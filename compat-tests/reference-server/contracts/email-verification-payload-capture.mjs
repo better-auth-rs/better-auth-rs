@@ -125,10 +125,9 @@ async function captureCase(backend, scenario, callbackURL, recorder, diagnostics
       } else {
         assert.equal(response.status, 401);
         assert.deepEqual(JSON.parse(response.body), { code: "INVALID_TOKEN", message: "Invalid token" });
-        assert.equal(errors.length, 1);
-        assert.deepEqual(errors[0].error.properties.body, { code: "INVALID_TOKEN", message: "Invalid token" });
+        assert.equal(errors.length, 0);
         assert.deepEqual(consoleErrors, []);
-        assert.deepEqual(events.map(event => event.kind), ["api-error"]);
+        assert.deepEqual(events, []);
       }
     } catch (error) {
       diagnostics.push({ backend, scenario: scenario.name, callbackURL, before, events, response, after, assertion: native(error, true) });

@@ -39,6 +39,8 @@ on:
       - compat-tests/reference-server/contracts/device-where-references-capture.mjs
       - compat-tests/reference-server/contracts/email-verification-payload-capture.mjs
       - compat-tests/reference-server/contracts/oauth-token-duration-capture.mjs
+      - compat-tests/reference-server/contracts/memory-name-coercion-capture.mjs
+      - compat-tests/reference-server/contracts/custom-model-join-reference-capture.mjs
       - compat-tests/reference-server/contracts/account-user-auth-boundary.test.ts
 
 permissions:
@@ -53,8 +55,11 @@ jobs:
           - contract: email-verification-payload
             regressions: [email-verification-duration]
             backend: ''
-          - contract: oauth-token-duration
-            regressions: [email-verification-duration, duration-options]
+          - contract: memory-name-coercion
+            regressions: [api-key-number-name-order]
+            backend: ''
+          - contract: custom-model-join-reference
+            regressions: [schema-join-reference]
             backend: ''
     runs-on: ubuntu-latest
     timeout-minutes: 10

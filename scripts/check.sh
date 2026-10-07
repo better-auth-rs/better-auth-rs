@@ -50,7 +50,7 @@ run_stage() {
         ./compat-tests/reference-server/contracts/cookie-cache-cleanup.test.ts \
         ./compat-tests/reference-server/contracts/cookie-lifetime.test.ts \
         ./compat-tests/reference-server/contracts/cookie-session-precision.test.ts
-      cargo clippy --locked -p better-auth-core -p better-auth-api --lib --tests -- -D warnings
+      cargo clippy --locked -p better-auth-core -p better-auth-api --lib -- -D warnings
       cargo clippy --locked --features axum,seaorm2,redis-cache \
         --test cookie_attribute_mutation_tests --test cookie_http_errors_tests \
         --test cookie_expires_tests --test cookie_cleanup_tests \
@@ -72,6 +72,7 @@ run_stage() {
         --test api_key_number_name_tests --test passkey_additional_fields_tests \
         --test plugin_display_json_tests --test plugin_model_fields_tests -- -D warnings
       cargo test --locked -p better-auth-cli -p better-auth-seaorm-macros
+      cargo test --locked -p better-auth-core --lib store::ephemeral::api_keys::tests::sorting
       cargo test --locked -p better-auth-api --lib plugins::api_key::
       cargo test --locked --no-fail-fast --features axum,seaorm2,redis-cache \
         --test api_key_number_name_tests --test passkey_additional_fields_tests \

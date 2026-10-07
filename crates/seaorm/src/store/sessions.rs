@@ -523,6 +523,8 @@ where
     S: AuthSchema + Send + Sync,
     S::Session: SeaOrmSessionModel,
     S::User: SeaOrmUserModel,
+    S::Account: crate::schema::SeaOrmAccountModel,
+    S::Verification: crate::schema::SeaOrmVerificationModel,
 {
     async fn update_session_with_writer(
         &self,

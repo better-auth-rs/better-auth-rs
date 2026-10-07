@@ -94,6 +94,10 @@ impl Attributes {
 }
 
 #[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "Setup errors propagate; assertions compare complete pinned headers and writer attribute values."
+)]
 fn cookie_writer_mutations_match_pinned_serializers_without_mutating_callers() -> AuthResult<()> {
     let capture: Capture = serde_json::from_str(include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),

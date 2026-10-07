@@ -98,11 +98,20 @@ impl ApiKeyStore for EphemeralStore {
                     })
                     .collect::<AuthResult<Vec<_>>>()?;
                 if let Some(("name", direction)) = sort.filter(|_| keys.len() > 1) {
+                    // With at most one non-nullish name, distinct rows use nullish comparison branches.
+                    // FieldValue conversion has no callbacks, so precompute text only when needed.
+                    let compare_text = keys
+                        .iter()
+                        .map(|(key, _)| key.name.field_value())
+                        .filter(|name| !name.is_null() && !name.is_undefined())
+                        .take(2)
+                        .count()
+                        == 2;
                     let mut named = keys
                         .into_iter()
                         .map(|key| {
                             let name = key.0.name.field_value();
-                            let text = name.display_utf16()?;
+                            let text = compare_text.then(|| name.display_utf16()).transpose()?;
                             Ok((name, text, key))
                         })
                         .collect::<AuthResult<Vec<_>>>()?;
@@ -390,6 +399,8 @@ impl ApiKeyStore for EphemeralStore {
 
 #[cfg(test)]
 mod tests {
+    mod sorting;
+
     use super::*;
     use crate::store::ConsumeApiKeyResult;
 

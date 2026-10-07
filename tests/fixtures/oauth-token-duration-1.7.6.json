@@ -1,0 +1,1861 @@
+{
+  "version": "1.7.6",
+  "contract": {
+    "clock": "Date.now and new Date read one fixed millisecond clock; Date arithmetic retains TimeClip ordering",
+    "errors": "Capture name, message, own property names and values; exclude environment-specific stack formatting",
+    "callbacks": "Capture public refresh context headers and Request metadata; the HTTP request body is captured before the handler consumes it",
+    "sources": [
+      "@better-auth/core/src/oauth2/utils.ts",
+      "@better-auth/core/src/oauth2/refresh-access-token.ts",
+      "better-auth/dist/plugins/generic-oauth/index.mjs",
+      "better-auth/dist/api/routes/account.mjs",
+      "@better-auth/core/src/db/adapter/factory.ts"
+    ]
+  },
+  "cases": [
+    {
+      "backend": "memory",
+      "scenario": {
+        "name": "negative-submillisecond",
+        "responseDuration": -0.0005
+      },
+      "now": 2000000000123,
+      "helpers": [
+        {
+          "operation": "exchange",
+          "outcome": {
+            "kind": "returned",
+            "value": {
+              "tokenType": "Bearer",
+              "accessToken": "duration-authorization_code-access",
+              "refreshToken": "duration-new-refresh",
+              "accessTokenExpiresAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.122Z"
+              },
+              "refreshTokenExpiresAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.122Z"
+              },
+              "scopes": [
+                "openid",
+                "email"
+              ],
+              "idToken": "duration-new-id",
+              "raw": {
+                "token_type": "Bearer",
+                "access_token": "duration-authorization_code-access",
+                "refresh_token": "duration-new-refresh",
+                "id_token": "duration-new-id",
+                "scope": "openid email",
+                "expires_in": -0.0005,
+                "refresh_token_expires_in": -0.0005
+              }
+            }
+          },
+          "events": [
+            {
+              "kind": "token.http",
+              "request": {
+                "url": "https://duration-provider.test/token",
+                "method": "POST",
+                "headers": [
+                  [
+                    "accept",
+                    "application/json"
+                  ],
+                  [
+                    "content-type",
+                    "application/x-www-form-urlencoded"
+                  ]
+                ],
+                "bodyUsed": false,
+                "body": "grant_type=authorization_code&code=duration-code&code_verifier=duration-verifier&redirect_uri=http%3A%2F%2Foauth-token-duration.test%2Fapi%2Fauth%2Fcallback%2Fduration&client_id=duration-client&client_secret=duration-client-secret"
+              },
+              "response": {
+                "status": 200,
+                "statusText": "",
+                "headers": [
+                  [
+                    "content-type",
+                    "application/json;charset=utf-8"
+                  ]
+                ],
+                "cookies": [],
+                "body": "{\"token_type\":\"Bearer\",\"access_token\":\"duration-authorization_code-access\",\"refresh_token\":\"duration-new-refresh\",\"id_token\":\"duration-new-id\",\"scope\":\"openid email\",\"expires_in\":-0.0005,\"refresh_token_expires_in\":-0.0005}"
+              }
+            }
+          ],
+          "storage": {
+            "user": [],
+            "session": [],
+            "account": [],
+            "verification": []
+          }
+        },
+        {
+          "operation": "refresh",
+          "outcome": {
+            "kind": "returned",
+            "value": {
+              "accessToken": "duration-refresh_token-access",
+              "refreshToken": "duration-new-refresh",
+              "tokenType": "Bearer",
+              "scopes": [
+                "openid",
+                "email"
+              ],
+              "idToken": "duration-new-id",
+              "accessTokenExpiresAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.122Z"
+              },
+              "refreshTokenExpiresAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.122Z"
+              }
+            }
+          },
+          "events": [
+            {
+              "kind": "refresh.params",
+              "hasContext": false,
+              "headers": {
+                "type": "undefined"
+              },
+              "request": {
+                "type": "undefined"
+              }
+            },
+            {
+              "kind": "token.http",
+              "request": {
+                "url": "https://duration-provider.test/token",
+                "method": "POST",
+                "headers": [
+                  [
+                    "accept",
+                    "application/json"
+                  ],
+                  [
+                    "content-type",
+                    "application/x-www-form-urlencoded"
+                  ]
+                ],
+                "bodyUsed": false,
+                "body": "grant_type=refresh_token&refresh_token=duration-old-refresh&duration_case=negative-submillisecond&client_id=duration-client&client_secret=duration-client-secret"
+              },
+              "response": {
+                "status": 200,
+                "statusText": "",
+                "headers": [
+                  [
+                    "content-type",
+                    "application/json;charset=utf-8"
+                  ]
+                ],
+                "cookies": [],
+                "body": "{\"token_type\":\"Bearer\",\"access_token\":\"duration-refresh_token-access\",\"refresh_token\":\"duration-new-refresh\",\"id_token\":\"duration-new-id\",\"scope\":\"openid email\",\"expires_in\":-0.0005,\"refresh_token_expires_in\":-0.0005}"
+              }
+            }
+          ],
+          "storage": {
+            "user": [],
+            "session": [],
+            "account": [],
+            "verification": []
+          }
+        }
+      ],
+      "before": {
+        "user": [
+          {
+            "name": "Duration Owner",
+            "email": "owner@oauth-token-duration.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "id": "duration-owner"
+          }
+        ],
+        "session": [
+          {
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T04:33:20.123Z"
+            },
+            "token": "duration-owner-session-token",
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "ipAddress": null,
+            "userAgent": null,
+            "userId": "duration-owner",
+            "id": "duration-session"
+          }
+        ],
+        "account": [
+          {
+            "accountId": "duration-subject",
+            "providerId": "duration",
+            "userId": "duration-owner",
+            "accessToken": "duration-old-access",
+            "refreshToken": "duration-old-refresh",
+            "idToken": "duration-old-id",
+            "accessTokenExpiresAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:19.123Z"
+            },
+            "refreshTokenExpiresAt": {
+              "type": "date",
+              "value": "2033-05-18T05:33:20.123Z"
+            },
+            "scope": "openid email profile",
+            "password": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "id": "duration-account"
+          }
+        ],
+        "verification": []
+      },
+      "refresh": {
+        "request": {
+          "url": "http://oauth-token-duration.test/api/auth/refresh-token",
+          "method": "POST",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "cookie",
+              "better-auth.session_token=duration-owner-session-token.fqlqqGVRQmK3YjdL8IOTQaCaSBmjExscfab7kHJwz8Y%3D"
+            ],
+            [
+              "origin",
+              "http://oauth-token-duration.test"
+            ],
+            [
+              "x-duration-case",
+              "negative-submillisecond"
+            ]
+          ],
+          "bodyUsed": false,
+          "body": "{\"accountId\":\"duration-account\"}"
+        },
+        "outcome": {
+          "kind": "returned",
+          "response": {
+            "status": 200,
+            "statusText": "",
+            "headers": [
+              [
+                "content-type",
+                "application/json"
+              ]
+            ],
+            "cookies": [],
+            "body": "{\"accessToken\":\"duration-refresh_token-access\",\"refreshToken\":\"duration-new-refresh\",\"accessTokenExpiresAt\":\"2033-05-18T03:33:20.122Z\",\"refreshTokenExpiresAt\":\"2033-05-18T03:33:20.122Z\",\"scope\":\"openid email profile\",\"idToken\":\"duration-new-id\",\"providerId\":\"duration\",\"accountId\":\"duration-account\"}"
+          }
+        },
+        "events": [
+          {
+            "kind": "refresh.params",
+            "hasContext": true,
+            "headers": [
+              [
+                "content-type",
+                "application/json"
+              ],
+              [
+                "cookie",
+                "better-auth.session_token=duration-owner-session-token.fqlqqGVRQmK3YjdL8IOTQaCaSBmjExscfab7kHJwz8Y%3D"
+              ],
+              [
+                "origin",
+                "http://oauth-token-duration.test"
+              ],
+              [
+                "x-duration-case",
+                "negative-submillisecond"
+              ]
+            ],
+            "request": {
+              "url": "http://oauth-token-duration.test/api/auth/refresh-token",
+              "method": "POST",
+              "headers": [
+                [
+                  "content-type",
+                  "application/json"
+                ],
+                [
+                  "cookie",
+                  "better-auth.session_token=duration-owner-session-token.fqlqqGVRQmK3YjdL8IOTQaCaSBmjExscfab7kHJwz8Y%3D"
+                ],
+                [
+                  "origin",
+                  "http://oauth-token-duration.test"
+                ],
+                [
+                  "x-duration-case",
+                  "negative-submillisecond"
+                ]
+              ],
+              "bodyUsed": true
+            }
+          },
+          {
+            "kind": "token.http",
+            "request": {
+              "url": "https://duration-provider.test/token",
+              "method": "POST",
+              "headers": [
+                [
+                  "accept",
+                  "application/json"
+                ],
+                [
+                  "content-type",
+                  "application/x-www-form-urlencoded"
+                ]
+              ],
+              "bodyUsed": false,
+              "body": "grant_type=refresh_token&refresh_token=duration-old-refresh&duration_case=negative-submillisecond&client_id=duration-client&client_secret=duration-client-secret"
+            },
+            "response": {
+              "status": 200,
+              "statusText": "",
+              "headers": [
+                [
+                  "content-type",
+                  "application/json;charset=utf-8"
+                ]
+              ],
+              "cookies": [],
+              "body": "{\"token_type\":\"Bearer\",\"access_token\":\"duration-refresh_token-access\",\"refresh_token\":\"duration-new-refresh\",\"id_token\":\"duration-new-id\",\"scope\":\"openid email\",\"expires_in\":-0.0005,\"refresh_token_expires_in\":-0.0005}"
+            }
+          },
+          {
+            "kind": "hook",
+            "model": "account",
+            "operation": "update",
+            "phase": "before",
+            "data": {
+              "accessToken": "duration-refresh_token-access",
+              "refreshToken": "duration-new-refresh",
+              "accessTokenExpiresAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.122Z"
+              },
+              "refreshTokenExpiresAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.122Z"
+              },
+              "idToken": "duration-new-id"
+            }
+          },
+          {
+            "kind": "hook",
+            "model": "account",
+            "operation": "update",
+            "phase": "after",
+            "data": {
+              "accountId": "duration-subject",
+              "providerId": "duration",
+              "userId": "duration-owner",
+              "accessToken": "duration-refresh_token-access",
+              "refreshToken": "duration-new-refresh",
+              "idToken": "duration-new-id",
+              "accessTokenExpiresAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.122Z"
+              },
+              "refreshTokenExpiresAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.122Z"
+              },
+              "scope": "openid email profile",
+              "password": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "id": "duration-account"
+            }
+          }
+        ],
+        "account": {
+          "accountId": "duration-subject",
+          "providerId": "duration",
+          "userId": "duration-owner",
+          "accessToken": "duration-refresh_token-access",
+          "refreshToken": "duration-new-refresh",
+          "idToken": "duration-new-id",
+          "accessTokenExpiresAt": {
+            "type": "date",
+            "value": "2033-05-18T03:33:20.122Z"
+          },
+          "refreshTokenExpiresAt": {
+            "type": "date",
+            "value": "2033-05-18T03:33:20.122Z"
+          },
+          "scope": "openid email profile",
+          "password": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2033-05-18T03:33:20.123Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2033-05-18T03:33:20.123Z"
+          },
+          "id": "duration-account"
+        }
+      },
+      "after": {
+        "user": [
+          {
+            "name": "Duration Owner",
+            "email": "owner@oauth-token-duration.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "id": "duration-owner"
+          }
+        ],
+        "session": [
+          {
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T04:33:20.123Z"
+            },
+            "token": "duration-owner-session-token",
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "ipAddress": null,
+            "userAgent": null,
+            "userId": "duration-owner",
+            "id": "duration-session"
+          }
+        ],
+        "account": [
+          {
+            "accountId": "duration-subject",
+            "providerId": "duration",
+            "userId": "duration-owner",
+            "accessToken": "duration-refresh_token-access",
+            "refreshToken": "duration-new-refresh",
+            "idToken": "duration-new-id",
+            "accessTokenExpiresAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.122Z"
+            },
+            "refreshTokenExpiresAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.122Z"
+            },
+            "scope": "openid email profile",
+            "password": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "id": "duration-account"
+          }
+        ],
+        "verification": []
+      }
+    },
+    {
+      "backend": "memory",
+      "scenario": {
+        "name": "fallback-nan",
+        "fallbackDuration": {
+          "type": "number",
+          "value": "NaN"
+        }
+      },
+      "now": 2000000000123,
+      "helpers": [
+        {
+          "operation": "exchange",
+          "outcome": {
+            "kind": "returned",
+            "value": {
+              "tokenType": "Bearer",
+              "accessToken": "duration-authorization_code-access",
+              "refreshToken": "duration-new-refresh",
+              "accessTokenExpiresAt": {
+                "type": "undefined"
+              },
+              "refreshTokenExpiresAt": {
+                "type": "undefined"
+              },
+              "scopes": [
+                "openid",
+                "email"
+              ],
+              "idToken": "duration-new-id",
+              "raw": {
+                "token_type": "Bearer",
+                "access_token": "duration-authorization_code-access",
+                "refresh_token": "duration-new-refresh",
+                "id_token": "duration-new-id",
+                "scope": "openid email"
+              }
+            }
+          },
+          "events": [
+            {
+              "kind": "token.http",
+              "request": {
+                "url": "https://duration-provider.test/token",
+                "method": "POST",
+                "headers": [
+                  [
+                    "accept",
+                    "application/json"
+                  ],
+                  [
+                    "content-type",
+                    "application/x-www-form-urlencoded"
+                  ]
+                ],
+                "bodyUsed": false,
+                "body": "grant_type=authorization_code&code=duration-code&code_verifier=duration-verifier&redirect_uri=http%3A%2F%2Foauth-token-duration.test%2Fapi%2Fauth%2Fcallback%2Fduration&client_id=duration-client&client_secret=duration-client-secret"
+              },
+              "response": {
+                "status": 200,
+                "statusText": "",
+                "headers": [
+                  [
+                    "content-type",
+                    "application/json;charset=utf-8"
+                  ]
+                ],
+                "cookies": [],
+                "body": "{\"token_type\":\"Bearer\",\"access_token\":\"duration-authorization_code-access\",\"refresh_token\":\"duration-new-refresh\",\"id_token\":\"duration-new-id\",\"scope\":\"openid email\"}"
+              }
+            }
+          ],
+          "storage": {
+            "user": [],
+            "session": [],
+            "account": [],
+            "verification": []
+          }
+        },
+        {
+          "operation": "refresh",
+          "outcome": {
+            "kind": "returned",
+            "value": {
+              "accessToken": "duration-refresh_token-access",
+              "refreshToken": "duration-new-refresh",
+              "tokenType": "Bearer",
+              "scopes": [
+                "openid",
+                "email"
+              ],
+              "idToken": "duration-new-id"
+            }
+          },
+          "events": [
+            {
+              "kind": "refresh.params",
+              "hasContext": false,
+              "headers": {
+                "type": "undefined"
+              },
+              "request": {
+                "type": "undefined"
+              }
+            },
+            {
+              "kind": "token.http",
+              "request": {
+                "url": "https://duration-provider.test/token",
+                "method": "POST",
+                "headers": [
+                  [
+                    "accept",
+                    "application/json"
+                  ],
+                  [
+                    "content-type",
+                    "application/x-www-form-urlencoded"
+                  ]
+                ],
+                "bodyUsed": false,
+                "body": "grant_type=refresh_token&refresh_token=duration-old-refresh&duration_case=fallback-nan&client_id=duration-client&client_secret=duration-client-secret"
+              },
+              "response": {
+                "status": 200,
+                "statusText": "",
+                "headers": [
+                  [
+                    "content-type",
+                    "application/json;charset=utf-8"
+                  ]
+                ],
+                "cookies": [],
+                "body": "{\"token_type\":\"Bearer\",\"access_token\":\"duration-refresh_token-access\",\"refresh_token\":\"duration-new-refresh\",\"id_token\":\"duration-new-id\",\"scope\":\"openid email\"}"
+              }
+            }
+          ],
+          "storage": {
+            "user": [],
+            "session": [],
+            "account": [],
+            "verification": []
+          }
+        }
+      ],
+      "before": {
+        "user": [
+          {
+            "name": "Duration Owner",
+            "email": "owner@oauth-token-duration.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "id": "duration-owner"
+          }
+        ],
+        "session": [
+          {
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T04:33:20.123Z"
+            },
+            "token": "duration-owner-session-token",
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "ipAddress": null,
+            "userAgent": null,
+            "userId": "duration-owner",
+            "id": "duration-session"
+          }
+        ],
+        "account": [
+          {
+            "accountId": "duration-subject",
+            "providerId": "duration",
+            "userId": "duration-owner",
+            "accessToken": "duration-old-access",
+            "refreshToken": "duration-old-refresh",
+            "idToken": "duration-old-id",
+            "accessTokenExpiresAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:19.123Z"
+            },
+            "refreshTokenExpiresAt": {
+              "type": "date",
+              "value": "2033-05-18T05:33:20.123Z"
+            },
+            "scope": "openid email profile",
+            "password": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "id": "duration-account"
+          }
+        ],
+        "verification": []
+      },
+      "refresh": {
+        "request": {
+          "url": "http://oauth-token-duration.test/api/auth/refresh-token",
+          "method": "POST",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "cookie",
+              "better-auth.session_token=duration-owner-session-token.fqlqqGVRQmK3YjdL8IOTQaCaSBmjExscfab7kHJwz8Y%3D"
+            ],
+            [
+              "origin",
+              "http://oauth-token-duration.test"
+            ],
+            [
+              "x-duration-case",
+              "fallback-nan"
+            ]
+          ],
+          "bodyUsed": false,
+          "body": "{\"accountId\":\"duration-account\"}"
+        },
+        "outcome": {
+          "kind": "returned",
+          "response": {
+            "status": 200,
+            "statusText": "",
+            "headers": [
+              [
+                "content-type",
+                "application/json"
+              ]
+            ],
+            "cookies": [],
+            "body": "{\"accessToken\":\"duration-refresh_token-access\",\"refreshToken\":\"duration-new-refresh\",\"refreshTokenExpiresAt\":\"2033-05-18T05:33:20.123Z\",\"scope\":\"openid email profile\",\"idToken\":\"duration-new-id\",\"providerId\":\"duration\",\"accountId\":\"duration-account\"}"
+          }
+        },
+        "events": [
+          {
+            "kind": "refresh.params",
+            "hasContext": true,
+            "headers": [
+              [
+                "content-type",
+                "application/json"
+              ],
+              [
+                "cookie",
+                "better-auth.session_token=duration-owner-session-token.fqlqqGVRQmK3YjdL8IOTQaCaSBmjExscfab7kHJwz8Y%3D"
+              ],
+              [
+                "origin",
+                "http://oauth-token-duration.test"
+              ],
+              [
+                "x-duration-case",
+                "fallback-nan"
+              ]
+            ],
+            "request": {
+              "url": "http://oauth-token-duration.test/api/auth/refresh-token",
+              "method": "POST",
+              "headers": [
+                [
+                  "content-type",
+                  "application/json"
+                ],
+                [
+                  "cookie",
+                  "better-auth.session_token=duration-owner-session-token.fqlqqGVRQmK3YjdL8IOTQaCaSBmjExscfab7kHJwz8Y%3D"
+                ],
+                [
+                  "origin",
+                  "http://oauth-token-duration.test"
+                ],
+                [
+                  "x-duration-case",
+                  "fallback-nan"
+                ]
+              ],
+              "bodyUsed": true
+            }
+          },
+          {
+            "kind": "token.http",
+            "request": {
+              "url": "https://duration-provider.test/token",
+              "method": "POST",
+              "headers": [
+                [
+                  "accept",
+                  "application/json"
+                ],
+                [
+                  "content-type",
+                  "application/x-www-form-urlencoded"
+                ]
+              ],
+              "bodyUsed": false,
+              "body": "grant_type=refresh_token&refresh_token=duration-old-refresh&duration_case=fallback-nan&client_id=duration-client&client_secret=duration-client-secret"
+            },
+            "response": {
+              "status": 200,
+              "statusText": "",
+              "headers": [
+                [
+                  "content-type",
+                  "application/json;charset=utf-8"
+                ]
+              ],
+              "cookies": [],
+              "body": "{\"token_type\":\"Bearer\",\"access_token\":\"duration-refresh_token-access\",\"refresh_token\":\"duration-new-refresh\",\"id_token\":\"duration-new-id\",\"scope\":\"openid email\"}"
+            }
+          },
+          {
+            "kind": "hook",
+            "model": "account",
+            "operation": "update",
+            "phase": "before",
+            "data": {
+              "accessToken": "duration-refresh_token-access",
+              "refreshToken": "duration-new-refresh",
+              "accessTokenExpiresAt": {
+                "type": "undefined"
+              },
+              "refreshTokenExpiresAt": {
+                "type": "date",
+                "value": "2033-05-18T05:33:20.123Z"
+              },
+              "idToken": "duration-new-id"
+            }
+          },
+          {
+            "kind": "hook",
+            "model": "account",
+            "operation": "update",
+            "phase": "after",
+            "data": {
+              "accountId": "duration-subject",
+              "providerId": "duration",
+              "userId": "duration-owner",
+              "accessToken": "duration-refresh_token-access",
+              "refreshToken": "duration-new-refresh",
+              "idToken": "duration-new-id",
+              "accessTokenExpiresAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:19.123Z"
+              },
+              "refreshTokenExpiresAt": {
+                "type": "date",
+                "value": "2033-05-18T05:33:20.123Z"
+              },
+              "scope": "openid email profile",
+              "password": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "id": "duration-account"
+            }
+          }
+        ],
+        "account": {
+          "accountId": "duration-subject",
+          "providerId": "duration",
+          "userId": "duration-owner",
+          "accessToken": "duration-refresh_token-access",
+          "refreshToken": "duration-new-refresh",
+          "idToken": "duration-new-id",
+          "accessTokenExpiresAt": {
+            "type": "date",
+            "value": "2033-05-18T03:33:19.123Z"
+          },
+          "refreshTokenExpiresAt": {
+            "type": "date",
+            "value": "2033-05-18T05:33:20.123Z"
+          },
+          "scope": "openid email profile",
+          "password": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2033-05-18T03:33:20.123Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2033-05-18T03:33:20.123Z"
+          },
+          "id": "duration-account"
+        }
+      },
+      "after": {
+        "user": [
+          {
+            "name": "Duration Owner",
+            "email": "owner@oauth-token-duration.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "id": "duration-owner"
+          }
+        ],
+        "session": [
+          {
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T04:33:20.123Z"
+            },
+            "token": "duration-owner-session-token",
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "ipAddress": null,
+            "userAgent": null,
+            "userId": "duration-owner",
+            "id": "duration-session"
+          }
+        ],
+        "account": [
+          {
+            "accountId": "duration-subject",
+            "providerId": "duration",
+            "userId": "duration-owner",
+            "accessToken": "duration-refresh_token-access",
+            "refreshToken": "duration-new-refresh",
+            "idToken": "duration-new-id",
+            "accessTokenExpiresAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:19.123Z"
+            },
+            "refreshTokenExpiresAt": {
+              "type": "date",
+              "value": "2033-05-18T05:33:20.123Z"
+            },
+            "scope": "openid email profile",
+            "password": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "id": "duration-account"
+          }
+        ],
+        "verification": []
+      }
+    },
+    {
+      "backend": "sqlite",
+      "scenario": {
+        "name": "negative-submillisecond",
+        "responseDuration": -0.0005
+      },
+      "now": 2000000000123,
+      "helpers": [
+        {
+          "operation": "exchange",
+          "outcome": {
+            "kind": "returned",
+            "value": {
+              "tokenType": "Bearer",
+              "accessToken": "duration-authorization_code-access",
+              "refreshToken": "duration-new-refresh",
+              "accessTokenExpiresAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.122Z"
+              },
+              "refreshTokenExpiresAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.122Z"
+              },
+              "scopes": [
+                "openid",
+                "email"
+              ],
+              "idToken": "duration-new-id",
+              "raw": {
+                "token_type": "Bearer",
+                "access_token": "duration-authorization_code-access",
+                "refresh_token": "duration-new-refresh",
+                "id_token": "duration-new-id",
+                "scope": "openid email",
+                "expires_in": -0.0005,
+                "refresh_token_expires_in": -0.0005
+              }
+            }
+          },
+          "events": [
+            {
+              "kind": "token.http",
+              "request": {
+                "url": "https://duration-provider.test/token",
+                "method": "POST",
+                "headers": [
+                  [
+                    "accept",
+                    "application/json"
+                  ],
+                  [
+                    "content-type",
+                    "application/x-www-form-urlencoded"
+                  ]
+                ],
+                "bodyUsed": false,
+                "body": "grant_type=authorization_code&code=duration-code&code_verifier=duration-verifier&redirect_uri=http%3A%2F%2Foauth-token-duration.test%2Fapi%2Fauth%2Fcallback%2Fduration&client_id=duration-client&client_secret=duration-client-secret"
+              },
+              "response": {
+                "status": 200,
+                "statusText": "",
+                "headers": [
+                  [
+                    "content-type",
+                    "application/json;charset=utf-8"
+                  ]
+                ],
+                "cookies": [],
+                "body": "{\"token_type\":\"Bearer\",\"access_token\":\"duration-authorization_code-access\",\"refresh_token\":\"duration-new-refresh\",\"id_token\":\"duration-new-id\",\"scope\":\"openid email\",\"expires_in\":-0.0005,\"refresh_token_expires_in\":-0.0005}"
+              }
+            }
+          ],
+          "storage": {
+            "user": [],
+            "session": [],
+            "account": [],
+            "verification": []
+          }
+        },
+        {
+          "operation": "refresh",
+          "outcome": {
+            "kind": "returned",
+            "value": {
+              "accessToken": "duration-refresh_token-access",
+              "refreshToken": "duration-new-refresh",
+              "tokenType": "Bearer",
+              "scopes": [
+                "openid",
+                "email"
+              ],
+              "idToken": "duration-new-id",
+              "accessTokenExpiresAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.122Z"
+              },
+              "refreshTokenExpiresAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.122Z"
+              }
+            }
+          },
+          "events": [
+            {
+              "kind": "refresh.params",
+              "hasContext": false,
+              "headers": {
+                "type": "undefined"
+              },
+              "request": {
+                "type": "undefined"
+              }
+            },
+            {
+              "kind": "token.http",
+              "request": {
+                "url": "https://duration-provider.test/token",
+                "method": "POST",
+                "headers": [
+                  [
+                    "accept",
+                    "application/json"
+                  ],
+                  [
+                    "content-type",
+                    "application/x-www-form-urlencoded"
+                  ]
+                ],
+                "bodyUsed": false,
+                "body": "grant_type=refresh_token&refresh_token=duration-old-refresh&duration_case=negative-submillisecond&client_id=duration-client&client_secret=duration-client-secret"
+              },
+              "response": {
+                "status": 200,
+                "statusText": "",
+                "headers": [
+                  [
+                    "content-type",
+                    "application/json;charset=utf-8"
+                  ]
+                ],
+                "cookies": [],
+                "body": "{\"token_type\":\"Bearer\",\"access_token\":\"duration-refresh_token-access\",\"refresh_token\":\"duration-new-refresh\",\"id_token\":\"duration-new-id\",\"scope\":\"openid email\",\"expires_in\":-0.0005,\"refresh_token_expires_in\":-0.0005}"
+              }
+            }
+          ],
+          "storage": {
+            "user": [],
+            "session": [],
+            "account": [],
+            "verification": []
+          }
+        }
+      ],
+      "before": {
+        "user": [
+          {
+            "id": "duration-owner",
+            "name": "Duration Owner",
+            "email": "owner@oauth-token-duration.test",
+            "emailVerified": 1,
+            "image": null,
+            "createdAt": "2033-05-18T03:33:20.123Z",
+            "updatedAt": "2033-05-18T03:33:20.123Z"
+          }
+        ],
+        "session": [
+          {
+            "id": "duration-session",
+            "expiresAt": "2033-05-18T04:33:20.123Z",
+            "token": "duration-owner-session-token",
+            "createdAt": "2033-05-18T03:33:20.123Z",
+            "updatedAt": "2033-05-18T03:33:20.123Z",
+            "ipAddress": null,
+            "userAgent": null,
+            "userId": "duration-owner"
+          }
+        ],
+        "account": [
+          {
+            "id": "duration-account",
+            "accountId": "duration-subject",
+            "providerId": "duration",
+            "userId": "duration-owner",
+            "accessToken": "duration-old-access",
+            "refreshToken": "duration-old-refresh",
+            "idToken": "duration-old-id",
+            "accessTokenExpiresAt": "2033-05-18T03:33:19.123Z",
+            "refreshTokenExpiresAt": "2033-05-18T05:33:20.123Z",
+            "scope": "openid email profile",
+            "password": null,
+            "createdAt": "2033-05-18T03:33:20.123Z",
+            "updatedAt": "2033-05-18T03:33:20.123Z"
+          }
+        ],
+        "verification": []
+      },
+      "refresh": {
+        "request": {
+          "url": "http://oauth-token-duration.test/api/auth/refresh-token",
+          "method": "POST",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "cookie",
+              "better-auth.session_token=duration-owner-session-token.fqlqqGVRQmK3YjdL8IOTQaCaSBmjExscfab7kHJwz8Y%3D"
+            ],
+            [
+              "origin",
+              "http://oauth-token-duration.test"
+            ],
+            [
+              "x-duration-case",
+              "negative-submillisecond"
+            ]
+          ],
+          "bodyUsed": false,
+          "body": "{\"accountId\":\"duration-account\"}"
+        },
+        "outcome": {
+          "kind": "returned",
+          "response": {
+            "status": 200,
+            "statusText": "",
+            "headers": [
+              [
+                "content-type",
+                "application/json"
+              ]
+            ],
+            "cookies": [],
+            "body": "{\"accessToken\":\"duration-refresh_token-access\",\"refreshToken\":\"duration-new-refresh\",\"accessTokenExpiresAt\":\"2033-05-18T03:33:20.122Z\",\"refreshTokenExpiresAt\":\"2033-05-18T03:33:20.122Z\",\"scope\":\"openid email profile\",\"idToken\":\"duration-new-id\",\"providerId\":\"duration\",\"accountId\":\"duration-account\"}"
+          }
+        },
+        "events": [
+          {
+            "kind": "refresh.params",
+            "hasContext": true,
+            "headers": [
+              [
+                "content-type",
+                "application/json"
+              ],
+              [
+                "cookie",
+                "better-auth.session_token=duration-owner-session-token.fqlqqGVRQmK3YjdL8IOTQaCaSBmjExscfab7kHJwz8Y%3D"
+              ],
+              [
+                "origin",
+                "http://oauth-token-duration.test"
+              ],
+              [
+                "x-duration-case",
+                "negative-submillisecond"
+              ]
+            ],
+            "request": {
+              "url": "http://oauth-token-duration.test/api/auth/refresh-token",
+              "method": "POST",
+              "headers": [
+                [
+                  "content-type",
+                  "application/json"
+                ],
+                [
+                  "cookie",
+                  "better-auth.session_token=duration-owner-session-token.fqlqqGVRQmK3YjdL8IOTQaCaSBmjExscfab7kHJwz8Y%3D"
+                ],
+                [
+                  "origin",
+                  "http://oauth-token-duration.test"
+                ],
+                [
+                  "x-duration-case",
+                  "negative-submillisecond"
+                ]
+              ],
+              "bodyUsed": true
+            }
+          },
+          {
+            "kind": "token.http",
+            "request": {
+              "url": "https://duration-provider.test/token",
+              "method": "POST",
+              "headers": [
+                [
+                  "accept",
+                  "application/json"
+                ],
+                [
+                  "content-type",
+                  "application/x-www-form-urlencoded"
+                ]
+              ],
+              "bodyUsed": false,
+              "body": "grant_type=refresh_token&refresh_token=duration-old-refresh&duration_case=negative-submillisecond&client_id=duration-client&client_secret=duration-client-secret"
+            },
+            "response": {
+              "status": 200,
+              "statusText": "",
+              "headers": [
+                [
+                  "content-type",
+                  "application/json;charset=utf-8"
+                ]
+              ],
+              "cookies": [],
+              "body": "{\"token_type\":\"Bearer\",\"access_token\":\"duration-refresh_token-access\",\"refresh_token\":\"duration-new-refresh\",\"id_token\":\"duration-new-id\",\"scope\":\"openid email\",\"expires_in\":-0.0005,\"refresh_token_expires_in\":-0.0005}"
+            }
+          },
+          {
+            "kind": "hook",
+            "model": "account",
+            "operation": "update",
+            "phase": "before",
+            "data": {
+              "accessToken": "duration-refresh_token-access",
+              "refreshToken": "duration-new-refresh",
+              "accessTokenExpiresAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.122Z"
+              },
+              "refreshTokenExpiresAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.122Z"
+              },
+              "idToken": "duration-new-id"
+            }
+          },
+          {
+            "kind": "hook",
+            "model": "account",
+            "operation": "update",
+            "phase": "after",
+            "data": {
+              "accountId": "duration-subject",
+              "providerId": "duration",
+              "userId": "duration-owner",
+              "accessToken": "duration-refresh_token-access",
+              "refreshToken": "duration-new-refresh",
+              "idToken": "duration-new-id",
+              "accessTokenExpiresAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.122Z"
+              },
+              "refreshTokenExpiresAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.122Z"
+              },
+              "scope": "openid email profile",
+              "password": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "id": "duration-account"
+            }
+          }
+        ],
+        "account": {
+          "accountId": "duration-subject",
+          "providerId": "duration",
+          "userId": "duration-owner",
+          "accessToken": "duration-refresh_token-access",
+          "refreshToken": "duration-new-refresh",
+          "idToken": "duration-new-id",
+          "accessTokenExpiresAt": {
+            "type": "date",
+            "value": "2033-05-18T03:33:20.122Z"
+          },
+          "refreshTokenExpiresAt": {
+            "type": "date",
+            "value": "2033-05-18T03:33:20.122Z"
+          },
+          "scope": "openid email profile",
+          "password": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2033-05-18T03:33:20.123Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2033-05-18T03:33:20.123Z"
+          },
+          "id": "duration-account"
+        }
+      },
+      "after": {
+        "user": [
+          {
+            "id": "duration-owner",
+            "name": "Duration Owner",
+            "email": "owner@oauth-token-duration.test",
+            "emailVerified": 1,
+            "image": null,
+            "createdAt": "2033-05-18T03:33:20.123Z",
+            "updatedAt": "2033-05-18T03:33:20.123Z"
+          }
+        ],
+        "session": [
+          {
+            "id": "duration-session",
+            "expiresAt": "2033-05-18T04:33:20.123Z",
+            "token": "duration-owner-session-token",
+            "createdAt": "2033-05-18T03:33:20.123Z",
+            "updatedAt": "2033-05-18T03:33:20.123Z",
+            "ipAddress": null,
+            "userAgent": null,
+            "userId": "duration-owner"
+          }
+        ],
+        "account": [
+          {
+            "id": "duration-account",
+            "accountId": "duration-subject",
+            "providerId": "duration",
+            "userId": "duration-owner",
+            "accessToken": "duration-refresh_token-access",
+            "refreshToken": "duration-new-refresh",
+            "idToken": "duration-new-id",
+            "accessTokenExpiresAt": "2033-05-18T03:33:20.122Z",
+            "refreshTokenExpiresAt": "2033-05-18T03:33:20.122Z",
+            "scope": "openid email profile",
+            "password": null,
+            "createdAt": "2033-05-18T03:33:20.123Z",
+            "updatedAt": "2033-05-18T03:33:20.123Z"
+          }
+        ],
+        "verification": []
+      }
+    },
+    {
+      "backend": "sqlite",
+      "scenario": {
+        "name": "fallback-nan",
+        "fallbackDuration": {
+          "type": "number",
+          "value": "NaN"
+        }
+      },
+      "now": 2000000000123,
+      "helpers": [
+        {
+          "operation": "exchange",
+          "outcome": {
+            "kind": "returned",
+            "value": {
+              "tokenType": "Bearer",
+              "accessToken": "duration-authorization_code-access",
+              "refreshToken": "duration-new-refresh",
+              "accessTokenExpiresAt": {
+                "type": "undefined"
+              },
+              "refreshTokenExpiresAt": {
+                "type": "undefined"
+              },
+              "scopes": [
+                "openid",
+                "email"
+              ],
+              "idToken": "duration-new-id",
+              "raw": {
+                "token_type": "Bearer",
+                "access_token": "duration-authorization_code-access",
+                "refresh_token": "duration-new-refresh",
+                "id_token": "duration-new-id",
+                "scope": "openid email"
+              }
+            }
+          },
+          "events": [
+            {
+              "kind": "token.http",
+              "request": {
+                "url": "https://duration-provider.test/token",
+                "method": "POST",
+                "headers": [
+                  [
+                    "accept",
+                    "application/json"
+                  ],
+                  [
+                    "content-type",
+                    "application/x-www-form-urlencoded"
+                  ]
+                ],
+                "bodyUsed": false,
+                "body": "grant_type=authorization_code&code=duration-code&code_verifier=duration-verifier&redirect_uri=http%3A%2F%2Foauth-token-duration.test%2Fapi%2Fauth%2Fcallback%2Fduration&client_id=duration-client&client_secret=duration-client-secret"
+              },
+              "response": {
+                "status": 200,
+                "statusText": "",
+                "headers": [
+                  [
+                    "content-type",
+                    "application/json;charset=utf-8"
+                  ]
+                ],
+                "cookies": [],
+                "body": "{\"token_type\":\"Bearer\",\"access_token\":\"duration-authorization_code-access\",\"refresh_token\":\"duration-new-refresh\",\"id_token\":\"duration-new-id\",\"scope\":\"openid email\"}"
+              }
+            }
+          ],
+          "storage": {
+            "user": [],
+            "session": [],
+            "account": [],
+            "verification": []
+          }
+        },
+        {
+          "operation": "refresh",
+          "outcome": {
+            "kind": "returned",
+            "value": {
+              "accessToken": "duration-refresh_token-access",
+              "refreshToken": "duration-new-refresh",
+              "tokenType": "Bearer",
+              "scopes": [
+                "openid",
+                "email"
+              ],
+              "idToken": "duration-new-id"
+            }
+          },
+          "events": [
+            {
+              "kind": "refresh.params",
+              "hasContext": false,
+              "headers": {
+                "type": "undefined"
+              },
+              "request": {
+                "type": "undefined"
+              }
+            },
+            {
+              "kind": "token.http",
+              "request": {
+                "url": "https://duration-provider.test/token",
+                "method": "POST",
+                "headers": [
+                  [
+                    "accept",
+                    "application/json"
+                  ],
+                  [
+                    "content-type",
+                    "application/x-www-form-urlencoded"
+                  ]
+                ],
+                "bodyUsed": false,
+                "body": "grant_type=refresh_token&refresh_token=duration-old-refresh&duration_case=fallback-nan&client_id=duration-client&client_secret=duration-client-secret"
+              },
+              "response": {
+                "status": 200,
+                "statusText": "",
+                "headers": [
+                  [
+                    "content-type",
+                    "application/json;charset=utf-8"
+                  ]
+                ],
+                "cookies": [],
+                "body": "{\"token_type\":\"Bearer\",\"access_token\":\"duration-refresh_token-access\",\"refresh_token\":\"duration-new-refresh\",\"id_token\":\"duration-new-id\",\"scope\":\"openid email\"}"
+              }
+            }
+          ],
+          "storage": {
+            "user": [],
+            "session": [],
+            "account": [],
+            "verification": []
+          }
+        }
+      ],
+      "before": {
+        "user": [
+          {
+            "id": "duration-owner",
+            "name": "Duration Owner",
+            "email": "owner@oauth-token-duration.test",
+            "emailVerified": 1,
+            "image": null,
+            "createdAt": "2033-05-18T03:33:20.123Z",
+            "updatedAt": "2033-05-18T03:33:20.123Z"
+          }
+        ],
+        "session": [
+          {
+            "id": "duration-session",
+            "expiresAt": "2033-05-18T04:33:20.123Z",
+            "token": "duration-owner-session-token",
+            "createdAt": "2033-05-18T03:33:20.123Z",
+            "updatedAt": "2033-05-18T03:33:20.123Z",
+            "ipAddress": null,
+            "userAgent": null,
+            "userId": "duration-owner"
+          }
+        ],
+        "account": [
+          {
+            "id": "duration-account",
+            "accountId": "duration-subject",
+            "providerId": "duration",
+            "userId": "duration-owner",
+            "accessToken": "duration-old-access",
+            "refreshToken": "duration-old-refresh",
+            "idToken": "duration-old-id",
+            "accessTokenExpiresAt": "2033-05-18T03:33:19.123Z",
+            "refreshTokenExpiresAt": "2033-05-18T05:33:20.123Z",
+            "scope": "openid email profile",
+            "password": null,
+            "createdAt": "2033-05-18T03:33:20.123Z",
+            "updatedAt": "2033-05-18T03:33:20.123Z"
+          }
+        ],
+        "verification": []
+      },
+      "refresh": {
+        "request": {
+          "url": "http://oauth-token-duration.test/api/auth/refresh-token",
+          "method": "POST",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "cookie",
+              "better-auth.session_token=duration-owner-session-token.fqlqqGVRQmK3YjdL8IOTQaCaSBmjExscfab7kHJwz8Y%3D"
+            ],
+            [
+              "origin",
+              "http://oauth-token-duration.test"
+            ],
+            [
+              "x-duration-case",
+              "fallback-nan"
+            ]
+          ],
+          "bodyUsed": false,
+          "body": "{\"accountId\":\"duration-account\"}"
+        },
+        "outcome": {
+          "kind": "returned",
+          "response": {
+            "status": 200,
+            "statusText": "",
+            "headers": [
+              [
+                "content-type",
+                "application/json"
+              ]
+            ],
+            "cookies": [],
+            "body": "{\"accessToken\":\"duration-refresh_token-access\",\"refreshToken\":\"duration-new-refresh\",\"refreshTokenExpiresAt\":\"2033-05-18T05:33:20.123Z\",\"scope\":\"openid email profile\",\"idToken\":\"duration-new-id\",\"providerId\":\"duration\",\"accountId\":\"duration-account\"}"
+          }
+        },
+        "events": [
+          {
+            "kind": "refresh.params",
+            "hasContext": true,
+            "headers": [
+              [
+                "content-type",
+                "application/json"
+              ],
+              [
+                "cookie",
+                "better-auth.session_token=duration-owner-session-token.fqlqqGVRQmK3YjdL8IOTQaCaSBmjExscfab7kHJwz8Y%3D"
+              ],
+              [
+                "origin",
+                "http://oauth-token-duration.test"
+              ],
+              [
+                "x-duration-case",
+                "fallback-nan"
+              ]
+            ],
+            "request": {
+              "url": "http://oauth-token-duration.test/api/auth/refresh-token",
+              "method": "POST",
+              "headers": [
+                [
+                  "content-type",
+                  "application/json"
+                ],
+                [
+                  "cookie",
+                  "better-auth.session_token=duration-owner-session-token.fqlqqGVRQmK3YjdL8IOTQaCaSBmjExscfab7kHJwz8Y%3D"
+                ],
+                [
+                  "origin",
+                  "http://oauth-token-duration.test"
+                ],
+                [
+                  "x-duration-case",
+                  "fallback-nan"
+                ]
+              ],
+              "bodyUsed": true
+            }
+          },
+          {
+            "kind": "token.http",
+            "request": {
+              "url": "https://duration-provider.test/token",
+              "method": "POST",
+              "headers": [
+                [
+                  "accept",
+                  "application/json"
+                ],
+                [
+                  "content-type",
+                  "application/x-www-form-urlencoded"
+                ]
+              ],
+              "bodyUsed": false,
+              "body": "grant_type=refresh_token&refresh_token=duration-old-refresh&duration_case=fallback-nan&client_id=duration-client&client_secret=duration-client-secret"
+            },
+            "response": {
+              "status": 200,
+              "statusText": "",
+              "headers": [
+                [
+                  "content-type",
+                  "application/json;charset=utf-8"
+                ]
+              ],
+              "cookies": [],
+              "body": "{\"token_type\":\"Bearer\",\"access_token\":\"duration-refresh_token-access\",\"refresh_token\":\"duration-new-refresh\",\"id_token\":\"duration-new-id\",\"scope\":\"openid email\"}"
+            }
+          },
+          {
+            "kind": "hook",
+            "model": "account",
+            "operation": "update",
+            "phase": "before",
+            "data": {
+              "accessToken": "duration-refresh_token-access",
+              "refreshToken": "duration-new-refresh",
+              "accessTokenExpiresAt": {
+                "type": "undefined"
+              },
+              "refreshTokenExpiresAt": {
+                "type": "date",
+                "value": "2033-05-18T05:33:20.123Z"
+              },
+              "idToken": "duration-new-id"
+            }
+          },
+          {
+            "kind": "hook",
+            "model": "account",
+            "operation": "update",
+            "phase": "after",
+            "data": {
+              "accountId": "duration-subject",
+              "providerId": "duration",
+              "userId": "duration-owner",
+              "accessToken": "duration-refresh_token-access",
+              "refreshToken": "duration-new-refresh",
+              "idToken": "duration-new-id",
+              "accessTokenExpiresAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:19.123Z"
+              },
+              "refreshTokenExpiresAt": {
+                "type": "date",
+                "value": "2033-05-18T05:33:20.123Z"
+              },
+              "scope": "openid email profile",
+              "password": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "id": "duration-account"
+            }
+          }
+        ],
+        "account": {
+          "accountId": "duration-subject",
+          "providerId": "duration",
+          "userId": "duration-owner",
+          "accessToken": "duration-refresh_token-access",
+          "refreshToken": "duration-new-refresh",
+          "idToken": "duration-new-id",
+          "accessTokenExpiresAt": {
+            "type": "date",
+            "value": "2033-05-18T03:33:19.123Z"
+          },
+          "refreshTokenExpiresAt": {
+            "type": "date",
+            "value": "2033-05-18T05:33:20.123Z"
+          },
+          "scope": "openid email profile",
+          "password": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2033-05-18T03:33:20.123Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2033-05-18T03:33:20.123Z"
+          },
+          "id": "duration-account"
+        }
+      },
+      "after": {
+        "user": [
+          {
+            "id": "duration-owner",
+            "name": "Duration Owner",
+            "email": "owner@oauth-token-duration.test",
+            "emailVerified": 1,
+            "image": null,
+            "createdAt": "2033-05-18T03:33:20.123Z",
+            "updatedAt": "2033-05-18T03:33:20.123Z"
+          }
+        ],
+        "session": [
+          {
+            "id": "duration-session",
+            "expiresAt": "2033-05-18T04:33:20.123Z",
+            "token": "duration-owner-session-token",
+            "createdAt": "2033-05-18T03:33:20.123Z",
+            "updatedAt": "2033-05-18T03:33:20.123Z",
+            "ipAddress": null,
+            "userAgent": null,
+            "userId": "duration-owner"
+          }
+        ],
+        "account": [
+          {
+            "id": "duration-account",
+            "accountId": "duration-subject",
+            "providerId": "duration",
+            "userId": "duration-owner",
+            "accessToken": "duration-refresh_token-access",
+            "refreshToken": "duration-new-refresh",
+            "idToken": "duration-new-id",
+            "accessTokenExpiresAt": "2033-05-18T03:33:19.123Z",
+            "refreshTokenExpiresAt": "2033-05-18T05:33:20.123Z",
+            "scope": "openid email profile",
+            "password": null,
+            "createdAt": "2033-05-18T03:33:20.123Z",
+            "updatedAt": "2033-05-18T03:33:20.123Z"
+          }
+        ],
+        "verification": []
+      }
+    }
+  ]
+}
