@@ -1,3 +1,4 @@
+import { withRestoredSchema } from "./schema-isolation.mjs";
 import assert from "node:assert/strict";
 import { readFileSync, writeFileSync } from "node:fs";
 import { Database } from "bun:sqlite";
@@ -31,25 +32,27 @@ async function captureSqlite(tableName, configuration) {
 }
 
 export async function capturePasskeyCatalog(backend) {
-  assert.ok(["sqlite", "postgres", "mysql"].includes(backend), "Select sqlite, postgres or mysql");
-  const version = JSON.parse(readFileSync(new URL("../node_modules/better-auth/package.json", import.meta.url), "utf8")).version;
-  const pluginVersion = JSON.parse(readFileSync(new URL("../node_modules/@better-auth/passkey/package.json", import.meta.url), "utf8")).version;
-  assert.equal(version, "1.7.6");
-  assert.equal(pluginVersion, version);
-  const configurations = JSON.parse(readFileSync(new URL("../../schema-consumer/passkey-catalog-config.json", import.meta.url), "utf8"));
-  const cases = [];
-  for (const name of backend === "sqlite" ? ["default", "legacy", "custom"] : ["default", "custom"]) {
-    const configuration = configurations[name];
-    const tableName = configuration.passkey?.modelName || "passkey";
-    const options = { plugins: [configuration.passkey === undefined
-      ? passkey() : passkey({ schema: configuration })] };
-    const observed = backend === "sqlite"
-      ? await captureSqlite(tableName, options)
-      : await captureFreshServerCatalog(backend, [tableName], options,
-        context => observeServerIndexes(context, tableName));
-    cases.push({ name, configuration, ...observed });
-  }
-  return { version, database: backend, cases };
+  return withRestoredSchema(passkey().schema, async () => {
+    assert.ok(["sqlite", "postgres", "mysql"].includes(backend), "Select sqlite, postgres or mysql");
+    const version = JSON.parse(readFileSync(new URL("../node_modules/better-auth/package.json", import.meta.url), "utf8")).version;
+    const pluginVersion = JSON.parse(readFileSync(new URL("../node_modules/@better-auth/passkey/package.json", import.meta.url), "utf8")).version;
+    assert.equal(version, "1.7.6");
+    assert.equal(pluginVersion, version);
+    const configurations = JSON.parse(readFileSync(new URL("../../schema-consumer/passkey-catalog-config.json", import.meta.url), "utf8"));
+    const cases = [];
+    for (const name of backend === "sqlite" ? ["default", "legacy", "custom"] : ["default", "custom"]) {
+      const configuration = configurations[name];
+      const tableName = configuration.passkey?.modelName || "passkey";
+      const options = { plugins: [configuration.passkey === undefined
+        ? passkey() : passkey({ schema: configuration })] };
+      const observed = backend === "sqlite"
+        ? await captureSqlite(tableName, options)
+        : await captureFreshServerCatalog(backend, [tableName], options,
+          context => observeServerIndexes(context, tableName));
+      cases.push({ name, configuration, ...observed });
+    }
+    return { version, database: backend, cases };
+  });
 }
 
 if (import.meta.main) {

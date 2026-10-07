@@ -1,3 +1,4 @@
+import { withRestoredSchema } from "./schema-isolation.mjs";
 import { afterAll, expect, test } from "bun:test";
 import { createRequire } from "node:module";
 import { AsyncLocalStorage } from "node:async_hooks";
@@ -270,36 +271,38 @@ for (const backend of ["memory", "sqlite"]) {
     const {jwt,siwe}=await import(require.resolve("better-auth/plugins"));
     const {Database}=await import("bun:sqlite");
     const {getMigrations}=await import(require.resolve("better-auth/db/migration"));
-    const db=backend==="sqlite"?new Database(":memory:"):undefined;
-    const collection=backend==="sqlite"?"traced_authenticators":"passkey";
-    const walletCollection=backend==="sqlite"?"wallet_address":"walletAddress";
-    const options={secret:"observability-reference-secret-more-than-32-characters",baseURL:"http://observability.test",database:db,logger:{disabled:true},plugins:[
-      passkey({schema:{passkey:{modelName:collection}}}),jwt(),siwe({verifyMessage:async()=>true,schema:{walletAddress:{modelName:walletCollection}}})
-    ]};
-    if(db)await(await getMigrations(options)).runMigrations();
-    const ctx=await betterAuth(options).$context;
-    spans.length=0;
-    const row=await ctx.adapter.create({model:"passkey",data:{publicKey:"public",userId:"owner",credentialID:"credential",counter:0,deviceType:"singleDevice",backedUp:false}});
-    expect((await ctx.adapter.findOne({model:"passkey",where:[{field:"credentialID",value:"credential"}]})).id).toBe(row.id);
-    expect((await ctx.adapter.update({model:"passkey",where:[{field:"id",value:row.id}],update:{name:"Renamed"}})).name).toBe("Renamed");
-    expect(await ctx.adapter.update({model:"passkey",where:[{field:"id",value:"missing"}],update:{name:"Ignored"}})).toBeNull();
-    expect((await ctx.adapter.findMany({model:"passkey",where:[{field:"userId",value:"owner"}]})).length).toBe(1);
-    await ctx.adapter.delete({model:"passkey",where:[{field:"id",value:row.id}]});
-    expect((await ctx.adapter.findMany({model:"passkey",where:[{field:"userId",value:"owner"}]})).length).toBe(0);
-    const key=await ctx.adapter.create({model:"jwks",data:{publicKey:"public",privateKey:"private",createdAt:new Date()}});
-    expect((await ctx.adapter.findOne({model:"jwks",where:[{field:"id",value:key.id}]})).id).toBe(key.id);
-    expect((await ctx.adapter.findMany({model:"jwks"})).length).toBe(1);
-    const wallet=await ctx.adapter.create({model:"walletAddress",data:{userId:"owner",address:"0x123",chainId:1,isPrimary:true,createdAt:new Date()}});
-    expect((await ctx.adapter.findOne({model:"walletAddress",where:[{field:"address",value:"0x123"},{field:"chainId",value:1}]})).id).toBe(wallet.id);
-    const operations=[...['create','findOne','update','update','findMany','delete','findMany'].map(op=>[op,collection]),...['create','findOne','findMany'].map(op=>[op,'jwks']),...['create','findOne'].map(op=>[op,walletCollection])];
-    expect(spans.map(span=>span.name)).toEqual(operations.map(([op,model])=>`db ${op} ${model}`));
-    for(let index=0;index<spans.length;index++){
-      expect(spans[index].attributes).toEqual({'db.operation.name':operations[index][0],'db.collection.name':operations[index][1]});
-      expect(spans[index].exceptions).toEqual([]);
-      expect(spans[index].status).toBeUndefined();
-      expect(spans[index].ended).toBe(1);
-    }
-    db?.close();
+    await withRestoredSchema({ ...passkey().schema, ...siwe({ verifyMessage: async () => true }).schema }, async () => {
+      const db=backend==="sqlite"?new Database(":memory:"):undefined;
+      const collection=backend==="sqlite"?"traced_authenticators":"passkey";
+      const walletCollection=backend==="sqlite"?"wallet_address":"walletAddress";
+      const options={secret:"observability-reference-secret-more-than-32-characters",baseURL:"http://observability.test",database:db,logger:{disabled:true},plugins:[
+        passkey({schema:{passkey:{modelName:collection}}}),jwt(),siwe({verifyMessage:async()=>true,schema:{walletAddress:{modelName:walletCollection}}})
+      ]};
+      if(db)await(await getMigrations(options)).runMigrations();
+      const ctx=await betterAuth(options).$context;
+      spans.length=0;
+      const row=await ctx.adapter.create({model:"passkey",data:{publicKey:"public",userId:"owner",credentialID:"credential",counter:0,deviceType:"singleDevice",backedUp:false}});
+      expect((await ctx.adapter.findOne({model:"passkey",where:[{field:"credentialID",value:"credential"}]})).id).toBe(row.id);
+      expect((await ctx.adapter.update({model:"passkey",where:[{field:"id",value:row.id}],update:{name:"Renamed"}})).name).toBe("Renamed");
+      expect(await ctx.adapter.update({model:"passkey",where:[{field:"id",value:"missing"}],update:{name:"Ignored"}})).toBeNull();
+      expect((await ctx.adapter.findMany({model:"passkey",where:[{field:"userId",value:"owner"}]})).length).toBe(1);
+      await ctx.adapter.delete({model:"passkey",where:[{field:"id",value:row.id}]});
+      expect((await ctx.adapter.findMany({model:"passkey",where:[{field:"userId",value:"owner"}]})).length).toBe(0);
+      const key=await ctx.adapter.create({model:"jwks",data:{publicKey:"public",privateKey:"private",createdAt:new Date()}});
+      expect((await ctx.adapter.findOne({model:"jwks",where:[{field:"id",value:key.id}]})).id).toBe(key.id);
+      expect((await ctx.adapter.findMany({model:"jwks"})).length).toBe(1);
+      const wallet=await ctx.adapter.create({model:"walletAddress",data:{userId:"owner",address:"0x123",chainId:1,isPrimary:true,createdAt:new Date()}});
+      expect((await ctx.adapter.findOne({model:"walletAddress",where:[{field:"address",value:"0x123"},{field:"chainId",value:1}]})).id).toBe(wallet.id);
+      const operations=[...['create','findOne','update','update','findMany','delete','findMany'].map(op=>[op,collection]),...['create','findOne','findMany'].map(op=>[op,'jwks']),...['create','findOne'].map(op=>[op,walletCollection])];
+      expect(spans.map(span=>span.name)).toEqual(operations.map(([op,model])=>`db ${op} ${model}`));
+      for(let index=0;index<spans.length;index++){
+        expect(spans[index].attributes).toEqual({'db.operation.name':operations[index][0],'db.collection.name':operations[index][1]});
+        expect(spans[index].exceptions).toEqual([]);
+        expect(spans[index].status).toBeUndefined();
+        expect(spans[index].ended).toBe(1);
+      }
+      db?.close();
+    });
   });
 }
 
@@ -309,35 +312,37 @@ for (const backend of ["memory", "sqlite"]) {
     const {recordTwoFactorFailure, resetTwoFactorFailures, assertTwoFactorNotLocked}=await import(new URL("./two-factor/verify-two-factor.mjs", `file://${require.resolve("better-auth/plugins")}`).href);
     const {Database}=await import("bun:sqlite");
     const {getMigrations}=await import(require.resolve("better-auth/db/migration"));
-    const db=backend==="sqlite"?new Database(":memory:"):undefined;
-    const collection=backend==="sqlite"?"two_factor":"twoFactor";
-    const options={secret:"observability-reference-secret-more-than-32-characters",baseURL:"http://observability.test",database:db,logger:{disabled:true},plugins:[twoFactor({accountLockout:{maxFailedAttempts:2},schema:{twoFactor:{modelName:collection}}})]};
-    if(db)await(await getMigrations(options)).runMigrations();
-    const ctx={context:await betterAuth(options).$context};
-    const factor=await ctx.context.adapter.create({model:"twoFactor",data:{userId:"owner",secret:"secret",backupCodes:"codes",verified:true}});
-    const trace=async(action:()=>Promise<unknown>, expected:string[])=>{
-      spans.length=0;
-      await action();
-      expect(spans.map(span=>span.name)).toEqual(expected.map(operation=>`db ${operation} ${collection}`));
-      for (const span of spans) {
-        expect(span.ended).toBe(1);
-        expect(span.exceptions).toEqual([]);
-        expect(span.status).toBeUndefined();
-        expect(span.attributes["db.collection.name"]).toBe(collection);
-      }
-    };
-    await trace(()=>recordTwoFactorFailure(ctx,"twoFactor",factor),["incrementOne"]);
-    await trace(()=>recordTwoFactorFailure(ctx,"twoFactor",factor),["incrementOne","incrementOne"]);
-    const locked=await ctx.context.adapter.findOne({model:"twoFactor",where:[{field:"id",value:factor.id}]});
-    expect(locked.failedVerificationCount).toBe(2);
-    expect(locked.lockedUntil).not.toBeNull();
-    await trace(()=>resetTwoFactorFailures(ctx,"twoFactor",factor),["update"]);
-    await ctx.context.adapter.update({model:"twoFactor",where:[{field:"id",value:factor.id}],update:{lockedUntil:new Date(0),failedVerificationCount:1}});
-    await trace(()=>assertTwoFactorNotLocked(ctx,"twoFactor",{...factor,lockedUntil:new Date(0)}),["incrementOne"]);
-    const cleared=await ctx.context.adapter.findOne({model:"twoFactor",where:[{field:"id",value:factor.id}]});
-    expect(cleared.failedVerificationCount).toBe(0);
-    expect(cleared.lockedUntil).toBeNull();
-    db?.close();
+    await withRestoredSchema(twoFactor().schema, async () => {
+      const db=backend==="sqlite"?new Database(":memory:"):undefined;
+      const collection=backend==="sqlite"?"two_factor":"twoFactor";
+      const options={secret:"observability-reference-secret-more-than-32-characters",baseURL:"http://observability.test",database:db,logger:{disabled:true},plugins:[twoFactor({accountLockout:{maxFailedAttempts:2},schema:{twoFactor:{modelName:collection}}})]};
+      if(db)await(await getMigrations(options)).runMigrations();
+      const ctx={context:await betterAuth(options).$context};
+      const factor=await ctx.context.adapter.create({model:"twoFactor",data:{userId:"owner",secret:"secret",backupCodes:"codes",verified:true}});
+      const trace=async(action:()=>Promise<unknown>, expected:string[])=>{
+        spans.length=0;
+        await action();
+        expect(spans.map(span=>span.name)).toEqual(expected.map(operation=>`db ${operation} ${collection}`));
+        for (const span of spans) {
+          expect(span.ended).toBe(1);
+          expect(span.exceptions).toEqual([]);
+          expect(span.status).toBeUndefined();
+          expect(span.attributes["db.collection.name"]).toBe(collection);
+        }
+      };
+      await trace(()=>recordTwoFactorFailure(ctx,"twoFactor",factor),["incrementOne"]);
+      await trace(()=>recordTwoFactorFailure(ctx,"twoFactor",factor),["incrementOne","incrementOne"]);
+      const locked=await ctx.context.adapter.findOne({model:"twoFactor",where:[{field:"id",value:factor.id}]});
+      expect(locked.failedVerificationCount).toBe(2);
+      expect(locked.lockedUntil).not.toBeNull();
+      await trace(()=>resetTwoFactorFailures(ctx,"twoFactor",factor),["update"]);
+      await ctx.context.adapter.update({model:"twoFactor",where:[{field:"id",value:factor.id}],update:{lockedUntil:new Date(0),failedVerificationCount:1}});
+      await trace(()=>assertTwoFactorNotLocked(ctx,"twoFactor",{...factor,lockedUntil:new Date(0)}),["incrementOne"]);
+      const cleared=await ctx.context.adapter.findOne({model:"twoFactor",where:[{field:"id",value:factor.id}]});
+      expect(cleared.failedVerificationCount).toBe(0);
+      expect(cleared.lockedUntil).toBeNull();
+      db?.close();
+    });
   });
 }
 

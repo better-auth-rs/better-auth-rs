@@ -27,6 +27,7 @@ on:
           - fullstack
           - quick-start
           - alignment
+          - reference-contracts
           - client-configuration
           - device-validation
           - device-storage
@@ -120,6 +121,7 @@ jobs:
           devenv_nixpkgs_rev=$(python3 -c 'import json; print(json.load(open("devenv.lock"))["nodes"]["nixpkgs-src"]["locked"]["rev"])')
           nix profile add "github:NixOS/nixpkgs/${devenv_nixpkgs_rev}#devenv"
       - name: Restore Rust cache
+        if: env.CHECK_STAGE != 'reference-contracts'
         id: rust-cache
         uses: actions/cache/restore@v6.1.0
         with:

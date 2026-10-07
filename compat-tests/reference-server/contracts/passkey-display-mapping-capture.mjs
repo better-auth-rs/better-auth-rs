@@ -1,3 +1,4 @@
+import { withRestoredSchema } from "./schema-isolation.mjs";
 import assert from "node:assert/strict";
 import { readFileSync, writeFileSync } from "node:fs";
 import { Database } from "bun:sqlite";
@@ -149,20 +150,22 @@ async function captureFailure(backend, mapping, operation, phase) {
 }
 
 export async function capturePasskeyDisplayMapping() {
-  const backends = [];
-  for (const backend of ["memory", "sqlite"]) {
-    const cases = [];
-    for (const mapping of mappingNames) {
-      const operations = await captureOperations(backend, mapping);
-      const failures = [];
-      for (const operation of passkeyFailureOperations) {
-        for (const phase of ["input", "output"]) failures.push(await captureFailure(backend, mapping, operation, phase));
+  return withRestoredSchema(passkey().schema, async () => {
+    const backends = [];
+    for (const backend of ["memory", "sqlite"]) {
+      const cases = [];
+      for (const mapping of mappingNames) {
+        const operations = await captureOperations(backend, mapping);
+        const failures = [];
+        for (const operation of passkeyFailureOperations) {
+          for (const phase of ["input", "output"]) failures.push(await captureFailure(backend, mapping, operation, phase));
+        }
+        cases.push({ mapping, operations, failures });
       }
-      cases.push({ mapping, operations, failures });
+      backends.push({ backend, cases });
     }
-    backends.push({ backend, cases });
-  }
-  return { version, backends };
+    return { version, backends };
+  });
 }
 
 if (import.meta.main) {
