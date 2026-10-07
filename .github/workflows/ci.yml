@@ -124,68 +124,41 @@ jobs:
       - name: Install locked compatibility dependencies
         run: devenv shell -- ./scripts/check.sh dependencies
       - name: Check formatting
-        if: env.CHECK_STAGE == 'all' || env.CHECK_STAGE == 'format'
+        if: env.CHECK_STAGE == 'all'
         run: devenv shell -- ./scripts/check.sh format
       - name: Lint default features
-        if: env.CHECK_STAGE == 'all' || env.CHECK_STAGE == 'lint-default'
+        if: env.CHECK_STAGE == 'all'
         run: devenv shell -- ./scripts/check.sh lint-default
       - name: Lint integration features
-        if: env.CHECK_STAGE == 'all' || env.CHECK_STAGE == 'lint-features'
+        if: env.CHECK_STAGE == 'all'
         run: devenv shell -- ./scripts/check.sh lint-features
       - name: Test workspace
-        if: env.CHECK_STAGE == 'all' || env.CHECK_STAGE == 'workspace-tests'
+        if: env.CHECK_STAGE == 'all'
         run: devenv shell -- ./scripts/check.sh workspace-tests
       - name: Check Rustls configuration
-        if: env.CHECK_STAGE == 'all' || env.CHECK_STAGE == 'rustls'
+        if: env.CHECK_STAGE == 'all'
         run: devenv shell -- ./scripts/check.sh rustls
       - name: Build Rustdoc
-        if: env.CHECK_STAGE == 'all' || env.CHECK_STAGE == 'rustdoc'
+        if: env.CHECK_STAGE == 'all'
         run: devenv shell -- ./scripts/check.sh rustdoc
       - name: Check generated consumer and databases
-        if: env.CHECK_STAGE == 'all' || env.CHECK_STAGE == 'consumer'
+        if: env.CHECK_STAGE == 'all'
         run: devenv shell -- ./scripts/check.sh consumer
       - name: Check fullstack example
-        if: env.CHECK_STAGE == 'all' || env.CHECK_STAGE == 'fullstack'
+        if: env.CHECK_STAGE == 'all'
         run: devenv shell -- ./scripts/check.sh fullstack
       - name: Check quick-start guide
-        if: env.CHECK_STAGE == 'all' || env.CHECK_STAGE == 'quick-start'
+        if: env.CHECK_STAGE == 'all'
         run: devenv shell -- ./scripts/check.sh quick-start
       - name: Check upstream alignment
-        if: env.CHECK_STAGE == 'all' || env.CHECK_STAGE == 'alignment'
+        if: env.CHECK_STAGE == 'all'
         run: devenv shell -- ./scripts/check.sh alignment
-      - name: Check client configuration compatibility
-        if: env.CHECK_STAGE == 'client-configuration'
+      - name: Run focused check
+        if: env.CHECK_STAGE != 'all'
         env:
           CHECK_COMPAT_PROFILE: ${{ inputs.profile }}
         run: |
-          if [[ -n "$CHECK_COMPAT_PROFILE" ]]; then
+          if [[ "$CHECK_STAGE" == "client-configuration" && -n "$CHECK_COMPAT_PROFILE" ]]; then
             export COMPAT_TEST_PROFILE="$CHECK_COMPAT_PROFILE"
           fi
-          devenv shell -- ./scripts/check.sh client-configuration
-      - name: Check Device request validation
-        if: env.CHECK_STAGE == 'device-validation'
-        run: devenv shell -- ./scripts/check.sh device-validation
-      - name: Check Device storage and native SQL fields
-        if: env.CHECK_STAGE == 'device-storage'
-        run: devenv shell -- ./scripts/check.sh device-storage
-      - name: Check captured provider options
-        if: env.CHECK_STAGE == 'provider-options'
-        run: devenv shell -- ./scripts/check.sh provider-options
-      - name: Check Passkey storage and authentication
-        if: env.CHECK_STAGE == 'passkey'
-        run: devenv shell -- ./scripts/check.sh passkey
-      - name: Check TwoFactor storage and authentication
-        if: env.CHECK_STAGE == 'two-factor'
-        run: devenv shell -- ./scripts/check.sh two-factor
-      - name: Check plugin fields and API Key storage
-        if: env.CHECK_STAGE == 'plugin-fields'
-        run: devenv shell -- ./scripts/check.sh plugin-fields
-      - name: Check schema join references
-        if: env.CHECK_STAGE == 'schema-joins'
-        run: devenv shell -- ./scripts/check.sh schema-joins
-      - name: Check User fields and ID generation
-        if: env.CHECK_STAGE == 'user-fields'
-        run: devenv shell -- ./scripts/check.sh user-fields
-      - name: Check native runtime values
-        if: env.CHECK_STAGE == 'runtime-values'
-        run: devenv shell -- ./scripts/check.sh runtime-values
+          devenv shell -- ./scripts/check.sh "$CHECK_STAGE"
