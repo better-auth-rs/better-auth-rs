@@ -6,12 +6,16 @@ description: Persist anonymous sessions and link anonymous identities when users
 Register `AnonymousPlugin::new()` to expose `POST /sign-in/anonymous` and `POST /delete-anonymous-user`. Generate the user schema with `--plugins anonymous` and apply the migration before enabling the plugin.
 
 ```rust
-use better_auth::plugins::AnonymousPlugin;
+use better_auth::{AuthError, FieldValue, plugins::AnonymousPlugin};
 
 let plugin = AnonymousPlugin::new()
     .on_link_account(|link| async move {
         // Transfer application data before the anonymous identity is removed.
-        transfer_cart(&link.anonymous_user.id, &link.new_user.id).await
+        let new_user_id = link.new_user.as_object()
+            .and_then(|user| user.get("id"))
+            .and_then(FieldValue::as_str)
+            .ok_or_else(|| AuthError::internal("Cart transfer requires a string User ID"))?;
+        transfer_cart(link.anonymous_user.id.typed()?, new_user_id).await
     });
 ```
 

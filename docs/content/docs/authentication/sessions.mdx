@@ -133,7 +133,7 @@ use better_auth::config::CookieCacheVersion;
 
 config.session.cookie_cache.as_mut().unwrap().version =
     CookieCacheVersion::dynamic(|data| async move {
-        Ok(format!("v2:{}", data.user.email_verified))
+        Ok(format!("v2:{}", data.user_field("emailVerified").is_truthy()))
     });
 ```
 

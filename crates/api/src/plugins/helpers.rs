@@ -320,8 +320,11 @@ pub(crate) async fn issue_selected_user_session<S: better_auth_core::AuthSchema>
             .cloned()
             .unwrap_or_default(),
     );
-    if admin_plugin_enabled(ctx) {
-        let _ = session_user(ctx, user_id.typed()?, None).await?;
+    if admin_plugin_enabled(ctx)
+        && user_id.is_truthy()?
+        && let Some(stored_user) = ctx.database.get_user_by_id_field(&user_id).await?
+    {
+        apply_session_ban(ctx, &user_id, &stored_user, None).await?;
     }
     let session = ctx
         .session_manager()
@@ -347,6 +350,16 @@ pub(crate) async fn session_user<S: better_auth_core::AuthSchema>(
     }
     .ok_or(AuthError::UserNotFound)?;
 
+    apply_session_ban(ctx, &user_id.into(), &user, transaction).await?;
+    Ok(user)
+}
+
+async fn apply_session_ban<S: better_auth_core::AuthSchema>(
+    ctx: &AuthContext<S>,
+    user_id: &better_auth_core::SchemaValue<String>,
+    user: &better_auth_core::wire::UserView,
+    transaction: Option<&dyn better_auth_core::store::AuthTransaction<S>>,
+) -> Result<(), SessionIssueError> {
     if admin_plugin_enabled(ctx) && user.banned() {
         if user
             .ban_expires()
@@ -360,17 +373,17 @@ pub(crate) async fn session_user<S: better_auth_core::AuthSchema>(
             };
             // Session admission updates storage without replacing the route's user snapshot.
             let _ = match transaction {
-                Some(tx) => tx.update_user(user_id, update).await?,
-                None => ctx.database.update_user(user_id, update).await?,
+                Some(tx) => tx.update_user(user_id.typed()?, update).await?,
+                None => ctx.database.update_user(user_id.typed()?, update).await?,
             };
         } else {
             return Err(SessionIssueError::Banned {
-                message: admin_banned_user_message(ctx, &user).await?,
+                message: admin_banned_user_message(ctx, user).await?,
             });
         }
     }
 
-    Ok(user)
+    Ok(())
 }
 
 /// Parse a cookie value from the request's `Cookie` header.
@@ -407,3 +420,7 @@ pub(crate) fn oauth_scope_whitespace(character: char) -> bool {
 #[cfg(test)]
 #[path = "helpers/response_tests.rs"]
 mod response_tests;
+
+#[cfg(test)]
+#[path = "helpers/session_tests.rs"]
+mod session_tests;
