@@ -418,7 +418,7 @@ API Key creation without a name retains its explicit null default. Database fiel
 
 For manual `AuthUser` and `AuthSession` implementations, declare `const PLUGIN_FIELDS: &'static [&'static str]` with the supported Rust field names. Declare a field only when the entity getter and store writes support that field. The default empty list supports core fields only.
 
-Manual SeaORM implementations can use `better_auth::seaorm::field_value::from_column` in `AuthRecordFields` and `decode_column` for typed writes. These conversions preserve native dates, arrays, and SQL NULL without serializing the model through JSON. Both functions return errors for unsupported conversions; propagate those errors.
+Manual SeaORM implementations can use `better_auth::seaorm::field_value::from_column` in `AuthRecordFields` to read native dates, arrays, and SQL NULL without serializing the model through JSON. Use `decode_column` for supported typed writes. For nullable non-JSON columns, map `FieldValue::Null` to `None` and decode present values separately. Native SQL array writes are unsupported. Both functions return errors for unsupported conversions; propagate those errors.
 
 Run the application database migrations before starting the server. Capability validation checks Rust entities; capability validation does not inspect database tables or replace migrations.
 

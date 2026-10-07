@@ -46,6 +46,7 @@ pub fn from_column(value: Value) -> AuthResult<FieldValue> {
 
 /// Decode an adapter field into the model's declared SQL column type.
 /// Return an error if the field cannot be represented by that type.
+/// Handle nullable non-JSON columns outside this function. Native SQL array writes are unsupported.
 pub fn decode_column<T: ValueType>(value: FieldValue) -> AuthResult<T> {
     let value = if matches!(T::column_type(), ColumnType::Json | ColumnType::JsonBinary) {
         Value::Json(Some(Box::new(value.json()?.ok_or_else(|| {
