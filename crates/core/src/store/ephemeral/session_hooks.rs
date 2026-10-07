@@ -3,7 +3,7 @@ use super::*;
 use crate::store::database_hooks::{DatabaseHookControl, DatabaseHookUpdate, SessionUpdate};
 
 impl SessionUpdate {
-    fn apply(self, session: &mut SessionView) {
+    fn apply(self, session: &mut SessionView, user_id: Option<crate::SchemaValue<String>>) {
         if let Some(fields) = &mut session.visible_fields {
             for (name, supplied) in [
                 ("impersonatedBy", self.impersonated_by.is_some()),
@@ -24,8 +24,8 @@ impl SessionUpdate {
         if let Some(id) = self.id {
             session.id = id.into();
         }
-        if let Some(user_id) = self.user_id {
-            session.user_id = user_id.into();
+        if let Some(user_id) = user_id {
+            session.user_id = user_id;
         }
         fields!(
             token,
@@ -98,19 +98,39 @@ impl EphemeralStore {
         token: &str,
         mut update: SessionUpdate,
     ) -> AuthResult<Option<SessionView>> {
-        update.additional_fields = self
-            .session_config
-            .field_schema()
+        let schema = self.session_config.field_schema();
+        let configured_user_id = schema.fields().contains_key("userId");
+        let mut user_id = if configured_user_id {
+            if let Some(user_id) = update.user_id.take() {
+                let _ = update
+                    .additional_fields
+                    .insert("userId".into(), user_id.into());
+            }
+            None
+        } else {
+            update
+                .user_id
+                .take()
+                .map(|user_id| self.memory_session_user_id_input(user_id.into()))
+                .transpose()?
+        };
+        update.additional_fields = schema
             .storage_fields_with_binding(update.additional_fields, false, |_, field, value| {
                 self.memory_plugin_field_input(field, value)
             })
             .await?;
+        if configured_user_id {
+            user_id = update
+                .additional_fields
+                .remove(schema.record_storage_key("userId"))
+                .map(crate::SchemaValue::from_field);
+        }
         let session = self
             .raw("session", "update", |state| {
                 let Some(mut session) = state.sessions.find_mut(|row| row.token == token)? else {
                     return Ok(None);
                 };
-                update.apply(&mut session);
+                update.apply(&mut session, user_id);
                 Ok(Some(session.clone()))
             })
             .await?;
@@ -169,19 +189,28 @@ impl EphemeralStore {
         }
         let count = if preserve {
             let expires_at = Utc::now();
-            let fields = self
-                .session_config
-                .field_schema()
+            let schema = self.session_config.field_schema();
+            let mut fields = schema
                 .storage_fields_with_binding(Default::default(), false, |_, field, value| {
                     self.memory_plugin_field_input(field, value)
                 })
                 .await?;
+            let user_id = if schema.fields().contains_key("userId") {
+                fields
+                    .remove(schema.record_storage_key("userId"))
+                    .map(crate::SchemaValue::from_field)
+            } else {
+                None
+            };
             self.raw("session", "updateMany", |state| {
                 let mut count = 0;
                 state.sessions.update_each(|session| {
                     if matches(session) {
                         session.expires_at = expires_at.into();
                         session.updated_at = expires_at.into();
+                        if let Some(user_id) = &user_id {
+                            session.user_id = user_id.clone();
+                        }
                         session.additional_fields.extend(fields.clone());
                         count += 1;
                     }

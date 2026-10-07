@@ -77,8 +77,11 @@ impl EphemeralStore {
         })
         .await?;
         if database_sessions {
+            let session_user_id = self.memory_session_user_id_query(Value::from(user_id))?;
             self.raw("session", "deleteMany", |state| {
-                state.sessions.retain(|row| row.user_id != user_id)?;
+                state
+                    .sessions
+                    .retain(|row| !row.user_id.field_value().strict_equals(&session_user_id))?;
                 Ok(())
             })
             .await?;

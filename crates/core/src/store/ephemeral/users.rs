@@ -86,12 +86,30 @@ impl EphemeralStore {
             .output_memory_fields_many(&storage)
             .await?;
         for (user, fields) in users.iter_mut().zip(fields) {
-            self.assign_user_output(user, fields);
+            self.assign_user_output(user, fields)?;
         }
         Ok(users)
     }
 
-    pub(super) fn assign_user_output(&self, user: &mut UserView, mut fields: FieldMap) {
+    pub(super) fn project_user_id(
+        id: &crate::SchemaValue<String>,
+    ) -> AuthResult<crate::SchemaValue<String>> {
+        let value = id.field_value();
+        if value.is_null() || value.is_undefined() {
+            Ok(crate::SchemaValue::from_field(value))
+        } else {
+            Ok(crate::SchemaValue::from_field(
+                value.display_utf16()?.into(),
+            ))
+        }
+    }
+
+    pub(super) fn assign_user_output(
+        &self,
+        user: &mut UserView,
+        mut fields: FieldMap,
+    ) -> AuthResult<()> {
+        user.id = Self::project_user_id(&user.id)?;
         if self.config.user.fields().contains_key("name") {
             user.name = crate::SchemaValue::from_field(fields.remove("name").unwrap_or_default());
         }
@@ -99,6 +117,7 @@ impl EphemeralStore {
             user.image = crate::SchemaValue::from_field(fields.remove("image").unwrap_or_default());
         }
         user.additional_fields = fields;
+        Ok(())
     }
     pub(super) async fn prepare_user_update(&self, update: UpdateUser) -> AuthResult<UpdateUser> {
         self.prepare_user_update_optional(update)
@@ -180,10 +199,12 @@ impl EphemeralStore {
         mut update: UpdateUser,
     ) -> AuthResult<Option<UserView>> {
         self.model_fields.canonicalize_id(EntityRole::User)?;
+        let id =
+            crate::SchemaValue::<String>::from_field(self.memory_user_id_query(&Value::from(id))?);
         let user = self
             .raw("user", "update", |state| {
                 Ok({
-                    let Some(mut user) = state.users.get_mut(id)? else {
+                    let Some(mut user) = state.users.get_mut(&id)? else {
                         return Ok(None);
                     };
                     if update.phone_number == Some(None) {
@@ -413,7 +434,14 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             "create",
             async {
                 let mut state = self.lock()?;
-                self.assign_insert_serial_id(&mut user.id, state.users.len());
+                if matches!(
+                    self.config.advanced.database.generate_id(),
+                    crate::id::IdGeneration::Serial
+                ) {
+                    user.id = crate::SchemaValue::from_field(Value::Number(
+                        (state.users.len() + 1) as f64,
+                    ));
+                }
                 state.users.push(user.clone());
                 Ok(())
             },
@@ -429,12 +457,10 @@ impl UserStore<StatelessSchema> for EphemeralStore {
         &self,
         id: &crate::SchemaValue<String>,
     ) -> AuthResult<Option<UserView>> {
-        self.output_optional_user_ref(self.user_ref(|user| user.id == *id).await?)
-            .await
+        self.get_user_by_id_value(&id.field_value()).await
     }
     async fn get_user_by_id(&self, id: &str) -> AuthResult<Option<UserView>> {
-        self.output_optional_user_ref(self.user_ref(|user| user.id == id).await?)
-            .await
+        self.get_user_by_id_value(&Value::from(id)).await
     }
     async fn get_user_by_id_value(&self, id: &Value) -> AuthResult<Option<UserView>> {
         self.output_optional_user_ref(self.user_ref_by_id_value(id).await?)
@@ -443,11 +469,16 @@ impl UserStore<StatelessSchema> for EphemeralStore {
 
     async fn list_users_by_ids(&self, ids: &[String], limit: f64) -> AuthResult<Vec<UserView>> {
         self.model_fields.canonicalize_id(EntityRole::User)?;
+        let ids = ids
+            .iter()
+            .map(|id| self.memory_user_id_query(&Value::from(id.clone())))
+            .collect::<AuthResult<Vec<_>>>()?;
         let users: Vec<_> = self
             .raw("user", "findMany", |state| {
                 Ok(crate::query::paginate_memory(
                     state.users.select_refs(|user| {
-                        ids.iter().any(|id| user.id.as_str() == Some(id.as_str()))
+                        ids.iter()
+                            .any(|id| user.id.field_value().same_value_zero(id))
                     })?,
                     Some(limit),
                     None,
@@ -470,7 +501,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
         let Some(record) = self.user_ref_by_email(email).await? else {
             return Ok(None);
         };
-        let stored_user_id = record.read(|user| Ok(user.id.clone()))?;
+        let stored_user_id = record.read(|user| Self::project_user_id(&user.id))?;
         let user = self.output_user_refs(vec![record]).await?.remove(0);
         let mut accounts = Vec::new();
         if let Some(id) = stored_user_id.as_str() {
@@ -531,8 +562,10 @@ impl UserStore<StatelessSchema> for EphemeralStore {
         }
         self.delete_user_accounts_with_hooks(id).await?;
         self.model_fields.canonicalize_id(EntityRole::User)?;
+        let stored_id =
+            crate::SchemaValue::<String>::from_field(self.memory_user_id_query(&Value::from(id))?);
         let user = self
-            .raw("user", "findOne", |state| state.users.get(id))
+            .raw("user", "findOne", |state| state.users.get(&stored_id))
             .await?;
         // Upstream deleteWithHooks treats snapshot projection failures as a missing row.
         let Some(user) = (match user {
@@ -559,7 +592,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             }
         }
         self.raw("user", "delete", |state| {
-            let _ = state.users.remove(id)?;
+            let _ = state.users.remove(&stored_id)?;
             Ok(())
         })
         .await?;
@@ -579,14 +612,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
         )?
         .bind_memory_filter(|name, value| {
             if matches!(name, "id" | "_id") {
-                return match value {
-                    Value::Array(values) => values
-                        .iter()
-                        .map(|value| self.memory_user_id_query(value))
-                        .collect::<AuthResult<Vec<_>>>()
-                        .map(Value::from),
-                    value => self.memory_user_id_query(&value),
-                };
+                return self.memory_user_id_query(&value);
             }
             self.memory_field_query(&self.config.user, name, value)
         })?;

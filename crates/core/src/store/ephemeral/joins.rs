@@ -78,7 +78,7 @@ impl EphemeralStore {
             |_, (source, native, output)| {
                 let mut user = UserView::from_field_values(std::mem::take(native))?;
                 user.metadata = source.read(|user| Ok(user.metadata.clone()))?;
-                self.assign_user_output(&mut user, std::mem::take(output));
+                self.assign_user_output(&mut user, std::mem::take(output))?;
                 Ok(user)
             },
         )
@@ -144,27 +144,23 @@ impl EphemeralStore {
                 else {
                     return Ok(None);
                 };
-                let stored_id = user.id.clone();
+                let stored_id = Self::project_user_id(&user.id)?;
                 let mut accounts = Vec::new();
-                if let Some(id) = stored_id.as_str() {
-                    let id =
-                        self.memory_field_query(&fields, "userId", Value::String(id.to_owned()))?;
-                    let matching = state.accounts.select_refs(|row| {
-                        row.get(fields.record_storage_key("userId"))
-                            .unwrap_or(&Value::Undefined)
-                            .strict_equals(&id)
-                    })?;
-                    let mut seen = Vec::new();
-                    for row in matching {
-                        if accounts.len() as f64 >= self.config.advanced.database.find_many_limit()
-                        {
-                            break;
-                        }
-                        let id = row.read(|row| Ok(row.get("id").cloned().unwrap_or_default()))?;
-                        if !seen.iter().any(|seen: &Value| seen.same_value_zero(&id)) {
-                            seen.push(id);
-                            accounts.push(row);
-                        }
+                let id = user.id.field_value();
+                let matching = state.accounts.select_refs(|row| {
+                    row.get(fields.record_storage_key("userId"))
+                        .unwrap_or(&Value::Undefined)
+                        .strict_equals(&id)
+                })?;
+                let mut seen = Vec::new();
+                for row in matching {
+                    if accounts.len() as f64 >= self.config.advanced.database.find_many_limit() {
+                        break;
+                    }
+                    let id = row.read(|row| Ok(row.get("id").cloned().unwrap_or_default()))?;
+                    if !seen.iter().any(|seen: &Value| seen.same_value_zero(&id)) {
+                        seen.push(id);
+                        accounts.push(row);
                     }
                 }
                 Ok(Some((user, stored_id, accounts)))
@@ -211,15 +207,11 @@ impl EphemeralStore {
                     .take(2)
                 {
                     let owner = account.get(fields.record_storage_key("userId")).cloned();
-                    let user = match &owner {
-                        Some(id) if !id.is_null() => {
-                            let id = self.memory_user_id_query(id)?;
-                            state
-                                .users
-                                .first_ref(|user| user.id.field_value().strict_equals(&id))?
-                        }
-                        _ => None,
-                    };
+                    let user = state.users.first_ref(|user| {
+                        user.id
+                            .field_value()
+                            .strict_equals(owner.as_ref().unwrap_or(&Value::Undefined))
+                    })?;
                     rows.push((account, self.stored_account_owner_id(owner)?, user));
                 }
                 Ok(rows)
@@ -271,11 +263,10 @@ impl EphemeralStore {
             .raw("session", "findOne", |state| {
                 match state.sessions.find(|row| row.token == token)? {
                     Some(session) => {
-                        let user = state.users.first_ref(|user| {
-                            user.id
-                                .field_value()
-                                .strict_equals(&session.user_id.field_value())
-                        })?;
+                        let owner = session.user_id.field_value();
+                        let user = state
+                            .users
+                            .first_ref(|user| user.id.field_value().strict_equals(&owner))?;
                         Ok(vec![(session, user)])
                     }
                     None => Ok(Vec::new()),
@@ -316,11 +307,10 @@ impl EphemeralStore {
                 sessions
                     .into_iter()
                     .map(|session| {
-                        let user = state.users.first_ref(|user| {
-                            user.id
-                                .field_value()
-                                .strict_equals(&session.user_id.field_value())
-                        })?;
+                        let owner = session.user_id.field_value();
+                        let user = state
+                            .users
+                            .first_ref(|user| user.id.field_value().strict_equals(&owner))?;
                         Ok((session, user))
                     })
                     .collect()

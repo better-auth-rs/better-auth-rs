@@ -431,6 +431,7 @@ pub struct PreparedUserQuery<'a> {
     fields: &'a UserConfig,
     filter: Option<(&'a str, &'a UserFieldConfig, Value)>,
     memory_filter: Option<Value>,
+    memory_search: Option<Value>,
 }
 
 impl<'a> PreparedUserQuery<'a> {
@@ -482,14 +483,35 @@ impl<'a> PreparedUserQuery<'a> {
             fields,
             filter,
             memory_filter: None,
+            memory_search: None,
         })
     }
 
-    /// Bind Memory JSON and reference values without changing SQL query values.
+    /// Bind Memory search and filter values without changing SQL query values.
     pub fn bind_memory_filter(
         mut self,
-        bind: impl FnOnce(&str, Value) -> AuthResult<Value>,
+        mut bind: impl FnMut(&str, Value) -> AuthResult<Value>,
     ) -> AuthResult<Self> {
+        if let Some(value) = self
+            .params
+            .search_value
+            .as_deref()
+            .filter(|value| !value.is_empty())
+        {
+            let name = self
+                .params
+                .search_field
+                .as_deref()
+                .filter(|name| !name.is_empty())
+                .unwrap_or("email");
+            let declared = declared_field(name, self.fields);
+            let name = declared.map_or(name, |(logical, _)| logical);
+            let value = bind(name, Value::from(value))?;
+            self.memory_search = Some(match declared {
+                Some((_, field)) => bind_filter(field, &value)?,
+                None => value,
+            });
+        }
         let name = self
             .params
             .filter_field
@@ -538,7 +560,9 @@ impl<'a> PreparedUserQuery<'a> {
                 .unwrap_or("email");
             if !matches_memory_value(
                 &self.memory_value(record, field)?,
-                &Value::from(expected),
+                self.memory_search
+                    .as_ref()
+                    .unwrap_or(&Value::from(expected)),
                 self.params.search_operator.as_deref().unwrap_or("contains"),
             )? {
                 return Ok(false);

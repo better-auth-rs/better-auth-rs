@@ -624,11 +624,16 @@ impl MemberStore for EphemeralStore {
                     Value::Array(values) => Value::Array(
                         values
                             .iter()
-                            .map(|value| self.memory_user_id_query(value))
+                            .map(|value| {
+                                self.organization_query(EntityRole::Member, "id", value.clone())
+                                    .map(crate::SchemaValue::into_field_value)
+                            })
                             .collect::<AuthResult<Vec<_>>>()?
                             .into(),
                     ),
-                    value => self.memory_user_id_query(value)?,
+                    value => self
+                        .organization_query(EntityRole::Member, "id", value.clone())?
+                        .into_field_value(),
                 }
             } else {
                 self.memory_field_query(&schema, field, expected.clone())?

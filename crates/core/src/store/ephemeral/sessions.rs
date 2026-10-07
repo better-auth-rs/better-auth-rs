@@ -51,7 +51,20 @@ impl EphemeralStore {
                     Ok(())
                 })
             },
-            |_, (session, _)| Ok(session.clone()),
+            |_, (session, _)| {
+                let mut session = session.clone();
+                if self.session_config.fields().contains_key("userId") {
+                    session.user_id = crate::SchemaValue::from_field(
+                        session
+                            .additional_fields
+                            .remove("userId")
+                            .unwrap_or_default(),
+                    );
+                } else {
+                    session.user_id = Self::project_user_id(&session.user_id)?;
+                }
+                Ok(session)
+            },
             complete,
         )
         .await
@@ -152,7 +165,14 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
         }
         let now = crate::FieldDate::from(Utc::now());
         let token = crate::id::random_id(None);
+        let schema = self.session_config.field_schema();
+        let configured_user_id = schema.fields().contains_key("userId");
         let mut fields = self.session_config.default_fields();
+        if configured_user_id {
+            let _ = fields
+                .entry("userId".into())
+                .or_insert_with(|| create_session.user_id.field_value());
+        }
         fields.extend(create_session.additional_fields);
         let mut plugin_fields = FieldMap::new();
         for name in ["impersonatedBy", "activeOrganizationId", "activeTeamId"] {
@@ -164,6 +184,23 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
             .generated_id("session", None, self.lock()?.sessions.len())?
             .map(crate::SchemaValue::Typed)
             .unwrap_or_default();
+        let mut user_id = if configured_user_id {
+            create_session.user_id
+        } else {
+            self.memory_session_user_id_input(create_session.user_id.into_field_value())?
+        };
+        let mut additional_fields = schema
+            .storage_fields_with_binding(fields, true, |_, field, value| {
+                self.memory_plugin_field_input(field, value)
+            })
+            .await?;
+        if configured_user_id {
+            user_id = crate::SchemaValue::from_field(
+                additional_fields
+                    .remove(schema.record_storage_key("userId"))
+                    .unwrap_or_default(),
+            );
+        }
         let mut session = SessionView {
             visible_fields: Some(
                 [
@@ -185,18 +222,12 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
             updated_at: now,
             ip_address: create_session.ip_address.or_else(|| Some(String::new())),
             user_agent: create_session.user_agent.or_else(|| Some(String::new())),
-            user_id: create_session.user_id,
+            user_id,
             impersonated_by: create_session.impersonated_by,
             active_organization_id: create_session.active_organization_id,
             active_team_id: None,
             active: true,
-            additional_fields: self
-                .session_config
-                .field_schema()
-                .storage_fields_with_binding(fields, true, |_, field, value| {
-                    self.memory_plugin_field_input(field, value)
-                })
-                .await?,
+            additional_fields,
         };
         for (field, target) in [
             ("impersonatedBy", &mut session.impersonated_by),
@@ -275,39 +306,34 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
                 ))
             })
             .await?;
-        let owner_ids: Vec<_> = sessions
-            .iter()
-            .map(|session| session.user_id.clone())
-            .collect();
         let snapshots = self
-            .output_sessions_batches_then(sessions, |ready| {
-                let owner_ids = &owner_ids;
-                async move {
-                    let mut pending = Vec::new();
-                    let mut users = Vec::new();
-                    for (index, session) in ready {
-                        let owner_id = owner_ids.get(index).ok_or_else(|| {
-                            AuthError::internal("Session projection lost its stored join index")
-                        })?;
-                        let user = self.user_ref(|user| user.id == *owner_id).await?;
-                        let has_user = user.is_some();
-                        users.extend(user);
-                        pending.push((index, session, has_user));
-                    }
-                    let mut users = self.output_user_refs(users).await?.into_iter();
-                    Ok(pending
-                        .into_iter()
-                        .map(|(index, session, has_user)| {
-                            let data = if has_user { users.next() } else { None }.map(|user| {
-                                crate::session::SessionData {
-                                    session: session.clone(),
-                                    user,
-                                }
-                            });
-                            (index, (session, data))
-                        })
-                        .collect())
+            .output_sessions_batches_then(sessions, |ready| async move {
+                let mut pending = Vec::new();
+                let mut users = Vec::new();
+                for (index, session) in ready {
+                    let owner = session.user_id.field_value();
+                    let user = if owner.is_null() || owner.is_undefined() {
+                        None
+                    } else {
+                        self.user_ref_by_id_value(&owner).await?
+                    };
+                    let has_user = user.is_some();
+                    users.extend(user);
+                    pending.push((index, session, has_user));
                 }
+                let mut users = self.output_user_refs(users).await?.into_iter();
+                Ok(pending
+                    .into_iter()
+                    .map(|(index, session, has_user)| {
+                        let data = if has_user { users.next() } else { None }.map(|user| {
+                            crate::session::SessionData {
+                                session: session.clone(),
+                                user,
+                            }
+                        });
+                        (index, (session, data))
+                    })
+                    .collect())
             })
             .await?;
         // Complete started output callbacks before applying the joined batch's missing-user rule.
@@ -333,6 +359,7 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
     }
 
     async fn get_user_sessions(&self, user_id: &str) -> AuthResult<Vec<SessionView>> {
+        let user_id = self.memory_session_user_id_query(Value::from(user_id))?;
         let sessions: Vec<_> = self
             .raw("session", "findMany", |state| {
                 Ok(crate::query::paginate_memory(
@@ -340,7 +367,7 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
                         .sessions
                         .snapshot()?
                         .iter()
-                        .filter(|session| session.user_id == user_id)
+                        .filter(|session| session.user_id.field_value().strict_equals(&user_id))
                         .cloned()
                         .collect(),
                     Some(self.config.advanced.database.find_many_limit()),
@@ -429,8 +456,12 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
         user_id: &str,
         preserve: bool,
     ) -> AuthResult<Option<usize>> {
-        self.delete_sessions_with_hooks(|row| row.user_id == user_id, preserve)
-            .await
+        let user_id = self.memory_session_user_id_query(Value::from(user_id))?;
+        self.delete_sessions_with_hooks(
+            |row| row.user_id.field_value().strict_equals(&user_id),
+            preserve,
+        )
+        .await
     }
 
     async fn delete_expired_sessions(&self) -> AuthResult<usize> {

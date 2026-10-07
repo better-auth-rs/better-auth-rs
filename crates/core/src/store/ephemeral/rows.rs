@@ -5,6 +5,7 @@ use crate::{
     StructuredCloneContext,
 };
 use std::collections::{HashMap, HashSet};
+use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 pub(super) trait MemoryRow {
@@ -185,18 +186,53 @@ impl<T: Clone + MemoryRow> Rows<T> {
     }
 }
 pub(super) trait TransactionRow {
-    fn transaction_id(&self) -> Option<String>;
+    fn transaction_id(&self) -> FieldValue;
 }
 impl<T: MemoryRow> TransactionRow for T {
-    fn transaction_id(&self) -> Option<String> {
-        self.id().as_str().map(str::to_owned)
+    fn transaction_id(&self) -> FieldValue {
+        self.id().field_value()
     }
 }
 impl TransactionRow for FieldMap {
-    fn transaction_id(&self) -> Option<String> {
-        self.get("id")
-            .and_then(FieldValue::as_str)
-            .map(str::to_owned)
+    fn transaction_id(&self) -> FieldValue {
+        self.get("id").cloned().unwrap_or_default()
+    }
+}
+
+struct TransactionId(FieldValue);
+
+impl PartialEq for TransactionId {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.same_value_zero(&other.0)
+    }
+}
+
+impl Eq for TransactionId {}
+
+impl Hash for TransactionId {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        match &self.0 {
+            FieldValue::Undefined => 0_u8.hash(state),
+            FieldValue::Null => 1_u8.hash(state),
+            FieldValue::Bool(value) => (2_u8, value).hash(state),
+            FieldValue::Number(value) => {
+                let bits = if value.is_nan() {
+                    f64::NAN.to_bits()
+                } else if *value == 0.0 {
+                    0
+                } else {
+                    value.to_bits()
+                };
+                (3_u8, bits).hash(state);
+            }
+            FieldValue::String(value) => {
+                (4_u8, value.encode_utf16().collect::<Vec<_>>()).hash(state);
+            }
+            FieldValue::Utf16String(value) => (4_u8, value.as_utf16()).hash(state),
+            FieldValue::Date(value) => (5_u8, value.milliseconds().to_bits()).hash(state),
+            FieldValue::Array(value) => (6_u8, Arc::as_ptr(value)).hash(state),
+            FieldValue::Object(value) => (7_u8, Arc::as_ptr(value)).hash(state),
+        }
     }
 }
 pub(super) fn row_json(row: &impl AuthRecordFields) -> AuthResult<Option<String>> {
@@ -210,17 +246,20 @@ impl<T: Clone + AuthRecordFields + TransactionRow> Rows<T> {
         let base: HashMap<_, _> = base
             .snapshot()?
             .into_iter()
-            .map(|row| Ok((row.transaction_id(), row_json(&row)?)))
+            .map(|row| Ok((TransactionId(row.transaction_id()), row_json(&row)?)))
             .collect::<AuthResult<_>>()?;
         let mut changed = HashMap::new();
         for shared in &working.0 {
             let row = lock(shared)?.clone();
-            let _ = changed.insert(row.transaction_id(), (shared.clone(), row_json(&row)?));
+            let _ = changed.insert(
+                TransactionId(row.transaction_id()),
+                (shared.clone(), row_json(&row)?),
+            );
         }
         let mut placed = HashSet::new();
         let mut live = Vec::new();
         for shared in &self.0 {
-            let id = lock(shared)?.transaction_id();
+            let id = TransactionId(lock(shared)?.transaction_id());
             if base.contains_key(&id) && !changed.contains_key(&id) {
                 continue;
             }
@@ -232,7 +271,7 @@ impl<T: Clone + AuthRecordFields + TransactionRow> Rows<T> {
             let _ = placed.insert(id);
         }
         for shared in working.0 {
-            let id = lock(&shared)?.transaction_id();
+            let id = TransactionId(lock(&shared)?.transaction_id());
             if !base.contains_key(&id) && !placed.contains(&id) {
                 live.push(shared);
             }
@@ -294,6 +333,149 @@ mod tests {
                 label: fields.remove("label").unwrap_or_default().decode()?,
             })
         }
+    }
+
+    #[test]
+    fn transaction_keys_preserve_native_types_and_object_identity() {
+        let date = FieldValue::Date(crate::FieldDate::from_milliseconds(1.0));
+        let array = FieldValue::from(vec![FieldValue::Number(1.0)]);
+        let object = FieldValue::from(FieldMap::new());
+        let keys: HashSet<_> = [
+            FieldValue::Undefined,
+            FieldValue::Null,
+            FieldValue::Bool(false),
+            FieldValue::Bool(true),
+            FieldValue::Number(0.0),
+            FieldValue::Number(1.0),
+            FieldValue::Number(f64::NAN),
+            FieldValue::String("1".into()),
+            FieldValue::String("😀".into()),
+            FieldValue::Utf16String(crate::Utf16String::from_units(vec![0xd800])),
+            date.clone(),
+            array.clone(),
+            object.clone(),
+        ]
+        .into_iter()
+        .map(TransactionId)
+        .collect();
+        assert_eq!(keys.len(), 13);
+        for equivalent in [
+            FieldValue::Number(-0.0),
+            FieldValue::Number(f64::from_bits(0x7ff8_0000_0000_0001)),
+            FieldValue::Utf16String("😀".into()),
+            date,
+            array,
+            object,
+        ] {
+            assert!(keys.contains(&TransactionId(equivalent)));
+        }
+        for distinct in [
+            FieldValue::Number(2.0),
+            FieldValue::String("0".into()),
+            FieldValue::Date(crate::FieldDate::from_milliseconds(1.0)),
+            FieldValue::from(vec![FieldValue::Number(1.0)]),
+            FieldValue::from(FieldMap::new()),
+        ] {
+            assert!(!keys.contains(&TransactionId(distinct)));
+        }
+    }
+
+    #[test]
+    fn transaction_numeric_ids_merge_updates_deletes_and_creates_independently() -> AuthResult<()> {
+        let mut live = Rows::default();
+        for (id, label) in [
+            (FieldValue::Number(1.0), "Alice"),
+            (FieldValue::Number(2.0), "Bob"),
+            (FieldValue::String("1".into()), "String ID"),
+            (FieldValue::Number(3.0), "Deleted"),
+        ] {
+            live.push(Record {
+                id: SchemaValue::from_field(id),
+                label: label.into(),
+            });
+        }
+        let base = live.deep_clone(&mut StructuredCloneContext::new())?;
+        let mut working = base.deep_clone(&mut StructuredCloneContext::new())?;
+        working.update_each(|row| {
+            if row.label == "Alice" {
+                row.label = "Updated Alice".into();
+            }
+            Ok(())
+        })?;
+        let _ = working.remove_first(|row| row.label == "Deleted")?;
+        working.push(Record {
+            id: SchemaValue::from_field(FieldValue::Number(4.0)),
+            label: "Created".into(),
+        });
+        let bob = live
+            .first_ref(|row| row.label == "Bob")?
+            .ok_or_else(|| AuthError::internal("missing Bob fixture"))?;
+        bob.write(|row| {
+            row.label = "Concurrent Bob".into();
+            Ok(())
+        })?;
+        assert_eq!(
+            live.snapshot()?.first().map(|row| row.label.clone()),
+            Some("Alice".into())
+        );
+        assert_eq!(live.len(), 4);
+        live.merge(&base, working.clone())?;
+        assert_eq!(
+            live.snapshot()?
+                .iter()
+                .map(|row| row.label.as_str())
+                .collect::<Vec<_>>(),
+            ["Updated Alice", "Concurrent Bob", "String ID", "Created"]
+        );
+        assert!(live.0.iter().any(|row| Arc::ptr_eq(row, &bob.0)));
+        for expected in
+            working.select_refs(|row| matches!(row.label.as_str(), "Updated Alice" | "Created"))?
+        {
+            assert!(live.0.iter().any(|row| Arc::ptr_eq(row, &expected.0)));
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn transaction_native_duplicate_ids_keep_the_last_row_limitation() -> AuthResult<()> {
+        for (first, last) in [
+            (Some(FieldValue::Number(1.0)), Some(FieldValue::Number(1.0))),
+            (
+                Some(FieldValue::Number(f64::NAN)),
+                Some(FieldValue::Number(-f64::NAN)),
+            ),
+            (
+                Some(FieldValue::Number(-0.0)),
+                Some(FieldValue::Number(0.0)),
+            ),
+            (None, Some(FieldValue::Undefined)),
+        ] {
+            let mut live = Rows::default();
+            for (id, label) in [(first, "First"), (last, "Last")] {
+                let mut row = FieldMap::from([("label".into(), FieldValue::from(label))]);
+                if let Some(id) = id {
+                    let _ = row.insert("id".into(), id);
+                }
+                live.push(row);
+            }
+            let base = live.deep_clone(&mut StructuredCloneContext::new())?;
+            let working = base.deep_clone(&mut StructuredCloneContext::new())?;
+            working.update_each(|row| {
+                if row.get("label").and_then(FieldValue::as_str) == Some("Last") {
+                    let _ = row.insert("label".into(), "Updated".into());
+                }
+                Ok(())
+            })?;
+            live.merge(&base, working)?;
+            assert_eq!(live.len(), 2);
+            for row in live.snapshot()? {
+                assert_eq!(
+                    row.get("label").and_then(FieldValue::as_str),
+                    Some("Updated")
+                );
+            }
+        }
+        Ok(())
     }
 
     #[test]

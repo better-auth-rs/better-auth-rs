@@ -9,11 +9,10 @@ impl EphemeralStore {
         name: &str,
         value: Value,
     ) -> AuthResult<crate::SchemaValue<String>> {
-        let value = if name == "id" {
-            self.memory_user_id_query(&value)?
-        } else {
-            self.memory_field_query(&self.field_config(role)?, name, value)?
-        };
+        if name == "id" {
+            return self.organization_primary_id(&crate::SchemaValue::from_field(value));
+        }
+        let value = self.memory_field_query(&self.field_config(role)?, name, value)?;
         Ok(crate::SchemaValue::from_field(value))
     }
 
@@ -21,9 +20,16 @@ impl EphemeralStore {
         &self,
         value: &crate::SchemaValue<String>,
     ) -> AuthResult<crate::SchemaValue<String>> {
-        // Join keys come from the stored row before output transforms run.
-        self.memory_user_id_query(&value.field_value())
-            .map(crate::SchemaValue::from_field)
+        // Organization records store textual primary IDs.
+        if matches!(
+            self.config.advanced.database.generate_id(),
+            crate::id::IdGeneration::Serial
+        ) {
+            let number = crate::query::field_number(&value.field_value())?;
+            Ok(crate::schema_value::number_string(number).into())
+        } else {
+            Ok(value.clone())
+        }
     }
 
     pub(super) fn organization_reference_query(
@@ -90,11 +96,34 @@ impl EphemeralStore {
             self.config.advanced.database.generate_id(),
             crate::id::IdGeneration::Serial
         ) {
-            // Memory's typed user rows retain primary IDs as strings.
-            let number = crate::query::field_number(value)?;
-            Ok(Value::String(crate::schema_value::number_string(number)))
+            crate::id::serial_reference_query_value(value.clone())
         } else {
             Ok(value.clone())
+        }
+    }
+
+    pub(super) fn memory_session_user_id_input(
+        &self,
+        value: Value,
+    ) -> AuthResult<crate::SchemaValue<String>> {
+        let value = if matches!(
+            self.config.advanced.database.generate_id(),
+            crate::id::IdGeneration::Serial
+        ) {
+            crate::id::serial_reference_value(value)?
+        } else {
+            value
+        };
+        Ok(crate::SchemaValue::from_field(value))
+    }
+
+    pub(super) fn memory_session_user_id_query(&self, value: Value) -> AuthResult<Value> {
+        match self.session_config.fields().get("userId") {
+            Some(field) => crate::user_query::bind_filter(
+                field,
+                &self.memory_field_query(&self.session_config.field_schema(), "userId", value)?,
+            ),
+            None => self.memory_user_id_query(&value),
         }
     }
 

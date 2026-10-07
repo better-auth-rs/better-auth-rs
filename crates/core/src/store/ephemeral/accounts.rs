@@ -194,8 +194,10 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
                             AuthError::internal("Account projection lost its stored owner index")
                         })?;
                         let stored_owner_id = self.stored_account_owner_id(owner_id.clone())?;
-                        let user = match owner_id {
-                            Some(id) if !id.is_null() => self.user_ref_by_id_value(id).await?,
+                        let user = match output.get("userId") {
+                            Some(id) if !id.is_null() && !id.is_undefined() => {
+                                self.user_ref_by_id_value(id).await?
+                            }
                             _ => None,
                         };
                         let has_user = user.is_some();
