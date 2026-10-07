@@ -358,6 +358,71 @@ async fn test_device_token_rate_limits_with_slow_down() {
     assert_eq!(second_body["error_description"], POLLING_TOO_FREQUENTLY);
 }
 
+#[tokio::test]
+async fn test_device_token_zero_interval_skips_future_poll_timestamp() {
+    let plugin = DeviceAuthorizationPlugin::new();
+    let ctx = test_helpers::create_test_context().await;
+    for (name, interval, expected_error, expected_description) in [
+        ("zero", 0.0, "authorization_pending", AUTHORIZATION_PENDING),
+        (
+            "negative-zero",
+            -0.0,
+            "authorization_pending",
+            AUTHORIZATION_PENDING,
+        ),
+        ("positive", 5000.0, "slow_down", POLLING_TOO_FREQUENTLY),
+    ] {
+        let started = Utc::now();
+        let row = ctx
+            .database
+            .create_device_code(CreateDeviceCode {
+                additional_fields: Default::default(),
+                device_code: format!("polling-{name}"),
+                user_code: format!("polling-user-{name}"),
+                user_id: None,
+                expires_at: (started + Duration::hours(2)).into(),
+                status: DEVICE_STATUS_PENDING.into(),
+                last_polled_at: Some((started + Duration::hours(1)).into()),
+                polling_interval: Some(interval),
+                client_id: Some("test-client".into()),
+                scope: Default::default(),
+            })
+            .await
+            .unwrap();
+        let response = plugin
+            .handle_device_token(&device_token_request(&row.device_code, "test-client"), &ctx)
+            .await
+            .unwrap();
+        assert_eq!(response.status, 400);
+        assert_eq!(
+            json_body(&response),
+            serde_json::json!({
+                "error": expected_error, "error_description": expected_description,
+            })
+        );
+        let remaining = ctx
+            .database
+            .get_device_code_by_device_code(&row.device_code)
+            .await
+            .unwrap()
+            .unwrap();
+        if expected_error == "slow_down" {
+            assert_eq!(remaining, row);
+        } else {
+            let polled = remaining.last_polled_at.as_ref().unwrap().milliseconds();
+            assert!(polled >= started.timestamp_millis() as f64);
+            assert!(polled <= Utc::now().timestamp_millis() as f64);
+            assert_eq!(
+                remaining,
+                better_auth_core::DeviceCode {
+                    last_polled_at: remaining.last_polled_at.clone(),
+                    ..row
+                }
+            );
+        }
+    }
+}
+
 // Upstream source: packages/better-auth/src/plugins/device-authorization/device-authorization.test.ts :: verification scenarios.
 #[tokio::test]
 async fn test_device_verify_strips_hyphens_and_preserves_input_shape() {

@@ -41,6 +41,20 @@ run_stage() {
       cargo test --locked --test client_compat_tests -- \
         --ignored --nocapture --exact --test-threads=1 configuration_failure_aggregation configuration_client_compat
       ;;
+    credential-timing)
+      cargo fmt --all -- --check
+      cargo clippy --locked -p better-auth-api --tests -- -D warnings
+      cargo clippy --locked --features axum,seaorm2,redis-cache --test plugin_model_fields_tests -- -D warnings
+      cargo test --locked -p better-auth-api --lib -- \
+        plugins::one_time_token::tests:: plugins::device_authorization::tests::
+      cargo test --locked --features axum,seaorm2,redis-cache --test plugin_model_fields_tests -- \
+        device_redemption:: device_consumption::
+      bun --no-install test \
+        ./compat-tests/reference-server/contracts/one-time-token-expiry.test.ts \
+        ./compat-tests/reference-server/contracts/device-polling.test.ts \
+        ./compat-tests/reference-server/contracts/device-redemption.test.ts \
+        ./compat-tests/reference-server/contracts/device-interval.test.ts
+      ;;
     cookie-attributes)
       cargo fmt --all -- --check
       bun --no-install test \

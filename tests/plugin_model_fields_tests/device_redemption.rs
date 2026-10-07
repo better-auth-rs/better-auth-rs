@@ -172,6 +172,133 @@ async fn sqlite_server_device_redemption_matches_upstream() -> AuthResult<()> {
     contract(sqlite().await?, "sqlite").await
 }
 
+async fn polling_truthiness_contract<S: AuthSchema>(
+    raw: Arc<dyn AuthStore<S>>,
+    supports_nan: bool,
+) -> AuthResult<()> {
+    let auth = BetterAuth::new(config())
+        .store_arc(raw)
+        .plugin(DeviceAuthorizationPlugin::new())
+        .build()
+        .await?;
+    let owner = owner(auth.store().as_ref(), "polling-owner").await?;
+    let intervals = [
+        ("zero", 0.0, false),
+        ("negative-zero", -0.0, false),
+        ("positive", 5000.0, true),
+        ("fractional", 1.5, true),
+    ];
+    let mut intervals = intervals.to_vec();
+    if supports_nan {
+        intervals.push(("nan", f64::NAN, false));
+    }
+    for (name, interval, blocks_future) in intervals {
+        for future in [false, true] {
+            let token = format!("polling-{name}-{future}");
+            let started = chrono::Utc::now();
+            let last_polled_at = started
+                + if future {
+                    chrono::Duration::hours(1)
+                } else {
+                    -chrono::Duration::hours(1)
+                };
+            let seeded = auth
+                .store()
+                .create_device_code(CreateDeviceCode {
+                    additional_fields: Default::default(),
+                    device_code: token.clone(),
+                    user_code: token.clone(),
+                    user_id: Some(owner.clone()),
+                    expires_at: (started + chrono::Duration::hours(2)).into(),
+                    status: "approved".into(),
+                    last_polled_at: Some(last_polled_at.into()),
+                    polling_interval: Some(interval),
+                    client_id: Some("ordinary-client".into()),
+                    scope: Some("read".into()).into(),
+                })
+                .await?;
+            if interval.is_nan() {
+                assert!(seeded.polling_interval.is_some_and(f64::is_nan));
+            }
+            let endpoint = EndpointContext::native(None, None, FieldValue::Null, auth.context());
+            let events = Arc::new(Mutex::new(Vec::new()));
+            let authorize_events = events.clone();
+            let prepare_events = events.clone();
+            let result = redeem_device_code(
+                &endpoint,
+                &token,
+                move |row, _| {
+                    Box::pin(async move {
+                        trace_lock(&authorize_events)?
+                            .push(("authorize", row.last_polled_at.clone()));
+                        Ok(DeviceCodeRedemptionAuthorization {
+                            ownership: DeviceCodeOwnership::ClientId("ordinary-client".into()),
+                            context: "issuer",
+                        })
+                    })
+                },
+                move |row, authorization, _| {
+                    Box::pin(async move {
+                        assert_eq!(*authorization, "issuer");
+                        trace_lock(&prepare_events)?.push(("prepare", row.last_polled_at.clone()));
+                        Ok("prepared")
+                    })
+                },
+            )
+            .await;
+            let remaining = auth.store().get_device_code_by_device_code(&token).await?;
+            if future && blocks_future {
+                let response =
+                    required(result.err(), "A future poll must be throttled")?.to_auth_response();
+                assert_eq!(response.status, 400, "{name}");
+                assert_eq!(
+                    serde_json::from_slice::<Value>(&response.body.bytes()?)?,
+                    json!({"error": "slow_down", "error_description": "Polling too frequently"})
+                );
+                assert_eq!(
+                    *trace_lock(&events)?,
+                    [("authorize", seeded.last_polled_at.clone())]
+                );
+                assert_eq!(remaining, Some(seeded));
+            } else {
+                let redeemed = result?;
+                assert_eq!(redeemed.authorization_context, "issuer");
+                assert_eq!(redeemed.redemption_context, "prepared");
+                assert_eq!(redeemed.claimed_device_code.id, seeded.id);
+                assert_eq!(redeemed.claimed_device_code.user_id, seeded.user_id);
+                assert_eq!(redeemed.user.id.typed()?, &owner);
+                let polled = required(
+                    redeemed.claimed_device_code.last_polled_at,
+                    "Expected the poll timestamp",
+                )?;
+                assert!(polled.milliseconds() >= started.timestamp_millis() as f64);
+                assert!(polled.milliseconds() <= chrono::Utc::now().timestamp_millis() as f64);
+                assert_eq!(
+                    *trace_lock(&events)?,
+                    [
+                        ("authorize", seeded.last_polled_at.clone()),
+                        ("prepare", seeded.last_polled_at),
+                    ]
+                );
+                assert!(remaining.is_none());
+            }
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn memory_device_redemption_polling_truthiness_preserves_callbacks_and_consumption()
+-> AuthResult<()> {
+    polling_truthiness_contract(memory(), true).await
+}
+
+#[tokio::test]
+async fn sqlite_device_redemption_polling_truthiness_preserves_callbacks_and_consumption()
+-> AuthResult<()> {
+    polling_truthiness_contract(sqlite().await?, false).await
+}
+
 async fn redeemed_user<S: AuthSchema>(
     context: &AuthContext<S>,
     transaction: Option<&dyn AuthTransaction<S>>,

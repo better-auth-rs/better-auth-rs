@@ -78,3 +78,67 @@ async fn concurrent_redemption_issues_one_cookie_and_expired_proofs_cannot_authe
             .is_none()
     );
 }
+
+#[tokio::test]
+async fn custom_hashing_does_not_extend_token_lifetime() {
+    let (ctx, user, session) = create_test_context_with_user(
+        CreateUser::new()
+            .with_email("slow-hash@example.com")
+            .with_name("Slow Hash"),
+        Duration::hours(1),
+    )
+    .await;
+    let lifetime = Duration::milliseconds(50);
+    let hash_times = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let callback_times = hash_times.clone();
+    let plugin = OneTimeTokenPlugin::new()
+        .expires_in(lifetime)
+        .store_token(TokenStorage::Custom(Arc::new(move |token| {
+            let times = callback_times.clone();
+            Box::pin(async move {
+                let entered = Utc::now();
+                let first = times.lock().unwrap().is_empty();
+                if first {
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                }
+                times.lock().unwrap().push((entered, Utc::now()));
+                Ok(format!("hashed:{token}"))
+            })
+        })));
+    let token = plugin.generate(&ctx, session, user).await.unwrap();
+    let identifier = format!("one-time-token:hashed:{token}");
+    let proof = ctx
+        .database
+        .get_verification_including_expired(&identifier)
+        .await
+        .unwrap()
+        .unwrap();
+    let (entered, completed) = hash_times.lock().unwrap().first().copied().unwrap();
+    assert!(completed - entered > lifetime);
+    let expires_at = proof.expires_at.date_milliseconds().unwrap();
+    assert!(
+        expires_at <= (entered + lifetime).timestamp_millis() as f64,
+        "the token deadline must be computed before the custom hasher starts"
+    );
+    assert!(expires_at < completed.timestamp_millis() as f64);
+    for attempt in ["verification", "replay"] {
+        let request = verify_request(&token);
+        let response = plugin.handle_verify(&request, &ctx).await.unwrap();
+        let response = finalize_response(&ctx, &request, response);
+        assert_eq!(response.status, 400, "{attempt}");
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&response.body.bytes().unwrap()).unwrap(),
+            serde_json::json!({ "message": "Invalid token" }),
+            "{attempt}"
+        );
+        assert!(!response.headers.contains_key("set-cookie"), "{attempt}");
+        assert!(
+            ctx.database
+                .get_verification_including_expired(&identifier)
+                .await
+                .unwrap()
+                .is_none(),
+            "{attempt} must leave the proof consumed"
+        );
+    }
+}

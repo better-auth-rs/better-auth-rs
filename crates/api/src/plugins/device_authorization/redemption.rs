@@ -72,7 +72,9 @@ where
     let authorization = authorize(&device_code, endpoint).await?;
     if let (Some(last_polled_at), Some(polling_interval)) = (
         device_code.last_polled_at.as_ref(),
-        device_code.polling_interval,
+        device_code
+            .polling_interval
+            .filter(|interval| better_auth_core::FieldValue::Number(*interval).is_truthy()),
     ) {
         let elapsed = Utc::now().timestamp_millis() as f64 - last_polled_at.milliseconds();
         if elapsed < polling_interval {

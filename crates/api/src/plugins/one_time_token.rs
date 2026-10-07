@@ -132,13 +132,14 @@ impl OneTimeTokenPlugin {
                 URL_SAFE_NO_PAD.encode(bytes)
             }
         };
+        let expires_at = Utc::now() + self.config.expires_in;
         let stored = self.config.store_token.encode(&token).await?;
         let _ = ctx
             .database
             .create_verification(CreateVerification {
                 identifier: (format!("one-time-token:{stored}")).into(),
                 value: (session_token).into(),
-                expires_at: (Utc::now() + self.config.expires_in).into(),
+                expires_at: expires_at.into(),
                 ..Default::default()
             })
             .await?;

@@ -1,0 +1,3472 @@
+{
+  "version": "1.7.6",
+  "issuedAt": 2000000000123,
+  "expiresIn": 0.025,
+  "lifetimeMillis": 1500,
+  "hashDurationMillis": 2000,
+  "scope": {
+    "expiry": "The deadline precedes custom hashing; expired proof consumption removes the proof before replay",
+    "entrypoints": "Authenticated HTTP generation and the set-ott hook after email sign-in",
+    "signIn": "A deterministic configured password verifier admits the seeded credential account",
+    "normalization": "Replace the generated session token after checking its shape, storage references, and signed cookie",
+    "storage": "Capture every Memory or SQLite table and core lifecycle hook around generation, verification, replay, and session lookup"
+  },
+  "cases": [
+    {
+      "backend": "memory",
+      "entrypoint": "generate",
+      "seed": {
+        "input": [
+          {
+            "model": "user",
+            "forceAllowId": true,
+            "data": {
+              "id": "owner",
+              "name": "One Time Token Owner",
+              "email": "owner@one-time-token-expiry.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              }
+            }
+          },
+          {
+            "model": "session",
+            "forceAllowId": true,
+            "data": {
+              "id": "owner-session",
+              "userId": "owner",
+              "token": "fixed-owner-session-token",
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T04:33:20.123Z"
+              },
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "ipAddress": "203.0.113.8",
+              "userAgent": "one-time-token-expiry-contract"
+            }
+          }
+        ],
+        "before": {
+          "user": [],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "after": {
+          "user": [
+            {
+              "name": "One Time Token Owner",
+              "email": "owner@one-time-token-expiry.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [
+            {
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T04:33:20.123Z"
+              },
+              "token": "fixed-owner-session-token",
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "ipAddress": "203.0.113.8",
+              "userAgent": "one-time-token-expiry-contract",
+              "userId": "owner",
+              "id": "owner-session"
+            }
+          ],
+          "account": [],
+          "verification": []
+        },
+        "events": []
+      },
+      "generation": {
+        "name": "generate",
+        "timestampMillis": 2000000000123,
+        "request": {
+          "url": "http://one-time-token-expiry.test/api/auth/one-time-token/generate",
+          "method": "GET",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "cookie",
+              "better-auth.session_token=fixed-owner-session-token.lSt%2Bm%2BbCz91WoooyhBIobpOGmk8nnRlLyKvvM3naE8o%3D"
+            ],
+            [
+              "origin",
+              "http://one-time-token-expiry.test"
+            ],
+            [
+              "user-agent",
+              "one-time-token-expiry-contract"
+            ],
+            [
+              "x-forwarded-for",
+              "203.0.113.8"
+            ]
+          ],
+          "body": ""
+        },
+        "before": {
+          "user": [
+            {
+              "name": "One Time Token Owner",
+              "email": "owner@one-time-token-expiry.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [
+            {
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T04:33:20.123Z"
+              },
+              "token": "fixed-owner-session-token",
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "ipAddress": "203.0.113.8",
+              "userAgent": "one-time-token-expiry-contract",
+              "userId": "owner",
+              "id": "owner-session"
+            }
+          ],
+          "account": [],
+          "verification": []
+        },
+        "response": {
+          "status": 200,
+          "statusText": "",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ]
+          ],
+          "cookies": [],
+          "body": "{\"token\":\"fixed-one-time-token\"}"
+        },
+        "after": {
+          "user": [
+            {
+              "name": "One Time Token Owner",
+              "email": "owner@one-time-token-expiry.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [
+            {
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T04:33:20.123Z"
+              },
+              "token": "fixed-owner-session-token",
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "ipAddress": "203.0.113.8",
+              "userAgent": "one-time-token-expiry-contract",
+              "userId": "owner",
+              "id": "owner-session"
+            }
+          ],
+          "account": [],
+          "verification": [
+            {
+              "identifier": "one-time-token:hashed:fixed-one-time-token",
+              "value": "fixed-owner-session-token",
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.623Z"
+              },
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:22.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:22.123Z"
+              },
+              "id": "verification-1"
+            }
+          ]
+        },
+        "events": [
+          {
+            "kind": "token.generate",
+            "timestampMillis": 2000000000123,
+            "session": {
+              "session": {
+                "expiresAt": {
+                  "type": "date",
+                  "value": "2033-05-18T04:33:20.123Z"
+                },
+                "token": "fixed-owner-session-token",
+                "createdAt": {
+                  "type": "date",
+                  "value": "2033-05-18T03:33:20.123Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2033-05-18T03:33:20.123Z"
+                },
+                "ipAddress": "203.0.113.8",
+                "userAgent": "one-time-token-expiry-contract",
+                "userId": "owner",
+                "id": "owner-session"
+              },
+              "user": {
+                "name": "One Time Token Owner",
+                "email": "owner@one-time-token-expiry.test",
+                "emailVerified": true,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2033-05-18T03:33:20.123Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2033-05-18T03:33:20.123Z"
+                },
+                "id": "owner"
+              }
+            },
+            "path": "/one-time-token/generate"
+          },
+          {
+            "kind": "token.hash.start",
+            "invocation": 1,
+            "token": "fixed-one-time-token",
+            "timestampMillis": 2000000000123
+          },
+          {
+            "kind": "token.hash.end",
+            "invocation": 1,
+            "token": "fixed-one-time-token",
+            "result": "hashed:fixed-one-time-token",
+            "timestampMillis": 2000000002123
+          },
+          {
+            "kind": "hook",
+            "model": "verification",
+            "operation": "create",
+            "phase": "before",
+            "data": {
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:22.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:22.123Z"
+              },
+              "value": "fixed-owner-session-token",
+              "identifier": "one-time-token:hashed:fixed-one-time-token",
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.623Z"
+              }
+            }
+          },
+          {
+            "kind": "generate-id",
+            "input": {
+              "model": "verification"
+            },
+            "id": "verification-1"
+          },
+          {
+            "kind": "hook",
+            "model": "verification",
+            "operation": "create",
+            "phase": "after",
+            "data": {
+              "identifier": "one-time-token:hashed:fixed-one-time-token",
+              "value": "fixed-owner-session-token",
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.623Z"
+              },
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:22.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:22.123Z"
+              },
+              "id": "verification-1"
+            }
+          }
+        ],
+        "completedAt": 2000000002123
+      },
+      "verify": {
+        "name": "verify",
+        "timestampMillis": 2000000002123,
+        "request": {
+          "url": "http://one-time-token-expiry.test/api/auth/one-time-token/verify",
+          "method": "POST",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "origin",
+              "http://one-time-token-expiry.test"
+            ],
+            [
+              "user-agent",
+              "one-time-token-expiry-contract"
+            ],
+            [
+              "x-forwarded-for",
+              "203.0.113.8"
+            ]
+          ],
+          "body": "{\"token\":\"fixed-one-time-token\"}"
+        },
+        "before": {
+          "user": [
+            {
+              "name": "One Time Token Owner",
+              "email": "owner@one-time-token-expiry.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [
+            {
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T04:33:20.123Z"
+              },
+              "token": "fixed-owner-session-token",
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "ipAddress": "203.0.113.8",
+              "userAgent": "one-time-token-expiry-contract",
+              "userId": "owner",
+              "id": "owner-session"
+            }
+          ],
+          "account": [],
+          "verification": [
+            {
+              "identifier": "one-time-token:hashed:fixed-one-time-token",
+              "value": "fixed-owner-session-token",
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.623Z"
+              },
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:22.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:22.123Z"
+              },
+              "id": "verification-1"
+            }
+          ]
+        },
+        "response": {
+          "status": 400,
+          "statusText": "BAD_REQUEST",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ]
+          ],
+          "cookies": [],
+          "body": "{\"message\":\"Invalid token\"}"
+        },
+        "after": {
+          "user": [
+            {
+              "name": "One Time Token Owner",
+              "email": "owner@one-time-token-expiry.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [
+            {
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T04:33:20.123Z"
+              },
+              "token": "fixed-owner-session-token",
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "ipAddress": "203.0.113.8",
+              "userAgent": "one-time-token-expiry-contract",
+              "userId": "owner",
+              "id": "owner-session"
+            }
+          ],
+          "account": [],
+          "verification": []
+        },
+        "events": [
+          {
+            "kind": "token.hash.start",
+            "invocation": 2,
+            "token": "fixed-one-time-token",
+            "timestampMillis": 2000000002123
+          },
+          {
+            "kind": "token.hash.end",
+            "invocation": 2,
+            "token": "fixed-one-time-token",
+            "result": "hashed:fixed-one-time-token",
+            "timestampMillis": 2000000002123
+          },
+          {
+            "kind": "hook",
+            "model": "verification",
+            "operation": "delete",
+            "phase": "before",
+            "data": {
+              "identifier": "one-time-token:hashed:fixed-one-time-token",
+              "value": "fixed-owner-session-token",
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.623Z"
+              },
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:22.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:22.123Z"
+              },
+              "id": "verification-1"
+            }
+          },
+          {
+            "kind": "hook",
+            "model": "verification",
+            "operation": "delete",
+            "phase": "after",
+            "data": {
+              "identifier": "one-time-token:hashed:fixed-one-time-token",
+              "value": "fixed-owner-session-token",
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.623Z"
+              },
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:22.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:22.123Z"
+              },
+              "id": "verification-1"
+            }
+          }
+        ],
+        "completedAt": 2000000002123
+      },
+      "replay": {
+        "name": "replay",
+        "timestampMillis": 2000000002123,
+        "request": {
+          "url": "http://one-time-token-expiry.test/api/auth/one-time-token/verify",
+          "method": "POST",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "origin",
+              "http://one-time-token-expiry.test"
+            ],
+            [
+              "user-agent",
+              "one-time-token-expiry-contract"
+            ],
+            [
+              "x-forwarded-for",
+              "203.0.113.8"
+            ]
+          ],
+          "body": "{\"token\":\"fixed-one-time-token\"}"
+        },
+        "before": {
+          "user": [
+            {
+              "name": "One Time Token Owner",
+              "email": "owner@one-time-token-expiry.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [
+            {
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T04:33:20.123Z"
+              },
+              "token": "fixed-owner-session-token",
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "ipAddress": "203.0.113.8",
+              "userAgent": "one-time-token-expiry-contract",
+              "userId": "owner",
+              "id": "owner-session"
+            }
+          ],
+          "account": [],
+          "verification": []
+        },
+        "response": {
+          "status": 400,
+          "statusText": "BAD_REQUEST",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ]
+          ],
+          "cookies": [],
+          "body": "{\"message\":\"Invalid token\"}"
+        },
+        "after": {
+          "user": [
+            {
+              "name": "One Time Token Owner",
+              "email": "owner@one-time-token-expiry.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [
+            {
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T04:33:20.123Z"
+              },
+              "token": "fixed-owner-session-token",
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "ipAddress": "203.0.113.8",
+              "userAgent": "one-time-token-expiry-contract",
+              "userId": "owner",
+              "id": "owner-session"
+            }
+          ],
+          "account": [],
+          "verification": []
+        },
+        "events": [
+          {
+            "kind": "token.hash.start",
+            "invocation": 3,
+            "token": "fixed-one-time-token",
+            "timestampMillis": 2000000002123
+          },
+          {
+            "kind": "token.hash.end",
+            "invocation": 3,
+            "token": "fixed-one-time-token",
+            "result": "hashed:fixed-one-time-token",
+            "timestampMillis": 2000000002123
+          }
+        ],
+        "completedAt": 2000000002123
+      },
+      "session": {
+        "name": "session",
+        "timestampMillis": 2000000002123,
+        "request": {
+          "url": "http://one-time-token-expiry.test/api/auth/get-session",
+          "method": "GET",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "cookie",
+              "better-auth.session_token=fixed-owner-session-token.lSt%2Bm%2BbCz91WoooyhBIobpOGmk8nnRlLyKvvM3naE8o%3D"
+            ],
+            [
+              "origin",
+              "http://one-time-token-expiry.test"
+            ],
+            [
+              "user-agent",
+              "one-time-token-expiry-contract"
+            ],
+            [
+              "x-forwarded-for",
+              "203.0.113.8"
+            ]
+          ],
+          "body": ""
+        },
+        "before": {
+          "user": [
+            {
+              "name": "One Time Token Owner",
+              "email": "owner@one-time-token-expiry.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [
+            {
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T04:33:20.123Z"
+              },
+              "token": "fixed-owner-session-token",
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "ipAddress": "203.0.113.8",
+              "userAgent": "one-time-token-expiry-contract",
+              "userId": "owner",
+              "id": "owner-session"
+            }
+          ],
+          "account": [],
+          "verification": []
+        },
+        "response": {
+          "status": 200,
+          "statusText": "",
+          "headers": [
+            [
+              "cache-control",
+              "no-store"
+            ],
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "pragma",
+              "no-cache"
+            ]
+          ],
+          "cookies": [],
+          "body": "{\"session\":{\"expiresAt\":\"2033-05-18T04:33:20.123Z\",\"token\":\"fixed-owner-session-token\",\"createdAt\":\"2033-05-18T03:33:20.123Z\",\"updatedAt\":\"2033-05-18T03:33:20.123Z\",\"ipAddress\":\"203.0.113.8\",\"userAgent\":\"one-time-token-expiry-contract\",\"userId\":\"owner\",\"id\":\"owner-session\"},\"user\":{\"name\":\"One Time Token Owner\",\"email\":\"owner@one-time-token-expiry.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2033-05-18T03:33:20.123Z\",\"updatedAt\":\"2033-05-18T03:33:20.123Z\",\"id\":\"owner\"}}"
+        },
+        "after": {
+          "user": [
+            {
+              "name": "One Time Token Owner",
+              "email": "owner@one-time-token-expiry.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [
+            {
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T04:33:20.123Z"
+              },
+              "token": "fixed-owner-session-token",
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "ipAddress": "203.0.113.8",
+              "userAgent": "one-time-token-expiry-contract",
+              "userId": "owner",
+              "id": "owner-session"
+            }
+          ],
+          "account": [],
+          "verification": []
+        },
+        "events": [],
+        "completedAt": 2000000002123
+      },
+      "hashCalls": 3
+    },
+    {
+      "backend": "memory",
+      "entrypoint": "set-ott",
+      "seed": {
+        "input": [
+          {
+            "model": "user",
+            "forceAllowId": true,
+            "data": {
+              "id": "owner",
+              "name": "One Time Token Owner",
+              "email": "owner@one-time-token-expiry.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              }
+            }
+          },
+          {
+            "model": "account",
+            "forceAllowId": true,
+            "data": {
+              "id": "owner-account",
+              "userId": "owner",
+              "accountId": "owner",
+              "providerId": "credential",
+              "password": "one-time-token-expiry-password-hash",
+              "accessToken": null,
+              "refreshToken": null,
+              "idToken": null,
+              "accessTokenExpiresAt": null,
+              "refreshTokenExpiresAt": null,
+              "scope": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              }
+            }
+          }
+        ],
+        "before": {
+          "user": [],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "after": {
+          "user": [
+            {
+              "name": "One Time Token Owner",
+              "email": "owner@one-time-token-expiry.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [],
+          "account": [
+            {
+              "accountId": "owner",
+              "providerId": "credential",
+              "userId": "owner",
+              "accessToken": null,
+              "refreshToken": null,
+              "idToken": null,
+              "accessTokenExpiresAt": null,
+              "refreshTokenExpiresAt": null,
+              "scope": null,
+              "password": "one-time-token-expiry-password-hash",
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "id": "owner-account"
+            }
+          ],
+          "verification": []
+        },
+        "events": []
+      },
+      "generation": {
+        "name": "set-ott",
+        "timestampMillis": 2000000000123,
+        "request": {
+          "url": "http://one-time-token-expiry.test/api/auth/sign-in/email",
+          "method": "POST",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "origin",
+              "http://one-time-token-expiry.test"
+            ],
+            [
+              "user-agent",
+              "one-time-token-expiry-contract"
+            ],
+            [
+              "x-forwarded-for",
+              "203.0.113.8"
+            ]
+          ],
+          "body": "{\"email\":\"owner@one-time-token-expiry.test\",\"password\":\"one-time-token-expiry-password\"}"
+        },
+        "before": {
+          "user": [
+            {
+              "name": "One Time Token Owner",
+              "email": "owner@one-time-token-expiry.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [],
+          "account": [
+            {
+              "accountId": "owner",
+              "providerId": "credential",
+              "userId": "owner",
+              "accessToken": null,
+              "refreshToken": null,
+              "idToken": null,
+              "accessTokenExpiresAt": null,
+              "refreshTokenExpiresAt": null,
+              "scope": null,
+              "password": "one-time-token-expiry-password-hash",
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "id": "owner-account"
+            }
+          ],
+          "verification": []
+        },
+        "response": {
+          "status": 200,
+          "statusText": "",
+          "headers": [
+            [
+              "access-control-expose-headers",
+              "set-ott"
+            ],
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "set-ott",
+              "fixed-one-time-token"
+            ],
+            [
+              "set-cookie",
+              "better-auth.session_token=<verified-signed-session-token>; Max-Age=3600; Path=/; HttpOnly; SameSite=Lax"
+            ]
+          ],
+          "cookies": [
+            "better-auth.session_token=<verified-signed-session-token>; Max-Age=3600; Path=/; HttpOnly; SameSite=Lax"
+          ],
+          "body": "{\"redirect\":false,\"token\":\"<session-token>\",\"user\":{\"name\":\"One Time Token Owner\",\"email\":\"owner@one-time-token-expiry.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2033-05-18T03:33:20.123Z\",\"updatedAt\":\"2033-05-18T03:33:20.123Z\",\"id\":\"owner\"}}"
+        },
+        "after": {
+          "user": [
+            {
+              "name": "One Time Token Owner",
+              "email": "owner@one-time-token-expiry.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [
+            {
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T04:33:20.123Z"
+              },
+              "token": "<session-token>",
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "ipAddress": "203.0.113.8",
+              "userAgent": "one-time-token-expiry-contract",
+              "userId": "owner",
+              "id": "session-1"
+            }
+          ],
+          "account": [
+            {
+              "accountId": "owner",
+              "providerId": "credential",
+              "userId": "owner",
+              "accessToken": null,
+              "refreshToken": null,
+              "idToken": null,
+              "accessTokenExpiresAt": null,
+              "refreshTokenExpiresAt": null,
+              "scope": null,
+              "password": "one-time-token-expiry-password-hash",
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "id": "owner-account"
+            }
+          ],
+          "verification": [
+            {
+              "identifier": "one-time-token:hashed:fixed-one-time-token",
+              "value": "<session-token>",
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.623Z"
+              },
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:22.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:22.123Z"
+              },
+              "id": "verification-2"
+            }
+          ]
+        },
+        "events": [
+          {
+            "kind": "password.verify",
+            "value": {
+              "hash": "one-time-token-expiry-password-hash",
+              "password": "one-time-token-expiry-password"
+            }
+          },
+          {
+            "kind": "hook",
+            "model": "session",
+            "operation": "create",
+            "phase": "before",
+            "data": {
+              "ipAddress": "203.0.113.8",
+              "userAgent": "one-time-token-expiry-contract",
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T04:33:20.123Z"
+              },
+              "userId": "owner",
+              "token": "<session-token>",
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              }
+            }
+          },
+          {
+            "kind": "generate-id",
+            "input": {
+              "model": "session"
+            },
+            "id": "session-1"
+          },
+          {
+            "kind": "hook",
+            "model": "session",
+            "operation": "create",
+            "phase": "after",
+            "data": {
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T04:33:20.123Z"
+              },
+              "token": "<session-token>",
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "ipAddress": "203.0.113.8",
+              "userAgent": "one-time-token-expiry-contract",
+              "userId": "owner",
+              "id": "session-1"
+            }
+          },
+          {
+            "kind": "token.generate",
+            "timestampMillis": 2000000000123,
+            "session": {
+              "session": {
+                "expiresAt": {
+                  "type": "date",
+                  "value": "2033-05-18T04:33:20.123Z"
+                },
+                "token": "<session-token>",
+                "createdAt": {
+                  "type": "date",
+                  "value": "2033-05-18T03:33:20.123Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2033-05-18T03:33:20.123Z"
+                },
+                "ipAddress": "203.0.113.8",
+                "userAgent": "one-time-token-expiry-contract",
+                "userId": "owner",
+                "id": "session-1"
+              },
+              "user": {
+                "name": "One Time Token Owner",
+                "email": "owner@one-time-token-expiry.test",
+                "emailVerified": true,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2033-05-18T03:33:20.123Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2033-05-18T03:33:20.123Z"
+                },
+                "id": "owner"
+              }
+            },
+            "path": "/sign-in/email"
+          },
+          {
+            "kind": "token.hash.start",
+            "invocation": 1,
+            "token": "fixed-one-time-token",
+            "timestampMillis": 2000000000123
+          },
+          {
+            "kind": "token.hash.end",
+            "invocation": 1,
+            "token": "fixed-one-time-token",
+            "result": "hashed:fixed-one-time-token",
+            "timestampMillis": 2000000002123
+          },
+          {
+            "kind": "hook",
+            "model": "verification",
+            "operation": "create",
+            "phase": "before",
+            "data": {
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:22.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:22.123Z"
+              },
+              "value": "<session-token>",
+              "identifier": "one-time-token:hashed:fixed-one-time-token",
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.623Z"
+              }
+            }
+          },
+          {
+            "kind": "generate-id",
+            "input": {
+              "model": "verification"
+            },
+            "id": "verification-2"
+          },
+          {
+            "kind": "hook",
+            "model": "verification",
+            "operation": "create",
+            "phase": "after",
+            "data": {
+              "identifier": "one-time-token:hashed:fixed-one-time-token",
+              "value": "<session-token>",
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.623Z"
+              },
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:22.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:22.123Z"
+              },
+              "id": "verification-2"
+            }
+          }
+        ],
+        "completedAt": 2000000002123
+      },
+      "verify": {
+        "name": "verify",
+        "timestampMillis": 2000000002123,
+        "request": {
+          "url": "http://one-time-token-expiry.test/api/auth/one-time-token/verify",
+          "method": "POST",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "origin",
+              "http://one-time-token-expiry.test"
+            ],
+            [
+              "user-agent",
+              "one-time-token-expiry-contract"
+            ],
+            [
+              "x-forwarded-for",
+              "203.0.113.8"
+            ]
+          ],
+          "body": "{\"token\":\"fixed-one-time-token\"}"
+        },
+        "before": {
+          "user": [
+            {
+              "name": "One Time Token Owner",
+              "email": "owner@one-time-token-expiry.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [
+            {
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T04:33:20.123Z"
+              },
+              "token": "<session-token>",
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "ipAddress": "203.0.113.8",
+              "userAgent": "one-time-token-expiry-contract",
+              "userId": "owner",
+              "id": "session-1"
+            }
+          ],
+          "account": [
+            {
+              "accountId": "owner",
+              "providerId": "credential",
+              "userId": "owner",
+              "accessToken": null,
+              "refreshToken": null,
+              "idToken": null,
+              "accessTokenExpiresAt": null,
+              "refreshTokenExpiresAt": null,
+              "scope": null,
+              "password": "one-time-token-expiry-password-hash",
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "id": "owner-account"
+            }
+          ],
+          "verification": [
+            {
+              "identifier": "one-time-token:hashed:fixed-one-time-token",
+              "value": "<session-token>",
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.623Z"
+              },
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:22.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:22.123Z"
+              },
+              "id": "verification-2"
+            }
+          ]
+        },
+        "response": {
+          "status": 400,
+          "statusText": "BAD_REQUEST",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ]
+          ],
+          "cookies": [],
+          "body": "{\"message\":\"Invalid token\"}"
+        },
+        "after": {
+          "user": [
+            {
+              "name": "One Time Token Owner",
+              "email": "owner@one-time-token-expiry.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [
+            {
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T04:33:20.123Z"
+              },
+              "token": "<session-token>",
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "ipAddress": "203.0.113.8",
+              "userAgent": "one-time-token-expiry-contract",
+              "userId": "owner",
+              "id": "session-1"
+            }
+          ],
+          "account": [
+            {
+              "accountId": "owner",
+              "providerId": "credential",
+              "userId": "owner",
+              "accessToken": null,
+              "refreshToken": null,
+              "idToken": null,
+              "accessTokenExpiresAt": null,
+              "refreshTokenExpiresAt": null,
+              "scope": null,
+              "password": "one-time-token-expiry-password-hash",
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "id": "owner-account"
+            }
+          ],
+          "verification": []
+        },
+        "events": [
+          {
+            "kind": "token.hash.start",
+            "invocation": 2,
+            "token": "fixed-one-time-token",
+            "timestampMillis": 2000000002123
+          },
+          {
+            "kind": "token.hash.end",
+            "invocation": 2,
+            "token": "fixed-one-time-token",
+            "result": "hashed:fixed-one-time-token",
+            "timestampMillis": 2000000002123
+          },
+          {
+            "kind": "hook",
+            "model": "verification",
+            "operation": "delete",
+            "phase": "before",
+            "data": {
+              "identifier": "one-time-token:hashed:fixed-one-time-token",
+              "value": "<session-token>",
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.623Z"
+              },
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:22.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:22.123Z"
+              },
+              "id": "verification-2"
+            }
+          },
+          {
+            "kind": "hook",
+            "model": "verification",
+            "operation": "delete",
+            "phase": "after",
+            "data": {
+              "identifier": "one-time-token:hashed:fixed-one-time-token",
+              "value": "<session-token>",
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.623Z"
+              },
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:22.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:22.123Z"
+              },
+              "id": "verification-2"
+            }
+          }
+        ],
+        "completedAt": 2000000002123
+      },
+      "replay": {
+        "name": "replay",
+        "timestampMillis": 2000000002123,
+        "request": {
+          "url": "http://one-time-token-expiry.test/api/auth/one-time-token/verify",
+          "method": "POST",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "origin",
+              "http://one-time-token-expiry.test"
+            ],
+            [
+              "user-agent",
+              "one-time-token-expiry-contract"
+            ],
+            [
+              "x-forwarded-for",
+              "203.0.113.8"
+            ]
+          ],
+          "body": "{\"token\":\"fixed-one-time-token\"}"
+        },
+        "before": {
+          "user": [
+            {
+              "name": "One Time Token Owner",
+              "email": "owner@one-time-token-expiry.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [
+            {
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T04:33:20.123Z"
+              },
+              "token": "<session-token>",
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "ipAddress": "203.0.113.8",
+              "userAgent": "one-time-token-expiry-contract",
+              "userId": "owner",
+              "id": "session-1"
+            }
+          ],
+          "account": [
+            {
+              "accountId": "owner",
+              "providerId": "credential",
+              "userId": "owner",
+              "accessToken": null,
+              "refreshToken": null,
+              "idToken": null,
+              "accessTokenExpiresAt": null,
+              "refreshTokenExpiresAt": null,
+              "scope": null,
+              "password": "one-time-token-expiry-password-hash",
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "id": "owner-account"
+            }
+          ],
+          "verification": []
+        },
+        "response": {
+          "status": 400,
+          "statusText": "BAD_REQUEST",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ]
+          ],
+          "cookies": [],
+          "body": "{\"message\":\"Invalid token\"}"
+        },
+        "after": {
+          "user": [
+            {
+              "name": "One Time Token Owner",
+              "email": "owner@one-time-token-expiry.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [
+            {
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T04:33:20.123Z"
+              },
+              "token": "<session-token>",
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "ipAddress": "203.0.113.8",
+              "userAgent": "one-time-token-expiry-contract",
+              "userId": "owner",
+              "id": "session-1"
+            }
+          ],
+          "account": [
+            {
+              "accountId": "owner",
+              "providerId": "credential",
+              "userId": "owner",
+              "accessToken": null,
+              "refreshToken": null,
+              "idToken": null,
+              "accessTokenExpiresAt": null,
+              "refreshTokenExpiresAt": null,
+              "scope": null,
+              "password": "one-time-token-expiry-password-hash",
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "id": "owner-account"
+            }
+          ],
+          "verification": []
+        },
+        "events": [
+          {
+            "kind": "token.hash.start",
+            "invocation": 3,
+            "token": "fixed-one-time-token",
+            "timestampMillis": 2000000002123
+          },
+          {
+            "kind": "token.hash.end",
+            "invocation": 3,
+            "token": "fixed-one-time-token",
+            "result": "hashed:fixed-one-time-token",
+            "timestampMillis": 2000000002123
+          }
+        ],
+        "completedAt": 2000000002123
+      },
+      "session": {
+        "name": "session",
+        "timestampMillis": 2000000002123,
+        "request": {
+          "url": "http://one-time-token-expiry.test/api/auth/get-session",
+          "method": "GET",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "cookie",
+              "better-auth.session_token=<verified-signed-session-token>"
+            ],
+            [
+              "origin",
+              "http://one-time-token-expiry.test"
+            ],
+            [
+              "user-agent",
+              "one-time-token-expiry-contract"
+            ],
+            [
+              "x-forwarded-for",
+              "203.0.113.8"
+            ]
+          ],
+          "body": ""
+        },
+        "before": {
+          "user": [
+            {
+              "name": "One Time Token Owner",
+              "email": "owner@one-time-token-expiry.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [
+            {
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T04:33:20.123Z"
+              },
+              "token": "<session-token>",
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "ipAddress": "203.0.113.8",
+              "userAgent": "one-time-token-expiry-contract",
+              "userId": "owner",
+              "id": "session-1"
+            }
+          ],
+          "account": [
+            {
+              "accountId": "owner",
+              "providerId": "credential",
+              "userId": "owner",
+              "accessToken": null,
+              "refreshToken": null,
+              "idToken": null,
+              "accessTokenExpiresAt": null,
+              "refreshTokenExpiresAt": null,
+              "scope": null,
+              "password": "one-time-token-expiry-password-hash",
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "id": "owner-account"
+            }
+          ],
+          "verification": []
+        },
+        "response": {
+          "status": 200,
+          "statusText": "",
+          "headers": [
+            [
+              "cache-control",
+              "no-store"
+            ],
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "pragma",
+              "no-cache"
+            ]
+          ],
+          "cookies": [],
+          "body": "{\"session\":{\"expiresAt\":\"2033-05-18T04:33:20.123Z\",\"token\":\"<session-token>\",\"createdAt\":\"2033-05-18T03:33:20.123Z\",\"updatedAt\":\"2033-05-18T03:33:20.123Z\",\"ipAddress\":\"203.0.113.8\",\"userAgent\":\"one-time-token-expiry-contract\",\"userId\":\"owner\",\"id\":\"session-1\"},\"user\":{\"name\":\"One Time Token Owner\",\"email\":\"owner@one-time-token-expiry.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2033-05-18T03:33:20.123Z\",\"updatedAt\":\"2033-05-18T03:33:20.123Z\",\"id\":\"owner\"}}"
+        },
+        "after": {
+          "user": [
+            {
+              "name": "One Time Token Owner",
+              "email": "owner@one-time-token-expiry.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [
+            {
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T04:33:20.123Z"
+              },
+              "token": "<session-token>",
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "ipAddress": "203.0.113.8",
+              "userAgent": "one-time-token-expiry-contract",
+              "userId": "owner",
+              "id": "session-1"
+            }
+          ],
+          "account": [
+            {
+              "accountId": "owner",
+              "providerId": "credential",
+              "userId": "owner",
+              "accessToken": null,
+              "refreshToken": null,
+              "idToken": null,
+              "accessTokenExpiresAt": null,
+              "refreshTokenExpiresAt": null,
+              "scope": null,
+              "password": "one-time-token-expiry-password-hash",
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "id": "owner-account"
+            }
+          ],
+          "verification": []
+        },
+        "events": [],
+        "completedAt": 2000000002123
+      },
+      "hashCalls": 3
+    },
+    {
+      "backend": "sqlite",
+      "entrypoint": "generate",
+      "seed": {
+        "input": [
+          {
+            "model": "user",
+            "forceAllowId": true,
+            "data": {
+              "id": "owner",
+              "name": "One Time Token Owner",
+              "email": "owner@one-time-token-expiry.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              }
+            }
+          },
+          {
+            "model": "session",
+            "forceAllowId": true,
+            "data": {
+              "id": "owner-session",
+              "userId": "owner",
+              "token": "fixed-owner-session-token",
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T04:33:20.123Z"
+              },
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "ipAddress": "203.0.113.8",
+              "userAgent": "one-time-token-expiry-contract"
+            }
+          }
+        ],
+        "before": {
+          "user": [],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "after": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "One Time Token Owner",
+              "email": "owner@one-time-token-expiry.test",
+              "emailVerified": 1,
+              "image": null,
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:20.123Z"
+            }
+          ],
+          "session": [
+            {
+              "id": "owner-session",
+              "expiresAt": "2033-05-18T04:33:20.123Z",
+              "token": "fixed-owner-session-token",
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:20.123Z",
+              "ipAddress": "203.0.113.8",
+              "userAgent": "one-time-token-expiry-contract",
+              "userId": "owner"
+            }
+          ],
+          "account": [],
+          "verification": []
+        },
+        "events": []
+      },
+      "generation": {
+        "name": "generate",
+        "timestampMillis": 2000000000123,
+        "request": {
+          "url": "http://one-time-token-expiry.test/api/auth/one-time-token/generate",
+          "method": "GET",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "cookie",
+              "better-auth.session_token=fixed-owner-session-token.lSt%2Bm%2BbCz91WoooyhBIobpOGmk8nnRlLyKvvM3naE8o%3D"
+            ],
+            [
+              "origin",
+              "http://one-time-token-expiry.test"
+            ],
+            [
+              "user-agent",
+              "one-time-token-expiry-contract"
+            ],
+            [
+              "x-forwarded-for",
+              "203.0.113.8"
+            ]
+          ],
+          "body": ""
+        },
+        "before": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "One Time Token Owner",
+              "email": "owner@one-time-token-expiry.test",
+              "emailVerified": 1,
+              "image": null,
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:20.123Z"
+            }
+          ],
+          "session": [
+            {
+              "id": "owner-session",
+              "expiresAt": "2033-05-18T04:33:20.123Z",
+              "token": "fixed-owner-session-token",
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:20.123Z",
+              "ipAddress": "203.0.113.8",
+              "userAgent": "one-time-token-expiry-contract",
+              "userId": "owner"
+            }
+          ],
+          "account": [],
+          "verification": []
+        },
+        "response": {
+          "status": 200,
+          "statusText": "",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ]
+          ],
+          "cookies": [],
+          "body": "{\"token\":\"fixed-one-time-token\"}"
+        },
+        "after": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "One Time Token Owner",
+              "email": "owner@one-time-token-expiry.test",
+              "emailVerified": 1,
+              "image": null,
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:20.123Z"
+            }
+          ],
+          "session": [
+            {
+              "id": "owner-session",
+              "expiresAt": "2033-05-18T04:33:20.123Z",
+              "token": "fixed-owner-session-token",
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:20.123Z",
+              "ipAddress": "203.0.113.8",
+              "userAgent": "one-time-token-expiry-contract",
+              "userId": "owner"
+            }
+          ],
+          "account": [],
+          "verification": [
+            {
+              "id": "verification-1",
+              "identifier": "one-time-token:hashed:fixed-one-time-token",
+              "value": "fixed-owner-session-token",
+              "expiresAt": "2033-05-18T03:33:21.623Z",
+              "createdAt": "2033-05-18T03:33:22.123Z",
+              "updatedAt": "2033-05-18T03:33:22.123Z"
+            }
+          ]
+        },
+        "events": [
+          {
+            "kind": "token.generate",
+            "timestampMillis": 2000000000123,
+            "session": {
+              "session": {
+                "expiresAt": {
+                  "type": "date",
+                  "value": "2033-05-18T04:33:20.123Z"
+                },
+                "token": "fixed-owner-session-token",
+                "createdAt": {
+                  "type": "date",
+                  "value": "2033-05-18T03:33:20.123Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2033-05-18T03:33:20.123Z"
+                },
+                "ipAddress": "203.0.113.8",
+                "userAgent": "one-time-token-expiry-contract",
+                "userId": "owner",
+                "id": "owner-session"
+              },
+              "user": {
+                "name": "One Time Token Owner",
+                "email": "owner@one-time-token-expiry.test",
+                "emailVerified": true,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2033-05-18T03:33:20.123Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2033-05-18T03:33:20.123Z"
+                },
+                "id": "owner"
+              }
+            },
+            "path": "/one-time-token/generate"
+          },
+          {
+            "kind": "token.hash.start",
+            "invocation": 1,
+            "token": "fixed-one-time-token",
+            "timestampMillis": 2000000000123
+          },
+          {
+            "kind": "token.hash.end",
+            "invocation": 1,
+            "token": "fixed-one-time-token",
+            "result": "hashed:fixed-one-time-token",
+            "timestampMillis": 2000000002123
+          },
+          {
+            "kind": "hook",
+            "model": "verification",
+            "operation": "create",
+            "phase": "before",
+            "data": {
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:22.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:22.123Z"
+              },
+              "value": "fixed-owner-session-token",
+              "identifier": "one-time-token:hashed:fixed-one-time-token",
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.623Z"
+              }
+            }
+          },
+          {
+            "kind": "generate-id",
+            "input": {
+              "model": "verification"
+            },
+            "id": "verification-1"
+          },
+          {
+            "kind": "hook",
+            "model": "verification",
+            "operation": "create",
+            "phase": "after",
+            "data": {
+              "identifier": "one-time-token:hashed:fixed-one-time-token",
+              "value": "fixed-owner-session-token",
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.623Z"
+              },
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:22.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:22.123Z"
+              },
+              "id": "verification-1"
+            }
+          }
+        ],
+        "completedAt": 2000000002123
+      },
+      "verify": {
+        "name": "verify",
+        "timestampMillis": 2000000002123,
+        "request": {
+          "url": "http://one-time-token-expiry.test/api/auth/one-time-token/verify",
+          "method": "POST",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "origin",
+              "http://one-time-token-expiry.test"
+            ],
+            [
+              "user-agent",
+              "one-time-token-expiry-contract"
+            ],
+            [
+              "x-forwarded-for",
+              "203.0.113.8"
+            ]
+          ],
+          "body": "{\"token\":\"fixed-one-time-token\"}"
+        },
+        "before": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "One Time Token Owner",
+              "email": "owner@one-time-token-expiry.test",
+              "emailVerified": 1,
+              "image": null,
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:20.123Z"
+            }
+          ],
+          "session": [
+            {
+              "id": "owner-session",
+              "expiresAt": "2033-05-18T04:33:20.123Z",
+              "token": "fixed-owner-session-token",
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:20.123Z",
+              "ipAddress": "203.0.113.8",
+              "userAgent": "one-time-token-expiry-contract",
+              "userId": "owner"
+            }
+          ],
+          "account": [],
+          "verification": [
+            {
+              "id": "verification-1",
+              "identifier": "one-time-token:hashed:fixed-one-time-token",
+              "value": "fixed-owner-session-token",
+              "expiresAt": "2033-05-18T03:33:21.623Z",
+              "createdAt": "2033-05-18T03:33:22.123Z",
+              "updatedAt": "2033-05-18T03:33:22.123Z"
+            }
+          ]
+        },
+        "response": {
+          "status": 400,
+          "statusText": "BAD_REQUEST",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ]
+          ],
+          "cookies": [],
+          "body": "{\"message\":\"Invalid token\"}"
+        },
+        "after": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "One Time Token Owner",
+              "email": "owner@one-time-token-expiry.test",
+              "emailVerified": 1,
+              "image": null,
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:20.123Z"
+            }
+          ],
+          "session": [
+            {
+              "id": "owner-session",
+              "expiresAt": "2033-05-18T04:33:20.123Z",
+              "token": "fixed-owner-session-token",
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:20.123Z",
+              "ipAddress": "203.0.113.8",
+              "userAgent": "one-time-token-expiry-contract",
+              "userId": "owner"
+            }
+          ],
+          "account": [],
+          "verification": []
+        },
+        "events": [
+          {
+            "kind": "token.hash.start",
+            "invocation": 2,
+            "token": "fixed-one-time-token",
+            "timestampMillis": 2000000002123
+          },
+          {
+            "kind": "token.hash.end",
+            "invocation": 2,
+            "token": "fixed-one-time-token",
+            "result": "hashed:fixed-one-time-token",
+            "timestampMillis": 2000000002123
+          },
+          {
+            "kind": "hook",
+            "model": "verification",
+            "operation": "delete",
+            "phase": "before",
+            "data": {
+              "identifier": "one-time-token:hashed:fixed-one-time-token",
+              "value": "fixed-owner-session-token",
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.623Z"
+              },
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:22.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:22.123Z"
+              },
+              "id": "verification-1"
+            }
+          },
+          {
+            "kind": "hook",
+            "model": "verification",
+            "operation": "delete",
+            "phase": "after",
+            "data": {
+              "identifier": "one-time-token:hashed:fixed-one-time-token",
+              "value": "fixed-owner-session-token",
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.623Z"
+              },
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:22.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:22.123Z"
+              },
+              "id": "verification-1"
+            }
+          }
+        ],
+        "completedAt": 2000000002123
+      },
+      "replay": {
+        "name": "replay",
+        "timestampMillis": 2000000002123,
+        "request": {
+          "url": "http://one-time-token-expiry.test/api/auth/one-time-token/verify",
+          "method": "POST",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "origin",
+              "http://one-time-token-expiry.test"
+            ],
+            [
+              "user-agent",
+              "one-time-token-expiry-contract"
+            ],
+            [
+              "x-forwarded-for",
+              "203.0.113.8"
+            ]
+          ],
+          "body": "{\"token\":\"fixed-one-time-token\"}"
+        },
+        "before": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "One Time Token Owner",
+              "email": "owner@one-time-token-expiry.test",
+              "emailVerified": 1,
+              "image": null,
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:20.123Z"
+            }
+          ],
+          "session": [
+            {
+              "id": "owner-session",
+              "expiresAt": "2033-05-18T04:33:20.123Z",
+              "token": "fixed-owner-session-token",
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:20.123Z",
+              "ipAddress": "203.0.113.8",
+              "userAgent": "one-time-token-expiry-contract",
+              "userId": "owner"
+            }
+          ],
+          "account": [],
+          "verification": []
+        },
+        "response": {
+          "status": 400,
+          "statusText": "BAD_REQUEST",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ]
+          ],
+          "cookies": [],
+          "body": "{\"message\":\"Invalid token\"}"
+        },
+        "after": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "One Time Token Owner",
+              "email": "owner@one-time-token-expiry.test",
+              "emailVerified": 1,
+              "image": null,
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:20.123Z"
+            }
+          ],
+          "session": [
+            {
+              "id": "owner-session",
+              "expiresAt": "2033-05-18T04:33:20.123Z",
+              "token": "fixed-owner-session-token",
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:20.123Z",
+              "ipAddress": "203.0.113.8",
+              "userAgent": "one-time-token-expiry-contract",
+              "userId": "owner"
+            }
+          ],
+          "account": [],
+          "verification": []
+        },
+        "events": [
+          {
+            "kind": "token.hash.start",
+            "invocation": 3,
+            "token": "fixed-one-time-token",
+            "timestampMillis": 2000000002123
+          },
+          {
+            "kind": "token.hash.end",
+            "invocation": 3,
+            "token": "fixed-one-time-token",
+            "result": "hashed:fixed-one-time-token",
+            "timestampMillis": 2000000002123
+          }
+        ],
+        "completedAt": 2000000002123
+      },
+      "session": {
+        "name": "session",
+        "timestampMillis": 2000000002123,
+        "request": {
+          "url": "http://one-time-token-expiry.test/api/auth/get-session",
+          "method": "GET",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "cookie",
+              "better-auth.session_token=fixed-owner-session-token.lSt%2Bm%2BbCz91WoooyhBIobpOGmk8nnRlLyKvvM3naE8o%3D"
+            ],
+            [
+              "origin",
+              "http://one-time-token-expiry.test"
+            ],
+            [
+              "user-agent",
+              "one-time-token-expiry-contract"
+            ],
+            [
+              "x-forwarded-for",
+              "203.0.113.8"
+            ]
+          ],
+          "body": ""
+        },
+        "before": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "One Time Token Owner",
+              "email": "owner@one-time-token-expiry.test",
+              "emailVerified": 1,
+              "image": null,
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:20.123Z"
+            }
+          ],
+          "session": [
+            {
+              "id": "owner-session",
+              "expiresAt": "2033-05-18T04:33:20.123Z",
+              "token": "fixed-owner-session-token",
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:20.123Z",
+              "ipAddress": "203.0.113.8",
+              "userAgent": "one-time-token-expiry-contract",
+              "userId": "owner"
+            }
+          ],
+          "account": [],
+          "verification": []
+        },
+        "response": {
+          "status": 200,
+          "statusText": "",
+          "headers": [
+            [
+              "cache-control",
+              "no-store"
+            ],
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "pragma",
+              "no-cache"
+            ]
+          ],
+          "cookies": [],
+          "body": "{\"session\":{\"expiresAt\":\"2033-05-18T04:33:20.123Z\",\"token\":\"fixed-owner-session-token\",\"createdAt\":\"2033-05-18T03:33:20.123Z\",\"updatedAt\":\"2033-05-18T03:33:20.123Z\",\"ipAddress\":\"203.0.113.8\",\"userAgent\":\"one-time-token-expiry-contract\",\"userId\":\"owner\",\"id\":\"owner-session\"},\"user\":{\"name\":\"One Time Token Owner\",\"email\":\"owner@one-time-token-expiry.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2033-05-18T03:33:20.123Z\",\"updatedAt\":\"2033-05-18T03:33:20.123Z\",\"id\":\"owner\"}}"
+        },
+        "after": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "One Time Token Owner",
+              "email": "owner@one-time-token-expiry.test",
+              "emailVerified": 1,
+              "image": null,
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:20.123Z"
+            }
+          ],
+          "session": [
+            {
+              "id": "owner-session",
+              "expiresAt": "2033-05-18T04:33:20.123Z",
+              "token": "fixed-owner-session-token",
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:20.123Z",
+              "ipAddress": "203.0.113.8",
+              "userAgent": "one-time-token-expiry-contract",
+              "userId": "owner"
+            }
+          ],
+          "account": [],
+          "verification": []
+        },
+        "events": [],
+        "completedAt": 2000000002123
+      },
+      "hashCalls": 3
+    },
+    {
+      "backend": "sqlite",
+      "entrypoint": "set-ott",
+      "seed": {
+        "input": [
+          {
+            "model": "user",
+            "forceAllowId": true,
+            "data": {
+              "id": "owner",
+              "name": "One Time Token Owner",
+              "email": "owner@one-time-token-expiry.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              }
+            }
+          },
+          {
+            "model": "account",
+            "forceAllowId": true,
+            "data": {
+              "id": "owner-account",
+              "userId": "owner",
+              "accountId": "owner",
+              "providerId": "credential",
+              "password": "one-time-token-expiry-password-hash",
+              "accessToken": null,
+              "refreshToken": null,
+              "idToken": null,
+              "accessTokenExpiresAt": null,
+              "refreshTokenExpiresAt": null,
+              "scope": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              }
+            }
+          }
+        ],
+        "before": {
+          "user": [],
+          "session": [],
+          "account": [],
+          "verification": []
+        },
+        "after": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "One Time Token Owner",
+              "email": "owner@one-time-token-expiry.test",
+              "emailVerified": 1,
+              "image": null,
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:20.123Z"
+            }
+          ],
+          "session": [],
+          "account": [
+            {
+              "id": "owner-account",
+              "accountId": "owner",
+              "providerId": "credential",
+              "userId": "owner",
+              "accessToken": null,
+              "refreshToken": null,
+              "idToken": null,
+              "accessTokenExpiresAt": null,
+              "refreshTokenExpiresAt": null,
+              "scope": null,
+              "password": "one-time-token-expiry-password-hash",
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:20.123Z"
+            }
+          ],
+          "verification": []
+        },
+        "events": []
+      },
+      "generation": {
+        "name": "set-ott",
+        "timestampMillis": 2000000000123,
+        "request": {
+          "url": "http://one-time-token-expiry.test/api/auth/sign-in/email",
+          "method": "POST",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "origin",
+              "http://one-time-token-expiry.test"
+            ],
+            [
+              "user-agent",
+              "one-time-token-expiry-contract"
+            ],
+            [
+              "x-forwarded-for",
+              "203.0.113.8"
+            ]
+          ],
+          "body": "{\"email\":\"owner@one-time-token-expiry.test\",\"password\":\"one-time-token-expiry-password\"}"
+        },
+        "before": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "One Time Token Owner",
+              "email": "owner@one-time-token-expiry.test",
+              "emailVerified": 1,
+              "image": null,
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:20.123Z"
+            }
+          ],
+          "session": [],
+          "account": [
+            {
+              "id": "owner-account",
+              "accountId": "owner",
+              "providerId": "credential",
+              "userId": "owner",
+              "accessToken": null,
+              "refreshToken": null,
+              "idToken": null,
+              "accessTokenExpiresAt": null,
+              "refreshTokenExpiresAt": null,
+              "scope": null,
+              "password": "one-time-token-expiry-password-hash",
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:20.123Z"
+            }
+          ],
+          "verification": []
+        },
+        "response": {
+          "status": 200,
+          "statusText": "",
+          "headers": [
+            [
+              "access-control-expose-headers",
+              "set-ott"
+            ],
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "set-ott",
+              "fixed-one-time-token"
+            ],
+            [
+              "set-cookie",
+              "better-auth.session_token=<verified-signed-session-token>; Max-Age=3600; Path=/; HttpOnly; SameSite=Lax"
+            ]
+          ],
+          "cookies": [
+            "better-auth.session_token=<verified-signed-session-token>; Max-Age=3600; Path=/; HttpOnly; SameSite=Lax"
+          ],
+          "body": "{\"redirect\":false,\"token\":\"<session-token>\",\"user\":{\"name\":\"One Time Token Owner\",\"email\":\"owner@one-time-token-expiry.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2033-05-18T03:33:20.123Z\",\"updatedAt\":\"2033-05-18T03:33:20.123Z\",\"id\":\"owner\"}}"
+        },
+        "after": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "One Time Token Owner",
+              "email": "owner@one-time-token-expiry.test",
+              "emailVerified": 1,
+              "image": null,
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:20.123Z"
+            }
+          ],
+          "session": [
+            {
+              "id": "session-1",
+              "expiresAt": "2033-05-18T04:33:20.123Z",
+              "token": "<session-token>",
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:20.123Z",
+              "ipAddress": "203.0.113.8",
+              "userAgent": "one-time-token-expiry-contract",
+              "userId": "owner"
+            }
+          ],
+          "account": [
+            {
+              "id": "owner-account",
+              "accountId": "owner",
+              "providerId": "credential",
+              "userId": "owner",
+              "accessToken": null,
+              "refreshToken": null,
+              "idToken": null,
+              "accessTokenExpiresAt": null,
+              "refreshTokenExpiresAt": null,
+              "scope": null,
+              "password": "one-time-token-expiry-password-hash",
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:20.123Z"
+            }
+          ],
+          "verification": [
+            {
+              "id": "verification-2",
+              "identifier": "one-time-token:hashed:fixed-one-time-token",
+              "value": "<session-token>",
+              "expiresAt": "2033-05-18T03:33:21.623Z",
+              "createdAt": "2033-05-18T03:33:22.123Z",
+              "updatedAt": "2033-05-18T03:33:22.123Z"
+            }
+          ]
+        },
+        "events": [
+          {
+            "kind": "password.verify",
+            "value": {
+              "hash": "one-time-token-expiry-password-hash",
+              "password": "one-time-token-expiry-password"
+            }
+          },
+          {
+            "kind": "hook",
+            "model": "session",
+            "operation": "create",
+            "phase": "before",
+            "data": {
+              "ipAddress": "203.0.113.8",
+              "userAgent": "one-time-token-expiry-contract",
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T04:33:20.123Z"
+              },
+              "userId": "owner",
+              "token": "<session-token>",
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              }
+            }
+          },
+          {
+            "kind": "generate-id",
+            "input": {
+              "model": "session"
+            },
+            "id": "session-1"
+          },
+          {
+            "kind": "hook",
+            "model": "session",
+            "operation": "create",
+            "phase": "after",
+            "data": {
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T04:33:20.123Z"
+              },
+              "token": "<session-token>",
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "ipAddress": "203.0.113.8",
+              "userAgent": "one-time-token-expiry-contract",
+              "userId": "owner",
+              "id": "session-1"
+            }
+          },
+          {
+            "kind": "token.generate",
+            "timestampMillis": 2000000000123,
+            "session": {
+              "session": {
+                "expiresAt": {
+                  "type": "date",
+                  "value": "2033-05-18T04:33:20.123Z"
+                },
+                "token": "<session-token>",
+                "createdAt": {
+                  "type": "date",
+                  "value": "2033-05-18T03:33:20.123Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2033-05-18T03:33:20.123Z"
+                },
+                "ipAddress": "203.0.113.8",
+                "userAgent": "one-time-token-expiry-contract",
+                "userId": "owner",
+                "id": "session-1"
+              },
+              "user": {
+                "name": "One Time Token Owner",
+                "email": "owner@one-time-token-expiry.test",
+                "emailVerified": true,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2033-05-18T03:33:20.123Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2033-05-18T03:33:20.123Z"
+                },
+                "id": "owner"
+              }
+            },
+            "path": "/sign-in/email"
+          },
+          {
+            "kind": "token.hash.start",
+            "invocation": 1,
+            "token": "fixed-one-time-token",
+            "timestampMillis": 2000000000123
+          },
+          {
+            "kind": "token.hash.end",
+            "invocation": 1,
+            "token": "fixed-one-time-token",
+            "result": "hashed:fixed-one-time-token",
+            "timestampMillis": 2000000002123
+          },
+          {
+            "kind": "hook",
+            "model": "verification",
+            "operation": "create",
+            "phase": "before",
+            "data": {
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:22.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:22.123Z"
+              },
+              "value": "<session-token>",
+              "identifier": "one-time-token:hashed:fixed-one-time-token",
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.623Z"
+              }
+            }
+          },
+          {
+            "kind": "generate-id",
+            "input": {
+              "model": "verification"
+            },
+            "id": "verification-2"
+          },
+          {
+            "kind": "hook",
+            "model": "verification",
+            "operation": "create",
+            "phase": "after",
+            "data": {
+              "identifier": "one-time-token:hashed:fixed-one-time-token",
+              "value": "<session-token>",
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.623Z"
+              },
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:22.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:22.123Z"
+              },
+              "id": "verification-2"
+            }
+          }
+        ],
+        "completedAt": 2000000002123
+      },
+      "verify": {
+        "name": "verify",
+        "timestampMillis": 2000000002123,
+        "request": {
+          "url": "http://one-time-token-expiry.test/api/auth/one-time-token/verify",
+          "method": "POST",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "origin",
+              "http://one-time-token-expiry.test"
+            ],
+            [
+              "user-agent",
+              "one-time-token-expiry-contract"
+            ],
+            [
+              "x-forwarded-for",
+              "203.0.113.8"
+            ]
+          ],
+          "body": "{\"token\":\"fixed-one-time-token\"}"
+        },
+        "before": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "One Time Token Owner",
+              "email": "owner@one-time-token-expiry.test",
+              "emailVerified": 1,
+              "image": null,
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:20.123Z"
+            }
+          ],
+          "session": [
+            {
+              "id": "session-1",
+              "expiresAt": "2033-05-18T04:33:20.123Z",
+              "token": "<session-token>",
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:20.123Z",
+              "ipAddress": "203.0.113.8",
+              "userAgent": "one-time-token-expiry-contract",
+              "userId": "owner"
+            }
+          ],
+          "account": [
+            {
+              "id": "owner-account",
+              "accountId": "owner",
+              "providerId": "credential",
+              "userId": "owner",
+              "accessToken": null,
+              "refreshToken": null,
+              "idToken": null,
+              "accessTokenExpiresAt": null,
+              "refreshTokenExpiresAt": null,
+              "scope": null,
+              "password": "one-time-token-expiry-password-hash",
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:20.123Z"
+            }
+          ],
+          "verification": [
+            {
+              "id": "verification-2",
+              "identifier": "one-time-token:hashed:fixed-one-time-token",
+              "value": "<session-token>",
+              "expiresAt": "2033-05-18T03:33:21.623Z",
+              "createdAt": "2033-05-18T03:33:22.123Z",
+              "updatedAt": "2033-05-18T03:33:22.123Z"
+            }
+          ]
+        },
+        "response": {
+          "status": 400,
+          "statusText": "BAD_REQUEST",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ]
+          ],
+          "cookies": [],
+          "body": "{\"message\":\"Invalid token\"}"
+        },
+        "after": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "One Time Token Owner",
+              "email": "owner@one-time-token-expiry.test",
+              "emailVerified": 1,
+              "image": null,
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:20.123Z"
+            }
+          ],
+          "session": [
+            {
+              "id": "session-1",
+              "expiresAt": "2033-05-18T04:33:20.123Z",
+              "token": "<session-token>",
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:20.123Z",
+              "ipAddress": "203.0.113.8",
+              "userAgent": "one-time-token-expiry-contract",
+              "userId": "owner"
+            }
+          ],
+          "account": [
+            {
+              "id": "owner-account",
+              "accountId": "owner",
+              "providerId": "credential",
+              "userId": "owner",
+              "accessToken": null,
+              "refreshToken": null,
+              "idToken": null,
+              "accessTokenExpiresAt": null,
+              "refreshTokenExpiresAt": null,
+              "scope": null,
+              "password": "one-time-token-expiry-password-hash",
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:20.123Z"
+            }
+          ],
+          "verification": []
+        },
+        "events": [
+          {
+            "kind": "token.hash.start",
+            "invocation": 2,
+            "token": "fixed-one-time-token",
+            "timestampMillis": 2000000002123
+          },
+          {
+            "kind": "token.hash.end",
+            "invocation": 2,
+            "token": "fixed-one-time-token",
+            "result": "hashed:fixed-one-time-token",
+            "timestampMillis": 2000000002123
+          },
+          {
+            "kind": "hook",
+            "model": "verification",
+            "operation": "delete",
+            "phase": "before",
+            "data": {
+              "identifier": "one-time-token:hashed:fixed-one-time-token",
+              "value": "<session-token>",
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.623Z"
+              },
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:22.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:22.123Z"
+              },
+              "id": "verification-2"
+            }
+          },
+          {
+            "kind": "hook",
+            "model": "verification",
+            "operation": "delete",
+            "phase": "after",
+            "data": {
+              "identifier": "one-time-token:hashed:fixed-one-time-token",
+              "value": "<session-token>",
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.623Z"
+              },
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:22.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:22.123Z"
+              },
+              "id": "verification-2"
+            }
+          }
+        ],
+        "completedAt": 2000000002123
+      },
+      "replay": {
+        "name": "replay",
+        "timestampMillis": 2000000002123,
+        "request": {
+          "url": "http://one-time-token-expiry.test/api/auth/one-time-token/verify",
+          "method": "POST",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "origin",
+              "http://one-time-token-expiry.test"
+            ],
+            [
+              "user-agent",
+              "one-time-token-expiry-contract"
+            ],
+            [
+              "x-forwarded-for",
+              "203.0.113.8"
+            ]
+          ],
+          "body": "{\"token\":\"fixed-one-time-token\"}"
+        },
+        "before": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "One Time Token Owner",
+              "email": "owner@one-time-token-expiry.test",
+              "emailVerified": 1,
+              "image": null,
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:20.123Z"
+            }
+          ],
+          "session": [
+            {
+              "id": "session-1",
+              "expiresAt": "2033-05-18T04:33:20.123Z",
+              "token": "<session-token>",
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:20.123Z",
+              "ipAddress": "203.0.113.8",
+              "userAgent": "one-time-token-expiry-contract",
+              "userId": "owner"
+            }
+          ],
+          "account": [
+            {
+              "id": "owner-account",
+              "accountId": "owner",
+              "providerId": "credential",
+              "userId": "owner",
+              "accessToken": null,
+              "refreshToken": null,
+              "idToken": null,
+              "accessTokenExpiresAt": null,
+              "refreshTokenExpiresAt": null,
+              "scope": null,
+              "password": "one-time-token-expiry-password-hash",
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:20.123Z"
+            }
+          ],
+          "verification": []
+        },
+        "response": {
+          "status": 400,
+          "statusText": "BAD_REQUEST",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ]
+          ],
+          "cookies": [],
+          "body": "{\"message\":\"Invalid token\"}"
+        },
+        "after": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "One Time Token Owner",
+              "email": "owner@one-time-token-expiry.test",
+              "emailVerified": 1,
+              "image": null,
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:20.123Z"
+            }
+          ],
+          "session": [
+            {
+              "id": "session-1",
+              "expiresAt": "2033-05-18T04:33:20.123Z",
+              "token": "<session-token>",
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:20.123Z",
+              "ipAddress": "203.0.113.8",
+              "userAgent": "one-time-token-expiry-contract",
+              "userId": "owner"
+            }
+          ],
+          "account": [
+            {
+              "id": "owner-account",
+              "accountId": "owner",
+              "providerId": "credential",
+              "userId": "owner",
+              "accessToken": null,
+              "refreshToken": null,
+              "idToken": null,
+              "accessTokenExpiresAt": null,
+              "refreshTokenExpiresAt": null,
+              "scope": null,
+              "password": "one-time-token-expiry-password-hash",
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:20.123Z"
+            }
+          ],
+          "verification": []
+        },
+        "events": [
+          {
+            "kind": "token.hash.start",
+            "invocation": 3,
+            "token": "fixed-one-time-token",
+            "timestampMillis": 2000000002123
+          },
+          {
+            "kind": "token.hash.end",
+            "invocation": 3,
+            "token": "fixed-one-time-token",
+            "result": "hashed:fixed-one-time-token",
+            "timestampMillis": 2000000002123
+          }
+        ],
+        "completedAt": 2000000002123
+      },
+      "session": {
+        "name": "session",
+        "timestampMillis": 2000000002123,
+        "request": {
+          "url": "http://one-time-token-expiry.test/api/auth/get-session",
+          "method": "GET",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "cookie",
+              "better-auth.session_token=<verified-signed-session-token>"
+            ],
+            [
+              "origin",
+              "http://one-time-token-expiry.test"
+            ],
+            [
+              "user-agent",
+              "one-time-token-expiry-contract"
+            ],
+            [
+              "x-forwarded-for",
+              "203.0.113.8"
+            ]
+          ],
+          "body": ""
+        },
+        "before": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "One Time Token Owner",
+              "email": "owner@one-time-token-expiry.test",
+              "emailVerified": 1,
+              "image": null,
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:20.123Z"
+            }
+          ],
+          "session": [
+            {
+              "id": "session-1",
+              "expiresAt": "2033-05-18T04:33:20.123Z",
+              "token": "<session-token>",
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:20.123Z",
+              "ipAddress": "203.0.113.8",
+              "userAgent": "one-time-token-expiry-contract",
+              "userId": "owner"
+            }
+          ],
+          "account": [
+            {
+              "id": "owner-account",
+              "accountId": "owner",
+              "providerId": "credential",
+              "userId": "owner",
+              "accessToken": null,
+              "refreshToken": null,
+              "idToken": null,
+              "accessTokenExpiresAt": null,
+              "refreshTokenExpiresAt": null,
+              "scope": null,
+              "password": "one-time-token-expiry-password-hash",
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:20.123Z"
+            }
+          ],
+          "verification": []
+        },
+        "response": {
+          "status": 200,
+          "statusText": "",
+          "headers": [
+            [
+              "cache-control",
+              "no-store"
+            ],
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "pragma",
+              "no-cache"
+            ]
+          ],
+          "cookies": [],
+          "body": "{\"session\":{\"expiresAt\":\"2033-05-18T04:33:20.123Z\",\"token\":\"<session-token>\",\"createdAt\":\"2033-05-18T03:33:20.123Z\",\"updatedAt\":\"2033-05-18T03:33:20.123Z\",\"ipAddress\":\"203.0.113.8\",\"userAgent\":\"one-time-token-expiry-contract\",\"userId\":\"owner\",\"id\":\"session-1\"},\"user\":{\"name\":\"One Time Token Owner\",\"email\":\"owner@one-time-token-expiry.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2033-05-18T03:33:20.123Z\",\"updatedAt\":\"2033-05-18T03:33:20.123Z\",\"id\":\"owner\"}}"
+        },
+        "after": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "One Time Token Owner",
+              "email": "owner@one-time-token-expiry.test",
+              "emailVerified": 1,
+              "image": null,
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:20.123Z"
+            }
+          ],
+          "session": [
+            {
+              "id": "session-1",
+              "expiresAt": "2033-05-18T04:33:20.123Z",
+              "token": "<session-token>",
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:20.123Z",
+              "ipAddress": "203.0.113.8",
+              "userAgent": "one-time-token-expiry-contract",
+              "userId": "owner"
+            }
+          ],
+          "account": [
+            {
+              "id": "owner-account",
+              "accountId": "owner",
+              "providerId": "credential",
+              "userId": "owner",
+              "accessToken": null,
+              "refreshToken": null,
+              "idToken": null,
+              "accessTokenExpiresAt": null,
+              "refreshTokenExpiresAt": null,
+              "scope": null,
+              "password": "one-time-token-expiry-password-hash",
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:20.123Z"
+            }
+          ],
+          "verification": []
+        },
+        "events": [],
+        "completedAt": 2000000002123
+      },
+      "hashCalls": 3
+    }
+  ]
+}
