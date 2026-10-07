@@ -28,11 +28,11 @@ struct OrganizationChildren<O: SeaOrmOrganizationSchema> {
 async fn project_sequential<M: SeaOrmOrganizationModel>(
     rows: Vec<M>,
     config: &UserConfig,
-    native_json: bool,
+    backend: sea_orm::DbBackend,
 ) -> AuthResult<Vec<M::Record>> {
     let mut result = Vec::with_capacity(rows.len());
     for row in rows {
-        result.push(row.record(config, native_json).await?);
+        result.push(row.record(config, backend).await?);
     }
     Ok(result)
 }
@@ -77,7 +77,7 @@ where
         let member = member
             .record(
                 &self.organization_fields()?.member,
-                self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
+                self.connection().get_database_backend(),
             )
             .await?;
         let user = match selected_user {
@@ -221,7 +221,7 @@ where
         input: OrganizationDetailsQuery<'_>,
     ) -> AuthResult<Option<OrganizationDetails>> {
         let fields = self.organization_fields()?;
-        let native_json = self.connection().get_database_backend() == sea_orm::DbBackend::Postgres;
+        let backend = self.connection().get_database_backend();
         let predicate = match input.organization {
             OrganizationKey::Id(id) => O::Organization::column("id")?
                 .eq_id(id, self.config().advanced.database.generate_id())?,
@@ -246,17 +246,15 @@ where
             (organization, None)
         };
         let organization_id = models::join_value(&organization, "id")?;
-        let organization = organization
-            .record(&fields.organization, native_json)
-            .await?;
+        let organization = organization.record(&fields.organization, backend).await?;
         let (invitations, members, teams) = if let Some(children) = children {
             let invitations =
-                project_sequential(children.invitations, &fields.invitation, native_json).await?;
+                project_sequential(children.invitations, &fields.invitation, backend).await?;
             let members = self
-                .project_members_with_owners(children.members, &fields.member, native_json)
+                .project_members_with_owners(children.members, &fields.member, backend)
                 .await?;
             let teams = match children.teams {
-                Some(rows) => Some(project_sequential(rows, &fields.team, native_json).await?),
+                Some(rows) => Some(project_sequential(rows, &fields.team, backend).await?),
                 None => None,
             };
             (invitations, members, teams)
@@ -271,7 +269,7 @@ where
                 .all(self.connection())
                 .await
                 .map_err(map_db_err)?;
-            let invitations = project_sequential(rows, &fields.invitation, native_json).await?;
+            let invitations = project_sequential(rows, &fields.invitation, backend).await?;
             let (member_limit, _) = super::pagination::sql_pagination(
                 self.connection().get_database_backend(),
                 Some(member_limit),
@@ -284,7 +282,7 @@ where
                 .await
                 .map_err(map_db_err)?;
             let members = self
-                .project_members_with_owners(rows, &fields.member, native_json)
+                .project_members_with_owners(rows, &fields.member, backend)
                 .await?;
             let teams = if input.include_teams {
                 let rows = Entity::<O::Team>::find()
@@ -293,7 +291,7 @@ where
                     .all(self.connection())
                     .await
                     .map_err(map_db_err)?;
-                Some(project_sequential(rows, &fields.team, native_json).await?)
+                Some(project_sequential(rows, &fields.team, backend).await?)
             } else {
                 None
             };
@@ -353,12 +351,12 @@ where
         &self,
         rows: Vec<O::Member>,
         fields: &UserConfig,
-        native_json: bool,
+        backend: sea_orm::DbBackend,
     ) -> AuthResult<Vec<(better_auth_core::Member, Value)>> {
         let mut members = Vec::with_capacity(rows.len());
         for row in rows {
             let owner = models::join_value(&row, "user_id")?;
-            members.push((row.record(fields, native_json).await?, owner));
+            members.push((row.record(fields, backend).await?, owner));
         }
         Ok(members)
     }
@@ -370,7 +368,7 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPluginSchema> SeaOrmSt
         user_id: &str,
     ) -> AuthResult<Vec<better_auth_core::Organization>> {
         let fields = self.organization_fields()?;
-        let native_json = self.connection().get_database_backend() == sea_orm::DbBackend::Postgres;
+        let backend = self.connection().get_database_backend();
         let parent = Entity::<O::Member>::find()
             .filter(
                 O::Member::column("user_id")?
@@ -397,7 +395,7 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPluginSchema> SeaOrmSt
         models::project_batches_then::<O::Member, _, _>(
             &members,
             &fields.member,
-            native_json,
+            backend,
             |ready| {
                 let rows = &rows;
                 let fields = &fields;
@@ -422,7 +420,7 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPluginSchema> SeaOrmSt
                             models::project::<O::Organization>(
                                 organizations,
                                 &fields.organization,
-                                native_json,
+                                backend,
                             )
                             .await?,
                         )
@@ -460,7 +458,7 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPluginSchema> SeaOrmSt
         models::project::<O::Team>(
             teams,
             &self.organization_fields()?.team,
-            self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
+            self.connection().get_database_backend(),
         )
         .await
     }
@@ -470,7 +468,7 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPluginSchema> SeaOrmSt
         email: &str,
     ) -> AuthResult<Vec<better_auth_core::store::InvitationOrganization>> {
         let fields = self.organization_fields()?;
-        let native_json = self.connection().get_database_backend() == sea_orm::DbBackend::Postgres;
+        let backend = self.connection().get_database_backend();
         let parent = Entity::<O::Invitation>::find()
             .filter(O::Invitation::column("email")?.eq(email.to_lowercase()))
             .limit(super::pagination::default_limit(
@@ -494,7 +492,7 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPluginSchema> SeaOrmSt
         models::project_batches_then::<O::Invitation, _, _>(
             &invitations,
             &fields.invitation,
-            native_json,
+            backend,
             |ready| {
                 let rows = &rows;
                 let fields = &fields;
@@ -516,7 +514,7 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPluginSchema> SeaOrmSt
                     let mut projected = models::project::<O::Organization>(
                         organizations,
                         &fields.organization,
-                        native_json,
+                        backend,
                     )
                     .await?
                     .into_iter();

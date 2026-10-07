@@ -26,25 +26,17 @@ pub(super) fn sqlite_extra_output(
     {
         return Ok(Some(FieldValue::Number(f64::from(u8::from(value)))));
     }
+    if let Some(value) = sqlite_json_output(&value)? {
+        return Ok(Some(value));
+    }
     if matches!(
         field.field_type,
         UserFieldType::Json | UserFieldType::StringArray | UserFieldType::NumberArray
-    ) {
-        match &value {
-            Value::Json(None) => return Ok(Some(FieldValue::Null)),
-            // SQL NULL and a stored JSON literal null must reach the callback differently.
-            Value::Json(Some(value)) => {
-                return better_auth_core::utils::json::stringify(value)
-                    .map(|text| Some(FieldValue::String(text)))
-                    .map_err(Into::into);
-            }
-            value @ Value::Array(_, Some(_)) => {
-                return crate::__private_field_value(value.clone())?
-                    .stringify()
-                    .map(|value| value.map(FieldValue::String));
-            }
-            _ => {}
-        }
+    ) && let value @ Value::Array(_, Some(_)) = &value
+    {
+        return crate::__private_field_value(value.clone())?
+            .stringify()
+            .map(|value| value.map(FieldValue::String));
     }
     let value = crate::__private_field_value(value)?;
     if matches!(field.field_type, UserFieldType::Date)
@@ -55,6 +47,18 @@ pub(super) fn sqlite_extra_output(
         })));
     }
     Ok(Some(value))
+}
+
+pub(super) fn sqlite_json_output(value: &sea_orm::Value) -> AuthResult<Option<FieldValue>> {
+    // ponytail: typed JSON loses text formatting; use raw query rows when byte preservation is required.
+    match value {
+        sea_orm::Value::Json(None) => Ok(Some(FieldValue::Null)),
+        // SQL NULL and a stored JSON literal null must reach the callback differently.
+        sea_orm::Value::Json(Some(value)) => better_auth_core::utils::json::stringify(value)
+            .map(|text| Some(FieldValue::String(text)))
+            .map_err(Into::into),
+        _ => Ok(None),
+    }
 }
 
 pub(super) fn plugin_field_output(

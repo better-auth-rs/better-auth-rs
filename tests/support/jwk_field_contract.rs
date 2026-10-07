@@ -1,4 +1,5 @@
 use better_auth::__private_core::__private_async_trait::async_trait;
+use better_auth::seaorm::sea_orm::entity::prelude::DateTimeUtc;
 use better_auth::{
     __private_core::{
         AuthContext, AuthError, AuthInitContext, AuthPlugin, AuthRequest, AuthResponse, AuthResult,
@@ -157,7 +158,7 @@ pub(crate) fn input() -> CreateJwk {
         public_key: "public".into(),
         private_key: "private".into(),
         created_at: "2030-01-01T00:00:00Z"
-            .parse::<chrono::DateTime<chrono::Utc>>()
+            .parse::<DateTimeUtc>()
             .expect("fixed inert fixture date parses")
             .into(),
         expires_at: None,

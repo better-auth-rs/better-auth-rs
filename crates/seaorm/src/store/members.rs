@@ -238,10 +238,7 @@ where
         .await?
         .insert(self.connection())
         .await?
-        .record(
-            &config,
-            self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
-        )
+        .record(&config, self.connection().get_database_backend())
         .await
     }
 
@@ -313,7 +310,7 @@ where
             Some(row) => row
                 .record(
                     &self.organization_fields()?.member,
-                    self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
+                    self.connection().get_database_backend(),
                 )
                 .await
                 .map(Some),
@@ -343,7 +340,7 @@ where
             Some(row) => row
                 .record(
                     &self.organization_fields()?.member,
-                    self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
+                    self.connection().get_database_backend(),
                 )
                 .await
                 .map(Some),
@@ -397,7 +394,7 @@ where
         models::project::<O::Member>(
             rows,
             &self.organization_fields()?.member,
-            self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
+            self.connection().get_database_backend(),
         )
         .await
     }
@@ -454,7 +451,7 @@ where
             models::project::<O::Member>(
                 rows,
                 &self.organization_fields()?.member,
-                self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
+                self.connection().get_database_backend(),
             )
             .await?,
             total,
@@ -656,7 +653,7 @@ impl<
             Some(row) => row
                 .record(
                     &self.organization_fields()?.member,
-                    db.get_database_backend() == sea_orm::DbBackend::Postgres,
+                    db.get_database_backend(),
                 )
                 .await
                 .map(Some),
@@ -701,7 +698,7 @@ impl<
         let member = member
             .record(
                 &self.organization_fields()?.member,
-                db.get_database_backend() == sea_orm::DbBackend::Postgres,
+                db.get_database_backend(),
             )
             .await?;
         self.delete_member_for_user_with_connection(
@@ -743,7 +740,7 @@ impl<
         let teams = models::project::<O::Team>(
             teams,
             &self.organization_fields()?.team,
-            db.get_database_backend() == sea_orm::DbBackend::Postgres,
+            db.get_database_backend(),
         )
         .await?;
         for team in teams {

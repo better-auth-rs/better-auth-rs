@@ -3,9 +3,38 @@ use crate::SeaOrmOrganizationModel;
 use better_auth_core::store::schema::resolve_field_name;
 use better_auth_core::{AuthError, AuthResult, user_fields::UserConfig};
 use better_auth_core::{FieldMap, FieldValue};
-use sea_orm::{ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter};
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, ConnectionTrait, DbBackend, EntityTrait, QueryFilter,
+};
 
 pub(super) type Entity<M> = <M as SeaOrmOrganizationModel>::Entity;
+
+pub(crate) fn record_fields<M: SeaOrmOrganizationModel>(
+    model: &M,
+    fields: &UserConfig,
+    backend: DbBackend,
+) -> AuthResult<better_auth_core::user_fields::AdapterRecord> {
+    let mut record = model.record_fields(fields)?;
+    if backend == DbBackend::Sqlite {
+        record.map_native_fields(fields, |name| {
+            super::field_output::sqlite_json_output(
+                &super::field_output::column_value::<M::Entity>(model, M::column(name)?),
+            )
+        })?;
+    }
+    record.map_storage_fields(
+        fields,
+        super::field_output::capabilities(backend),
+        |name, field| {
+            super::field_output::plugin_field_output(
+                super::field_output::column_value::<M::Entity>(model, M::column(name)?),
+                field,
+                backend,
+            )
+        },
+    )?;
+    Ok(record)
+}
 
 pub(super) fn values<const N: usize>(fields: [(&str, FieldValue); N]) -> FieldMap {
     fields
@@ -97,10 +126,7 @@ pub(super) async fn insert<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
     .await?
     .insert(conn)
     .await?
-    .record(
-        config,
-        conn.get_database_backend() == sea_orm::DbBackend::Postgres,
-    )
+    .record(config, conn.get_database_backend())
     .await
 }
 
@@ -142,25 +168,22 @@ pub(super) async fn update<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
     find::<M, _>(conn, id, policy)
         .await?
         .ok_or_else(|| better_auth_core::AuthError::not_found("Organization record not found"))?
-        .record(
-            config,
-            conn.get_database_backend() == sea_orm::DbBackend::Postgres,
-        )
+        .record(config, conn.get_database_backend())
         .await
 }
 
 pub(super) async fn project<M: SeaOrmOrganizationModel>(
     rows: Vec<M>,
     config: &UserConfig,
-    supports_native_json: bool,
+    backend: DbBackend,
 ) -> AuthResult<Vec<M::Record>> {
-    M::records(&rows, config, supports_native_json).await
+    M::records(&rows, config, backend).await
 }
 
 pub(super) async fn project_then<M: SeaOrmOrganizationModel, R: Send, F>(
     rows: &[M],
     config: &UserConfig,
-    supports_native_json: bool,
+    backend: DbBackend,
     complete: impl Fn(usize, M::Record) -> F + Sync,
 ) -> AuthResult<Vec<R>>
 where
@@ -169,25 +192,29 @@ where
 {
     let records = rows
         .iter()
-        .map(|row| row.record_fields(config))
+        .map(|row| record_fields(row, config, backend))
         .collect::<AuthResult<Vec<_>>>()?;
     config
-        .organization_output_records_then(records, supports_native_json, |index, fields| {
-            let complete = &complete;
-            async move {
-                let row = rows.get(index).ok_or_else(|| {
-                    AuthError::internal("Organization projection lost its stored row index")
-                })?;
-                complete(index, row.record_from_fields(config, fields)?).await
-            }
-        })
+        .organization_output_records_then(
+            records,
+            backend == DbBackend::Postgres,
+            |index, fields| {
+                let complete = &complete;
+                async move {
+                    let row = rows.get(index).ok_or_else(|| {
+                        AuthError::internal("Organization projection lost its stored row index")
+                    })?;
+                    complete(index, row.record_from_fields(config, fields)?).await
+                }
+            },
+        )
         .await
 }
 
 pub(super) async fn project_batches_then<M: SeaOrmOrganizationModel, R: Send, F>(
     rows: &[M],
     config: &UserConfig,
-    supports_native_json: bool,
+    backend: DbBackend,
     complete: impl Fn(Vec<(usize, M::Record)>) -> F + Sync,
 ) -> AuthResult<Vec<R>>
 where
@@ -196,12 +223,12 @@ where
 {
     let records = rows
         .iter()
-        .map(|row| row.record_fields(config))
+        .map(|row| record_fields(row, config, backend))
         .collect::<AuthResult<Vec<_>>>()?;
     config
         .organization_output_records_batches_then(
             records,
-            supports_native_json,
+            backend == DbBackend::Postgres,
             |index, fields| {
                 rows.get(index)
                     .ok_or_else(|| {

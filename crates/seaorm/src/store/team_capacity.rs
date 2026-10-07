@@ -26,12 +26,7 @@ async fn update<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
     }
     let changed = update.exec(conn).await.map_err(map_db_err)?.rows_affected > 0;
     if changed && let Some(row) = models::find::<M, _>(conn, id, policy).await? {
-        let _ = row
-            .record(
-                fields,
-                conn.get_database_backend() == sea_orm::DbBackend::Postgres,
-            )
-            .await?;
+        let _ = row.record(fields, conn.get_database_backend()).await?;
     }
     Ok(changed)
 }
@@ -63,12 +58,7 @@ pub(super) async fn reserve<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
         .rows_affected
         > 0;
     if changed && let Some(row) = models::find::<M, _>(conn, id, policy).await? {
-        let _ = row
-            .record(
-                fields,
-                conn.get_database_backend() == sea_orm::DbBackend::Postgres,
-            )
-            .await?;
+        let _ = row.record(fields, conn.get_database_backend()).await?;
     }
     update::<M, _>(
         conn,

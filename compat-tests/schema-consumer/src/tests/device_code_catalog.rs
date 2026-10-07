@@ -3,13 +3,16 @@ use super::{
     server_catalog_indexes,
 };
 use better_auth::{
-    AuthConfig, AuthSchema,
+    AuthConfig, AuthSchema, FieldDate,
     config::IdGeneration,
     prelude::{CreateDeviceCode, CreateUser, UpdateDeviceCode},
     seaorm::{
         Database, DatabaseConnection, SeaOrmAccountModel, SeaOrmPluginModel, SeaOrmPluginSchema,
         SeaOrmSessionModel, SeaOrmStore, SeaOrmUserModel, SeaOrmVerificationModel,
-        sea_orm::{ConnectionTrait, DbBackend, EntityName, EntityTrait, Statement},
+        sea_orm::{
+            ConnectionTrait, DbBackend, EntityName, EntityTrait, Statement,
+            entity::prelude::DateTimeUtc,
+        },
     },
     store::AuthStore,
 };
@@ -100,13 +103,13 @@ where
         )
         .await?;
     let owner_id = owner.id.typed()?.clone();
-    let expires_at = "2030-01-02T03:04:05.123Z".parse()?;
+    let expires_at: FieldDate = "2030-01-02T03:04:05.123Z".parse::<DateTimeUtc>()?.into();
     let created = store
         .create_device_code(CreateDeviceCode {
             device_code: "ordinary-catalog-device".into(),
             user_code: "CATALOG".into(),
             user_id: None,
-            expires_at,
+            expires_at: expires_at.clone(),
             status: "pending".into(),
             last_polled_at: None,
             polling_interval: Some(5.0),

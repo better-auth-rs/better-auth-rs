@@ -10,7 +10,7 @@ use std::sync::Arc;
 pub struct AdapterRecord {
     output: FieldMap,
     storage: FieldMap,
-    raw_storage: bool,
+    raw_storage: Option<FieldOutputCapabilities>,
 }
 
 impl AdapterRecord {
@@ -19,7 +19,7 @@ impl AdapterRecord {
         Self {
             output: core,
             storage,
-            raw_storage: false,
+            raw_storage: None,
         }
     }
 
@@ -28,15 +28,35 @@ impl AdapterRecord {
     pub fn map_storage_fields(
         &mut self,
         fields: &UserConfig,
+        capabilities: FieldOutputCapabilities,
         map: impl Fn(&str, &UserFieldConfig) -> AuthResult<Option<Value>>,
     ) -> AuthResult<()> {
         for (name, field) in fields.fields() {
+            if name == "id" {
+                continue;
+            }
             let storage = resolve_field_name(field.field_name.as_deref(), name);
             if let Some(value) = map(storage, field)? {
                 let _ = self.storage.insert(storage.to_owned(), value);
             }
         }
-        self.raw_storage = true;
+        self.raw_storage = Some(capabilities);
+        Ok(())
+    }
+
+    /// Restore unconfigured core values without applying application field policies.
+    pub fn map_native_fields(
+        &mut self,
+        fields: &UserConfig,
+        map: impl Fn(&str) -> AuthResult<Option<Value>>,
+    ) -> AuthResult<()> {
+        for (name, value) in &mut self.output {
+            if !fields.fields().contains_key(name)
+                && let Some(raw) = map(name)?
+            {
+                *value = raw;
+            }
+        }
         Ok(())
     }
 }
@@ -208,7 +228,7 @@ impl UserConfig {
                     supports_native_json(field),
                 ))
             },
-            |index, (_, output)| complete(index, std::mem::take(output)),
+            |index, record| complete(index, std::mem::take(&mut record.output)),
         )
         .await
     }
@@ -273,7 +293,7 @@ impl UserConfig {
                     supports_native_json(field),
                 ))
             },
-            |index, (_, output)| decode(index, std::mem::take(output)),
+            |index, record| decode(index, std::mem::take(&mut record.output)),
             complete,
         )
         .await
@@ -285,10 +305,11 @@ impl UserConfig {
     ) -> AuthResult<Vec<OrganizationRecord>> {
         records
             .into_iter()
-            .map(|record| {
-                let mut core = record.output;
-                core.retain(|name, _| name == "id" || !self.fields().contains_key(name));
-                Ok((record.storage, core))
+            .map(|mut record| {
+                record
+                    .output
+                    .retain(|name, _| name == "id" || !self.fields().contains_key(name));
+                Ok(record)
             })
             .collect()
     }
@@ -591,10 +612,10 @@ impl UserConfig {
     }
 }
 
-type OrganizationRecord = (FieldMap, FieldMap);
+type OrganizationRecord = AdapterRecord;
 
 async fn project_organization_field(
-    (storage, output): &mut OrganizationRecord,
+    record: &mut OrganizationRecord,
     name: &str,
     field: &UserFieldConfig,
     supports_native_json: bool,
@@ -602,16 +623,17 @@ async fn project_organization_field(
     if name == "id" {
         return Ok(());
     }
-    let value = storage
+    let value = record
+        .storage
         .get(resolve_field_name(field.field_name.as_deref(), name))
         .cloned()
         .unwrap_or_default();
-    super::organization::assign_output(
-        output,
-        name,
-        field,
-        field.adapter_output(value, supports_native_json).await?,
-    )
+    let value = if let Some(capabilities) = record.raw_storage {
+        field.adapter_output_from_raw(value, capabilities).await?
+    } else {
+        field.adapter_output(value, supports_native_json).await?
+    };
+    super::organization::assign_output(&mut record.output, name, field, value)
 }
 
 fn adapter_records(storage: &[FieldMap]) -> AuthResult<Vec<AdapterRecord>> {
@@ -669,7 +691,7 @@ async fn project_adapter_field_with_capabilities(
         .get(resolve_field_name(field.field_name.as_deref(), name))
         .cloned()
         .unwrap_or_default();
-    let value = if record.raw_storage {
+    let value = if let Some(capabilities) = record.raw_storage {
         field.adapter_output_from_raw(value, capabilities).await?
     } else {
         field
@@ -745,7 +767,11 @@ mod tests {
                 ),
             };
             let mut record = AdapterRecord::new(FieldMap::new(), FieldMap::new());
-            record.map_storage_fields(&fields, |_, _| Ok(Some(raw.clone())))?;
+            record.map_storage_fields(
+                &fields,
+                FieldOutputCapabilities::json_only(false),
+                |_, _| Ok(Some(raw.clone())),
+            )?;
             let projected = fields
                 .project_adapter_records_with_capabilities(
                     vec![record],

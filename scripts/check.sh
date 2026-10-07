@@ -113,6 +113,16 @@ run_stage() {
       ;;
     user-fields)
       cargo fmt --all -- --check
+      bun --no-install test \
+        ./compat-tests/reference-server/contracts/user-id-generation-order.test.ts \
+        ./compat-tests/reference-server/contracts/user-serial-create-order.test.ts \
+        ./compat-tests/reference-server/contracts/account-verification-serial-primary.test.ts \
+        ./compat-tests/reference-server/contracts/adapter-id-slot.test.ts \
+        ./compat-tests/reference-server/contracts/adapter-id-coercion.test.ts \
+        ./compat-tests/reference-server/contracts/memory-transaction-values.test.ts \
+        ./compat-tests/reference-server/contracts/async-field-transforms.test.ts \
+        ./compat-tests/reference-server/contracts/sql-user-extra-output.test.ts \
+        ./compat-tests/reference-server/contracts/user-sort-field.test.ts
       cargo clippy --locked --keep-going -p better-auth-core -p better-auth-seaorm -- -D warnings
       cargo clippy --locked --keep-going --features axum,seaorm2,redis-cache --test user_id_generation_order_tests --test plugin_id_slot_tests --test session_id_policy_tests --test legacy_schema_integration_tests -- -D warnings
       cargo test --locked --no-fail-fast -p better-auth-core -p better-auth-seaorm --lib -- user_fields:: schema_history field_value:: id_slot store::ephemeral::user_serial_tests:: store::ephemeral::serial_primary_tests:: store::ephemeral::rows::tests::
@@ -125,16 +135,6 @@ run_stage() {
         --test native_memory_join_tests --test account_owner_batch_tests --test session_id_policy_tests
       cargo test --locked --features axum,seaorm2,redis-cache --test session_id_policy_tests -- --ignored
       cargo test --locked --features axum,seaorm2,redis-cache --test legacy_schema_integration_tests -- serial_session_update_ids_reach_the_numeric_column_after_conversion
-      bun --no-install test \
-        ./compat-tests/reference-server/contracts/user-id-generation-order.test.ts \
-        ./compat-tests/reference-server/contracts/user-serial-create-order.test.ts \
-        ./compat-tests/reference-server/contracts/account-verification-serial-primary.test.ts \
-        ./compat-tests/reference-server/contracts/adapter-id-slot.test.ts \
-        ./compat-tests/reference-server/contracts/adapter-id-coercion.test.ts \
-        ./compat-tests/reference-server/contracts/memory-transaction-values.test.ts \
-        ./compat-tests/reference-server/contracts/async-field-transforms.test.ts \
-        ./compat-tests/reference-server/contracts/sql-user-extra-output.test.ts \
-        ./compat-tests/reference-server/contracts/user-sort-field.test.ts
       ;;
     schema-joins)
       cargo fmt --all -- --check

@@ -85,10 +85,7 @@ where
         // Output transforms run after the claim is committed, before the member transaction starts.
         match row {
             Some(row) => row
-                .record(
-                    &config,
-                    self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
-                )
+                .record(&config, self.connection().get_database_backend())
                 .await
                 .map(Some),
             None => Ok(None),

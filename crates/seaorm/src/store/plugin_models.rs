@@ -14,13 +14,17 @@ pub(super) fn record_fields<M: SeaOrmPluginModel>(
     backend: DbBackend,
 ) -> AuthResult<better_auth_core::user_fields::AdapterRecord> {
     let mut record = model.record_fields(fields)?;
-    record.map_storage_fields(fields, |name, field| {
-        super::field_output::plugin_field_output(
-            super::field_output::column_value::<M::Entity>(model, M::column(name)?),
-            field,
-            backend,
-        )
-    })?;
+    record.map_storage_fields(
+        fields,
+        super::field_output::capabilities(backend),
+        |name, field| {
+            super::field_output::plugin_field_output(
+                super::field_output::column_value::<M::Entity>(model, M::column(name)?),
+                field,
+                backend,
+            )
+        },
+    )?;
     Ok(record)
 }
 

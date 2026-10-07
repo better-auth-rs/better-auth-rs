@@ -3,6 +3,7 @@ mod policies;
 
 pub(crate) use policies::{Fields, config};
 
+use better_auth::seaorm::sea_orm::entity::prelude::DateTimeUtc;
 use better_auth::{
     __private_core::{
         AuthError, AuthResult, AuthSchema, AuthStore, CreateTwoFactor, CreateUser, FieldMap,
@@ -76,7 +77,7 @@ fn input(owner: &str) -> CreateTwoFactor {
             (
                 "activatedAt".into(),
                 "2029-01-02T03:04:05.000Z"
-                    .parse::<chrono::DateTime<chrono::Utc>>()
+                    .parse::<DateTimeUtc>()
                     .expect("fixed activation date parses")
                     .into(),
             ),
@@ -106,7 +107,7 @@ fn update() -> UpdateTwoFactor {
             (
                 "activatedAt".into(),
                 "2029-02-03T04:05:06.789Z"
-                    .parse::<chrono::DateTime<chrono::Utc>>()
+                    .parse::<DateTimeUtc>()
                     .expect("fixed activation date parses")
                     .into(),
             ),

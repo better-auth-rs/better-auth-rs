@@ -76,10 +76,7 @@ where
         .await?
         .insert(self.connection())
         .await?
-        .record(
-            &config,
-            self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
-        )
+        .record(&config, self.connection().get_database_backend())
         .await
     }
     async fn delete_organization_records(&self, id: &str) -> AuthResult<()> {
@@ -161,10 +158,7 @@ where
         active
             .insert(self.connection())
             .await?
-            .record(
-                &config,
-                self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
-            )
+            .record(&config, self.connection().get_database_backend())
             .await
     }
 
@@ -178,10 +172,7 @@ where
         .await?;
         match row {
             Some(row) => row
-                .record(
-                    &config,
-                    self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
-                )
+                .record(&config, self.connection().get_database_backend())
                 .await
                 .map(Some),
             None => Ok(None),
@@ -216,10 +207,7 @@ where
             .map_err(map_db_err)?;
         match row {
             Some(row) => row
-                .record(
-                    &config,
-                    self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
-                )
+                .record(&config, self.connection().get_database_backend())
                 .await
                 .map(Some),
             None => Ok(None),
@@ -238,7 +226,7 @@ where
                 .await
                 .map_err(map_db_err)?,
             &config,
-            self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
+            self.connection().get_database_backend(),
         )
         .await
     }
@@ -341,7 +329,7 @@ where
         let organizations = models::project_then::<O::Member, _, _>(
             &rows,
             &config.member,
-            self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
+            self.connection().get_database_backend(),
             |index, _| {
                 let rows = &rows;
                 let config = &config;
@@ -363,8 +351,7 @@ where
                         Some(row) => row
                             .record(
                                 &config.organization,
-                                self.connection().get_database_backend()
-                                    == sea_orm::DbBackend::Postgres,
+                                self.connection().get_database_backend(),
                             )
                             .await
                             .map(Some),
@@ -405,7 +392,7 @@ impl<
             Some(row) => row
                 .record(
                     &self.organization_fields()?.organization,
-                    db.get_database_backend() == sea_orm::DbBackend::Postgres,
+                    db.get_database_backend(),
                 )
                 .await
                 .map(Some),

@@ -74,10 +74,7 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> I
         .await?;
         match row {
             Some(row) => row
-                .record(
-                    &config,
-                    self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
-                )
+                .record(&config, self.connection().get_database_backend())
                 .await
                 .map(Some),
             None => Ok(None),
@@ -102,10 +99,7 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> I
             .map_err(map_db_err)?;
         match row {
             Some(row) => row
-                .record(
-                    &config,
-                    self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
-                )
+                .record(&config, self.connection().get_database_backend())
                 .await
                 .map(Some),
             None => Ok(None),
@@ -160,7 +154,7 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> I
         models::project::<O::Invitation>(
             rows,
             &self.organization_fields()?.invitation,
-            self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
+            self.connection().get_database_backend(),
         )
         .await
     }
@@ -200,7 +194,7 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> I
         models::project_then::<O::Invitation, _, _>(
             &rows,
             &fields.invitation,
-            self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
+            self.connection().get_database_backend(),
             |index, invitation| {
                 let rows = &rows;
                 let fields = &fields;
@@ -222,8 +216,7 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> I
                         Some(row) => Some(
                             row.record(
                                 &fields.organization,
-                                self.connection().get_database_backend()
-                                    == sea_orm::DbBackend::Postgres,
+                                self.connection().get_database_backend(),
                             )
                             .await?,
                         ),

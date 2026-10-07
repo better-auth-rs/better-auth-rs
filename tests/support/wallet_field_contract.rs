@@ -1,4 +1,5 @@
 use better_auth::__private_core::__private_async_trait::async_trait;
+use better_auth::seaorm::sea_orm::entity::prelude::DateTimeUtc;
 use better_auth::{
     __private_core::{
         AuthContext, AuthError, AuthInitContext, AuthPlugin, AuthRequest, AuthResponse, AuthResult,
@@ -161,7 +162,7 @@ pub(crate) fn input(user_id: String) -> CreateWalletAddress {
         chain_id: 1,
         is_primary: false,
         created_at: "2030-01-01T00:00:00Z"
-            .parse::<chrono::DateTime<chrono::Utc>>()
+            .parse::<DateTimeUtc>()
             .expect("fixed inert fixture date parses")
             .into(),
         additional_fields: [

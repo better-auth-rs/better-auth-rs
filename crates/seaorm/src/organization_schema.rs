@@ -6,7 +6,7 @@ use better_auth_core::{
     user_fields::{AdapterRecord, UserConfig},
 };
 use sea_orm::{
-    ActiveModelBehavior, ActiveModelTrait, ColumnTrait, EntityTrait, FromQueryResult,
+    ActiveModelBehavior, ActiveModelTrait, ColumnTrait, DbBackend, EntityTrait, FromQueryResult,
     IntoActiveModel,
 };
 use serde::Serialize;
@@ -42,29 +42,27 @@ pub trait SeaOrmOrganizationModel:
     fn record(
         &self,
         fields: &UserConfig,
-        supports_native_json: bool,
+        backend: DbBackend,
     ) -> impl Future<Output = AuthResult<Self::Record>> + Send {
         async move {
-            Ok(
-                Self::records(std::slice::from_ref(self), fields, supports_native_json)
-                    .await?
-                    .remove(0),
-            )
+            Ok(Self::records(std::slice::from_ref(self), fields, backend)
+                .await?
+                .remove(0))
         }
     }
     /// Project a batch before decoding records, preserving callback and result order.
     fn records(
         rows: &[Self],
         fields: &UserConfig,
-        supports_native_json: bool,
+        backend: DbBackend,
     ) -> impl Future<Output = AuthResult<Vec<Self::Record>>> + Send {
         async move {
             let records = rows
                 .iter()
-                .map(|row| row.record_fields(fields))
+                .map(|row| crate::store::organization_record_fields(row, fields, backend))
                 .collect::<AuthResult<Vec<_>>>()?;
             let projected = fields
-                .organization_output_records(records, supports_native_json)
+                .organization_output_records(records, backend == DbBackend::Postgres)
                 .await?;
             rows.iter()
                 .zip(projected)

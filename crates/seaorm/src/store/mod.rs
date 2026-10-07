@@ -24,6 +24,7 @@ mod model_names;
 mod organization_extensions;
 mod organization_joins;
 mod organization_models;
+pub(crate) use organization_models::record_fields as organization_record_fields;
 mod organization_roles;
 mod organizations;
 mod pagination;

@@ -68,10 +68,7 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
         .await?;
         match row {
             Some(row) => row
-                .record(
-                    &config,
-                    self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
-                )
+                .record(&config, self.connection().get_database_backend())
                 .await
                 .map(Some),
             None => Ok(None),
@@ -96,7 +93,7 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
         models::project::<O::OrganizationRole>(
             rows,
             &self.organization_fields()?.organization_role,
-            self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
+            self.connection().get_database_backend(),
         )
         .await
     }
@@ -121,7 +118,7 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
         models::project::<O::OrganizationRole>(
             rows,
             &self.organization_fields()?.organization_role,
-            self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
+            self.connection().get_database_backend(),
         )
         .await
     }
@@ -149,7 +146,7 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
             Some(row) => row
                 .record(
                     &self.organization_fields()?.organization_role,
-                    self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
+                    self.connection().get_database_backend(),
                 )
                 .await
                 .map(Some),
@@ -221,10 +218,7 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
         )
         .await?
         .ok_or_else(|| better_auth_core::AuthError::not_found("Role not found"))?
-        .record(
-            &config,
-            self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
-        )
+        .record(&config, self.connection().get_database_backend())
         .await
     }
     async fn delete_organization_role(&self, id: &str) -> AuthResult<()> {

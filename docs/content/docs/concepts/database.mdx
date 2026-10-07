@@ -8,6 +8,10 @@ for auth persistence through the `seaorm2` feature on `better-auth`.
 
 The SeaORM integration enables SQLite, PostgreSQL, and MySQL drivers. Use the matching backend when generating entities with the CLI. Driver availability does not establish complete schema or value compatibility with the upstream adapter; the [alignment inventory](https://github.com/better-auth-rs/better-auth-rs/blob/master/docs/upstream-alignment-backlog.md) records the verified contracts.
 
+Organization projection uses the actual database backend for native and configured fields. SQLite `Json` model values restore JSON text before output callbacks; SQL NULL remains null. Native `metadata` and `permission` values follow the same rule across single, batch, and joined reads. A typed `Json` model does not retain the original text's whitespace or byte layout.
+
+Custom callers of `SeaOrmOrganizationModel::record` and `::records` must pass `DbBackend`. `AdapterRecord::map_storage_fields` also requires the backend's `FieldOutputCapabilities`; the adapter owns ID projection.
+
 The supported public path is:
 
 1. Enable the `seaorm2` feature on `better-auth`.

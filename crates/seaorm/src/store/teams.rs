@@ -68,10 +68,7 @@ impl<
         .await?;
         match row {
             Some(row) => row
-                .record(
-                    &config,
-                    self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
-                )
+                .record(&config, self.connection().get_database_backend())
                 .await
                 .map(Some),
             None => Ok(None),
@@ -122,7 +119,7 @@ impl<
                 .ok_or_else(|| AuthError::not_found("Team not found"))?
                 .record(
                     &Default::default(),
-                    self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
+                    self.connection().get_database_backend(),
                 )
                 .await?;
         let _ = Entity::<O::TeamMember>::delete_many()
@@ -154,7 +151,7 @@ impl<
         let pending = models::project::<O::Invitation>(
             pending,
             &config,
-            self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
+            self.connection().get_database_backend(),
         )
         .await?;
         for row in pending {
@@ -197,7 +194,7 @@ impl<
         models::project::<O::Team>(
             rows,
             &self.organization_fields()?.team,
-            self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
+            self.connection().get_database_backend(),
         )
         .await
     }
@@ -231,7 +228,7 @@ impl<
         let teams = models::project_then::<O::TeamMember, _, _>(
             &rows,
             &better_auth_core::user_fields::UserConfig::default(),
-            self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
+            self.connection().get_database_backend(),
             |index, _| {
                 let rows = &rows;
                 let config = &config;
@@ -248,11 +245,7 @@ impl<
                         .map_err(map_db_err)?;
                     match row {
                         Some(row) => row
-                            .record(
-                                config,
-                                self.connection().get_database_backend()
-                                    == sea_orm::DbBackend::Postgres,
-                            )
+                            .record(config, self.connection().get_database_backend())
                             .await
                             .map(Some),
                         None => Ok(None),
@@ -284,7 +277,7 @@ impl<
             Some(row) => row
                 .record(
                     &Default::default(),
-                    self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
+                    self.connection().get_database_backend(),
                 )
                 .await
                 .map(Some),
@@ -307,7 +300,7 @@ impl<
         models::project::<O::TeamMember>(
             rows,
             &Default::default(),
-            self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
+            self.connection().get_database_backend(),
         )
         .await
     }
@@ -397,10 +390,7 @@ impl<
             .map_err(map_db_err)?;
         match row {
             Some(row) => row
-                .record(
-                    &config,
-                    db.get_database_backend() == sea_orm::DbBackend::Postgres,
-                )
+                .record(&config, db.get_database_backend())
                 .await
                 .map(Some),
             None => Ok(None),
@@ -446,10 +436,7 @@ impl<
         {
             return Ok(Some(
                 member
-                    .record(
-                        &Default::default(),
-                        db.get_database_backend() == sea_orm::DbBackend::Postgres,
-                    )
+                    .record(&Default::default(), db.get_database_backend())
                     .await?,
             ));
         }

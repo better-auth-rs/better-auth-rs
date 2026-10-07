@@ -1,4 +1,5 @@
 use better_auth::__private_core::__private_async_trait::async_trait;
+use better_auth::seaorm::sea_orm::entity::prelude::DateTimeUtc;
 use better_auth::{
     __private_core::{
         AuthContext, AuthError, AuthInitContext, AuthPlugin, AuthRequest, AuthResponse, AuthResult,
@@ -130,7 +131,7 @@ pub(crate) fn input(label: &str) -> CreateDeviceCode {
         user_code: format!("ordinary-user:{label}"),
         user_id: None,
         expires_at: "2030-01-01T00:00:00Z"
-            .parse::<chrono::DateTime<chrono::Utc>>()
+            .parse::<DateTimeUtc>()
             .expect("fixed fixture date parses")
             .into(),
         status: "pending".into(),

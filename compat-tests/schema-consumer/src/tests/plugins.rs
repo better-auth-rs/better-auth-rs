@@ -182,7 +182,7 @@ async fn renamed_plugin_tables_preserve_authentication_and_atomic_storage() {
         .update_api_key(
             &key.api_key.id,
             UpdateApiKey {
-                name: Some("renamed key".into()),
+                name: Some(Some("renamed key".into()).into()),
                 ..Default::default()
             },
         )
