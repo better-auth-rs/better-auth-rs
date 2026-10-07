@@ -63,7 +63,10 @@ impl EphemeralStore {
                     Ok(())
                 })
             },
-            |_, (snapshot, _)| Ok(snapshot.clone()),
+            |_, (snapshot, source)| {
+                snapshot.id = source.read(|row| Self::project_id(&row.id))?;
+                Ok(snapshot.clone())
+            },
         )
         .await
     }
@@ -131,7 +134,9 @@ impl PasskeyStore for EphemeralStore {
         };
         let selected = self
             .raw("passkey", "create", |state| {
-                self.assign_insert_serial_id(&mut passkey.id, state.passkeys.len());
+                if let Some(id) = self.next_serial_id(state.passkeys.len()) {
+                    passkey.id = crate::SchemaValue::from_field(id);
+                }
                 let source = state.passkeys.push_ref(passkey.clone());
                 Ok((passkey, source))
             })
@@ -140,7 +145,9 @@ impl PasskeyStore for EphemeralStore {
     }
 
     async fn get_passkey_by_id(&self, id: &str) -> AuthResult<Option<Passkey>> {
-        self.find_passkey(|row| row.id == id).await
+        let id = self.memory_primary_id_query(&crate::FieldValue::from(id))?;
+        self.find_passkey(|row| row.id.field_value().strict_equals(&id))
+            .await
     }
 
     async fn get_passkey_by_credential_id(
@@ -196,11 +203,12 @@ impl PasskeyStore for EphemeralStore {
                 |field, value| self.memory_plugin_field_input(field, value),
             )
             .await?;
+        let id = self.memory_primary_id_query(&id.field_value())?;
         let selected = self
             .raw("passkey", "update", |state| {
                 let Some(source) = state
                     .passkeys
-                    .first_ref(|row| row.id.field_value().strict_equals(&id.field_value()))?
+                    .first_ref(|row| row.id.field_value().strict_equals(&id))?
                 else {
                     return Ok(None);
                 };
@@ -231,9 +239,13 @@ impl PasskeyStore for EphemeralStore {
                 |field, value| self.memory_plugin_field_input(field, value),
             )
             .await?;
+        let id = self.memory_primary_id_query(&crate::FieldValue::from(id))?;
         let selected = self
             .raw("passkey", "update", |state| {
-                let Some(source) = state.passkeys.first_ref(|row| row.id == id)? else {
+                let Some(source) = state
+                    .passkeys
+                    .first_ref(|row| row.id.field_value().strict_equals(&id))?
+                else {
                     return Ok(None);
                 };
                 let snapshot = source.write(|passkey| {
@@ -249,8 +261,11 @@ impl PasskeyStore for EphemeralStore {
     }
 
     async fn delete_passkey(&self, id: &str) -> AuthResult<()> {
+        let id = self.memory_primary_id_query(&crate::FieldValue::from(id))?;
         self.raw("passkey", "delete", |state| {
-            let _ = state.passkeys.remove(id)?;
+            let _ = state
+                .passkeys
+                .remove_first(|row| row.id.field_value().strict_equals(&id))?;
             Ok(())
         })
         .await

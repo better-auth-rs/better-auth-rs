@@ -34,6 +34,10 @@ impl<S: AuthSchema> LastLoginMethodResolver<S> for RuntimeResolver {
 }
 
 #[tokio::test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "The test propagates setup errors and uses assertions to check plugin isolation."
+)]
 async fn shared_ephemeral_records_keep_plugin_bindings_and_field_policies_per_auth_instance()
 -> AuthResult<()> {
     let store = Arc::new(EphemeralStore::default());
@@ -268,6 +272,10 @@ impl AuthPlugin<Schema> for HookPlugin {
 }
 
 #[tokio::test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "The test propagates database errors and uses assertions to check transaction hooks."
+)]
 async fn plugin_hooks_share_the_real_transaction_and_commit_queue_before_application_hooks()
 -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let config = AuthConfig::new("plugin-runtime-secret-with-at-least-32-characters");

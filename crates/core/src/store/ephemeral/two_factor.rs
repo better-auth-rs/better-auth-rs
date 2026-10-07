@@ -40,6 +40,7 @@ impl EphemeralStore {
             let _ = output.insert(name.to_owned(), value);
         }
         snapshot.additional_fields = output;
+        snapshot.id = source.read(|row| Self::project_id(&row.id))?;
         Ok(snapshot)
     }
 
@@ -81,9 +82,10 @@ impl TwoFactorStore for EphemeralStore {
         let fields = self
             .prepare_two_factor_fields(update.additional_fields, false)
             .await?;
+        let id = self.memory_primary_id_query(&id.field_value())?;
         self.write_two_factor_row(
             "update",
-            |factor| factor.id.field_value().strict_equals(&id.field_value()),
+            |factor| factor.id.field_value().strict_equals(&id),
             |factor| {
                 if let Some(secret) = update.secret {
                     factor.secret = secret;
@@ -109,12 +111,10 @@ impl TwoFactorStore for EphemeralStore {
         let fields = self
             .prepare_two_factor_fields(FieldMap::new(), false)
             .await?;
+        let id = self.memory_primary_id_query(&id.field_value())?;
         self.write_two_factor_row(
             "incrementOne",
-            |factor| {
-                factor.id.field_value().strict_equals(&id.field_value())
-                    && factor.backup_codes == previous
-            },
+            |factor| factor.id.field_value().strict_equals(&id) && factor.backup_codes == previous,
             |factor| {
                 factor.backup_codes = replacement.to_owned();
                 factor.additional_fields.extend(fields);
@@ -129,10 +129,11 @@ impl TwoFactorStore for EphemeralStore {
         max_attempts: i64,
         locked_until: &(dyn Fn() -> AuthResult<chrono::DateTime<Utc>> + Send + Sync),
     ) -> AuthResult<()> {
+        let id = self.memory_primary_id_query(&id.field_value())?;
         let failures = self
             .write_two_factor_row(
                 "incrementOne",
-                |factor| factor.id.field_value().strict_equals(&id.field_value()),
+                |factor| factor.id.field_value().strict_equals(&id),
                 |factor| {
                     let failures = factor.failed_verification_count.unwrap_or(0) + 1;
                     factor.failed_verification_count = Some(failures);
@@ -150,7 +151,7 @@ impl TwoFactorStore for EphemeralStore {
                 .write_two_factor_row(
                     "incrementOne",
                     |factor| {
-                        factor.id.field_value().strict_equals(&id.field_value())
+                        factor.id.field_value().strict_equals(&id)
                             && factor
                                 .failed_verification_count
                                 .is_some_and(|failures| failures >= max_attempts)
@@ -172,6 +173,7 @@ impl TwoFactorStore for EphemeralStore {
         let fields = self
             .prepare_two_factor_fields(FieldMap::new(), false)
             .await?;
+        let id = self.memory_primary_id_query(&id.field_value())?;
         let _ = self
             .write_two_factor_row(
                 if locked_before.is_some() {
@@ -180,7 +182,7 @@ impl TwoFactorStore for EphemeralStore {
                     "update"
                 },
                 |factor| {
-                    factor.id.field_value().strict_equals(&id.field_value())
+                    factor.id.field_value().strict_equals(&id)
                         && locked_before.is_none_or(|before| {
                             // The upstream Memory adapter compares a null lock as epoch zero.
                             factor
@@ -204,7 +206,7 @@ impl TwoFactorStore for EphemeralStore {
         let additional_fields = self
             .prepare_two_factor_fields(input.additional_fields, true)
             .await?;
-        let factor = TwoFactor {
+        let mut factor = TwoFactor {
             additional_fields,
             id: self
                 .generated_id("twoFactor", None, self.lock()?.two_factors.len())?
@@ -221,6 +223,9 @@ impl TwoFactorStore for EphemeralStore {
         };
         let (snapshot, source) = self
             .raw("twoFactor", "create", |state| {
+                if let Some(id) = self.next_serial_id(state.two_factors.len()) {
+                    factor.id = crate::SchemaValue::from_field(id);
+                }
                 let source = state.two_factors.push_ref(factor.clone());
                 Ok((factor, source))
             })

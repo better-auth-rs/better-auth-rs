@@ -54,7 +54,9 @@ impl ApiKeyStore for EphemeralStore {
         };
         let selected = self
             .raw("apikey", "create", |state| {
-                self.assign_insert_serial_id(&mut key.id, state.api_keys.len());
+                if let Some(id) = self.next_serial_id(state.api_keys.len()) {
+                    key.id = crate::SchemaValue::from_field(id);
+                }
                 let source = state.api_keys.push_ref(key.clone());
                 Ok((key, source))
             })
@@ -63,14 +65,15 @@ impl ApiKeyStore for EphemeralStore {
     }
 
     async fn get_api_key_by_id(&self, id: &str) -> AuthResult<Option<ApiKey>> {
-        self.find_api_key(|row| row.id == id).await
+        self.get_api_key_by_id_value(&id.to_owned().into()).await
     }
 
     async fn get_api_key_by_id_value(
         &self,
         id: &crate::SchemaValue<String>,
     ) -> AuthResult<Option<ApiKey>> {
-        self.find_api_key(|row| row.id.field_value().strict_equals(&id.field_value()))
+        let id = self.memory_primary_id_query(&id.field_value())?;
+        self.find_api_key(|row| row.id.field_value().strict_equals(&id))
             .await
     }
 
@@ -172,11 +175,12 @@ impl ApiKeyStore for EphemeralStore {
                 |field, value| self.memory_plugin_field_input(field, value),
             )
             .await?;
+        let id = self.memory_primary_id_query(&id.field_value())?;
         let row = self
             .raw("apikey", "update", |state| {
                 let Some(source) = state
                     .api_keys
-                    .first_ref(|key| key.id.field_value().strict_equals(&id.field_value()))?
+                    .first_ref(|key| key.id.field_value().strict_equals(&id))?
                 else {
                     return Ok(None);
                 };
@@ -239,11 +243,12 @@ impl ApiKeyStore for EphemeralStore {
                 })
                 .await?
         };
+        let id = self.memory_primary_id_query(&id.field_value())?;
         let row = self
             .raw("apikey", write.operation(), |state| {
                 let Some(source) = state
                     .api_keys
-                    .first_ref(|key| key.id.field_value().strict_equals(&id.field_value()))?
+                    .first_ref(|key| key.id.field_value().strict_equals(&id))?
                 else {
                     return Ok(None);
                 };
@@ -321,8 +326,11 @@ impl ApiKeyStore for EphemeralStore {
     }
 
     async fn delete_api_key(&self, id: &crate::SchemaValue<String>) -> AuthResult<()> {
+        let id = self.memory_primary_id_query(&id.field_value())?;
         self.raw("apikey", "delete", |state| {
-            let _ = state.api_keys.remove(id)?;
+            let _ = state
+                .api_keys
+                .remove_first(|key| key.id.field_value().strict_equals(&id))?;
             Ok(())
         })
         .await
@@ -534,8 +542,11 @@ mod tests {
 
 fn comparator(field: &str) -> AuthResult<fn(&ApiKey, &ApiKey) -> std::cmp::Ordering> {
     Ok(match field {
-        "id" => |a, b| match (a.id.as_str(), b.id.as_str()) {
-            (Some(a), Some(b)) => a.cmp(b),
+        "id" => |a, b| match (a.id.field_value(), b.id.field_value()) {
+            (crate::FieldValue::String(a), crate::FieldValue::String(b)) => a.cmp(&b),
+            (crate::FieldValue::Number(a), crate::FieldValue::Number(b)) => (a - b)
+                .partial_cmp(&0.0)
+                .unwrap_or(std::cmp::Ordering::Equal),
             _ => std::cmp::Ordering::Equal,
         },
         "start" => |a, b| a.start.cmp(&b.start),

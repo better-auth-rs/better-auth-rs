@@ -45,7 +45,10 @@ impl EphemeralStore {
                     Ok(())
                 })
             },
-            |_, (snapshot, _)| Ok(snapshot.clone()),
+            |_, (snapshot, source)| {
+                snapshot.id = source.read(|row| Self::project_id(&row.id))?;
+                Ok(snapshot.clone())
+            },
         )
         .await
     }

@@ -1,6 +1,7 @@
 use super::*;
 
 mod fixture;
+mod plugin_credentials;
 mod session_plugins;
 
 fn serial_store() -> EphemeralStore {

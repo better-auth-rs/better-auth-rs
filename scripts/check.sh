@@ -76,6 +76,7 @@ run_stage() {
         --example postgres_usage -- -D warnings
       cargo test --locked -p better-auth-core --lib -- field_value:: \
         store::ephemeral::serial_primary_tests:: \
+        store::ephemeral::api_keys::tests:: store::ephemeral::two_factor::tests:: \
         store::ephemeral::fields::builtin_policies_transform_typed_records_once_and_preserve_adapter_id \
         types::tests::nullable_user_updates_preserve_omission_null_and_values
       cargo test --locked --no-fail-fast --features axum,seaorm2,redis-cache \
