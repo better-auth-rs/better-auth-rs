@@ -57,7 +57,7 @@ impl JwtPlugin {
         {
             return callback(data, endpoint).await;
         }
-        data.created_at = chrono::Utc::now();
+        data.created_at = chrono::Utc::now().into();
         store(endpoint).create_jwk(data).await
     }
 }

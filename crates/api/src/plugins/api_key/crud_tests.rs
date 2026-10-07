@@ -22,7 +22,7 @@ async fn context() -> (AuthContext<TestSchema>, String, String) {
         .create_session(CreateSession {
             additional_fields: Default::default(),
             user_id: user_id.clone(),
-            expires_at: Utc::now() + Duration::hours(1),
+            expires_at: (Utc::now() + Duration::hours(1)).into(),
             ip_address: None,
             user_agent: None,
             impersonated_by: None,
@@ -250,10 +250,14 @@ async fn trusted_creation_and_update_preserve_permissions_and_fractional_expirat
         .unwrap();
     assert_eq!(key.api_key.remaining, Some(3.0));
     assert_eq!(key.api_key.permissions, Some(json!({"device":["read"]})));
-    let expires_at =
-        chrono::DateTime::parse_from_rfc3339(key.api_key.expires_at.as_deref().unwrap())
-            .unwrap()
-            .with_timezone(&Utc);
+    let expires_at = key
+        .api_key
+        .expires_at
+        .as_ref()
+        .unwrap()
+        .to_datetime()
+        .unwrap()
+        .unwrap();
     assert!((expires_at - before).num_milliseconds() >= 86_400_249);
     assert!((expires_at - Utc::now()).num_milliseconds() <= 86_400_250);
     let updated = plugin

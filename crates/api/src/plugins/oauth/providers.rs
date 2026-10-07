@@ -1,6 +1,5 @@
 use async_trait::async_trait;
-use better_auth_core::{AuthError, AuthResult, NativeRequest, SchemaValue};
-use chrono::{DateTime, Utc};
+use better_auth_core::{AuthError, AuthResult, FieldDate, FieldValue, NativeRequest, SchemaValue};
 use indexmap::IndexMap;
 use serde::Deserialize;
 use serde_json::Value;
@@ -34,8 +33,8 @@ pub struct OAuthTokenSet {
     pub token_type: Option<String>,
     pub access_token: Option<String>,
     pub refresh_token: Option<String>,
-    pub access_token_expires_at: Option<DateTime<Utc>>,
-    pub refresh_token_expires_at: Option<DateTime<Utc>>,
+    pub access_token_expires_at: Option<FieldDate>,
+    pub refresh_token_expires_at: Option<FieldDate>,
     pub scopes: Vec<String>,
     pub id_token: Option<String>,
     pub raw: Option<Value>,
@@ -45,7 +44,7 @@ pub struct OAuthTokenSet {
 #[derive(Debug, Clone)]
 pub struct OAuthUserInfo {
     /// Mapped application fields validated by the configured user schema.
-    pub additional_fields: serde_json::Map<String, Value>,
+    pub additional_fields: better_auth_core::FieldMap,
     pub id: String,
     /// Preserve a missing email with `Undefined`, null with `Typed(None)`, or a string.
     pub email: SchemaValue<Option<String>>,
@@ -68,13 +67,13 @@ impl OAuthUserInfo {
 
     pub(super) fn name(&self) -> AuthResult<Option<&str>> {
         match &self.name {
-            SchemaValue::Typed(Some(value)) | SchemaValue::Dynamic(Value::String(value)) => {
+            SchemaValue::Typed(Some(value)) | SchemaValue::Dynamic(FieldValue::String(value)) => {
                 Ok(Some(value))
             }
             SchemaValue::Undefined
             | SchemaValue::Typed(None)
-            | SchemaValue::Dynamic(Value::Null) => Ok(None),
-            SchemaValue::Dynamic(_) | SchemaValue::InvalidDate => Err(AuthError::internal(
+            | SchemaValue::Dynamic(FieldValue::Null) => Ok(None),
+            SchemaValue::Dynamic(_) => Err(AuthError::internal(
                 "OAuth profile name must be a string, null, or undefined",
             )),
         }
@@ -91,11 +90,13 @@ pub(super) fn decode_profile_name(value: Option<&Value>) -> SchemaValue<Option<S
 
 pub(super) fn profile_email_verified(value: &SchemaValue<Option<bool>>) -> AuthResult<bool> {
     match value {
-        SchemaValue::Typed(Some(value)) | SchemaValue::Dynamic(Value::Bool(value)) => Ok(*value),
-        SchemaValue::Undefined | SchemaValue::Typed(None) | SchemaValue::Dynamic(Value::Null) => {
-            Ok(false)
+        SchemaValue::Typed(Some(value)) | SchemaValue::Dynamic(FieldValue::Bool(value)) => {
+            Ok(*value)
         }
-        SchemaValue::Dynamic(_) | SchemaValue::InvalidDate => Err(AuthError::internal(
+        SchemaValue::Undefined
+        | SchemaValue::Typed(None)
+        | SchemaValue::Dynamic(FieldValue::Null) => Ok(false),
+        SchemaValue::Dynamic(_) => Err(AuthError::internal(
             "OAuth profile email verification must be a boolean, null, or undefined",
         )),
     }
@@ -103,13 +104,13 @@ pub(super) fn profile_email_verified(value: &SchemaValue<Option<bool>>) -> AuthR
 
 pub(super) fn profile_email(value: &SchemaValue<Option<String>>) -> AuthResult<Option<&str>> {
     match value {
-        SchemaValue::Undefined | SchemaValue::Typed(None) | SchemaValue::Dynamic(Value::Null) => {
-            Ok(None)
-        }
-        SchemaValue::Typed(Some(value)) | SchemaValue::Dynamic(Value::String(value)) => {
+        SchemaValue::Undefined
+        | SchemaValue::Typed(None)
+        | SchemaValue::Dynamic(FieldValue::Null) => Ok(None),
+        SchemaValue::Typed(Some(value)) | SchemaValue::Dynamic(FieldValue::String(value)) => {
             Ok(Some(value))
         }
-        SchemaValue::Dynamic(_) | SchemaValue::InvalidDate => Err(AuthError::internal(
+        SchemaValue::Dynamic(_) => Err(AuthError::internal(
             "OAuth profile email must be a string, null, or undefined",
         )),
     }
@@ -134,8 +135,8 @@ pub struct OAuthUserInfoRequest {
     pub token_type: Option<String>,
     pub access_token: Option<String>,
     pub refresh_token: Option<String>,
-    pub access_token_expires_at: Option<DateTime<Utc>>,
-    pub refresh_token_expires_at: Option<DateTime<Utc>>,
+    pub access_token_expires_at: Option<FieldDate>,
+    pub refresh_token_expires_at: Option<FieldDate>,
     pub scopes: Vec<String>,
     pub id_token: Option<String>,
     pub raw: Option<Value>,

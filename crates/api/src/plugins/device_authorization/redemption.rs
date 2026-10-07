@@ -70,13 +70,12 @@ where
         return Err(device_error_response(400, "invalid_grant", INVALID_DEVICE_CODE)?.into());
     };
     let authorization = authorize(&device_code, endpoint).await?;
-    if let (Some(last_polled_at), Some(polling_interval)) =
-        (device_code.last_polled_at, device_code.polling_interval)
-    {
-        let elapsed = Utc::now()
-            .signed_duration_since(last_polled_at)
-            .num_milliseconds();
-        if (elapsed as f64) < polling_interval {
+    if let (Some(last_polled_at), Some(polling_interval)) = (
+        device_code.last_polled_at.as_ref(),
+        device_code.polling_interval,
+    ) {
+        let elapsed = Utc::now().timestamp_millis() as f64 - last_polled_at.milliseconds();
+        if elapsed < polling_interval {
             return Err(device_error_response(400, "slow_down", POLLING_TOO_FREQUENTLY)?.into());
         }
     }
@@ -84,12 +83,12 @@ where
         .update_device_code(
             &device_code.id,
             UpdateDeviceCode {
-                last_polled_at: Some(Some(Utc::now())),
+                last_polled_at: Some(Some(Utc::now().into())),
                 ..Default::default()
             },
         )
         .await?;
-    if device_code.expires_at < Utc::now() {
+    if device_code.expires_at.milliseconds() < Utc::now().timestamp_millis() as f64 {
         store.delete_device_code(&device_code.id).await?;
         return Err(device_error_response(400, "expired_token", EXPIRED_DEVICE_CODE)?.into());
     }

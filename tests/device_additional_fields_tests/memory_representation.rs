@@ -1,7 +1,8 @@
 use super::contract as fields;
 use better_auth::{
     __private_core::{
-        AuthResult, AuthUser, CreateDeviceCode, CreateUser, DeviceCode, UpdateDeviceCode,
+        AuthResult, AuthUser, CreateDeviceCode, CreateUser, DeviceCode, FieldMap, FieldValue,
+        UpdateDeviceCode,
         id::{IdGeneration, IdGenerator},
         store::{DeviceCodeStore, EphemeralStore, transaction},
         user_fields::{
@@ -11,7 +12,7 @@ use better_auth::{
     },
     AuthConfig, BetterAuth,
 };
-use serde_json::{Map, Value, json};
+use serde_json::{Value, json};
 use std::sync::{
     Arc, Mutex,
     atomic::{AtomicUsize, Ordering},
@@ -109,12 +110,39 @@ fn policies(trace: Option<&Trace>) -> UserConfig {
 fn input(label: &str, targets: &[String]) -> CreateDeviceCode {
     let mut input = fields::input(label);
     input.additional_fields = [
-        ("settings".into(), json!({"theme":"dark"})),
-        ("nullableSettings".into(), Value::Null),
-        ("tags".into(), json!(["alpha", "beta"])),
-        ("targets".into(), json!(targets)),
-        ("targetNumbers".into(), json!([1, 2])),
-        ("targetDocument".into(), json!(targets)),
+        (
+            "settings".into(),
+            FieldValue::from(FieldMap::from([("theme".into(), FieldValue::from("dark"))])),
+        ),
+        ("nullableSettings".into(), FieldValue::Null),
+        (
+            "tags".into(),
+            FieldValue::from(vec![FieldValue::from("alpha"), FieldValue::from("beta")]),
+        ),
+        (
+            "targets".into(),
+            FieldValue::from(
+                targets
+                    .iter()
+                    .cloned()
+                    .map(FieldValue::from)
+                    .collect::<Vec<_>>(),
+            ),
+        ),
+        (
+            "targetNumbers".into(),
+            FieldValue::from(vec![FieldValue::from(1), FieldValue::from(2)]),
+        ),
+        (
+            "targetDocument".into(),
+            FieldValue::from(
+                targets
+                    .iter()
+                    .cloned()
+                    .map(FieldValue::from)
+                    .collect::<Vec<_>>(),
+            ),
+        ),
     ]
     .into_iter()
     .collect();
@@ -123,9 +151,12 @@ fn input(label: &str, targets: &[String]) -> CreateDeviceCode {
 
 fn update(theme: &str) -> UpdateDeviceCode {
     UpdateDeviceCode {
-        additional_fields: [("settings".into(), json!({"theme":theme}))]
-            .into_iter()
-            .collect(),
+        additional_fields: [(
+            "settings".into(),
+            FieldValue::from(FieldMap::from([("theme".into(), FieldValue::from(theme))])),
+        )]
+        .into_iter()
+        .collect(),
         ..Default::default()
     }
 }
@@ -140,7 +171,7 @@ fn native(row: &DeviceCode) -> DeviceCode {
     clippy::expect_used,
     reason = "All declared physical fields must be present"
 )]
-fn stored_physical(row: &DeviceCode) -> Map<String, Value> {
+fn stored_physical(row: &DeviceCode) -> FieldMap {
     ALIASES
         .into_iter()
         .map(|(name, alias)| {
@@ -207,7 +238,7 @@ async fn observations(serial: bool) -> AuthResult<Value> {
             .with_name(format!("Display target {index}"))
             .with_email(format!("target{index}@device-fields.test"));
         let fixed_date = fields::input("date").expires_at;
-        input.created_at = Some(fixed_date);
+        input.created_at = Some(fixed_date.clone());
         input.updated_at = Some(fixed_date);
         let user = reader.store().create_user(input).await?;
         targets.push(user.id().typed()?.to_string());

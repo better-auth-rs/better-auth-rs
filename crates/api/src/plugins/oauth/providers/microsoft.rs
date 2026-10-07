@@ -172,7 +172,8 @@ pub(in crate::plugins::oauth) fn decode_profile(profile: Value) -> Result<OAuthU
             .map(serde_json::from_value)
             .transpose()
             .map_err(|error| format!("Invalid Microsoft picture: {error}"))?,
-        email_verified: SchemaValue::from_json(Some(email_verified)),
+        email_verified: SchemaValue::from_json(Some(email_verified))
+            .map_err(|error| error.to_string())?,
         additional_fields: Default::default(),
     })
 }

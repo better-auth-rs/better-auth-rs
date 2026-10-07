@@ -68,7 +68,7 @@ async fn fixture(config: Arc<AuthConfig>) -> Fixture {
             provider_id: ("provider".to_string()).into(),
             access_token: (Some("provider-access".to_string())).into(),
             refresh_token: (Some("provider-refresh".to_string())).into(),
-            access_token_expires_at: (Some(Utc::now() + Duration::hours(1))).into(),
+            access_token_expires_at: Some((Utc::now() + Duration::hours(1)).into()).into(),
             refresh_token_expires_at: Default::default(),
             id_token: Default::default(),
             scope: (Some("openid,email".to_string())).into(),
@@ -107,7 +107,7 @@ impl OAuthRefreshTokenHandler for ProviderCalls {
         let _ = self.refresh.fetch_add(1, Ordering::SeqCst);
         Ok(OAuthTokenSet {
             access_token: Some("refreshed-access".to_string()),
-            access_token_expires_at: Some(Utc::now() + Duration::hours(1)),
+            access_token_expires_at: Some((Utc::now() + Duration::hours(1)).into()),
             ..Default::default()
         })
     }
@@ -313,7 +313,7 @@ async fn missing_token_endpoint_preserves_account_route_errors_and_stored_creden
         .update_account(
             &fixture.account_id,
             UpdateAccount {
-                access_token_expires_at: (Some(Utc::now() - Duration::seconds(1))).into(),
+                access_token_expires_at: Some((Utc::now() - Duration::seconds(1)).into()).into(),
                 ..Default::default()
             },
         )

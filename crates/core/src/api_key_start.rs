@@ -1,13 +1,18 @@
-//! API key display prefixes retain JavaScript UTF-16 substring boundaries.
+//! Strings retain JavaScript UTF-16 code units, including unpaired surrogates.
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
 
-/// An API key prefix that can end with an unpaired UTF-16 surrogate.
+/// A string that can contain unpaired UTF-16 surrogates.
 /// JSON serialization preserves every code unit. UTF-8 conversion is fallible.
 #[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
-pub struct ApiKeyStart(Vec<u16>);
+pub struct Utf16String(Vec<u16>);
 
-impl ApiKeyStart {
+impl Utf16String {
+    /// Construct a JavaScript string from exact UTF-16 code units.
+    pub fn from_units(units: Vec<u16>) -> Self {
+        Self(units)
+    }
+
     /// Take the first `length` UTF-16 code units, as JavaScript `substring` does.
     pub fn prefix(value: &str, length: usize) -> Self {
         Self(value.encode_utf16().take(length).collect())
@@ -69,19 +74,19 @@ impl ApiKeyStart {
     }
 }
 
-impl From<&str> for ApiKeyStart {
+impl From<&str> for Utf16String {
     fn from(value: &str) -> Self {
         Self(value.encode_utf16().collect())
     }
 }
 
-impl From<String> for ApiKeyStart {
+impl From<String> for Utf16String {
     fn from(value: String) -> Self {
         Self::from(value.as_str())
     }
 }
 
-impl Serialize for ApiKeyStart {
+impl Serialize for Utf16String {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut json = String::from("\"");
         for unit in &self.0 {
@@ -94,22 +99,22 @@ impl Serialize for ApiKeyStart {
     }
 }
 
-impl<'de> Deserialize<'de> for ApiKeyStart {
+impl<'de> Deserialize<'de> for Utf16String {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         struct Visitor;
         impl de::Visitor<'_> for Visitor {
-            type Value = ApiKeyStart;
+            type Value = Utf16String;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 formatter.write_str("an API key prefix encoded as a JSON string")
             }
 
             fn visit_bytes<E: de::Error>(self, value: &[u8]) -> Result<Self::Value, E> {
-                ApiKeyStart::from_wtf8(value).map_err(E::custom)
+                Utf16String::from_wtf8(value).map_err(E::custom)
             }
 
             fn visit_str<E: de::Error>(self, value: &str) -> Result<Self::Value, E> {
-                Ok(ApiKeyStart::from(value))
+                Ok(Utf16String::from(value))
             }
         }
         // serde_json supplies WTF-8 here; deserialize_string rejects lone surrogates.
@@ -123,28 +128,31 @@ mod tests {
 
     #[test]
     fn substring_retains_surrogates_through_json_and_wtf8() {
-        let start = ApiKeyStart::prefix("😀abcdefgh", 1);
+        let start = Utf16String::prefix("😀abcdefgh", 1);
         assert_eq!(start.as_utf16(), &[0xd83d]);
         assert!(start.to_utf8().is_err());
         assert_eq!(start.to_wtf8(), [0xed, 0xa0, 0xbd]);
         let json = serde_json::to_string(&start).unwrap();
         assert_eq!(json, "\"\\ud83d\"");
-        assert_eq!(serde_json::from_str::<ApiKeyStart>(&json).unwrap(), start);
+        assert_eq!(serde_json::from_str::<Utf16String>(&json).unwrap(), start);
         assert_eq!(
-            ApiKeyStart::prefix("😀abcdefgh", 2).to_utf8().unwrap(),
+            Utf16String::prefix("😀abcdefgh", 2).to_utf8().unwrap(),
             "😀"
         );
         assert_eq!(
-            ApiKeyStart::prefix("😀abcdefgh", 6).to_utf8().unwrap(),
+            Utf16String::prefix("😀abcdefgh", 6).to_utf8().unwrap(),
             "😀abcd"
         );
         assert_eq!(
-            serde_json::from_str::<ApiKeyStart>("\"\\udc00A\\ud800\"")
+            serde_json::from_str::<Utf16String>("\"\\udc00A\\ud800\"")
                 .unwrap()
                 .as_utf16(),
             &[0xdc00, 65, 0xd800]
         );
-        assert!(serde_json::from_str::<ApiKeyStart>("[65]").is_err());
-        assert!(ApiKeyStart::from("😀") < ApiKeyStart::from("\u{e000}"));
+        assert!(serde_json::from_str::<Utf16String>("[65]").is_err());
+        assert!(Utf16String::from("😀") < Utf16String::from("\u{e000}"));
     }
 }
+
+/// API key display prefixes retain their existing public type name.
+pub type ApiKeyStart = Utf16String;

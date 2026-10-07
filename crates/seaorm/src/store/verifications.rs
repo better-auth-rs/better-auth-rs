@@ -42,14 +42,14 @@ where
                 .new_verification_active(
                     self.connection(),
                     Some(reservation_id.clone()),
-                    verification.with_timestamps(Utc::now()),
+                    verification.with_timestamps(Utc::now().into()),
                 )
                 .await?;
             let row =
                 database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(
                     self.config(),
                     "create",
-                    async { active.insert(self.connection()).await.map_err(map_db_err) },
+                    async { active.insert(self.connection()).await },
                 )
                 .await?;
             let _ = self.output_verification(&row, self.connection()).await?;
@@ -447,24 +447,32 @@ where
         db: &impl ConnectionTrait,
         id: Option<<S::Verification as SeaOrmVerificationModel>::Id>,
         input: CreateVerification,
-    ) -> AuthResult<<S::Verification as SeaOrmVerificationModel>::ActiveModel> {
+    ) -> AuthResult<
+        super::record_write::RecordWrite<<S::Verification as SeaOrmVerificationModel>::Entity>,
+    > {
         let fields = self.config().verification.field_schema();
         let backend = db.get_database_backend();
         let input = fields
-            .record_storage_fields_for_adapter(
-                input.fields()?,
-                true,
-                backend == sea_orm::DbBackend::Postgres,
-                S::Verification::native_json_field,
-            )
+            .record_storage_fields_with_binding(input.fields()?, true, |name, field, value| {
+                crate::reference_id::input_binding(
+                    name,
+                    field,
+                    value,
+                    self.config().advanced.database.generate_id(),
+                    S::Verification::field_column,
+                    S::Verification::native_json_field,
+                    backend,
+                )
+            })
             .await?;
-        let mut active = S::Verification::new_active(id, input)?;
-        crate::reference_id::apply_bindings(
-            &mut active,
-            &fields,
-            backend,
-            S::Verification::field_column,
-        )?;
+        let mut active = super::record_write::RecordWrite::<
+            <S::Verification as SeaOrmVerificationModel>::Entity,
+        >::from_fields(input, S::Verification::field_column)?;
+        if let Some(id) = id {
+            active.set(S::Verification::id_column(), id.into());
+        } else {
+            active.not_set(S::Verification::id_column());
+        }
         Ok(active)
     }
 
@@ -494,27 +502,27 @@ where
         let fields = self.config().verification.field_schema();
         let backend = db.get_database_backend();
         let input = fields
-            .record_storage_fields_for_adapter(
-                update.fields()?,
-                false,
-                backend == sea_orm::DbBackend::Postgres,
-                S::Verification::native_json_field,
-            )
+            .record_storage_fields_with_binding(update.fields()?, false, |name, field, value| {
+                crate::reference_id::input_binding(
+                    name,
+                    field,
+                    value,
+                    self.config().advanced.database.generate_id(),
+                    S::Verification::field_column,
+                    S::Verification::native_json_field,
+                    backend,
+                )
+            })
             .await?;
-        let mut active = <S::Verification as SeaOrmVerificationModel>::ActiveModel::default();
-        S::Verification::apply_fields(&mut active, input)?;
-        crate::reference_id::apply_bindings(
-            &mut active,
-            &fields,
-            backend,
-            S::Verification::field_column,
-        )?;
+        let active = super::record_write::RecordWrite::<
+            <S::Verification as SeaOrmVerificationModel>::Entity,
+        >::from_fields(input, S::Verification::field_column)?;
         let reselect = match (
-            active.get(S::Verification::id_column()),
-            active.get(S::Verification::identifier_column()),
+            active.expression(S::Verification::id_column(), backend)?,
+            active.expression(S::Verification::identifier_column(), backend)?,
         ) {
-            (sea_orm::ActiveValue::Set(value), _) => S::Verification::id_column().eq(value),
-            (_, sea_orm::ActiveValue::Set(value)) => S::Verification::identifier_column().eq(value),
+            (Some(value), _) => S::Verification::id_column().eq(value),
+            (_, Some(value)) => S::Verification::identifier_column().eq(value),
             _ => S::Verification::identifier_column().eq(identifier),
         };
         let row =
@@ -522,7 +530,7 @@ where
                 self.config(),
                 "update",
                 async {
-                    super::updates::update_returning_one::<
+                    super::updates::update_record_returning_one::<
                         <S::Verification as SeaOrmVerificationModel>::Entity,
                         _,
                     >(
@@ -659,15 +667,12 @@ where
         tx: Option<super::HookTransaction<'_, S>>,
         mut verification: CreateVerification,
     ) -> AuthResult<VerificationView> {
-        verification = verification.with_timestamps(Utc::now());
+        verification = verification.with_timestamps(Utc::now().into());
         self.before_runtime_verification_in_tx(&mut verification, tx)
             .await?;
         let id = self.generated_id(
             "verification",
-            verification
-                .id
-                .json()?
-                .and_then(|id| id.as_str().map(str::to_owned)),
+            verification.id.field_value().as_str().map(str::to_owned),
         )?;
         let parsed = id.as_deref().map(S::Verification::parse_id).transpose()?;
         let mut active = self
@@ -679,7 +684,7 @@ where
         let row = database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(
             self.config(),
             "create",
-            async { active.insert(connection).await.map_err(map_db_err) },
+            async { active.insert(connection).await },
         )
         .await?;
         self.output_verification(&row, connection).await

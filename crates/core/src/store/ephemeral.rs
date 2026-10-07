@@ -3,10 +3,10 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard, RwLock, Weak};
 
+use crate::{AuthRecordFields, FieldMap, FieldValue as Value, FromFieldMap, SchemaField};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use indexmap::IndexMap;
-use serde_json::{Map, Value};
 
 use crate::config::AuthConfig;
 use crate::error::{AuthError, AuthResult};
@@ -200,25 +200,13 @@ impl EphemeralStore {
         &self,
         values: Vec<Organization>,
     ) -> AuthResult<Vec<Organization>> {
-        let metadata: Vec<_> = values.iter().map(|value| value.metadata.clone()).collect();
-        let mut output: Vec<Organization> = self
-            .output_records(
-                better_auth_schema_registry::EntityRole::Organization,
-                values,
-            )
-            .await?;
-        if !self
-            .organization_fields()?
-            .organization
-            .fields()
-            .contains_key("metadata")
-        {
-            for (output, metadata) in output.iter_mut().zip(metadata) {
-                output.metadata = metadata;
-            }
-        }
-        Ok(output)
+        self.output_records(
+            better_auth_schema_registry::EntityRole::Organization,
+            values,
+        )
+        .await
     }
+
     async fn output_member(&self, value: Member) -> AuthResult<Member> {
         self.output_record(better_auth_schema_registry::EntityRole::Member, value)
             .await

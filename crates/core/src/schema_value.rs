@@ -1,10 +1,12 @@
 //! Values whose storage type can be replaced by an application schema.
 
 mod date;
+mod field;
+pub use field::SchemaField;
 
-use crate::{AuthError, AuthResult};
-use serde::{Deserialize, Deserializer, Serialize, Serializer, de::DeserializeOwned};
-use serde_json::Value;
+use crate::{AuthError, AuthResult, FieldDate, FieldValue};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde_json::Value as JsonValue;
 
 /// A schema field retains values outside its default Rust type and distinguishes omission from null.
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -12,9 +14,7 @@ pub enum SchemaValue<T> {
     /// A value with the default field type.
     Typed(T),
     /// A value supplied by a replacement schema or transform.
-    Dynamic(Value),
-    /// An invalid JavaScript date. Serialize as null but retain NaN date operations.
-    InvalidDate,
+    Dynamic(FieldValue),
     /// The adapter omitted the field.
     #[default]
     Undefined,
@@ -26,7 +26,6 @@ impl<T> SchemaValue<T> {
         match self {
             Self::Typed(value) => SchemaValue::Typed(value),
             Self::Dynamic(value) => SchemaValue::Dynamic(value.clone()),
-            Self::InvalidDate => SchemaValue::InvalidDate,
             Self::Undefined => SchemaValue::Undefined,
         }
     }
@@ -36,7 +35,6 @@ impl<T> SchemaValue<T> {
         match self {
             Self::Typed(value) => SchemaValue::Typed(transform(value)),
             Self::Dynamic(value) => SchemaValue::Dynamic(value),
-            Self::InvalidDate => SchemaValue::InvalidDate,
             Self::Undefined => SchemaValue::Undefined,
         }
     }
@@ -49,7 +47,7 @@ impl<T> SchemaValue<T> {
     pub fn typed(&self) -> AuthResult<&T> {
         match self {
             Self::Typed(value) => Ok(value),
-            Self::Dynamic(_) | Self::InvalidDate | Self::Undefined => Err(AuthError::internal(
+            Self::Dynamic(_) | Self::Undefined => Err(AuthError::internal(
                 "The schema field does not have the type required by this operation",
             )),
         }
@@ -91,85 +89,68 @@ impl PartialEq<&str> for SchemaValue<String> {
     }
 }
 
-impl SchemaValue<Value> {
-    /// Decode a projected JSON field while preserving non-JSON date and omission provenance.
-    pub fn into_field<T: DeserializeOwned>(self) -> SchemaValue<T> {
+impl<T: SchemaField> SchemaValue<T> {
+    /// Preserve replacement types and object handles when decoding an adapter field.
+    pub fn from_field(value: FieldValue) -> Self {
+        if value.is_undefined() {
+            Self::Undefined
+        } else {
+            T::from_field(value).map_or_else(Self::Dynamic, Self::Typed)
+        }
+    }
+
+    /// Move the stored value into the adapter without applying JSON conversion.
+    pub fn into_field_value(self) -> FieldValue {
         match self {
-            Self::Typed(value) | Self::Dynamic(value) => SchemaValue::from_json(Some(value)),
-            Self::InvalidDate => SchemaValue::InvalidDate,
-            Self::Undefined => SchemaValue::Undefined,
+            Self::Typed(value) => value.into_field(),
+            Self::Dynamic(value) => value,
+            Self::Undefined => FieldValue::Undefined,
         }
     }
-}
 
-impl<T: DeserializeOwned> SchemaValue<T> {
-    /// Preserve the adapter value, including a replacement type or an omitted field.
-    pub fn from_json(value: Option<Value>) -> Self {
-        match value {
-            Some(value) => match serde_json::from_value(value.clone()) {
-                Ok(typed) => Self::Typed(typed),
-                Err(_) => Self::Dynamic(value),
-            },
-            None => Self::Undefined,
-        }
+    /// Copy the stored value while preserving Date, array, and object handles.
+    pub fn field_value(&self) -> FieldValue {
+        self.clone().into_field_value()
     }
-}
 
-impl<T: Serialize> SchemaValue<T> {
+    /// Import a value at a JSON boundary without reviving Date strings.
+    pub fn from_json(value: Option<JsonValue>) -> AuthResult<Self> {
+        value
+            .map(FieldValue::from_json)
+            .transpose()
+            .map(|value| Self::from_field(value.unwrap_or_default()))
+    }
+
     /// Evaluate an endpoint's truthy guard without decoding a replacement field's default type.
     pub fn is_truthy(&self) -> AuthResult<bool> {
-        if matches!(self, Self::InvalidDate) {
-            return Ok(true);
-        }
-        Ok(self
-            .json()?
-            .as_ref()
-            .is_some_and(crate::user_fields::is_truthy))
+        Ok(self.field_value().is_truthy())
     }
 
     /// Return the field's JSON value without replacing omission with null.
-    pub fn json(&self) -> AuthResult<Option<Value>> {
-        if self.is_undefined() {
-            Ok(None)
-        } else {
-            serde_json::to_value(self).map(Some).map_err(Into::into)
-        }
+    pub fn json(&self) -> AuthResult<Option<JsonValue>> {
+        self.field_value().json()
     }
 
     /// Apply JavaScript string conversion for upstream template-literal fields.
     pub fn display_string(&self) -> AuthResult<String> {
-        if matches!(self, Self::InvalidDate) {
-            return Ok("Invalid Date".to_owned());
-        }
-        fn display(value: &Value) -> AuthResult<String> {
-            Ok(match value {
-                Value::String(value) => value.clone(),
-                Value::Null => "null".to_owned(),
-                Value::Array(values) => values
-                    .iter()
-                    .map(|value| {
-                        if value.is_null() {
-                            Ok(String::new())
-                        } else {
-                            display(value)
-                        }
-                    })
-                    .collect::<AuthResult<Vec<_>>>()?
-                    .join(","),
-                Value::Object(_) => "[object Object]".to_owned(),
-                Value::Number(number) => {
-                    let number = number.as_f64().ok_or_else(|| {
-                        AuthError::internal("JSON number exceeds JavaScript number range")
-                    })?;
-                    number_string(number)
-                }
-                value => value.to_string(),
+        self.field_value()
+            .display_utf16()?
+            .to_utf8()
+            .map_err(|error| {
+                AuthError::internal(format!(
+                    "Rust strings cannot represent unpaired UTF-16 surrogates: {error}"
+                ))
             })
-        }
-        self.json()?
-            .as_ref()
-            .map(display)
-            .unwrap_or_else(|| Ok("undefined".to_owned()))
+    }
+}
+
+impl<T: SchemaField> SchemaField for SchemaValue<T> {
+    fn from_field(value: FieldValue) -> Result<Self, FieldValue> {
+        Ok(Self::from_field(value))
+    }
+
+    fn into_field(self) -> FieldValue {
+        self.into_field_value()
     }
 }
 
@@ -206,48 +187,44 @@ impl<T> From<T> for SchemaValue<T> {
     }
 }
 
+impl From<chrono::DateTime<chrono::Utc>> for SchemaValue<FieldDate> {
+    fn from(value: chrono::DateTime<chrono::Utc>) -> Self {
+        Self::Typed(value.into())
+    }
+}
+
 impl From<&str> for SchemaValue<String> {
     fn from(value: &str) -> Self {
         Self::Typed(value.to_owned())
     }
 }
 
-impl<T: Serialize> Serialize for SchemaValue<T> {
+impl<T: SchemaField> Serialize for SchemaValue<T> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        match self {
-            Self::Typed(value) => value.serialize(serializer),
-            Self::Dynamic(value) => value.serialize(serializer),
-            Self::InvalidDate | Self::Undefined => serializer.serialize_unit(),
-        }
+        crate::field_value::serde::value::serialize(&self.field_value(), serializer)
     }
 }
 
-impl<'de, T: DeserializeOwned> Deserialize<'de> for SchemaValue<T> {
+impl<'de, T: SchemaField> Deserialize<'de> for SchemaValue<T> {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        Value::deserialize(deserializer).map(|value| Self::from_json(Some(value)))
+        crate::field_value::serde::value::deserialize(deserializer).map(Self::from_field)
     }
 }
 
 /// Serialize default date values with the upstream millisecond precision.
 pub fn serialize_date<S: Serializer>(
-    value: &SchemaValue<chrono::DateTime<chrono::Utc>>,
+    value: &SchemaValue<FieldDate>,
     serializer: S,
 ) -> Result<S::Ok, S::Error> {
-    match value {
-        SchemaValue::Typed(value) => crate::utils::date::serialize(value, serializer),
-        value => value.serialize(serializer),
-    }
+    value.serialize(serializer)
 }
 
 /// Serialize nullable default date values with the upstream millisecond precision.
 pub fn serialize_optional_date<S: Serializer>(
-    value: &SchemaValue<Option<chrono::DateTime<chrono::Utc>>>,
+    value: &SchemaValue<Option<FieldDate>>,
     serializer: S,
 ) -> Result<S::Ok, S::Error> {
-    match value {
-        SchemaValue::Typed(value) => crate::utils::date::serialize_option(value, serializer),
-        value => value.serialize(serializer),
-    }
+    value.serialize(serializer)
 }
 
 #[cfg(test)]
@@ -268,9 +245,11 @@ mod tests {
             (serde_json::json!({"name": "object"}), "[object Object]"),
         ] {
             assert_eq!(
-                SchemaValue::<String>::Dynamic(value)
-                    .display_string()
-                    .expect("valid JSON value"),
+                SchemaValue::<String>::Dynamic(
+                    FieldValue::from_json(value).expect("valid JSON value")
+                )
+                .display_string()
+                .expect("valid JSON value"),
                 expected
             );
         }

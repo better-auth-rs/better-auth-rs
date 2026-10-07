@@ -6,7 +6,7 @@
 )]
 
 use super::*;
-use better_auth_core::SchemaValue;
+use better_auth_core::{FieldValue, SchemaValue};
 use serde_json::Value;
 
 #[test]
@@ -57,9 +57,9 @@ fn verification_status_requires_boolean_true() {
         (SchemaValue::Typed(None), false),
         (SchemaValue::Typed(Some(false)), false),
         (SchemaValue::Typed(Some(true)), true),
-        (SchemaValue::Dynamic(Value::Null), false),
-        (SchemaValue::Dynamic(Value::Bool(false)), false),
-        (SchemaValue::Dynamic(Value::Bool(true)), true),
+        (SchemaValue::Dynamic(FieldValue::Null), false),
+        (SchemaValue::Dynamic(FieldValue::Bool(false)), false),
+        (SchemaValue::Dynamic(FieldValue::Bool(true)), true),
     ] {
         assert_eq!(providers::profile_email_verified(&field).unwrap(), verified);
     }

@@ -47,8 +47,9 @@ impl<S: AuthSchema> SecondaryStore<S> {
             let Some(session) = cached.get("session") else {
                 continue;
             };
-            let expires =
-                serde_json::from_value(session.get("expiresAt").cloned().unwrap_or_default())?;
+            let expires = serde_json::from_value::<chrono::DateTime<chrono::Utc>>(
+                session.get("expiresAt").cloned().unwrap_or_default(),
+            )?;
             let _ = cached
                 .as_object_mut()
                 .ok_or_else(|| crate::AuthError::internal("Cached session must be an object"))?
@@ -57,7 +58,7 @@ impl<S: AuthSchema> SecondaryStore<S> {
                 .set(
                     &reference.token,
                     &serde_json::to_string(&cached)?,
-                    Some(ttl(expires)),
+                    Some(ttl(expires.into())),
                 )
                 .await?;
         }
@@ -72,7 +73,7 @@ impl<S: AuthSchema> UserStore<S> for SecondaryStore<S> {
     }
     async fn get_user_by_id_value(
         &self,
-        id: &serde_json::Value,
+        id: &crate::FieldValue,
     ) -> AuthResult<Option<crate::wire::UserView>> {
         self.inner.get_user_by_id_value(id).await
     }

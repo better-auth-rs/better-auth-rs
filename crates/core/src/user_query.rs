@@ -1,26 +1,24 @@
 //! Internal helpers for applying admin user-list query semantics.
 
+use crate::{FieldDate, FieldMap, FieldValue as Value};
 use chrono::{DateTime, Utc};
-use serde_json::{Map, Value};
 use std::cmp::Ordering;
 
 use crate::store::schema::resolve_field_name;
 use crate::types::ListUsersParams;
 use crate::user_fields::{UserConfig, UserFieldConfig, UserFieldType};
-use crate::{AuthResult, UserView, entity::AuthUser};
+use crate::{AuthRecordFields, AuthResult, UserView, entity::AuthUser};
 
-fn string_field(user: &UserView, field: &str) -> Option<String> {
-    match field {
-        "id" | "_id" => user.id().into_owned().as_str().map(str::to_owned),
-        "email" => user.email().map(str::to_owned),
-        "name" => match &user.name {
-            crate::SchemaValue::Typed(value) => value.clone(),
-            _ => None,
-        },
-        "username" => user.username().map(str::to_owned),
-        "role" => user.role().map(str::to_owned),
+fn string_field(user: &UserView, field: &str) -> Option<Value> {
+    let value = match field {
+        "id" | "_id" => Some(user.id.field_value()),
+        "email" => user.email().map(Value::from),
+        "name" => Some(user.name.field_value()),
+        "username" => user.username().map(Value::from),
+        "role" => user.role().map(Value::from),
         _ => None,
-    }
+    };
+    value.filter(|value| matches!(value, Value::String(_) | Value::Utf16String(_)))
 }
 
 fn bool_field(user: &UserView, field: &str) -> Option<bool> {
@@ -30,7 +28,7 @@ fn bool_field(user: &UserView, field: &str) -> Option<bool> {
     }
 }
 
-fn date_field(user: &UserView, field: &str) -> Option<DateTime<Utc>> {
+fn date_field(user: &UserView, field: &str) -> Option<FieldDate> {
     match field {
         "createdAt" => Some(user.created_at()),
         "updatedAt" => Some(user.updated_at()),
@@ -59,12 +57,8 @@ fn matches_search(user: &UserView, params: &ListUsersParams) -> bool {
         None => return false,
     };
 
-    match operator {
-        "contains" => haystack.contains(search_value),
-        "starts_with" => haystack.starts_with(search_value),
-        "ends_with" => haystack.ends_with(search_value),
-        _ => false,
-    }
+    matches!(operator, "contains" | "starts_with" | "ends_with")
+        && compare_string(&haystack, &Value::from(search_value), operator)
 }
 
 fn parse_bool(value: &str) -> Option<bool> {
@@ -75,13 +69,19 @@ fn parse_bool(value: &str) -> Option<bool> {
     }
 }
 
-fn parse_date(value: &str) -> Option<DateTime<Utc>> {
+fn parse_date(value: &str) -> Option<FieldDate> {
     DateTime::parse_from_rfc3339(value)
         .ok()
-        .map(|value| value.with_timezone(&Utc))
+        .map(|value| FieldDate::from(value.with_timezone(&Utc)))
 }
 
-fn compare_string(lhs: &str, rhs: &str, operator: &str) -> bool {
+fn compare_string(lhs: &Value, rhs: &Value, operator: &str) -> bool {
+    let (Some(lhs), Some(rhs)) = (
+        crate::query::field_string_units(lhs),
+        crate::query::field_string_units(rhs),
+    ) else {
+        return false;
+    };
     match operator {
         "eq" => lhs == rhs,
         "ne" => lhs != rhs,
@@ -89,9 +89,9 @@ fn compare_string(lhs: &str, rhs: &str, operator: &str) -> bool {
         "lte" => lhs <= rhs,
         "gt" => lhs > rhs,
         "gte" => lhs >= rhs,
-        "contains" => lhs.contains(rhs),
-        "starts_with" => lhs.starts_with(rhs),
-        "ends_with" => lhs.ends_with(rhs),
+        "contains" => rhs.is_empty() || lhs.windows(rhs.len()).any(|window| window == &*rhs),
+        "starts_with" => lhs.starts_with(&rhs),
+        "ends_with" => lhs.ends_with(&rhs),
         _ => false,
     }
 }
@@ -104,7 +104,8 @@ fn compare_bool(lhs: bool, rhs: bool, operator: &str) -> bool {
     }
 }
 
-fn compare_date(lhs: DateTime<Utc>, rhs: DateTime<Utc>, operator: &str) -> bool {
+fn compare_date(lhs: FieldDate, rhs: FieldDate, operator: &str) -> bool {
+    let (lhs, rhs) = (lhs.milliseconds(), rhs.milliseconds());
     match operator {
         "eq" => lhs == rhs,
         "ne" => lhs != rhs,
@@ -126,11 +127,9 @@ fn matches_filter(user: &UserView, params: &ListUsersParams) -> bool {
         .filter(|name| !name.is_empty())
         .unwrap_or("email");
     let operator = params.filter_operator.as_deref().unwrap_or("eq");
-    let matches = |expected: &serde_json::Value, operator: &str| {
+    let matches = |expected: &Value, operator: &str| {
         if let Some(value) = string_field(user, field) {
-            return expected
-                .as_str()
-                .is_some_and(|expected| compare_string(&value, expected, operator));
+            return compare_string(&value, expected, operator);
         }
         if let Some(value) = bool_field(user, field) {
             let expected = expected
@@ -195,17 +194,11 @@ fn additional_field<'a>(
 
 /// Convert number and boolean query values without invoking field input transforms.
 pub fn bind_filter(field: &UserFieldConfig, value: &Value) -> AuthResult<Value> {
-    let number = |value: f64| -> AuthResult<Value> {
-        Ok(serde_json::from_str(&crate::schema_value::number_string(
-            value,
-        ))?)
-    };
     match (&field.field_type, value) {
         (UserFieldType::Number, Value::String(value)) => {
             crate::organization_fields::numeric_filter(value)
-                .map(number)
-                .transpose()
-                .map(|number| number.unwrap_or_else(|| Value::String(value.clone())))
+                .map(Value::Number)
+                .map_or_else(|| Ok(Value::String(value.clone())), Ok)
         }
         (UserFieldType::Number, Value::Array(values)) => {
             let numbers = values
@@ -217,15 +210,17 @@ pub fn bind_filter(field: &UserFieldConfig, value: &Value) -> AuthResult<Value> 
                 })
                 .collect::<Option<Vec<_>>>();
             match numbers {
-                Some(numbers) => numbers
+                Some(numbers) => Ok(numbers
                     .into_iter()
-                    .map(number)
-                    .collect::<AuthResult<Vec<_>>>()
-                    .map(Value::Array),
+                    .map(Value::Number)
+                    .collect::<Vec<_>>()
+                    .into()),
                 None => Ok(value.clone()),
             }
         }
-        (UserFieldType::Boolean, Value::String(value)) => Ok(Value::Bool(value == "true")),
+        (UserFieldType::Boolean, value @ (Value::String(_) | Value::Utf16String(_))) => {
+            Ok(Value::Bool(value.strict_equals(&Value::from("true"))))
+        }
         _ => Ok(value.clone()),
     }
 }
@@ -263,17 +258,18 @@ fn additional_filter<'a>(
 
 fn matches_value(actual: Option<&Value>, expected: &Value, operator: &str) -> bool {
     match (actual, expected) {
-        (Some(Value::String(actual)), Value::String(expected)) => {
-            compare_string(actual, expected, operator)
-        }
+        (
+            Some(actual @ (Value::String(_) | Value::Utf16String(_))),
+            expected @ (Value::String(_) | Value::Utf16String(_)),
+        ) => compare_string(actual, expected, operator),
         (Some(Value::Bool(actual)), Value::Bool(expected)) => {
             compare_bool(*actual, *expected, operator)
         }
         (Some(Value::Number(actual)), Value::Number(expected)) => {
-            let ordering = actual.as_f64().partial_cmp(&expected.as_f64());
+            let ordering = actual.partial_cmp(expected);
             match operator {
                 "eq" => ordering.is_some_and(Ordering::is_eq),
-                "ne" => ordering.is_some_and(|ordering| !ordering.is_eq()),
+                "ne" => actual != expected,
                 "lt" => ordering.is_some_and(Ordering::is_lt),
                 "lte" => ordering.is_some_and(|ordering| !ordering.is_gt()),
                 "gt" => ordering.is_some_and(Ordering::is_gt),
@@ -285,8 +281,71 @@ fn matches_value(actual: Option<&Value>, expected: &Value, operator: &str) -> bo
     }
 }
 
+fn matches_memory_value(actual: &Value, expected: &Value, operator: &str) -> AuthResult<bool> {
+    match operator {
+        "eq" if expected.is_null() => Ok(actual.is_null() || actual.is_undefined()),
+        "eq" => Ok(actual.strict_equals(expected)),
+        "ne" => Ok(!actual.strict_equals(expected)),
+        "in" | "not_in" => {
+            let values = expected
+                .as_array()
+                .ok_or_else(|| crate::AuthError::internal("Value must be an array"))?;
+            let present = values
+                .iter()
+                .any(|expected| actual.same_value_zero(expected));
+            Ok(if operator == "in" { present } else { !present })
+        }
+        "lt" | "lte" | "gt" | "gte" => {
+            if expected.is_null() {
+                return Ok(false);
+            }
+            let order = crate::query::field_compare(actual, expected)?;
+            Ok(match operator {
+                "lt" => order == Some(Ordering::Less),
+                "lte" => matches!(order, Some(Ordering::Less | Ordering::Equal)),
+                "gt" => order == Some(Ordering::Greater),
+                _ => matches!(order, Some(Ordering::Greater | Ordering::Equal)),
+            })
+        }
+        "contains" | "starts_with" | "ends_with" => {
+            if operator == "contains" {
+                match actual {
+                    Value::Undefined | Value::Null => return Ok(false),
+                    Value::Array(values) => {
+                        return Ok(values.iter().any(|value| value.same_value_zero(expected)));
+                    }
+                    _ => {}
+                }
+            }
+            if matches!(actual, Value::String(_) | Value::Utf16String(_)) {
+                return Ok(compare_string(
+                    actual,
+                    &Value::from(expected.display_utf16()?),
+                    operator,
+                ));
+            }
+            let method = match operator {
+                "contains" => "includes",
+                "starts_with" => "startsWith",
+                _ => "endsWith",
+            };
+            let message = match actual {
+                Value::Undefined => {
+                    format!("undefined is not an object (evaluating 'record[field].{method}')")
+                }
+                Value::Null => {
+                    format!("null is not an object (evaluating 'record[field].{method}')")
+                }
+                _ => format!("record[field].{method} is not a function"),
+            };
+            Err(crate::AuthError::internal(message))
+        }
+        _ => Ok(false),
+    }
+}
+
 fn matches_record(
-    (user, raw): (&UserView, &Map<String, Value>),
+    (user, raw): (&UserView, &FieldMap),
     params: &ListUsersParams,
     filter: &Option<(&str, &UserFieldConfig, Value)>,
 ) -> bool {
@@ -303,7 +362,7 @@ fn matches_record(
                     && matches!(operator, "eq" | "ne")
                 {
                     match operator {
-                        "eq" => actual.is_none_or(Value::is_null),
+                        "eq" => actual.is_none_or(|value| value.is_null() || value.is_undefined()),
                         _ => !matches!(actual, Some(Value::Null)),
                     }
                 } else {
@@ -318,15 +377,20 @@ fn matches_record(
 
 fn compare_values(left: Option<&Value>, right: Option<&Value>, direction: &str) -> Ordering {
     let ordering = match (left, right) {
-        (Some(Value::Number(left)), Some(Value::Number(right))) => left
-            .as_f64()
-            .partial_cmp(&right.as_f64())
-            .unwrap_or(Ordering::Equal),
-        (Some(Value::String(left)), Some(Value::String(right))) => left.cmp(right),
+        (Some(Value::Number(left)), Some(Value::Number(right))) => {
+            left.partial_cmp(right).unwrap_or(Ordering::Equal)
+        }
+        (
+            Some(left @ (Value::String(_) | Value::Utf16String(_))),
+            Some(right @ (Value::String(_) | Value::Utf16String(_))),
+        ) => crate::query::field_string_units(left).cmp(&crate::query::field_string_units(right)),
         (Some(Value::Bool(left)), Some(Value::Bool(right))) => left.cmp(right),
-        (None | Some(Value::Null), None | Some(Value::Null)) => Ordering::Equal,
-        (None | Some(Value::Null), _) => Ordering::Less,
-        (_, None | Some(Value::Null)) => Ordering::Greater,
+        (
+            None | Some(Value::Null | Value::Undefined),
+            None | Some(Value::Null | Value::Undefined),
+        ) => Ordering::Equal,
+        (None | Some(Value::Null | Value::Undefined), _) => Ordering::Less,
+        (_, None | Some(Value::Null | Value::Undefined)) => Ordering::Greater,
         _ => Ordering::Equal,
     };
     if direction == "asc" {
@@ -336,21 +400,28 @@ fn compare_values(left: Option<&Value>, right: Option<&Value>, direction: &str) 
     }
 }
 
-fn compare_option_strings(lhs: Option<String>, rhs: Option<String>, direction: &str) -> Ordering {
-    match direction {
-        "asc" => lhs.cmp(&rhs),
-        _ => rhs.cmp(&lhs),
-    }
+fn compare_option_strings(lhs: Option<Value>, rhs: Option<Value>, direction: &str) -> Ordering {
+    compare_values(lhs.as_ref(), rhs.as_ref(), direction)
 }
 
 fn compare_option_dates(
-    lhs: Option<DateTime<Utc>>,
-    rhs: Option<DateTime<Utc>>,
+    lhs: Option<FieldDate>,
+    rhs: Option<FieldDate>,
     direction: &str,
 ) -> Ordering {
-    match direction {
-        "asc" => lhs.cmp(&rhs),
-        _ => rhs.cmp(&lhs),
+    let compare = |left: Option<FieldDate>, right: Option<FieldDate>| match (left, right) {
+        (Some(left), Some(right)) => left
+            .milliseconds()
+            .partial_cmp(&right.milliseconds())
+            .unwrap_or(Ordering::Equal),
+        (None, None) => Ordering::Equal,
+        (None, Some(_)) => Ordering::Less,
+        (Some(_), None) => Ordering::Greater,
+    };
+    if direction == "asc" {
+        compare(lhs, rhs)
+    } else {
+        compare(rhs, lhs)
     }
 }
 
@@ -359,6 +430,7 @@ pub struct PreparedUserQuery<'a> {
     params: &'a ListUsersParams,
     fields: &'a UserConfig,
     filter: Option<(&'a str, &'a UserFieldConfig, Value)>,
+    memory_filter: Option<Value>,
 }
 
 impl<'a> PreparedUserQuery<'a> {
@@ -404,11 +476,166 @@ impl<'a> PreparedUserQuery<'a> {
             }
             on_field()?;
         }
+        let filter = additional_filter(params, fields, &mut on_field)?;
         Ok(Self {
             params,
             fields,
-            filter: additional_filter(params, fields, &mut on_field)?,
+            filter,
+            memory_filter: None,
         })
+    }
+
+    /// Bind Memory JSON and reference values without changing SQL query values.
+    pub fn bind_memory_filter(
+        mut self,
+        bind: impl FnOnce(&str, Value) -> AuthResult<Value>,
+    ) -> AuthResult<Self> {
+        let name = self
+            .params
+            .filter_field
+            .as_deref()
+            .filter(|name| !name.is_empty())
+            .unwrap_or("email");
+        let declared = declared_field(name, self.fields);
+        let name = declared.map_or(name, |(logical, _)| logical);
+        self.memory_filter = self
+            .params
+            .filter_value
+            .clone()
+            .map(|value| {
+                let value = bind(name, value)?;
+                match declared {
+                    Some((_, field)) => bind_filter(field, &value),
+                    None => Ok(value),
+                }
+            })
+            .transpose()?;
+        Ok(self)
+    }
+
+    fn memory_value(&self, (user, raw): (&UserView, &FieldMap), name: &str) -> AuthResult<Value> {
+        let name = if name == "_id" { "id" } else { name };
+        let logical = declared_field(name, self.fields).map_or(name, |(logical, _)| logical);
+        if UserView::NATIVE_FIELDS.contains(&logical) {
+            return Ok(user.field_values()?.remove(logical).unwrap_or_default());
+        }
+        let storage = additional_field(name, self.fields).map_or(name, |(storage, _)| storage);
+        Ok(raw.get(storage).cloned().unwrap_or_default())
+    }
+
+    fn matches_memory(&self, record: (&UserView, &FieldMap)) -> AuthResult<bool> {
+        if let Some(expected) = self
+            .params
+            .search_value
+            .as_deref()
+            .filter(|value| !value.is_empty())
+        {
+            let field = self
+                .params
+                .search_field
+                .as_deref()
+                .filter(|name| !name.is_empty())
+                .unwrap_or("email");
+            if !matches_memory_value(
+                &self.memory_value(record, field)?,
+                &Value::from(expected),
+                self.params.search_operator.as_deref().unwrap_or("contains"),
+            )? {
+                return Ok(false);
+            }
+        }
+        let Some(expected) = self
+            .memory_filter
+            .as_ref()
+            .or_else(|| self.filter.as_ref().map(|(_, _, value)| value))
+            .or(self.params.filter_value.as_ref())
+        else {
+            return Ok(true);
+        };
+        let field = self
+            .params
+            .filter_field
+            .as_deref()
+            .filter(|name| !name.is_empty())
+            .unwrap_or("email");
+        matches_memory_value(
+            &self.memory_value(record, field)?,
+            expected,
+            self.params.filter_operator.as_deref().unwrap_or("eq"),
+        )
+    }
+
+    /// Count Memory rows with native object identity and JavaScript comparisons.
+    pub fn count_memory<'r, T: 'r>(
+        &self,
+        users: impl IntoIterator<Item = &'r T>,
+        record: impl Fn(&T) -> (&UserView, &FieldMap),
+    ) -> AuthResult<usize> {
+        users.into_iter().try_fold(0, |count, user| {
+            self.matches_memory(record(user))
+                .map(|matched| count + usize::from(matched))
+        })
+    }
+
+    /// Select Memory rows without serializing their native field values.
+    pub fn select_memory<T>(
+        &self,
+        users: Vec<T>,
+        record: impl Fn(&T) -> (&UserView, &FieldMap),
+    ) -> AuthResult<(Vec<T>, usize)> {
+        let mut selected = Vec::with_capacity(users.len());
+        for user in users {
+            if self.matches_memory(record(&user))? {
+                selected.push(user);
+            }
+        }
+        if selected.len() > 1 {
+            self.validate_sort()?;
+        }
+        if let Some(name) = self
+            .params
+            .sort_by
+            .as_deref()
+            .filter(|name| !name.is_empty())
+        {
+            let descending = self
+                .params
+                .sort_direction
+                .as_deref()
+                .filter(|value| !value.is_empty())
+                .unwrap_or("asc")
+                != "asc";
+            let mut error = None;
+            selected.sort_by(|left, right| {
+                if error.is_some() {
+                    return Ordering::Equal;
+                }
+                let compare = || {
+                    crate::query::field_compare(
+                        &self.memory_value(record(left), name)?,
+                        &self.memory_value(record(right), name)?,
+                    )
+                };
+                match compare() {
+                    Ok(order) => {
+                        let order = order.unwrap_or(Ordering::Equal);
+                        if descending { order.reverse() } else { order }
+                    }
+                    Err(failure) => {
+                        error = Some(failure);
+                        Ordering::Equal
+                    }
+                }
+            });
+            if let Some(error) = error {
+                return Err(error);
+            }
+        }
+        let total = selected.len();
+        Ok((
+            crate::query::paginate_memory(selected, self.params.limit, self.params.offset),
+            total,
+        ))
     }
 
     /// Report whether a declared name selects an additional field instead of a native getter.
@@ -438,7 +665,7 @@ impl<'a> PreparedUserQuery<'a> {
     pub fn count<'r, T: 'r>(
         &self,
         users: impl IntoIterator<Item = &'r T>,
-        record: impl Fn(&T) -> (&UserView, &Map<String, Value>),
+        record: impl Fn(&T) -> (&UserView, &FieldMap),
     ) -> usize {
         users
             .into_iter()
@@ -451,7 +678,7 @@ impl<'a> PreparedUserQuery<'a> {
     pub fn select<T>(
         &self,
         mut users: Vec<T>,
-        record: impl Fn(&T) -> (&UserView, &Map<String, Value>),
+        record: impl Fn(&T) -> (&UserView, &FieldMap),
     ) -> AuthResult<(Vec<T>, usize)> {
         let params = self.params;
         let fields = self.fields;
@@ -511,7 +738,7 @@ pub fn count_users<'a, T: 'a>(
     users: impl IntoIterator<Item = &'a T>,
     params: &ListUsersParams,
     fields: &UserConfig,
-    record: impl Fn(&T) -> (&UserView, &Map<String, Value>),
+    record: impl Fn(&T) -> (&UserView, &FieldMap),
 ) -> AuthResult<usize> {
     Ok(PreparedUserQuery::new(params, fields)?.count(users, record))
 }
@@ -521,7 +748,75 @@ pub fn apply_list_users_by<T>(
     users: Vec<T>,
     params: &ListUsersParams,
     fields: &UserConfig,
-    record: impl Fn(&T) -> (&UserView, &Map<String, Value>),
+    record: impl Fn(&T) -> (&UserView, &FieldMap),
 ) -> AuthResult<(Vec<T>, usize)> {
     PreparedUserQuery::new(params, fields)?.select(users, record)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn runtime_string_filters_and_sorting_preserve_utf16_code_units() {
+        let supplementary = Value::from("😀");
+        let private_use = Value::from("\u{e000}");
+        let lone = Value::Utf16String(crate::Utf16String::prefix("😀", 1));
+        let same_text = Value::Utf16String(crate::Utf16String::from("😀"));
+        assert!(matches_value(Some(&supplementary), &private_use, "lt"));
+        assert!(matches_value(Some(&supplementary), &same_text, "eq"));
+        assert!(matches_value(Some(&supplementary), &lone, "contains"));
+        assert!(matches_value(Some(&supplementary), &lone, "starts_with"));
+        assert!(!matches_value(Some(&supplementary), &lone, "ends_with"));
+        assert_eq!(
+            compare_values(Some(&supplementary), Some(&private_use), "asc"),
+            Ordering::Less
+        );
+        assert_eq!(
+            compare_option_strings(Some(lone), Some(supplementary), "desc"),
+            Ordering::Greater
+        );
+    }
+
+    #[tokio::test]
+    async fn memory_queries_retain_native_date_identity_and_nan_membership() -> AuthResult<()> {
+        use crate::store::{EphemeralStore, UserStore};
+        let user = EphemeralStore::default()
+            .create_user(crate::CreateUser::new())
+            .await?;
+        let config = UserConfig::default();
+        let shared = Value::from(user.created_at.clone());
+        let distinct = Value::from(FieldDate::from_milliseconds(user.created_at.milliseconds()));
+        for (expected, operator, matches) in [
+            (shared.clone(), "eq", 1),
+            (distinct.clone(), "eq", 0),
+            (Value::from(vec![shared]), "in", 1),
+            (distinct, "lte", 1),
+        ] {
+            let params = ListUsersParams {
+                filter_field: Some("createdAt".into()),
+                filter_value: Some(expected),
+                filter_operator: Some(operator.into()),
+                ..Default::default()
+            };
+            let query = PreparedUserQuery::new(&params, &config)?;
+            assert_eq!(
+                query.count_memory([&user], |user| (user, &user.additional_fields))?,
+                matches
+            );
+            let (selected, total) =
+                query.select_memory(vec![user.clone()], |user| (user, &user.additional_fields))?;
+            assert_eq!(selected.len(), matches);
+            assert_eq!(total, matches);
+        }
+        let nan = Value::Number(f64::NAN);
+        assert!(!matches_memory_value(&nan, &nan, "eq")?);
+        assert!(matches_memory_value(
+            &nan,
+            &Value::from(vec![nan.clone()]),
+            "in"
+        )?);
+        assert!(!matches_memory_value(&nan, &Value::from(0.0), "gte")?);
+        Ok(())
+    }
 }

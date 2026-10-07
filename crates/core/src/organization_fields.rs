@@ -3,15 +3,26 @@
 use crate::user_fields::UserConfig;
 
 /// Prepare the Organization adapter's metadata value before database field policies run.
-pub fn metadata_input(value: Option<serde_json::Value>, create: bool) -> Option<serde_json::Value> {
-    let value = value?;
-    if create && !crate::user_fields::is_truthy(&value) {
-        return None;
+pub fn metadata_input(
+    value: Option<crate::FieldValue>,
+    create: bool,
+) -> crate::AuthResult<Option<crate::FieldValue>> {
+    let Some(value) = value else { return Ok(None) };
+    if create && !value.is_truthy() {
+        return Ok(None);
     }
-    if create || value.is_object() || value.is_array() || value.is_null() {
-        Some(serde_json::Value::String(value.to_string()))
+    if create
+        || matches!(
+            value,
+            crate::FieldValue::Object(_)
+                | crate::FieldValue::Array(_)
+                | crate::FieldValue::Date(_)
+                | crate::FieldValue::Null
+        )
+    {
+        Ok(value.stringify()?.map(crate::FieldValue::String))
     } else {
-        Some(value)
+        Ok(Some(value))
     }
 }
 

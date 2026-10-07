@@ -66,12 +66,12 @@ pub(super) fn generate(
         let reference = identity::is_reference(role, field)?;
         references.push(quote!(Column::#column => #reference,));
         let decoded = if name == "id" || reference {
-            identity::decode(field, core_root)
+            identity::decode(field, core_root, seaorm_root)
         } else {
-            quote!(#core_root::serde_json::from_value(value)?)
+            adapter_record::decode_field(field, seaorm_root)
         };
         assignments.push(quote!(#(#aliases)|* => active.#ident = #seaorm_root::sea_orm::ActiveValue::Set(#decoded),));
-        let stored_value = adapter_record::field_value(field, core_root);
+        let stored_value = adapter_record::field_value(field, seaorm_root);
         values.push(quote!(Column::#column => #stored_value,));
         if !core.contains(&name.as_str()) {
             core_columns.push(quote!(Column::#column => None,));
@@ -114,35 +114,43 @@ pub(super) fn generate(
         } else if role == EntityRole::TwoFactor
             && matches!(name.as_str(), "created_at" | "updated_at")
         {
-            quote!(#core_root::SchemaValue::Typed(self.#ident))
+            quote!(#core_root::SchemaValue::Typed(self.#ident.into()))
         } else if role == EntityRole::Passkey && name == "created_at" {
             if identity::optional_inner(&field.ty).is_some() {
-                quote!(#core_root::SchemaValue::Typed(self.#ident))
+                quote!(#core_root::SchemaValue::Typed(self.#ident.map(Into::into)))
             } else {
-                quote!(#core_root::SchemaValue::Typed(Some(self.#ident)))
+                quote!(#core_root::SchemaValue::Typed(Some(self.#ident.into())))
             }
         } else if role == EntityRole::ApiKey && name == "name"
             || role == EntityRole::Passkey
-                && matches!(
-                    name.as_str(),
-                    "name" | "aaguid" | "credential" | "updated_at"
-                )
+                && matches!(name.as_str(), "name" | "aaguid" | "credential")
         {
             quote!(#core_root::SchemaValue::Typed(self.#ident.to_owned()))
+        } else if role == EntityRole::Passkey && name == "updated_at" {
+            quote!(#core_root::SchemaValue::Typed(self.#ident.into()))
         } else if role == EntityRole::ApiKey && name == "start" {
             quote!(self.#ident.clone().map(#core_root::ApiKeyStart::from))
         } else if role == EntityRole::ApiKey && matches!(name.as_str(), "created_at" | "updated_at")
         {
-            quote!(self.#ident.to_rfc3339_opts(#seaorm_root::__private_chrono::SecondsFormat::Millis, true))
+            quote!(self.#ident.into())
         } else if role == EntityRole::ApiKey
             && matches!(
                 name.as_str(),
                 "expires_at" | "last_request" | "last_refill_at"
             )
         {
-            quote!(self.#ident.map(|value| value.to_rfc3339_opts(#seaorm_root::__private_chrono::SecondsFormat::Millis, true)))
+            quote!(self.#ident.map(Into::into))
         } else if role == EntityRole::Passkey && name == "counter" {
             quote!(u64::try_from(self.#ident).map_err(|error| #core_root::AuthError::config(format!("Invalid stored passkey counter: {error}")))?)
+        } else if matches!(
+            name.as_str(),
+            "expires_at" | "last_polled_at" | "locked_until" | "created_at" | "updated_at"
+        ) {
+            if identity::optional_inner(&field.ty).is_some() {
+                quote!(self.#ident.map(Into::into))
+            } else {
+                quote!(self.#ident.into())
+            }
         } else {
             quote!(self.#ident.to_owned())
         };
@@ -205,7 +213,7 @@ pub(super) fn generate(
                 match column { #(#core_columns)* }
             }
             fn record_fields(&self, fields: &#core_root::user_fields::UserConfig) -> #core_root::AuthResult<#core_root::user_fields::AdapterRecord> {
-                let mut storage = #core_root::serde_json::Map::new();
+                let mut storage = #core_root::FieldMap::new();
                 for (name, field) in fields.fields() {
                     let name = #core_root::store::schema::resolve_field_name(field.field_name.as_deref(), name);
                     let value = match Self::column(name)? { #(#values)* };
@@ -219,7 +227,7 @@ pub(super) fn generate(
             fn is_id_reference(column: &Column) -> bool {
                 match column { #(#references)* }
             }
-            fn apply_fields(active: &mut ActiveModel, fields: #core_root::serde_json::Map<String, #core_root::serde_json::Value>) -> #core_root::AuthResult<()> {
+            fn apply_fields(active: &mut ActiveModel, fields: #core_root::FieldMap) -> #core_root::AuthResult<()> {
                 for (name, value) in fields {
                     match name.as_str() { #(#assignments)* _ => return Err(#core_root::AuthError::config(format!("Unknown plugin model field: {name}"))) }
                 }

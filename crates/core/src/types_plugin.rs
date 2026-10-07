@@ -1,5 +1,4 @@
 use crate::SchemaValue;
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 
@@ -28,19 +27,19 @@ pub struct TwoFactor {
     pub failed_verification_count: Option<i64>,
     /// End of the account-level verification lock.
     #[serde(rename = "lockedUntil")]
-    #[serde(serialize_with = "crate::utils::date::serialize_option")]
-    pub locked_until: Option<DateTime<Utc>>,
+    #[serde(default, with = "crate::field_value::serde::optional_date")]
+    pub locked_until: Option<crate::FieldDate>,
     #[serde(rename = "createdAt")]
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
-    #[serde(serialize_with = "crate::schema_value::serialize_date")]
-    pub created_at: SchemaValue<DateTime<Utc>>,
+    #[serde(with = "crate::field_value::serde::schema_date")]
+    pub created_at: SchemaValue<crate::FieldDate>,
     #[serde(rename = "updatedAt")]
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
-    #[serde(serialize_with = "crate::schema_value::serialize_date")]
-    pub updated_at: SchemaValue<DateTime<Utc>>,
+    #[serde(with = "crate::field_value::serde::schema_date")]
+    pub updated_at: SchemaValue<crate::FieldDate>,
     /// Declared application fields after adapter output projection.
-    #[serde(flatten, default)]
-    pub additional_fields: serde_json::Map<String, serde_json::Value>,
+    #[serde(with = "crate::field_value::serde::map", flatten, default)]
+    pub additional_fields: crate::FieldMap,
 }
 
 /// Two-factor persistence representation selected by the model.
@@ -56,7 +55,7 @@ pub enum TwoFactorStorage {
 #[derive(Debug, Clone)]
 pub struct CreateTwoFactor {
     /// Declared application fields before adapter input policies.
-    pub additional_fields: serde_json::Map<String, serde_json::Value>,
+    pub additional_fields: crate::FieldMap,
     pub user_id: String,
     pub secret: String,
     pub backup_codes: String,
@@ -68,7 +67,7 @@ pub struct CreateTwoFactor {
 #[derive(Debug, Default)]
 pub struct UpdateTwoFactor {
     /// Declared application fields to update; omitted keys retain their stored values.
-    pub additional_fields: serde_json::Map<String, serde_json::Value>,
+    pub additional_fields: crate::FieldMap,
     /// Replacement encrypted authenticator secret.
     pub secret: Option<String>,
     /// Replacement encrypted backup codes.
@@ -111,8 +110,8 @@ impl From<&str> for PasskeyCredentialState {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Passkey {
     /// Declared application fields after adapter output projection.
-    #[serde(flatten, default)]
-    pub additional_fields: serde_json::Map<String, serde_json::Value>,
+    #[serde(with = "crate::field_value::serde::map", flatten, default)]
+    pub additional_fields: crate::FieldMap,
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub id: SchemaValue<String>,
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
@@ -132,12 +131,12 @@ pub struct Passkey {
     pub transports: Option<String>,
     #[serde(rename = "createdAt")]
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
-    #[serde(serialize_with = "crate::schema_value::serialize_optional_date")]
-    pub created_at: SchemaValue<Option<DateTime<Utc>>>,
+    #[serde(with = "crate::field_value::serde::optional_schema_date")]
+    pub created_at: SchemaValue<Option<crate::FieldDate>>,
     #[serde(rename = "updatedAt")]
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
-    #[serde(serialize_with = "crate::schema_value::serialize_date")]
-    pub updated_at: SchemaValue<DateTime<Utc>>,
+    #[serde(with = "crate::field_value::serde::schema_date")]
+    pub updated_at: SchemaValue<crate::FieldDate>,
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     #[serde(deserialize_with = "deserialize_display_string")]
     pub aaguid: SchemaValue<Option<String>>,
@@ -149,7 +148,7 @@ pub struct Passkey {
 #[derive(Debug, Clone)]
 pub struct CreatePasskey {
     /// Declared application fields before adapter input policies.
-    pub additional_fields: serde_json::Map<String, serde_json::Value>,
+    pub additional_fields: crate::FieldMap,
     pub user_id: String,
     /// Omission and explicit null remain distinct during field input transforms.
     pub name: SchemaValue<Option<String>>,
@@ -196,12 +195,12 @@ pub struct DeviceCode {
     #[serde(rename = "userId", skip_serializing_if = "Option::is_none")]
     pub user_id: Option<String>,
     #[serde(rename = "expiresAt")]
-    #[serde(serialize_with = "crate::utils::date::serialize")]
-    pub expires_at: DateTime<Utc>,
+    #[serde(with = "crate::field_value::serde::date")]
+    pub expires_at: crate::FieldDate,
     pub status: String,
     #[serde(rename = "lastPolledAt")]
-    #[serde(serialize_with = "crate::utils::date::serialize_option")]
-    pub last_polled_at: Option<DateTime<Utc>>,
+    #[serde(default, with = "crate::field_value::serde::optional_date")]
+    pub last_polled_at: Option<crate::FieldDate>,
     #[serde(rename = "pollingInterval", skip_serializing_if = "Option::is_none")]
     pub polling_interval: Option<f64>,
     #[serde(
@@ -213,12 +212,12 @@ pub struct DeviceCode {
     #[serde(default, skip_serializing_if = "crate::SchemaValue::is_undefined")]
     pub scope: crate::SchemaValue<Option<String>>,
     /// Declared application fields after adapter output projection.
-    #[serde(flatten, default)]
-    pub additional_fields: serde_json::Map<String, serde_json::Value>,
+    #[serde(with = "crate::field_value::serde::map", flatten, default)]
+    pub additional_fields: crate::FieldMap,
 }
 
 /// Issuer ownership required by atomic device-code consumption.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum DeviceCodeOwnership {
     /// Require the stored client binding to equal this client identifier.
     ClientId(String),
@@ -229,7 +228,7 @@ pub enum DeviceCodeOwnership {
         /// Native `scope`, a registered logical field name, or a configured storage field name.
         field: String,
         /// Scalar null, string, number, or boolean query value.
-        value: serde_json::Value,
+        value: crate::FieldValue,
     },
     /// Require membership in a candidate set with `AND` and case-sensitive comparison.
     FieldIn {
@@ -237,7 +236,7 @@ pub enum DeviceCodeOwnership {
         /// Configured storage field names are accepted.
         field: String,
         /// Null, string, or number candidates. An empty set never matches.
-        values: Vec<serde_json::Value>,
+        values: Vec<crate::FieldValue>,
     },
     /// Exclude a candidate set with `AND` and the selected adapter's null semantics.
     FieldNotIn {
@@ -245,7 +244,7 @@ pub enum DeviceCodeOwnership {
         /// Configured storage field names are accepted.
         field: String,
         /// Null, string, or number candidates. An empty set matches every bound row.
-        values: Vec<serde_json::Value>,
+        values: Vec<crate::FieldValue>,
     },
     /// Apply a typed `AND` condition while retaining the selected code and owner bindings.
     Where(DeviceCodeWhere),
@@ -254,7 +253,7 @@ pub enum DeviceCodeOwnership {
 /// A DeviceCode ownership condition over scope or a declared scalar, array, or JSON field.
 /// String fields that reference `id` support Serial ID generation.
 /// Date fields and other references require query representations that preserve their adapter semantics.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct DeviceCodeWhere {
     /// Native `scope`, a registered logical field name, or a configured storage field name.
     pub field: String,
@@ -263,14 +262,14 @@ pub struct DeviceCodeWhere {
     /// A finite JSON scalar or null. `In` and `NotIn` require flat scalar arrays.
     /// JSON fields also accept arrays and objects with `Eq` and `Ne`.
     /// Native array identity cannot be expressed by this value representation.
-    pub value: serde_json::Value,
+    pub value: crate::FieldValue,
     /// String comparison mode. Range comparisons ignore this setting.
     pub mode: WhereMode,
 }
 
 impl DeviceCodeWhere {
     /// Construct a case-sensitive equality condition.
-    pub fn new(field: impl Into<String>, value: impl Into<serde_json::Value>) -> Self {
+    pub fn new(field: impl Into<String>, value: impl Into<crate::FieldValue>) -> Self {
         Self {
             field: field.into(),
             operator: WhereOperator::Eq,
@@ -324,22 +323,22 @@ pub struct CreateDeviceCode {
     pub device_code: String,
     pub user_code: String,
     pub user_id: Option<String>,
-    pub expires_at: DateTime<Utc>,
+    pub expires_at: crate::FieldDate,
     pub status: String,
-    pub last_polled_at: Option<DateTime<Utc>>,
+    pub last_polled_at: Option<crate::FieldDate>,
     pub polling_interval: Option<f64>,
     pub client_id: Option<String>,
     /// Omit with `Undefined`, clear with `Typed(None)`, or supply a string.
     pub scope: crate::SchemaValue<Option<String>>,
     /// Declared application fields before adapter input policies.
-    pub additional_fields: serde_json::Map<String, serde_json::Value>,
+    pub additional_fields: crate::FieldMap,
 }
 
 /// Input for updating an existing device authorization code.
 #[derive(Debug, Clone, Default)]
 pub struct UpdateDeviceCode {
     /// Declared application fields to update; omitted keys retain their stored values.
-    pub additional_fields: serde_json::Map<String, serde_json::Value>,
+    pub additional_fields: crate::FieldMap,
     /// Omit with `Undefined`; supplied null and string values pass through field policies.
     pub scope: crate::SchemaValue<Option<String>>,
     /// Update the status. `None` leaves it unchanged.
@@ -349,15 +348,15 @@ pub struct UpdateDeviceCode {
     pub user_id: Option<Option<String>>,
     /// Update the last poll timestamp. `Some(None)` clears it, `None` leaves it
     /// unchanged.
-    pub last_polled_at: Option<Option<DateTime<Utc>>>,
+    pub last_polled_at: Option<Option<crate::FieldDate>>,
 }
 
 /// API key response shape.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ApiKey {
     /// Declared application fields after adapter output projection.
-    #[serde(flatten, default)]
-    pub additional_fields: serde_json::Map<String, serde_json::Value>,
+    #[serde(with = "crate::field_value::serde::map", flatten, default)]
+    pub additional_fields: crate::FieldMap,
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub id: SchemaValue<String>,
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
@@ -377,7 +376,8 @@ pub struct ApiKey {
     #[serde(rename = "refillAmount")]
     pub refill_amount: Option<f64>,
     #[serde(rename = "lastRefillAt")]
-    pub last_refill_at: Option<String>,
+    #[serde(with = "crate::field_value::serde::optional_date", default)]
+    pub last_refill_at: Option<crate::FieldDate>,
     pub enabled: bool,
     #[serde(rename = "rateLimitEnabled")]
     pub rate_limit_enabled: bool,
@@ -389,13 +389,17 @@ pub struct ApiKey {
     pub request_count: Option<f64>,
     pub remaining: Option<f64>,
     #[serde(rename = "lastRequest")]
-    pub last_request: Option<String>,
+    #[serde(with = "crate::field_value::serde::optional_date", default)]
+    pub last_request: Option<crate::FieldDate>,
     #[serde(rename = "expiresAt")]
-    pub expires_at: Option<String>,
+    #[serde(with = "crate::field_value::serde::optional_date", default)]
+    pub expires_at: Option<crate::FieldDate>,
     #[serde(rename = "createdAt")]
-    pub created_at: String,
+    #[serde(with = "crate::field_value::serde::date")]
+    pub created_at: crate::FieldDate,
     #[serde(rename = "updatedAt")]
-    pub updated_at: String,
+    #[serde(with = "crate::field_value::serde::date")]
+    pub updated_at: crate::FieldDate,
     pub permissions: Option<String>,
     pub metadata: Option<String>,
 }
@@ -404,7 +408,7 @@ pub struct ApiKey {
 #[derive(Debug, Clone)]
 pub struct CreateApiKey {
     /// Declared application fields before adapter input policies.
-    pub additional_fields: serde_json::Map<String, serde_json::Value>,
+    pub additional_fields: crate::FieldMap,
     /// Owner of the key — a user id, or an organization id when the key's
     /// configuration references organizations.
     pub reference_id: String,
@@ -414,7 +418,7 @@ pub struct CreateApiKey {
     pub prefix: Option<String>,
     pub key_hash: String,
     pub start: Option<crate::ApiKeyStart>,
-    pub expires_at: Option<String>,
+    pub expires_at: Option<crate::FieldDate>,
     pub remaining: Option<f64>,
     pub rate_limit_enabled: bool,
     pub rate_limit_time_window: Option<f64>,
@@ -430,8 +434,8 @@ pub struct CreateApiKey {
 #[derive(Debug, Clone, Default)]
 pub struct UpdateApiKey {
     /// Declared application field patch before adapter input policies.
-    pub additional_fields: serde_json::Map<String, serde_json::Value>,
-    pub name: Option<String>,
+    pub additional_fields: crate::FieldMap,
+    pub name: Option<SchemaValue<Option<String>>>,
     pub enabled: Option<bool>,
     pub remaining: Option<f64>,
     pub rate_limit_enabled: Option<bool>,
@@ -443,17 +447,17 @@ pub struct UpdateApiKey {
     pub metadata: Option<String>,
     /// Update the expiration time. `Some(Some("..."))` sets a new value,
     /// `Some(None)` clears it, `None` leaves it unchanged.
-    pub expires_at: Option<Option<String>>,
+    pub expires_at: Option<Option<crate::FieldDate>>,
     /// Last request timestamp (updated during verify).
-    pub last_request: Option<Option<String>>,
+    pub last_request: Option<Option<crate::FieldDate>>,
     /// Request count within the current rate-limit window.
     pub request_count: Option<f64>,
     /// Last refill timestamp (updated during verify).
-    pub last_refill_at: Option<Option<String>>,
+    pub last_refill_at: Option<Option<crate::FieldDate>>,
 }
 
 impl AuthTwoFactor for TwoFactor {
-    fn additional_fields(&self) -> Option<&serde_json::Map<String, serde_json::Value>> {
+    fn additional_fields(&self) -> Option<&crate::FieldMap> {
         Some(&self.additional_fields)
     }
     fn id(&self) -> SchemaValue<Cow<'_, str>> {
@@ -474,13 +478,13 @@ impl AuthTwoFactor for TwoFactor {
     fn failed_verification_count(&self) -> Option<i64> {
         self.failed_verification_count
     }
-    fn locked_until(&self) -> Option<DateTime<Utc>> {
-        self.locked_until
+    fn locked_until(&self) -> Option<crate::FieldDate> {
+        self.locked_until.clone()
     }
-    fn created_at(&self) -> &SchemaValue<DateTime<Utc>> {
+    fn created_at(&self) -> &SchemaValue<crate::FieldDate> {
         &self.created_at
     }
-    fn updated_at(&self) -> &SchemaValue<DateTime<Utc>> {
+    fn updated_at(&self) -> &SchemaValue<crate::FieldDate> {
         &self.updated_at
     }
 }
@@ -503,7 +507,7 @@ impl<T: AuthTwoFactor> From<&T> for TwoFactor {
 }
 
 impl AuthApiKey for ApiKey {
-    fn additional_fields(&self) -> Option<&serde_json::Map<String, serde_json::Value>> {
+    fn additional_fields(&self) -> Option<&crate::FieldMap> {
         Some(&self.additional_fields)
     }
     fn id(&self) -> SchemaValue<Cow<'_, str>> {
@@ -533,8 +537,8 @@ impl AuthApiKey for ApiKey {
     fn refill_amount(&self) -> Option<f64> {
         self.refill_amount
     }
-    fn last_refill_at(&self) -> Option<&str> {
-        self.last_refill_at.as_deref()
+    fn last_refill_at(&self) -> Option<crate::FieldDate> {
+        self.last_refill_at.clone()
     }
     fn enabled(&self) -> bool {
         self.enabled
@@ -554,17 +558,17 @@ impl AuthApiKey for ApiKey {
     fn remaining(&self) -> Option<f64> {
         self.remaining
     }
-    fn last_request(&self) -> Option<&str> {
-        self.last_request.as_deref()
+    fn last_request(&self) -> Option<crate::FieldDate> {
+        self.last_request.clone()
     }
-    fn expires_at(&self) -> Option<&str> {
-        self.expires_at.as_deref()
+    fn expires_at(&self) -> Option<crate::FieldDate> {
+        self.expires_at.clone()
     }
-    fn created_at(&self) -> &str {
-        &self.created_at
+    fn created_at(&self) -> crate::FieldDate {
+        self.created_at.clone()
     }
-    fn updated_at(&self) -> &str {
-        &self.updated_at
+    fn updated_at(&self) -> crate::FieldDate {
+        self.updated_at.clone()
     }
     fn permissions(&self) -> Option<&str> {
         self.permissions.as_deref()
@@ -587,15 +591,15 @@ impl<T: AuthApiKey> From<&T> for ApiKey {
             config_id: api_key.config_id().into_owned(),
             refill_interval: api_key.refill_interval(),
             refill_amount: api_key.refill_amount(),
-            last_refill_at: api_key.last_refill_at().map(str::to_owned),
+            last_refill_at: api_key.last_refill_at(),
             enabled: api_key.enabled(),
             rate_limit_enabled: api_key.rate_limit_enabled(),
             rate_limit_time_window: api_key.rate_limit_time_window(),
             rate_limit_max: api_key.rate_limit_max(),
             request_count: api_key.request_count(),
             remaining: api_key.remaining(),
-            last_request: api_key.last_request().map(str::to_owned),
-            expires_at: api_key.expires_at().map(str::to_owned),
+            last_request: api_key.last_request(),
+            expires_at: api_key.expires_at(),
             created_at: api_key.created_at().to_owned(),
             updated_at: api_key.updated_at().to_owned(),
             permissions: api_key.permissions().map(str::to_owned),
@@ -605,7 +609,7 @@ impl<T: AuthApiKey> From<&T> for ApiKey {
 }
 
 impl AuthPasskey for Passkey {
-    fn additional_fields(&self) -> Option<&serde_json::Map<String, serde_json::Value>> {
+    fn additional_fields(&self) -> Option<&crate::FieldMap> {
         Some(&self.additional_fields)
     }
     fn id(&self) -> SchemaValue<Cow<'_, str>> {
@@ -635,10 +639,10 @@ impl AuthPasskey for Passkey {
     fn transports(&self) -> Option<&str> {
         self.transports.as_deref()
     }
-    fn created_at(&self) -> &SchemaValue<Option<DateTime<Utc>>> {
+    fn created_at(&self) -> &SchemaValue<Option<crate::FieldDate>> {
         &self.created_at
     }
-    fn updated_at(&self) -> &SchemaValue<DateTime<Utc>> {
+    fn updated_at(&self) -> &SchemaValue<crate::FieldDate> {
         &self.updated_at
     }
     fn aaguid(&self) -> &SchemaValue<Option<String>> {
@@ -679,10 +683,11 @@ pub struct WalletAddress {
     pub address: String,
     pub chain_id: i64,
     pub is_primary: bool,
-    pub created_at: DateTime<Utc>,
+    #[serde(with = "crate::field_value::serde::date")]
+    pub created_at: crate::FieldDate,
     /// Declared application fields returned by the adapter.
-    #[serde(default, flatten)]
-    pub additional_fields: serde_json::Map<String, serde_json::Value>,
+    #[serde(with = "crate::field_value::serde::map", default, flatten)]
+    pub additional_fields: crate::FieldMap,
 }
 
 /// SIWE wallet creation data. The adapter generates the model ID.
@@ -692,7 +697,7 @@ pub struct CreateWalletAddress {
     pub address: String,
     pub chain_id: i64,
     pub is_primary: bool,
-    pub created_at: DateTime<Utc>,
+    pub created_at: crate::FieldDate,
     /// Logical application fields consumed by registered adapter policies.
-    pub additional_fields: serde_json::Map<String, serde_json::Value>,
+    pub additional_fields: crate::FieldMap,
 }

@@ -19,11 +19,11 @@ Authentication reads application-owned user entities through `AuthUser`. Public 
 | `role` | `Option<String>` | User role |
 | `banned` | `bool` | Whether user is banned |
 | `banReason` | `Option<String>` | Ban reason |
-| `banExpires` | `Option<DateTime>` | Ban expiration |
+| `banExpires` | `Option<FieldDate>` | Ban expiration |
 | `twoFactorEnabled` | `bool` | 2FA status |
-| `metadata` | `serde_json::Value` | Internal application data; not returned by default |
-| `createdAt` | `DateTime` | Creation timestamp |
-| `updatedAt` | `DateTime` | Last update timestamp |
+| `metadata` | `FieldValue` | Internal application data; not returned by default |
+| `createdAt` | `FieldDate` | Creation timestamp |
+| `updatedAt` | `FieldDate` | Last update timestamp |
 
 ## Application User Fields
 
@@ -31,7 +31,6 @@ Register application fields with `AuthConfig.user.fields_mut()`. The underlying 
 
 ```rust
 use better_auth::config::{UserFieldConfig, UserFieldType};
-use serde_json::json;
 
 config.user.fields_mut().insert("department".into(), UserFieldConfig {
     field_type: UserFieldType::String,
@@ -41,26 +40,36 @@ config.user.fields_mut().insert("department".into(), UserFieldConfig {
 config.user.fields_mut().insert("internalCode".into(), UserFieldConfig {
     input: Some(false),
     returned: Some(false),
-    default_value: Some(json!("unassigned")),
+    default_value: Some("unassigned".into()),
     ..Default::default()
 });
 ```
 
 `input` and `returned` accept `Option<bool>`; omission defaults to true through their runtime getters. `required: Some(true)` rejects missing public creation input without a default. `None` and `Some(false)` keep user fields optional; Organization routes use a different creation requirement, described in the [Organization guide](/docs/plugins/organization). Updates leave missing fields unchanged. `input: Some(false)` rejects truthy client values; during creation, a configured default replaces supplied values. `returned: Some(false)` hides the field from public user responses, session caches, and JWT user claims. Administrator routes can set configured fields without public input restrictions. Application metadata and permissions are not rewritten by user projection.
 
-Use `validator` for synchronous input validation or normalization. The validator returns `AuthResult<Value>`; a failure becomes `VALIDATION_ERROR`. Use `default_value_fn` for dynamic creation defaults. Use `on_update` to produce a value when a database update omits the field. Set `transform: Some(FieldTransforms { input, output })` for transformations. `None` omits the container; `Some(FieldTransforms::default())` retains an explicitly empty container. Both callbacks use `UserFieldTransform`. Transform callbacks take and return `Option<Value>`: `None` means undefined, while `Some(Value::Null)` means explicit null.
+Use `validator` for synchronous input validation or normalization. The validator returns `AuthResult<FieldValue>`; a failure becomes `VALIDATION_ERROR`. Use `default_value_fn` for dynamic creation defaults. Use `on_update` to produce a value when a database update omits the field. Set `transform: Some(FieldTransforms { input, output })` for transformations. `None` omits the container; `Some(FieldTransforms::default())` retains an explicitly empty container. Both callbacks use `UserFieldTransform`. Transform callbacks take and return `FieldValue`: `FieldValue::Undefined` means undefined, and `FieldValue::Null` means explicit null. Dynamic defaults, update callbacks, and adapter binding callbacks use the same runtime value type.
 
-As in the upstream adapter, public input transforms run at both the route and storage boundaries. A validator replaces the route transform, but the storage transform still runs. Missing optional fields reach the storage input transform during creation. Database reads apply output transforms once; cache reads preserve the transformed values. Date fields use RFC 3339 strings and normalize to millisecond UTC timestamps. The entity column types determine storage representation for strings, numbers, booleans, JSON, arrays, and enums. An enum declaration alone does not validate allowed values; configure a validator when validation is required.
+As in the upstream adapter, public input transforms run at both the route and storage boundaries. A validator replaces the route transform, but the storage transform still runs. Missing optional fields reach the storage input transform during creation. Database reads apply output transforms once; cache reads preserve the transformed values. Runtime Date fields use `FieldDate`, which retains milliseconds, object identity, and invalid dates. Convert Chrono dates with `.into()`; import RFC 3339 strings only at a declared JSON or cache date boundary. The entity column types determine storage representation for strings, numbers, booleans, JSON, arrays, and enums. An enum declaration alone does not validate allowed values; configure a validator when validation is required.
 
-Core User, Account, Session, and Verification database lists preserve the selected row order and advance output transforms by schema field across the batch. Each row retains its field order. If a callback fails, that row stops; other rows finish, then the batch returns the first original error. This preserves callbacks that upstream already started before observing the batch error. Rust completes those rows before returning; JavaScript may reject the caller while other rows continue through microtasks. Rust does not emulate that relative timing. Field transform callbacks remain synchronous; asynchronous field callbacks are a separate unsupported capability.
+Core User, Account, Session, and Verification database lists preserve the selected row order and advance output transforms by schema field across the batch. Each row retains its field order. If a callback fails, that row stops; other rows finish, then the batch returns the first original error. This preserves callbacks that upstream already started before observing the batch error. Rust completes those rows before returning; JavaScript may reject the caller while other rows continue through microtasks. Rust does not emulate that relative timing. Use `UserFieldTransform::new_async` for adapter callbacks that return futures. Public synchronous input parsing rejects an asynchronous transform when no validator replaces the transform.
 
 Handwritten `SeaOrmAccountModel` and `SeaOrmVerificationModel` implementations must implement `record_fields` and return `AdapterRecord::new(core, storage)`. Extract raw model values there. The default `record` method and database list projection apply output policies through the shared boundary. `AuthEntity` generates `record_fields`.
 
-`AuthUser` reads `name` and `image` through `Serialize`. If their serialized keys differ from canonical names, handwritten implementations must override `serialized_field_name`; `AuthEntity` generates that mapping.
+`AuthUser` reads `name` and `image` through `AuthRecordFields` without serializing the model. If their serialized keys differ from canonical names, handwritten implementations must override `serialized_field_name`; `AuthEntity` generates that mapping.
 
 Plugin fields are projected from the active plugin schema. Disabling Anonymous, Phone Number, Username, Admin, or Two Factor hides stored plugin fields on database reads. An existing signed session cache preserves its previous plugin fields until expiry or a cache version change, matching upstream. Current `returned: Some(false)` restrictions apply even to existing caches. Change `session.cookie_cache.version` when a configuration change must invalidate cached user shapes immediately.
 
 Custom stores must apply `UserConfig::storage_fields` before persistence. Custom endpoints must return `AuthContext::user_view` rather than serialize storage models. `UserView::from` is an unconfigured internal conversion. Generic OAuth and OIDC pass `OAuthProfile.additional_fields` through `UserConfig::parse_provider_input` before persistence. Custom provider integrations must use the same boundary. Raw OAuth provider response data is not mapped user input.
+
+### Runtime values and serialization
+
+Use `FieldMap` for record `additional_fields`. Keep schema declarations as `IndexMap<String, UserFieldConfig>`. Use `FieldMap::from_json` or `FieldValue::from_json` at an external JSON input boundary. Use `.json()` or the explicit `field_value::serde` helpers at an output boundary. Propagate conversion errors. `FieldValue` has no blanket Serde implementation because serialization changes runtime values.
+
+`FieldValue` retains undefined properties, nonfinite numbers, Date objects, arrays, and object identity. A regular clone preserves object handles. Transaction snapshots use one `StructuredCloneContext` across all rows to preserve aliases with new handles. Transaction change detection compares JSON text. Native record cloning preserves private fields and field visibility separately from public serialization.
+
+`SchemaValue<T>::from_json` is fallible. Use `SchemaValue::from_field` for runtime values. JSON output omits undefined object properties and converts nonfinite numbers and invalid dates to null. `Utf16String` retains isolated UTF-16 surrogate units; explicit text serialization preserves these units, while `.json()` reports an error when `serde_json::Value` cannot represent the string. Valid dates outside Chrono's range retain their milliseconds, but JSON date conversion currently returns an error for those values.
+
+Organization metadata and role permissions in adapter records are actual stored fields, usually JSON text. Organization creation, update, and role endpoints parse that text at their upstream response boundary. Do not infer storage representation from the `SchemaValue::Typed` or `SchemaValue::Dynamic` variant.
 
 ### Memory JSON and arrays
 
@@ -86,7 +95,7 @@ Adapter-specific Date, JSON, array, and reference query binding and equality rem
 
 SeaORM projects declared non-reference String additional fields from actual model columns. SQL NULL and present strings therefore reach output callbacks even when the model's Serde attributes omit those fields. SQLite also selects Number, Boolean, UTC Date, JSON, and array column values. SQLite callbacks receive numeric booleans, JSON and array text, and UTC date text before the existing User projector decodes these values. Native User getters, special native-field projections, reference declarations, and completed adapter output retain their existing behavior. The same `field_column` resolver requirement applies to point reads, write returns, and batch output; resolver errors propagate at the field's output stage. The pinned SQLite String point/batch contract and the existing nullable/scalar query, output-order, and batch-error regressions pass. The expanded six-type SQLite contract also passes against the unchanged pinned capture. Two point reads and a four-row list compare complete callback presence/type/value events, returned fields, order, and total. The existing JSON-text regression, scoped Clippy, and workspace formatting pass. PostgreSQL and MySQL retain the String-only column override, and their output acceptance remains unverified.
 
-Custom typed adapters may use `UserView::with_internal_fields_many_for_adapter_using` to supply raw additional-field values through the existing User projector. Pass `user_fields::FieldOutputCapabilities` instead of the former JSON Boolean argument. Its `supports_native_json`, `supports_arrays`, and `supports_booleans` members describe the adapter's callback values; a false member enables that type's decoder after the callback. The accessor receives the original model, logical field name, and resolved field policy. `Some(Value::Null)` supplies a present null; `None` retains the existing serialized source. Supplied non-reference values bypass callback-value reconstruction and run the application callback once before decoding. References and the serialized source retain the compatibility output path. Propagate accessor errors. The projector does not call the accessor for native fields or already projected UserViews. Older UserView entry points and `UserFieldConfig::adapter_output` retain their existing signatures and behavior. Single-row and batch output retain the same field ordering and error propagation. Direct generic `AuthUser` projection remains serialization-backed.
+Custom typed adapters may use `UserView::with_internal_fields_many_for_adapter_using` to supply raw additional-field values through the existing User projector. Pass `user_fields::FieldOutputCapabilities` instead of the former JSON Boolean argument. Its `supports_native_json`, `supports_arrays`, and `supports_booleans` members describe the adapter's callback values; a false member enables that type's decoder after the callback. The accessor receives the original model, logical field name, and resolved field policy. `Some(Value::Null)` supplies a present null; `None` retains the existing serialized source. Supplied non-reference values bypass callback-value reconstruction and run the application callback once before decoding. References and the serialized source retain the compatibility output path. Propagate accessor errors. The projector does not call the accessor for native fields or already projected UserViews. `UserFieldConfig::adapter_output` accepts a `FieldValue` and returns a `FieldValue`; use `Undefined` for an absent field. Single-row and batch output retain the same field ordering and error propagation. Direct generic `AuthUser` projection reads `AuthRecordFields` and preserves runtime values.
 
 An optional typed JSON column distinguishes SQL NULL (`None`) from the stored JSON literal null (`Some(Value::Null)`). SQLite callbacks receive null for the first state and the text `"null"` for the second state. Typed JSON reconstruction does not preserve arbitrary original whitespace, number spelling, or key byte order; use a text-column representation when the application needs stored text. Generated UTC dates use the existing millisecond ISO serializer. Other Chrono date representations use their inner value's Serde representation and retain the existing post-callback date result or error. Handwritten `time` date types retain their existing serialized source, including its omission rules, because the generic SeaORM conversion produces SQL literals for those variants. PostgreSQL/MySQL non-String output, arbitrary handwritten date types, invalid returned dates, nonfinite numbers, native aliases, references, and arbitrary joined shapes remain unresolved alignment work. The new contract does not establish those behaviors.
 

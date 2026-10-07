@@ -31,14 +31,16 @@ struct Case {
     stored_updated: Expected,
 }
 
-fn check_date(value: Option<&str>, expected: &Expected, before: i64, after: i64) {
+fn check_date(
+    value: Option<&better_auth_core::FieldDate>,
+    expected: &Expected,
+    before: i64,
+    after: i64,
+) {
     match (value, expected.lifetime_millis) {
         (None, None) => {}
         (Some(date), Some(lifetime)) => {
-            let origin = chrono::DateTime::parse_from_rfc3339(date)
-                .unwrap()
-                .timestamp_millis()
-                - lifetime;
+            let origin = date.milliseconds() as i64 - lifetime;
             assert!(
                 (before..=after).contains(&origin),
                 "{before} <= {origin} <= {after}"
@@ -101,7 +103,7 @@ async fn expiration_config_preserves_fractional_defaults_and_day_bounds_in_sqlit
             case.name
         );
         check_date(
-            created.expires_at.as_deref(),
+            created.expires_at.as_ref(),
             &case.created,
             before_create,
             after_create,
@@ -117,7 +119,7 @@ async fn expiration_config_preserves_fractional_defaults_and_day_bounds_in_sqlit
         );
         assert_eq!(stored.expires_at, created.expires_at);
         check_date(
-            stored.expires_at.as_deref(),
+            stored.expires_at.as_ref(),
             &case.stored_created,
             before_create,
             after_create,
@@ -147,7 +149,7 @@ async fn expiration_config_preserves_fractional_defaults_and_day_bounds_in_sqlit
             updated.name.typed()?.as_deref(),
             Some(case.updated.name.as_str())
         );
-        check_date(updated.expires_at.as_deref(), &case.updated, before, after);
+        check_date(updated.expires_at.as_ref(), &case.updated, before, after);
         let stored_updated = ctx
             .database
             .get_api_key_by_id(created.id.typed()?)
@@ -159,7 +161,7 @@ async fn expiration_config_preserves_fractional_defaults_and_day_bounds_in_sqlit
         );
         assert_eq!(stored_updated.expires_at, updated.expires_at);
         check_date(
-            stored_updated.expires_at.as_deref(),
+            stored_updated.expires_at.as_ref(),
             &case.stored_updated,
             before,
             after,

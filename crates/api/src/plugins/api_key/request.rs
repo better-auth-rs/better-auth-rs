@@ -121,7 +121,8 @@ pub(super) fn validate_numbers(
         }
         let location = format!("body.{name}");
         if matches!(kind, Id) {
-            let value = SchemaValue::<Value>::from_json(value.cloned()).display_string()?;
+            let value = SchemaValue::<better_auth_core::FieldValue>::from_json(value.cloned())?
+                .display_string()?;
             let _ = output.insert(name.into(), Value::String(value));
             continue;
         }

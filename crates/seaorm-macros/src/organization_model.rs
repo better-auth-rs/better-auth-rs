@@ -64,18 +64,17 @@ pub(super) fn generate(
         if is_core {
             core_columns.push(quote!(Column::#column));
             core_names.push(quote!(Column::#column => Some(#public_name),));
-            core_values.push(
-                quote!((#public_name.to_owned(), #core_root::serde_json::to_value(&self.#ident)?)),
-            );
+            let value = adapter_record::field_value(field, seaorm_root);
+            core_values.push(quote!((#public_name.to_owned(), #value)));
         } else {
             core_names.push(quote!(Column::#column => None,));
         }
         let reference = identity::is_reference(role, field)?;
         references.push(quote!(Column::#column => #reference,));
         let decoded = if name == "id" || reference {
-            identity::decode(field, core_root)
+            identity::decode(field, core_root, seaorm_root)
         } else {
-            quote!(#core_root::serde_json::from_value(value)?)
+            adapter_record::decode_field(field, seaorm_root)
         };
         assignments.push(quote!(#(#aliases)|* => active.#ident = #seaorm_root::sea_orm::ActiveValue::Set(#decoded),));
         if is_core {
@@ -91,6 +90,8 @@ pub(super) fn generate(
                     quote!(#ident: #core_root::SchemaValue::Typed(self.#ident.to_string()))
                 } else if name == "user_id" {
                     quote!(#ident: self.#ident.to_string())
+                } else if name == "created_at" {
+                    quote!(#ident: self.#ident.into())
                 } else {
                     quote!(#ident: self.#ident.to_owned())
                 });
@@ -100,6 +101,8 @@ pub(super) fn generate(
                 output_values.push(quote!(let _ = projected.remove(#public_name);));
                 output.push(if name == "id" {
                     quote!(#ident: #core_root::SchemaValue::Typed(self.#ident.to_string()))
+                } else if name == "created_at" {
+                    quote!(#ident: self.#ident.into())
                 } else {
                     quote!(#ident: self.#ident.to_owned())
                 });
@@ -111,69 +114,23 @@ pub(super) fn generate(
                     let #ident = if fields.fields().get(#public_name).is_some_and(|field| !matches!(field.field_type, #core_root::user_fields::UserFieldType::Date)) {
                         value.map(#core_root::SchemaValue::Dynamic).unwrap_or_default()
                     } else {
-                        #core_root::SchemaValue::from_json(value)
-                    };
-                });
-            } else if matches!(
-                (role, name.as_str()),
-                (EntityRole::Organization, "metadata")
-                    | (EntityRole::OrganizationRole, "permission")
-            ) {
-                let unconfigured = if role == EntityRole::Organization
-                    && matches!(&field.ty, syn::Type::Path(path) if path.path.segments.last().is_some_and(|segment| segment.ident == "Option"))
-                {
-                    quote! {
-                        if matches!(
-                            #seaorm_root::sea_orm::ColumnTrait::def(&Column::#column).get_column_type(),
-                            #seaorm_root::sea_orm::ColumnType::Json | #seaorm_root::sea_orm::ColumnType::JsonBinary
-                        ) {
-                            #core_root::SchemaValue::Typed(self.#ident.as_ref().map(#core_root::serde_json::to_value).transpose()?)
-                        } else {
-                            value.map(#core_root::SchemaValue::Dynamic).unwrap_or_default()
-                        }
-                    }
-                } else if role == EntityRole::OrganizationRole {
-                    quote! {
-                        let value = if matches!(
-                            #seaorm_root::sea_orm::ColumnTrait::def(&Column::#column).get_column_type(),
-                            #seaorm_root::sea_orm::ColumnType::Text
-                                | #seaorm_root::sea_orm::ColumnType::String(_)
-                                | #seaorm_root::sea_orm::ColumnType::Char(_)
-                        ) {
-                            value.map(|value| {
-                                let text: String = #core_root::serde_json::from_value(value)?;
-                                #core_root::serde_json::from_str::<#core_root::serde_json::Value>(&text)
-                            }).transpose()?
-                        } else {
-                            value
-                        };
-                        #core_root::SchemaValue::from_json(value)
-                    }
-                } else {
-                    quote!(#core_root::SchemaValue::from_json(value))
-                };
-                output_values.push(quote! {
-                    let value = projected.remove(#public_name);
-                    let #ident = if fields.fields().contains_key(#public_name) {
-                        value.map(#core_root::SchemaValue::Dynamic).unwrap_or_default()
-                    } else {
-                        #unconfigured
+                        #core_root::SchemaValue::from_field(value.unwrap_or_default())
                     };
                 });
             } else {
                 let reference = reference.then(|| quote! {
                     if !fields.fields().contains_key(#public_name) {
                         if let Some(value) = value.as_mut().filter(|value| !value.is_null()) {
-                            *value = #core_root::serde_json::Value::String(#core_root::SchemaValue::<String>::from_json(Some(value.clone())).display_string()?);
+                            *value = #core_root::FieldValue::String(#core_root::SchemaValue::<String>::from_field(value.clone()).display_string()?);
                         }
                     }
                 });
                 output_values.push(if reference.is_some() { quote! {
                     let mut value = projected.remove(#public_name);
                     #reference
-                    let #ident = #core_root::SchemaValue::from_json(value);
+                    let #ident = #core_root::SchemaValue::from_field(value.unwrap_or_default());
                 }} else { quote! {
-                    let #ident = #core_root::SchemaValue::from_json(projected.remove(#public_name));
+                    let #ident = #core_root::SchemaValue::from_field(projected.remove(#public_name).unwrap_or_default());
                 }});
             }
             output.push(quote!(#ident));
@@ -191,10 +148,9 @@ pub(super) fn generate(
         }
     } else {
         quote! {
-            let model = #core_root::serde_json::to_value(self)?;
-            let model = model.as_object().ok_or_else(|| #core_root::AuthError::config("Organization models must serialize as objects"))?;
-            let core = #core_root::serde_json::Map::from_iter([#(#core_values),*]);
-            let mut storage = #core_root::serde_json::Map::new();
+            let model = #core_root::entity::AuthRecordFields::field_values(self)?;
+            let core = #core_root::FieldMap::from_iter([#(#core_values),*]);
+            let mut storage = #core_root::FieldMap::new();
             for (name, field) in fields.fields() {
                 if name == "id" { continue; }
                 let storage_name = #core_root::store::schema::resolve_field_name(field.field_name.as_deref(), name);
@@ -232,14 +188,14 @@ pub(super) fn generate(
             fn record_fields(&self, fields: &#core_root::user_fields::UserConfig) -> #core_root::AuthResult<#core_root::user_fields::AdapterRecord> {
                 #record_fields
             }
-            fn record_from_fields(&self, fields: &#core_root::user_fields::UserConfig, mut projected: #core_root::serde_json::Map<String, #core_root::serde_json::Value>) -> #core_root::AuthResult<Self::Record> {
+            fn record_from_fields(&self, fields: &#core_root::user_fields::UserConfig, mut projected: #core_root::FieldMap) -> #core_root::AuthResult<Self::Record> {
                 #(#output_values)*
                 Ok(#core_root::#record { #(#output,)* #extras })
             }
             fn is_id_reference(column: &Column) -> bool {
                 match column { #(#references)* }
             }
-            fn apply_fields(active: &mut ActiveModel, fields: #core_root::serde_json::Map<String, #core_root::serde_json::Value>) -> #core_root::AuthResult<()> {
+            fn apply_fields(active: &mut ActiveModel, fields: #core_root::FieldMap) -> #core_root::AuthResult<()> {
                 for (name, value) in fields {
                     match name.as_str() { #(#assignments)* _ => return Err(#core_root::AuthError::config(format!("Unknown organization model field: {name}"))) }
                 }

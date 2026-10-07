@@ -2,15 +2,11 @@ use super::fields::PreparedOrganizationFields;
 use super::*;
 use crate::Team;
 use better_auth_schema_registry::EntityRole;
-use serde_json::json;
 
 fn member_count(team: &Team) -> AuthResult<Option<f64>> {
     match team.additional_fields.get("memberCount") {
         Some(Value::Null) | None => Ok(None),
-        Some(Value::Number(value)) => value
-            .as_f64()
-            .map(Some)
-            .ok_or_else(|| AuthError::internal("Team memberCount is outside the numeric range")),
+        Some(Value::Number(value)) => Ok(Some(*value)),
         _ => Err(AuthError::internal(
             "Team memberCount must be numeric for this operation",
         )),
@@ -43,7 +39,7 @@ impl PreparedTeamSeats {
         if let Some(count) = self.next_count {
             let _ = team
                 .additional_fields
-                .insert("memberCount".into(), json!(count));
+                .insert("memberCount".into(), count.into_field());
         }
         Ok(team)
     }
@@ -60,10 +56,10 @@ impl EphemeralStore {
         let patch = self
             .prepare_record_patch(
                 EntityRole::Team,
-                [("memberCount".into(), json!(actual))]
+                [("memberCount".into(), Value::from(actual))]
                     .into_iter()
                     .collect(),
-                Map::new(),
+                FieldMap::new(),
             )
             .await?;
         let patch = if initial_count.is_some_and(|count| count < actual as f64) {
@@ -81,7 +77,7 @@ impl EphemeralStore {
             let count = count.map(|count| count + 1.0);
             let _ = team
                 .additional_fields
-                .insert("memberCount".into(), json!(count));
+                .insert("memberCount".into(), count.into_field());
             let _ = self.output_team(team).await?;
             Some(count)
         } else {
@@ -111,7 +107,7 @@ impl EphemeralStore {
         if let Some(count) = next_count {
             let _ = team
                 .additional_fields
-                .insert("memberCount".into(), json!(count - deleted as f64));
+                .insert("memberCount".into(), Value::Number(count - deleted as f64));
             let _ = self.output_team(team).await?;
         }
         Ok(PreparedTeamSeats {

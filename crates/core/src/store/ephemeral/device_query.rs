@@ -1,7 +1,7 @@
 use crate::{
-    AuthError, AuthResult, DeviceCode, DeviceCodeWhere, SchemaValue, WhereMode, WhereOperator,
+    AuthError, AuthResult, DeviceCode, DeviceCodeWhere, FieldValue as Value, WhereMode,
+    WhereOperator,
 };
-use serde_json::Value;
 use std::{borrow::Cow, cmp::Ordering};
 
 pub(super) fn matches(row: &DeviceCode, query: &DeviceCodeWhere) -> AuthResult<bool> {
@@ -11,12 +11,7 @@ pub(super) fn matches(row: &DeviceCode, query: &DeviceCodeWhere) -> AuthResult<b
         _ => None,
     };
     let actual = if let Some(native) = native {
-        if matches!(native, SchemaValue::InvalidDate) {
-            return Err(AuthError::config(
-                "DeviceCode Where cannot compare an invalid Date represented as a native string field",
-            ));
-        }
-        native.json()?.map(Cow::Owned)
+        Some(Cow::Owned(native.field_value()))
     } else {
         row.additional_fields.get(&query.field).map(Cow::Borrowed)
     };
@@ -28,7 +23,9 @@ pub(super) fn matches(row: &DeviceCode, query: &DeviceCodeWhere) -> AuthResult<b
                 .as_array()
                 .is_some_and(|values| values.iter().all(Value::is_string)));
     match query.operator {
-        WhereOperator::Eq if query.value.is_null() => Ok(actual.is_none_or(Value::is_null)),
+        WhereOperator::Eq if query.value.is_null() => {
+            Ok(actual.is_none_or(|value| value.is_null() || value.is_undefined()))
+        }
         WhereOperator::Eq => Ok(strict_equals(actual, &query.value, insensitive)),
         WhereOperator::Ne => Ok(!strict_equals(actual, &query.value, insensitive)),
         WhereOperator::In | WhereOperator::NotIn => {
@@ -38,7 +35,7 @@ pub(super) fn matches(row: &DeviceCode, query: &DeviceCodeWhere) -> AuthResult<b
                 .ok_or_else(|| AuthError::internal("Value must be an array"))?;
             let present = values
                 .iter()
-                .any(|value| strict_equals(actual, value, insensitive));
+                .any(|value| includes(actual, value, insensitive));
             Ok(if query.operator == WhereOperator::In {
                 present
             } else {
@@ -64,15 +61,22 @@ pub(super) fn matches(row: &DeviceCode, query: &DeviceCodeWhere) -> AuthResult<b
 }
 
 fn strict_equals(actual: Option<&Value>, expected: &Value, insensitive: bool) -> bool {
-    match (actual, expected) {
-        (Some(Value::String(actual)), Value::String(expected)) if insensitive => {
-            actual.to_lowercase() == expected.to_lowercase()
-        }
-        (Some(Value::Number(actual)), Value::Number(expected)) => {
-            actual.as_f64() == expected.as_f64()
-        }
-        (Some(actual), expected) => actual == expected,
-        _ => false,
+    if insensitive {
+        return actual
+            .and_then(crate::query::field_string_units)
+            .zip(crate::query::field_string_units(expected))
+            .is_some_and(|(actual, expected)| lowercase(&actual) == lowercase(&expected));
+    }
+    actual.unwrap_or(&Value::Undefined).strict_equals(expected)
+}
+
+fn includes(actual: Option<&Value>, expected: &Value, insensitive: bool) -> bool {
+    if insensitive {
+        strict_equals(actual, expected, true)
+    } else {
+        actual
+            .unwrap_or(&Value::Undefined)
+            .same_value_zero(expected)
     }
 }
 
@@ -80,16 +84,7 @@ fn compare(actual: Option<&Value>, expected: &Value) -> AuthResult<Option<Orderi
     let Some(actual) = actual else {
         return Ok(None);
     };
-    let actual = match actual {
-        Value::Array(_) | Value::Object(_) => Cow::Owned(Value::String(
-            SchemaValue::<Value>::Dynamic(actual.clone()).display_string()?,
-        )),
-        actual => Cow::Borrowed(actual),
-    };
-    if let (Value::String(actual), Value::String(expected)) = (actual.as_ref(), expected) {
-        return Ok(Some(actual.encode_utf16().cmp(expected.encode_utf16())));
-    }
-    Ok(crate::query::number(&actual)?.partial_cmp(&crate::query::number(expected)?))
+    crate::query::field_compare(actual, expected)
 }
 
 fn pattern(
@@ -99,30 +94,31 @@ fn pattern(
     insensitive: bool,
 ) -> AuthResult<bool> {
     if insensitive {
-        let (Some(Value::String(actual)), Value::String(expected)) = (actual, expected) else {
+        let Some((actual, expected)) = actual
+            .and_then(crate::query::field_string_units)
+            .zip(crate::query::field_string_units(expected))
+        else {
             return Ok(false);
         };
         return Ok(string_pattern(
-            &actual.to_lowercase(),
-            &expected.to_lowercase(),
+            &lowercase(&actual),
+            &lowercase(&expected),
             operator,
         ));
     }
     if operator == WhereOperator::Contains {
         match actual {
-            None | Some(Value::Null) => return Ok(false),
+            None | Some(Value::Undefined | Value::Null) => return Ok(false),
             Some(Value::Array(values)) => {
-                return Ok(values
-                    .iter()
-                    .any(|value| strict_equals(Some(value), expected, false)));
+                return Ok(values.iter().any(|value| value.same_value_zero(expected)));
             }
             _ => {}
         }
     }
-    if let Some(Value::String(actual)) = actual {
+    if let Some(actual) = actual.and_then(crate::query::field_string_units) {
         return Ok(string_pattern(
-            actual,
-            &SchemaValue::<Value>::Dynamic(expected.clone()).display_string()?,
+            &actual,
+            expected.display_utf16()?.as_utf16(),
             operator,
         ));
     }
@@ -132,7 +128,9 @@ fn pattern(
         _ => "endsWith",
     };
     let message = match actual {
-        None => format!("undefined is not an object (evaluating 'record[field].{method}')"),
+        None | Some(Value::Undefined) => {
+            format!("undefined is not an object (evaluating 'record[field].{method}')")
+        }
         Some(Value::Null) => {
             format!("null is not an object (evaluating 'record[field].{method}')")
         }
@@ -141,10 +139,29 @@ fn pattern(
     Err(AuthError::internal(message))
 }
 
-fn string_pattern(actual: &str, expected: &str, operator: WhereOperator) -> bool {
+fn string_pattern(actual: &[u16], expected: &[u16], operator: WhereOperator) -> bool {
     match operator {
-        WhereOperator::Contains => actual.contains(expected),
+        WhereOperator::Contains => {
+            expected.is_empty() || actual.windows(expected.len()).any(|part| part == expected)
+        }
         WhereOperator::StartsWith => actual.starts_with(expected),
         _ => actual.ends_with(expected),
     }
+}
+
+fn lowercase(units: &[u16]) -> Vec<u16> {
+    let mut output = Vec::new();
+    let mut text = String::new();
+    for unit in char::decode_utf16(units.iter().copied()) {
+        match unit {
+            Ok(character) => text.push(character),
+            Err(error) => {
+                output.extend(text.to_lowercase().encode_utf16());
+                text.clear();
+                output.push(error.unpaired_surrogate());
+            }
+        }
+    }
+    output.extend(text.to_lowercase().encode_utf16());
+    output
 }

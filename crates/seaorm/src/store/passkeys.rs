@@ -3,12 +3,9 @@ use super::instrumentation::database_operation;
 use super::plugin_models::Entity;
 use crate::SeaOrmPluginModel;
 use async_trait::async_trait;
+use better_auth_core::{FieldMap, FieldValue, SchemaField};
 use chrono::Utc;
-use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DbBackend, EntityTrait, IntoActiveModel, QueryFilter,
-    QuerySelect,
-};
-use serde_json::{Map, Value, json};
+use sea_orm::{ColumnTrait, DbBackend, EntityTrait, QueryFilter, QuerySelect};
 
 use better_auth_core::store::{PasskeyStore, schema::EntityRole};
 use better_auth_core::{PasskeyCredentialState, PasskeyStorage};
@@ -98,7 +95,7 @@ where
         let id = id.typed()?;
         let (counter, fields) = match (P::Passkey::passkey_storage(), update) {
             (PasskeyStorage::Native, UpdatePasskeyAuthentication::Native { counter }) => {
-                (counter, Map::new())
+                (counter, FieldMap::new())
             }
             (
                 PasskeyStorage::Legacy,
@@ -110,11 +107,14 @@ where
                 },
             ) => (
                 counter,
-                Map::from_iter([
-                    ("backed_up".into(), json!(backed_up)),
-                    ("device_type".into(), json!(device_type)),
-                    ("credential".into(), json!(credential)),
-                    ("updated_at".into(), json!(Utc::now())),
+                FieldMap::from_iter([
+                    ("backed_up".into(), (backed_up).into_field()),
+                    ("device_type".into(), (device_type).into_field()),
+                    ("credential".into(), credential.to_owned().into_field()),
+                    (
+                        "updated_at".into(),
+                        better_auth_core::FieldValue::Date((Utc::now()).into()),
+                    ),
                 ]),
             ),
             _ => {
@@ -124,10 +124,10 @@ where
             }
         };
         let patch = self
-            .prepare_passkey_fields(fields, Map::new(), false)
+            .prepare_passkey_fields(fields, FieldMap::new(), false)
             .await?;
         let model = database_operation::<Entity<P::Passkey>, _>(self.config(), "update", async {
-            let Some(model) = Entity::<P::Passkey>::find()
+            let Some(_model) = Entity::<P::Passkey>::find()
                 .filter(
                     P::Passkey::column("id")?
                         .eq_id(id, self.config().advanced.database.generate_id())?,
@@ -140,31 +140,40 @@ where
             };
             let counter = i64::try_from(counter)
                 .map_err(|_| AuthError::bad_request("Passkey counter exceeds i64 range"))?;
-            let mut active = model.into_active_model();
-            super::plugin_models::apply_active_fields::<P::Passkey>(&mut active, patch);
+            let mut active = patch;
             super::plugin_models::set::<P::Passkey>(
                 &mut active,
                 "counter",
                 counter,
                 self.config().advanced.database.generate_id(),
             )?;
-            let model = active.update(self.connection()).await.map_err(map_db_err)?;
-            Ok(Some(model))
+            let filter = P::Passkey::column("id")?
+                .eq_id(id, self.config().advanced.database.generate_id())?;
+            super::updates::update_record_returning_one(
+                self.connection(),
+                active,
+                filter.clone(),
+                filter,
+            )
+            .await
         })
         .await?
         .ok_or_else(|| AuthError::not_found("Passkey not found"))?;
         Ok(self.project_passkey_models(vec![model]).await?.remove(0))
     }
     async fn update_passkey_name(&self, id: &str, name: &str) -> AuthResult<Passkey> {
-        let mut fields = Map::from_iter([("name".into(), json!(name))]);
+        let mut fields = FieldMap::from_iter([("name".into(), name.to_owned().into_field())]);
         if P::Passkey::passkey_storage() == PasskeyStorage::Legacy {
-            let _ = fields.insert("updated_at".into(), json!(Utc::now()));
+            let _ = fields.insert(
+                "updated_at".into(),
+                better_auth_core::FieldValue::Date((Utc::now()).into()),
+            );
         }
         let patch = self
-            .prepare_passkey_fields(fields, Map::new(), false)
+            .prepare_passkey_fields(fields, FieldMap::new(), false)
             .await?;
         let model = database_operation::<Entity<P::Passkey>, _>(self.config(), "update", async {
-            let Some(model) = Entity::<P::Passkey>::find()
+            let Some(_model) = Entity::<P::Passkey>::find()
                 .filter(
                     P::Passkey::column("id")?
                         .eq_id(id, self.config().advanced.database.generate_id())?,
@@ -175,10 +184,16 @@ where
             else {
                 return Ok(None);
             };
-            let mut active = model.into_active_model();
-            super::plugin_models::apply_active_fields::<P::Passkey>(&mut active, patch);
-            let model = active.update(self.connection()).await.map_err(map_db_err)?;
-            Ok(Some(model))
+            let active = patch;
+            let filter = P::Passkey::column("id")?
+                .eq_id(id, self.config().advanced.database.generate_id())?;
+            super::updates::update_record_returning_one(
+                self.connection(),
+                active,
+                filter.clone(),
+                filter,
+            )
+            .await
         })
         .await?
         .ok_or_else(|| AuthError::not_found("Passkey not found"))?;
@@ -249,10 +264,10 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
 
     async fn prepare_passkey_fields(
         &self,
-        mut native: Map<String, Value>,
-        mut extras: Map<String, Value>,
+        mut native: FieldMap,
+        mut extras: FieldMap,
         create: bool,
-    ) -> AuthResult<<P::Passkey as SeaOrmPluginModel>::ActiveModel> {
+    ) -> AuthResult<super::plugin_models::Write<P::Passkey>> {
         let fields = self.model_fields.fields(EntityRole::Passkey);
         let _ = extras.remove("name");
         let _ = extras.remove("aaguid");
@@ -294,24 +309,35 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
             }
         };
 
-        let mut fields = Map::from_iter([
-            ("public_key".to_owned(), json!(input.public_key)),
-            ("user_id".to_owned(), json!(input.user_id)),
-            ("credential_id".to_owned(), json!(input.credential_id)),
-            ("counter".to_owned(), json!(counter)),
-            ("device_type".to_owned(), json!(input.device_type)),
-            ("backed_up".to_owned(), json!(input.backed_up)),
-            ("transports".to_owned(), json!(input.transports)),
+        let mut fields = FieldMap::from_iter([
+            ("public_key".to_owned(), (input.public_key).into_field()),
+            ("user_id".to_owned(), (input.user_id).into_field()),
+            (
+                "credential_id".to_owned(),
+                (input.credential_id).into_field(),
+            ),
+            ("counter".to_owned(), (counter).into_field()),
+            ("device_type".to_owned(), (input.device_type).into_field()),
+            ("backed_up".to_owned(), (input.backed_up).into_field()),
+            ("transports".to_owned(), (input.transports).into_field()),
         ]);
         if let Some(credential) = &credential {
-            let _ = fields.insert("credential".into(), json!(credential));
+            let _ = fields.insert("credential".into(), credential.to_owned().into_field());
         }
-        let _ = fields.insert("created_at".into(), json!(Utc::now()));
+        let _ = fields.insert(
+            "created_at".into(),
+            better_auth_core::FieldValue::Date((Utc::now()).into()),
+        );
         if credential.is_some() {
-            let _ = fields.insert("updated_at".into(), json!(Utc::now()));
+            let _ = fields.insert(
+                "updated_at".into(),
+                better_auth_core::FieldValue::Date((Utc::now()).into()),
+            );
         }
         for (name, value) in [("name", input.name), ("aaguid", input.aaguid)] {
-            if let Some(value) = value.json()? {
+            if let Some(value) =
+                Some(value.into_field_value()).filter(|value| !value.is_undefined())
+            {
                 let _ = fields.insert(name.into(), value);
             }
         }
@@ -319,7 +345,7 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
             .prepare_passkey_fields(fields, input.additional_fields, true)
             .await?;
         let model = database_operation::<Entity<P::Passkey>, _>(self.config(), "create", async {
-            active.insert(connection).await.map_err(map_db_err)
+            active.insert(connection).await
         })
         .await?;
         Ok(self.project_passkey_models(vec![model]).await?.remove(0))

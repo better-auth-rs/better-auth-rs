@@ -2,7 +2,7 @@
 use crate::user_fields::{UserFieldConfig, UserFieldType};
 use serde_json::{Map, Value, json};
 
-pub(super) fn component_property(field: &UserFieldConfig) -> Value {
+pub(super) fn component_property(field: &UserFieldConfig) -> crate::AuthResult<Value> {
     let kind = match &field.field_type {
         UserFieldType::String | UserFieldType::Date => json!("string"),
         UserFieldType::Number => json!("number"),
@@ -27,27 +27,29 @@ pub(super) fn component_property(field: &UserFieldConfig) -> Value {
     if field.default_value_fn.is_none()
         && let Some(default) = &field.default_value
     {
-        let _ = schema.insert("default".into(), default.clone());
+        if let Some(default) = default.json()? {
+            let _ = schema.insert("default".into(), default);
+        }
     }
     if !field.input() {
         let _ = schema.insert("readOnly".into(), Value::Bool(true));
     }
-    Value::Object(schema)
+    Ok(Value::Object(schema))
 }
 
-pub(super) fn input_property(field: &UserFieldConfig) -> Value {
-    match &field.field_type {
+pub(super) fn input_property(field: &UserFieldConfig) -> crate::AuthResult<Value> {
+    Ok(match &field.field_type {
         UserFieldType::Date => json!({"type":"string","format":"date-time"}),
         UserFieldType::Json => json!({}),
         UserFieldType::StringArray => json!({"type":"array","items":{"type":"string"}}),
         UserFieldType::NumberArray => json!({"type":"array","items":{"type":"number"}}),
         UserFieldType::Enum(values) => json!({"type":"string","enum":values}),
         _ => {
-            let mut schema = component_property(field);
+            let mut schema = component_property(field)?;
             if let Some(schema) = schema.as_object_mut() {
                 let _ = schema.remove("readOnly");
             }
             schema
         }
-    }
+    })
 }

@@ -606,7 +606,7 @@ async fn social_code_exchange_and_profile_mapping_persist_through_sqlite() {
                     .update_account_optional(
                         account["id"].as_str().unwrap(),
                         UpdateAccount {
-                            access_token_expires_at: SchemaValue::Typed(Some(expired_at)),
+                            access_token_expires_at: SchemaValue::Typed(Some(expired_at.into())),
                             ..Default::default()
                         },
                     )

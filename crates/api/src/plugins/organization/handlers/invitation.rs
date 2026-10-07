@@ -35,14 +35,14 @@ pub(crate) async fn invite_member_core(
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     request: Option<&AuthRequest>,
 ) -> AuthResult<InvitationView> {
-    let org_value = body
-        .organization_id
-        .json()?
-        .filter(better_auth_core::user_fields::is_truthy)
+    let org_value = body.organization_id.field_value();
+    let org_value = org_value
+        .is_truthy()
+        .then_some(org_value)
         .or_else(|| {
             session
                 .active_organization_id()
-                .map(|id| serde_json::json!(id))
+                .map(better_auth_core::FieldValue::from)
         })
         .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
     let email = crate::plugins::organization::input::string_operation(
@@ -53,15 +53,11 @@ pub(crate) async fn invite_member_core(
     if !validator::ValidateEmail::validate_email(&email) {
         return Err(AuthError::bad_request("Invalid email"));
     }
-    let resend = body
-        .resend
-        .json()?
-        .as_ref()
-        .is_some_and(better_auth_core::user_fields::is_truthy);
+    let resend = body.resend.is_truthy()?;
 
     let member = ctx
         .database
-        .get_member_with_user_value(&org_value, &serde_json::json!(user.id()))
+        .get_member_with_user_value(&org_value, &user.id().field_value())
         .await?
         .map(|joined| joined.member)
         .ok_or_else(|| AuthError::bad_request("Member not found"))?;
@@ -209,23 +205,20 @@ pub(crate) async fn invite_member_core(
                 return Err(AuthError::forbidden("Invitation limit reached"));
             }
         }
-        let team_ids_value = body.team_id.json()?;
-        let check_teams = config.teams.enabled
-            && team_ids_value
-                .as_ref()
-                .is_some_and(better_auth_core::user_fields::is_truthy);
+        let team_ids_value = body.team_id.field_value();
+        let check_teams = config.teams.enabled && team_ids_value.is_truthy();
         let team_ids = crate::plugins::organization::input::invitation_team_ids(team_ids_value);
         if check_teams {
-            let raw = team_ids
-                .json()?
-                .ok_or_else(|| AuthError::from(AuthResponse::new(500)))?;
+            let raw = team_ids.field_value();
             let requested = raw
                 .as_array()
                 .ok_or_else(|| AuthError::from(AuthResponse::new(500)))?;
             for team_id in requested {
                 let reserved = match team_id {
-                    serde_json::Value::String(id) => id.contains(','),
-                    serde_json::Value::Array(ids) => ids.iter().any(|id| id == ","),
+                    better_auth_core::FieldValue::String(id) => id.contains(','),
+                    better_auth_core::FieldValue::Array(ids) => ids
+                        .iter()
+                        .any(|id| id.strict_equals(&better_auth_core::FieldValue::from(","))),
                     _ => return Err(AuthResponse::new(500).into()),
                 };
                 if reserved {
@@ -269,7 +262,7 @@ pub(crate) async fn invite_member_core(
             id: body
                 .additional_fields
                 .get("id")
-                .and_then(serde_json::Value::as_str)
+                .and_then(better_auth_core::FieldValue::as_str)
                 .map(str::to_owned),
             created_at: body
                 .additional_fields

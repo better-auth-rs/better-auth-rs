@@ -1,7 +1,7 @@
 //! Bridge configured username fields to the application-owned typed user record.
 
 use crate::store::schema::resolve_field_name;
-use serde_json::{Map, Value};
+use crate::{FieldMap, FieldValue as Value};
 
 use super::{UserConfig, UserFieldConfig};
 use crate::{AuthResult, CreateUser, UpdateUser};
@@ -15,17 +15,13 @@ pub(crate) const USER_FIELDS: &[&str] = &[
     "updatedAt",
 ];
 
-fn take_field(fields: &mut Map<String, Value>, name: &str) -> AuthResult<Option<Option<String>>> {
-    fields
-        .remove(name)
-        .map(serde_json::from_value)
-        .transpose()
-        .map_err(Into::into)
+fn take_field(fields: &mut FieldMap, name: &str) -> AuthResult<Option<Option<String>>> {
+    fields.remove(name).map(|value| value.decode()).transpose()
 }
 
 fn prepare(
     config: &UserConfig,
-    fields: &mut Map<String, Value>,
+    fields: &mut FieldMap,
     username: &mut Option<Option<String>>,
     display_username: &mut Option<Option<String>>,
 ) -> AuthResult<()> {
@@ -49,7 +45,7 @@ impl CreateUser {
             if config.fields().contains_key(name)
                 && let Some(value) = self.additional_fields.remove(name)
             {
-                *target = crate::SchemaValue::from_json(Some(value));
+                *target = crate::SchemaValue::from_field(value);
             }
         }
         prepare(
@@ -61,7 +57,7 @@ impl CreateUser {
     }
 
     /// Assign parsed endpoint fields without performing another transform or validation.
-    pub fn assign_user_fields(&mut self, mut fields: Map<String, Value>) -> AuthResult<()> {
+    pub fn assign_user_fields(&mut self, mut fields: FieldMap) -> AuthResult<()> {
         if let Some(value) = take_field(&mut fields, "username")? {
             self.username = Some(value);
         }
@@ -69,17 +65,17 @@ impl CreateUser {
             self.display_username = Some(value);
         }
         if let Some(value) = fields.remove("name") {
-            self.name = crate::SchemaValue::from_json(Some(value));
+            self.name = crate::SchemaValue::from_field(value);
         }
         if let Some(value) = fields.remove("image") {
-            self.image = crate::SchemaValue::from_json(Some(value));
+            self.image = crate::SchemaValue::from_field(value);
         }
         self.additional_fields = fields;
         Ok(())
     }
 
     /// Move configured typed values into the shared adapter input before applying storage policies.
-    pub fn take_user_field_input(&mut self, config: &UserConfig) -> AuthResult<Map<String, Value>> {
+    pub fn take_user_field_input(&mut self, config: &UserConfig) -> AuthResult<FieldMap> {
         let mut fields = std::mem::take(&mut self.additional_fields);
         for (name, value) in [
             ("username", &mut self.username),
@@ -92,10 +88,8 @@ impl CreateUser {
             }
         }
         for (name, value) in [("name", &mut self.name), ("image", &mut self.image)] {
-            if config.fields().contains_key(name)
-                && let Some(raw) = std::mem::take(value).json()?
-            {
-                let _ = fields.insert(name.into(), raw);
+            if config.fields().contains_key(name) && !value.is_undefined() {
+                let _ = fields.insert(name.into(), std::mem::take(value).into_field_value());
             }
         }
         Ok(fields)
@@ -109,7 +103,7 @@ impl UpdateUser {
             if config.fields().contains_key(name)
                 && let Some(value) = self.additional_fields.remove(name)
             {
-                *target = crate::SchemaValue::from_json(Some(value));
+                *target = crate::SchemaValue::from_field(value);
             }
         }
         prepare(
@@ -121,7 +115,7 @@ impl UpdateUser {
     }
 
     /// Assign parsed fields while retaining explicit null updates.
-    pub fn assign_user_fields(&mut self, mut fields: Map<String, Value>) -> AuthResult<()> {
+    pub fn assign_user_fields(&mut self, mut fields: FieldMap) -> AuthResult<()> {
         if let Some(value) = take_field(&mut fields, "username")? {
             self.username = Some(value);
         }
@@ -129,17 +123,17 @@ impl UpdateUser {
             self.display_username = Some(value);
         }
         if let Some(value) = fields.remove("name") {
-            self.name = crate::SchemaValue::from_json(Some(value));
+            self.name = crate::SchemaValue::from_field(value);
         }
         if let Some(value) = fields.remove("image") {
-            self.image = crate::SchemaValue::from_json(Some(value));
+            self.image = crate::SchemaValue::from_field(value);
         }
         self.additional_fields = fields;
         Ok(())
     }
 
     /// Move the final hook-adjusted fields into the adapter input once.
-    pub fn take_user_field_input(&mut self, config: &UserConfig) -> AuthResult<Map<String, Value>> {
+    pub fn take_user_field_input(&mut self, config: &UserConfig) -> AuthResult<FieldMap> {
         let mut fields = std::mem::take(&mut self.additional_fields);
         for (name, value) in [
             ("username", &mut self.username),
@@ -152,10 +146,8 @@ impl UpdateUser {
             }
         }
         for (name, value) in [("name", &mut self.name), ("image", &mut self.image)] {
-            if config.fields().contains_key(name)
-                && let Some(raw) = std::mem::take(value).json()?
-            {
-                let _ = fields.insert(name.into(), raw);
+            if config.fields().contains_key(name) && !value.is_undefined() {
+                let _ = fields.insert(name.into(), std::mem::take(value).into_field_value());
             }
         }
         Ok(fields)
@@ -183,16 +175,16 @@ impl UserConfig {
     #[doc(hidden)]
     pub async fn create_user_storage_fields<I>(
         &self,
-        input: Map<String, Value>,
+        input: FieldMap,
         mut generate_id: impl FnMut() -> AuthResult<Option<I>>,
         bind: impl Fn(&str, &UserFieldConfig, Value) -> AuthResult<Value>,
-    ) -> AuthResult<(Map<String, Value>, Option<I>)> {
+    ) -> AuthResult<(FieldMap, Option<I>)> {
         let mut schema = self.user_adapter_fields();
         // Insertion preserves a configured ID position and appends an implicit ID.
         let _ = schema
             .fields_mut()
             .insert("id".into(), UserFieldConfig::default());
-        let mut output = Map::new();
+        let mut output = FieldMap::new();
         let mut id = None;
         for (name, field) in schema.fields() {
             if name == "id" {
@@ -209,7 +201,7 @@ impl UserConfig {
     /// Keep the storage entry so output transforms can observe the original stored value once.
     pub fn stored_username_field(
         &self,
-        fields: &Map<String, Value>,
+        fields: &FieldMap,
         name: &str,
     ) -> AuthResult<Option<Option<String>>> {
         let Some(config) = self.fields().get(name) else {
@@ -218,8 +210,7 @@ impl UserConfig {
         fields
             .get(resolve_field_name(config.field_name.as_deref(), name))
             .cloned()
-            .map(serde_json::from_value)
+            .map(|value| value.decode())
             .transpose()
-            .map_err(Into::into)
     }
 }

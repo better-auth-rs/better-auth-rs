@@ -178,13 +178,13 @@ impl OpenApiPluginMetadata {
     /// Add or replace declared fields. Physical table and column names do not change document names.
     /// Final registered adapter policies replace metadata for the same model field.
     /// This metadata supplies unregistered fields and models without changing runtime policies.
-    pub fn model(mut self, name: impl Into<String>, fields: &UserConfig) -> Self {
+    pub fn model(mut self, name: impl Into<String>, fields: &UserConfig) -> AuthResult<Self> {
         let name = name.into();
         let target = self.models.entry(name.clone()).or_default();
         for (key, config) in fields.fields() {
-            let _ = target.insert(key.clone(), project_field(key, config, name == "user"));
+            let _ = target.insert(key.clone(), project_field(key, config, name == "user")?);
         }
-        self
+        Ok(self)
     }
 
     pub fn remove_model(mut self, name: &str) -> Self {
@@ -222,19 +222,21 @@ pub(super) fn project_field(
     key: &str,
     field: &crate::user_fields::UserFieldConfig,
     user: bool,
-) -> Field {
-    Field {
+) -> AuthResult<Field> {
+    Ok(Field {
         key: key.to_owned(),
-        property: super::field_schema::component_property(field),
+        property: super::field_schema::component_property(field)?,
         required: field.required == Some(true) && field.returned(),
         condition: None,
-        input_property: (user && field.input()).then(|| super::field_schema::input_property(field)),
+        input_property: (user && field.input())
+            .then(|| super::field_schema::input_property(field))
+            .transpose()?,
         input_required: user
             && field.input()
             && field.required == Some(true)
             && field.default_value.is_none()
             && field.default_value_fn.is_none(),
-    }
+    })
 }
 
 pub(super) fn model_projection(fields: &ModelFields) -> (Map<String, Value>, Vec<String>) {

@@ -225,12 +225,12 @@ pub(crate) async fn create_user_core(
         .get("banReason")
         .and_then(serde_json::Value::as_str)
         .map(str::to_owned);
-    create_user.ban_expires = ban_expiry(&data)?;
-    create_user.image = better_auth_core::SchemaValue::from_json(data.get("image").cloned());
+    create_user.ban_expires = ban_expiry(&data)?.map(Into::into);
+    create_user.image = better_auth_core::SchemaValue::from_json(data.get("image").cloned())?;
     create_user.email_verified = data
         .get("emailVerified")
         .and_then(serde_json::Value::as_bool);
-    create_user.additional_fields = data;
+    create_user.additional_fields = better_auth_core::FieldMap::from_json(data)?;
 
     let mut input: serde_json::Map<String, serde_json::Value> = match req {
         Some(req) => req.body_as_json()?,
@@ -296,7 +296,7 @@ pub(crate) async fn update_user_core(
         ));
     }
     let mut update = UpdateUser {
-        additional_fields: body.data.clone(),
+        additional_fields: better_auth_core::FieldMap::from_json(body.data.clone())?,
         ..Default::default()
     };
 
@@ -339,7 +339,7 @@ pub(crate) async fn update_user_core(
             "You are not allowed to update users email",
         )?;
         if let Some(value) = body.data.get("email") {
-            let email = better_auth_core::SchemaValue::<String>::Dynamic(value.clone())
+            let email = better_auth_core::SchemaValue::<String>::from_json(Some(value.clone()))?
                 .display_string()?
                 .to_lowercase();
             if !crate::plugins::json_body::valid_email(&email)? {
@@ -360,8 +360,8 @@ pub(crate) async fn update_user_core(
         .get_user_by_id(&body.user_id)
         .await?
         .ok_or_else(|| AuthError::not_found(MESSAGE_USER_NOT_FOUND))?;
-    update.name = better_auth_core::SchemaValue::from_json(body.data.get("name").cloned());
-    update.image = better_auth_core::SchemaValue::from_json(body.data.get("image").cloned());
+    update.name = better_auth_core::SchemaValue::from_json(body.data.get("name").cloned())?;
+    update.image = better_auth_core::SchemaValue::from_json(body.data.get("image").cloned())?;
     if let Some(value) = body
         .data
         .get("emailVerified")
@@ -396,7 +396,7 @@ pub(crate) async fn update_user_core(
         );
     }
     if body.data.contains_key("banExpires") {
-        update.ban_expires = Some(ban_expiry(&body.data)?);
+        update.ban_expires = Some(ban_expiry(&body.data)?.map(Into::into));
     }
     if let Some(value) = body
         .data
@@ -515,7 +515,7 @@ pub(crate) async fn ban_user_core(
                 })
                 .unwrap_or_else(|| "No reason".to_string()),
         )),
-        ban_expires: Some(ban_expires),
+        ban_expires: Some(ban_expires.map(Into::into)),
         ..Default::default()
     };
 
@@ -588,7 +588,7 @@ pub(crate) async fn impersonate_user_core(
     if target.banned() {
         if target
             .ban_expires()
-            .is_some_and(|expires| expires <= Utc::now())
+            .is_some_and(|expires| expires.milliseconds() <= Utc::now().timestamp_millis() as f64)
         {
             target = ctx
                 .database
@@ -623,7 +623,7 @@ pub(crate) async fn impersonate_user_core(
     let create_session = CreateSession {
         additional_fields: Default::default(),
         user_id: target.id().into_owned(),
-        expires_at,
+        expires_at: expires_at.into(),
         ip_address: ip_address.map(|value| value.to_string()),
         user_agent: user_agent.map(|value| value.to_string()),
         impersonated_by: acting_user.id.as_str().map(str::to_owned),

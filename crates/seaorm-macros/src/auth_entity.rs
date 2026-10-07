@@ -237,9 +237,9 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
                 }
             }
             let value = if ident == "id" || identity::is_reference(role, field)? {
-                identity::decode(field, &core_root)
+                identity::decode(field, &core_root, &seaorm_root)
             } else {
-                quote!(#core_root::serde_json::from_value(value)?)
+                adapter_record::decode_field(field, &seaorm_root)
             };
             updates.push(quote! {
                 #(#aliases)|* => active.#ident = #seaorm_root::sea_orm::ActiveValue::Set(
@@ -288,7 +288,36 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
         TokenStream::new()
     };
 
-    match role {
+    let record_fields = (|| -> syn::Result<TokenStream> {
+        let rule = serde_serialized_name(&input.attrs, "rename_all")?
+            .map(|rule| {
+                serde_rename_rule::RenameRule::from_rename_all_str(&rule)
+                    .map_err(|error| syn::Error::new_spanned(input, error.to_string()))
+            })
+            .transpose()?;
+        let values = fields
+            .named
+            .iter()
+            .map(|field| {
+                let name = field.ident.as_ref().expect("named model field").to_string();
+                let name = serde_serialized_name(&field.attrs, "rename")?.unwrap_or_else(|| {
+                    rule.as_ref()
+                        .map_or_else(|| name.clone(), |rule| rule.apply_to_field(&name))
+                });
+                let value = adapter_record::field_value(field, &seaorm_root);
+                Ok(quote!((#name.to_owned(), #value)))
+            })
+            .collect::<syn::Result<Vec<_>>>()?;
+        Ok(quote! {
+            impl #core_root::entity::AuthRecordFields for #ident {
+                fn field_values(&self) -> #core_root::AuthResult<#core_root::FieldMap> {
+                    Ok(#core_root::FieldMap::from_iter([#(#values),*]))
+                }
+            }
+        })
+    })()
+    .unwrap_or_else(syn::Error::into_compile_error);
+    let implementation = match role {
         EntityRole::User => gen_user(
             (ident, fields),
             &aliases,
@@ -325,7 +354,8 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
         }
         role => gen_organization_model(input, fields, role, &seaorm_root, &core_root)
             .unwrap_or_else(|error| error.to_compile_error()),
-    }
+    };
+    quote!(#record_fields #implementation)
 }
 
 fn gen_user(
@@ -340,6 +370,20 @@ fn gen_user(
     let (ident, fields) = model;
     let id_type = identity::field_type(fields, "id")?;
     let id_view = identity::string_view(id_type, "id");
+    let decode_name =
+        adapter_record::decode_type(identity::field_type(fields, "name")?, seaorm_root);
+    let decode_image =
+        adapter_record::decode_type(identity::field_type(fields, "image")?, seaorm_root);
+    let decode_metadata = fields
+        .named
+        .iter()
+        .find(|field| {
+            field
+                .ident
+                .as_ref()
+                .is_some_and(|ident| ident == "metadata")
+        })
+        .map(|field| adapter_record::decode_field(field, seaorm_root));
     let optional_two_factor = fields.named.iter().any(|field| {
         field
             .ident
@@ -406,25 +450,28 @@ fn gen_user(
         quote! { fn ban_reason(&self) -> Option<&str> { None } }
     };
     let ban_expires_impl = if has("ban_expires") {
-        quote! { fn ban_expires(&self) -> Option<#seaorm_root::sea_orm::entity::prelude::DateTimeUtc> { self.ban_expires } }
+        quote! { fn ban_expires(&self) -> Option<#core_root::FieldDate> { self.ban_expires.map(Into::into) } }
     } else {
-        quote! { fn ban_expires(&self) -> Option<#seaorm_root::sea_orm::entity::prelude::DateTimeUtc> { None } }
-    };
-    let metadata_impl = if has("metadata") {
-        quote! { fn metadata(&self) -> &#seaorm_root::sea_orm::entity::prelude::Json { &self.metadata } }
-    } else {
-        quote! { fn metadata(&self) -> &#seaorm_root::sea_orm::entity::prelude::Json {
-            static EMPTY: ::std::sync::LazyLock<#seaorm_root::sea_orm::entity::prelude::Json> =
-                ::std::sync::LazyLock::new(|| #seaorm_root::sea_orm::entity::prelude::Json::Object(::std::default::Default::default()));
-            &EMPTY
-        } }
+        quote! { fn ban_expires(&self) -> Option<#core_root::FieldDate> { None } }
     };
 
     // new_active — plugin fields get Set(default) when present, omitted when absent
-    let plugin_new_active = plugin_set_fields_user(has, optional_two_factor, seaorm_root);
+    let plugin_new_active = plugin_set_fields_user(
+        has,
+        optional_two_factor,
+        decode_metadata.as_ref(),
+        seaorm_root,
+        core_root,
+    );
 
     // apply_update — only update fields that exist
-    let plugin_apply_update = plugin_update_fields_user(has, optional_two_factor, seaorm_root);
+    let plugin_apply_update = plugin_update_fields_user(
+        has,
+        optional_two_factor,
+        decode_metadata.as_ref(),
+        seaorm_root,
+        core_root,
+    );
 
     let username_column_impl = if has("username") {
         quote! { fn username_column() -> Option<Self::Column> { Some(Column::Username) } }
@@ -440,8 +487,8 @@ fn gen_user(
             fn id(&self) -> #core_root::SchemaValue<::std::borrow::Cow<'_, str>> { #core_root::SchemaValue::Typed(#id_view) }
             fn email(&self) -> Option<&str> { self.email.as_deref() }
             fn email_verified(&self) -> bool { self.email_verified }
-            fn created_at(&self) -> #seaorm_root::sea_orm::entity::prelude::DateTimeUtc { self.created_at }
-            fn updated_at(&self) -> #seaorm_root::sea_orm::entity::prelude::DateTimeUtc { self.updated_at }
+            fn created_at(&self) -> #core_root::FieldDate { self.created_at.into() }
+            fn updated_at(&self) -> #core_root::FieldDate { self.updated_at.into() }
             #(#identity_getters)*
             #phone_impl
             #username_impl
@@ -451,12 +498,11 @@ fn gen_user(
             #banned_impl
             #ban_reason_impl
             #ban_expires_impl
-            #metadata_impl
         }
 
         impl #seaorm_root::SeaOrmUserModel for #ident {
             #field_methods
-            fn apply_fields(active: &mut Self::ActiveModel, fields: #core_root::serde_json::Map<::std::string::String, #core_root::serde_json::Value>) -> #core_root::AuthResult<()> {
+            fn apply_fields(active: &mut Self::ActiveModel, fields: #core_root::FieldMap) -> #core_root::AuthResult<()> {
                 for (name, value) in fields {
                     match name.as_str() {
                         #(#extra_updates)*
@@ -488,12 +534,12 @@ fn gen_user(
                 Ok(Self::ActiveModel {
                     id: id.map_or(#seaorm_root::sea_orm::ActiveValue::NotSet, #seaorm_root::sea_orm::ActiveValue::Set),
                     email: #seaorm_root::sea_orm::ActiveValue::Set(create_user.email),
-                    name: match create_user.name.json()? {
-                        Some(value) => #seaorm_root::sea_orm::ActiveValue::Set(#core_root::serde_json::from_value(value)?),
+                    name: match Some(create_user.name.into_field_value()).filter(|value| !value.is_undefined()) {
+                        Some(value) => #seaorm_root::sea_orm::ActiveValue::Set(#decode_name),
                         None => #seaorm_root::sea_orm::ActiveValue::NotSet,
                     },
-                    image: match create_user.image.json()? {
-                        Some(value) => #seaorm_root::sea_orm::ActiveValue::Set(#core_root::serde_json::from_value(value)?),
+                    image: match Some(create_user.image.into_field_value()).filter(|value| !value.is_undefined()) {
+                        Some(value) => #seaorm_root::sea_orm::ActiveValue::Set(#decode_image),
                         None => #seaorm_root::sea_orm::ActiveValue::NotSet,
                     },
                     email_verified: #seaorm_root::sea_orm::ActiveValue::Set(create_user.email_verified.unwrap_or(false)),
@@ -509,11 +555,11 @@ fn gen_user(
                 update: #core_root::types::UpdateUser,
                 now: #seaorm_root::sea_orm::entity::prelude::DateTimeUtc,
             ) -> #core_root::AuthResult<()> {
-                if let Some(value) = update.name.json()? {
-                    active.name = #seaorm_root::sea_orm::ActiveValue::Set(#core_root::serde_json::from_value(value)?);
+                if let Some(value) = Some(update.name.into_field_value()).filter(|value| !value.is_undefined()) {
+                    active.name = #seaorm_root::sea_orm::ActiveValue::Set(#decode_name);
                 }
-                if let Some(value) = update.image.json()? {
-                    active.image = #seaorm_root::sea_orm::ActiveValue::Set(#core_root::serde_json::from_value(value)?);
+                if let Some(value) = Some(update.image.into_field_value()).filter(|value| !value.is_undefined()) {
+                    active.image = #seaorm_root::sea_orm::ActiveValue::Set(#decode_image);
                 }
                 if let ::std::option::Option::Some(email) = update.email {
                     active.email = #seaorm_root::sea_orm::ActiveValue::Set(::std::option::Option::Some(email));
@@ -533,7 +579,9 @@ fn gen_user(
 fn plugin_set_fields_user(
     has: &dyn Fn(&str) -> bool,
     optional_two_factor: bool,
+    decode_metadata: Option<&TokenStream>,
     seaorm_root: &TokenStream,
+    core_root: &TokenStream,
 ) -> Vec<TokenStream> {
     let mut out = Vec::new();
     for name in ["is_anonymous", "phone_number", "phone_number_verified"] {
@@ -572,10 +620,10 @@ fn plugin_set_fields_user(
         );
     }
     if has("ban_expires") {
-        out.push(quote! { ban_expires: #seaorm_root::sea_orm::ActiveValue::Set(create_user.ban_expires) });
+        out.push(quote! { ban_expires: #seaorm_root::sea_orm::ActiveValue::Set(create_user.ban_expires.map(|value| #seaorm_root::__private_field_decode(#core_root::FieldValue::Date(value))).transpose()?) });
     }
-    if has("metadata") {
-        out.push(quote! { metadata: #seaorm_root::sea_orm::ActiveValue::Set(create_user.metadata.unwrap_or(#seaorm_root::sea_orm::entity::prelude::Json::Object(::std::default::Default::default()))) });
+    if let Some(decode_metadata) = decode_metadata {
+        out.push(quote! { metadata: #seaorm_root::sea_orm::ActiveValue::Set({ let value = create_user.metadata.unwrap_or_else(|| #core_root::FieldValue::Object(::std::sync::Arc::new(Default::default()))); #decode_metadata }) });
     }
     out
 }
@@ -584,7 +632,9 @@ fn plugin_set_fields_user(
 fn plugin_update_fields_user(
     has: &dyn Fn(&str) -> bool,
     optional_two_factor: bool,
+    decode_metadata: Option<&TokenStream>,
     seaorm_root: &TokenStream,
+    core_root: &TokenStream,
 ) -> Vec<TokenStream> {
     let mut out = Vec::new();
     for name in ["is_anonymous", "phone_number_verified"] {
@@ -629,14 +679,14 @@ fn plugin_update_fields_user(
             }
         });
     }
-    if has("metadata") {
+    if let Some(decode_metadata) = decode_metadata {
         out.push(quote! {
-            if let ::std::option::Option::Some(metadata) = update.metadata {
-                active.metadata = #seaorm_root::sea_orm::ActiveValue::Set(metadata);
+            if let ::std::option::Option::Some(value) = update.metadata {
+                active.metadata = #seaorm_root::sea_orm::ActiveValue::Set(#decode_metadata);
             }
         });
     }
-    for name in ["banned", "ban_reason", "ban_expires"] {
+    for name in ["banned", "ban_reason"] {
         if has(name) {
             let field = format_ident!("{name}");
             out.push(quote! {
@@ -645,6 +695,9 @@ fn plugin_update_fields_user(
                 }
             });
         }
+    }
+    if has("ban_expires") {
+        out.push(quote! { if let Some(value) = update.ban_expires { active.ban_expires = #seaorm_root::sea_orm::ActiveValue::Set(value.map(|value| #seaorm_root::__private_field_decode(#core_root::FieldValue::Date(value))).transpose()?); } });
     }
     out
 }
@@ -666,7 +719,11 @@ fn gen_session(
     let updates = ["token", "expires_at", "created_at", "updated_at", "ip_address", "user_agent", "impersonated_by", "active_organization_id", "active_team_id"]
         .into_iter().filter(|name| has(name)).map(|name| {
             let field = format_ident!("{name}");
-            quote! { if let Some(value) = update.#field { active.#field = #seaorm_root::sea_orm::ActiveValue::Set(value); } }
+            if matches!(name, "expires_at" | "created_at" | "updated_at") {
+                quote! { if let Some(value) = update.#field { active.#field = #seaorm_root::sea_orm::ActiveValue::Set(#seaorm_root::__private_field_decode(#core_root::FieldValue::Date(value))?); } }
+            } else {
+                quote! { if let Some(value) = update.#field { active.#field = #seaorm_root::sea_orm::ActiveValue::Set(value); } }
+            }
         });
     let plugin_fields: Vec<_> = registry::plugin_field_names(EntityRole::Session)
         .into_iter()
@@ -757,10 +814,10 @@ fn gen_session(
             #aliases
             const PLUGIN_FIELDS: &'static [&'static str] = &[#(#plugin_fields),*];
             fn id(&self) -> #core_root::SchemaValue<::std::borrow::Cow<'_, str>> { #core_root::SchemaValue::Typed(#id_view) }
-            fn expires_at(&self) -> #seaorm_root::sea_orm::entity::prelude::DateTimeUtc { self.expires_at }
+            fn expires_at(&self) -> #core_root::FieldDate { self.expires_at.into() }
             fn token(&self) -> &str { &self.token }
-            fn created_at(&self) -> #seaorm_root::sea_orm::entity::prelude::DateTimeUtc { self.created_at }
-            fn updated_at(&self) -> #seaorm_root::sea_orm::entity::prelude::DateTimeUtc { self.updated_at }
+            fn created_at(&self) -> #core_root::FieldDate { self.created_at.into() }
+            fn updated_at(&self) -> #core_root::FieldDate { self.updated_at.into() }
             fn ip_address(&self) -> Option<&str> { self.ip_address.as_deref() }
             fn user_agent(&self) -> Option<&str> { self.user_agent.as_deref() }
             fn user_id(&self) -> #core_root::SchemaValue<::std::borrow::Cow<'_, str>> { #core_root::SchemaValue::Typed(#user_id_view) }
@@ -786,7 +843,7 @@ fn gen_session(
 
             fn apply_fields(
                 active: &mut Self::ActiveModel,
-                fields: #core_root::serde_json::Map<::std::string::String, #core_root::serde_json::Value>,
+                fields: #core_root::FieldMap,
             ) -> #core_root::AuthResult<()> {
                 for (name, value) in fields {
                     match name.as_str() {
@@ -817,12 +874,12 @@ fn gen_session(
                 token: ::std::string::String,
                 create_session: #core_root::types::CreateSession,
                 now: #seaorm_root::sea_orm::entity::prelude::DateTimeUtc,
-            ) -> Self::ActiveModel {
-                Self::ActiveModel {
+            ) -> #core_root::AuthResult<Self::ActiveModel> {
+                Ok(Self::ActiveModel {
                     id: id.map_or(#seaorm_root::sea_orm::ActiveValue::NotSet, #seaorm_root::sea_orm::ActiveValue::Set),
                     user_id: match create_session.user_id { #core_root::SchemaValue::Typed(id) => #seaorm_root::sea_orm::ActiveValue::Set(Self::parse_user_id(&id).expect("the store validates session user IDs before constructing a model")), _ => #seaorm_root::sea_orm::ActiveValue::NotSet },
                     token: #seaorm_root::sea_orm::ActiveValue::Set(token),
-                    expires_at: #seaorm_root::sea_orm::ActiveValue::Set(create_session.expires_at),
+                    expires_at: #seaorm_root::sea_orm::ActiveValue::NotSet,
                     created_at: #seaorm_root::sea_orm::ActiveValue::Set(now),
                     updated_at: #seaorm_root::sea_orm::ActiveValue::Set(now),
                     ip_address: #seaorm_root::sea_orm::ActiveValue::Set(create_session.ip_address),
@@ -830,7 +887,7 @@ fn gen_session(
                     #active_insert
                     #(#plugin_new_active,)*
                     #(#extras,)*
-                }
+                })
             }
 
             fn set_expires_at(

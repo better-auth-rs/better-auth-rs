@@ -7,7 +7,6 @@ use crate::types::{
 };
 use crate::{AuthConfig, AuthResult, AuthSchema};
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
 
 /// Partial session values supplied to update hooks.
 #[derive(Clone, Default)]
@@ -19,11 +18,11 @@ pub struct SessionUpdate {
     /// Replacement owner ID.
     pub user_id: Option<String>,
     /// Replacement expiration time.
-    pub expires_at: Option<DateTime<Utc>>,
+    pub expires_at: Option<crate::FieldDate>,
     /// Replacement creation time.
-    pub created_at: Option<DateTime<Utc>>,
+    pub created_at: Option<crate::FieldDate>,
     /// Replacement modification time.
-    pub updated_at: Option<DateTime<Utc>>,
+    pub updated_at: Option<crate::FieldDate>,
     /// Set or clear the client IP address.
     pub ip_address: Option<Option<String>>,
     /// Set or clear the user agent.
@@ -35,7 +34,7 @@ pub struct SessionUpdate {
     /// Set or clear the active team.
     pub active_team_id: Option<Option<String>>,
     /// Application fields keyed by their public names.
-    pub additional_fields: serde_json::Map<String, serde_json::Value>,
+    pub additional_fields: crate::FieldMap,
 }
 
 pub use crate::types_account::VerificationUpdate;
@@ -328,12 +327,12 @@ pub trait DatabaseHooks<S: AuthSchema>: Send + Sync {
 
 impl SessionUpdate {
     /// Serialize supplied fields using public names, preserving explicit null values.
-    pub fn into_public_fields(self) -> AuthResult<serde_json::Map<String, serde_json::Value>> {
+    pub fn into_public_fields(self) -> AuthResult<crate::FieldMap> {
         let mut fields = self.additional_fields;
         macro_rules! supplied {
             ($($field:ident => $name:literal),* $(,)?) => {$(
                 if let Some(value) = self.$field {
-                    let _ = fields.insert($name.into(), serde_json::to_value(value)?);
+                    let _ = fields.insert($name.into(), crate::SchemaField::into_field(value));
                 }
             )*};
         }

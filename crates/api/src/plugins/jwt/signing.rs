@@ -68,41 +68,62 @@ impl JwtPlugin {
         if let Some(callback) = &self.config.custom_sign {
             return callback(payload, options.clone()).await;
         }
-        let selected = if let Some(id) = &options.key_id {
-            let key = self
-                .read_key(id, endpoint)
-                .await?
-                .ok_or_else(|| AuthError::config("Requested JWT signing key does not exist"))?;
-            if key.expires_at.is_some_and(|expiry| expiry < Utc::now())
-                || options.algorithm.is_some_and(|alg| {
+        let selected =
+            if let Some(id) = &options.key_id {
+                let key = self
+                    .read_key(id, endpoint)
+                    .await?
+                    .ok_or_else(|| AuthError::config("Requested JWT signing key does not exist"))?;
+                if key.expires_at.as_ref().is_some_and(|expiry| {
+                    expiry.milliseconds() < Utc::now().timestamp_millis() as f64
+                }) || options.algorithm.is_some_and(|alg| {
                     key.alg.as_deref().unwrap_or(self.config.algorithm.name()) != alg.name()
-                })
-            {
-                return Err(AuthError::config(
-                    "Requested JWT signing key is expired or has a different algorithm",
-                ));
-            }
-            Some(key)
-        } else {
-            let mut keys = self.read_keys(endpoint).await?.unwrap_or_default();
-            keys.sort_by_key(|key| std::cmp::Reverse(key.created_at));
-            keys.retain(|key| key.expires_at.is_none_or(|expiry| expiry > Utc::now()));
-            let preferred = keys
-                .iter()
-                .find(|key| {
-                    key.alg.as_deref().unwrap_or(self.config.algorithm.name())
-                        == options.algorithm.unwrap_or(self.config.algorithm).name()
-                })
-                .cloned();
-            if preferred.is_some() || options.algorithm.is_some() {
-                preferred
+                }) {
+                    return Err(AuthError::config(
+                        "Requested JWT signing key is expired or has a different algorithm",
+                    ));
+                }
+                Some(key)
             } else {
-                let mut fallback = self.read_keys(endpoint).await?.unwrap_or_default();
-                fallback.retain(|key| key.expires_at.is_none_or(|expiry| expiry > Utc::now()));
-                fallback.sort_by_key(|key| std::cmp::Reverse(key.created_at));
-                fallback.into_iter().next()
-            }
-        };
+                let mut keys = self.read_keys(endpoint).await?.unwrap_or_default();
+                keys.sort_by(|left, right| {
+                    right
+                        .created_at
+                        .milliseconds()
+                        .partial_cmp(&left.created_at.milliseconds())
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                });
+                keys.retain(|key| {
+                    key.expires_at.as_ref().is_none_or(|expiry| {
+                        expiry.milliseconds() > Utc::now().timestamp_millis() as f64
+                    })
+                });
+                let preferred = keys
+                    .iter()
+                    .find(|key| {
+                        key.alg.as_deref().unwrap_or(self.config.algorithm.name())
+                            == options.algorithm.unwrap_or(self.config.algorithm).name()
+                    })
+                    .cloned();
+                if preferred.is_some() || options.algorithm.is_some() {
+                    preferred
+                } else {
+                    let mut fallback = self.read_keys(endpoint).await?.unwrap_or_default();
+                    fallback.retain(|key| {
+                        key.expires_at.as_ref().is_none_or(|expiry| {
+                            expiry.milliseconds() > Utc::now().timestamp_millis() as f64
+                        })
+                    });
+                    fallback.sort_by(|left, right| {
+                        right
+                            .created_at
+                            .milliseconds()
+                            .partial_cmp(&left.created_at.milliseconds())
+                            .unwrap_or(std::cmp::Ordering::Equal)
+                    });
+                    fallback.into_iter().next()
+                }
+            };
         let key = match selected {
             Some(key) => key,
             None => {
@@ -127,7 +148,10 @@ impl JwtPlugin {
             }
         };
         if (options.key_id.is_some() || options.algorithm.is_some())
-            && key.expires_at.is_some_and(|expiry| expiry < Utc::now())
+            && key
+                .expires_at
+                .as_ref()
+                .is_some_and(|expiry| expiry.milliseconds() < Utc::now().timestamp_millis() as f64)
         {
             return Err(AuthError::config("Requested JWT signing key is expired"));
         }

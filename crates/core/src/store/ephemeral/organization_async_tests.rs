@@ -5,7 +5,6 @@ use crate::{
     store::TeamStore,
     user_fields::{FieldTransforms, UserFieldConfig, UserFieldTransform, UserFieldType},
 };
-use serde_json::json;
 use tokio::sync::{Barrier, Notify};
 
 #[tokio::test]
@@ -68,16 +67,22 @@ async fn async_team_update_applies_patch_to_latest_row_without_holding_state_loc
         .update_team(
             team.id.typed()?,
             UpdateTeam {
-                created_at: Some(created_at),
+                created_at: Some(created_at.into()),
                 ..Default::default()
             },
         )
         .await?;
-    assert_eq!(*changed.created_at.typed()?, created_at);
+    assert_eq!(
+        changed.created_at.typed()?,
+        &crate::FieldDate::from(created_at)
+    );
     release.notify_one();
     let updated = pending.await.unwrap()?;
     assert_eq!(updated.name, "after");
-    assert_eq!(*updated.created_at.typed()?, created_at);
+    assert_eq!(
+        updated.created_at.typed()?,
+        &crate::FieldDate::from(created_at)
+    );
     assert_eq!(store.get_team(team.id.typed()?).await?.unwrap(), updated);
     Ok(())
 }
@@ -143,7 +148,7 @@ async fn async_competing_reservations_keep_the_last_seat_atomic() -> AuthResult<
                 .get(&team.id)?
                 .unwrap()
                 .additional_fields["memberCount"],
-            json!(1.0)
+            Value::from(1.0)
         );
     }
     Ok(())
@@ -198,7 +203,7 @@ async fn canceled_reservation_has_no_seat_or_member_write() -> AuthResult<()> {
             .get(&team.id)?
             .unwrap()
             .additional_fields["memberCount"],
-        0
+        Value::from(0)
     );
     Ok(())
 }
@@ -231,7 +236,7 @@ async fn reservation_callback_can_update_an_unrelated_team_field() -> AuthResult
                                 .update_team(
                                     &id,
                                     UpdateTeam {
-                                        created_at: Some(date),
+                                        created_at: Some(date.into()),
                                         ..Default::default()
                                     },
                                 )
@@ -253,8 +258,8 @@ async fn reservation_callback_can_update_an_unrelated_team_field() -> AuthResult
             .is_some()
     );
     let row = store.lock()?.teams.get(&team.id)?.unwrap();
-    assert_eq!(*row.created_at.typed()?, date);
-    assert_eq!(row.additional_fields["memberCount"], json!(1.0));
+    assert_eq!(row.created_at.typed()?, &crate::FieldDate::from(date));
+    assert_eq!(row.additional_fields["memberCount"], Value::from(1.0));
     store.configure_organization_fields(Default::default())?;
     Ok(())
 }
@@ -289,7 +294,9 @@ async fn full_team_keeps_the_prepared_counter_repair() -> AuthResult<()> {
         .update_team(
             team.id.typed()?,
             UpdateTeam {
-                additional_fields: [("memberCount".into(), json!(0))].into_iter().collect(),
+                additional_fields: [("memberCount".into(), Value::from(0))]
+                    .into_iter()
+                    .collect(),
                 ..Default::default()
             },
         )
@@ -301,7 +308,7 @@ async fn full_team_keeps_the_prepared_counter_repair() -> AuthResult<()> {
             .get(&team.id)?
             .unwrap()
             .additional_fields["memberCount"],
-        0
+        Value::from(0)
     );
     assert!(
         store
@@ -317,7 +324,7 @@ async fn full_team_keeps_the_prepared_counter_repair() -> AuthResult<()> {
             .get(&team.id)?
             .unwrap()
             .additional_fields["memberCount"],
-        json!(1)
+        Value::from(1)
     );
     Ok(())
 }
@@ -345,7 +352,7 @@ async fn invitation_member_output_failure_compensates_without_member_seat_or_ses
     let session = store
         .create_session(CreateSession {
             user_id: "member".into(),
-            expires_at: Utc::now() + chrono::Duration::days(1),
+            expires_at: (Utc::now() + chrono::Duration::days(1)).into(),
             additional_fields: Default::default(),
             ip_address: None,
             user_agent: None,
@@ -403,7 +410,7 @@ async fn invitation_member_output_failure_compensates_without_member_seat_or_ses
     );
     assert_eq!(
         *events.lock().unwrap(),
-        vec![Some(json!("accepted")), Some(json!("pending"))]
+        vec![Value::from("accepted"), Value::from("pending")]
     );
     let state = store.lock()?;
     assert!(state.invitations.get(&invitation.id)?.unwrap().is_pending());
@@ -411,7 +418,7 @@ async fn invitation_member_output_failure_compensates_without_member_seat_or_ses
     assert_eq!(state.team_members.len(), 0);
     assert_eq!(
         state.teams.get(&team.id)?.unwrap().additional_fields["memberCount"],
-        0
+        Value::from(0)
     );
     assert_eq!(
         state
@@ -482,13 +489,13 @@ async fn async_team_input_failure_has_no_write_and_output_failure_keeps_write() 
         UserFieldConfig {
             transform: Some(FieldTransforms {
                 input: Some(UserFieldTransform::new_async(|value| async move {
-                    if value == Some(json!("input-error")) {
+                    if value == Value::from("input-error") {
                         return Err(AuthError::bad_request("input rejected"));
                     }
                     Ok(value)
                 })),
                 output: Some(UserFieldTransform::new_async(|value| async move {
-                    if value == Some(json!("output-error")) {
+                    if value == Value::from("output-error") {
                         return Err(AuthError::bad_request("output rejected"));
                     }
                     Ok(value)

@@ -19,8 +19,13 @@ pub(super) fn default_expiration(
         )),
         Some(issued) => {
             // Upstream adds the relative lifetime before JOSE parses the resulting NumericDate.
-            let issued = SchemaValue::<Value>::Dynamic(issued.clone()).display_string()?;
-            let seconds = SchemaValue::<Value>::Dynamic(expiration.claim(0.0)).display_string()?;
+            let issued =
+                SchemaValue::<better_auth_core::FieldValue>::from_json(Some(issued.clone()))?
+                    .display_string()?;
+            let seconds = SchemaValue::<better_auth_core::FieldValue>::from_json(Some(
+                expiration.claim(0.0),
+            ))?
+            .display_string()?;
             Ok(format!("{issued}{seconds}").into())
         }
     }

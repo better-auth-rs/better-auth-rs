@@ -1,20 +1,14 @@
 mod fields;
 
 use async_trait::async_trait;
-use chrono::{DateTime, SecondsFormat, Utc};
+use chrono::Utc;
 
 use super::{EphemeralStore, rows::RowRef};
 use crate::store::{ApiKeyStore, ApiKeyUsageWrite};
-use crate::{ApiKey, AuthError, AuthResult, CreateApiKey, UpdateApiKey};
+use crate::{ApiKey, AuthError, AuthResult, CreateApiKey, FieldDate, UpdateApiKey};
 
-fn now() -> String {
-    Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true)
-}
-
-fn timestamp(value: &str) -> AuthResult<i64> {
-    DateTime::parse_from_rfc3339(value)
-        .map(|value| value.timestamp_millis())
-        .map_err(|error| AuthError::internal(format!("Invalid stored API key timestamp: {error}")))
+fn now() -> FieldDate {
+    Utc::now().into()
 }
 
 #[async_trait]
@@ -24,7 +18,7 @@ impl ApiKeyStore for EphemeralStore {
         let fields = self
             .model_fields
             .api_key_fields_for_storage(
-                Some(input.name),
+                Some(input.name.into()),
                 input.additional_fields,
                 true,
                 |field, value| self.memory_plugin_field_input(field, value),
@@ -36,7 +30,7 @@ impl ApiKeyStore for EphemeralStore {
                 .generated_id("apikey", None, self.lock()?.api_keys.len())?
                 .map(crate::SchemaValue::Typed)
                 .unwrap_or_default(),
-            name: fields.name.map(Into::into).unwrap_or_default(),
+            name: fields.name.unwrap_or_default(),
             start: input.start,
             prefix: input.prefix,
             key_hash: input.key_hash,
@@ -76,7 +70,8 @@ impl ApiKeyStore for EphemeralStore {
         &self,
         id: &crate::SchemaValue<String>,
     ) -> AuthResult<Option<ApiKey>> {
-        self.find_api_key(|row| &row.id == id).await
+        self.find_api_key(|row| row.id.field_value().strict_equals(&id.field_value()))
+            .await
     }
 
     async fn get_api_key_by_hash(&self, hash: &str) -> AuthResult<Option<ApiKey>> {
@@ -171,7 +166,7 @@ impl ApiKeyStore for EphemeralStore {
         let fields = self
             .model_fields
             .api_key_fields_for_storage(
-                update.name.take().map(Some),
+                update.name.take(),
                 std::mem::take(&mut update.additional_fields),
                 false,
                 |field, value| self.memory_plugin_field_input(field, value),
@@ -179,7 +174,10 @@ impl ApiKeyStore for EphemeralStore {
             .await?;
         let row = self
             .raw("apikey", "update", |state| {
-                let Some(source) = state.api_keys.first_ref(|key| &key.id == id)? else {
+                let Some(source) = state
+                    .api_keys
+                    .first_ref(|key| key.id.field_value().strict_equals(&id.field_value()))?
+                else {
                     return Ok(None);
                 };
                 let snapshot = source.write(|key| {
@@ -243,7 +241,10 @@ impl ApiKeyStore for EphemeralStore {
         };
         let row = self
             .raw("apikey", write.operation(), |state| {
-                let Some(source) = state.api_keys.first_ref(|key| &key.id == id)? else {
+                let Some(source) = state
+                    .api_keys
+                    .first_ref(|key| key.id.field_value().strict_equals(&id.field_value()))?
+                else {
                     return Ok(None);
                 };
                 let snapshot = source.write(|key| {
@@ -253,14 +254,12 @@ impl ApiKeyStore for EphemeralStore {
                             remaining,
                             at,
                         } => {
-                            let actual =
-                                key.last_refill_at.as_deref().map(timestamp).transpose()?;
-                            if actual != previous.map(|date| date.timestamp_millis()) {
+                            let actual = key.last_refill_at.as_ref().map(FieldDate::milliseconds);
+                            if actual != previous.map(|date| date.timestamp_millis() as f64) {
                                 return Ok(None);
                             }
                             key.remaining = Some(remaining);
-                            key.last_refill_at =
-                                Some(at.to_rfc3339_opts(SecondsFormat::Millis, true));
+                            key.last_refill_at = Some(at.into());
                         }
                         ApiKeyUsageWrite::Decrement => {
                             let Some(remaining) =
@@ -274,41 +273,39 @@ impl ApiKeyStore for EphemeralStore {
                             previous_before,
                             at,
                         } => {
-                            let actual = key.last_request.as_deref().map(timestamp).transpose()?;
+                            let actual = key.last_request.as_ref().map(FieldDate::milliseconds);
                             let matches = match previous_before {
                                 None => actual.is_none(),
-                                Some(previous) => actual
-                                    .is_some_and(|actual| actual <= previous.timestamp_millis()),
+                                Some(previous) => actual.is_some_and(|actual| {
+                                    actual <= previous.timestamp_millis() as f64
+                                }),
                             };
                             if !matches {
                                 return Ok(None);
                             }
                             key.request_count = Some(1.0);
-                            key.last_request =
-                                Some(at.to_rfc3339_opts(SecondsFormat::Millis, true));
+                            key.last_request = Some(at.into());
                         }
                         ApiKeyUsageWrite::IncrementWindow {
                             previous_after,
                             maximum,
                             at,
                         } => {
-                            let actual = key.last_request.as_deref().map(timestamp).transpose()?;
-                            if actual
-                                .is_none_or(|actual| actual <= previous_after.timestamp_millis())
-                                || key.request_count.unwrap_or(0.0) >= maximum
+                            let actual = key.last_request.as_ref().map(FieldDate::milliseconds);
+                            if !actual.is_some_and(|actual| {
+                                actual > previous_after.timestamp_millis() as f64
+                            }) || key.request_count.unwrap_or(0.0) >= maximum
                             {
                                 return Ok(None);
                             }
                             key.request_count = Some(key.request_count.unwrap_or(0.0) + 1.0);
-                            key.last_request =
-                                Some(at.to_rfc3339_opts(SecondsFormat::Millis, true));
+                            key.last_request = Some(at.into());
                         }
                         ApiKeyUsageWrite::LastRequest(at) => {
-                            key.last_request =
-                                Some(at.to_rfc3339_opts(SecondsFormat::Millis, true));
+                            key.last_request = Some(at.into());
                         }
                         ApiKeyUsageWrite::UpdatedAt(at) => {
-                            key.updated_at = at.to_rfc3339_opts(SecondsFormat::Millis, true);
+                            key.updated_at = at.into();
                         }
                     }
                     fields.apply(key);
@@ -333,11 +330,11 @@ impl ApiKeyStore for EphemeralStore {
 
     async fn delete_expired_api_keys(&self) -> AuthResult<usize> {
         self.raw("apikey", "deleteMany", |state| {
-            let current = Utc::now().timestamp_millis();
+            let current = Utc::now().timestamp_millis() as f64;
             let mut expired = Vec::new();
             for key in state.api_keys.snapshot()?.iter() {
-                if let Some(expires) = key.expires_at.as_deref()
-                    && timestamp(expires)? < current
+                if let Some(expires) = key.expires_at.as_ref()
+                    && expires.milliseconds() < current
                 {
                     expired.push(key.id.clone());
                 }
@@ -400,7 +397,10 @@ mod tests {
         };
         assert_eq!(allowed.remaining, Some(2.0));
         assert_eq!(allowed.request_count, Some(1.0));
-        let unchanged = "2000-01-01T00:00:00.000Z";
+        let unchanged: FieldDate = chrono::DateTime::parse_from_rfc3339("2000-01-01T00:00:00.000Z")
+            .unwrap()
+            .with_timezone(&Utc)
+            .into();
         store
             .lock()
             .unwrap()
@@ -408,7 +408,7 @@ mod tests {
             .get_mut(&key.id)
             .unwrap()
             .unwrap()
-            .updated_at = unchanged.into();
+            .updated_at = unchanged.clone();
         for remaining in [1.0, 0.0] {
             assert!(matches!(
                 consume(&store, &key.id, true).await.unwrap(),
@@ -453,7 +453,12 @@ mod tests {
             .update_api_key(
                 &key.id,
                 UpdateApiKey {
-                    last_refill_at: Some(Some("2000-01-01T00:00:00.000Z".into())),
+                    last_refill_at: Some(Some(
+                        chrono::DateTime::parse_from_rfc3339("2000-01-01T00:00:00.000Z")
+                            .unwrap()
+                            .with_timezone(&Utc)
+                            .into(),
+                    )),
                     ..Default::default()
                 },
             )
@@ -486,6 +491,45 @@ mod tests {
             .unwrap();
         assert_eq!(stored.remaining, Some(-0.5));
     }
+
+    #[tokio::test]
+    async fn invalid_last_request_does_not_match_an_active_rate_window() {
+        let store = EphemeralStore::default();
+        let key = store.create_api_key(input()).await.unwrap();
+        let invalid = FieldDate::invalid();
+        store
+            .update_api_key(
+                &key.id,
+                UpdateApiKey {
+                    last_request: Some(Some(invalid.clone())),
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+        let at = Utc::now();
+        assert!(
+            store
+                .write_api_key_usage(
+                    &key.id,
+                    ApiKeyUsageWrite::IncrementWindow {
+                        previous_after: at - chrono::Duration::minutes(1),
+                        maximum: 1.0,
+                        at,
+                    },
+                )
+                .await
+                .unwrap()
+                .is_none()
+        );
+        let stored = store
+            .get_api_key_by_id_value(&key.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(stored.request_count, Some(0.0));
+        assert!(stored.last_request.unwrap().same_object(&invalid));
+    }
 }
 
 fn comparator(field: &str) -> AuthResult<fn(&ApiKey, &ApiKey) -> std::cmp::Ordering> {
@@ -500,11 +544,13 @@ fn comparator(field: &str) -> AuthResult<fn(&ApiKey, &ApiKey) -> std::cmp::Order
         "configId" => |a, b| a.config_id.cmp(&b.config_id),
         "enabled" => |a, b| a.enabled.cmp(&b.enabled),
         "rateLimitEnabled" => |a, b| a.rate_limit_enabled.cmp(&b.rate_limit_enabled),
-        "createdAt" => |a, b| a.created_at.cmp(&b.created_at),
-        "updatedAt" => |a, b| a.updated_at.cmp(&b.updated_at),
-        "expiresAt" => |a, b| a.expires_at.cmp(&b.expires_at),
-        "lastRequest" => |a, b| a.last_request.cmp(&b.last_request),
-        "lastRefillAt" => |a, b| a.last_refill_at.cmp(&b.last_refill_at),
+        "createdAt" => |a, b| compare_dates(Some(&a.created_at), Some(&b.created_at)),
+        "updatedAt" => |a, b| compare_dates(Some(&a.updated_at), Some(&b.updated_at)),
+        "expiresAt" => |a, b| compare_dates(a.expires_at.as_ref(), b.expires_at.as_ref()),
+        "lastRequest" => |a, b| compare_dates(a.last_request.as_ref(), b.last_request.as_ref()),
+        "lastRefillAt" => {
+            |a, b| compare_dates(a.last_refill_at.as_ref(), b.last_refill_at.as_ref())
+        }
         "permissions" => |a, b| a.permissions.cmp(&b.permissions),
         "metadata" => |a, b| a.metadata.cmp(&b.metadata),
         "key" => |a, b| a.key_hash.cmp(&b.key_hash),
@@ -531,4 +577,10 @@ fn compare_numbers(left: Option<f64>, right: Option<f64>) -> std::cmp::Ordering 
         (None, Some(_)) => std::cmp::Ordering::Less,
         (Some(_), None) => std::cmp::Ordering::Greater,
     }
+}
+
+fn compare_dates(left: Option<&FieldDate>, right: Option<&FieldDate>) -> std::cmp::Ordering {
+    left.map_or(0.0, FieldDate::milliseconds)
+        .partial_cmp(&right.map_or(0.0, FieldDate::milliseconds))
+        .unwrap_or(std::cmp::Ordering::Equal)
 }

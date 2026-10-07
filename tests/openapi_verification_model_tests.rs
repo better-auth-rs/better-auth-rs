@@ -42,7 +42,7 @@ impl<S: AuthSchema> AuthPlugin<S> for VerificationDisplay {
     fn openapi(&self) -> AuthResult<OpenApiPluginMetadata> {
         Ok(
             OpenApiPluginMetadata::from_routes("ordinary-verification-display", Vec::new())?
-                .model("verification", &plugin_fields()),
+                .model("verification", &plugin_fields())?,
         )
     }
 

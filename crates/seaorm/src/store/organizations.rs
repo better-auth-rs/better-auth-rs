@@ -10,11 +10,9 @@ use async_trait::async_trait;
 use better_auth_core::{
     AuthError, AuthResult, organization_fields::OrganizationFields, store::OrganizationStore,
 };
+use better_auth_core::{FieldValue, SchemaField};
 use chrono::Utc;
-use sea_orm::{
-    ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QuerySelect, TransactionTrait,
-};
-use serde_json::json;
+use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect, TransactionTrait};
 
 impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema>
     SeaOrmStore<S, O, P>
@@ -59,15 +57,12 @@ where
                 Some(record.id.typed()?.clone())
             },
             values([
-                ("name", serde_json::to_value(record.name)?),
-                ("slug", serde_json::to_value(record.slug)?),
-                ("logo", serde_json::to_value(record.logo)?),
-                (
-                    "metadata",
-                    record.metadata.json()?.unwrap_or(serde_json::Value::Null),
-                ),
-                ("created_at", serde_json::to_value(record.created_at)?),
-                ("auth_updated_at", json!(Utc::now())),
+                ("name", record.name.into_field_value()),
+                ("slug", record.slug.into_field_value()),
+                ("logo", record.logo.into_field_value()),
+                ("metadata", record.metadata.into_field_value()),
+                ("created_at", record.created_at.into_field_value()),
+                ("auth_updated_at", FieldValue::Date((Utc::now()).into())),
             ]),
         )?;
         models::active::<O::Organization>(
@@ -80,8 +75,7 @@ where
         )
         .await?
         .insert(self.connection())
-        .await
-        .map_err(map_db_err)?
+        .await?
         .record(
             &config,
             self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
@@ -126,29 +120,36 @@ where
         let mut core = self.create_fields(
             "organization",
             org.id,
-            values([("created_at", json!(now)), ("auth_updated_at", json!(now))]),
+            values([
+                ("created_at", FieldValue::Date((now).into())),
+                ("auth_updated_at", FieldValue::Date((now).into())),
+            ]),
         )?;
         for (name, value) in [
-            ("name", org.name.json()?),
-            ("slug", org.slug.json()?),
-            ("logo", org.logo.json()?),
+            (
+                "name",
+                Some(org.name.field_value()).filter(|value| !value.is_undefined()),
+            ),
+            (
+                "slug",
+                Some(org.slug.field_value()).filter(|value| !value.is_undefined()),
+            ),
+            (
+                "logo",
+                Some(org.logo.field_value()).filter(|value| !value.is_undefined()),
+            ),
         ] {
             if let Some(value) = value {
                 let _ = core.insert(name.into(), value);
             }
         }
-        let native_metadata = !config.fields().contains_key("metadata")
-            && matches!(
-                O::Organization::column("metadata")?.def().get_column_type(),
-                sea_orm::ColumnType::Json | sea_orm::ColumnType::JsonBinary
-            );
-        if !native_metadata
-            && let Some(value) =
-                better_auth_core::organization_fields::metadata_input(org.metadata.json()?, true)
-        {
+        if let Some(value) = better_auth_core::organization_fields::metadata_input(
+            Some(org.metadata.field_value()).filter(|value| !value.is_undefined()),
+            true,
+        )? {
             let _ = core.insert("metadata".into(), value);
         }
-        let mut active = models::active::<O::Organization>(
+        let active = models::active::<O::Organization>(
             core,
             org.additional_fields,
             &config,
@@ -157,23 +158,9 @@ where
             self.config().advanced.database.generate_id(),
         )
         .await?;
-        // Native JSON retains SQL NULL separately from a stored JSON null value.
-        let metadata = match org.metadata {
-            better_auth_core::SchemaValue::Typed(value) => value,
-            better_auth_core::SchemaValue::Dynamic(value) => Some(value),
-            better_auth_core::SchemaValue::Undefined => None,
-            better_auth_core::SchemaValue::InvalidDate => Some(serde_json::Value::Null),
-        };
-        if native_metadata {
-            active.set(
-                O::Organization::column("metadata")?,
-                sea_orm::Value::Json(metadata.map(Box::new)),
-            );
-        }
         active
             .insert(self.connection())
-            .await
-            .map_err(map_db_err)?
+            .await?
             .record(
                 &config,
                 self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
@@ -203,23 +190,25 @@ where
 
     async fn get_organization_by_id_value(
         &self,
-        id: &serde_json::Value,
+        id: &FieldValue,
     ) -> AuthResult<Option<Organization>> {
         self.get_organization_by_id_value_with_connection(self.connection(), id)
             .await
     }
 
     async fn get_organization_by_slug(&self, slug: &str) -> AuthResult<Option<Organization>> {
-        self.get_organization_by_slug_value(&json!(slug)).await
+        self.get_organization_by_slug_value(&(slug).to_owned().into_field())
+            .await
     }
 
     async fn get_organization_by_slug_value(
         &self,
-        slug: &serde_json::Value,
+        slug: &FieldValue,
     ) -> AuthResult<Option<Organization>> {
         let config = self.organization_fields()?.organization;
         let column = O::Organization::column("slug")?;
-        let filter = super::value_filter::equals(column, slug);
+        let filter =
+            super::value_filter::equals(column, slug, self.connection().get_database_backend())?;
         let row = Entity::<O::Organization>::find()
             .filter(filter)
             .one(self.connection())
@@ -260,32 +249,27 @@ where
         update: UpdateOrganization,
     ) -> AuthResult<Organization> {
         let config = self.organization_fields()?.organization;
-        let mut core = values([("auth_updated_at", json!(Utc::now()))]);
+        let mut core = values([("auth_updated_at", FieldValue::Date((Utc::now()).into()))]);
         for (name, value) in [
-            ("id", update.id.as_ref().map(|v| json!(v))),
-            ("name", update.name.map(|v| json!(v))),
-            ("slug", update.slug.map(|v| json!(v))),
-            ("logo", update.logo.map(|v| json!(v))),
-            ("created_at", update.created_at.map(|v| json!(v))),
+            ("id", update.id.as_ref().map(|v| v.to_owned().into_field())),
+            ("name", update.name.map(|v| v.to_owned().into_field())),
+            ("slug", update.slug.map(|v| v.to_owned().into_field())),
+            ("logo", update.logo.map(|v| v.to_owned().into_field())),
+            (
+                "created_at",
+                update.created_at.map(|v| v.to_owned().into_field()),
+            ),
         ] {
             if let Some(value) = value {
                 let _ = core.insert(name.into(), value);
             }
         }
-        let native_metadata = !config.fields().contains_key("metadata")
-            && matches!(
-                O::Organization::column("metadata")?.def().get_column_type(),
-                sea_orm::ColumnType::Json | sea_orm::ColumnType::JsonBinary
-            );
-        if !native_metadata
-            && let Some(value) = better_auth_core::organization_fields::metadata_input(
-                update.metadata.clone(),
-                false,
-            )
+        if let Some(value) =
+            better_auth_core::organization_fields::metadata_input(update.metadata, false)?
         {
             let _ = core.insert("metadata".into(), value);
         }
-        let mut active = models::active::<O::Organization>(
+        let active = models::active::<O::Organization>(
             core,
             update.additional_fields,
             &config,
@@ -294,14 +278,8 @@ where
             self.config().advanced.database.generate_id(),
         )
         .await?;
-        if native_metadata && let Some(metadata) = update.metadata {
-            active.set(
-                O::Organization::column("metadata")?,
-                sea_orm::Value::Json(Some(Box::new(metadata))),
-            );
-        }
-        let _ = Entity::<O::Organization>::update_many()
-            .set(active)
+        let _ = active
+            .update(self.connection().get_database_backend())?
             .filter(
                 O::Organization::column("id")?
                     .eq_id(id, self.config().advanced.database.generate_id())?,
@@ -411,13 +389,14 @@ impl<
     >(
         &self,
         db: &C,
-        id: &serde_json::Value,
+        id: &FieldValue,
     ) -> AuthResult<Option<Organization>> {
         let row = Entity::<O::Organization>::find()
             .filter(super::value_filter::equals_id(
                 O::Organization::column("id")?,
                 id,
                 self.config().advanced.database.generate_id(),
+                self.connection().get_database_backend(),
             )?)
             .one(db)
             .await

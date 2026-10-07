@@ -1,12 +1,12 @@
 use super::SeaOrmStore;
 use crate::{SeaOrmPluginModel, schema::AuthSchema};
+use better_auth_core::FieldMap;
 use better_auth_core::store::schema::resolve_field_name;
 use better_auth_core::{
     AuthError, AuthResult, DeviceCode, SchemaValue,
     store::schema::{EntityRole, core_fields},
 };
 use sea_orm::{ColumnTrait, DbBackend, IdenStatic};
-use serde_json::{Map, Value};
 
 impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema>
     SeaOrmStore<S, O, P>
@@ -36,9 +36,9 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
     pub(super) async fn prepare_device_code_fields(
         &self,
         scope: SchemaValue<Option<String>>,
-        additional_fields: Map<String, Value>,
+        additional_fields: FieldMap,
         create: bool,
-    ) -> AuthResult<<P::DeviceCode as SeaOrmPluginModel>::ActiveModel> {
+    ) -> AuthResult<super::plugin_models::Write<P::DeviceCode>> {
         let config = self.model_fields.fields(EntityRole::DeviceCode);
         let mut fields = self
             .model_fields
@@ -66,8 +66,10 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
                 )?;
             }
         }
-        let mut active = P::DeviceCode::active(fields)?;
-        crate::reference_id::apply_bindings(&mut active, config, backend, P::DeviceCode::column)?;
+        let mut active = super::plugin_models::Write::<P::DeviceCode>::default();
+        for (name, value) in fields {
+            active.field(P::DeviceCode::column(&name)?, value);
+        }
         Ok(active)
     }
 

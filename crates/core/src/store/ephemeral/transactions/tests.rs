@@ -68,7 +68,7 @@ fn merge_preserves_private_changes_and_concurrent_rows_without_resurrecting_dele
         serde_json::to_value(&base["private"]).unwrap(),
         serde_json::to_value(&working["private"]).unwrap()
     );
-    merge_map(&mut live, &base, working);
+    merge_map(&mut live, &base, working).unwrap();
     assert_eq!(
         live["private"].password.typed().unwrap().as_deref(),
         Some("committed")
@@ -97,7 +97,7 @@ fn merge_keeps_private_passkey_credential_updates() {
         device_type: "singleDevice".into(),
         backed_up: false,
         transports: None,
-        created_at: Some(Utc::now()).into(),
+        created_at: Some(crate::FieldDate::from(Utc::now())).into(),
         updated_at: Utc::now().into(),
         aaguid: None.into(),
         credential: "private-before".into(),
@@ -110,7 +110,7 @@ fn merge_keeps_private_passkey_credential_updates() {
         serde_json::to_value(&working["key"]).unwrap()
     );
     let mut live = base.clone();
-    merge_map(&mut live, &base, working);
+    merge_map(&mut live, &base, working).unwrap();
     assert_eq!(live["key"].credential, "private-after");
 }
 

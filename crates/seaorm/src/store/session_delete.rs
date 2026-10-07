@@ -82,18 +82,18 @@ where
             S::Session::apply_update(
                 &mut active,
                 SessionUpdate {
-                    expires_at: Some(Utc::now()),
-                    updated_at: Some(Utc::now()),
+                    expires_at: Some(Utc::now().into()),
+                    updated_at: Some(Utc::now().into()),
                     ..Default::default()
                 },
             )?;
-            self.apply_session_field_updates(&mut active).await?;
+            let active = self.apply_session_field_updates(active).await?;
             database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
                 self.config(),
                 "updateMany",
                 async {
-                    <S::Session as SeaOrmSessionModel>::Entity::update_many()
-                        .set(active)
+                    active
+                        .update(db.get_database_backend())?
                         .filter(condition)
                         .exec(db)
                         .await

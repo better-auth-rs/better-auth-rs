@@ -1,57 +1,16 @@
 use crate::SchemaValue;
-use chrono::{DateTime, Utc};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use serde_json::Value;
+use chrono::Utc;
+use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 
 use crate::entity::{AuthInvitation, AuthMember, AuthOrganization};
-
-fn serialize_json_option_as_string<S>(
-    value: &SchemaValue<Option<serde_json::Value>>,
-    serializer: S,
-) -> Result<S::Ok, S::Error>
-where
-    S: Serializer,
-{
-    match value {
-        SchemaValue::Typed(Some(inner)) => serializer
-            .serialize_some(&serde_json::to_string(inner).map_err(serde::ser::Error::custom)?),
-        value => value.serialize(serializer),
-    }
-}
-
-fn deserialize_json_option_from_string<'de, D>(
-    deserializer: D,
-) -> Result<SchemaValue<Option<serde_json::Value>>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    #[derive(Deserialize)]
-    #[serde(untagged)]
-    enum MetadataValue {
-        Json(serde_json::Value),
-        String(String),
-    }
-
-    let value = Option::<MetadataValue>::deserialize(deserializer)?;
-    value
-        .map(|inner| match inner {
-            MetadataValue::Json(value) => Ok(value),
-            MetadataValue::String(value) => match serde_json::from_str(&value) {
-                Ok(parsed) => Ok(parsed),
-                Err(_) => Ok(serde_json::Value::String(value)),
-            },
-        })
-        .transpose()
-        .map(SchemaValue::Typed)
-}
 
 /// Organization entity - matches OpenAPI schema
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct Organization {
     /// Application fields projected by the configured organization schema.
-    #[serde(flatten)]
-    pub additional_fields: serde_json::Map<String, serde_json::Value>,
+    #[serde(with = "crate::field_value::serde::map", flatten)]
+    pub additional_fields: crate::FieldMap,
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub id: SchemaValue<String>,
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
@@ -60,24 +19,20 @@ pub struct Organization {
     pub slug: SchemaValue<String>,
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub logo: SchemaValue<Option<String>>,
-    #[serde(
-        serialize_with = "serialize_json_option_as_string",
-        deserialize_with = "deserialize_json_option_from_string"
-    )]
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
-    pub metadata: SchemaValue<Option<serde_json::Value>>,
+    pub metadata: SchemaValue<Option<crate::FieldValue>>,
     #[serde(rename = "createdAt")]
-    #[serde(serialize_with = "crate::schema_value::serialize_date")]
+    #[serde(with = "crate::field_value::serde::schema_date")]
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
-    pub created_at: SchemaValue<DateTime<Utc>>,
+    pub created_at: SchemaValue<crate::FieldDate>,
 }
 
 /// Organization member
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Member {
     /// Application fields projected by the configured member schema.
-    #[serde(flatten)]
-    pub additional_fields: serde_json::Map<String, serde_json::Value>,
+    #[serde(with = "crate::field_value::serde::map", flatten)]
+    pub additional_fields: crate::FieldMap,
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub id: SchemaValue<String>,
     #[serde(rename = "organizationId")]
@@ -89,9 +44,9 @@ pub struct Member {
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub role: SchemaValue<String>,
     #[serde(rename = "createdAt")]
-    #[serde(serialize_with = "crate::schema_value::serialize_date")]
+    #[serde(with = "crate::field_value::serde::schema_date")]
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
-    pub created_at: SchemaValue<DateTime<Utc>>,
+    pub created_at: SchemaValue<crate::FieldDate>,
 }
 
 /// Invitation status
@@ -131,8 +86,8 @@ impl std::fmt::Display for InvitationStatus {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Invitation {
     /// Application fields projected by the configured invitation schema.
-    #[serde(flatten)]
-    pub additional_fields: serde_json::Map<String, serde_json::Value>,
+    #[serde(with = "crate::field_value::serde::map", flatten)]
+    pub additional_fields: crate::FieldMap,
     #[serde(rename = "teamId")]
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub team_id: SchemaValue<Option<String>>,
@@ -151,13 +106,13 @@ pub struct Invitation {
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub inviter_id: SchemaValue<String>,
     #[serde(rename = "expiresAt")]
-    #[serde(serialize_with = "crate::schema_value::serialize_date")]
+    #[serde(with = "crate::field_value::serde::schema_date")]
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
-    pub expires_at: SchemaValue<DateTime<Utc>>,
+    pub expires_at: SchemaValue<crate::FieldDate>,
     #[serde(rename = "createdAt")]
-    #[serde(serialize_with = "crate::schema_value::serialize_date")]
+    #[serde(with = "crate::field_value::serde::schema_date")]
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
-    pub created_at: SchemaValue<DateTime<Utc>>,
+    pub created_at: SchemaValue<crate::FieldDate>,
 }
 
 impl Invitation {
@@ -168,30 +123,7 @@ impl Invitation {
 
     /// Check if the invitation has expired
     pub fn is_expired(&self) -> crate::AuthResult<bool> {
-        let timestamp = match &self.expires_at {
-            SchemaValue::Typed(value) => return Ok(*value < Utc::now()),
-            SchemaValue::Dynamic(Value::Null) => Some(0.0),
-            SchemaValue::Dynamic(Value::Bool(value)) => Some(f64::from(u8::from(*value))),
-            SchemaValue::Dynamic(Value::Number(value)) => value.as_f64(),
-            SchemaValue::Dynamic(Value::String(_) | Value::Array(_)) => {
-                let value = self.expires_at.display_string()?;
-                if value
-                    .trim_matches(|ch: char| {
-                        (ch.is_whitespace() && ch != '\u{85}') || ch == '\u{feff}'
-                    })
-                    .is_empty()
-                {
-                    Some(0.0)
-                } else {
-                    crate::organization_fields::numeric_filter(&value)
-                }
-            }
-            SchemaValue::Dynamic(Value::Object(_))
-            | SchemaValue::Undefined
-            | SchemaValue::InvalidDate => None,
-        };
-        // Upstream compares the replacement value with a Date, which coerces to milliseconds.
-        Ok(timestamp.is_some_and(|value| value < Utc::now().timestamp_millis() as f64))
+        Ok(self.expires_at.is_before(Utc::now()))
     }
 }
 
@@ -199,12 +131,12 @@ impl Invitation {
 #[derive(Debug, Clone)]
 pub struct CreateOrganization {
     /// Validated application input before adapter transforms.
-    pub additional_fields: serde_json::Map<String, serde_json::Value>,
+    pub additional_fields: crate::FieldMap,
     pub id: Option<String>,
     pub name: SchemaValue<String>,
     pub slug: SchemaValue<String>,
     pub logo: SchemaValue<Option<String>>,
-    pub metadata: SchemaValue<Option<serde_json::Value>>,
+    pub metadata: SchemaValue<Option<crate::FieldValue>>,
 }
 
 impl CreateOrganization {
@@ -224,7 +156,7 @@ impl CreateOrganization {
         self
     }
 
-    pub fn with_metadata(mut self, metadata: serde_json::Value) -> Self {
+    pub fn with_metadata(mut self, metadata: crate::FieldValue) -> Self {
         self.metadata = Some(metadata).into();
         self
     }
@@ -234,20 +166,20 @@ impl CreateOrganization {
 #[derive(Debug, Clone, Default)]
 pub struct UpdateOrganization {
     pub id: Option<String>,
-    pub created_at: Option<DateTime<Utc>>,
+    pub created_at: Option<crate::FieldDate>,
     /// Application fields to update; omitted fields retain their stored values.
-    pub additional_fields: serde_json::Map<String, serde_json::Value>,
+    pub additional_fields: crate::FieldMap,
     pub name: Option<String>,
     pub slug: Option<String>,
     pub logo: Option<Option<String>>,
-    pub metadata: Option<serde_json::Value>,
+    pub metadata: Option<crate::FieldValue>,
 }
 
 /// Member creation data
 #[derive(Debug, Clone)]
 pub struct CreateMember {
     /// Validated application input before adapter transforms.
-    pub additional_fields: serde_json::Map<String, serde_json::Value>,
+    pub additional_fields: crate::FieldMap,
     pub organization_id: SchemaValue<String>,
     pub user_id: SchemaValue<String>,
     pub role: SchemaValue<String>,
@@ -272,16 +204,16 @@ impl CreateMember {
 #[derive(Debug, Clone)]
 pub struct CreateInvitation {
     pub id: Option<String>,
-    pub created_at: Option<DateTime<Utc>>,
+    pub created_at: Option<crate::FieldDate>,
     pub status: Option<InvitationStatus>,
     /// Validated application input before adapter transforms.
-    pub additional_fields: serde_json::Map<String, serde_json::Value>,
+    pub additional_fields: crate::FieldMap,
     pub team_id: Option<String>,
     pub organization_id: String,
     pub email: String,
     pub role: String,
     pub inviter_id: String,
-    pub expires_at: DateTime<Utc>,
+    pub expires_at: crate::FieldDate,
 }
 
 impl CreateInvitation {
@@ -290,7 +222,7 @@ impl CreateInvitation {
         email: impl Into<String>,
         role: impl Into<String>,
         inviter_id: impl Into<String>,
-        expires_at: DateTime<Utc>,
+        expires_at: crate::FieldDate,
     ) -> Self {
         Self {
             organization_id: organization_id.into(),
@@ -322,7 +254,7 @@ impl<T: AuthOrganization> From<&T> for Organization {
 }
 
 impl AuthOrganization for Organization {
-    fn projected_fields(&self) -> Option<&serde_json::Map<String, serde_json::Value>> {
+    fn projected_fields(&self) -> Option<&crate::FieldMap> {
         Some(&self.additional_fields)
     }
 
@@ -338,16 +270,16 @@ impl AuthOrganization for Organization {
     fn logo(&self) -> &SchemaValue<Option<String>> {
         &self.logo
     }
-    fn metadata(&self) -> &SchemaValue<Option<serde_json::Value>> {
+    fn metadata(&self) -> &SchemaValue<Option<crate::FieldValue>> {
         &self.metadata
     }
-    fn created_at(&self) -> &SchemaValue<DateTime<Utc>> {
+    fn created_at(&self) -> &SchemaValue<crate::FieldDate> {
         &self.created_at
     }
 }
 
 impl AuthMember for Member {
-    fn projected_fields(&self) -> Option<&serde_json::Map<String, serde_json::Value>> {
+    fn projected_fields(&self) -> Option<&crate::FieldMap> {
         Some(&self.additional_fields)
     }
 
@@ -363,7 +295,7 @@ impl AuthMember for Member {
     fn role(&self) -> &SchemaValue<String> {
         &self.role
     }
-    fn created_at(&self) -> &SchemaValue<DateTime<Utc>> {
+    fn created_at(&self) -> &SchemaValue<crate::FieldDate> {
         &self.created_at
     }
 }
@@ -382,7 +314,7 @@ impl<T: AuthMember> From<&T> for Member {
 }
 
 impl AuthInvitation for Invitation {
-    fn projected_fields(&self) -> Option<&serde_json::Map<String, serde_json::Value>> {
+    fn projected_fields(&self) -> Option<&crate::FieldMap> {
         Some(&self.additional_fields)
     }
 
@@ -407,10 +339,10 @@ impl AuthInvitation for Invitation {
     fn inviter_id(&self) -> &SchemaValue<String> {
         &self.inviter_id
     }
-    fn expires_at(&self) -> &SchemaValue<DateTime<Utc>> {
+    fn expires_at(&self) -> &SchemaValue<crate::FieldDate> {
         &self.expires_at
     }
-    fn created_at(&self) -> &SchemaValue<DateTime<Utc>> {
+    fn created_at(&self) -> &SchemaValue<crate::FieldDate> {
         &self.created_at
     }
 }

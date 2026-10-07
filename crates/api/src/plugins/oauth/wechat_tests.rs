@@ -201,9 +201,12 @@ async fn grants_match_captured_get_requests_and_normalized_tokens() {
         assert_eq!(json!(result.access_token), expected["accessToken"]);
         assert_eq!(json!(result.refresh_token), expected["refreshToken"]);
         assert_eq!(json!(result.scopes), expected["scopes"]);
-        let expires = result.access_token_expires_at.unwrap();
+        let expires = result.access_token_expires_at.unwrap().milliseconds();
         let duration = Duration::seconds(sample["rawResponse"]["expires_in"].as_i64().unwrap());
-        assert!(expires >= before + duration && expires <= after + duration);
+        assert!(
+            expires >= (before + duration).timestamp_millis() as f64
+                && expires <= (after + duration).timestamp_millis() as f64
+        );
         assert!(result.refresh_token_expires_at.is_none());
         assert!(result.id_token.is_none());
         if name == "code" {

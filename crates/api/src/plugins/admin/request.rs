@@ -51,7 +51,8 @@ fn field(
             errors.push(invalid_type(&format!("body.{name}"), "nonoptional", None));
             return Ok(());
         }
-        let value = SchemaValue::<Value>::from_json(value.cloned()).display_string()?;
+        let value = SchemaValue::<better_auth_core::FieldValue>::from_json(value.cloned())?
+            .display_string()?;
         let _ = output.insert(name.into(), value.into());
         return Ok(());
     }

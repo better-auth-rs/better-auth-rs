@@ -59,18 +59,18 @@ pub(super) fn is_reference(role: EntityRole, field: &syn::Field) -> syn::Result<
     }))
 }
 
-pub(super) fn decode(field: &syn::Field, core: &TokenStream) -> TokenStream {
+pub(super) fn decode(field: &syn::Field, core: &TokenStream, seaorm: &TokenStream) -> TokenStream {
     let optional = optional_inner(&field.ty);
     let ty = optional.unwrap_or(&field.ty);
     if !matches!(ty, syn::Type::Path(path) if path.path.segments.last().is_some_and(|segment| matches!(segment.ident.to_string().as_str(), "String" | "Uuid" | "i16" | "i32" | "i64" | "u16" | "u32" | "u64")))
     {
-        return quote!(#core::serde_json::from_value(value)?);
+        return adapter_record::decode_field(field, seaorm);
     }
     let value = quote! {
         match value {
-            #core::serde_json::Value::String(value) => value.parse::<#ty>()
+            #core::FieldValue::String(value) => value.parse::<#ty>()
                 .map_err(|error| #core::AuthError::bad_request(format!("Invalid model identifier: {error}")))?,
-            value => #core::serde_json::from_value::<#ty>(value)?,
+            value => #seaorm::__private_field_decode::<#ty>(value)?,
         }
     };
     if optional.is_some() {

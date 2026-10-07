@@ -9,7 +9,7 @@ impl EphemeralStore {
         mut snapshot: crate::types::WalletAddress,
         source: RowRef<crate::types::WalletAddress>,
     ) -> AuthResult<crate::types::WalletAddress> {
-        let mut output = Map::new();
+        let mut output = FieldMap::new();
         for (name, field) in self.model_fields.fields(EntityRole::WalletAddress).fields() {
             let value = source.read(|row| {
                 Ok(row
@@ -17,12 +17,14 @@ impl EphemeralStore {
                     .get(resolve_field_name(field.field_name.as_deref(), name))
                     .cloned())
             })?;
-            if let Some(value) = project_adapter_value(value, field, field.references_id(), true)
-                .await?
-                .json()?
-            {
-                let _ = output.insert(name.to_owned(), value);
-            }
+            let value = project_adapter_value(
+                value.unwrap_or_default(),
+                field,
+                field.references_id(),
+                true,
+            )
+            .await?;
+            let _ = output.insert(name.to_owned(), value);
         }
         snapshot.additional_fields = output;
         Ok(snapshot)

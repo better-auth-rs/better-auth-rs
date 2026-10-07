@@ -64,8 +64,8 @@ impl<S: AuthSchema> AuthPlugin<S> for RegisteredFields {
                         ("label", string(false, Some("stale-documentation"))),
                         ("docsNote", documentation.clone()),
                     ]),
-                )
-                .model("widget", &fields([("label", documentation)])),
+                )?
+                .model("widget", &fields([("label", documentation)]))?,
         )
     }
 

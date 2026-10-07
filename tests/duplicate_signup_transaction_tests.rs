@@ -114,7 +114,7 @@ async fn duplicate_notification_uses_signup_transaction_and_preserves_after_comm
                             return Err(AuthError::internal("synthetic-error"));
                         }
                         let mut fields = input.core_fields;
-                        let _ = fields.insert("id".into(), json!(input.id));
+                        let _ = fields.insert("id".into(), input.id.into());
                         Ok(fields)
                     }))
                     .callbacks(

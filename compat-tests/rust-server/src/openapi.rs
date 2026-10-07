@@ -158,7 +158,7 @@ impl<S: AuthSchema> AuthPlugin<S> for DocsProbe {
                 "docs-probe",
                 <Self as AuthPlugin<S>>::routes(self),
             )?
-            .model("widget", &fields),
+            .model("widget", &fields)?,
         )
     }
 

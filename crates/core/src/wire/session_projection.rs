@@ -1,13 +1,13 @@
 use super::SessionView;
+use crate::FieldMap;
 use crate::store::schema::resolve_field_name;
 use crate::{AuthResult, AuthSession, config::SessionConfig, user_fields::UserFieldConfig};
-use serde_json::{Map, Value};
 
 pub(super) struct SessionProjection<'a, T> {
     session: &'a T,
     pub(super) view: SessionView,
-    core: Map<String, Value>,
-    model: Value,
+    core: crate::FieldMap,
+    model: FieldMap,
 }
 
 pub(super) fn rows<'a, T: AuthSession>(
@@ -25,9 +25,9 @@ pub(super) fn rows<'a, T: AuthSession>(
                 view,
                 core,
                 model: if config.fields().is_empty() {
-                    Value::Null
+                    FieldMap::new()
                 } else {
-                    serde_json::to_value(session)?
+                    session.field_values()?
                 },
             })
         })
@@ -42,7 +42,7 @@ impl<T: AuthSession> SessionProjection<'_, T> {
         supports_native_json: bool,
     ) -> AuthResult<()> {
         let value = if let Some(fields) = self.session.projected_fields() {
-            fields.get(name).cloned()
+            fields.get(name).cloned().unwrap_or_default()
         } else {
             let value = self
                 .model
@@ -53,9 +53,12 @@ impl<T: AuthSession> SessionProjection<'_, T> {
                 .or_else(|| self.model.get(name))
                 .or_else(|| self.core.get(name))
                 .cloned();
-            field.adapter_output(value, supports_native_json).await?
+            field
+                .adapter_output(value.unwrap_or_default(), supports_native_json)
+                .await?
         };
-        if let Some(mut value) = value {
+        {
+            let mut value = value;
             if !field.references_id() {
                 field.normalize_date(&mut value)?;
             }

@@ -55,9 +55,9 @@ impl EphemeralStore {
         mut snapshot: DeviceCode,
         source: RowRef<DeviceCode>,
     ) -> AuthResult<DeviceCode> {
-        let scope = snapshot.scope.json()?;
+        let scope = Some(snapshot.scope.field_value());
         let fields = self.model_fields.fields(EntityRole::DeviceCode);
-        let mut output = IndexMap::new();
+        let mut output = FieldMap::new();
         for (name, field) in fields.fields() {
             let value = if name == "scope" {
                 scope.clone()
@@ -69,21 +69,22 @@ impl EphemeralStore {
                         .cloned())
                 })?
             };
-            let value = project_adapter_value(value, field, field.references_id(), true).await?;
-            if !value.is_undefined() {
-                let _ = output.insert(name.clone(), value);
-            }
+            let value = project_adapter_value(
+                value.unwrap_or_default(),
+                field,
+                field.references_id(),
+                true,
+            )
+            .await?;
+            let _ = output.insert(name.clone(), value);
         }
         // Only declared application fields are live; authorization fields retain the selected snapshot.
         self.model_fields
-            .assign_device_code_output(&mut snapshot, output)?;
+            .assign_device_code_output(&mut snapshot, output);
         Ok(snapshot)
     }
 
-    fn bind_device_code_fields(
-        &self,
-        values: &mut serde_json::Map<String, serde_json::Value>,
-    ) -> AuthResult<()> {
+    fn bind_device_code_fields(&self, values: &mut FieldMap) -> AuthResult<()> {
         for (name, field) in self.model_fields.fields(EntityRole::DeviceCode).fields() {
             if let Some(value) =
                 values.get_mut(resolve_field_name(field.field_name.as_deref(), name))
@@ -103,7 +104,7 @@ impl DeviceCodeStore for EphemeralStore {
             .device_code_fields_for_storage(input.scope, input.additional_fields, true)
             .await?;
         self.bind_device_code_fields(&mut fields)?;
-        let scope = crate::plugin_runtime::ModelFields::take_device_code_scope(&mut fields)?;
+        let scope = crate::plugin_runtime::ModelFields::take_device_code_scope(&mut fields);
         let device_code = DeviceCode {
             additional_fields: fields,
             id: self
@@ -121,7 +122,7 @@ impl DeviceCodeStore for EphemeralStore {
                 .client_id
                 .map(|value| crate::SchemaValue::Typed(Some(value)))
                 .unwrap_or_default(),
-            scope: scope.map(Into::into).unwrap_or_default(),
+            scope: scope.unwrap_or_default(),
         };
         let (snapshot, source) = self
             .raw("deviceCode", "create", |state| {
@@ -158,7 +159,7 @@ impl DeviceCodeStore for EphemeralStore {
             .device_code_fields_for_storage(update.scope, update.additional_fields, false)
             .await?;
         self.bind_device_code_fields(&mut fields)?;
-        let scope = crate::plugin_runtime::ModelFields::take_device_code_scope(&mut fields)?;
+        let scope = crate::plugin_runtime::ModelFields::take_device_code_scope(&mut fields);
         let (snapshot, source) = self
             .raw("deviceCode", "update", |state| {
                 let Some(source) = state.device_codes.first_ref(|row| &row.id == id)? else {
@@ -168,7 +169,7 @@ impl DeviceCodeStore for EphemeralStore {
                 let snapshot = source.write(|device_code| {
                     device_code.additional_fields.extend(fields);
                     if let Some(scope) = scope {
-                        device_code.scope = scope.into();
+                        device_code.scope = scope;
                     }
                     if let Some(status) = update.status {
                         device_code.status = status;
@@ -200,7 +201,7 @@ impl DeviceCodeStore for EphemeralStore {
             .device_code_fields_for_storage(update.scope, update.additional_fields, false)
             .await?;
         self.bind_device_code_fields(&mut fields)?;
-        let scope = crate::plugin_runtime::ModelFields::take_device_code_scope(&mut fields)?;
+        let scope = crate::plugin_runtime::ModelFields::take_device_code_scope(&mut fields);
         let row = self
             .raw("deviceCode", "update", |state| {
                 let Some(mut device_code) = state.device_codes.get_mut(id)? else {
@@ -213,7 +214,7 @@ impl DeviceCodeStore for EphemeralStore {
 
                 device_code.additional_fields.extend(fields);
                 if let Some(scope) = scope {
-                    device_code.scope = scope.into();
+                    device_code.scope = scope;
                 }
                 if let Some(status) = update.status {
                     device_code.status = status;
@@ -246,7 +247,7 @@ impl DeviceCodeStore for EphemeralStore {
             .device_code_fields_for_storage(Default::default(), Default::default(), false)
             .await?;
         self.bind_device_code_fields(&mut fields)?;
-        let scope = crate::plugin_runtime::ModelFields::take_device_code_scope(&mut fields)?;
+        let scope = crate::plugin_runtime::ModelFields::take_device_code_scope(&mut fields);
         let row = self
             .raw("deviceCode", "incrementOne", |state| {
                 let Some(mut device_code) = state.device_codes.get_mut(id)? else {
@@ -259,7 +260,7 @@ impl DeviceCodeStore for EphemeralStore {
 
                 device_code.additional_fields.extend(fields);
                 if let Some(scope) = scope {
-                    device_code.scope = scope.into();
+                    device_code.scope = scope;
                 }
                 device_code.user_id = Some(user_id.to_string());
                 Ok(Some(device_code.clone()))
@@ -281,12 +282,24 @@ impl DeviceCodeStore for EphemeralStore {
         let (mut query, field) = self
             .model_fields
             .device_code_ownership_query(ownership, self.config.advanced.database.generate_id())?;
-        query.value = field.adapter_input(query.value, false, false)?;
+        if matches!(field.field_type, crate::user_fields::UserFieldType::Json)
+            && matches!(
+                query.value,
+                Value::Object(_) | Value::Array(_) | Value::Date(_) | Value::Null
+            )
+        {
+            query.value = query
+                .value
+                .stringify()?
+                .map(Value::String)
+                .unwrap_or_default();
+        }
         let row = self
             .raw("deviceCode", "consumeOne", |state| {
                 let mut selected = None;
                 // Memory evaluates every row before consumption, including rows with another ID.
-                for row in state.device_codes.snapshot()? {
+                for source in state.device_codes.select_refs(|_| true)? {
+                    let row = source.read(|row| Ok(row.clone()))?;
                     let matches = query::matches(&row, &query)?;
                     if selected.is_none()
                         && same_bindings(&row, expected)
@@ -294,11 +307,11 @@ impl DeviceCodeStore for EphemeralStore {
                         && row.status == "approved"
                         && matches
                     {
-                        selected = Some(row);
+                        selected = Some(source);
                     }
                 }
                 let row = match selected {
-                    Some(selected) => state.device_codes.remove_first(|row| row == &selected)?,
+                    Some(selected) => state.device_codes.remove_ref(&selected)?,
                     None => None,
                 };
                 if let Some(row) = &row

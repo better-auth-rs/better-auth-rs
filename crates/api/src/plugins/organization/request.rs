@@ -5,16 +5,46 @@ use super::{
     types::*,
 };
 use better_auth_core::{
-    AuthError, AuthRequest, AuthResult, endpoint_input::ValidatedBody, user_fields::UserConfig,
+    AuthError, AuthRequest, AuthResult, FieldMap, FieldValue, FromFieldMap, SchemaField,
+    endpoint_input::ValidatedBody, user_fields::UserConfig,
 };
-use serde::de::DeserializeOwned;
 use serde_json::{Map, Value};
 
-fn typed<T: DeserializeOwned + Send + Sync + 'static>(value: Value) -> AuthResult<ValidatedBody> {
+macro_rules! from_fields {
+    ($type:ty { $($field:ident: $name:literal),* $(,)? } $(; $additional:ident)?) => {
+        impl better_auth_core::FromFieldMap for $type {
+            fn from_field_values(mut fields: better_auth_core::FieldMap) -> better_auth_core::AuthResult<Self> {
+                Ok(Self {
+                    $($field: crate::plugins::organization::request::take(&mut fields, $name)?,)*
+                    $($additional: fields,)?
+                })
+            }
+        }
+    };
+}
+pub(super) use from_fields;
+
+pub(super) fn typed<T: FromFieldMap + Send + Sync + 'static>(
+    fields: FieldMap,
+) -> AuthResult<ValidatedBody> {
+    let projection = Value::Object(fields.json()?);
     Ok(ValidatedBody::new(
-        Some(value.clone()),
-        serde_json::from_value::<T>(value)?,
+        Some(projection),
+        T::from_field_values(fields)?,
     ))
+}
+
+pub(super) fn take<T: SchemaField>(fields: &mut FieldMap, name: &str) -> AuthResult<T> {
+    fields.remove(name).unwrap_or_default().decode()
+}
+
+pub(super) fn object(fields: &mut FieldMap, name: &str) -> AuthResult<FieldMap> {
+    match fields.remove(name) {
+        Some(FieldValue::Object(value)) => Ok((*value).clone()),
+        _ => Err(AuthError::internal(format!(
+            "Validated Organization field {name} is not an object"
+        ))),
+    }
 }
 
 pub(super) fn read<T: Clone + Send + Sync + 'static>(
@@ -49,7 +79,7 @@ fn schema_fields(
     prefix: &str,
     partial: bool,
     errors: &mut Vec<String>,
-) -> AuthResult<Map<String, Value>> {
+) -> AuthResult<FieldMap> {
     input::fields(schema, body, base, prefix, partial, false, errors)
 }
 
@@ -57,17 +87,17 @@ fn static_fields(
     body: &Map<String, Value>,
     base: &[(&str, BaseField, bool)],
     errors: &mut Vec<String>,
-) -> AuthResult<Map<String, Value>> {
+) -> AuthResult<FieldMap> {
     schema_fields(&UserConfig::default(), body, base, "body", false, errors)
 }
 
-fn selector(body: &Map<String, Value>, output: &mut Map<String, Value>, errors: &mut Vec<String>) {
+fn selector(body: &Map<String, Value>, output: &mut FieldMap, errors: &mut Vec<String>) {
     if let Some((name, value)) = ["roleName", "roleId"].into_iter().find_map(|name| {
         body.get(name)
             .filter(|value| value.as_str().is_some_and(|value| !value.is_empty()))
             .map(|value| (name, value))
     }) {
-        let _ = output.insert(name.into(), value.clone());
+        let _ = output.insert(name.into(), value.as_str().unwrap().into());
     } else {
         let name = match (
             body.get("roleName").and_then(Value::as_str),
@@ -103,7 +133,7 @@ pub(super) fn validate(
         input::finish(errors)?;
         return Err(AuthError::internal("Invalid Organization body"));
     };
-    let mut output = match req.path() {
+    let output = match req.path() {
         "/organization/create" => schema_fields(
             &schema.organization,
             body,
@@ -120,7 +150,7 @@ pub(super) fn validate(
             &mut errors,
         )?,
         "/organization/update" => {
-            let mut output = Map::new();
+            let mut output = FieldMap::new();
             if let Some(data) = input::object(body.get("data"), "body.data", &mut errors) {
                 let data = input::fields(
                     &schema.organization,
@@ -136,7 +166,7 @@ pub(super) fn validate(
                     true,
                     &mut errors,
                 )?;
-                let _ = output.insert("data".into(), Value::Object(data));
+                let _ = output.insert("data".into(), data.into());
             }
             output.extend(static_fields(
                 body,
@@ -212,7 +242,7 @@ pub(super) fn validate(
                     true,
                     &mut errors,
                 )?;
-                let _ = output.insert("data".into(), Value::Object(data));
+                let _ = output.insert("data".into(), data.into());
             }
             output
         }
@@ -254,7 +284,7 @@ pub(super) fn validate(
                     false,
                     &mut errors,
                 )?;
-                let _ = output.insert("additionalFields".into(), Value::Object(data));
+                let _ = output.insert("additionalFields".into(), data.into());
             }
             output
         }
@@ -264,27 +294,10 @@ pub(super) fn validate(
             selector(body, &mut output, &mut errors);
             output
         }
-        "/organization/update-role" => {
-            let mut output =
-                static_fields(body, &[("organizationId", String, false)], &mut errors)?;
-            if let Some(data) = input::object(body.get("data"), "body.data", &mut errors) {
-                // The upstream role update endpoint makes configured fields nullish at initialization.
-                let data = schema_fields(
-                    &schema.organization_role,
-                    data,
-                    &[
-                        ("permission", Permissions, false),
-                        ("roleName", String, false),
-                    ],
-                    "body.data",
-                    false,
-                    &mut errors,
-                )?;
-                let _ = output.insert("data".into(), Value::Object(data));
-            }
-            selector(body, &mut output, &mut errors);
-            output
-        }
+        "/organization/update-role" => Ok(ValidatedBody::new(
+            Some(projection),
+            roles::UpdateRole::validated(output, &schema.organization_role)?,
+        )),
         "/organization/has-permission" => {
             let mut output =
                 static_fields(body, &[("organizationId", String, false)], &mut errors)?;
@@ -320,45 +333,45 @@ pub(super) fn validate(
         }
     };
     input::finish(errors)?;
-    let value = Value::Object(output.clone());
+    let projection = Value::Object(output.json()?);
     match req.path() {
-        "/organization/create" => typed::<CreateOrganizationRequest>(value),
-        "/organization/update" => typed::<UpdateOrganizationRequest>(value),
-        "/organization/delete" => typed::<DeleteOrganizationRequest>(value),
-        "/organization/leave" => typed::<LeaveOrganizationRequest>(value),
-        "/organization/check-slug" => typed::<CheckSlugRequest>(value),
-        "/organization/set-active" => typed::<SetActiveOrganizationRequest>(value),
-        "/organization/remove-member" => typed::<RemoveMemberRequest>(value),
-        "/organization/update-member-role" => typed::<UpdateMemberRoleRequest>(value),
-        "/organization/invite-member" => typed::<InviteMemberRequest>(value),
-        "/organization/accept-invitation" => typed::<AcceptInvitationRequest>(value),
-        "/organization/reject-invitation" => typed::<RejectInvitationRequest>(value),
-        "/organization/cancel-invitation" => typed::<CancelInvitationRequest>(value),
-        "/organization/create-team" => typed::<team::CreateBody>(value),
-        "/organization/update-team" => typed::<team::UpdateBody>(value),
-        "/organization/remove-team" => typed::<team::TeamBody>(value),
-        "/organization/set-active-team" => typed::<team::ActiveBody>(value),
+        "/organization/create" => typed::<CreateOrganizationRequest>(output),
+        "/organization/update" => typed::<UpdateOrganizationRequest>(output),
+        "/organization/delete" => typed::<DeleteOrganizationRequest>(output),
+        "/organization/leave" => typed::<LeaveOrganizationRequest>(output),
+        "/organization/check-slug" => typed::<CheckSlugRequest>(output),
+        "/organization/set-active" => typed::<SetActiveOrganizationRequest>(output),
+        "/organization/remove-member" => typed::<RemoveMemberRequest>(output),
+        "/organization/update-member-role" => typed::<UpdateMemberRoleRequest>(output),
+        "/organization/invite-member" => typed::<InviteMemberRequest>(output),
+        "/organization/accept-invitation" => typed::<AcceptInvitationRequest>(output),
+        "/organization/reject-invitation" => typed::<RejectInvitationRequest>(output),
+        "/organization/cancel-invitation" => typed::<CancelInvitationRequest>(output),
+        "/organization/create-team" => typed::<team::CreateBody>(output),
+        "/organization/update-team" => typed::<team::UpdateBody>(output),
+        "/organization/remove-team" => typed::<team::TeamBody>(output),
+        "/organization/set-active-team" => typed::<team::ActiveBody>(output),
         "/organization/add-team-member" | "/organization/remove-team-member" => {
-            typed::<team::MemberBody>(value)
+            typed::<team::MemberBody>(output)
         }
-        "/organization/create-role" => typed::<roles::CreateRole>(value),
-        "/organization/delete-role" => typed::<roles::RoleSelector>(value),
+        "/organization/create-role" => typed::<roles::CreateRole>(output),
+        "/organization/delete-role" => typed::<roles::RoleSelector>(output),
         "/organization/update-role" => {
             if schema
                 .organization_role
                 .fields()
                 .get("permission")
                 .is_some_and(|field| field.input())
-                && let Some(data) = output.get_mut("data").and_then(Value::as_object_mut)
+                && let Some(FieldValue::Object(data)) = output.get_mut("data")
             {
-                let _ = data.remove("permission");
+                let _ = std::sync::Arc::make_mut(data).remove("permission");
             }
             Ok(ValidatedBody::new(
-                Some(value),
-                serde_json::from_value::<roles::UpdateRole>(Value::Object(output))?,
+                Some(projection),
+                roles::UpdateRole::from_field_values(output)?,
             ))
         }
-        "/organization/has-permission" => typed::<HasPermissionRequest>(value),
+        "/organization/has-permission" => typed::<HasPermissionRequest>(output),
         _ => Err(AuthError::internal(
             "Organization endpoint has no typed body",
         )),

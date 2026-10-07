@@ -3,8 +3,8 @@ use async_trait::async_trait;
 use better_auth_core::store::schema::resolve_field_name;
 use chrono::Utc;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseBackend, EntityTrait, PaginatorTrait, QueryFilter,
-    QueryOrder, QuerySelect, Select,
+    ColumnTrait, DatabaseBackend, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder,
+    QuerySelect, Select,
 };
 
 use better_auth_core::store::{ListOrganizationMembersParams, MemberStore};
@@ -16,8 +16,8 @@ use crate::types_org::{CreateMember, Member};
 use super::organization_models::{self as models, Entity, values};
 use super::{SeaOrmStore, map_db_err};
 use crate::SeaOrmOrganizationModel;
+use better_auth_core::{FieldValue, SchemaField};
 use sea_orm::sea_query::{Expr, ExprTrait, SimpleExpr};
-use serde_json::json;
 
 fn member_expression(
     column: impl ColumnTrait,
@@ -70,8 +70,8 @@ fn apply_member_filter<M: SeaOrmOrganizationModel>(
     backend: DatabaseBackend,
     policy: &better_auth_core::id::IdGeneration,
 ) -> AuthResult<Select<Entity<M>>> {
+    use better_auth_core::FieldValue as Value;
     use better_auth_core::user_fields::UserFieldType;
-    use serde_json::Value;
     let (Some(field), Some(value)) = (params.filter_field.as_deref(), params.filter_value.as_ref())
     else {
         return Ok(query);
@@ -96,36 +96,27 @@ fn apply_member_filter<M: SeaOrmOrganizationModel>(
     .then_some(column);
     let column = member_expression(column, field, config, backend);
     let field_type = config.fields().get(field).map(|field| &field.field_type);
-    let convert = |value: &Value, number_strings: bool| -> AuthResult<sea_orm::Value> {
-        if let (Value::String(value), Some(column)) = (value, id_column) {
-            return column.id_value(value, policy);
-        }
-        Ok(match value {
-            Value::String(value)
-                if number_strings && matches!(field_type, Some(UserFieldType::Boolean)) =>
-            {
-                (value == "true").into()
+    let convert =
+        |value: &Value, number_strings: bool| -> AuthResult<sea_orm::sea_query::SimpleExpr> {
+            if let (Value::String(value), Some(column)) = (value, id_column) {
+                return Ok(column.id_value(value, policy)?.into());
             }
-            Value::String(value)
-                if number_strings && matches!(field_type, Some(UserFieldType::Number)) =>
-            {
-                better_auth_core::organization_fields::numeric_filter(value)
-                    .map_or_else(|| value.as_str().into(), Into::into)
-            }
-            Value::String(value) => value.as_str().into(),
-            Value::Bool(value) => (*value).into(),
-            Value::Number(value) => {
-                if let Some(value) = value.as_i64() {
-                    value.into()
-                } else if let Some(value) = value.as_u64() {
-                    value.into()
-                } else {
-                    value.as_f64().into()
+            let value = match value {
+                Value::String(value)
+                    if number_strings && matches!(field_type, Some(UserFieldType::Boolean)) =>
+                {
+                    Value::Bool(value == "true")
                 }
-            }
-            value => sea_orm::Value::Json(Some(Box::new(value.clone()))),
-        })
-    };
+                Value::String(value)
+                    if number_strings && matches!(field_type, Some(UserFieldType::Number)) =>
+                {
+                    better_auth_core::organization_fields::numeric_filter(value)
+                        .map_or_else(|| Value::String(value.clone()), Value::Number)
+                }
+                value => value.clone(),
+            };
+            super::record_bindings::parameter(value, backend)
+        };
     let operator = params.filter_operator.as_deref().unwrap_or("eq");
     if matches!(operator, "in" | "not_in") {
         let values = value
@@ -156,7 +147,14 @@ fn apply_member_filter<M: SeaOrmOrganizationModel>(
         else {
             return Ok(query.filter(Expr::value(false)));
         };
-        sea_orm::Value::ChronoDateTimeUtc(Some(parsed.with_timezone(&Utc)))
+        super::record_bindings::parameter(
+            if backend == DatabaseBackend::Sqlite {
+                super::record_bindings::sqlite_date(parsed.with_timezone(&Utc).into())?
+            } else {
+                Value::Date(parsed.with_timezone(&Utc).into())
+            },
+            backend,
+        )?
     } else {
         convert(value, true)?
     };
@@ -168,16 +166,8 @@ fn apply_member_filter<M: SeaOrmOrganizationModel>(
         "lt" => query.filter(column.lt(value)),
         "lte" => query.filter(column.lte(value)),
         "contains" | "starts_with" | "ends_with" => {
-            let pattern = match value {
-                sea_orm::Value::Double(Some(value)) => value.to_string(),
-                sea_orm::Value::Bool(Some(value)) if backend != DatabaseBackend::Postgres => {
-                    u8::from(value).to_string()
-                }
-                sea_orm::Value::Bool(Some(value)) => value.to_string(),
-                _ => raw_value
-                    .as_str()
-                    .map_or_else(|| raw_value.to_string(), str::to_owned),
-            };
+            let pattern =
+                super::record_bindings::utf16_string(&raw_value.display_utf16()?, backend);
             let pattern = match operator {
                 "starts_with" => format!("{pattern}%"),
                 "ends_with" => format!("%{pattern}"),
@@ -231,13 +221,10 @@ where
                 Some(record.id.typed()?.clone())
             },
             models::values([
-                (
-                    "organization_id",
-                    serde_json::to_value(record.organization_id)?,
-                ),
-                ("user_id", serde_json::to_value(record.user_id)?),
-                ("role", serde_json::to_value(record.role)?),
-                ("created_at", serde_json::to_value(record.created_at)?),
+                ("organization_id", record.organization_id.into_field_value()),
+                ("user_id", record.user_id.into_field_value()),
+                ("role", record.role.into_field_value()),
+                ("created_at", record.created_at.into_field_value()),
             ]),
         )?;
         models::active::<O::Member>(
@@ -250,8 +237,7 @@ where
         )
         .await?
         .insert(self.connection())
-        .await
-        .map_err(map_db_err)?
+        .await?
         .record(
             &config,
             self.connection().get_database_backend() == sea_orm::DbBackend::Postgres,
@@ -282,19 +268,21 @@ where
     }
     async fn get_member_with_user_value(
         &self,
-        organization_id: &serde_json::Value,
-        user_id: &serde_json::Value,
+        organization_id: &FieldValue,
+        user_id: &FieldValue,
     ) -> AuthResult<Option<better_auth_core::store::MemberUser>> {
         let query = Entity::<O::Member>::find()
             .filter(super::value_filter::equals_id(
                 O::Member::column("organization_id")?,
                 organization_id,
                 self.config().advanced.database.generate_id(),
+                self.connection().get_database_backend(),
             )?)
             .filter(super::value_filter::equals_id(
                 O::Member::column("user_id")?,
                 user_id,
                 self.config().advanced.database.generate_id(),
+                self.connection().get_database_backend(),
             )?);
         self.read_member_user(query, false).await
     }
@@ -335,8 +323,8 @@ where
 
     async fn get_member_value(
         &self,
-        organization_id: &serde_json::Value,
-        user_id: &serde_json::Value,
+        organization_id: &FieldValue,
+        user_id: &FieldValue,
     ) -> AuthResult<Option<Member>> {
         self.get_member_value_with_connection(self.connection(), organization_id, user_id)
             .await
@@ -367,7 +355,7 @@ where
         models::update::<O::Member, _>(
             self.connection(),
             member_id,
-            values([("role", json!(role))]),
+            values([("role", (role).to_owned().into_field())]),
             Default::default(),
             &self.organization_fields()?.member,
             self.config().advanced.database.generate_id(),
@@ -474,13 +462,16 @@ where
     }
 
     async fn count_organization_members(&self, organization_id: &str) -> AuthResult<i64> {
-        self.count_organization_members_with_connection(self.connection(), &json!(organization_id))
-            .await
+        self.count_organization_members_with_connection(
+            self.connection(),
+            &(organization_id).to_owned().into_field(),
+        )
+        .await
     }
 
     async fn count_organization_members_value(
         &self,
-        organization_id: &serde_json::Value,
+        organization_id: &FieldValue,
     ) -> AuthResult<i64> {
         self.count_organization_members_with_connection(self.connection(), organization_id)
             .await
@@ -621,12 +612,12 @@ impl<
             "member",
             None,
             values([
-                ("organization_id", json!(member.organization_id)),
-                ("user_id", json!(member.user_id)),
-                ("created_at", json!(Utc::now())),
+                ("organization_id", member.organization_id.into_field_value()),
+                ("user_id", member.user_id.into_field_value()),
+                ("created_at", FieldValue::Date(Utc::now().into())),
             ]),
         )?;
-        if let Some(role) = member.role.json()? {
+        if let Some(role) = Some(member.role.field_value()).filter(|value| !value.is_undefined()) {
             let _ = core.insert("role".into(), role);
         }
         models::insert::<O::Member, _>(
@@ -642,19 +633,21 @@ impl<
     pub(super) async fn get_member_value_with_connection<C: sea_orm::ConnectionTrait>(
         &self,
         db: &C,
-        organization_id: &serde_json::Value,
-        user_id: &serde_json::Value,
+        organization_id: &FieldValue,
+        user_id: &FieldValue,
     ) -> AuthResult<Option<Member>> {
         let row = Entity::<O::Member>::find()
             .filter(super::value_filter::equals_id(
                 O::Member::column("organization_id")?,
                 organization_id,
                 self.config().advanced.database.generate_id(),
+                self.connection().get_database_backend(),
             )?)
             .filter(super::value_filter::equals_id(
                 O::Member::column("user_id")?,
                 user_id,
                 self.config().advanced.database.generate_id(),
+                self.connection().get_database_backend(),
             )?)
             .one(db)
             .await
@@ -674,13 +667,14 @@ impl<
     pub(super) async fn count_organization_members_with_connection<C: sea_orm::ConnectionTrait>(
         &self,
         db: &C,
-        organization_id: &serde_json::Value,
+        organization_id: &FieldValue,
     ) -> AuthResult<i64> {
         Entity::<O::Member>::find()
             .filter(super::value_filter::equals_id(
                 O::Member::column("organization_id")?,
                 organization_id,
                 self.config().advanced.database.generate_id(),
+                self.connection().get_database_backend(),
             )?)
             .count(db)
             .await

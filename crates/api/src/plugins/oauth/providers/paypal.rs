@@ -60,7 +60,8 @@ pub(super) fn decode_profile(profile: Value) -> Result<OAuthUserInfo, String> {
             .map(serde_json::from_value)
             .transpose()
             .map_err(|error| format!("Invalid PayPal picture: {error}"))?,
-        email_verified: SchemaValue::from_json(profile.get("email_verified").cloned()),
+        email_verified: SchemaValue::from_json(profile.get("email_verified").cloned())
+            .map_err(|error| error.to_string())?,
         additional_fields: Default::default(),
     })
 }

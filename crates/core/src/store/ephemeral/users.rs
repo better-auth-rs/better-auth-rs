@@ -24,10 +24,11 @@ impl EphemeralStore {
 
     pub(super) async fn user_ref_by_id_value(
         &self,
-        id: &serde_json::Value,
+        id: &Value,
     ) -> AuthResult<Option<RowRef<UserView>>> {
         let id = self.memory_user_id_query(id)?;
-        self.user_ref(|user| serde_json::json!(user.id) == id).await
+        self.user_ref(|user| user.id.field_value().strict_equals(&id))
+            .await
     }
 
     async fn output_optional_user_ref(
@@ -67,11 +68,11 @@ impl EphemeralStore {
                 let mut input = std::mem::take(&mut user.additional_fields);
                 for (name, value) in [("name", &user.name), ("image", &user.image)] {
                     if let Some(config) = self.config.user.fields().get(name)
-                        && let Some(raw) = value.json()?
+                        && !value.is_undefined()
                     {
                         let _ = input.insert(
                             resolve_field_name(config.field_name.as_deref(), name).into(),
-                            raw,
+                            value.field_value(),
                         );
                     }
                 }
@@ -90,12 +91,12 @@ impl EphemeralStore {
         Ok(users)
     }
 
-    pub(super) fn assign_user_output(&self, user: &mut UserView, mut fields: Map<String, Value>) {
+    pub(super) fn assign_user_output(&self, user: &mut UserView, mut fields: FieldMap) {
         if self.config.user.fields().contains_key("name") {
-            user.name = crate::SchemaValue::from_json(fields.remove("name"));
+            user.name = crate::SchemaValue::from_field(fields.remove("name").unwrap_or_default());
         }
         if self.config.user.fields().contains_key("image") {
-            user.image = crate::SchemaValue::from_json(fields.remove("image"));
+            user.image = crate::SchemaValue::from_field(fields.remove("image").unwrap_or_default());
         }
         user.additional_fields = fields;
     }
@@ -142,10 +143,11 @@ impl EphemeralStore {
             .await?;
         for (name, target) in [("name", &mut update.name), ("image", &mut update.image)] {
             if let Some(field) = self.config.user.fields().get(name) {
-                *target = crate::SchemaValue::from_json(
+                *target = crate::SchemaValue::from_field(
                     update
                         .additional_fields
-                        .remove(resolve_field_name(field.field_name.as_deref(), name)),
+                        .remove(resolve_field_name(field.field_name.as_deref(), name))
+                        .unwrap_or_default(),
                 );
             }
         }
@@ -247,7 +249,7 @@ impl EphemeralStore {
                     if let Some(metadata) = update.metadata {
                         user.metadata = metadata;
                     }
-                    user.updated_at = Utc::now();
+                    user.updated_at = Utc::now().into();
                     user.additional_fields.extend(update.additional_fields);
                     Some(user.clone())
                 })
@@ -334,8 +336,10 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             ("image", &mut create_user.image),
         ] {
             if let Some(field) = self.config.user.fields().get(name) {
-                *target = crate::SchemaValue::from_json(
-                    fields.remove(resolve_field_name(field.field_name.as_deref(), name)),
+                *target = crate::SchemaValue::from_field(
+                    fields
+                        .remove(resolve_field_name(field.field_name.as_deref(), name))
+                        .unwrap_or_default(),
                 );
             }
         }
@@ -351,7 +355,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             .stored_username_field(&fields, "displayUsername")?
             .or(create_user.display_username.take())
             .flatten();
-        let now = Utc::now();
+        let now = crate::FieldDate::from(Utc::now());
         let id = id.map(crate::SchemaValue::Typed).unwrap_or_default();
         let mut user = UserView {
             additional_fields: fields,
@@ -387,7 +391,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             email: create_user.email,
             email_verified: create_user.email_verified.unwrap_or(false),
             image: create_user.image,
-            created_at: create_user.created_at.unwrap_or(now),
+            created_at: create_user.created_at.unwrap_or_else(|| now.clone()),
             updated_at: create_user.updated_at.unwrap_or(now),
             is_anonymous: create_user.is_anonymous,
             phone_number: create_user.phone_number,
@@ -401,7 +405,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             ban_expires: create_user.ban_expires,
             metadata: create_user
                 .metadata
-                .unwrap_or_else(|| serde_json::json!({})),
+                .unwrap_or_else(|| FieldMap::new().into()),
         };
         crate::observability::database::with_database_operation(
             &self.config,
@@ -432,7 +436,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
         self.output_optional_user_ref(self.user_ref(|user| user.id == id).await?)
             .await
     }
-    async fn get_user_by_id_value(&self, id: &serde_json::Value) -> AuthResult<Option<UserView>> {
+    async fn get_user_by_id_value(&self, id: &Value) -> AuthResult<Option<UserView>> {
         self.output_optional_user_ref(self.user_ref_by_id_value(id).await?)
             .await
     }
@@ -572,7 +576,20 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             &params,
             &self.config.user,
             &self.model_fields,
-        )?;
+        )?
+        .bind_memory_filter(|name, value| {
+            if matches!(name, "id" | "_id") {
+                return match value {
+                    Value::Array(values) => values
+                        .iter()
+                        .map(|value| self.memory_user_id_query(value))
+                        .collect::<AuthResult<Vec<_>>>()
+                        .map(Value::from),
+                    value => self.memory_user_id_query(&value),
+                };
+            }
+            self.memory_field_query(&self.config.user, name, value)
+        })?;
         let users: Vec<_> = self
             .raw("user", "findMany", |state| {
                 state
@@ -586,7 +603,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
                     .collect::<AuthResult<Vec<_>>>()
             })
             .await?;
-        let (users, _) = query.select(users, |(snapshot, _)| {
+        let (users, _) = query.select_memory(users, |(snapshot, _)| {
             (snapshot, &snapshot.additional_fields)
         })?;
         let users = self
@@ -594,9 +611,9 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             .await?;
         let total = self
             .raw("user", "count", |state| {
-                Ok(query.count(state.users.snapshot()?.iter(), |snapshot| {
+                query.count_memory(state.users.snapshot()?.iter(), |snapshot| {
                     (snapshot, &snapshot.additional_fields)
-                }))
+                })
             })
             .await?;
         Ok((users, total))

@@ -61,7 +61,7 @@ pub trait SeaOrmUserModel:
     /// Persist configured application fields in the same insert or update as core user fields.
     fn apply_fields(
         _active: &mut Self::ActiveModel,
-        fields: serde_json::Map<String, serde_json::Value>,
+        fields: better_auth_core::FieldMap,
     ) -> AuthResult<()> {
         if fields.is_empty() {
             return Ok(());
@@ -108,12 +108,14 @@ pub trait SeaOrmSessionModel:
         )))
     }
 
+    /// Initialize native and application columns. The store binds `expires_at` after this method returns.
+    /// Leave `expires_at` unset so runtime Date values reach the SQL driver without typed decoding.
     fn new_active(
         id: Option<Self::Id>,
         token: String,
         create_session: CreateSession,
         now: DateTime<Utc>,
-    ) -> Self::ActiveModel;
+    ) -> AuthResult<Self::ActiveModel>;
     fn set_expires_at(active: &mut Self::ActiveModel, expires_at: DateTime<Utc>);
     fn set_updated_at(active: &mut Self::ActiveModel, updated_at: DateTime<Utc>);
     /// Apply core and enabled plugin values returned by session update hooks.
@@ -125,7 +127,7 @@ pub trait SeaOrmSessionModel:
     /// Apply fields validated against the application's session configuration.
     fn apply_fields(
         _active: &mut Self::ActiveModel,
-        fields: serde_json::Map<String, serde_json::Value>,
+        fields: better_auth_core::FieldMap,
     ) -> AuthResult<()> {
         if fields.is_empty() {
             return Ok(());
@@ -156,7 +158,7 @@ pub trait SeaOrmAccountModel:
     /// Build a model from adapter-transformed fields, after before hooks complete.
     fn new_active(
         id: Option<Self::Id>,
-        fields: serde_json::Map<String, serde_json::Value>,
+        fields: better_auth_core::FieldMap,
     ) -> AuthResult<Self::ActiveModel>;
     /// Resolve logical names and declared model aliases to the same database column.
     fn field_column(name: &str) -> AuthResult<<Self::Entity as EntityTrait>::Column>;
@@ -168,7 +170,7 @@ pub trait SeaOrmAccountModel:
     /// Decode a create record or update patch into its declared SQL column types.
     fn apply_fields(
         active: &mut Self::ActiveModel,
-        fields: serde_json::Map<String, serde_json::Value>,
+        fields: better_auth_core::FieldMap,
     ) -> AuthResult<()>;
     /// Extract model values before output policies run, preserving mapped storage columns.
     fn record_fields(
@@ -215,7 +217,7 @@ pub trait SeaOrmVerificationModel:
     /// Build a model from adapter-transformed fields, after before hooks complete.
     fn new_active(
         id: Option<Self::Id>,
-        fields: serde_json::Map<String, serde_json::Value>,
+        fields: better_auth_core::FieldMap,
     ) -> AuthResult<Self::ActiveModel>;
     /// Resolve logical names and declared model aliases to the same database column.
     fn field_column(name: &str) -> AuthResult<<Self::Entity as EntityTrait>::Column>;
@@ -227,7 +229,7 @@ pub trait SeaOrmVerificationModel:
     /// Decode a create record or update patch into its declared SQL column types.
     fn apply_fields(
         active: &mut Self::ActiveModel,
-        fields: serde_json::Map<String, serde_json::Value>,
+        fields: better_auth_core::FieldMap,
     ) -> AuthResult<()>;
     /// Extract model values before output policies run, preserving mapped storage columns.
     fn record_fields(

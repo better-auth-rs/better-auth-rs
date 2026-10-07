@@ -2,7 +2,6 @@ use super::*;
 use crate::store::TeamMemberLimits;
 use crate::{SchemaValue, TeamMember};
 use better_auth_schema_registry::EntityRole;
-use serde_json::json;
 
 impl EphemeralStore {
     pub(super) async fn accept_invitation(
@@ -23,10 +22,10 @@ impl EphemeralStore {
         let patch = self
             .prepare_record_patch(
                 EntityRole::Invitation,
-                [("status".into(), json!(InvitationStatus::Accepted))]
+                [("status".into(), InvitationStatus::Accepted.into_field())]
                     .into_iter()
                     .collect(),
-                Map::new(),
+                FieldMap::new(),
             )
             .await?;
         let invitation = {
@@ -54,7 +53,7 @@ impl EphemeralStore {
     }
 
     async fn restore_pending_invitation(&self, id: &str) -> AuthResult<()> {
-        let id = self.organization_query(EntityRole::Invitation, "id", json!(id))?;
+        let id = self.organization_query(EntityRole::Invitation, "id", Value::from(id))?;
         if !self
             .lock()?
             .invitations
@@ -66,10 +65,10 @@ impl EphemeralStore {
         let patch = self
             .prepare_record_patch(
                 EntityRole::Invitation,
-                [("status".into(), json!(InvitationStatus::Pending))]
+                [("status".into(), InvitationStatus::Pending.into_field())]
                     .into_iter()
                     .collect(),
-                Map::new(),
+                FieldMap::new(),
             )
             .await?;
         let restored = {
@@ -99,7 +98,8 @@ impl EphemeralStore {
         teams_enabled: bool,
         maximum: TeamMemberLimits<'_>,
     ) -> AuthResult<(Member, Option<SessionView>)> {
-        let member_user = self.organization_query(EntityRole::Member, "userId", json!(user_id))?;
+        let member_user =
+            self.organization_query(EntityRole::Member, "userId", Value::from(user_id))?;
         let member_org = self.organization_reference_query(
             EntityRole::Member,
             "organizationId",
@@ -132,7 +132,11 @@ impl EphemeralStore {
             let team = self
                 .lock()?
                 .teams
-                .get(&self.organization_query(EntityRole::Team, "id", json!(team_id))?)?
+                .get(&self.organization_query(
+                    EntityRole::Team,
+                    "id",
+                    Value::from(team_id.as_str()),
+                )?)?
                 .filter(|team| team.organization_id == team_org)
                 .ok_or_else(|| AuthError::bad_request("Team not found"))?;
             let limit = maximum.maximum(team_id).await?;
@@ -190,7 +194,11 @@ impl EphemeralStore {
                 (
                     state
                         .teams
-                        .get(&self.organization_query(EntityRole::Team, "id", json!(team_id))?)?
+                        .get(&self.organization_query(
+                            EntityRole::Team,
+                            "id",
+                            Value::from(team_id.as_str()),
+                        )?)?
                         .filter(|team| team.organization_id == team_org)
                         .ok_or_else(|| AuthError::bad_request("Team not found"))?,
                     state.team_members.snapshot()?,
@@ -224,7 +232,7 @@ impl EphemeralStore {
             created_at: Utc::now().into(),
         };
         let member = self
-            .store_record(EntityRole::Member, member, None, Map::new())
+            .store_record(EntityRole::Member, member, None, FieldMap::new())
             .await?;
         let output = self.output_member(member.clone()).await?;
         for (team_id, _) in &reservations {
@@ -233,9 +241,13 @@ impl EphemeralStore {
                     .generated_id("teamMember", None, team_member_count + memberships.len())?
                     .map(SchemaValue::Typed)
                     .unwrap_or_default(),
-                team_id: self.organization_query(EntityRole::Team, "id", json!(team_id))?,
+                team_id: self.organization_query(
+                    EntityRole::Team,
+                    "id",
+                    Value::from(team_id.as_str()),
+                )?,
                 user_id: team_user.to_owned(),
-                created_at: Utc::now(),
+                created_at: Utc::now().into(),
             });
         }
         let mut state = self.lock()?;
@@ -272,7 +284,7 @@ impl EphemeralStore {
         for id in &team_ids {
             let team = state
                 .teams
-                .get(&self.organization_query(EntityRole::Team, "id", json!(id))?)?
+                .get(&self.organization_query(EntityRole::Team, "id", Value::from(id.as_str()))?)?
                 .filter(|team| team.organization_id == team_org)
                 .ok_or_else(|| AuthError::bad_request("Team not found"))?;
             if !reservations.iter().any(|(reserved, _)| reserved == id)
@@ -289,7 +301,7 @@ impl EphemeralStore {
         for (id, prepared) in reservations {
             let team = state
                 .teams
-                .get(&self.organization_query(EntityRole::Team, "id", json!(id))?)?
+                .get(&self.organization_query(EntityRole::Team, "id", Value::from(id.as_str()))?)?
                 .filter(|team| team.organization_id == team_org)
                 .ok_or_else(|| AuthError::bad_request("Team not found"))?;
             let actual = current_members
@@ -321,7 +333,7 @@ impl EphemeralStore {
                 if let Some(fields) = &mut session.visible_fields {
                     let _ = fields.insert("activeTeamId".into());
                 }
-                session.updated_at = Utc::now();
+                session.updated_at = Utc::now().into();
                 Some(session.clone())
             } else {
                 None
@@ -330,7 +342,7 @@ impl EphemeralStore {
             if let Some(fields) = &mut session.visible_fields {
                 let _ = fields.insert("activeOrganizationId".into());
             }
-            session.updated_at = Utc::now();
+            session.updated_at = Utc::now().into();
             (Some(session), cookie_session)
         } else {
             (None, None)
@@ -412,9 +424,9 @@ mod tests {
                             let barrier = barrier.clone();
                             async move {
                                 let _ = calls.fetch_add(1, Ordering::SeqCst);
-                                assert_eq!(value, Some(json!("member")));
+                                assert_eq!(value, Value::from("member"));
                                 barrier.wait().await;
-                                Ok(Some(json!("visible-member")))
+                                Ok(Value::from("visible-member"))
                             }
                         }
                     })),

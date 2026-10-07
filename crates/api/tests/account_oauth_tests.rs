@@ -215,14 +215,16 @@ struct TestAccountCookieClaims<'a> {
     id_token: Option<&'a str>,
     #[serde(
         rename = "accessTokenExpiresAt",
-        skip_serializing_if = "Option::is_none"
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "better_auth_core::field_value::serde::optional_date::serialize"
     )]
-    access_token_expires_at: Option<chrono::DateTime<Utc>>,
+    access_token_expires_at: Option<better_auth_core::FieldDate>,
     #[serde(
         rename = "refreshTokenExpiresAt",
-        skip_serializing_if = "Option::is_none"
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "better_auth_core::field_value::serde::optional_date::serialize"
     )]
-    refresh_token_expires_at: Option<chrono::DateTime<Utc>>,
+    refresh_token_expires_at: Option<better_auth_core::FieldDate>,
     #[serde(skip_serializing_if = "Option::is_none")]
     scope: Option<&'a str>,
     exp: usize,
@@ -233,7 +235,7 @@ fn encode_account_cookie(
     account: &better_auth_core::wire::AccountView,
     access_token: Option<&str>,
     refresh_token: Option<&str>,
-    access_token_expires_at: Option<chrono::DateTime<Utc>>,
+    access_token_expires_at: Option<better_auth_core::FieldDate>,
 ) -> String {
     let now = Utc::now();
     better_auth_core::utils::jwe::encode(
@@ -594,7 +596,7 @@ async fn test_refresh_token_migrates_plaintext_when_encryption_is_enabled() {
                 access_token: Some("rotated-access-token".to_string()),
                 refresh_token: Some("rotated-refresh-token".to_string()),
                 id_token: Some("plain-id-token".to_string()),
-                access_token_expires_at: Some(Utc::now() + Duration::minutes(30)),
+                access_token_expires_at: Some((Utc::now() + Duration::minutes(30)).into()),
                 ..Default::default()
             },
         )])),
@@ -659,7 +661,7 @@ async fn test_refresh_token_persists_rotated_tokens_for_cookie_matched_account()
         &account,
         Some("old-access-token"),
         Some("old-refresh-token"),
-        Some(Utc::now() + Duration::minutes(30)),
+        Some((Utc::now() + Duration::minutes(30)).into()),
     );
 
     let ctx = AuthContext::new(config.clone(), db.clone())
@@ -674,8 +676,8 @@ async fn test_refresh_token_persists_rotated_tokens_for_cookie_matched_account()
             OAuthTokenSet {
                 access_token: Some("rotated-access-token".to_string()),
                 refresh_token: Some("rotated-refresh-token".to_string()),
-                access_token_expires_at: Some(Utc::now() + Duration::minutes(30)),
-                refresh_token_expires_at: Some(Utc::now() + Duration::hours(24)),
+                access_token_expires_at: Some((Utc::now() + Duration::minutes(30)).into()),
+                refresh_token_expires_at: Some((Utc::now() + Duration::hours(24)).into()),
                 scopes: vec!["email".to_string()],
                 ..Default::default()
             },
@@ -742,7 +744,7 @@ async fn test_get_access_token_refresh_persists_rotated_tokens_for_cookie_matche
         &account,
         Some("expired-access-token"),
         Some("old-refresh-token"),
-        Some(Utc::now() - Duration::seconds(10)),
+        Some((Utc::now() - Duration::seconds(10)).into()),
     );
 
     let ctx = AuthContext::new(config.clone(), db.clone())
@@ -757,8 +759,8 @@ async fn test_get_access_token_refresh_persists_rotated_tokens_for_cookie_matche
             OAuthTokenSet {
                 access_token: Some("rotated-access-token".to_string()),
                 refresh_token: Some("rotated-refresh-token".to_string()),
-                access_token_expires_at: Some(Utc::now() + Duration::minutes(30)),
-                refresh_token_expires_at: Some(Utc::now() + Duration::hours(24)),
+                access_token_expires_at: Some((Utc::now() + Duration::minutes(30)).into()),
+                refresh_token_expires_at: Some((Utc::now() + Duration::hours(24)).into()),
                 scopes: vec!["email".to_string()],
                 ..Default::default()
             },

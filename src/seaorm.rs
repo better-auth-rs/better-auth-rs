@@ -11,4 +11,4 @@ pub use better_auth_seaorm::{
 };
 
 #[doc(hidden)]
-pub use better_auth_seaorm::__private_chrono;
+pub use better_auth_seaorm::{__private_chrono, __private_field_decode, __private_field_value};

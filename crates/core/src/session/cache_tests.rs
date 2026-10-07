@@ -359,7 +359,7 @@ async fn deferred_get_reports_refresh_and_post_updates_storage_and_cookie() {
             .unwrap()
             .unwrap()
             .expires_at(),
-        stale
+        crate::FieldDate::from(stale)
     );
     assert!(req.take_response_headers().unwrap().is_empty());
 
@@ -367,7 +367,9 @@ async fn deferred_get_reports_refresh_and_post_updates_storage_and_cookie() {
     post.method = HttpMethod::Post;
     let refreshed = manager.resolve(&post, SessionRead::Cached).await.unwrap();
     assert!(refreshed.needs_refresh.is_none());
-    assert!(refreshed.data.unwrap().session.expires_at > stale);
+    assert!(
+        refreshed.data.unwrap().session.expires_at.milliseconds() > stale.timestamp_millis() as f64
+    );
     assert!(
         post.take_response_headers()
             .unwrap()
@@ -404,7 +406,10 @@ async fn disable_refresh_and_dont_remember_do_not_extend_expiry() {
         ));
     for req in [query, remembered] {
         let resolved = manager.resolve(&req, SessionRead::Cached).await.unwrap();
-        assert_eq!(resolved.data.unwrap().session.expires_at, stale);
+        assert_eq!(
+            resolved.data.unwrap().session.expires_at,
+            crate::FieldDate::from(stale)
+        );
         assert!(resolved.needs_refresh.is_none());
         assert!(req.take_response_headers().unwrap().is_empty());
     }
@@ -416,7 +421,7 @@ async fn disable_refresh_and_dont_remember_do_not_extend_expiry() {
             .unwrap()
             .unwrap()
             .expires_at(),
-        stale
+        crate::FieldDate::from(stale)
     );
 }
 

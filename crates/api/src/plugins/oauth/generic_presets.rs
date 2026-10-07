@@ -208,7 +208,8 @@ impl Preset {
                         .get("default_avatar_id")
                         .filter(|value| is_truthy(value))
                 {
-                    let avatar = SchemaValue::<Value>::Dynamic(avatar.clone()).display_string()?;
+                    let avatar =
+                        SchemaValue::<String>::from_json(Some(avatar.clone()))?.display_string()?;
                     let _ = profile.insert(
                         "image".into(),
                         Value::String(format!(
@@ -283,13 +284,13 @@ impl OAuthAccountSubject for Preset {
         } else {
             "id"
         };
-        SchemaValue::<Value>::Dynamic(
+        SchemaValue::<String>::from_json(Some(
             profile
                 .get(field)
                 .filter(|value| !value.is_null())
                 .cloned()
                 .unwrap_or_else(|| Value::String(String::new())),
-        )
+        ))?
         .display_string()
     }
 }

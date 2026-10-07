@@ -1,9 +1,9 @@
 use super::EndpointContext;
+use better_auth_core::FieldValue;
 use better_auth_core::{
     AuthResult, AuthSchema, CreateMember, Member, Organization, SchemaValue, Team, TeamMember,
     UserView,
 };
-use serde_json::Value;
 
 pub(super) struct MemberAdapter<'a, 'b, S: AuthSchema>(&'a EndpointContext<'b, S>);
 
@@ -12,7 +12,10 @@ impl<'a, 'b, S: AuthSchema> MemberAdapter<'a, 'b, S> {
         Self(endpoint)
     }
 
-    pub(super) async fn get_user_by_id_value(&self, id: &Value) -> AuthResult<Option<UserView>> {
+    pub(super) async fn get_user_by_id_value(
+        &self,
+        id: &FieldValue,
+    ) -> AuthResult<Option<UserView>> {
         match self.0.transaction {
             Some(transaction) => transaction.get_user_by_id_value(id).await,
             None => self.0.auth.database.get_user_by_id_value(id).await,
@@ -26,8 +29,8 @@ impl<'a, 'b, S: AuthSchema> MemberAdapter<'a, 'b, S> {
     }
     pub(super) async fn get_member_value(
         &self,
-        org: &Value,
-        user: &Value,
+        org: &FieldValue,
+        user: &FieldValue,
     ) -> AuthResult<Option<Member>> {
         match self.0.transaction {
             Some(transaction) => transaction.get_member_value(org, user).await,
@@ -36,20 +39,20 @@ impl<'a, 'b, S: AuthSchema> MemberAdapter<'a, 'b, S> {
     }
     pub(super) async fn get_organization_by_id_value(
         &self,
-        id: &Value,
+        id: &FieldValue,
     ) -> AuthResult<Option<Organization>> {
         match self.0.transaction {
             Some(transaction) => transaction.get_organization_by_id_value(id).await,
             None => self.0.auth.database.get_organization_by_id_value(id).await,
         }
     }
-    pub(super) async fn get_team_value(&self, id: &Value) -> AuthResult<Option<Team>> {
+    pub(super) async fn get_team_value(&self, id: &FieldValue) -> AuthResult<Option<Team>> {
         match self.0.transaction {
             Some(transaction) => transaction.get_team_value(id).await,
             None => self.0.auth.database.get_team_value(id).await,
         }
     }
-    pub(super) async fn count_organization_members(&self, id: &Value) -> AuthResult<i64> {
+    pub(super) async fn count_organization_members(&self, id: &FieldValue) -> AuthResult<i64> {
         match self.0.transaction {
             Some(transaction) => transaction.count_organization_members_value(id).await,
             None => {

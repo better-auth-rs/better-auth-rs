@@ -126,7 +126,7 @@ pub(crate) mod test_helpers {
         let create_session = CreateSession {
             additional_fields: Default::default(),
             user_id: user_id.into(),
-            expires_at: Utc::now() + expires_in,
+            expires_at: (Utc::now() + expires_in).into(),
             ip_address: Some("127.0.0.1".to_string()),
             user_agent: Some("test-agent".to_string()),
             impersonated_by: None,

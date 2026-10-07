@@ -108,7 +108,7 @@ pub trait GenericOAuthUserInfoHandler: Send + Sync {
 #[derive(Debug, Clone, Default)]
 pub struct OAuthProfile {
     /// Application user fields supplied by the profile mapper.
-    pub additional_fields: serde_json::Map<String, Value>,
+    pub additional_fields: better_auth_core::FieldMap,
     /// Leave the email unchanged with `None`, or override its string/null/undefined value.
     pub email: Option<better_auth_core::SchemaValue<Option<String>>>,
     /// Leave the name unchanged with `None`, or override its string/null/undefined value.

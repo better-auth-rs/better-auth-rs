@@ -16,7 +16,12 @@ type TestResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
 #[tokio::test]
 async fn memory_device_where_matches_upstream_rows_callbacks_and_consumption() -> TestResult {
     let captured = contract::load("memory")?;
-    for (serial, cases) in inventory::paired(&captured, "memory") {
+    let transactions = contract::load_transactions("memory")?;
+    let transaction_cases = inventory::paired_transactions(&transactions, "memory");
+    for (serial, mut cases) in inventory::paired(&captured, "memory") {
+        if !serial {
+            cases.extend(transaction_cases.iter().copied());
+        }
         let config = contract::config(serial);
         contract::run(
             Arc::new(EphemeralStore::new(Arc::new(config.clone()))),
@@ -31,7 +36,12 @@ async fn memory_device_where_matches_upstream_rows_callbacks_and_consumption() -
 
 async fn sql_contract(database: DatabaseConnection, backend: &str) -> TestResult {
     let captured = contract::load(backend)?;
-    for (serial, cases) in inventory::paired(&captured, backend) {
+    let transactions = contract::load_transactions(backend)?;
+    let transaction_cases = inventory::paired_transactions(&transactions, backend);
+    for (serial, mut cases) in inventory::paired(&captured, backend) {
+        if !serial {
+            cases.extend(transaction_cases.iter().copied());
+        }
         let config = contract::config(serial);
         if serial {
             let store = fixture::setup_serial(config.clone(), database.clone()).await?;

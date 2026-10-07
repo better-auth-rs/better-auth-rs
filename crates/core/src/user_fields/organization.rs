@@ -3,17 +3,17 @@ use crate::store::schema::resolve_field_name;
 #[cfg(test)]
 use crate::user_fields::{FieldTransforms, UserFieldTransform};
 use crate::{AuthError, AuthResult};
-use serde_json::{Map, Value};
+use crate::{FieldMap, FieldValue as Value};
 
 impl UserConfig {
     /// Apply configured policies once to logical core fields and application fields.
     /// The adapter owns `id`; custom field attributes cannot replace its policy.
     pub async fn organization_storage_fields(
         &self,
-        core: Map<String, Value>,
-        extras: Map<String, Value>,
+        core: FieldMap,
+        extras: FieldMap,
         create: bool,
-    ) -> AuthResult<Map<String, Value>> {
+    ) -> AuthResult<FieldMap> {
         let mut output = core.clone();
         output.retain(|name, _| name == "id" || !self.fields().contains_key(name));
         let mut input = extras;
@@ -25,11 +25,11 @@ impl UserConfig {
     /// Validate Organization route fields without applying adapter defaults or transforms.
     pub fn parse_organization_input(
         &self,
-        input: &Map<String, Value>,
+        input: &FieldMap,
         prefix: &str,
         partial: bool,
-    ) -> AuthResult<Map<String, Value>> {
-        let mut parsed = Map::new();
+    ) -> AuthResult<FieldMap> {
+        let mut parsed = FieldMap::new();
         let mut errors = Vec::new();
         for (name, field) in self.fields() {
             match field.validate_organization_input(
@@ -56,10 +56,7 @@ impl UserConfig {
     }
 
     /// Apply the adapter's field mapping and output transforms before route visibility filtering.
-    pub async fn output_fields(
-        &self,
-        storage: &Map<String, Value>,
-    ) -> AuthResult<Map<String, Value>> {
+    pub async fn output_fields(&self, storage: &FieldMap) -> AuthResult<FieldMap> {
         // Projection preserves the one input row.
         Ok(self
             .output_fields_many(std::slice::from_ref(storage))
@@ -68,29 +65,26 @@ impl UserConfig {
     }
 
     /// Project a database result while retaining row order and per-row field order.
-    pub async fn output_fields_many(
-        &self,
-        storage: &[Map<String, Value>],
-    ) -> AuthResult<Vec<Map<String, Value>>> {
+    pub async fn output_fields_many(&self, storage: &[FieldMap]) -> AuthResult<Vec<FieldMap>> {
         self.output_fields_many_with_json(storage, |_| true).await
     }
 
     pub(crate) async fn output_memory_fields_many(
         &self,
-        storage: &[Map<String, Value>],
-    ) -> AuthResult<Vec<Map<String, Value>>> {
+        storage: &[FieldMap],
+    ) -> AuthResult<Vec<FieldMap>> {
         self.output_fields_many_with_json(storage, UserFieldConfig::references_id)
             .await
     }
 
     async fn output_fields_many_with_json(
         &self,
-        storage: &[Map<String, Value>],
+        storage: &[FieldMap],
         supports_native_json: impl Fn(&UserFieldConfig) -> bool + Sync,
-    ) -> AuthResult<Vec<Map<String, Value>>> {
+    ) -> AuthResult<Vec<FieldMap>> {
         let mut rows: Vec<_> = storage
             .iter()
-            .map(|storage| (storage, Map::new()))
+            .map(|storage| (storage, FieldMap::new()))
             .collect();
         super::batch::project_fields(
             &mut rows,
@@ -105,7 +99,9 @@ impl UserConfig {
                         output,
                         name,
                         field,
-                        field.adapter_output(value, supports_native_json).await?,
+                        field
+                            .adapter_output(value.unwrap_or_default(), supports_native_json)
+                            .await?,
                     )
                 })
             },
@@ -115,7 +111,7 @@ impl UserConfig {
     }
 
     /// Apply only `returned` flags to fields already projected by the adapter.
-    pub fn filter_returned_fields(&self, fields: &mut Map<String, Value>) {
+    pub fn filter_returned_fields(&self, fields: &mut FieldMap) {
         fields.retain(|name, _| self.fields().get(name).is_none_or(|field| field.returned()));
     }
 }
@@ -145,7 +141,7 @@ impl UserFieldConfig {
         };
         let mut errors = Vec::new();
         let valid = match (&self.field_type, value) {
-            (UserFieldType::String, Some(Value::String(_)))
+            (UserFieldType::String, Some(Value::String(_) | Value::Utf16String(_)))
             | (UserFieldType::Number, Some(Value::Number(_)))
             | (UserFieldType::Boolean, Some(Value::Bool(_)))
             | (UserFieldType::Json, Some(_)) => true,
@@ -191,11 +187,12 @@ impl UserFieldConfig {
 
 fn type_name(value: Option<&Value>) -> &'static str {
     match value {
-        None => "undefined",
+        None | Some(Value::Undefined) => "undefined",
         Some(Value::Null) => "null",
         Some(Value::Bool(_)) => "boolean",
         Some(Value::Number(_)) => "number",
-        Some(Value::String(_)) => "string",
+        Some(Value::String(_) | Value::Utf16String(_)) => "string",
+        Some(Value::Date(_)) => "date",
         Some(Value::Array(_)) => "array",
         Some(Value::Object(_)) => "object",
     }
@@ -212,7 +209,9 @@ fn invalid_type(location: &str, expected: &str, value: Option<&Value>) -> String
 mod tests {
     use super::*;
     use crate::user_fields::UserFieldConfig;
-    use serde_json::json;
+    macro_rules! json {
+        ($($token:tt)*) => { Value::from_json(serde_json::json!($($token)*)).expect("valid JSON field") };
+    }
     use std::sync::Arc;
 
     #[tokio::test]
@@ -237,9 +236,7 @@ mod tests {
                             })),
                             transform: Some(FieldTransforms {
                                 input: Some(UserFieldTransform::new(|value| {
-                                    Ok(value.map(|value| {
-                                        json!(format!("{}:in", value.as_str().unwrap()))
-                                    }))
+                                    Ok(json!(format!("{}:in", value.as_str().unwrap())))
                                 })),
                                 ..Default::default()
                             }),
@@ -259,7 +256,7 @@ mod tests {
             ),
         };
         let error = schema
-            .parse_organization_input(&Map::new(), "body", false)
+            .parse_organization_input(&FieldMap::new(), "body", false)
             .unwrap_err();
         assert!(
             error
@@ -288,7 +285,7 @@ mod tests {
         );
         assert!(
             schema
-                .parse_organization_input(&Map::new(), "body.data", true)
+                .parse_organization_input(&FieldMap::new(), "body.data", true)
                 .unwrap()
                 .is_empty()
         );
@@ -351,16 +348,14 @@ mod tests {
 }
 
 pub(crate) fn assign_output(
-    output: &mut Map<String, Value>,
+    output: &mut FieldMap,
     name: &str,
     field: &UserFieldConfig,
-    value: Option<Value>,
+    mut value: Value,
 ) -> AuthResult<()> {
-    if let Some(mut value) = value {
-        if !field.references_id() {
-            field.normalize_date(&mut value)?;
-        }
-        let _ = output.insert(name.to_owned(), value);
+    if !field.references_id() {
+        field.normalize_date(&mut value)?;
     }
+    let _ = output.insert(name.to_owned(), value);
     Ok(())
 }

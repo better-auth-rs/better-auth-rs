@@ -14,7 +14,7 @@ impl EphemeralStore {
         } else {
             self.memory_field_query(&self.field_config(role)?, name, value)?
         };
-        Ok(crate::SchemaValue::from_json(Some(value)))
+        Ok(crate::SchemaValue::from_field(value))
     }
 
     pub(super) fn organization_primary_id(
@@ -22,11 +22,8 @@ impl EphemeralStore {
         value: &crate::SchemaValue<String>,
     ) -> AuthResult<crate::SchemaValue<String>> {
         // Join keys come from the stored row before output transforms run.
-        value
-            .json()?
-            .map(|value| self.memory_user_id_query(&value))
-            .transpose()
-            .map(crate::SchemaValue::from_json)
+        self.memory_user_id_query(&value.field_value())
+            .map(crate::SchemaValue::from_field)
     }
 
     pub(super) fn organization_reference_query(
@@ -35,10 +32,7 @@ impl EphemeralStore {
         name: &str,
         value: &crate::SchemaValue<String>,
     ) -> AuthResult<crate::SchemaValue<String>> {
-        match value.json()? {
-            Some(value) => self.organization_query(role, name, value),
-            None => Ok(crate::SchemaValue::Undefined),
-        }
+        self.organization_query(role, name, value.field_value())
     }
 
     fn uses_serial_reference(&self, field: &UserFieldConfig) -> bool {
@@ -73,7 +67,12 @@ impl EphemeralStore {
         let original_json = field
             .is_some_and(|field| matches!(field.field_type, UserFieldType::Json))
             .then(|| value.clone())
-            .filter(|value| value.is_object() || value.is_array() || value.is_null());
+            .filter(|value| {
+                value.is_object()
+                    || value.is_array()
+                    || value.is_null()
+                    || value.as_date().is_some()
+            });
         let value = if field.is_some_and(|field| self.uses_serial_reference(field)) {
             crate::id::serial_reference_query_value(value)?
         } else {
@@ -81,7 +80,7 @@ impl EphemeralStore {
         };
         // Query JSON conversion follows reference conversion and uses the original query value.
         match original_json {
-            Some(value) => Ok(Value::String(crate::utils::json::stringify(&value)?)),
+            Some(value) => Ok(value.stringify()?.map(Value::String).unwrap_or_default()),
             None => Ok(value),
         }
     }
@@ -92,7 +91,7 @@ impl EphemeralStore {
             crate::id::IdGeneration::Serial
         ) {
             // Memory's typed user rows retain primary IDs as strings.
-            let number = crate::query::number(value)?;
+            let number = crate::query::field_number(value)?;
             Ok(Value::String(crate::schema_value::number_string(number)))
         } else {
             Ok(value.clone())
@@ -113,11 +112,11 @@ impl EphemeralStore {
         match value {
             Some(value) if reference && !value.is_null() => {
                 // Derive the canonical binding from the captured raw value, not output policies.
-                crate::SchemaValue::<String>::from_json(Some(value))
+                crate::SchemaValue::<String>::from_field(value)
                     .display_string()
                     .map(Into::into)
             }
-            value => Ok(crate::SchemaValue::from_json(value)),
+            value => Ok(crate::SchemaValue::from_field(value.unwrap_or_default())),
         }
     }
 }

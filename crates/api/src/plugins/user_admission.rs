@@ -3,8 +3,9 @@
 use super::endpoint_context::EndpointContext;
 use async_trait::async_trait;
 use better_auth_core::{AuthError, AuthResponse, AuthResult, AuthSchema, CreateUser};
+use better_auth_core::{FieldMap, FieldValue};
 use serde::Serialize;
-use serde_json::{Map, Value};
+use serde_json::Value;
 use std::sync::Arc;
 
 /// The operation that is subject to the admission policy.
@@ -64,7 +65,8 @@ impl UserValidationSource {
 #[derive(Debug, Clone, Serialize)]
 pub struct UserValidationData {
     /// Public field names. Generated identifiers are absent during creation.
-    pub user: Map<String, Value>,
+    #[serde(with = "better_auth_core::field_value::serde::map")]
+    pub user: FieldMap,
     pub source: UserValidationSource,
 }
 
@@ -181,14 +183,10 @@ pub(crate) async fn validate_create<S: AuthSchema>(
     }
     let mut user = input.additional_fields.clone();
     for (name, field) in [("name", &input.name), ("image", &input.image)] {
-        let value = match field {
-            better_auth_core::SchemaValue::Typed(value) => {
-                value.clone().map(Value::String).unwrap_or(Value::Null)
-            }
-            better_auth_core::SchemaValue::Dynamic(value) => value.clone(),
-            better_auth_core::SchemaValue::InvalidDate => Value::Null,
-            better_auth_core::SchemaValue::Undefined => continue,
-        };
+        let value = field.field_value();
+        if value.is_undefined() {
+            continue;
+        }
         let _ = user.insert(name.into(), value);
     }
     for (name, value) in [
@@ -200,7 +198,7 @@ pub(crate) async fn validate_create<S: AuthSchema>(
         if let Some(value) = value {
             let _ = user.insert(
                 name.into(),
-                Value::String(if name == "email" {
+                FieldValue::String(if name == "email" {
                     value.to_lowercase()
                 } else {
                     value.clone()
@@ -215,7 +213,10 @@ pub(crate) async fn validate_create<S: AuthSchema>(
         if let Some(value) = value {
             let _ = user.insert(
                 name.into(),
-                value.clone().map(Value::String).unwrap_or(Value::Null),
+                value
+                    .clone()
+                    .map(FieldValue::String)
+                    .unwrap_or(FieldValue::Null),
             );
         }
     }
@@ -226,25 +227,25 @@ pub(crate) async fn validate_create<S: AuthSchema>(
         ("phoneNumberVerified", input.phone_number_verified),
     ] {
         if let Some(value) = value {
-            let _ = user.insert(name.into(), Value::Bool(value));
+            let _ = user.insert(name.into(), FieldValue::Bool(value));
         }
     }
     if let Some(value) = &input.ban_reason {
         let _ = user.insert("banReason".into(), value.clone().into());
     }
-    if let Some(value) = input.ban_expires {
-        let _ = user.insert("banExpires".into(), serde_json::json!(value));
+    if let Some(value) = &input.ban_expires {
+        let _ = user.insert("banExpires".into(), FieldValue::Date(value.clone()));
     }
     if let Some(value) = &input.metadata {
         let _ = user.insert("metadata".into(), value.clone());
     }
     let now = chrono::Utc::now();
-    let _ = user
-        .entry("createdAt")
-        .or_insert(serde_json::json!(input.created_at.unwrap_or(now)));
-    let _ = user
-        .entry("updatedAt")
-        .or_insert(serde_json::json!(input.updated_at.unwrap_or(now)));
+    let _ = user.entry("createdAt").or_insert(FieldValue::Date(
+        input.created_at.clone().unwrap_or_else(|| now.into()),
+    ));
+    let _ = user.entry("updatedAt").or_insert(FieldValue::Date(
+        input.updated_at.clone().unwrap_or_else(|| now.into()),
+    ));
     validate(UserValidationData { user, source }, endpoint).await
 }
 

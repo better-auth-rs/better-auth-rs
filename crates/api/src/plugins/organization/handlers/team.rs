@@ -16,6 +16,31 @@ mod lifecycle;
 #[path = "team_input_tests.rs"]
 mod input_tests;
 
+use crate::plugins::organization::request::{from_fields, object, take};
+use better_auth_core::{FieldMap, FromFieldMap};
+
+from_fields!(CreateBody { name: "name", organization_id: "organizationId" }; additional_fields);
+from_fields!(UpdateData { name: "name", organization_id: "organizationId" }; additional_fields);
+from_fields!(TeamBody {
+    team_id: "teamId",
+    organization_id: "organizationId"
+});
+from_fields!(MemberBody {
+    team_id: "teamId",
+    user_id: "userId",
+    organization_id: "organizationId"
+});
+from_fields!(ActiveBody { team_id: "teamId" });
+
+impl FromFieldMap for UpdateBody {
+    fn from_field_values(mut fields: FieldMap) -> AuthResult<Self> {
+        Ok(Self {
+            team_id: take(&mut fields, "teamId")?,
+            data: UpdateData::from_field_values(object(&mut fields, "data")?)?,
+        })
+    }
+}
+
 pub(crate) fn routes() -> Vec<AuthRoute> {
     vec![
         AuthRoute::post("/organization/create-team", "createTeam"),
@@ -41,7 +66,8 @@ pub(crate) fn routes() -> Vec<AuthRoute> {
 #[serde(rename_all = "camelCase")]
 pub(in crate::plugins::organization) struct CreateBody {
     #[serde(flatten)]
-    additional_fields: serde_json::Map<String, serde_json::Value>,
+    #[serde(with = "better_auth_core::field_value::serde::map")]
+    additional_fields: better_auth_core::FieldMap,
     #[serde(
         default,
         skip_serializing_if = "better_auth_core::SchemaValue::is_undefined"
@@ -77,7 +103,8 @@ pub(in crate::plugins::organization) struct UpdateBody {
 #[serde(rename_all = "camelCase")]
 pub(in crate::plugins::organization) struct UpdateData {
     #[serde(flatten)]
-    additional_fields: serde_json::Map<String, serde_json::Value>,
+    #[serde(with = "better_auth_core::field_value::serde::map")]
+    additional_fields: better_auth_core::FieldMap,
     #[serde(
         default,
         skip_serializing_if = "better_auth_core::SchemaValue::is_undefined"

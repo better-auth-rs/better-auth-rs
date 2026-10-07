@@ -61,8 +61,8 @@ impl OpenApiRegistry {
         let mut input_fields: ModelFields = endpoint_user_fields
             .fields()
             .iter()
-            .map(|(key, field)| (key.clone(), project_field(key, field, true)))
-            .collect();
+            .map(|(key, field)| Ok((key.clone(), project_field(key, field, true)?)))
+            .collect::<AuthResult<_>>()?;
         let mut routes = Vec::new();
         let disabled = &adapter_config.disabled_paths;
         for endpoint in catalog.endpoints(None) {
@@ -134,7 +134,8 @@ impl OpenApiRegistry {
                 fields
                     .fields()
                     .iter()
-                    .map(|(key, field)| (key.clone(), project_field(key, field, false))),
+                    .map(|(key, field)| Ok((key.clone(), project_field(key, field, false)?)))
+                    .collect::<AuthResult<ModelFields>>()?,
             );
             let order = if matches!(
                 role,

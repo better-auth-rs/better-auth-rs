@@ -2,7 +2,7 @@ use better_auth_core::{AuthResult, SchemaValue};
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, ConnectionTrait, DbBackend, EntityTrait, Iden, Iterable,
     QueryFilter,
-    sea_query::{Expr, Query, SimpleExpr, Value},
+    sea_query::{Query, Value},
 };
 
 use super::{
@@ -16,6 +16,7 @@ fn fields<M: SeaOrmUserModel>(
     active: M::ActiveModel,
     name: SchemaValue<Option<String>>,
     image: SchemaValue<Option<String>>,
+    extra: better_auth_core::FieldMap,
 ) -> AuthResult<Vec<(<M::Entity as EntityTrait>::Column, Binding)>> {
     let mut fields = Vec::new();
     // The upstream adapter walks the logical schema, independent of request key order or SQL column names.
@@ -34,16 +35,17 @@ fn fields<M: SeaOrmUserModel>(
             _ => None,
         };
         if let Some(raw) = raw {
-            if let Some(value) = raw.json()? {
+            if let Some(value) = Some(raw.field_value()).filter(|value| !value.is_undefined()) {
                 fields.push((column, Binding::for_column(column, value)));
             }
         } else if let sea_orm::ActiveValue::Set(value) = active.get(column) {
             let binding = match (backend, key, value) {
                 (DbBackend::Sqlite, "createdAt" | "updatedAt", Value::ChronoDateTimeUtc(value)) => {
-                    Binding::Raw(better_auth_core::utils::date::serialize_option(
-                        &value,
-                        serde_json::value::Serializer,
-                    )?)
+                    Binding::Raw(value.map_or(better_auth_core::FieldValue::Null, |value| {
+                        better_auth_core::FieldValue::String(
+                            value.to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+                        )
+                    }))
                 }
                 (_, _, value) => Binding::Native(value),
             };
@@ -67,6 +69,14 @@ fn fields<M: SeaOrmUserModel>(
     if let sea_orm::ActiveValue::Set(value) = active.get(M::id_column()) {
         fields.push((M::id_column(), Binding::Native(value)));
     }
+    for (name, value) in extra {
+        if value.is_undefined() {
+            continue;
+        }
+        let column = M::field_column(&name)?;
+        fields.retain(|(stored, _)| stored.to_string() != column.to_string());
+        fields.push((column, Binding::for_column(column, value)));
+    }
     Ok(fields)
 }
 
@@ -75,9 +85,10 @@ pub(super) async fn insert<M: SeaOrmUserModel>(
     active: M::ActiveModel,
     name: SchemaValue<Option<String>>,
     image: SchemaValue<Option<String>>,
+    extra: better_auth_core::FieldMap,
 ) -> AuthResult<M> {
     let backend = db.get_database_backend();
-    let fields = fields::<M>(backend, active, name, image)?;
+    let fields = fields::<M>(backend, active, name, image, extra)?;
     let (columns, bindings): (Vec<_>, Vec<_>) = fields.into_iter().unzip();
     let values = record_bindings::bind(backend, bindings)?;
     let id = columns
@@ -89,7 +100,7 @@ pub(super) async fn insert<M: SeaOrmUserModel>(
     let _ = query
         .into_table(M::Entity::default())
         .columns(columns)
-        .values_panic(values.into_iter().map(SimpleExpr::Value));
+        .values_panic(values);
     if db.support_returning() {
         let _ = query.returning(Query::returning().all());
         return M::find_by_statement(backend.build(&query))
@@ -117,15 +128,16 @@ pub(super) async fn update<M: SeaOrmUserModel>(
     active: M::ActiveModel,
     name: SchemaValue<Option<String>>,
     image: SchemaValue<Option<String>>,
+    extra: better_auth_core::FieldMap,
     id: sea_orm::Value,
 ) -> AuthResult<Option<M>> {
     let backend = db.get_database_backend();
-    let fields = fields::<M>(backend, active, name, image)?;
+    let fields = fields::<M>(backend, active, name, image, extra)?;
     let (columns, bindings): (Vec<_>, Vec<_>) = fields.into_iter().unzip();
     let values = record_bindings::bind(backend, bindings)?;
     let mut query = M::Entity::update_many();
     for (column, value) in columns.into_iter().zip(values) {
-        query = query.col_expr(column, Expr::val(value));
+        query = query.col_expr(column, value);
     }
     super::updates::execute_update_returning_one(
         db,

@@ -1,3 +1,4 @@
+use better_auth_core::{FieldMap, FieldValue, SchemaField};
 mod fields;
 
 use super::id_filter::IdColumn;
@@ -7,43 +8,24 @@ use crate::SeaOrmPluginModel;
 use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DbBackend, EntityTrait, ExprTrait, Iterable, Order,
-    PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, sea_query::Expr,
+    ColumnTrait, DbBackend, EntityTrait, ExprTrait, Order, PaginatorTrait, QueryFilter, QueryOrder,
+    QuerySelect, sea_query::Expr,
 };
-use serde_json::{Map, json};
 
-use better_auth_core::ApiKeyStart;
 use better_auth_core::store::{ApiKeyStore, ApiKeyUsageWrite, schema::EntityRole};
 
 use crate::error::{AuthError, AuthResult};
 use crate::schema::AuthSchema;
 use crate::types::{ApiKey, CreateApiKey, UpdateApiKey};
 
-use super::{SeaOrmStore, map_db_err, parse_optional_rfc3339};
-
-fn start_for_database(start: ApiKeyStart, backend: DbBackend) -> AuthResult<String> {
-    match backend {
-        DbBackend::Sqlite => {
-            // Bun's SQLite text reader replaces each invalid WTF-8 byte with U+FFFD.
-            Ok(String::from_utf8_lossy(&start.to_wtf8()).into_owned())
-        }
-        // pg and mysql2 encode JS strings through Node's UTF-8 Buffer conversion.
-        DbBackend::Postgres | DbBackend::MySql => Ok(String::from_utf16_lossy(start.as_utf16())),
-        _ => start.to_utf8().map_err(|error| {
-            better_auth_core::DatabaseError::Query(format!(
-                "API key start cannot be stored as UTF-8 text: {error}"
-            ))
-            .into()
-        }),
-    }
-}
+use super::{SeaOrmStore, map_db_err};
 
 /// Apply `UpdateApiKey` fields to a SeaORM active model.
 fn apply_update_fields<M: SeaOrmPluginModel>(
-    mut active: M::ActiveModel,
+    mut active: super::plugin_models::Write<M>,
     update: UpdateApiKey,
     policy: &better_auth_core::id::IdGeneration,
-) -> AuthResult<M::ActiveModel> {
+) -> AuthResult<super::plugin_models::Write<M>> {
     if let Some(enabled) = update.enabled {
         set::<M>(&mut active, "enabled", enabled, policy)?;
     }
@@ -87,33 +69,23 @@ fn apply_update_fields<M: SeaOrmPluginModel>(
         set::<M>(&mut active, "metadata", Some(metadata), policy)?;
     }
     if let Some(expires_at) = update.expires_at {
-        set::<M>(
-            &mut active,
-            "expires_at",
-            parse_optional_rfc3339(expires_at.as_deref(), "expires_at")?,
-            policy,
-        )?;
+        set::<M>(&mut active, "expires_at", expires_at, policy)?;
     }
     if let Some(last_request) = update.last_request {
-        set::<M>(
-            &mut active,
-            "last_request",
-            parse_optional_rfc3339(last_request.as_deref(), "last_request")?,
-            policy,
-        )?;
+        set::<M>(&mut active, "last_request", last_request, policy)?;
     }
     if let Some(request_count) = update.request_count {
         set::<M>(&mut active, "request_count", Some(request_count), policy)?;
     }
     if let Some(last_refill_at) = update.last_refill_at {
-        set::<M>(
-            &mut active,
-            "last_refill_at",
-            parse_optional_rfc3339(last_refill_at.as_deref(), "last_refill_at")?,
-            policy,
-        )?;
+        set::<M>(&mut active, "last_refill_at", last_refill_at, policy)?;
     }
-    set::<M>(&mut active, "updated_at", Utc::now(), policy)?;
+    set::<M>(
+        &mut active,
+        "updated_at",
+        better_auth_core::FieldDate::from(Utc::now()),
+        policy,
+    )?;
     Ok(active)
 }
 
@@ -125,46 +97,51 @@ where
 {
     async fn create_api_key(&self, input: CreateApiKey) -> AuthResult<ApiKey> {
         let now = Utc::now();
-        let start = input
-            .start
-            .map(|start| start_for_database(start, self.connection().get_database_backend()))
-            .transpose()?;
-        let fields = Map::from_iter([
-            ("start".to_owned(), json!(start)),
-            ("prefix".to_owned(), json!(input.prefix)),
-            ("key_hash".to_owned(), json!(input.key_hash)),
-            ("reference_id".to_owned(), json!(input.reference_id)),
-            ("config_id".to_owned(), json!(input.config_id)),
-            ("refill_interval".to_owned(), json!(input.refill_interval)),
-            ("refill_amount".to_owned(), json!(input.refill_amount)),
-            ("last_refill_at".to_owned(), serde_json::Value::Null),
-            ("enabled".to_owned(), json!(input.enabled)),
+        let fields = FieldMap::from_iter([
+            ("start".to_owned(), input.start.into_field()),
+            ("prefix".to_owned(), (input.prefix).into_field()),
+            ("key_hash".to_owned(), (input.key_hash).into_field()),
+            ("reference_id".to_owned(), (input.reference_id).into_field()),
+            ("config_id".to_owned(), (input.config_id).into_field()),
+            (
+                "refill_interval".to_owned(),
+                (input.refill_interval).into_field(),
+            ),
+            (
+                "refill_amount".to_owned(),
+                (input.refill_amount).into_field(),
+            ),
+            ("last_refill_at".to_owned(), FieldValue::Null),
+            ("enabled".to_owned(), (input.enabled).into_field()),
             (
                 "rate_limit_enabled".to_owned(),
-                json!(input.rate_limit_enabled),
+                (input.rate_limit_enabled).into_field(),
             ),
             (
                 "rate_limit_time_window".to_owned(),
-                json!(input.rate_limit_time_window),
+                (input.rate_limit_time_window).into_field(),
             ),
-            ("rate_limit_max".to_owned(), json!(input.rate_limit_max)),
-            ("request_count".to_owned(), json!(Some(0.0))),
-            ("remaining".to_owned(), json!(input.remaining)),
-            ("last_request".to_owned(), serde_json::Value::Null),
             (
-                "expires_at".to_owned(),
-                json!(parse_optional_rfc3339(
-                    input.expires_at.as_deref(),
-                    "expires_at",
-                )?),
+                "rate_limit_max".to_owned(),
+                (input.rate_limit_max).into_field(),
             ),
-            ("created_at".to_owned(), json!(now)),
-            ("updated_at".to_owned(), json!(now)),
-            ("permissions".to_owned(), json!(input.permissions)),
-            ("metadata".to_owned(), json!(input.metadata)),
+            ("request_count".to_owned(), (Some(0.0)).into_field()),
+            ("remaining".to_owned(), (input.remaining).into_field()),
+            ("last_request".to_owned(), FieldValue::Null),
+            ("expires_at".to_owned(), (input.expires_at).into_field()),
+            (
+                "created_at".to_owned(),
+                better_auth_core::FieldValue::Date((now).into()),
+            ),
+            (
+                "updated_at".to_owned(),
+                better_auth_core::FieldValue::Date((now).into()),
+            ),
+            ("permissions".to_owned(), (input.permissions).into_field()),
+            ("metadata".to_owned(), (input.metadata).into_field()),
         ]);
         let mut active = self
-            .prepare_api_key_fields(Some(input.name), input.additional_fields, true)
+            .prepare_api_key_fields(Some(input.name.into()), input.additional_fields, true)
             .await?;
         let fields = self.create_fields("apikey", None, fields)?;
         super::plugin_models::apply::<P::ApiKey>(
@@ -173,7 +150,7 @@ where
             self.config().advanced.database.generate_id(),
         )?;
         let model = database_operation::<Entity<P::ApiKey>, _>(self.config(), "create", async {
-            active.insert(self.connection()).await.map_err(map_db_err)
+            active.insert(self.connection()).await
         })
         .await?;
         Ok(self.project_api_key_models(vec![model]).await?.remove(0))
@@ -272,7 +249,7 @@ where
         let id = id.typed()?;
         let active = self
             .prepare_api_key_fields(
-                update.name.take().map(Some),
+                update.name.take(),
                 std::mem::take(&mut update.additional_fields),
                 false,
             )
@@ -285,7 +262,7 @@ where
         let filter =
             P::ApiKey::column("id")?.eq_id(id, self.config().advanced.database.generate_id())?;
         let model = database_operation::<Entity<P::ApiKey>, _>(self.config(), "update", async {
-            super::updates::update_returning_one::<Entity<P::ApiKey>, _>(
+            super::updates::update_record_returning_one::<Entity<P::ApiKey>, _>(
                 self.connection(),
                 active,
                 filter.clone(),
@@ -310,7 +287,8 @@ where
         let fields = if matches!(&write, ApiKeyUsageWrite::Decrement) {
             Default::default()
         } else {
-            self.prepare_api_key_fields(None, Map::new(), false).await?
+            self.prepare_api_key_fields(None, FieldMap::new(), false)
+                .await?
         };
         let operation = write.operation();
         let reselect =
@@ -369,11 +347,7 @@ where
                 query = query.col_expr(P::ApiKey::column("updated_at")?, Expr::value(at));
             }
         }
-        for column in <P::ApiKey as SeaOrmPluginModel>::Column::iter() {
-            if let sea_orm::ActiveValue::Set(value) = fields.get(column) {
-                query = query.col_expr(column, Expr::value(value));
-            }
-        }
+        query = fields.apply_to(query, self.connection().get_database_backend())?;
         let query = query.filter(guard.clone());
         let model = database_operation::<Entity<P::ApiKey>, _>(self.config(), operation, async {
             if operation == "incrementOne" {

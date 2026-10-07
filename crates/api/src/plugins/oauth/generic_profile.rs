@@ -126,9 +126,10 @@ pub(super) async fn fetch_profile(
         Some(value) => Some(value.as_str().unwrap_or_default().to_owned()).into(),
     });
     let _ = super::providers::profile_email(&email)?;
-    let email_verified = mapped.email_verified.unwrap_or_else(|| {
-        better_auth_core::SchemaValue::from_json(profile.get("emailVerified").cloned())
-    });
+    let email_verified = match mapped.email_verified {
+        Some(value) => value,
+        None => better_auth_core::SchemaValue::from_json(profile.get("emailVerified").cloned())?,
+    };
     let _ = super::providers::profile_email_verified(&email_verified)?;
     Ok(Some(ProfileResponse {
         user: AccountInfoUser {

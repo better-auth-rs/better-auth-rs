@@ -8,9 +8,9 @@ use crate::types_org::{CreateInvitation, Invitation, InvitationStatus};
 use crate::{SeaOrmOrganizationModel, SeaOrmOrganizationSchema};
 use async_trait::async_trait;
 use better_auth_core::{AuthResult, store::InvitationStore};
+use better_auth_core::{FieldValue, SchemaField};
 use chrono::Utc;
 use sea_orm::{ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QuerySelect};
-use serde_json::json;
 
 #[async_trait]
 impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> InvitationStore
@@ -22,24 +22,26 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> I
             "invitation",
             input.id,
             values([
-                ("organization_id", json!(input.organization_id)),
-                ("email", json!(input.email)),
-                ("role", json!(input.role)),
+                ("organization_id", (input.organization_id).into_field()),
+                ("email", (input.email).into_field()),
+                ("role", (input.role).into_field()),
                 (
                     "status",
-                    json!(
-                        input
-                            .status
-                            .unwrap_or(InvitationStatus::Pending)
-                            .to_string()
-                    ),
+                    (input
+                        .status
+                        .unwrap_or(InvitationStatus::Pending)
+                        .to_string())
+                    .into_field(),
                 ),
-                ("inviter_id", json!(input.inviter_id)),
-                ("team_id", json!(input.team_id)),
-                ("expires_at", json!(input.expires_at)),
+                ("inviter_id", (input.inviter_id).into_field()),
+                ("team_id", (input.team_id).into_field()),
+                ("expires_at", (input.expires_at).into_field()),
                 (
                     "created_at",
-                    json!(input.created_at.unwrap_or_else(Utc::now)),
+                    input
+                        .created_at
+                        .unwrap_or_else(|| Utc::now().into())
+                        .into_field(),
                 ),
             ]),
         )?;
@@ -117,7 +119,7 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> I
         models::update::<O::Invitation, _>(
             self.connection(),
             id,
-            values([("status", json!(status.to_string()))]),
+            values([("status", (status.to_string()).into_field())]),
             Default::default(),
             &self.organization_fields()?.invitation,
             self.config().advanced.database.generate_id(),
@@ -132,7 +134,7 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> I
         models::update::<O::Invitation, _>(
             self.connection(),
             id,
-            values([("expires_at", json!(expires_at))]),
+            values([("expires_at", FieldValue::Date((expires_at).into()))]),
             Default::default(),
             &self.organization_fields()?.invitation,
             self.config().advanced.database.generate_id(),
@@ -298,7 +300,7 @@ mod tests {
                 "first@example.com",
                 "member",
                 "inviter-1",
-                Utc::now() + Duration::hours(1),
+                (Utc::now() + Duration::hours(1)).into(),
             ))
             .await
             .expect("pending invitation should be created");
@@ -308,7 +310,7 @@ mod tests {
                 "second@example.com",
                 "member",
                 "inviter-1",
-                Utc::now() + Duration::hours(1),
+                (Utc::now() + Duration::hours(1)).into(),
             ))
             .await
             .expect("cancelable invitation should be created");
@@ -322,7 +324,7 @@ mod tests {
                 "expired@example.com",
                 "member",
                 "inviter-1",
-                Utc::now() - Duration::hours(1),
+                (Utc::now() - Duration::hours(1)).into(),
             ))
             .await
             .expect("expired invitation should be created");
@@ -366,7 +368,7 @@ mod tests {
                 "expired@example.com",
                 "member",
                 "inviter-1",
-                Utc::now() - Duration::hours(1),
+                (Utc::now() - Duration::hours(1)).into(),
             ))
             .await
             .expect("expired invitation should be created");

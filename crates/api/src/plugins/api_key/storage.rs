@@ -4,7 +4,7 @@ use std::sync::{Arc, OnceLock, Weak};
 
 use better_auth_core::store::SecondaryStorage;
 use better_auth_core::{ApiKey, AuthContext, AuthError, AuthResult, CreateApiKey, UpdateApiKey};
-use chrono::{DateTime, SecondsFormat, Utc};
+use chrono::Utc;
 use futures_util::{StreamExt, TryFutureExt, future, stream};
 use serde_json::Value;
 use tokio::sync::Mutex;
@@ -59,25 +59,16 @@ fn required_backend<'a>(
     })
 }
 
-pub(super) fn now() -> String {
-    Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true)
+pub(super) fn now() -> better_auth_core::FieldDate {
+    Utc::now().into()
 }
 
-pub(super) fn timestamp(value: &str) -> AuthResult<i64> {
-    DateTime::parse_from_rfc3339(value)
-        .map(|value| value.timestamp_millis())
-        .map_err(|error| AuthError::internal(format!("Invalid stored API key timestamp: {error}")))
-}
-
-fn ttl(key: &ApiKey) -> AuthResult<Option<u64>> {
-    key.expires_at
-        .as_deref()
-        .map(|expires| {
-            let seconds = (timestamp(expires)? - Utc::now().timestamp_millis()).div_euclid(1000);
-            Ok(u64::try_from(seconds).ok().filter(|seconds| *seconds > 0))
-        })
-        .transpose()
-        .map(Option::flatten)
+fn ttl(key: &ApiKey) -> Option<u64> {
+    key.expires_at.as_ref().and_then(|expires| {
+        let seconds =
+            ((expires.milliseconds() - Utc::now().timestamp_millis() as f64) / 1000.0).floor();
+        (seconds > 0.0).then_some(seconds as u64)
+    })
 }
 
 fn serialize(key: &ApiKey) -> AuthResult<String> {
@@ -190,7 +181,7 @@ async fn put_with_failure_flag(
     failed: Option<&AtomicBool>,
 ) -> AuthResult<()> {
     let value = serialize(key)?;
-    let ttl = ttl(key)?;
+    let ttl = ttl(key);
     let hashed = format!("api-key:{}", key.key_hash);
     let id = format!("api-key:by-id:{}", key.id.display_string()?);
     let reference = format!("api-key:by-ref:{}", key.reference_id);
@@ -354,7 +345,7 @@ pub(super) async fn create(
 
 pub(super) fn apply_update(key: &mut ApiKey, update: UpdateApiKey) {
     if let Some(name) = update.name {
-        key.name = Some(name).into();
+        key.name = name;
     }
     macro_rules! optional { ($($field:ident),* $(,)?) => { $(if let Some(value) = update.$field { key.$field = Some(value); })* }; }
     optional!(
@@ -631,11 +622,38 @@ fn sort_views(
             "configId" => compare_strings(Some(&a.config_id), Some(&b.config_id)),
             "enabled" => a.enabled.cmp(&b.enabled),
             "rateLimitEnabled" => a.rate_limit_enabled.cmp(&b.rate_limit_enabled),
-            "createdAt" => a.created_at.cmp(&b.created_at),
-            "updatedAt" => a.updated_at.cmp(&b.updated_at),
-            "expiresAt" => a.expires_at.cmp(&b.expires_at),
-            "lastRequest" => a.last_request.cmp(&b.last_request),
-            "lastRefillAt" => a.last_refill_at.cmp(&b.last_refill_at),
+            "createdAt" => compare_numbers(
+                Some(a.created_at.milliseconds()),
+                Some(b.created_at.milliseconds()),
+            ),
+            "updatedAt" => compare_numbers(
+                Some(a.updated_at.milliseconds()),
+                Some(b.updated_at.milliseconds()),
+            ),
+            "expiresAt" => compare_numbers(
+                a.expires_at
+                    .as_ref()
+                    .map(better_auth_core::FieldDate::milliseconds),
+                b.expires_at
+                    .as_ref()
+                    .map(better_auth_core::FieldDate::milliseconds),
+            ),
+            "lastRequest" => compare_numbers(
+                a.last_request
+                    .as_ref()
+                    .map(better_auth_core::FieldDate::milliseconds),
+                b.last_request
+                    .as_ref()
+                    .map(better_auth_core::FieldDate::milliseconds),
+            ),
+            "lastRefillAt" => compare_numbers(
+                a.last_refill_at
+                    .as_ref()
+                    .map(better_auth_core::FieldDate::milliseconds),
+                b.last_refill_at
+                    .as_ref()
+                    .map(better_auth_core::FieldDate::milliseconds),
+            ),
             "remaining" => compare_numbers(a.remaining, b.remaining),
             "requestCount" => compare_numbers(a.request_count, b.request_count),
             "rateLimitMax" => compare_numbers(a.rate_limit_max, b.rate_limit_max),

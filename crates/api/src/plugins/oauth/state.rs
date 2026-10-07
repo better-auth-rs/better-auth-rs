@@ -45,7 +45,7 @@ impl OAuthStatePayload {
                 let mut value: Value = serde_json::from_str(raw.get())?;
                 if let Some(link) = value.as_object_mut() {
                     let user_id =
-                        better_auth_core::SchemaValue::<String>::from_json(link.remove("userId"))
+                        better_auth_core::SchemaValue::<String>::from_json(link.remove("userId"))?
                             .display_string()?;
                     let _ = link.insert("userId".into(), user_id.into());
                 }

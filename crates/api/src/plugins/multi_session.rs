@@ -86,8 +86,9 @@ impl MultiSessionPlugin {
         let name = cookie_name(&token, &ctx.config);
         let token = signed_device_token(req, &name, &ctx.config).ok_or_else(invalid_session)?;
         let session = find_session(ctx, &token).await?;
-        let Some((session, user)) = session.filter(|(session, _)| session.expires_at >= Utc::now())
-        else {
+        let Some((session, user)) = session.filter(|(session, _)| {
+            session.expires_at.milliseconds() >= Utc::now().timestamp_millis() as f64
+        }) else {
             better_auth_core::utils::cookie_utils::remove_set_cookie_entries(req, None, &name)?;
             req.append_response_header("Set-Cookie", create_clear_cookie(&name, &ctx.config)?)?;
             return Err(invalid_session());
@@ -270,7 +271,7 @@ async fn list_sessions<S: AuthSchema>(
             ctx.database.get_user_by_id_field(&session.user_id).await?
         };
         if let Some(user) = user {
-            if session.expires_at > Utc::now() {
+            if session.expires_at.milliseconds() > Utc::now().timestamp_millis() as f64 {
                 sessions.push((session, user));
             }
         } else {

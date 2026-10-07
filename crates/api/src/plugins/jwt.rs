@@ -344,7 +344,7 @@ impl JwtPlugin {
                 additional_fields: Default::default(),
                 public_key,
                 private_key,
-                created_at: Utc::now(),
+                created_at: Utc::now().into(),
                 expires_at: self
                     .config
                     .rotation_interval
@@ -377,8 +377,10 @@ impl JwtPlugin {
         })?;
         let mut public = Vec::new();
         for key in keys.into_iter().filter(|key| {
-            key.expires_at
-                .is_none_or(|expiry| expiry + self.config.grace_period > Utc::now())
+            key.expires_at.as_ref().is_none_or(|expiry| {
+                expiry.milliseconds() + self.config.grace_period.num_milliseconds() as f64
+                    > Utc::now().timestamp_millis() as f64
+            })
         }) {
             let mut value: Map<String, Value> = serde_json::from_str(&key.public_key)?;
             let _ = value.entry("alg").or_insert_with(|| {

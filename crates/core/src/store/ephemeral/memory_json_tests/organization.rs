@@ -12,7 +12,7 @@ struct Records {
 
 async fn create_organization(
     fixture: &Fixture,
-    operations: &mut Vec<Value>,
+    operations: &mut Vec<JsonValue>,
     suffix: &str,
 ) -> AuthResult<Organization> {
     let label = format!("organization-{suffix}");
@@ -34,7 +34,7 @@ async fn create_organization(
 
 async fn create_member(
     fixture: &Fixture,
-    operations: &mut Vec<Value>,
+    operations: &mut Vec<JsonValue>,
     label: &str,
     organization: &Organization,
     user: &UserView,
@@ -56,7 +56,7 @@ async fn snapshots(
     fixture: &Fixture,
     user_a: &UserView,
     user_b: &UserView,
-) -> AuthResult<(Value, Records)> {
+) -> AuthResult<(JsonValue, Records)> {
     let mut operations = Vec::new();
     let organization_a = create_organization(fixture, &mut operations, "a").await?;
     let organization_b = create_organization(fixture, &mut operations, "b").await?;
@@ -93,7 +93,7 @@ async fn snapshots(
             additional_fields: input("team", false),
             name: "Display Team".into(),
             organization_id: organization_a.id.clone(),
-            created_at: Some(instant),
+            created_at: Some(instant.into()),
             ..Default::default()
         })
         .await?;
@@ -109,11 +109,14 @@ async fn snapshots(
         "invitee@memory-core-json.test",
         "member",
         user_a.id.typed()?,
-        "2100-01-01T00:00:00Z".parse().map_err(|error| {
-            AuthError::internal(format!("Parse the display fixture timestamp: {error}"))
-        })?,
+        "2100-01-01T00:00:00Z"
+            .parse::<DateTime<Utc>>()
+            .map_err(|error| {
+                AuthError::internal(format!("Parse the display fixture timestamp: {error}"))
+            })?
+            .into(),
     );
-    invitation_input.created_at = Some(instant);
+    invitation_input.created_at = Some(instant.into());
     invitation_input.status = Some(InvitationStatus::Pending);
     invitation_input.additional_fields = input("invitation", false);
     let invitation = fixture.store.create_invitation(invitation_input).await?;
@@ -130,7 +133,7 @@ async fn snapshots(
             additional_fields: input("role", false),
             organization_id: organization_a.id.typed()?.clone(),
             role: "viewer".into(),
-            permission: json!({}),
+            permission: FieldMap::default().into(),
         })
         .await?;
     fixture.point(
@@ -217,7 +220,7 @@ pub(super) async fn groups(
     fixture: &Fixture,
     user_a: &UserView,
     user_b: &UserView,
-) -> AuthResult<(Value, Value)> {
+) -> AuthResult<(JsonValue, JsonValue)> {
     let (snapshots, records) = snapshots(fixture, user_a, user_b).await?;
     let mut operations = Vec::new();
     let organizations = fixture
@@ -246,7 +249,7 @@ pub(super) async fn groups(
             limit: Some(10.0),
             offset: Some(0.0),
             filter_field: Some("settings".into()),
-            filter_value: Some(json!({"label": "member-a-a"})),
+            filter_value: Some(FieldMap::from_iter([("label".into(), "member-a-a".into())]).into()),
             filter_operator: Some("eq".into()),
             ..Default::default()
         })

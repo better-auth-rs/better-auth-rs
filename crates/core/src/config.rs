@@ -245,7 +245,7 @@ impl SessionConfig {
     }
 
     /// Evaluate creation defaults without validating or transforming session input.
-    pub fn default_fields(&self) -> serde_json::Map<String, serde_json::Value> {
+    pub fn default_fields(&self) -> crate::FieldMap {
         self.fields()
             .iter()
             .filter_map(|(name, field)| field.default_value().map(|value| (name.clone(), value)))

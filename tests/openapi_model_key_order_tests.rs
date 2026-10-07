@@ -36,7 +36,7 @@ impl<S: AuthSchema> AuthPlugin<S> for ExplicitModels {
                     .into(),
                 ),
             };
-            metadata = metadata.model(name, &fields);
+            metadata = metadata.model(name, &fields)?;
         }
         Ok(metadata)
     }

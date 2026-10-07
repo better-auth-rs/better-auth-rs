@@ -1,6 +1,7 @@
 use crate::store::schema::resolve_field_name;
+use crate::{AuthRecordFields, FromFieldMap, SchemaField};
 use crate::{AuthResult, entity::AuthUser, plugin::MetadataMap, wire::UserView};
-use serde_json::{Map, Value, json};
+use crate::{FieldMap, FieldValue as Value};
 
 const PLUGIN_FIELDS: &[(&str, &[&str])] = &[
     ("anonymous.enabled", &["isAnonymous"]),
@@ -20,11 +21,11 @@ const PLUGIN_FIELDS: &[(&str, &[&str])] = &[
 impl UserView {
     /// Build an enumeration-safe signup response without adapter transforms or persistence.
     pub fn synthetic_output(
-        data: Map<String, Value>,
+        data: FieldMap,
         config: &super::UserConfig,
         metadata: &MetadataMap,
-    ) -> Map<String, Value> {
-        let mut output = Map::new();
+    ) -> FieldMap {
+        let mut output = FieldMap::new();
         for name in [
             "id",
             "name",
@@ -39,7 +40,7 @@ impl UserView {
             }
         }
         for (plugin, names) in PLUGIN_FIELDS {
-            if metadata.get(*plugin).and_then(Value::as_bool) != Some(true) {
+            if metadata.get(*plugin).and_then(serde_json::Value::as_bool) != Some(true) {
                 continue;
             }
             for name in *names {
@@ -213,7 +214,7 @@ impl UserView {
                     PLUGIN_FIELDS
                         .iter()
                         .filter(|(plugin, _)| {
-                            metadata.get(*plugin).and_then(Value::as_bool) == Some(true)
+                            metadata.get(*plugin).and_then(serde_json::Value::as_bool) == Some(true)
                         })
                         .flat_map(|(_, fields)| fields.iter().map(|name| (*name).to_owned()))
                         .filter(|name| {
@@ -233,7 +234,7 @@ impl UserView {
                 );
                 view.additional_fields.clear();
                 let model = if !config.fields().is_empty() && user.projected_fields().is_none() {
-                    Some(serde_json::to_value(user)?)
+                    Some(user.field_values()?)
                 } else {
                     None
                 };
@@ -248,10 +249,11 @@ impl UserView {
                 Box::pin(async move {
                     let value = if let Some(projected) = user.projected_fields() {
                         match name {
-                            "name" => view.name.json()?,
-                            "image" => view.image.json()?,
+                            "name" => Some(view.name.field_value()),
+                            "image" => Some(view.image.field_value()),
                             _ => projected.get(name).cloned(),
                         }
+                        .unwrap_or_default()
                     } else {
                         let storage_name = resolve_field_name(field.field_name.as_deref(), name);
                         let value = if Self::NATIVE_FIELDS.contains(&name) {
@@ -268,32 +270,37 @@ impl UserView {
                                     .cloned()
                             })
                             .or_else(|| match (name, storage_name == name) {
-                                ("username", true) => Some(json!(user.username())),
-                                ("displayUsername", true) => Some(json!(user.display_username())),
+                                ("username", true) => {
+                                    Some(user.username().map(str::to_owned).into_field())
+                                }
+                                ("displayUsername", true) => {
+                                    Some(user.display_username().map(str::to_owned).into_field())
+                                }
                                 _ => None,
                             });
                         if raw_extra {
-                            field.adapter_output_from_raw(value, capabilities).await?
+                            field
+                                .adapter_output_from_raw(value.unwrap_or_default(), capabilities)
+                                .await?
                         } else {
                             field
-                                .adapter_output(value, capabilities.supports_native_json)
+                                .adapter_output(
+                                    value.unwrap_or_default(),
+                                    capabilities.supports_native_json,
+                                )
                                 .await?
                         }
                     };
                     if name == "username" || name == "displayUsername" {
                         if let Some(fields) = &mut view.visible_fields {
-                            if value.is_some() && (!public || field.returned()) {
+                            if !public || field.returned() {
                                 let _ = fields.insert(name.to_owned());
                             } else {
                                 let _ = fields.remove(name);
                             }
                         }
                         let typed = if !public || field.returned() {
-                            value
-                                .as_ref()
-                                .map(|value| serde_json::from_value(value.clone()))
-                                .transpose()?
-                                .flatten()
+                            value.decode()?
                         } else {
                             None
                         };
@@ -309,7 +316,7 @@ impl UserView {
                         } else {
                             &mut view.image
                         };
-                        *target = crate::SchemaValue::from_json(value);
+                        *target = crate::SchemaValue::from_field(value);
                         if public
                             && !field.returned()
                             && let Some(fields) = &mut view.visible_fields
@@ -318,7 +325,8 @@ impl UserView {
                         }
                         return Ok(());
                     }
-                    if let Some(mut value) = value {
+                    {
+                        let mut value = value;
                         if !field.references_id() {
                             field.normalize_date(&mut value)?;
                         }
@@ -366,19 +374,13 @@ impl UserView {
             return None;
         }
         let value = match name {
-            "id" if !self.id.is_undefined() => json!(self.id),
-            "name" if !self.name.is_undefined() => json!(self.name),
-            "email" => json!(self.email),
-            "emailVerified" => json!(self.email_verified),
-            "image" if !self.image.is_undefined() => json!(self.image),
-            "createdAt" => json!(
-                self.created_at
-                    .to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
-            ),
-            "updatedAt" => json!(
-                self.updated_at
-                    .to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
-            ),
+            "id" if !self.id.is_undefined() => self.id.clone().into_field(),
+            "name" if !self.name.is_undefined() => self.name.clone().into_field(),
+            "email" => self.email.clone().into_field(),
+            "emailVerified" => self.email_verified.into_field(),
+            "image" if !self.image.is_undefined() => self.image.clone().into_field(),
+            "createdAt" => self.created_at.clone().into_field(),
+            "updatedAt" => self.updated_at.clone().into_field(),
             "id" | "name" | "image" => return None,
             _ => {
                 if self
@@ -389,23 +391,20 @@ impl UserView {
                     return None;
                 }
                 let value = match name {
-                    "isAnonymous" => json!(self.is_anonymous),
-                    "phoneNumber" => json!(self.phone_number),
-                    "phoneNumberVerified" => json!(self.phone_number_verified),
-                    "username" => json!(self.username),
-                    "displayUsername" => json!(self.display_username),
-                    "twoFactorEnabled" => json!(self.two_factor_enabled),
-                    "role" => json!(self.role),
-                    "banned" => json!(self.banned),
-                    "banReason" => json!(self.ban_reason),
-                    "banExpires" => json!(
-                        self.ban_expires
-                            .map(|date| date.to_rfc3339_opts(chrono::SecondsFormat::Millis, true))
-                    ),
+                    "isAnonymous" => self.is_anonymous.into_field(),
+                    "phoneNumber" => self.phone_number.clone().into_field(),
+                    "phoneNumberVerified" => self.phone_number_verified.into_field(),
+                    "username" => self.username.clone().into_field(),
+                    "displayUsername" => self.display_username.clone().into_field(),
+                    "twoFactorEnabled" => self.two_factor_enabled.into_field(),
+                    "role" => self.role.clone().into_field(),
+                    "banned" => self.banned.into_field(),
+                    "banReason" => self.ban_reason.clone().into_field(),
+                    "banExpires" => self.ban_expires.clone().into_field(),
                     _ => return None,
                 };
                 if name == "isAnonymous" && value.is_null() && self.visible_fields.is_some() {
-                    return Some(json!(false));
+                    return Some(Value::Bool(false));
                 }
                 if self.visible_fields.is_none()
                     && value.is_null()
@@ -420,9 +419,9 @@ impl UserView {
     }
 }
 
-impl From<UserView> for Map<String, Value> {
+impl From<UserView> for FieldMap {
     fn from(user: UserView) -> Self {
-        let mut result: Map<_, _> = UserView::NATIVE_FIELDS
+        let mut result: FieldMap = UserView::NATIVE_FIELDS
             .iter()
             .filter_map(|name| {
                 user.native_field_value(name)
@@ -434,15 +433,12 @@ impl From<UserView> for Map<String, Value> {
     }
 }
 
-impl TryFrom<Map<String, Value>> for UserView {
-    type Error = serde_json::Error;
+impl TryFrom<FieldMap> for UserView {
+    type Error = crate::AuthError;
 
-    fn try_from(mut fields: Map<String, Value>) -> Result<Self, Self::Error> {
-        fn take<T: serde::de::DeserializeOwned>(
-            fields: &mut Map<String, Value>,
-            name: &str,
-        ) -> Result<T, serde_json::Error> {
-            serde_json::from_value(fields.remove(name).unwrap_or(Value::Null))
+    fn try_from(mut fields: FieldMap) -> Result<Self, Self::Error> {
+        fn take<T: crate::SchemaField>(fields: &mut FieldMap, name: &str) -> AuthResult<T> {
+            fields.remove(name).unwrap_or_default().decode()
         }
         let visible_fields = Some(
             PLUGIN_FIELDS
@@ -459,34 +455,83 @@ impl TryFrom<Map<String, Value>> for UserView {
                 .collect(),
         );
         Ok(Self {
-            id: crate::SchemaValue::from_json(fields.remove("id")),
-            name: crate::SchemaValue::from_json(fields.remove("name")),
+            id: crate::SchemaValue::from_field(fields.remove("id").unwrap_or_default()),
+            name: crate::SchemaValue::from_field(fields.remove("name").unwrap_or_default()),
             email: take(&mut fields, "email")?,
             email_verified: take(&mut fields, "emailVerified")?,
-            image: crate::SchemaValue::from_json(fields.remove("image")),
+            image: crate::SchemaValue::from_field(fields.remove("image").unwrap_or_default()),
             created_at: take(&mut fields, "createdAt")?,
             updated_at: take(&mut fields, "updatedAt")?,
             is_anonymous: take(&mut fields, "isAnonymous")?,
             phone_number: take(&mut fields, "phoneNumber")?,
             phone_number_verified: take(&mut fields, "phoneNumberVerified")?,
             // Keep schema-backed fields in the projected map for later cookie updates.
-            username: serde_json::from_value(
-                fields.get("username").cloned().unwrap_or(Value::Null),
-            )?,
-            display_username: serde_json::from_value(
-                fields
-                    .get("displayUsername")
-                    .cloned()
-                    .unwrap_or(Value::Null),
-            )?,
+            username: fields
+                .get("username")
+                .cloned()
+                .unwrap_or_default()
+                .decode()?,
+            display_username: fields
+                .get("displayUsername")
+                .cloned()
+                .unwrap_or_default()
+                .decode()?,
             two_factor_enabled: take(&mut fields, "twoFactorEnabled")?,
             role: take(&mut fields, "role")?,
             banned: take::<Option<bool>>(&mut fields, "banned")?.unwrap_or(false),
             ban_reason: take(&mut fields, "banReason")?,
             ban_expires: take(&mut fields, "banExpires")?,
-            metadata: Value::Null,
+            metadata: fields.remove("metadata").unwrap_or(Value::Null),
             visible_fields,
             additional_fields: fields,
         })
+    }
+}
+
+impl AuthRecordFields for UserView {
+    fn field_values(&self) -> AuthResult<FieldMap> {
+        let mut fields = FieldMap::from(self.clone());
+        let _ = fields.insert("metadata".into(), self.metadata.clone());
+        Ok(fields)
+    }
+
+    fn structured_clone(&self, context: &mut crate::StructuredCloneContext) -> AuthResult<Self> {
+        let mut user = self.clone();
+        user.id = context.clone_field(&self.id)?;
+        user.name = context.clone_field(&self.name)?;
+        user.image = context.clone_field(&self.image)?;
+        user.created_at = context.clone_field(&self.created_at)?;
+        user.updated_at = context.clone_field(&self.updated_at)?;
+        user.ban_expires = context.clone_field(&self.ban_expires)?;
+        user.metadata = context.clone_value(&self.metadata);
+        user.additional_fields = context.clone_map(&self.additional_fields);
+        Ok(user)
+    }
+}
+
+impl FromFieldMap for UserView {
+    fn from_field_values(fields: FieldMap) -> AuthResult<Self> {
+        Self::try_from(fields)
+    }
+}
+
+impl serde::Serialize for UserView {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        crate::field_value::serde::map::serialize(&FieldMap::from(self.clone()), serializer)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for UserView {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        use serde::de::Error;
+        let mut fields = crate::field_value::serde::map::deserialize(deserializer)?;
+        for name in ["createdAt", "updatedAt", "banExpires"] {
+            if let Some(Value::String(text)) = fields.get(name) {
+                let date = crate::utils::date::parse_adapter_date(text)
+                    .ok_or_else(|| D::Error::custom(format!("Invalid user date field `{name}`")))?;
+                let _ = fields.insert(name.into(), crate::FieldDate::from(date).into());
+            }
+        }
+        Self::from_field_values(fields).map_err(D::Error::custom)
     }
 }

@@ -204,7 +204,7 @@ impl<S: AuthSchema> DatabaseHooks<S> for LoginDatabaseHooks<S> {
             return Ok(());
         };
         let update = UpdateUser {
-            additional_fields: serde_json::Map::from_iter([(
+            additional_fields: better_auth_core::FieldMap::from_iter([(
                 "lastLoginMethod".into(),
                 method.into(),
             )]),

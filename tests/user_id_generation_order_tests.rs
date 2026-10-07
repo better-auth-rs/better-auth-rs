@@ -1,8 +1,8 @@
 #![cfg(feature = "seaorm2")]
 
 use better_auth_core::{
-    AuthConfig, AuthError, AuthResult, AuthSchema, AuthStore, CreateUser, ListUsersParams,
-    UserView,
+    AuthConfig, AuthError, AuthResult, AuthSchema, AuthStore, CreateUser, FieldMap, FieldValue,
+    ListUsersParams, UserView,
     id::{IdGeneration, IdGenerator},
     plugin_runtime::ModelFields,
     store::{EphemeralStore, RuntimeStore, StatelessSchema, UserStore},
@@ -16,7 +16,7 @@ use better_auth_seaorm::{
     store::entities,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value, json};
+use serde_json::{Value, json};
 use std::sync::{Arc, Mutex, OnceLock, Weak};
 
 type Trace = Arc<Mutex<Vec<Value>>>;
@@ -79,7 +79,7 @@ fn field(name: &'static str, operation: Operation, trace: &Trace) -> UserFieldCo
             input: Some(UserFieldTransform::new(move |value| {
                 record(
                     &input_trace,
-                    json!(["input", format!("user.{name}"), value]),
+                    json!(["input", format!("user.{name}"), value.json()?]),
                 )?;
                 if operation == Operation::FieldFailure && name == "label" {
                     return Err(AuthError::internal("label-input-failure"));
@@ -89,7 +89,7 @@ fn field(name: &'static str, operation: Operation, trace: &Trace) -> UserFieldCo
             output: Some(UserFieldTransform::new(move |value| {
                 record(
                     &output_trace,
-                    json!(["output", format!("user.{name}"), value]),
+                    json!(["output", format!("user.{name}"), value.json()?]),
                 )?;
                 Ok(value)
             })),
@@ -136,7 +136,7 @@ fn config(slot: Slot, operation: Operation, trace: &Trace) -> AuthConfig {
 
 async fn view(user: &UserView, fields: &UserConfig) -> AuthResult<Value> {
     let user = UserView::with_fields(user, fields, &Default::default()).await?;
-    Ok(Value::Object(Map::from(user)))
+    Ok(Value::Object(FieldMap::from(user).json()?))
 }
 
 async fn create<S: AuthSchema>(
@@ -154,9 +154,9 @@ async fn create<S: AuthSchema>(
             email: Some("owner@user-id-order.test".into()),
             email_verified: Some(true),
             image: Some("owner-image".into()).into(),
-            created_at: Some(timestamp),
-            updated_at: Some(timestamp),
-            additional_fields: Map::from_iter([("label".into(), json!("Label"))]),
+            created_at: Some(timestamp.into()),
+            updated_at: Some(timestamp.into()),
+            additional_fields: FieldMap::from_iter([("label".into(), "Label".into())]),
             ..Default::default()
         })
         .await;
@@ -315,10 +315,10 @@ fn serial_user(label: &str) -> CreateUser {
     CreateUser {
         name: Some(label.to_owned()).into(),
         email: Some(format!("{label}@serial-user.test")),
-        created_at: Some(chrono::DateTime::UNIX_EPOCH),
-        updated_at: Some(chrono::DateTime::UNIX_EPOCH),
+        created_at: Some(chrono::DateTime::UNIX_EPOCH.into()),
+        updated_at: Some(chrono::DateTime::UNIX_EPOCH.into()),
         is_anonymous: Some(false),
-        additional_fields: Map::from_iter([("label".into(), json!(label))]),
+        additional_fields: FieldMap::from_iter([("label".into(), label.into())]),
         ..Default::default()
     }
 }
@@ -342,7 +342,7 @@ async fn reentrant_serial_user() -> AuthResult<()> {
                     let target = callback_target.clone();
                     let completed_child = callback_child.clone();
                     async move {
-                        if value.as_ref().and_then(Value::as_str) == Some("parent") {
+                        if value.as_str() == Some("parent") {
                             let store = target.get().and_then(Weak::upgrade).ok_or_else(|| {
                                 AuthError::internal("Reentrant User store is not available")
                             })?;
@@ -369,10 +369,13 @@ async fn reentrant_serial_user() -> AuthResult<()> {
         .ok_or_else(|| AuthError::internal("Reentrant child did not complete"))?;
     assert_eq!(child.id, "1");
     assert_eq!(parent.id, "2");
-    assert_eq!(child.additional_fields.get("label"), Some(&json!("child")));
+    assert_eq!(
+        child.additional_fields.get("label"),
+        Some(&FieldValue::from("child"))
+    );
     assert_eq!(
         parent.additional_fields.get("label"),
-        Some(&json!("parent"))
+        Some(&FieldValue::from("parent"))
     );
     let (rows, total) = store.list_users(ListUsersParams::default()).await?;
     assert_eq!(total, 2);

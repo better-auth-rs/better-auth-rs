@@ -311,7 +311,7 @@ impl DeviceAuthorizationPlugin {
                     device_code: device_code.clone(),
                     user_code: user_code.clone(),
                     user_id: body.user_id.clone().filter(|id| !id.is_empty()),
-                    expires_at,
+                    expires_at: expires_at.into(),
                     status: DEVICE_STATUS_PENDING.to_string(),
                     last_polled_at: None,
                     polling_interval: Some(polling_interval),
@@ -441,14 +441,19 @@ impl DeviceAuthorizationPlugin {
             &DeviceTokenResponse {
                 access_token: session.token().to_string(),
                 token_type: "Bearer",
-                expires_in: (session.expires_at().timestamp_millis()
-                    - Utc::now().timestamp_millis())
-                .div_euclid(1000)
-                .max(0),
-                scope: serde_json::from_value::<Option<String>>(
-                    device_code.scope.json()?.unwrap_or(serde_json::Value::Null),
-                )?
-                .unwrap_or_default(),
+                expires_in: {
+                    let seconds = ((session.expires_at().milliseconds()
+                        - Utc::now().timestamp_millis() as f64)
+                        / 1_000.0)
+                        .floor();
+                    if seconds < 0.0 { 0.0 } else { seconds }
+                }
+                .into(),
+                scope: device_code
+                    .scope
+                    .field_value()
+                    .decode::<Option<String>>()?
+                    .unwrap_or_default(),
             },
         )?
         .with_header("Cache-Control", "no-store")
@@ -468,7 +473,7 @@ impl DeviceAuthorizationPlugin {
             return device_error_response(400, "invalid_request", INVALID_USER_CODE);
         };
 
-        if device_code.expires_at < Utc::now() {
+        if device_code.expires_at.milliseconds() < Utc::now().timestamp_millis() as f64 {
             return device_error_response(400, "expired_token", EXPIRED_USER_CODE);
         }
 
@@ -552,7 +557,7 @@ impl DeviceAuthorizationPlugin {
             return device_error_response(400, "invalid_request", INVALID_USER_CODE);
         };
 
-        if device_code.expires_at < Utc::now() {
+        if device_code.expires_at.milliseconds() < Utc::now().timestamp_millis() as f64 {
             return device_error_response(400, "expired_token", EXPIRED_USER_CODE);
         }
 

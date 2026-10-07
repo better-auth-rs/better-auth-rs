@@ -203,6 +203,7 @@ fn decode_profile(profile: &Value, limited: bool) -> Result<OAuthUserInfo, Strin
                     .cloned()
                     .unwrap_or(Value::Bool(false)),
             ))
+            .map_err(|error| error.to_string())?
         },
         additional_fields: Default::default(),
     })

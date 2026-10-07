@@ -1,6 +1,9 @@
 //! Rows preserve object identity when a transaction commits into the live table.
 
-use crate::{AuthError, AuthResult, SchemaValue};
+use crate::{
+    AuthError, AuthRecordFields, AuthResult, FieldMap, FieldValue, FromFieldMap, SchemaValue,
+    StructuredCloneContext,
+};
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, MutexGuard};
 
@@ -72,14 +75,6 @@ impl<T: Clone> Rows<T> {
             .map(|row| lock(row).map(|row| row.clone()))
             .collect()
     }
-    pub(super) fn deep_clone(&self) -> AuthResult<Self> {
-        Ok(Self(
-            self.snapshot()?
-                .into_iter()
-                .map(|row| Arc::new(Mutex::new(row)))
-                .collect(),
-        ))
-    }
     pub(super) fn find_mut(
         &self,
         predicate: impl Fn(&T) -> bool,
@@ -108,6 +103,14 @@ impl<T: Clone> Rows<T> {
         }
         Ok(None)
     }
+    pub(super) fn remove_ref(&mut self, selected: &RowRef<T>) -> AuthResult<Option<T>> {
+        let Some(index) = self.0.iter().position(|row| Arc::ptr_eq(row, &selected.0)) else {
+            return Ok(None);
+        };
+        let value = lock(&self.0[index])?.clone();
+        let _ = self.0.remove(index);
+        Ok(Some(value))
+    }
     pub(super) fn update_each(
         &self,
         mut update: impl FnMut(&mut T) -> AuthResult<()>,
@@ -129,6 +132,18 @@ impl<T: Clone> Rows<T> {
             .filter_map(|(row, keep)| keep.then_some(row))
             .collect();
         Ok(())
+    }
+}
+impl<T: Clone + AuthRecordFields + FromFieldMap> Rows<T> {
+    pub(super) fn deep_clone(&self, context: &mut StructuredCloneContext) -> AuthResult<Self> {
+        self.snapshot()?
+            .into_iter()
+            .map(|row| {
+                row.structured_clone(context)
+                    .map(|row| Arc::new(Mutex::new(row)))
+            })
+            .collect::<AuthResult<Vec<_>>>()
+            .map(Self)
     }
 }
 impl<T: Clone + MemoryRow> Rows<T> {
@@ -170,26 +185,30 @@ impl<T: MemoryRow> TransactionRow for T {
         self.id().as_str().map(str::to_owned)
     }
 }
-impl TransactionRow for serde_json::Map<String, serde_json::Value> {
+impl TransactionRow for FieldMap {
     fn transaction_id(&self) -> Option<String> {
         self.get("id")
-            .and_then(serde_json::Value::as_str)
+            .and_then(FieldValue::as_str)
             .map(str::to_owned)
     }
 }
-impl<T: Clone + PartialEq + TransactionRow> Rows<T> {
+pub(super) fn row_json(row: &impl AuthRecordFields) -> AuthResult<Option<String>> {
+    FieldValue::from(row.field_values()?).stringify()
+}
+
+impl<T: Clone + AuthRecordFields + TransactionRow> Rows<T> {
     pub(super) fn merge(&mut self, base: &Self, working: Self) -> AuthResult<()> {
         // The pinned memory adapter reconciles by public ID, even when IDs are
         // missing or duplicated. Preserve that observable limitation and row order.
         let base: HashMap<_, _> = base
             .snapshot()?
             .into_iter()
-            .map(|row| (row.transaction_id(), row))
-            .collect();
+            .map(|row| Ok((row.transaction_id(), row_json(&row)?)))
+            .collect::<AuthResult<_>>()?;
         let mut changed = HashMap::new();
         for shared in &working.0 {
             let row = lock(shared)?.clone();
-            let _ = changed.insert(row.transaction_id(), (shared.clone(), row));
+            let _ = changed.insert(row.transaction_id(), (shared.clone(), row_json(&row)?));
         }
         let mut placed = HashSet::new();
         let mut live = Vec::new();
@@ -244,11 +263,29 @@ mod tests {
     #[derive(Clone, Debug, PartialEq)]
     struct Record {
         id: SchemaValue<String>,
-        label: &'static str,
+        label: String,
     }
     impl MemoryRow for Record {
         fn id(&self) -> &SchemaValue<String> {
             &self.id
+        }
+    }
+
+    impl AuthRecordFields for Record {
+        fn field_values(&self) -> AuthResult<FieldMap> {
+            Ok([
+                ("id".into(), self.id.field_value()),
+                ("label".into(), self.label.clone().into()),
+            ]
+            .into())
+        }
+    }
+    impl FromFieldMap for Record {
+        fn from_field_values(mut fields: FieldMap) -> AuthResult<Self> {
+            Ok(Self {
+                id: SchemaValue::from_field(fields.remove("id").unwrap_or_default()),
+                label: fields.remove("label").unwrap_or_default().decode()?,
+            })
         }
     }
 
@@ -263,10 +300,13 @@ mod tests {
                     "duplicate" => SchemaValue::Typed("duplicate".into()),
                     _ => SchemaValue::Typed((index + 1).to_string()),
                 };
-                live.push(Record { id, label });
+                live.push(Record {
+                    id,
+                    label: label.into(),
+                });
             }
-            let base = live.deep_clone()?;
-            let working = base.deep_clone()?;
+            let base = live.deep_clone(&mut StructuredCloneContext::new())?;
+            let working = base.deep_clone(&mut StructuredCloneContext::new())?;
             {
                 let mut first = working
                     .find_mut(|row| row.label == "Alice")?
@@ -274,7 +314,7 @@ mod tests {
                 if kind == "changed" {
                     first.id = SchemaValue::Typed("changed-public-id".into());
                 }
-                first.label = "Updated Alice";
+                first.label = "Updated Alice".into();
             }
             live.merge(&base, working.clone())?;
             let rows = live.snapshot()?;
@@ -284,12 +324,14 @@ mod tests {
                 ["Alice", "Bob"]
             };
             assert_eq!(
-                rows.iter().map(|row| row.label).collect::<Vec<_>>(),
+                rows.iter()
+                    .map(|row| row.label.as_str())
+                    .collect::<Vec<_>>(),
                 expected
             );
             assert_eq!(
-                working.snapshot()?.first().map(|row| row.label),
-                Some("Updated Alice")
+                working.snapshot()?.first().map(|row| row.label.clone()),
+                Some("Updated Alice".to_owned())
             );
         }
         Ok(())

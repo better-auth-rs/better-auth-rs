@@ -371,7 +371,7 @@ async fn test_delete_expired_api_keys_memory_adapter() {
     .await;
 
     // Expire the first key by setting expires_at to the past
-    let past = (Utc::now() - Duration::hours(1)).to_rfc3339();
+    let past = better_auth_core::FieldDate::from(Utc::now() - Duration::hours(1));
     ctx.database
         .update_api_key(
             &id1.clone().into(),
@@ -418,7 +418,7 @@ async fn test_delete_expired_removes_only_expired() {
     )
     .await;
 
-    let past = (Utc::now() - Duration::hours(1)).to_rfc3339();
+    let past = better_auth_core::FieldDate::from(Utc::now() - Duration::hours(1));
     ctx.database
         .update_api_key(
             &id1.clone().into(),

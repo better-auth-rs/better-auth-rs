@@ -5,6 +5,11 @@ extern crate self as better_auth_seaorm;
 mod config;
 mod conversions;
 mod error;
+mod field_value;
+#[doc(hidden)]
+pub use field_value::{
+    decode_column as __private_field_decode, from_column as __private_field_value,
+};
 mod reference_id;
 mod transaction_connection;
 pub use reference_id::ReferenceId;

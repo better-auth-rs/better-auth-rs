@@ -2,10 +2,10 @@ use async_trait::async_trait;
 use better_auth_core::middleware::{EndpointRateLimit, RateLimitDecision};
 use better_auth_core::store::{RateLimitRecord, RateLimitStore};
 use better_auth_core::{AuthResult, AuthSchema};
+use better_auth_core::{FieldMap, SchemaField};
 use chrono::Utc;
 use sea_orm::sea_query::{Expr, ExprTrait};
-use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter};
-use serde_json::{Map, json};
+use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 
 use super::plugin_models::Entity;
 use super::{SeaOrmStore, entities::rate_limit, map_db_err};
@@ -74,10 +74,10 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPluginSchema> RateLimi
                     self.create_fields(
                         "rateLimit",
                         None,
-                        Map::from_iter([
-                            ("key".to_owned(), json!(key)),
-                            ("count".to_owned(), json!(1)),
-                            ("last_request".to_owned(), json!(now)),
+                        FieldMap::from_iter([
+                            ("key".to_owned(), key.to_owned().into_field()),
+                            ("count".to_owned(), (1).into_field()),
+                            ("last_request".to_owned(), (now).into_field()),
                         ]),
                     )?,
                     self.config().advanced.database.generate_id(),
@@ -87,7 +87,7 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPluginSchema> RateLimi
                 if let Err(error) = insert {
                     // Upstream retries a competing creation only when the key now exists.
                     if self.rate_limit_record(key).await?.is_none() {
-                        return Err(map_db_err(error));
+                        return Err(error);
                     }
                     continue;
                 }

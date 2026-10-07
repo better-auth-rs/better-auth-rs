@@ -1,9 +1,10 @@
 use crate::SeaOrmPluginModel;
 use better_auth_core::store::schema::{EntityRole, core_fields, resolve_field_name};
 use better_auth_core::{AuthError, AuthResult, id::IdGeneration, user_fields::UserConfig};
-use sea_orm::{ActiveModelTrait, ColumnTrait, DbBackend, IdenStatic, Iterable};
-use serde::Serialize;
-use serde_json::Map;
+use better_auth_core::{FieldMap, SchemaField};
+use sea_orm::{ColumnTrait, DbBackend, IdenStatic, Iterable};
+
+pub(super) type Write<M> = super::record_write::RecordWrite<Entity<M>>;
 
 pub(super) type Entity<M> = <M as SeaOrmPluginModel>::Entity;
 
@@ -24,50 +25,43 @@ pub(super) fn record_fields<M: SeaOrmPluginModel>(
 }
 
 pub(super) fn set<M: SeaOrmPluginModel>(
-    active: &mut M::ActiveModel,
+    active: &mut Write<M>,
     name: &str,
-    value: impl Serialize,
+    value: impl SchemaField,
     policy: &IdGeneration,
 ) -> AuthResult<()> {
-    let fields = Map::from_iter([(name.to_owned(), serde_json::to_value(value)?)]);
+    let fields = FieldMap::from_iter([(name.to_owned(), value.into_field())]);
     apply::<M>(active, fields, policy)
 }
 
 pub(super) fn apply<M: SeaOrmPluginModel>(
-    active: &mut M::ActiveModel,
-    mut fields: Map<String, serde_json::Value>,
+    active: &mut Write<M>,
+    mut fields: FieldMap,
     policy: &IdGeneration,
 ) -> AuthResult<()> {
     crate::reference_id::prepare_fields(&mut fields, policy, None, M::column, M::is_id_reference)?;
-    M::apply_fields(active, fields)
+    for (name, value) in fields {
+        active.native_field(M::column(&name)?, value);
+    }
+    Ok(())
 }
 
 pub(super) fn active<M: SeaOrmPluginModel>(
-    mut fields: Map<String, serde_json::Value>,
+    fields: FieldMap,
     policy: &IdGeneration,
-) -> AuthResult<M::ActiveModel> {
-    crate::reference_id::prepare_fields(&mut fields, policy, None, M::column, M::is_id_reference)?;
-    M::active(fields)
-}
-
-pub(super) fn apply_active_fields<M: SeaOrmPluginModel>(
-    active: &mut M::ActiveModel,
-    patch: M::ActiveModel,
-) {
-    for column in M::Column::iter() {
-        if let sea_orm::ActiveValue::Set(value) = patch.get(column) {
-            active.set(column, value);
-        }
-    }
+) -> AuthResult<Write<M>> {
+    let mut active = Write::<M>::default();
+    apply::<M>(&mut active, fields, policy)?;
+    Ok(active)
 }
 
 pub(super) async fn additional_fields<M: SeaOrmPluginModel>(
     config: &UserConfig,
-    input: Map<String, serde_json::Value>,
+    input: FieldMap,
     policy: &IdGeneration,
     backend: DbBackend,
     create: bool,
-) -> AuthResult<M::ActiveModel> {
+) -> AuthResult<Write<M>> {
     let fields = config
         .storage_fields_with_binding(input, create, |name, field, value| {
             crate::reference_id::input_binding(
@@ -88,8 +82,10 @@ pub(super) async fn additional_fields<M: SeaOrmPluginModel>(
             )
         })
         .await?;
-    let mut active = M::active(fields)?;
-    crate::reference_id::apply_bindings(&mut active, config, backend, M::column)?;
+    let mut active = Write::<M>::default();
+    for (name, value) in fields {
+        active.field(M::column(&name)?, value);
+    }
     Ok(active)
 }
 

@@ -19,31 +19,27 @@ impl EphemeralStore {
             |(_, source), name, field| {
                 source.read(|row| {
                     if name == "name" {
-                        row.name.json()
+                        Ok(row.name.field_value())
                     } else {
                         Ok(row
                             .additional_fields
                             .get(resolve_field_name(field.field_name.as_deref(), name))
-                            .cloned())
+                            .cloned()
+                            .unwrap_or_default())
                     }
                 })
             },
             |(snapshot, source), name, field, value| {
                 Box::pin(async move {
-                    let value = project_adapter_value(value, field, field.references_id(), true)
-                        .await?
-                        .json()?;
+                    let value =
+                        project_adapter_value(value, field, field.references_id(), true).await?;
                     if name == "name" {
-                        let name = value
-                            .map(serde_json::from_value)
-                            .transpose()?
-                            .map(crate::SchemaValue::Typed)
-                            .unwrap_or_default();
+                        let name = crate::SchemaValue::from_field(value);
                         // Native fields follow name and precede application fields in the upstream schema.
                         *snapshot = source.read(|row| Ok(row.clone()))?;
                         snapshot.additional_fields.clear();
                         snapshot.name = name;
-                    } else if let Some(value) = value {
+                    } else {
                         let _ = snapshot.additional_fields.insert(name.to_owned(), value);
                     }
                     Ok(())

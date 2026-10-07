@@ -15,7 +15,8 @@ mod input_tests;
 #[serde(rename_all = "camelCase")]
 pub struct AddMemberInput {
     #[serde(flatten)]
-    pub additional_fields: serde_json::Map<String, serde_json::Value>,
+    #[serde(with = "better_auth_core::field_value::serde::map")]
+    pub additional_fields: better_auth_core::FieldMap,
     #[serde(
         default,
         skip_serializing_if = "better_auth_core::SchemaValue::is_undefined"
@@ -37,6 +38,10 @@ pub struct AddMemberInput {
     )]
     pub team_id: better_auth_core::SchemaValue<String>,
 }
+
+super::request::from_fields!(AddMemberInput {
+    user_id: "userId", organization_id: "organizationId", role: "role", team_id: "teamId",
+}; additional_fields);
 
 impl OrganizationPlugin {
     /// Add a member from a trusted server context, optionally using an authenticated request.
@@ -65,34 +70,30 @@ impl OrganizationPlugin {
         let ctx = endpoint.auth;
         let store = store::MemberAdapter::new(endpoint);
         let additional_fields = input.additional_fields.clone();
-        let user_id = input
-            .user_id
-            .json()?
-            .filter(better_auth_core::user_fields::is_truthy);
+        let user_id = input.user_id.field_value();
+        let user_id = user_id.is_truthy().then_some(user_id);
         // Upstream permits a supplied user ID even when session lookup fails.
         let session = match user_id.is_some() {
             true => super::handlers::require_session(request, ctx).await.ok(),
             _ => None,
         };
-        let org_value = input
-            .organization_id
-            .json()?
-            .filter(better_auth_core::user_fields::is_truthy)
+        let org_value = input.organization_id.field_value();
+        let org_value = org_value
+            .is_truthy()
+            .then_some(org_value)
             .or_else(|| {
                 session
                     .as_ref()
                     .and_then(|(_, session)| session.active_organization_id())
-                    .map(|id| serde_json::json!(id))
+                    .map(|id| better_auth_core::FieldValue::from(id))
             })
             .ok_or(AuthError::Upstream {
                 status: 400,
                 code: "NO_ACTIVE_ORGANIZATION",
                 message: "No active organization",
             })?;
-        let team_value = input
-            .team_id
-            .json()?
-            .filter(better_auth_core::user_fields::is_truthy);
+        let team_value = input.team_id.field_value();
+        let team_value = team_value.is_truthy().then_some(team_value);
         if team_value.is_some() && !self.config.teams.enabled {
             ctx.config.logger.error("Teams are not enabled", &[]);
             return Err(better_auth_core::AuthResponse::json(
@@ -116,7 +117,7 @@ impl OrganizationPlugin {
         if let Some(email) = user.email()
             && let Some(existing) = store.get_user_by_email(email).await?
             && store
-                .get_member_value(&org_value, &serde_json::json!(existing.id()))
+                .get_member_value(&org_value, &existing.id().field_value())
                 .await?
                 .is_some()
         {
@@ -135,7 +136,7 @@ impl OrganizationPlugin {
                     code: "TEAM_NOT_FOUND",
                     message: "Team not found",
                 })?;
-            if team.organization_id.json()?.as_ref() != Some(&org_value) {
+            if !team.organization_id.field_value().strict_equals(&org_value) {
                 return Err(AuthError::Upstream {
                     status: 400,
                     code: "TEAM_NOT_FOUND",

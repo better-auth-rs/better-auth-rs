@@ -78,21 +78,21 @@ impl<S: AuthSchema> Transaction<S> {
 impl<S: AuthSchema> AuthTransaction<S> for Transaction<S> {
     async fn get_member_value(
         &self,
-        organization_id: &serde_json::Value,
-        user_id: &serde_json::Value,
+        organization_id: &crate::FieldValue,
+        user_id: &crate::FieldValue,
     ) -> AuthResult<Option<crate::Member>> {
         self.inner.get_member_value(organization_id, user_id).await
     }
     async fn get_organization_by_id_value(
         &self,
-        id: &serde_json::Value,
+        id: &crate::FieldValue,
     ) -> AuthResult<Option<crate::Organization>> {
         self.inner.get_organization_by_id_value(id).await
     }
-    async fn get_team_value(&self, id: &serde_json::Value) -> AuthResult<Option<crate::Team>> {
+    async fn get_team_value(&self, id: &crate::FieldValue) -> AuthResult<Option<crate::Team>> {
         self.inner.get_team_value(id).await
     }
-    async fn count_organization_members_value(&self, id: &serde_json::Value) -> AuthResult<i64> {
+    async fn count_organization_members_value(&self, id: &crate::FieldValue) -> AuthResult<i64> {
         self.inner.count_organization_members_value(id).await
     }
     async fn create_member(&self, input: crate::CreateMember) -> AuthResult<crate::Member> {

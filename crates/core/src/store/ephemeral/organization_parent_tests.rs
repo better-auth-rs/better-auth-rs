@@ -9,7 +9,7 @@ use crate::AuthResponse;
 use crate::organization_fields::OrganizationFields;
 use crate::store::{MemberUser, OrganizationDetailsQuery, OrganizationKey};
 use crate::user_fields::{FieldTransforms, UserFieldConfig, UserFieldTransform};
-use serde_json::json;
+use serde_json::{Value as JsonValue, json};
 use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::sync::{mpsc, oneshot};
 
@@ -18,7 +18,7 @@ struct Control {
     mode: String,
     enabled: AtomicBool,
     changed: AtomicBool,
-    events: Mutex<Vec<Value>>,
+    events: Mutex<Vec<JsonValue>>,
     store: Mutex<Weak<EphemeralStore>>,
     gate: Mutex<Option<oneshot::Receiver<()>>>,
     started: mpsc::UnboundedSender<()>,
@@ -26,7 +26,7 @@ struct Control {
 }
 
 impl Control {
-    fn event(&self, event: Value) {
+    fn event(&self, event: JsonValue) {
         self.events.lock().unwrap().push(event);
     }
 
@@ -46,13 +46,13 @@ impl Control {
             let mut row = state.invitations.get_mut("invitation-a")?.unwrap();
             let _ = row
                 .additional_fields
-                .insert("detail".into(), json!("I-A-detail-after"));
+                .insert("detail".into(), Value::from("I-A-detail-after"));
             ("invitation", "I-A-detail-after")
         } else {
             let mut row = state.members.get_mut("member-a")?.unwrap();
             let _ = row
                 .additional_fields
-                .insert("detail".into(), json!("M-A-detail-after"));
+                .insert("detail".into(), Value::from("M-A-detail-after"));
             ("member", "M-A-detail-after")
         };
         drop(state);
@@ -98,7 +98,7 @@ fn field(control: &Arc<Control>, name: &'static str) -> UserFieldConfig {
                 if !state.enabled.load(Ordering::Relaxed) {
                     return Ok(value);
                 }
-                let text = value.as_ref().unwrap().as_str().unwrap();
+                let text = value.as_str().unwrap();
                 state.event(json!([name, text]));
                 if text == state.parent().1 && !state.changed.load(Ordering::Relaxed) {
                     if state.mode == "read" {
@@ -114,7 +114,7 @@ fn field(control: &Arc<Control>, name: &'static str) -> UserFieldConfig {
                         }
                     }
                 }
-                Ok(Some(json!(format!("{text}-visible"))))
+                Ok(Value::from(format!("{text}-visible")))
             }
         })
     } else {
@@ -122,7 +122,7 @@ fn field(control: &Arc<Control>, name: &'static str) -> UserFieldConfig {
             if !state.enabled.load(Ordering::Relaxed) {
                 return Ok(value);
             }
-            let text = value.as_ref().unwrap().as_str().unwrap();
+            let text = value.as_str().unwrap();
             state.event(json!([name, text]));
             if name == "organization.logo" && text == "O-B-logo" {
                 state.finished.send(()).unwrap();
@@ -133,7 +133,7 @@ fn field(control: &Arc<Control>, name: &'static str) -> UserFieldConfig {
             {
                 state.inject_detail()?;
             }
-            Ok(Some(json!(format!("{text}-visible"))))
+            Ok(Value::from(format!("{text}-visible")))
         })
     };
     UserFieldConfig {
@@ -147,13 +147,13 @@ fn field(control: &Arc<Control>, name: &'static str) -> UserFieldConfig {
 }
 
 async fn seed(store: &EphemeralStore) -> AuthResult<()> {
-    let now = "2025-01-01T00:00:00Z".parse().unwrap();
+    let now = "2025-01-01T00:00:00Z".parse::<DateTime<Utc>>().unwrap();
     let _ = store
         .create_user(CreateUser {
             id: Some("user-a".into()),
             image: Some("U-A-image".to_owned()).into(),
-            created_at: Some(now),
-            updated_at: Some(now),
+            created_at: Some(now.into()),
+            updated_at: Some(now.into()),
             email_verified: Some(true),
             ..CreateUser::new()
                 .with_name("U-A")
@@ -175,8 +175,8 @@ async fn seed(store: &EphemeralStore) -> AuthResult<()> {
                 role: "member".into(),
                 created_at: now.into(),
                 additional_fields: [
-                    ("label".into(), json!(format!("M-{label}"))),
-                    ("detail".into(), json!(format!("M-{label}-detail"))),
+                    ("label".into(), Value::from(format!("M-{label}"))),
+                    ("detail".into(), Value::from(format!("M-{label}-detail"))),
                 ]
                 .into_iter()
                 .collect(),
@@ -190,10 +190,10 @@ async fn seed(store: &EphemeralStore) -> AuthResult<()> {
             "2099-01-01T00:00:00Z".parse().unwrap(),
         );
         invitation.id = Some(format!("invitation-{suffix}"));
-        invitation.created_at = Some(now);
+        invitation.created_at = Some(now.into());
         invitation.additional_fields = [
-            ("label".into(), json!(format!("I-{label}"))),
-            ("detail".into(), json!(format!("I-{label}-detail"))),
+            ("label".into(), Value::from(format!("I-{label}"))),
+            ("detail".into(), Value::from(format!("I-{label}-detail"))),
         ]
         .into_iter()
         .collect();
@@ -202,12 +202,12 @@ async fn seed(store: &EphemeralStore) -> AuthResult<()> {
     Ok(())
 }
 
-fn member(row: MemberUser) -> Value {
+fn member(row: MemberUser) -> JsonValue {
     json!({"label":row.member.additional_fields["label"], "detail":row.member.additional_fields["detail"],
         "user":{"name":row.user.name, "image":row.user.image}})
 }
 
-async fn query(store: &EphemeralStore, path: &str) -> AuthResult<Value> {
+async fn query(store: &EphemeralStore, path: &str) -> AuthResult<JsonValue> {
     Ok(match path {
         "member-org" => member(
             store
@@ -256,7 +256,7 @@ async fn query(store: &EphemeralStore, path: &str) -> AuthResult<Value> {
     })
 }
 
-async fn check_case(fixture: &Value) -> AuthResult<()> {
+async fn check_case(fixture: &JsonValue) -> AuthResult<()> {
     let (started, mut started_rx) = mpsc::unbounded_channel();
     let (finished, mut finished_rx) = mpsc::unbounded_channel();
     let (release, receiver) = oneshot::channel();
@@ -341,7 +341,7 @@ async fn check_case(fixture: &Value) -> AuthResult<()> {
                 response.headers.get("x-ordinary-error").map(String::as_str),
                 Some("original")
             );
-            let body: Value = serde_json::from_slice(&response.body).unwrap();
+            let body: JsonValue = serde_json::from_slice(&response.body).unwrap();
             assert_eq!(
                 json!({"status":"BAD_REQUEST","code":body["code"],"message":body["message"]}),
                 fixture["error"]
@@ -366,7 +366,7 @@ async fn check_case(fixture: &Value) -> AuthResult<()> {
 #[tokio::test]
 async fn memory_organization_fallback_parent_reads_match_pinned_display_contracts() -> AuthResult<()>
 {
-    let fixture: Value = serde_json::from_str(include_str!(
+    let fixture: JsonValue = serde_json::from_str(include_str!(
         "../../../../../tests/fixtures/organization-fallback-parent-1.7.6.json"
     ))
     .unwrap();

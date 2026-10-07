@@ -10,6 +10,8 @@ use std::{
     sync::Arc,
 };
 
+pub mod serde;
+
 /// An immutable Date object. Clones retain identity, including for an invalid Date.
 /// `PartialEq` compares stored milliseconds; use `same_object` for object identity.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -65,6 +67,36 @@ pub struct FieldMap(IndexMap<String, FieldValue>);
 impl FieldMap {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Remove a property without changing the order of the remaining properties.
+    pub fn remove(&mut self, name: &str) -> Option<FieldValue> {
+        self.0.shift_remove(name)
+    }
+
+    /// Import object fields at a JSON boundary without reviving Date strings.
+    pub fn from_json(fields: ::serde_json::Map<String, JsonValue>) -> AuthResult<Self> {
+        fields
+            .into_iter()
+            .map(|(name, value)| Ok((name, FieldValue::from_json(value)?)))
+            .collect()
+    }
+
+    /// Project object fields at a JSON boundary and omit undefined properties.
+    pub fn json(&self) -> AuthResult<::serde_json::Map<String, JsonValue>> {
+        let mut fields = ::serde_json::Map::new();
+        for (name, value) in self {
+            if let Some(value) = value.json()? {
+                let _ = fields.insert(name.clone(), value);
+            }
+        }
+        Ok(fields)
+    }
+}
+
+impl<const N: usize> From<[(String, FieldValue); N]> for FieldMap {
+    fn from(fields: [(String, FieldValue); N]) -> Self {
+        fields.into_iter().collect()
     }
 }
 
@@ -126,12 +158,40 @@ pub enum FieldValue {
     Bool(bool),
     Number(f64),
     String(String),
+    Utf16String(crate::Utf16String),
     Date(FieldDate),
     Array(Arc<[FieldValue]>),
     Object(Arc<FieldMap>),
 }
 
 impl FieldValue {
+    /// Decode the requested Rust type without serializing the field value.
+    pub fn decode<T: crate::SchemaField>(&self) -> AuthResult<T> {
+        T::from_field(self.clone())
+            .map_err(|_| AuthError::internal("Adapter field does not have the requested Rust type"))
+    }
+
+    /// Move this value out and leave undefined in its place.
+    pub fn take(&mut self) -> Self {
+        std::mem::take(self)
+    }
+
+    pub fn is_string(&self) -> bool {
+        matches!(self, Self::String(_) | Self::Utf16String(_))
+    }
+
+    pub fn is_number(&self) -> bool {
+        matches!(self, Self::Number(_))
+    }
+
+    pub fn is_array(&self) -> bool {
+        matches!(self, Self::Array(_))
+    }
+
+    pub fn is_object(&self) -> bool {
+        matches!(self, Self::Object(_))
+    }
+
     pub fn is_undefined(&self) -> bool {
         matches!(self, Self::Undefined)
     }
@@ -189,6 +249,7 @@ impl FieldValue {
             Self::Bool(value) => *value,
             Self::Number(value) => *value != 0.0 && !value.is_nan(),
             Self::String(value) => !value.is_empty(),
+            Self::Utf16String(value) => !value.as_utf16().is_empty(),
             Self::Date(_) | Self::Array(_) | Self::Object(_) => true,
         }
     }
@@ -200,6 +261,11 @@ impl FieldValue {
             (Self::Bool(left), Self::Bool(right)) => left == right,
             (Self::Number(left), Self::Number(right)) => left == right,
             (Self::String(left), Self::String(right)) => left == right,
+            (Self::Utf16String(left), Self::Utf16String(right)) => left == right,
+            (Self::String(left), Self::Utf16String(right))
+            | (Self::Utf16String(right), Self::String(left)) => {
+                left.encode_utf16().eq(right.as_utf16().iter().copied())
+            }
             (Self::Date(left), Self::Date(right)) => left.same_object(right),
             (Self::Array(left), Self::Array(right)) => Arc::ptr_eq(left, right),
             (Self::Object(left), Self::Object(right)) => Arc::ptr_eq(left, right),
@@ -246,6 +312,11 @@ impl FieldValue {
                 serde_json::Number::from_f64(*value).map_or(JsonValue::Null, JsonValue::Number)
             }
             Self::String(value) => JsonValue::String(value.clone()),
+            Self::Utf16String(value) => JsonValue::String(value.to_utf8().map_err(|error| {
+                AuthError::internal(format!(
+                    "JSON value cannot represent unpaired UTF-16 surrogates: {error}"
+                ))
+            })?),
             Self::Date(value) => value.to_datetime()?.map_or(JsonValue::Null, |value| {
                 let text = if (0..=9999).contains(&value.year()) {
                     value.to_rfc3339_opts(SecondsFormat::Millis, true)
@@ -278,11 +349,13 @@ impl FieldValue {
 
     /// Serialize with JavaScript property ordering, numeric formatting, and JSON value conversion.
     pub fn stringify(&self) -> AuthResult<Option<String>> {
-        self.json()?
-            .as_ref()
-            .map(crate::utils::json::stringify)
-            .transpose()
-            .map_err(Into::into)
+        if self.is_undefined() {
+            Ok(None)
+        } else {
+            ::serde_json::to_string(&serde::Json(self))
+                .map(Some)
+                .map_err(Into::into)
+        }
     }
 }
 
@@ -307,6 +380,15 @@ impl From<String> for FieldValue {
 impl From<&str> for FieldValue {
     fn from(value: &str) -> Self {
         Self::String(value.to_owned())
+    }
+}
+
+impl From<crate::Utf16String> for FieldValue {
+    fn from(value: crate::Utf16String) -> Self {
+        match value.to_utf8() {
+            Ok(value) => Self::String(value),
+            Err(_) => Self::Utf16String(value),
+        }
     }
 }
 
@@ -393,3 +475,45 @@ impl StructuredCloneContext {
 
 #[cfg(test)]
 mod tests;
+
+impl FieldValue {
+    /// Apply JavaScript string conversion while retaining unpaired UTF-16 code units.
+    pub fn display_utf16(&self) -> AuthResult<crate::Utf16String> {
+        Ok(match self {
+            Self::Undefined => "undefined".into(),
+            Self::Null => "null".into(),
+            Self::String(value) => value.as_str().into(),
+            Self::Utf16String(value) => value.clone(),
+            Self::Bool(value) => value.to_string().into(),
+            Self::Number(value) => crate::schema_value::number_string(*value).into(),
+            Self::Object(_) => "[object Object]".into(),
+            Self::Date(value) => match value.to_datetime()? {
+                Some(value) => value
+                    .with_timezone(&chrono::Local)
+                    .format("%a %b %d %Y %H:%M:%S GMT%z (%Z)")
+                    .to_string()
+                    .into(),
+                None => "Invalid Date".into(),
+            },
+            Self::Array(values) => {
+                let mut units = Vec::new();
+                for (index, value) in values.iter().enumerate() {
+                    if index != 0 {
+                        units.push(u16::from(b','));
+                    }
+                    if !value.is_undefined() && !value.is_null() {
+                        units.extend_from_slice(value.display_utf16()?.as_utf16());
+                    }
+                }
+                crate::Utf16String::from_units(units)
+            }
+        })
+    }
+}
+
+impl StructuredCloneContext {
+    /// Clone one native schema field using the same object graph as its containing record.
+    pub fn clone_field<T: crate::SchemaField>(&mut self, value: &T) -> AuthResult<T> {
+        self.clone_value(&value.clone().into_field()).decode()
+    }
+}

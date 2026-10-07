@@ -10,7 +10,7 @@ impl EphemeralStore {
     ) -> AuthResult<Vec<crate::Jwk>> {
         let mut rows = selected
             .into_iter()
-            .map(|(snapshot, source)| (snapshot, source, Map::new()))
+            .map(|(snapshot, source)| (snapshot, source, FieldMap::new()))
             .collect::<Vec<_>>();
         project_source_fields_then(
             &mut rows,
@@ -26,13 +26,14 @@ impl EphemeralStore {
             |(_, _, output), name, field, value| {
                 Box::pin(async move {
                     // References bypass JSON decoding; Serial reference arrays must reach callbacks unchanged.
-                    if let Some(value) =
-                        project_adapter_value(value, field, field.references_id(), true)
-                            .await?
-                            .json()?
-                    {
-                        let _ = output.insert(name.to_owned(), value);
-                    }
+                    let value = project_adapter_value(
+                        value.unwrap_or_default(),
+                        field,
+                        field.references_id(),
+                        true,
+                    )
+                    .await?;
+                    let _ = output.insert(name.to_owned(), value);
                     Ok(())
                 })
             },

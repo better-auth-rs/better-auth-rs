@@ -1,5 +1,5 @@
 use better_auth_core::{
-    AuthResult,
+    AuthResult, FieldValue,
     user_fields::{FieldOutputCapabilities, UserFieldConfig, UserFieldType},
 };
 use sea_orm::{DbBackend, EntityTrait, ModelTrait};
@@ -19,64 +19,49 @@ pub(super) fn capabilities(backend: DbBackend) -> FieldOutputCapabilities {
 pub(super) fn sqlite_extra_output(
     value: sea_orm::Value,
     field: &UserFieldConfig,
-) -> AuthResult<Option<serde_json::Value>> {
+) -> AuthResult<Option<FieldValue>> {
     use sea_orm::Value;
     if matches!(field.field_type, UserFieldType::Boolean)
         && let Value::Bool(Some(value)) = value
     {
-        return Ok(Some(serde_json::Value::from(i64::from(value))));
+        return Ok(Some(FieldValue::Number(f64::from(u8::from(value)))));
     }
     if matches!(
         field.field_type,
         UserFieldType::Json | UserFieldType::StringArray | UserFieldType::NumberArray
     ) {
         match &value {
-            Value::Json(None) => return Ok(Some(serde_json::Value::Null)),
+            Value::Json(None) => return Ok(Some(FieldValue::Null)),
             // SQL NULL and a stored JSON literal null must reach the callback differently.
             Value::Json(Some(value)) => {
                 return better_auth_core::utils::json::stringify(value)
-                    .map(|text| Some(serde_json::Value::String(text)))
+                    .map(|text| Some(FieldValue::String(text)))
                     .map_err(Into::into);
             }
-            Value::Array(_, Some(_)) => {
-                return better_auth_core::utils::json::stringify(
-                    &sea_orm::sea_query::sea_value_to_json_value(&value),
-                )
-                .map(|text| Some(serde_json::Value::String(text)))
-                .map_err(Into::into);
+            value @ Value::Array(_, Some(_)) => {
+                return crate::__private_field_value(value.clone())?
+                    .stringify()
+                    .map(|value| value.map(FieldValue::String));
             }
             _ => {}
         }
     }
-    if matches!(field.field_type, UserFieldType::Date) {
-        return match value {
-            Value::ChronoDateTimeUtc(value) => better_auth_core::utils::date::serialize_option(
-                &value,
-                serde_json::value::Serializer,
-            )
-            .map(Some)
-            .map_err(Into::into),
-            Value::ChronoDate(value) => Ok(Some(serde_json::to_value(value)?)),
-            Value::ChronoTime(value) => Ok(Some(serde_json::to_value(value)?)),
-            Value::ChronoDateTime(value) => Ok(Some(serde_json::to_value(value)?)),
-            Value::ChronoDateTimeWithTimeZone(value) => Ok(Some(serde_json::to_value(value)?)),
-            Value::ChronoDateTimeLocal(value) => Ok(Some(serde_json::to_value(value)?)),
-            // The SQL formatter changes these representations; retain their serialized source.
-            Value::TimeDate(_)
-            | Value::TimeTime(_)
-            | Value::TimeDateTime(_)
-            | Value::TimeDateTimeWithTimeZone(_) => Ok(None),
-            value => Ok(Some(sea_orm::sea_query::sea_value_to_json_value(&value))),
-        };
+    let value = crate::__private_field_value(value)?;
+    if matches!(field.field_type, UserFieldType::Date)
+        && let FieldValue::Date(date) = &value
+    {
+        return Ok(Some(date.to_datetime()?.map_or(FieldValue::Null, |date| {
+            FieldValue::String(date.to_rfc3339_opts(chrono::SecondsFormat::Millis, true))
+        })));
     }
-    Ok(Some(sea_orm::sea_query::sea_value_to_json_value(&value)))
+    Ok(Some(value))
 }
 
 pub(super) fn plugin_field_output(
     value: sea_orm::Value,
     field: &UserFieldConfig,
     backend: DbBackend,
-) -> AuthResult<Option<serde_json::Value>> {
+) -> AuthResult<Option<FieldValue>> {
     if field.references_id() {
         return Ok(None);
     }
@@ -87,7 +72,7 @@ pub(super) fn plugin_field_output(
         && matches!(field.field_type, UserFieldType::Boolean)
         && let sea_orm::Value::Bool(Some(value)) = value
     {
-        return Ok(Some(serde_json::Value::from(i64::from(value))));
+        return Ok(Some(FieldValue::Number(f64::from(u8::from(value)))));
     }
-    Ok(None)
+    crate::__private_field_value(value).map(Some)
 }

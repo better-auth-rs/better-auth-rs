@@ -3,7 +3,7 @@ use crate::store::{AccountOwner, RuntimeStore};
 use crate::user_fields::{
     FieldTransforms, UserFieldConfig, UserFieldReference, UserFieldTransform,
 };
-use serde_json::json;
+use serde_json::{Value as JsonValue, json};
 
 fn config() -> AuthConfig {
     let mut config = AuthConfig::default();
@@ -22,16 +22,16 @@ fn config() -> AuthConfig {
     config
 }
 
-fn fixture() -> Value {
+fn fixture() -> JsonValue {
     serde_json::from_str(include_str!(
         "../../../../../tests/fixtures/schema-join-reference-history-1.7.6.json"
     ))
     .unwrap()
 }
 
-fn owner_schema(store: &EphemeralStore) -> Value {
+fn owner_schema(store: &EphemeralStore) -> JsonValue {
     match AccountOwner::validate_schema(&store.config, &store.model_fields, |_, _| false) {
-        Ok(()) => Value::Null,
+        Ok(()) => JsonValue::Null,
         Err(error) => json!({ "error": error.instrumentation_message() }),
     }
 }
@@ -138,7 +138,7 @@ async fn schema_history_memory_input_failure_preserves_callback_and_mutation() {
                     captured
                         .lock()
                         .unwrap()
-                        .push(json!(["input", "user.name", value]));
+                        .push(json!(["input", "user.name", value.json()?]));
                     Err(AuthError::internal("history-input-failure"))
                 })),
                 ..Default::default()
@@ -193,5 +193,5 @@ async fn schema_history_memory_atomic_verification_keeps_the_adapter_runtime() {
             .unwrap()
             .is_none()
     );
-    assert_eq!(owner_schema(&store), Value::Null);
+    assert_eq!(owner_schema(&store), JsonValue::Null);
 }

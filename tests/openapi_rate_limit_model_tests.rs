@@ -69,9 +69,9 @@ impl<S: AuthSchema> AuthPlugin<S> for RateLimitModel {
         };
         Ok(
             OpenApiPluginMetadata::from_routes("ordinary-rate-limit-model", Vec::new())?
-                .model("beforeRateLimit", &ordinary)
-                .model("rateLimit", &declared)
-                .model("afterRateLimit", &ordinary),
+                .model("beforeRateLimit", &ordinary)?
+                .model("rateLimit", &declared)?
+                .model("afterRateLimit", &ordinary)?,
         )
     }
 

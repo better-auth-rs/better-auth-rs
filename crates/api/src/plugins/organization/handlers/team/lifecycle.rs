@@ -87,7 +87,7 @@ pub(super) async fn create(
     let mut data = OrganizationTeamDraft {
         id: additional_fields
             .get("id")
-            .and_then(serde_json::Value::as_str)
+            .and_then(better_auth_core::FieldValue::as_str)
             .map(str::to_owned),
         additional_fields,
         name: body.name,

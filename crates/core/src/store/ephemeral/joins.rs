@@ -2,14 +2,13 @@
 
 use super::rows::RowRef;
 use super::*;
-use crate::SchemaValue;
 use crate::session::SessionData;
 use crate::store::schema::resolve_field_name;
 use crate::store::{AccountOwner, UserAccounts};
 use crate::user_fields::{UserFieldConfig, project_adapter_value, project_source_fields_then};
 
 type UserRef = RowRef<UserView>;
-type AccountRef = RowRef<Map<String, Value>>;
+type AccountRef = RowRef<FieldMap>;
 type SessionSnapshot = (SessionView, Option<SessionData>);
 
 impl EphemeralStore {
@@ -38,7 +37,7 @@ impl EphemeralStore {
         let _ = fields.insert("id".into(), UserFieldConfig::default());
         let mut rows = users
             .into_iter()
-            .map(|user| (user, Map::new(), Map::new()))
+            .map(|user| (user, FieldMap::new(), FieldMap::new()))
             .collect::<Vec<_>>();
         project_source_fields_then(
             &mut rows,
@@ -64,17 +63,20 @@ impl EphemeralStore {
                 let configured = name != "id" && self.config.user.fields().contains_key(name);
                 Box::pin(async move {
                     if configured {
-                        let value =
-                            project_adapter_value(value, field, field.references_id(), true)
-                                .await?
-                                .json()?;
+                        let value = project_adapter_value(
+                            value.unwrap_or_default(),
+                            field,
+                            field.references_id(),
+                            true,
+                        )
+                        .await?;
                         crate::user_fields::assign_output(output, name, field, value)?;
                     }
                     Ok(())
                 })
             },
             |_, (source, native, output)| {
-                let mut user = UserView::try_from(std::mem::take(native))?;
+                let mut user = UserView::from_field_values(std::mem::take(native))?;
                 user.metadata = source.read(|user| Ok(user.metadata.clone()))?;
                 self.assign_user_output(&mut user, std::mem::take(output));
                 Ok(user)
@@ -87,19 +89,23 @@ impl EphemeralStore {
         self.model_fields
             .canonicalize_id(crate::store::schema::EntityRole::Account)?;
         let schema = self.config.account.field_schema();
-        let mut fields = IndexMap::new();
+        let mut fields = FieldMap::new();
         for (name, field) in schema.fields() {
             if name == "id" {
                 continue;
             }
             let value = source.read(|row| Ok(row.get(schema.record_storage_key(name)).cloned()))?;
-            let value = project_adapter_value(value, field, field.references_id(), true).await?;
-            if !value.is_undefined() {
-                let _ = fields.insert(name.clone(), value);
-            }
+            let value = project_adapter_value(
+                value.unwrap_or_default(),
+                field,
+                field.references_id(),
+                true,
+            )
+            .await?;
+            let _ = fields.insert(name.clone(), value);
         }
         if let Some(id) = source.read(|row| Ok(row.get("id").cloned()))? {
-            let _ = fields.insert("id".into(), SchemaValue::Typed(id));
+            let _ = fields.insert("id".into(), id);
         }
         Ok(AccountView::from_adapter_fields(fields))
     }
@@ -113,7 +119,10 @@ impl EphemeralStore {
         self.raw("account", "findMany", |state| {
             Ok(crate::query::paginate_memory(
                 state.accounts.select_refs(|record| {
-                    record.get(fields.record_storage_key("userId")) == Some(&user_id)
+                    record
+                        .get(fields.record_storage_key("userId"))
+                        .unwrap_or(&Value::Undefined)
+                        .strict_equals(&user_id)
                 })?,
                 Some(self.config.advanced.database.find_many_limit()),
                 None,
@@ -141,7 +150,9 @@ impl EphemeralStore {
                     let id =
                         self.memory_field_query(&fields, "userId", Value::String(id.to_owned()))?;
                     let matching = state.accounts.select_refs(|row| {
-                        row.get(fields.record_storage_key("userId")) == Some(&id)
+                        row.get(fields.record_storage_key("userId"))
+                            .unwrap_or(&Value::Undefined)
+                            .strict_equals(&id)
                     })?;
                     let mut seen = Vec::new();
                     for row in matching {
@@ -149,8 +160,8 @@ impl EphemeralStore {
                         {
                             break;
                         }
-                        let id = row.read(|row| Ok(row.get("id").cloned()))?;
-                        if !seen.contains(&id) {
+                        let id = row.read(|row| Ok(row.get("id").cloned().unwrap_or_default()))?;
+                        if !seen.iter().any(|seen: &Value| seen.same_value_zero(&id)) {
                             seen.push(id);
                             accounts.push(row);
                         }
@@ -188,9 +199,14 @@ impl EphemeralStore {
                     .snapshot()?
                     .into_iter()
                     .filter(|record| {
-                        record.get(fields.record_storage_key("providerId")) == Some(&bound_provider)
-                            && record.get(fields.record_storage_key("accountId"))
-                                == Some(&account_id)
+                        record
+                            .get(fields.record_storage_key("providerId"))
+                            .unwrap_or(&Value::Undefined)
+                            .strict_equals(&bound_provider)
+                            && record
+                                .get(fields.record_storage_key("accountId"))
+                                .unwrap_or(&Value::Undefined)
+                                .strict_equals(&account_id)
                     })
                     .take(2)
                 {
@@ -200,7 +216,7 @@ impl EphemeralStore {
                             let id = self.memory_user_id_query(id)?;
                             state
                                 .users
-                                .first_ref(|user| serde_json::json!(user.id) == id)?
+                                .first_ref(|user| user.id.field_value().strict_equals(&id))?
                         }
                         _ => None,
                     };
@@ -255,7 +271,11 @@ impl EphemeralStore {
             .raw("session", "findOne", |state| {
                 match state.sessions.find(|row| row.token == token)? {
                     Some(session) => {
-                        let user = state.users.first_ref(|user| user.id == session.user_id)?;
+                        let user = state.users.first_ref(|user| {
+                            user.id
+                                .field_value()
+                                .strict_equals(&session.user_id.field_value())
+                        })?;
                         Ok(vec![(session, user)])
                     }
                     None => Ok(Vec::new()),
@@ -285,7 +305,9 @@ impl EphemeralStore {
                         .into_iter()
                         .filter(|session| {
                             tokens.contains(&session.token)
-                                && (!only_active || session.expires_at > now)
+                                && (!only_active
+                                    || session.expires_at.milliseconds()
+                                        > now.timestamp_millis() as f64)
                         })
                         .collect(),
                     Some(self.config.advanced.database.find_many_limit()),
@@ -294,7 +316,11 @@ impl EphemeralStore {
                 sessions
                     .into_iter()
                     .map(|session| {
-                        let user = state.users.first_ref(|user| user.id == session.user_id)?;
+                        let user = state.users.first_ref(|user| {
+                            user.id
+                                .field_value()
+                                .strict_equals(&session.user_id.field_value())
+                        })?;
                         Ok((session, user))
                     })
                     .collect()

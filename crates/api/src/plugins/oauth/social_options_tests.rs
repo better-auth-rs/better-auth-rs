@@ -251,7 +251,7 @@ impl OAuthProfileMapper for Mapper {
             .push("map");
         assert_eq!(raw.get("email"), Some(&json!("owner@example.test")));
         let mut mapped = OAuthProfile {
-            additional_fields: [("locale".into(), json!("zh-TW"))].into_iter().collect(),
+            additional_fields: [("locale".into(), "zh-TW".into())].into_iter().collect(),
             ..Default::default()
         };
         if !self.partial {
@@ -281,7 +281,7 @@ impl OAuthUserInfoHandler for CustomProfile {
                 name: Some("Custom".into()).into(),
                 image: Some(Some("https://images.test/custom.png".into())),
                 email_verified: Some(true).into(),
-                additional_fields: [("locale".into(), json!("en"))].into_iter().collect(),
+                additional_fields: [("locale".into(), "en".into())].into_iter().collect(),
             },
             data: json!({"id":"custom-subject"}),
         }))
@@ -350,7 +350,7 @@ async fn social_profile_mapping_matches_upstream_and_keeps_subject()
                     subject
                 }
             );
-            let mut user = response.user.additional_fields;
+            let mut user = response.user.additional_fields.json()?;
             user.extend(serde_json::from_value::<serde_json::Map<String, Value>>(json!({"name":response.user.name,"image":response.user.image,"email":response.user.email,"emailVerified":response.user.email_verified}))?);
             let actual =
                 json!({"user":user,"calls":*calls.lock().map_err(|_| "callback log poisoned")?});

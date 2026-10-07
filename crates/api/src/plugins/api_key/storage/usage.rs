@@ -2,7 +2,7 @@ use better_auth_core::store::{ConsumeApiKeyResult, SecondaryStorage};
 use better_auth_core::{ApiKey, AuthContext, AuthError, AuthResult};
 use chrono::Utc;
 
-use super::{ApiKeyConfig, ApiKeyStorage, cached, now, put, required_backend, timestamp};
+use super::{ApiKeyConfig, ApiKeyStorage, cached, now, put, required_backend};
 
 async fn merge_usage(
     storage: &dyn SecondaryStorage,
@@ -49,14 +49,18 @@ pub(in crate::plugins::api_key) async fn consume(
     }
 
     let mut snapshot = key.clone();
-    let milliseconds = Utc::now().timestamp_millis();
+    let milliseconds = Utc::now().timestamp_millis() as f64;
     let current = now();
     if let Some(mut remaining) = key.remaining {
         if let (Some(interval), Some(amount)) = (key.refill_interval, key.refill_amount)
             && interval != 0.0
             && amount != 0.0
-            && (milliseconds - timestamp(key.last_refill_at.as_deref().unwrap_or(&key.created_at))?)
-                as f64
+            && (milliseconds
+                - key
+                    .last_refill_at
+                    .as_ref()
+                    .unwrap_or(&key.created_at)
+                    .milliseconds())
                 > interval
         {
             remaining = amount;
@@ -75,10 +79,8 @@ pub(in crate::plugins::api_key) async fn consume(
     } else if let (Some(window), Some(max)) = (key.rate_limit_time_window, key.rate_limit_max) {
         let elapsed = key
             .last_request
-            .as_deref()
-            .map(timestamp)
-            .transpose()?
-            .map(|last| (milliseconds - last) as f64);
+            .as_ref()
+            .map(|last| milliseconds - last.milliseconds());
         if let Some(elapsed) = elapsed
             && elapsed <= window
             && key.request_count.unwrap_or(0.0) >= max

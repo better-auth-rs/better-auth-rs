@@ -5,7 +5,7 @@ use std::future::Future;
 
 use serde_json::{Map, Value, json};
 
-use crate::{AuthResponse, AuthResult};
+use crate::{AuthResponse, AuthResult, FieldValue};
 
 /// Decode HTTP query pairs without discarding repeated values or literal bracketed names.
 pub fn parse_url_query(query: &str) -> Value {
@@ -96,7 +96,7 @@ pub fn session_query(query: Option<Value>) -> AuthResult<Option<Value>> {
         if let Some(value) = object.get(name) {
             let _ = validated.insert(
                 name.into(),
-                Value::Bool(crate::user_fields::is_truthy(value)),
+                Value::Bool(FieldValue::from_json(value.clone())?.is_truthy()),
             );
         }
     }
@@ -164,14 +164,21 @@ mod tests {
 
 /// Apply ECMAScript `Number` conversion to a JSON endpoint value.
 pub fn number(value: &Value) -> AuthResult<f64> {
+    field_number(&FieldValue::from_json(value.clone())?)
+}
+
+/// Apply ECMAScript `Number` conversion without erasing Date or non-finite values.
+pub fn field_number(value: &FieldValue) -> AuthResult<f64> {
     match value {
-        Value::Null => Ok(0.0),
-        Value::Bool(value) => Ok(if *value { 1.0 } else { 0.0 }),
-        Value::Number(value) => value.as_f64().ok_or_else(|| {
-            crate::AuthError::internal("JSON number exceeds JavaScript number range")
-        }),
+        FieldValue::Undefined => Ok(f64::NAN),
+        FieldValue::Null => Ok(0.0),
+        FieldValue::Bool(value) => Ok(if *value { 1.0 } else { 0.0 }),
+        FieldValue::Number(value) => Ok(*value),
+        FieldValue::Date(value) => Ok(value.milliseconds()),
         value => {
-            let text = crate::SchemaValue::<Value>::Dynamic(value.clone()).display_string()?;
+            let Ok(text) = value.display_utf16()?.to_utf8() else {
+                return Ok(f64::NAN);
+            };
             if text
                 .trim_matches(|ch: char| (ch.is_whitespace() && ch != '\u{85}') || ch == '\u{feff}')
                 .is_empty()
@@ -181,6 +188,37 @@ pub fn number(value: &Value) -> AuthResult<f64> {
             Ok(crate::organization_fields::numeric_filter(&text).unwrap_or(f64::NAN))
         }
     }
+}
+
+/// Read JavaScript string code units without replacing unpaired surrogates.
+pub fn field_string_units(value: &FieldValue) -> Option<std::borrow::Cow<'_, [u16]>> {
+    match value {
+        FieldValue::String(value) => Some(value.encode_utf16().collect::<Vec<_>>().into()),
+        FieldValue::Utf16String(value) => Some(value.as_utf16().into()),
+        _ => None,
+    }
+}
+
+/// Apply JavaScript relational conversion. An unordered number comparison returns `None`.
+pub fn field_compare(
+    left: &FieldValue,
+    right: &FieldValue,
+) -> AuthResult<Option<std::cmp::Ordering>> {
+    let primitive = |value: &FieldValue| -> AuthResult<FieldValue> {
+        Ok(match value {
+            FieldValue::Date(value) => FieldValue::Number(value.milliseconds()),
+            FieldValue::Array(_) | FieldValue::Object(_) => {
+                FieldValue::from(value.display_utf16()?)
+            }
+            value => value.clone(),
+        })
+    };
+    let left = primitive(left)?;
+    let right = primitive(right)?;
+    if let (Some(left), Some(right)) = (field_string_units(&left), field_string_units(&right)) {
+        return Ok(Some(left.cmp(&right)));
+    }
+    Ok(field_number(&left)?.partial_cmp(&field_number(&right)?))
 }
 
 /// Parse the integer prefix used by Organization's `membersLimit` schema.
@@ -237,4 +275,39 @@ pub fn paginate_memory<T>(items: Vec<T>, limit: Option<f64>, offset: Option<f64>
     let count = items.len() - start;
     let count = limit.map_or(count, |limit| index(limit, count));
     items.into_iter().skip(start).take(count).collect()
+}
+
+#[cfg(test)]
+mod field_tests {
+    use super::*;
+    use crate::{FieldDate, Utf16String};
+    use std::cmp::Ordering;
+
+    #[test]
+    fn runtime_relational_conversion_preserves_dates_nonfinite_numbers_and_utf16() -> AuthResult<()>
+    {
+        let date = FieldValue::Date(FieldDate::from_milliseconds(42.0));
+        assert_eq!(
+            field_compare(&date, &FieldValue::Number(43.0))?,
+            Some(Ordering::Less)
+        );
+        assert_eq!(field_compare(&FieldDate::invalid().into(), &date)?, None);
+        assert_eq!(
+            field_compare(&FieldValue::Number(f64::NAN), &FieldValue::Null)?,
+            None
+        );
+        let high_surrogate = FieldValue::from(Utf16String::from_units(vec![0xd800]));
+        assert!(field_number(&high_surrogate)?.is_nan());
+        let array = FieldValue::from(vec![high_surrogate.clone()]);
+        assert!(field_number(&array)?.is_nan());
+        assert_eq!(
+            field_compare(&array, &high_surrogate)?,
+            Some(Ordering::Equal)
+        );
+        assert_eq!(
+            field_compare(&high_surrogate, &FieldValue::from("\u{e000}"))?,
+            Some(Ordering::Less)
+        );
+        Ok(())
+    }
 }

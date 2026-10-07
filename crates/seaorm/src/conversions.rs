@@ -1,13 +1,8 @@
 use better_auth_core::{
     ApiKey, DeviceCode, Invitation, InvitationStatus, Member, Organization, Passkey, TwoFactor,
 };
-use chrono::{DateTime, Utc};
 
 use crate::store::entities;
-
-fn to_rfc3339(value: DateTime<Utc>) -> String {
-    value.to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
-}
 
 impl From<&entities::organization::Model> for Organization {
     fn from(model: &entities::organization::Model) -> Self {
@@ -21,10 +16,10 @@ impl From<&entities::organization::Model> for Organization {
                 model
                     .metadata
                     .clone()
-                    .map(serde_json::Value::String)
-                    .unwrap_or(serde_json::Value::Null),
+                    .map(better_auth_core::FieldValue::String)
+                    .unwrap_or(better_auth_core::FieldValue::Null),
             ),
-            created_at: model.created_at.into(),
+            created_at: better_auth_core::FieldDate::from(model.created_at).into(),
         }
     }
 }
@@ -37,7 +32,7 @@ impl From<&entities::member::Model> for Member {
             organization_id: model.organization_id.clone().into(),
             user_id: model.user_id.clone().into(),
             role: model.role.clone().into(),
-            created_at: model.created_at.into(),
+            created_at: better_auth_core::FieldDate::from(model.created_at).into(),
         }
     }
 }
@@ -53,8 +48,8 @@ impl From<&entities::invitation::Model> for Invitation {
             status: InvitationStatus::from(model.status.clone()).into(),
             inviter_id: model.inviter_id.clone().into(),
             team_id: model.team_id.clone().into(),
-            expires_at: model.expires_at.into(),
-            created_at: model.created_at.into(),
+            expires_at: better_auth_core::FieldDate::from(model.expires_at).into(),
+            created_at: better_auth_core::FieldDate::from(model.created_at).into(),
         }
     }
 }
@@ -69,9 +64,9 @@ impl From<&entities::two_factor::Model> for TwoFactor {
             user_id: model.user_id.clone(),
             verified: Some(model.verified),
             failed_verification_count: Some(model.failed_verification_count),
-            locked_until: model.locked_until,
-            created_at: model.created_at.into(),
-            updated_at: model.updated_at.into(),
+            locked_until: model.locked_until.map(Into::into),
+            created_at: better_auth_core::FieldDate::from(model.created_at).into(),
+            updated_at: better_auth_core::FieldDate::from(model.updated_at).into(),
         }
     }
 }
@@ -89,17 +84,17 @@ impl From<&entities::api_key::Model> for ApiKey {
             config_id: model.config_id.clone(),
             refill_interval: model.refill_interval,
             refill_amount: model.refill_amount,
-            last_refill_at: model.last_refill_at.map(to_rfc3339),
+            last_refill_at: model.last_refill_at.map(Into::into),
             enabled: model.enabled,
             rate_limit_enabled: model.rate_limit_enabled,
             rate_limit_time_window: model.rate_limit_time_window,
             rate_limit_max: model.rate_limit_max,
             request_count: model.request_count,
             remaining: model.remaining,
-            last_request: model.last_request.map(to_rfc3339),
-            expires_at: model.expires_at.map(to_rfc3339),
-            created_at: to_rfc3339(model.created_at),
-            updated_at: to_rfc3339(model.updated_at),
+            last_request: model.last_request.map(Into::into),
+            expires_at: model.expires_at.map(Into::into),
+            created_at: better_auth_core::FieldDate::from(model.created_at).into(),
+            updated_at: better_auth_core::FieldDate::from(model.updated_at).into(),
             permissions: model.permissions.clone(),
             metadata: model.metadata.clone(),
         }
@@ -119,8 +114,8 @@ impl From<&entities::passkey::Model> for Passkey {
             device_type: model.device_type.clone(),
             backed_up: model.backed_up,
             transports: model.transports.clone(),
-            created_at: Some(model.created_at).into(),
-            updated_at: model.updated_at.into(),
+            created_at: Some(better_auth_core::FieldDate::from(model.created_at)).into(),
+            updated_at: better_auth_core::FieldDate::from(model.updated_at).into(),
             aaguid: model.aaguid.clone().into(),
             credential: model.credential.clone().into(),
         }
@@ -135,9 +130,9 @@ impl From<&entities::device_code::Model> for DeviceCode {
             device_code: model.device_code.clone(),
             user_code: model.user_code.clone(),
             user_id: model.user_id.clone(),
-            expires_at: model.expires_at,
+            expires_at: model.expires_at.into(),
             status: model.status.clone(),
-            last_polled_at: model.last_polled_at,
+            last_polled_at: model.last_polled_at.map(Into::into),
             polling_interval: model.polling_interval.map(f64::from),
             client_id: model.client_id.clone().into(),
             scope: model.scope.clone().into(),

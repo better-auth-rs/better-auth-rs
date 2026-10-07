@@ -113,39 +113,31 @@ pub fn random_id(size: Option<usize>) -> String {
     )
 }
 
-pub(crate) fn serial_reference_value(value: serde_json::Value) -> AuthResult<serde_json::Value> {
-    let convert = |value: serde_json::Value| -> AuthResult<serde_json::Value> {
-        if value.is_null() {
-            return Ok(value);
+pub(crate) fn serial_reference_value(value: crate::FieldValue) -> AuthResult<crate::FieldValue> {
+    serial_reference(value, false)
+}
+
+pub(crate) fn serial_reference_query_value(
+    value: crate::FieldValue,
+) -> AuthResult<crate::FieldValue> {
+    serial_reference(value, true)
+}
+
+fn serial_reference(value: crate::FieldValue, query: bool) -> AuthResult<crate::FieldValue> {
+    let convert = |value: crate::FieldValue| {
+        if value.is_null() && !query {
+            Ok(value)
+        } else {
+            crate::query::field_number(&value).map(crate::FieldValue::Number)
         }
-        let number = crate::query::number(&value)?;
-        Ok(serde_json::from_str(&crate::schema_value::number_string(
-            number,
-        ))?)
     };
     match value {
-        serde_json::Value::Array(values) => values
-            .into_iter()
+        crate::FieldValue::Array(values) => values
+            .iter()
+            .cloned()
             .map(convert)
             .collect::<AuthResult<Vec<_>>>()
             .map(Into::into),
         value => convert(value),
     }
-}
-
-pub(crate) fn serial_reference_query_value(
-    value: serde_json::Value,
-) -> AuthResult<serde_json::Value> {
-    let mut value = serial_reference_value(value)?;
-    // Where conversion uses Number(null), while stored references preserve null.
-    let replace_null = |value: &mut serde_json::Value| {
-        if value.is_null() {
-            *value = serde_json::Value::from(0);
-        }
-    };
-    match &mut value {
-        serde_json::Value::Array(values) => values.iter_mut().for_each(replace_null),
-        value => replace_null(value),
-    }
-    Ok(value)
 }

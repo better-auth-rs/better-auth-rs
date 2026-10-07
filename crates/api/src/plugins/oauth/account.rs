@@ -149,12 +149,9 @@ fn parse_scopes(scope: &SchemaValue<Option<String>>) -> AuthResult<Vec<String>> 
 }
 
 fn date_value(
-    value: &SchemaValue<Option<chrono::DateTime<Utc>>>,
-) -> AuthResult<SchemaValue<chrono::DateTime<Utc>>> {
-    if matches!(value, SchemaValue::InvalidDate) {
-        return Ok(SchemaValue::InvalidDate);
-    }
-    Ok(SchemaValue::from_json(value.json()?))
+    value: &SchemaValue<Option<better_auth_core::FieldDate>>,
+) -> AuthResult<SchemaValue<better_auth_core::FieldDate>> {
+    Ok(SchemaValue::from_field(value.field_value()))
 }
 
 fn decrypt_value(
@@ -246,10 +243,12 @@ async fn persist_tokens(
             .unwrap_or_else(|| account.id_token.clone()),
         access_token_expires_at: tokens
             .access_token_expires_at
+            .clone()
             .map(|value| SchemaValue::Typed(Some(value)))
             .unwrap_or_default(),
         refresh_token_expires_at: tokens
             .refresh_token_expires_at
+            .clone()
             .map(|value| SchemaValue::Typed(Some(value)))
             .unwrap_or_else(|| account.refresh_token_expires_at.clone()),
         ..Default::default()
@@ -321,16 +320,17 @@ async fn valid_access_token(
         };
         let access_token_expires_at = if let Some(value) = new_tokens
             .as_ref()
-            .and_then(|tokens| tokens.access_token_expires_at)
+            .and_then(|tokens| tokens.access_token_expires_at.clone())
         {
             SchemaValue::Typed(Some(value))
         } else if account.access_token_expires_at.is_truthy()? {
             // getValidAccessToken converts strings but preserves other replacement output types.
-            match account.access_token_expires_at.json()? {
-                Some(serde_json::Value::String(_)) => date_value(&account.access_token_expires_at)?
+            if account.access_token_expires_at.field_value().is_string() {
+                date_value(&account.access_token_expires_at)?
                     .converted_date()
-                    .map(Some),
-                _ => account.access_token_expires_at.clone(),
+                    .map(Some)
+            } else {
+                account.access_token_expires_at.clone()
             }
         } else {
             SchemaValue::Undefined
@@ -496,7 +496,7 @@ pub(super) async fn handle_account_info(
         access_token_expires_at: if account.access_token_expires_at.is_absent() {
             None
         } else {
-            *account.access_token_expires_at.typed()?
+            account.access_token_expires_at.typed()?.clone()
         },
         scopes: tokens.scopes,
         id_token: if tokens.id_token.is_absent() {

@@ -3,7 +3,7 @@
 use better_auth::config::{FieldTransforms, UserFieldTransform};
 use better_auth_core::store::UserStore;
 use better_auth_core::{
-    AuthConfig, AuthResult, AuthSchema, AuthStore, CreateUser, UpdateUser, UserView,
+    AuthConfig, AuthResult, AuthSchema, AuthStore, CreateUser, FieldMap, UpdateUser, UserView,
     store::{
         EphemeralStore, RuntimeStore,
         database_hooks::{DatabaseHookContext, DatabaseHookUpdate, DatabaseHooks},
@@ -165,7 +165,7 @@ async fn sqlite_record_array_cannot_replace_the_authenticated_identity_binding()
     }
     for name in [None, Some(Value::Null)] {
         let mut input = CreateUser::new().with_email("missing@record.test");
-        input.name = better_auth_core::SchemaValue::from_json(name);
+        input.name = better_auth_core::SchemaValue::from_json(name).unwrap();
         let error = store.create_user(input).await.unwrap_err();
         assert!(error.to_string().contains("NOT NULL"));
     }
@@ -226,11 +226,19 @@ async fn mapped_json_columns_preserve_raw_values_and_apply_each_storage_transfor
             transform: Some(FieldTransforms {
                 input: Some(UserFieldTransform::new(move |value| {
                     let _ = input_count.fetch_add(1, Ordering::SeqCst);
-                    Ok(value.map(|value| json!({"stored":value})))
+                    Ok(if value.is_undefined() {
+                        value
+                    } else {
+                        FieldMap::from_iter([("stored".into(), value)]).into()
+                    })
                 })),
                 output: Some(UserFieldTransform::new(move |value| {
                     let _ = output_count.fetch_add(1, Ordering::SeqCst);
-                    Ok(value.map(|value| json!({"shown":value})))
+                    Ok(if value.is_undefined() {
+                        value
+                    } else {
+                        FieldMap::from_iter([("shown".into(), value)]).into()
+                    })
                 })),
             }),
             ..Default::default()

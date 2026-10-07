@@ -113,9 +113,10 @@ pub(crate) struct SignInRequest {
 }
 
 #[derive(Debug, Serialize)]
-pub(crate) struct SignUpResponse<U: Serialize> {
+pub(crate) struct SignUpResponse {
     token: Option<String>,
-    user: U,
+    #[serde(with = "better_auth_core::field_value::serde::map")]
+    user: better_auth_core::FieldMap,
 }
 
 #[derive(Debug, Serialize)]

@@ -66,7 +66,7 @@ pub(crate) async fn create_organization_core(
 
     if ctx
         .database
-        .get_organization_by_slug_value(&body.slug.json()?.unwrap_or(serde_json::Value::Null))
+        .get_organization_by_slug_value(&body.slug.field_value())
         .await?
         .is_some()
     {
@@ -78,7 +78,7 @@ pub(crate) async fn create_organization_core(
         id: body
             .additional_fields
             .get("id")
-            .and_then(serde_json::Value::as_str)
+            .and_then(better_auth_core::FieldValue::as_str)
             .map(str::to_owned),
         name: body.name.clone(),
         slug: body.slug.clone(),
@@ -91,12 +91,9 @@ pub(crate) async fn create_organization_core(
             .before_create_organization(&mut org_data, &user_view)
             .await?;
     }
-    org_data.metadata = better_auth_core::SchemaValue::from_json(
-        org_data
-            .metadata
-            .json()?
-            .filter(better_auth_core::user_fields::is_truthy),
-    );
+    if !org_data.metadata.is_truthy()? {
+        org_data.metadata = better_auth_core::SchemaValue::Undefined;
+    }
     let mut organization = ctx.database.create_organization(org_data).await?;
     organization.metadata = super::super::native_json::metadata(organization.metadata, true)?;
     let organization_view =
@@ -185,11 +182,12 @@ pub(crate) async fn create_organization_core(
         hooks.after_create_organization(event).await?;
     }
     let mut response = CreatedOrganizationResponse::from_organization(&organization);
-    if let Some(serde_json::Value::String(value)) = response.metadata.json()?
+    if let better_auth_core::FieldValue::String(value) = response.metadata.field_value()
         && !value.is_empty()
     {
-        response.metadata =
-            better_auth_core::SchemaValue::Dynamic(super::super::native_json::parse_json(&value)?);
+        response.metadata = better_auth_core::SchemaValue::from_json(Some(
+            super::super::native_json::parse_json(&value)?,
+        ))?;
     }
     Ok((
         CreateOrganizationResponse {

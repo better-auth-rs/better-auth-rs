@@ -15,7 +15,7 @@
 extern crate self as better_auth;
 
 mod api_key_start;
-pub use api_key_start::ApiKeyStart;
+pub use api_key_start::{ApiKeyStart, Utf16String};
 
 pub mod api_error;
 pub mod background;
@@ -24,7 +24,7 @@ pub mod email;
 pub mod entity;
 pub mod error;
 mod error_codes;
-mod field_value;
+pub mod field_value;
 pub use field_value::{FieldDate, FieldMap, FieldValue, StructuredCloneContext};
 pub mod hooks;
 pub mod id;
@@ -63,7 +63,7 @@ pub use types_jwt::{CreateJwk, Jwk};
 pub mod organization_fields;
 pub mod schema_value;
 pub mod user_fields;
-pub use schema_value::SchemaValue;
+pub use schema_value::{SchemaField, SchemaValue};
 #[doc(hidden)]
 pub mod user_query;
 pub mod utils;
@@ -83,7 +83,8 @@ pub use config::{
 pub use email::{ConsoleEmailProvider, EmailProvider};
 pub use entity::{
     AuthAccount, AuthApiKey, AuthInvitation, AuthMember, AuthOrganization, AuthPasskey,
-    AuthSession, AuthTwoFactor, AuthUser, AuthVerification, MemberUserView,
+    AuthRecordFields, AuthSession, AuthTwoFactor, AuthUser, AuthVerification, FromFieldMap,
+    MemberUserView,
 };
 pub use error::{
     AuthError, AuthResult, DatabaseError, validate_request_body, validation_error_response,

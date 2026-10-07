@@ -257,6 +257,18 @@ fn authorize(role: &str, permissions: &Statements, roles: &HashMap<String, State
         })
 }
 
+fn decode_statements(
+    value: &better_auth_core::FieldValue,
+) -> better_auth_core::AuthResult<Statements> {
+    let fields = value
+        .as_object()
+        .ok_or_else(|| better_auth_core::AuthError::internal("Role permission is not an object"))?;
+    fields
+        .iter()
+        .map(|(resource, actions)| Ok((resource.clone(), actions.decode()?)))
+        .collect()
+}
+
 /// Check the complete permission request against each assigned role independently.
 pub(crate) async fn check_permissions(
     role: &str,
@@ -273,7 +285,7 @@ pub(crate) async fn check_permissions(
             .await?
         {
             let role = row.role.display_string()?;
-            let stored: Statements = match serde_json::from_value(super::native_json::permission(
+            let stored: Statements = match decode_statements(&super::native_json::permission(
                 &row.permission,
             )?) {
                 Ok(stored) => stored,

@@ -7,9 +7,8 @@ mod wallet;
 
 use crate::store::schema::{EntityRole, resolve_field_name};
 use crate::user_fields::{AdapterRecord, UserConfig, UserFieldType};
-use crate::{AuthConfig, AuthError, AuthResult, SchemaValue};
+use crate::{AuthConfig, AuthError, AuthResult, FieldMap, FieldValue as Value, SchemaValue};
 use indexmap::{IndexMap, IndexSet};
-use serde_json::{Map, Value};
 use std::sync::{Arc, LazyLock, Mutex};
 
 /// Plugin field policies consumed by the selected adapter during auth initialization.
@@ -23,15 +22,8 @@ pub struct ModelFields {
     canonical_ids: Arc<Mutex<IndexSet<EntityRole>>>,
 }
 
-fn optional_string(
-    fields: &mut Map<String, Value>,
-    name: &str,
-) -> AuthResult<Option<Option<String>>> {
-    fields
-        .remove(name)
-        .map(serde_json::from_value)
-        .transpose()
-        .map_err(Into::into)
+fn optional_string(fields: &mut FieldMap, name: &str) -> Option<SchemaValue<Option<String>>> {
+    fields.shift_remove(name).map(SchemaValue::from_field)
 }
 
 impl ModelFields {

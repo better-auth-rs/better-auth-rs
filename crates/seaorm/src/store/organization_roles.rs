@@ -10,27 +10,9 @@ use better_auth_core::{
     AuthResult, CreateOrganizationRole, OrganizationRole, UpdateOrganizationRole,
     store::OrganizationRoleStore,
 };
+use better_auth_core::{FieldValue, SchemaField};
 use chrono::Utc;
 use sea_orm::{ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QuerySelect};
-use serde_json::json;
-
-fn encode_native_permission<M: SeaOrmOrganizationModel>(
-    core: &mut serde_json::Map<String, serde_json::Value>,
-    config: &better_auth_core::user_fields::UserConfig,
-) -> AuthResult<()> {
-    if !config.fields().contains_key("permission")
-        && matches!(
-            M::column("permission")?.def().get_column_type(),
-            sea_orm::ColumnType::Text
-                | sea_orm::ColumnType::String(_)
-                | sea_orm::ColumnType::Char(_)
-        )
-        && let Some(permission) = core.get_mut("permission")
-    {
-        *permission = json!(better_auth_core::utils::json::stringify(permission)?);
-    }
-    Ok(())
-}
 
 #[async_trait]
 impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> OrganizationRoleStore
@@ -41,19 +23,19 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
         mut input: CreateOrganizationRole,
     ) -> AuthResult<OrganizationRole> {
         let config = self.organization_fields()?.organization_role;
-        let permission = if config.fields().contains_key("permission") {
-            json!(input.permission.to_string())
-        } else {
-            input.permission
-        };
+        let permission = input
+            .permission
+            .stringify()?
+            .map(FieldValue::String)
+            .unwrap_or_default();
         let mut core = self.create_fields(
             "organizationRole",
             None,
             values([
-                ("organizationId", json!(input.organization_id)),
-                ("role", json!(input.role)),
+                ("organizationId", (input.organization_id).into_field()),
+                ("role", (input.role).into_field()),
                 ("permission", permission),
-                ("createdAt", json!(Utc::now())),
+                ("createdAt", FieldValue::Date((Utc::now()).into())),
             ]),
         )?;
         for name in [
@@ -67,7 +49,6 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
                 let _ = core.insert(name.into(), value);
             }
         }
-        encode_native_permission::<O::OrganizationRole>(&mut core, &config)?;
         models::insert::<O::OrganizationRole, _>(
             self.connection(),
             core,
@@ -193,17 +174,16 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
         let config = self.organization_fields()?.organization_role;
         let mut core = Default::default();
         if !config.fields().contains_key("updatedAt") {
-            core = values([("updatedAt", json!(Utc::now()))]);
+            core = values([("updatedAt", FieldValue::Date((Utc::now()).into()))]);
         }
         if let Some(role) = input.role {
-            let _ = core.insert("role".into(), json!(role));
+            let _ = core.insert("role".into(), (role).to_owned().into_field());
         }
         if let Some(permission) = input.permission {
-            let value = if config.fields().contains_key("permission") {
-                json!(permission.to_string())
-            } else {
-                permission
-            };
+            let value = permission
+                .stringify()?
+                .map(FieldValue::String)
+                .unwrap_or_default();
             let _ = core.insert("permission".into(), value);
         }
         for name in ["id", "organizationId", "role", "createdAt", "updatedAt"] {
@@ -211,10 +191,9 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
                 let _ = core.entry(name).or_insert(value);
             }
         }
-        encode_native_permission::<O::OrganizationRole>(&mut core, &config)?;
         let updated_id = core
             .get("id")
-            .and_then(serde_json::Value::as_str)
+            .and_then(FieldValue::as_str)
             .unwrap_or(id)
             .to_owned();
         let active = models::active::<O::OrganizationRole>(
@@ -226,8 +205,8 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
             self.config().advanced.database.generate_id(),
         )
         .await?;
-        let _ = Entity::<O::OrganizationRole>::update_many()
-            .set(active)
+        let _ = active
+            .update(self.connection().get_database_backend())?
             .filter(
                 O::OrganizationRole::column("id")?
                     .eq_id(id, self.config().advanced.database.generate_id())?,

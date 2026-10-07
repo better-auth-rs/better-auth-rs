@@ -1,26 +1,23 @@
 use super::{
     FieldOutputCapabilities, UserConfig, UserFieldConfig, UserFieldReference, UserFieldType,
 };
+use crate::AuthResult;
 use crate::store::schema::resolve_field_name;
-use crate::{AuthResult, SchemaValue};
-use serde_json::{Map, Value};
+use crate::{FieldMap, FieldValue as Value};
 use std::sync::Arc;
 
 /// Raw logical fields and mapped storage fields, before adapter output policies run.
 pub struct AdapterRecord {
-    output: indexmap::IndexMap<String, SchemaValue<Value>>,
-    storage: Map<String, Value>,
+    output: FieldMap,
+    storage: FieldMap,
     raw_storage: bool,
 }
 
 impl AdapterRecord {
     /// Preserve unmapped core fields and defer configured policies to the batch boundary.
-    pub fn new(core: Map<String, Value>, storage: Map<String, Value>) -> Self {
+    pub fn new(core: FieldMap, storage: FieldMap) -> Self {
         Self {
-            output: core
-                .into_iter()
-                .map(|(name, value)| (name, SchemaValue::Typed(value)))
-                .collect(),
+            output: core,
             storage,
             raw_storage: false,
         }
@@ -53,9 +50,7 @@ fn field(field_type: UserFieldType, required: bool) -> UserFieldConfig {
 }
 
 fn timestamp(default: bool, update: bool) -> UserFieldConfig {
-    let now: Arc<dyn Fn() -> Value + Send + Sync> = Arc::new(|| {
-        Value::String(chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true))
-    });
+    let now: Arc<dyn Fn() -> Value + Send + Sync> = Arc::new(|| chrono::Utc::now().into());
     UserFieldConfig {
         default_value_fn: default.then(|| now.clone()),
         on_update: update.then_some(now),
@@ -159,7 +154,7 @@ impl UserConfig {
         &self,
         records: Vec<AdapterRecord>,
         supports_native_json: bool,
-    ) -> AuthResult<Vec<Map<String, Value>>> {
+    ) -> AuthResult<Vec<FieldMap>> {
         self.organization_output_records_then(records, supports_native_json, |_, output| {
             std::future::ready(Ok(output))
         })
@@ -171,7 +166,7 @@ impl UserConfig {
         &self,
         records: Vec<AdapterRecord>,
         supports_native_json: bool,
-        complete: impl Fn(usize, Map<String, Value>) -> F + Sync,
+        complete: impl Fn(usize, FieldMap) -> F + Sync,
     ) -> AuthResult<Vec<R>>
     where
         F: std::future::Future<Output = AuthResult<R>> + Send,
@@ -183,7 +178,7 @@ impl UserConfig {
     pub(crate) async fn organization_output_memory_records(
         &self,
         records: Vec<AdapterRecord>,
-    ) -> AuthResult<Vec<Map<String, Value>>> {
+    ) -> AuthResult<Vec<FieldMap>> {
         self.organization_output_records_with_json(
             records,
             UserFieldConfig::references_id,
@@ -196,7 +191,7 @@ impl UserConfig {
         &self,
         records: Vec<AdapterRecord>,
         supports_native_json: impl Fn(&UserFieldConfig) -> bool + Sync,
-        complete: impl Fn(usize, Map<String, Value>) -> F + Sync,
+        complete: impl Fn(usize, FieldMap) -> F + Sync,
     ) -> AuthResult<Vec<R>>
     where
         F: std::future::Future<Output = AuthResult<R>> + Send,
@@ -223,7 +218,7 @@ impl UserConfig {
         &self,
         records: Vec<AdapterRecord>,
         supports_native_json: bool,
-        decode: impl Fn(usize, Map<String, Value>) -> AuthResult<V> + Sync,
+        decode: impl Fn(usize, FieldMap) -> AuthResult<V> + Sync,
         complete: impl Fn(Vec<(usize, V)>) -> F + Sync,
     ) -> AuthResult<Vec<R>>
     where
@@ -241,7 +236,7 @@ impl UserConfig {
     pub(crate) async fn organization_output_memory_records_batches_then<V: Send, R: Send, F>(
         &self,
         records: Vec<AdapterRecord>,
-        decode: impl Fn(usize, Map<String, Value>) -> AuthResult<V> + Sync,
+        decode: impl Fn(usize, FieldMap) -> AuthResult<V> + Sync,
         complete: impl Fn(Vec<(usize, V)>) -> F + Sync,
     ) -> AuthResult<Vec<R>>
     where
@@ -260,7 +255,7 @@ impl UserConfig {
         &self,
         records: Vec<AdapterRecord>,
         supports_native_json: impl Fn(&UserFieldConfig) -> bool + Sync,
-        decode: impl Fn(usize, Map<String, Value>) -> AuthResult<V> + Sync,
+        decode: impl Fn(usize, FieldMap) -> AuthResult<V> + Sync,
         complete: impl Fn(Vec<(usize, V)>) -> F + Sync,
     ) -> AuthResult<Vec<R>>
     where
@@ -291,12 +286,7 @@ impl UserConfig {
         records
             .into_iter()
             .map(|record| {
-                let mut core = Map::new();
-                for (name, value) in record.output {
-                    if let Some(value) = value.json()? {
-                        let _ = core.insert(name, value);
-                    }
-                }
+                let mut core = record.output;
                 core.retain(|name, _| name == "id" || !self.fields().contains_key(name));
                 Ok((record.storage, core))
             })
@@ -319,10 +309,10 @@ impl UserConfig {
     /// Project a raw adapter record without retaining unmapped storage field names.
     pub async fn project_record(
         &self,
-        storage: &Map<String, Value>,
+        storage: &FieldMap,
         supports_native_json: bool,
         supports_native_dates: bool,
-    ) -> AuthResult<indexmap::IndexMap<String, SchemaValue<Value>>> {
+    ) -> AuthResult<FieldMap> {
         // Projection preserves the one input row.
         Ok(self
             .project_records(
@@ -337,10 +327,10 @@ impl UserConfig {
     /// Project raw adapter records together without retaining unmapped storage field names.
     pub async fn project_records(
         &self,
-        storage: &[Map<String, Value>],
+        storage: &[FieldMap],
         supports_native_json: bool,
         supports_native_dates: bool,
-    ) -> AuthResult<Vec<indexmap::IndexMap<String, SchemaValue<Value>>>> {
+    ) -> AuthResult<Vec<FieldMap>> {
         self.project_records_then(
             storage,
             supports_native_json,
@@ -353,8 +343,8 @@ impl UserConfig {
     /// Keep raw Memory reference values and decode ordinary JSON after output callbacks.
     pub(crate) async fn project_memory_records(
         &self,
-        storage: &[Map<String, Value>],
-    ) -> AuthResult<Vec<indexmap::IndexMap<String, SchemaValue<Value>>>> {
+        storage: &[FieldMap],
+    ) -> AuthResult<Vec<FieldMap>> {
         self.project_memory_adapter_records(adapter_records(storage)?)
             .await
     }
@@ -362,8 +352,8 @@ impl UserConfig {
     /// Preserve Memory field conversion while continuing each ready batch with its original indices.
     pub(crate) async fn project_memory_records_batches_then<R: Send, F>(
         &self,
-        storage: &[Map<String, Value>],
-        complete: impl Fn(Vec<(usize, indexmap::IndexMap<String, SchemaValue<Value>>)>) -> F + Sync,
+        storage: &[FieldMap],
+        complete: impl Fn(Vec<(usize, FieldMap)>) -> F + Sync,
     ) -> AuthResult<Vec<R>>
     where
         F: std::future::Future<Output = AuthResult<Vec<(usize, R)>>> + Send,
@@ -391,10 +381,10 @@ impl UserConfig {
     /// The original row index remains available for adapter-owned association data.
     pub async fn project_records_then<R: Send, F>(
         &self,
-        storage: &[Map<String, Value>],
+        storage: &[FieldMap],
         supports_native_json: bool,
         supports_native_dates: bool,
-        complete: impl Fn(usize, indexmap::IndexMap<String, SchemaValue<Value>>) -> F + Sync,
+        complete: impl Fn(usize, FieldMap) -> F + Sync,
     ) -> AuthResult<Vec<R>>
     where
         F: std::future::Future<Output = AuthResult<R>> + Send,
@@ -412,10 +402,10 @@ impl UserConfig {
     /// Continue ready raw records as a batch, retaining each original row index.
     pub async fn project_records_batches_then<R: Send, F>(
         &self,
-        storage: &[Map<String, Value>],
+        storage: &[FieldMap],
         supports_native_json: bool,
         supports_native_dates: bool,
-        complete: impl Fn(Vec<(usize, indexmap::IndexMap<String, SchemaValue<Value>>)>) -> F + Sync,
+        complete: impl Fn(Vec<(usize, FieldMap)>) -> F + Sync,
     ) -> AuthResult<Vec<R>>
     where
         F: std::future::Future<Output = AuthResult<Vec<(usize, R)>>> + Send,
@@ -433,11 +423,11 @@ impl UserConfig {
     /// Native adapter writes do not run HTTP input validation or remove `input: false` fields.
     pub async fn record_storage_fields_for_adapter(
         &self,
-        input: Map<String, Value>,
+        input: FieldMap,
         create: bool,
         supports_native_json: bool,
         native_json_field: impl Fn(&str) -> bool,
-    ) -> AuthResult<Map<String, Value>> {
+    ) -> AuthResult<FieldMap> {
         self.record_storage_fields_with_binding(input, create, |name, field, value| {
             field.adapter_input(value, supports_native_json, native_json_field(name))
         })
@@ -447,11 +437,11 @@ impl UserConfig {
     /// Bind a complete record after its storage policies, while retaining force-allowed IDs.
     pub async fn record_storage_fields_with_binding(
         &self,
-        input: Map<String, Value>,
+        input: FieldMap,
         create: bool,
         bind: impl Fn(&str, &super::UserFieldConfig, Value) -> AuthResult<Value>,
-    ) -> AuthResult<Map<String, Value>> {
-        let mut output = Map::new();
+    ) -> AuthResult<FieldMap> {
+        let mut output = FieldMap::new();
         if let Some(id) = input.get("id") {
             let _ = output.insert("id".into(), id.clone());
         }
@@ -472,11 +462,11 @@ impl UserConfig {
     /// The caller must invoke this after the write and before cache writes or database after hooks.
     pub async fn record_output_fields(
         &self,
-        core: Map<String, Value>,
-        storage: &Map<String, Value>,
+        core: FieldMap,
+        storage: &FieldMap,
         supports_native_json: bool,
         supports_native_dates: bool,
-    ) -> AuthResult<indexmap::IndexMap<String, SchemaValue<Value>>> {
+    ) -> AuthResult<FieldMap> {
         // Projection preserves the one input row.
         Ok(self
             .project_adapter_records(
@@ -494,7 +484,7 @@ impl UserConfig {
         records: Vec<AdapterRecord>,
         supports_native_json: bool,
         supports_native_dates: bool,
-    ) -> AuthResult<Vec<indexmap::IndexMap<String, SchemaValue<Value>>>> {
+    ) -> AuthResult<Vec<FieldMap>> {
         self.project_adapter_records_then(
             records,
             supports_native_json,
@@ -510,7 +500,7 @@ impl UserConfig {
         mut records: Vec<AdapterRecord>,
         capabilities: FieldOutputCapabilities,
         supports_native_dates: bool,
-    ) -> AuthResult<Vec<indexmap::IndexMap<String, SchemaValue<Value>>>> {
+    ) -> AuthResult<Vec<FieldMap>> {
         super::batch::project_fields(&mut records, self.fields(), |record, name, field| {
             Box::pin(project_adapter_field_with_capabilities(
                 record,
@@ -528,7 +518,7 @@ impl UserConfig {
     pub(crate) async fn project_memory_adapter_records(
         &self,
         mut records: Vec<AdapterRecord>,
-    ) -> AuthResult<Vec<indexmap::IndexMap<String, SchemaValue<Value>>>> {
+    ) -> AuthResult<Vec<FieldMap>> {
         super::batch::project_fields(&mut records, self.fields(), |record, name, field| {
             Box::pin(project_adapter_field(
                 record,
@@ -549,7 +539,7 @@ impl UserConfig {
         mut records: Vec<AdapterRecord>,
         supports_native_json: bool,
         supports_native_dates: bool,
-        complete: impl Fn(usize, indexmap::IndexMap<String, SchemaValue<Value>>) -> F + Sync,
+        complete: impl Fn(usize, FieldMap) -> F + Sync,
     ) -> AuthResult<Vec<R>>
     where
         F: std::future::Future<Output = AuthResult<R>> + Send,
@@ -577,7 +567,7 @@ impl UserConfig {
         mut records: Vec<AdapterRecord>,
         supports_native_json: bool,
         supports_native_dates: bool,
-        complete: impl Fn(Vec<(usize, indexmap::IndexMap<String, SchemaValue<Value>>)>) -> F + Sync,
+        complete: impl Fn(Vec<(usize, FieldMap)>) -> F + Sync,
     ) -> AuthResult<Vec<R>>
     where
         F: std::future::Future<Output = AuthResult<Vec<(usize, R)>>> + Send,
@@ -601,7 +591,7 @@ impl UserConfig {
     }
 }
 
-type OrganizationRecord = (Map<String, Value>, Map<String, Value>);
+type OrganizationRecord = (FieldMap, FieldMap);
 
 async fn project_organization_field(
     (storage, output): &mut OrganizationRecord,
@@ -614,7 +604,8 @@ async fn project_organization_field(
     }
     let value = storage
         .get(resolve_field_name(field.field_name.as_deref(), name))
-        .cloned();
+        .cloned()
+        .unwrap_or_default();
     super::organization::assign_output(
         output,
         name,
@@ -623,18 +614,22 @@ async fn project_organization_field(
     )
 }
 
-fn adapter_records(storage: &[Map<String, Value>]) -> AuthResult<Vec<AdapterRecord>> {
+fn adapter_records(storage: &[FieldMap]) -> AuthResult<Vec<AdapterRecord>> {
     storage
         .iter()
         .map(|storage| {
-            let mut core = Map::new();
+            let mut core = FieldMap::new();
             if let Some(id) = storage.get("id") {
                 let _ = core.insert(
                     "id".into(),
-                    Value::String(
-                        crate::SchemaValue::<String>::from_json(Some(id.clone()))
-                            .display_string()?,
-                    ),
+                    if id.is_null() || id.is_undefined() {
+                        id.clone()
+                    } else {
+                        Value::String(
+                            crate::SchemaValue::<String>::from_field(id.clone())
+                                .display_string()?,
+                        )
+                    },
                 );
             }
             Ok(AdapterRecord::new(core, storage.clone()))
@@ -672,7 +667,8 @@ async fn project_adapter_field_with_capabilities(
     let value = record
         .storage
         .get(resolve_field_name(field.field_name.as_deref(), name))
-        .cloned();
+        .cloned()
+        .unwrap_or_default();
     let value = if record.raw_storage {
         field.adapter_output_from_raw(value, capabilities).await?
     } else {
@@ -681,44 +677,39 @@ async fn project_adapter_field_with_capabilities(
             .await?
     };
     let value = project_output_value(value, field, supports_native_dates);
-    if value.is_undefined() {
-        let _ = record.output.shift_remove(name);
-    } else {
-        let _ = record.output.insert(name.to_owned(), value);
-    }
+    let _ = record.output.insert(name.to_owned(), value);
     Ok(())
 }
 
 pub(crate) async fn project_adapter_value(
-    value: Option<Value>,
+    value: Value,
     field: &UserFieldConfig,
     supports_native_json: bool,
     supports_native_dates: bool,
-) -> AuthResult<SchemaValue<Value>> {
+) -> AuthResult<Value> {
     let value = field.adapter_output(value, supports_native_json).await?;
     Ok(project_output_value(value, field, supports_native_dates))
 }
 
 fn project_output_value(
-    value: Option<Value>,
+    value: Value,
     field: &UserFieldConfig,
     supports_native_dates: bool,
-) -> SchemaValue<Value> {
+) -> Value {
     if !supports_native_dates
         && !field.references_id()
         && matches!(field.field_type, UserFieldType::Date)
     {
         match value {
-            Some(Value::String(text)) => match crate::utils::date::parse_adapter_date(&text) {
-                Some(date) => SchemaValue::Typed(Value::String(
-                    date.to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
-                )),
-                None => SchemaValue::InvalidDate,
-            },
-            value => SchemaValue::from_json(value),
+            Value::String(text) => Value::Date(
+                crate::utils::date::parse_adapter_date(&text)
+                    .map(crate::FieldDate::from)
+                    .unwrap_or_else(crate::FieldDate::invalid),
+            ),
+            value => value,
         }
     } else {
-        SchemaValue::from_json(value)
+        value
     }
 }
 
@@ -726,7 +717,9 @@ fn project_output_value(
 mod tests {
     use super::*;
     use crate::user_fields::{FieldTransforms, UserFieldTransform};
-    use serde_json::json;
+    macro_rules! json {
+        ($($token:tt)*) => { Value::from_json(serde_json::json!($($token)*)).expect("valid JSON field") };
+    }
 
     #[tokio::test]
     async fn raw_adapter_json_reaches_callbacks_before_output_decoding() -> AuthResult<()> {
@@ -740,8 +733,8 @@ mod tests {
                             field_type: UserFieldType::Json,
                             transform: Some(FieldTransforms {
                                 output: Some(UserFieldTransform::new(move |value| {
-                                    assert_eq!(value, Some(expected.clone()));
-                                    Ok(Some(json!("[3,4]")))
+                                    assert_eq!(value, expected.clone());
+                                    Ok(json!("[3,4]"))
                                 })),
                                 ..Default::default()
                             }),
@@ -751,7 +744,7 @@ mod tests {
                     .into(),
                 ),
             };
-            let mut record = AdapterRecord::new(Map::new(), Map::new());
+            let mut record = AdapterRecord::new(FieldMap::new(), FieldMap::new());
             record.map_storage_fields(&fields, |_, _| Ok(Some(raw.clone())))?;
             let projected = fields
                 .project_adapter_records_with_capabilities(
@@ -762,7 +755,7 @@ mod tests {
                 .await?;
             assert_eq!(
                 projected.first().and_then(|row| row.get("payload")),
-                Some(&SchemaValue::Typed(json!([3, 4])))
+                Some(&json!([3, 4]))
             );
         }
         Ok(())

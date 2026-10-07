@@ -4,7 +4,7 @@ use better_auth_core::{
     AuthContext, AuthError, AuthPlugin, AuthRequest, AuthResponse, AuthResult, AuthRoute,
     AuthSchema, BeforeRequestAction, HttpMethod, OAuthStateStrategy,
 };
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use url::Url;
@@ -75,8 +75,8 @@ struct StatePackage {
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct ProfileUser {
-    #[serde(default, flatten)]
-    additional_fields: serde_json::Map<String, Value>,
+    #[serde(default, flatten, with = "better_auth_core::field_value::serde::map")]
+    additional_fields: better_auth_core::FieldMap,
     id: String,
     email: String,
     name: String,
@@ -106,14 +106,16 @@ struct ProfileAccount {
     id_token: Option<String>,
     #[serde(
         skip_serializing_if = "Option::is_none",
-        serialize_with = "better_auth_core::utils::date::serialize_option"
+        default,
+        with = "better_auth_core::field_value::serde::optional_date"
     )]
-    access_token_expires_at: Option<DateTime<Utc>>,
+    access_token_expires_at: Option<better_auth_core::FieldDate>,
     #[serde(
         skip_serializing_if = "Option::is_none",
-        serialize_with = "better_auth_core::utils::date::serialize_option"
+        default,
+        with = "better_auth_core::field_value::serde::optional_date"
     )]
-    refresh_token_expires_at: Option<DateTime<Utc>>,
+    refresh_token_expires_at: Option<better_auth_core::FieldDate>,
     #[serde(skip_serializing_if = "Option::is_none")]
     scope: Option<String>,
 }
@@ -535,8 +537,8 @@ impl OAuthProxyPlugin {
                 access_token: tokens.access_token.clone(),
                 refresh_token: tokens.refresh_token.clone(),
                 id_token: tokens.id_token.clone(),
-                access_token_expires_at: tokens.access_token_expires_at,
-                refresh_token_expires_at: tokens.refresh_token_expires_at,
+                access_token_expires_at: tokens.access_token_expires_at.clone(),
+                refresh_token_expires_at: tokens.refresh_token_expires_at.clone(),
                 token_type: tokens.token_type.clone(),
                 scopes: tokens.scopes.clone(),
                 raw: tokens.raw.clone(),

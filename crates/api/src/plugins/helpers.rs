@@ -17,7 +17,9 @@ pub(crate) fn session_is_fresh(
         .session
         .fresh_age
         .unwrap_or_else(|| chrono::Duration::hours(24));
-    fresh_age.is_zero() || Utc::now() - session.created_at() < fresh_age
+    fresh_age.is_zero()
+        || Utc::now().timestamp_millis() as f64 - session.created_at().milliseconds()
+            < fresh_age.num_milliseconds() as f64
 }
 
 /// Convert an `expiresIn` value (**seconds** from now) into an RFC 3339
@@ -320,7 +322,7 @@ pub(crate) async fn session_user<S: better_auth_core::AuthSchema>(
     if admin_plugin_enabled(ctx) && user.banned() {
         if user
             .ban_expires()
-            .is_some_and(|expires| expires < Utc::now())
+            .is_some_and(|expires| expires.milliseconds() < Utc::now().timestamp_millis() as f64)
         {
             let update = UpdateUser {
                 banned: Some(false),

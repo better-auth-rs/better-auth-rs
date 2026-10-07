@@ -68,18 +68,18 @@ fn storage_name<'a>(fields: &'a UserConfig, name: &'a str) -> &'a str {
 }
 
 pub(crate) struct PasskeyFieldPatch {
-    pub name: Option<Option<String>>,
-    pub aaguid: Option<Option<String>>,
-    pub additional_fields: Map<String, Value>,
+    pub name: Option<SchemaValue<Option<String>>>,
+    pub aaguid: Option<SchemaValue<Option<String>>>,
+    pub additional_fields: FieldMap,
 }
 
 impl PasskeyFieldPatch {
     pub(crate) fn apply(self, row: &mut Passkey) {
         if let Some(name) = self.name {
-            row.name = name.into();
+            row.name = name;
         }
         if let Some(aaguid) = self.aaguid {
-            row.aaguid = aaguid.into();
+            row.aaguid = aaguid;
         }
         row.additional_fields.extend(self.additional_fields);
     }
@@ -90,27 +90,27 @@ impl ModelFields {
         &self,
         name: SchemaValue<Option<String>>,
         aaguid: SchemaValue<Option<String>>,
-        mut extras: Map<String, Value>,
+        mut extras: FieldMap,
         create: bool,
         bind: impl Fn(&UserFieldConfig, Value) -> AuthResult<Value>,
     ) -> AuthResult<PasskeyFieldPatch> {
-        let mut core = Map::new();
+        let mut core = FieldMap::new();
         for (name, value) in [("name", name), ("aaguid", aaguid)] {
-            let _ = extras.remove(name);
-            if let Some(value) = value.json()? {
-                let _ = core.insert(name.into(), value);
+            let _ = extras.shift_remove(name);
+            if !value.is_undefined() {
+                let _ = core.insert(name.into(), value.into_field_value());
             }
         }
         let config = self.fields(EntityRole::Passkey);
         let mut fields = config
             .organization_storage_fields(core, extras, create)
             .await?;
-        let name = optional_string(&mut fields, storage_name(config, "name"))?;
-        let aaguid = optional_string(&mut fields, storage_name(config, "aaguid"))?;
+        let name = optional_string(&mut fields, storage_name(config, "name"));
+        let aaguid = optional_string(&mut fields, storage_name(config, "aaguid"));
         for (name, field) in config.fields() {
             let storage = resolve_field_name(field.field_name.as_deref(), name);
             if let Some(value) = fields.get_mut(storage) {
-                *value = bind(field, value.take())?;
+                *value = bind(field, std::mem::take(value))?;
             }
         }
         Ok(PasskeyFieldPatch {
@@ -128,13 +128,14 @@ impl ModelFields {
             .map(|row| {
                 let mut storage = row.additional_fields.clone();
                 for (name, value) in [("name", &row.name), ("aaguid", &row.aaguid)] {
-                    if let Some(value) = value.json()? {
-                        let _ = storage.insert(storage_name(fields, name).into(), value);
+                    if !value.is_undefined() {
+                        let _ =
+                            storage.insert(storage_name(fields, name).into(), value.field_value());
                     }
                 }
-                Ok(AdapterRecord::new(Map::new(), storage))
+                AdapterRecord::new(FieldMap::new(), storage)
             })
-            .collect::<AuthResult<Vec<_>>>()?;
+            .collect();
         self.project_passkey_records(
             rows,
             records,
@@ -161,22 +162,11 @@ impl ModelFields {
                 if fields.fields().contains_key(name) {
                     *value = output
                         .shift_remove(name)
-                        .map(|value| value.json())
-                        .transpose()?
-                        .flatten()
-                        .map(serde_json::from_value)
-                        .transpose()?
-                        .map(SchemaValue::Typed)
+                        .map(SchemaValue::from_field)
                         .unwrap_or_default();
                 }
             }
-            row.additional_fields = output
-                .into_iter()
-                .map(|(name, value)| Ok(value.json()?.map(|value| (name, value))))
-                .collect::<AuthResult<Vec<_>>>()?
-                .into_iter()
-                .flatten()
-                .collect();
+            row.additional_fields = output;
         }
         Ok(rows)
     }

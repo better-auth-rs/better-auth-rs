@@ -21,7 +21,8 @@ async fn email_claim_reservations_have_one_winner_and_can_be_released()
     let claim = CreateVerification {
         identifier: "siwe-email-claim-owner@example.com".into(),
         value: "wallet-address".into(),
-        expires_at: (Utc::now() + chrono::Duration::minutes(1)).into(),
+        expires_at: better_auth_core::FieldDate::from(Utc::now() + chrono::Duration::minutes(1))
+            .into(),
         ..Default::default()
     };
     let barrier = Arc::new(Barrier::new(8));
@@ -88,7 +89,8 @@ async fn consume_hooks_preserve_cancellation_and_do_not_restore_committed_creden
         .create_verification(CreateVerification {
             identifier: "hook-credential".into(),
             value: "user-id".into(),
-            expires_at: (Utc::now() + chrono::Duration::hours(1)).into(),
+            expires_at: better_auth_core::FieldDate::from(Utc::now() + chrono::Duration::hours(1))
+                .into(),
             ..Default::default()
         })
         .await?;
@@ -152,8 +154,11 @@ async fn file_sqlite_credentials_are_consumed_once_and_failures_are_not_lost()
                     .create_verification(CreateVerification {
                         identifier: "one-use".into(),
                         value: value.into(),
-                        expires_at: (Utc::now() + chrono::Duration::hours(1)).into(),
-                        created_at: created_at.into(),
+                        expires_at: better_auth_core::FieldDate::from(
+                            Utc::now() + chrono::Duration::hours(1),
+                        )
+                        .into(),
+                        created_at: better_auth_core::FieldDate::from(created_at).into(),
                         ..Default::default()
                     })
                     .await?;
@@ -184,8 +189,11 @@ async fn file_sqlite_credentials_are_consumed_once_and_failures_are_not_lost()
                     .create_verification(CreateVerification {
                         identifier: "expired-latest".into(),
                         value: value.into(),
-                        expires_at: (Utc::now() + chrono::Duration::seconds(seconds)).into(),
-                        created_at: created_at.into(),
+                        expires_at: better_auth_core::FieldDate::from(
+                            Utc::now() + chrono::Duration::seconds(seconds),
+                        )
+                        .into(),
+                        created_at: better_auth_core::FieldDate::from(created_at).into(),
                         ..Default::default()
                     })
                     .await?;

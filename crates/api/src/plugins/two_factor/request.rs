@@ -83,9 +83,11 @@ pub(super) fn validate(req: &AuthRequest, password_optional: bool) -> AuthResult
         if valid {
             if let Some(value) = value {
                 let value = if kind == "id" {
-                    better_auth_core::SchemaValue::<Value>::from_json(Some(value.clone()))
-                        .display_string()?
-                        .into()
+                    better_auth_core::SchemaValue::<better_auth_core::FieldValue>::from_json(Some(
+                        value.clone(),
+                    ))?
+                    .display_string()?
+                    .into()
                 } else {
                     value.clone()
                 };

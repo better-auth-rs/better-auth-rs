@@ -5,10 +5,8 @@ use crate::SeaOrmPluginModel;
 use async_trait::async_trait;
 use better_auth_core::store::schema::EntityRole;
 use better_auth_core::{AuthResult, CreateJwk, Jwk, store::JwksStore};
-use sea_orm::{
-    ActiveModelTrait, ConnectionTrait, DbBackend, EntityTrait, QueryFilter, QuerySelect,
-};
-use serde_json::{Map, json};
+use better_auth_core::{FieldMap, SchemaField};
+use sea_orm::{ConnectionTrait, DbBackend, EntityTrait, QueryFilter, QuerySelect};
 
 use super::{SeaOrmStore, entities::jwk, map_db_err};
 
@@ -161,13 +159,7 @@ impl<
             )
             .await?;
         for (row, output) in rows.iter_mut().zip(output) {
-            row.additional_fields = output
-                .into_iter()
-                .map(|(name, value)| Ok(value.json()?.map(|value| (name, value))))
-                .collect::<AuthResult<Vec<_>>>()?
-                .into_iter()
-                .flatten()
-                .collect();
+            row.additional_fields = output;
         }
         Ok(rows)
     }
@@ -177,13 +169,13 @@ impl<
         connection: &impl ConnectionTrait,
         input: CreateJwk,
     ) -> AuthResult<Jwk> {
-        let native = Map::from_iter([
-            ("public_key".to_owned(), json!(input.public_key)),
-            ("private_key".to_owned(), json!(input.private_key)),
-            ("created_at".to_owned(), json!(input.created_at)),
-            ("expires_at".to_owned(), json!(input.expires_at)),
-            ("alg".to_owned(), json!(Some(input.alg))),
-            ("crv".to_owned(), json!(input.crv)),
+        let native = FieldMap::from_iter([
+            ("public_key".to_owned(), (input.public_key).into_field()),
+            ("private_key".to_owned(), (input.private_key).into_field()),
+            ("created_at".to_owned(), (input.created_at).into_field()),
+            ("expires_at".to_owned(), (input.expires_at).into_field()),
+            ("alg".to_owned(), (Some(input.alg)).into_field()),
+            ("crv".to_owned(), (input.crv).into_field()),
         ]);
         let config = self.model_fields.fields(EntityRole::Jwk);
         let backend = connection.get_database_backend();
@@ -201,7 +193,7 @@ impl<
             self.config().advanced.database.generate_id(),
         )?;
         let model = database_operation::<Entity<P::Jwk>, _>(self.config(), "create", async {
-            active.insert(connection).await.map_err(map_db_err)
+            active.insert(connection).await
         })
         .await?;
         Ok(self.project_jwk_models(vec![model]).await?.remove(0))

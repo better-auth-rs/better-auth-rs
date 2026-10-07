@@ -56,7 +56,7 @@ where
                         if sqlite {
                             sqlite_extra_output(value, field)
                         } else {
-                            Ok(Some(sea_orm::sea_query::sea_value_to_json_value(&value)))
+                            crate::__private_field_value(value).map(Some)
                         }
                     } else {
                         Ok(None)
@@ -222,36 +222,45 @@ where
         let mut image = std::mem::take(&mut create_user.image);
         for (key, target) in [("name", &mut name), ("image", &mut image)] {
             if let Some(field) = self.config().user.fields().get(key) {
-                *target = better_auth_core::SchemaValue::from_json(
-                    fields.remove(resolve_field_name(field.field_name.as_deref(), key)),
+                *target = better_auth_core::SchemaValue::from_field(
+                    fields
+                        .remove(resolve_field_name(field.field_name.as_deref(), key))
+                        .unwrap_or_default(),
                 );
             }
         }
-        let created_at = create_user.created_at;
-        let updated_at = create_user.updated_at;
+        let ban_expires = create_user.ban_expires.take();
+        let created_at = create_user.created_at.take();
+        let updated_at = create_user.updated_at.take();
         let database_generated_id = user_id.is_none();
         let mut model = S::User::new_active(user_id, create_user, now)?;
-        if let Some(value) = created_at {
-            model.set(S::User::created_at_column(), value.into());
-        }
-        if let Some(value) = updated_at {
-            model.set(S::User::field_column("updatedAt")?, value.into());
+        for (name, value) in [
+            ("createdAt", created_at),
+            ("updatedAt", updated_at),
+            ("banExpires", ban_expires),
+        ] {
+            if let Some(date) = value {
+                let storage = self.config().user.fields().get(name).map_or(name, |field| {
+                    resolve_field_name(field.field_name.as_deref(), name)
+                });
+                if fields.contains_key(storage) {
+                    continue;
+                }
+                let value = if db.get_database_backend() == sea_orm::DbBackend::Sqlite {
+                    super::record_bindings::sqlite_date(date)?
+                } else {
+                    better_auth_core::FieldValue::Date(date)
+                };
+                let _ = fields.insert(storage.into(), value);
+            }
         }
         if database_generated_id {
             model.not_set(S::User::id_column());
         }
-        S::User::apply_fields(&mut model, fields)?;
-        crate::reference_id::apply_bindings(
-            &mut model,
-            &self.config().user,
-            db.get_database_backend(),
-            S::User::field_column,
-        )?;
-
         let user = database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
             self.config(),
             "create",
-            async { super::user_values::insert::<S::User>(db, model, name, image).await },
+            async { super::user_values::insert::<S::User>(db, model, name, image, fields).await },
         )
         .await?;
         let user = self.output_user(&user, db).await?;
@@ -381,9 +390,31 @@ where
         let mut image = std::mem::take(&mut update.image);
         for (key, target) in [("name", &mut name), ("image", &mut image)] {
             if let Some(field) = self.config().user.fields().get(key) {
-                *target = better_auth_core::SchemaValue::from_json(
-                    fields.remove(resolve_field_name(field.field_name.as_deref(), key)),
+                *target = better_auth_core::SchemaValue::from_field(
+                    fields
+                        .remove(resolve_field_name(field.field_name.as_deref(), key))
+                        .unwrap_or_default(),
                 );
+            }
+        }
+        if let Some(value) = update.ban_expires.take() {
+            let storage = self
+                .config()
+                .user
+                .fields()
+                .get("banExpires")
+                .map_or("banExpires", |field| {
+                    resolve_field_name(field.field_name.as_deref(), "banExpires")
+                });
+            if !fields.contains_key(storage) {
+                let value = match value {
+                    Some(date) if db.get_database_backend() == sea_orm::DbBackend::Sqlite => {
+                        super::record_bindings::sqlite_date(date)?
+                    }
+                    Some(date) => better_auth_core::FieldValue::Date(date),
+                    None => better_auth_core::FieldValue::Null,
+                };
+                let _ = fields.insert(storage.into(), value);
             }
         }
         database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
@@ -392,15 +423,15 @@ where
             async {
                 let mut active = <S::User as SeaOrmUserModel>::ActiveModel::default();
                 S::User::apply_update(&mut active, update, Utc::now())?;
-                S::User::apply_fields(&mut active, fields)?;
-                crate::reference_id::apply_bindings(
-                    &mut active,
-                    &self.config().user,
-                    db.get_database_backend(),
-                    S::User::field_column,
-                )?;
-
-                super::user_values::update::<S::User>(db, active, name, image, user_id.into()).await
+                super::user_values::update::<S::User>(
+                    db,
+                    active,
+                    name,
+                    image,
+                    fields,
+                    user_id.into(),
+                )
+                .await
             },
         )
         .await
@@ -498,7 +529,7 @@ where
 
     async fn get_user_by_id_value(
         &self,
-        id: &serde_json::Value,
+        id: &better_auth_core::FieldValue,
     ) -> AuthResult<Option<better_auth_core::wire::UserView>> {
         self.model_fields.canonicalize_id(EntityRole::User)?;
         if let Some(id) = id.as_str() {
@@ -512,7 +543,8 @@ where
                     .filter(super::value_filter::equals(
                         <S::User as SeaOrmUserModel>::id_column(),
                         id,
-                    ))
+                        self.connection().get_database_backend(),
+                    )?)
                     .one(self.connection())
                     .await
                     .map_err(map_db_err)
@@ -742,31 +774,14 @@ where
 
         let query_record = |model: S::User| {
             let view = better_auth_core::UserView::from_model(&model)?;
-            let mut fields = serde_json::Map::new();
-            if !self.config().user.fields().is_empty() {
-                let serialized = serde_json::to_value(&model)?;
-                for (name, field) in self.config().user.fields() {
-                    let physical = resolve_field_name(field.field_name.as_deref(), name);
-                    let value = if (matches!(field.field_type, UserFieldType::String)
-                        || (self.connection().get_database_backend() == sea_orm::DbBackend::Sqlite
-                            && query.is_additional_field(name)
-                            && matches!(
-                                field.field_type,
-                                UserFieldType::Boolean | UserFieldType::Number
-                            )))
-                        && field.references.is_none()
-                    {
-                        let column = S::User::field_column(physical)?;
-                        let value =
-                            column_value::<<S::User as SeaOrmUserModel>::Entity>(&model, column);
-                        Some(sea_orm::sea_query::sea_value_to_json_value(&value))
-                    } else {
-                        serialized.get(physical).cloned()
-                    };
-                    if let Some(value) = value {
-                        let _ = fields.insert(physical.to_owned(), value);
-                    }
-                }
+            let mut fields = better_auth_core::FieldMap::new();
+            for (name, field) in self.config().user.fields() {
+                let physical = resolve_field_name(field.field_name.as_deref(), name);
+                let column = S::User::field_column(physical)?;
+                let value = crate::__private_field_value(column_value::<
+                    <S::User as SeaOrmUserModel>::Entity,
+                >(&model, column))?;
+                let _ = fields.insert(physical.to_owned(), value);
             }
             AuthResult::Ok((view, fields, model))
         };

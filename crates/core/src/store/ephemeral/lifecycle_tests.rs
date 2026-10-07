@@ -197,13 +197,19 @@ async fn concurrent_consume_runs_hooks_once_and_invalidates_older_rows() {
         .lock()
         .unwrap()
         .verifications
-        .find_mut(|row| row.get("id") == old.id.json().unwrap().as_ref())
+        .find_mut(|row| {
+            row.get("id")
+                .unwrap_or(&Value::Undefined)
+                .strict_equals(&old.id.field_value())
+        })
         .unwrap()
         .unwrap()
         .insert(
             "createdAt".into(),
-            serde_json::to_value(*old.created_at.typed().unwrap() - chrono::Duration::seconds(1))
-                .unwrap(),
+            crate::FieldDate::from_milliseconds(
+                old.created_at.typed().unwrap().milliseconds() - 1000.0,
+            )
+            .into(),
         );
     let _ = store
         .create_verification(CreateVerification {
@@ -339,7 +345,7 @@ async fn optional_runtime_fields_preserve_absence_then_explicit_null() {
             UpdateUser {
                 image: Some("https://example.test/avatar".into()).into(),
                 ban_reason: Some(Some("temporary".into())),
-                ban_expires: Some(Some(Utc::now())),
+                ban_expires: Some(Some(Utc::now().into())),
                 ..Default::default()
             },
         )
@@ -381,7 +387,7 @@ async fn optional_runtime_fields_preserve_absence_then_explicit_null() {
         .create_session(CreateSession {
             additional_fields: Default::default(),
             user_id: user.id,
-            expires_at: Utc::now() + chrono::Duration::days(1),
+            expires_at: (Utc::now() + chrono::Duration::days(1)).into(),
             ip_address: None,
             user_agent: None,
             impersonated_by: None,

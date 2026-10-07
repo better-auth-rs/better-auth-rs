@@ -184,7 +184,7 @@ fn standard_columns_and_legacy_envelope_authenticate_registered_key() -> TestRes
                         .map(|values| values.join(","))
                         .unwrap_or_default(),
                 ),
-                created_at: Some(chrono::Utc::now()).into(),
+                created_at: Some(chrono::Utc::now().into()).into(),
                 updated_at: match storage {
                     PasskeyStorage::Native => SchemaValue::Undefined,
                     PasskeyStorage::Legacy => chrono::Utc::now().into(),

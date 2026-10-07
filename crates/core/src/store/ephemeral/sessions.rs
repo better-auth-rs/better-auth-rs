@@ -4,7 +4,6 @@ use crate::store::database_hooks::{DatabaseHookControl, SessionUpdate};
 use crate::store::schema::resolve_field_name;
 #[cfg(test)]
 use crate::user_fields::{FieldTransforms, UserFieldTransform};
-use serde_json::Map;
 
 impl EphemeralStore {
     pub(super) async fn output_session(&self, session: SessionView) -> AuthResult<SessionView> {
@@ -31,11 +30,11 @@ impl EphemeralStore {
         let mut rows: Vec<_> = sessions
             .into_iter()
             .map(|mut session| {
-                let storage: Map<String, serde_json::Value> = session.clone().into();
+                let storage = session.field_values()?;
                 session.additional_fields.clear();
-                (session, storage)
+                Ok((session, storage))
             })
-            .collect();
+            .collect::<AuthResult<_>>()?;
         crate::user_fields::project_fields_batches_then(
             &mut rows,
             self.session_config.fields(),
@@ -45,9 +44,10 @@ impl EphemeralStore {
                         .get(resolve_field_name(field.field_name.as_deref(), name))
                         .or_else(|| storage.get(name))
                         .cloned();
-                    if let Some(value) = field.adapter_output(value, field.references_id()).await? {
-                        let _ = session.additional_fields.insert(name.to_owned(), value);
-                    }
+                    let value = field
+                        .adapter_output(value.unwrap_or_default(), field.references_id())
+                        .await?;
+                    let _ = session.additional_fields.insert(name.to_owned(), value);
                     Ok(())
                 })
             },
@@ -150,11 +150,11 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
         {
             return Ok(None);
         }
-        let now = Utc::now();
+        let now = crate::FieldDate::from(Utc::now());
         let token = crate::id::random_id(None);
         let mut fields = self.session_config.default_fields();
         fields.extend(create_session.additional_fields);
-        let mut plugin_fields = serde_json::Map::new();
+        let mut plugin_fields = FieldMap::new();
         for name in ["impersonatedBy", "activeOrganizationId", "activeTeamId"] {
             if let Some(value) = fields.remove(name) {
                 let _ = plugin_fields.insert(name.into(), value);
@@ -181,7 +181,7 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
             id,
             expires_at: create_session.expires_at,
             token: token.clone(),
-            created_at: now,
+            created_at: now.clone(),
             updated_at: now,
             ip_address: create_session.ip_address.or_else(|| Some(String::new())),
             user_agent: create_session.user_agent.or_else(|| Some(String::new())),
@@ -204,7 +204,7 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
             ("activeTeamId", &mut session.active_team_id),
         ] {
             if let Some(value) = plugin_fields.remove(field) {
-                *target = serde_json::from_value(value)?;
+                *target = value.decode()?;
                 if let Some(visible) = &mut session.visible_fields {
                     let _ = visible.insert(field.into());
                 }
@@ -265,7 +265,9 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
                         .into_iter()
                         .filter(|session| {
                             tokens.contains(&session.token)
-                                && (!only_active || session.expires_at > now)
+                                && (!only_active
+                                    || session.expires_at.milliseconds()
+                                        > now.timestamp_millis() as f64)
                         })
                         .collect(),
                     Some(self.config.advanced.database.find_many_limit()),
@@ -318,7 +320,7 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
     async fn update_session_fields(
         &self,
         token: &str,
-        fields: serde_json::Map<String, serde_json::Value>,
+        fields: FieldMap,
     ) -> AuthResult<Option<SessionView>> {
         self.update_session_with_hooks(
             token,
@@ -433,9 +435,12 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
 
     async fn delete_expired_sessions(&self) -> AuthResult<usize> {
         let now = Utc::now();
-        self.delete_sessions_with_hooks(|row| row.expires_at <= now || !row.active, false)
-            .await
-            .map(Option::unwrap_or_default)
+        self.delete_sessions_with_hooks(
+            |row| row.expires_at.milliseconds() <= now.timestamp_millis() as f64 || !row.active,
+            false,
+        )
+        .await
+        .map(Option::unwrap_or_default)
     }
 
     async fn update_session_active_organization(
@@ -478,7 +483,6 @@ async fn invitation_fields_update_atomically_with_team_membership() {
         store::{TeamMemberLimits, TeamStore},
         user_fields::{UserConfig, UserFieldConfig},
     };
-    use serde_json::json;
     use std::sync::atomic::{AtomicBool, Ordering};
     let reject = Arc::new(AtomicBool::new(true));
     let rejection = reject.clone();
@@ -486,17 +490,17 @@ async fn invitation_fields_update_atomically_with_team_membership() {
         required: Some(false),
         returned: Some(false),
         field_name: Some("stored_marker".into()),
-        default_value: Some(json!("created")),
-        on_update: Some(Arc::new(|| json!("updated"))),
+        default_value: Some(Value::from("created")),
+        on_update: Some(Arc::new(|| Value::from("updated"))),
         transform: Some(FieldTransforms {
             input: Some(UserFieldTransform::new(move |value| {
-                if rejection.load(Ordering::SeqCst) && value == Some(json!("updated")) {
+                if rejection.load(Ordering::SeqCst) && value == Value::from("updated") {
                     return Err(AuthError::bad_request("transform failed"));
                 }
-                Ok(value.map(|value| json!(format!("{}:in", value.as_str().unwrap()))))
+                Ok(Value::from(format!("{}:in", value.as_str().unwrap())))
             })),
             output: Some(UserFieldTransform::new(|value| {
-                Ok(value.map(|value| json!(format!("{}:out", value.as_str().unwrap()))))
+                Ok(Value::from(format!("{}:out", value.as_str().unwrap())))
             })),
         }),
         ..Default::default()
@@ -537,7 +541,7 @@ async fn invitation_fields_update_atomically_with_team_membership() {
         .create_session(CreateSession {
             additional_fields: Default::default(),
             user_id: "member".into(),
-            expires_at: Utc::now() + chrono::Duration::days(1),
+            expires_at: (Utc::now() + chrono::Duration::days(1)).into(),
             ip_address: None,
             user_agent: None,
             impersonated_by: None,
@@ -592,11 +596,11 @@ async fn invitation_fields_update_atomically_with_team_membership() {
         .unwrap();
     assert_eq!(
         member.additional_fields.get("marker"),
-        Some(&json!("created:in:out"))
+        Some(&Value::from("created:in:out"))
     );
     assert_eq!(
         accepted.additional_fields.get("marker"),
-        Some(&json!("updated:in:out"))
+        Some(&Value::from("updated:in:out"))
     );
     assert_eq!(
         store

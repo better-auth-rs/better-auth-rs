@@ -270,11 +270,7 @@ async fn fetch_default_user_info(
         None
     };
     if provider.config.is_vk() {
-        let original_email = response
-            .data
-            .pointer("/user/email")
-            .cloned()
-            .map_or(SchemaValue::Undefined, SchemaValue::Dynamic);
+        let original_email = SchemaValue::from_json(response.data.pointer("/user/email").cloned())?;
         let mapped_email = mapped
             .as_ref()
             .and_then(|value| value.email.as_ref())

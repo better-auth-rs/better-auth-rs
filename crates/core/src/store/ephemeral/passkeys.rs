@@ -37,31 +37,27 @@ impl EphemeralStore {
             &fields,
             |(_, source), name, field| {
                 source.read(|row| match name {
-                    "name" => row.name.json(),
-                    "aaguid" => row.aaguid.json(),
+                    "name" => Ok(row.name.field_value()),
+                    "aaguid" => Ok(row.aaguid.field_value()),
                     _ => Ok(row
                         .additional_fields
                         .get(resolve_field_name(field.field_name.as_deref(), name))
-                        .cloned()),
+                        .cloned()
+                        .unwrap_or_default()),
                 })
             },
             |(snapshot, _), name, field, value| {
                 Box::pin(async move {
-                    let value = project_adapter_value(value, field, field.references_id(), true)
-                        .await?
-                        .json()?;
+                    let value =
+                        project_adapter_value(value, field, field.references_id(), true).await?;
                     if matches!(name, "name" | "aaguid") {
-                        let value = value
-                            .map(serde_json::from_value)
-                            .transpose()?
-                            .map(crate::SchemaValue::Typed)
-                            .unwrap_or_default();
+                        let value = crate::SchemaValue::from_field(value);
                         if name == "name" {
                             snapshot.name = value;
                         } else {
                             snapshot.aaguid = value;
                         }
-                    } else if let Some(value) = value {
+                    } else {
                         let _ = snapshot.additional_fields.insert(name.to_owned(), value);
                     }
                     Ok(())
@@ -103,7 +99,7 @@ impl PasskeyStore for EphemeralStore {
                 "Native passkey creation requires Native storage",
             ));
         };
-        let now = Utc::now();
+        let now = crate::FieldDate::from(Utc::now());
         let fields = self
             .model_fields
             .passkey_fields_for_storage(
@@ -121,7 +117,7 @@ impl PasskeyStore for EphemeralStore {
                 .map(crate::SchemaValue::Typed)
                 .unwrap_or_default(),
             user_id: input.user_id,
-            name: fields.name.map(Into::into).unwrap_or_default(),
+            name: fields.name.unwrap_or_default(),
             credential_id: input.credential_id,
             public_key: input.public_key,
             counter: input.counter,
@@ -129,8 +125,8 @@ impl PasskeyStore for EphemeralStore {
             backed_up: input.backed_up,
             transports: input.transports,
             credential: credential.into(),
-            aaguid: fields.aaguid.map(Into::into).unwrap_or_default(),
-            created_at: Some(now).into(),
+            aaguid: fields.aaguid.unwrap_or_default(),
+            created_at: Some(now.clone()).into(),
             updated_at: now.into(),
         };
         let selected = self
@@ -202,7 +198,10 @@ impl PasskeyStore for EphemeralStore {
             .await?;
         let selected = self
             .raw("passkey", "update", |state| {
-                let Some(source) = state.passkeys.first_ref(|row| &row.id == id)? else {
+                let Some(source) = state
+                    .passkeys
+                    .first_ref(|row| row.id.field_value().strict_equals(&id.field_value()))?
+                else {
                     return Ok(None);
                 };
                 let snapshot = source.write(|passkey| {

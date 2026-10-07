@@ -8,12 +8,12 @@ use async_trait::async_trait;
 use better_auth_core::{
     AuthError, AuthResult, CreateTeam, Team, TeamMember, UpdateTeam, store::TeamStore,
 };
+use better_auth_core::{FieldValue, SchemaField};
 use chrono::Utc;
 use sea_orm::{
     ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QuerySelect, TransactionTrait,
     sea_query::Expr,
 };
-use serde_json::json;
 
 #[async_trait]
 impl<
@@ -27,19 +27,22 @@ impl<
             "team",
             input.id,
             values([
-                ("organization_id", json!(input.organization_id)),
+                ("organization_id", (input.organization_id).into_field()),
                 (
                     "created_at",
-                    json!(input.created_at.unwrap_or_else(Utc::now)),
+                    input
+                        .created_at
+                        .unwrap_or_else(|| Utc::now().into())
+                        .into_field(),
                 ),
-                ("member_count", json!(0)),
+                ("member_count", (0).into_field()),
             ]),
         )?;
-        if let Some(name) = input.name.json()? {
+        if let Some(name) = Some(input.name.field_value()).filter(|value| !value.is_undefined()) {
             let _ = core.insert("name".into(), name);
         }
         if let Some(updated_at) = input.updated_at {
-            let _ = core.insert("updated_at".into(), json!(updated_at));
+            let _ = core.insert("updated_at".into(), (updated_at).into_field());
         }
         for (public, stored) in [("createdAt", "created_at"), ("updatedAt", "updated_at")] {
             if let Some(value) = input.additional_fields.remove(public) {
@@ -74,7 +77,7 @@ impl<
             None => Ok(None),
         }
     }
-    async fn get_team_value(&self, id: &serde_json::Value) -> AuthResult<Option<Team>> {
+    async fn get_team_value(&self, id: &FieldValue) -> AuthResult<Option<Team>> {
         self.get_team_value_with_connection(self.connection(), id)
             .await
     }
@@ -82,14 +85,20 @@ impl<
         let config = self.organization_fields()?.team;
         let mut core = Default::default();
         if let Some(updated_at) = update.updated_at {
-            core = values([("updated_at", json!(updated_at))]);
+            core = values([("updated_at", (updated_at).into_field())]);
         } else if !config.fields().contains_key("updatedAt") {
-            core = values([("updated_at", json!(Utc::now()))]);
+            core = values([("updated_at", FieldValue::Date((Utc::now()).into()))]);
         }
         for (name, value) in [
-            ("name", update.name.map(|v| json!(v))),
-            ("organization_id", update.organization_id.map(|v| json!(v))),
-            ("created_at", update.created_at.map(|v| json!(v))),
+            ("name", update.name.map(|v| v.to_owned().into_field())),
+            (
+                "organization_id",
+                update.organization_id.map(|v| v.to_owned().into_field()),
+            ),
+            (
+                "created_at",
+                update.created_at.map(|v| v.to_owned().into_field()),
+            ),
         ] {
             if let Some(value) = value {
                 let _ = core.insert(name.into(), value);
@@ -149,7 +158,7 @@ impl<
         )
         .await?;
         for row in pending {
-            if *row.expires_at.typed()? <= Utc::now() {
+            if row.expires_at.typed()?.milliseconds() <= Utc::now().timestamp_millis() as f64 {
                 continue;
             }
             if let Some(ids) = row.team_id.typed()? {
@@ -160,7 +169,7 @@ impl<
                         row.id.typed()?,
                         values([(
                             "team_id",
-                            json!((!retained.is_empty()).then(|| retained.join(","))),
+                            ((!retained.is_empty()).then(|| retained.join(","))).into_field(),
                         )]),
                         Default::default(),
                         &config,
@@ -373,7 +382,7 @@ impl<
     pub(super) async fn get_team_value_with_connection<C: sea_orm::ConnectionTrait>(
         &self,
         db: &C,
-        id: &serde_json::Value,
+        id: &FieldValue,
     ) -> AuthResult<Option<Team>> {
         let config = self.organization_fields()?.team;
         let row = Entity::<O::Team>::find()
@@ -381,6 +390,7 @@ impl<
                 O::Team::column("id")?,
                 id,
                 self.config().advanced.database.generate_id(),
+                self.connection().get_database_backend(),
             )?)
             .one(db)
             .await
@@ -469,15 +479,16 @@ impl<
                 "teamMember",
                 None,
                 values([
-                    ("team_id", json!(team_id)),
-                    ("user_id", json!(user_id)),
+                    ("team_id", (team_id).to_owned().into_field()),
+                    ("user_id", (user_id).to_owned().into_field()),
                     (
                         "membership_key",
-                        json!(better_auth_core::organization_fields::team_membership_key(
-                            team_id, user_id
-                        )?),
+                        (better_auth_core::organization_fields::team_membership_key(
+                            team_id, user_id,
+                        )?)
+                        .into_field(),
                     ),
-                    ("created_at", json!(Utc::now())),
+                    ("created_at", FieldValue::Date((Utc::now()).into())),
                 ]),
             )?,
             Default::default(),

@@ -9,21 +9,21 @@ pub(super) struct EphemeralTransaction {
 impl AuthTransaction<StatelessSchema> for EphemeralTransaction {
     async fn get_member_value(
         &self,
-        organization_id: &serde_json::Value,
-        user_id: &serde_json::Value,
+        organization_id: &Value,
+        user_id: &Value,
     ) -> AuthResult<Option<crate::Member>> {
         self.store.get_member_value(organization_id, user_id).await
     }
     async fn get_organization_by_id_value(
         &self,
-        id: &serde_json::Value,
+        id: &Value,
     ) -> AuthResult<Option<crate::Organization>> {
         self.store.get_organization_by_id_value(id).await
     }
-    async fn get_team_value(&self, id: &serde_json::Value) -> AuthResult<Option<crate::Team>> {
+    async fn get_team_value(&self, id: &Value) -> AuthResult<Option<crate::Team>> {
         self.store.get_team_value(id).await
     }
-    async fn count_organization_members_value(&self, id: &serde_json::Value) -> AuthResult<i64> {
+    async fn count_organization_members_value(&self, id: &Value) -> AuthResult<i64> {
         self.store.count_organization_members_value(id).await
     }
     async fn create_member(&self, input: crate::CreateMember) -> AuthResult<crate::Member> {
@@ -201,15 +201,16 @@ impl AuthTransaction<StatelessSchema> for EphemeralTransaction {
     }
 }
 
-fn merge_map<T: Clone + PartialEq>(
+fn merge_map<T: Clone + crate::AuthRecordFields>(
     live: &mut IndexMap<String, T>,
     base: &IndexMap<String, T>,
     working: IndexMap<String, T>,
-) {
+) -> AuthResult<()> {
     live.retain(|id, _| !base.contains_key(id) || working.contains_key(id));
     for (id, row) in live.iter_mut() {
         if let Some(changed) = working.get(id)
-            && base.get(id) != Some(changed)
+            && base.get(id).map(super::rows::row_json).transpose()?
+                != Some(super::rows::row_json(changed)?)
         {
             row.clone_from(changed);
         }
@@ -219,6 +220,7 @@ fn merge_map<T: Clone + PartialEq>(
             let _ = live.insert(id, row);
         }
     }
+    Ok(())
 }
 
 impl State {
@@ -246,7 +248,7 @@ impl State {
             &mut self.rate_limits,
             &base.rate_limits,
             working.rate_limits,
-        );
+        )?;
         self.team_members
             .merge(&base.team_members, working.team_members)?;
         self.jwks.merge(&base.jwks, working.jwks)?;
@@ -319,7 +321,9 @@ impl EphemeralStore {
                     ));
                 }
             }
-            live.merge(&base, committed)?;
+            let mut merged = live.clone();
+            merged.merge(&base, committed)?;
+            *live = merged;
         }
         loop {
             let pending = std::mem::take(&mut *pending_hooks.lock().map_err(|_| {

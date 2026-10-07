@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use better_auth_core::{AuthError, AuthRequest, AuthResult, NativeRequest};
-use chrono::{DateTime, Duration, Utc};
+use chrono::{Duration, Utc};
 use reqwest::header::{HeaderMap, HeaderValue};
 use serde_json::Value;
 
@@ -218,20 +218,21 @@ fn authentication(
     }
 }
 
-fn expiry(seconds: f64) -> AuthResult<Option<DateTime<Utc>>> {
+fn expiry(seconds: f64) -> AuthResult<Option<better_auth_core::FieldDate>> {
     if seconds == 0.0 {
         return Ok(None);
     }
     expiry_at(seconds).map(Some)
 }
 
-pub(super) fn expiry_at(seconds: f64) -> AuthResult<DateTime<Utc>> {
+pub(super) fn expiry_at(seconds: f64) -> AuthResult<better_auth_core::FieldDate> {
     let millis = seconds * 1000.0;
     if !millis.is_finite() || millis.abs() > i64::MAX as f64 {
         return Err(AuthError::internal("Invalid OAuth token lifetime"));
     }
     Utc::now()
         .checked_add_signed(Duration::milliseconds(millis as i64))
+        .map(Into::into)
         .ok_or_else(|| AuthError::internal("OAuth token lifetime is out of range"))
 }
 
@@ -252,7 +253,7 @@ fn apply_default_expiry(
 
 pub(super) fn parse_token_response(value: Value) -> AuthResult<OAuthTokenSet> {
     let string = |key| value.get(key).and_then(Value::as_str).map(str::to_owned);
-    let date = |key| -> AuthResult<Option<DateTime<Utc>>> {
+    let date = |key| -> AuthResult<Option<better_auth_core::FieldDate>> {
         value
             .get(key)
             .and_then(|value| value.as_f64().or_else(|| value.as_str()?.parse().ok()))
@@ -421,6 +422,9 @@ mod tests {
             parse_token_response(json!({"scope":"email\tprofile,audit  openid", "expires_in":0.5}))
                 .unwrap();
         assert_eq!(tokens.scopes, ["email", "profile,audit", "openid"]);
-        assert!(tokens.access_token_expires_at.unwrap() >= before + Duration::milliseconds(500));
+        assert!(
+            tokens.access_token_expires_at.unwrap().milliseconds()
+                >= (before + Duration::milliseconds(500)).timestamp_millis() as f64
+        );
     }
 }

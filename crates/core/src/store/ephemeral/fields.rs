@@ -3,8 +3,6 @@ use crate::store::schema::resolve_field_name;
 #[cfg(test)]
 use crate::user_fields::{FieldTransforms, UserFieldTransform};
 use better_auth_schema_registry::{EntityRole, core_fields};
-use serde::{Serialize, de::DeserializeOwned};
-use serde_json::{Map, Value};
 
 fn public_name(name: &str) -> String {
     let mut parts = name.split('_');
@@ -19,50 +17,20 @@ fn public_name(name: &str) -> String {
     result
 }
 
-fn object(value: &impl Serialize) -> AuthResult<Map<String, Value>> {
-    match serde_json::to_value(value)? {
-        Value::Object(value) => Ok(value),
-        _ => Err(AuthError::config(
-            "Organization records must serialize as objects",
-        )),
-    }
+fn object(value: &impl AuthRecordFields) -> AuthResult<FieldMap> {
+    value.field_values()
 }
 
-pub(super) trait MemoryOrganizationRecord: Serialize + DeserializeOwned + Send {
-    fn preserve_schema_values(
-        &mut self,
-        fields: &crate::user_fields::UserConfig,
-        raw: &Map<String, Value>,
-    );
-}
+pub(super) trait MemoryOrganizationRecord: AuthRecordFields + FromFieldMap + Send {}
 
-macro_rules! record_values {
-    ($record:ty, dates [$($date:ident => $date_name:literal),*], json [$($json:ident => $json_name:literal),*]) => {
-        impl MemoryOrganizationRecord for $record {
-            fn preserve_schema_values(&mut self, fields: &crate::user_fields::UserConfig, raw: &Map<String, Value>) {
-                $(if fields.fields().get($date_name).is_some_and(|field| !matches!(field.field_type, crate::user_fields::UserFieldType::Date)) {
-                    self.$date = raw.get($date_name).cloned().map(crate::SchemaValue::Dynamic).unwrap_or_default();
-                })*
-                $(if fields.fields().contains_key($json_name) {
-                    self.$json = raw.get($json_name).cloned().map(crate::SchemaValue::Dynamic).unwrap_or_default();
-                })*
-            }
-        }
-    };
-}
-record_values!(Organization, dates [created_at => "createdAt"], json [metadata => "metadata"]);
-record_values!(Member, dates [created_at => "createdAt"], json []);
-record_values!(Invitation, dates [created_at => "createdAt", expires_at => "expiresAt"], json []);
-record_values!(crate::Team, dates [created_at => "createdAt", updated_at => "updatedAt"], json []);
-record_values!(crate::OrganizationRole, dates [created_at => "createdAt", updated_at => "updatedAt"], json [permission => "permission"]);
+impl MemoryOrganizationRecord for Organization {}
+impl MemoryOrganizationRecord for Member {}
+impl MemoryOrganizationRecord for Invitation {}
+impl MemoryOrganizationRecord for crate::Team {}
+impl MemoryOrganizationRecord for crate::OrganizationRole {}
 
-fn decode_record<T: MemoryOrganizationRecord>(
-    schema: &crate::user_fields::UserConfig,
-    fields: Map<String, Value>,
-) -> AuthResult<T> {
-    let mut record: T = serde_json::from_value(Value::Object(fields.clone()))?;
-    record.preserve_schema_values(schema, &fields);
-    Ok(record)
+fn decode_record<T: MemoryOrganizationRecord>(fields: FieldMap) -> AuthResult<T> {
+    T::from_field_values(fields)
 }
 
 #[tokio::test]
@@ -80,7 +48,7 @@ async fn memory_team_preserves_replaced_date_values_and_durable_capacity() {
         UserFieldConfig {
             transform: Some(FieldTransforms {
                 input: Some(UserFieldTransform::new(|_| {
-                    Ok(Some(json!("2000-01-02T03:04:05+02:00")))
+                    Ok(Value::from("2000-01-02T03:04:05+02:00"))
                 })),
                 ..Default::default()
             }),
@@ -91,11 +59,11 @@ async fn memory_team_preserves_replaced_date_values_and_durable_capacity() {
         "memberCount".into(),
         UserFieldConfig {
             field_type: UserFieldType::Number,
-            default_value: Some(json!(17)),
+            default_value: Some(Value::from(17.0)),
             transform: Some(FieldTransforms {
                 input: Some(UserFieldTransform::new(|value| {
-                    assert_eq!(value, Some(json!(0)));
-                    Ok(Some(json!(2)))
+                    assert_eq!(value, Value::from(0.0));
+                    Ok(Value::from(2.0))
                 })),
                 ..Default::default()
             }),
@@ -120,7 +88,7 @@ async fn memory_team_preserves_replaced_date_values_and_durable_capacity() {
         store.list_organization_teams("org").await.unwrap()[0].created_at,
         team.created_at
     );
-    assert_eq!(team.additional_fields["memberCount"], 2);
+    assert_eq!(team.additional_fields["memberCount"], Value::from(2.0));
     assert!(
         store
             .add_team_member(&team.id, "user", Some(2))
@@ -165,7 +133,7 @@ async fn memory_team_preserves_replaced_date_values_and_durable_capacity() {
 pub(super) struct PreparedOrganizationFields {
     schema: crate::user_fields::UserConfig,
     role: EntityRole,
-    fields: Map<String, Value>,
+    fields: FieldMap,
     create: bool,
 }
 
@@ -195,24 +163,21 @@ impl PreparedOrganizationFields {
                     let _ = record.insert(name.clone(), Value::Null);
                 }
             } else if self.create {
-                let _ = fields.entry(storage_name).or_insert(Value::Null);
+                let _ = fields.entry(storage_name.to_owned()).or_insert(Value::Null);
             }
         }
         record.extend(fields);
-        decode_record(&self.schema, record)
+        decode_record(record)
     }
 }
 
-fn record_input<T: MemoryOrganizationRecord>(
-    role: EntityRole,
-    value: &T,
-) -> AuthResult<Map<String, Value>> {
+fn record_input<T: MemoryOrganizationRecord>(role: EntityRole, value: &T) -> AuthResult<FieldMap> {
     let record = object(value)?;
     let core_names: Vec<_> = core_fields(role)
         .iter()
         .map(|field| public_name(field.name))
         .collect();
-    let mut core: Map<_, _> = record
+    let mut core: FieldMap = record
         .into_iter()
         .filter(|(name, _)| core_names.contains(name))
         .collect();
@@ -231,9 +196,9 @@ fn record_fields<T: MemoryOrganizationRecord>(
     role: EntityRole,
     value: &T,
     schema: &crate::user_fields::UserConfig,
-) -> AuthResult<(Map<String, Value>, Map<String, Value>)> {
+) -> AuthResult<(FieldMap, FieldMap)> {
     let raw = object(value)?;
-    let mut core: Map<_, _> = core_fields(role)
+    let mut core: FieldMap = core_fields(role)
         .iter()
         .map(|field| public_name(field.name))
         .filter_map(|name| raw.get(&name).cloned().map(|value| (name, value)))
@@ -299,7 +264,7 @@ impl EphemeralStore {
     fn bind_record_fields(
         &self,
         schema: &crate::user_fields::UserConfig,
-        fields: &mut Map<String, Value>,
+        fields: &mut FieldMap,
     ) -> AuthResult<()> {
         for (name, field) in schema.fields() {
             if name == "id" {
@@ -317,8 +282,8 @@ impl EphemeralStore {
     pub(super) async fn prepare_record_patch(
         &self,
         role: EntityRole,
-        core: Map<String, Value>,
-        extras: Map<String, Value>,
+        core: FieldMap,
+        extras: FieldMap,
     ) -> AuthResult<PreparedOrganizationFields> {
         let schema = self.field_config(role)?;
         let mut fields = schema
@@ -337,8 +302,8 @@ impl EphemeralStore {
         &self,
         role: EntityRole,
         value: T,
-        patch: Option<Map<String, Value>>,
-        extras: Map<String, Value>,
+        patch: Option<FieldMap>,
+        extras: FieldMap,
     ) -> AuthResult<T> {
         let schema = self.field_config(role)?;
         let create = patch.is_none();
@@ -403,7 +368,7 @@ impl EphemeralStore {
             .collect();
         let mut rows = values
             .into_iter()
-            .map(|row| (row, Map::new()))
+            .map(|row| (row, FieldMap::new()))
             .collect::<Vec<_>>();
         crate::user_fields::project_source_fields_batches_then(
             &mut rows,
@@ -425,13 +390,12 @@ impl EphemeralStore {
                 Box::pin(async move {
                     if configured {
                         let value = crate::user_fields::project_adapter_value(
-                            value,
+                            value.unwrap_or_default(),
                             field,
                             field.references_id(),
                             true,
                         )
-                        .await?
-                        .json()?;
+                        .await?;
                         crate::user_fields::assign_output(output, name, field, value)?;
                     } else if let Some(value) = value {
                         let _ = output.insert(name.to_owned(), value);
@@ -439,7 +403,7 @@ impl EphemeralStore {
                     Ok(())
                 })
             },
-            |_, (_, output)| decode_record(&schema, std::mem::take(output)),
+            |_, (_, output)| decode_record(std::mem::take(output)),
             complete,
         )
         .await
@@ -462,7 +426,7 @@ impl EphemeralStore {
             .organization_output_memory_records(records)
             .await?
             .into_iter()
-            .map(|fields| decode_record(&schema, fields))
+            .map(decode_record)
             .collect()
     }
 
@@ -488,7 +452,7 @@ impl EphemeralStore {
         schema
             .organization_output_memory_records_batches_then(
                 records,
-                |_, fields| decode_record(&schema, fields),
+                |_, fields| decode_record(fields),
                 complete,
             )
             .await
@@ -516,10 +480,18 @@ async fn builtin_policies_transform_typed_records_once_and_preserve_adapter_id()
     let policy = UserFieldConfig {
         transform: Some(FieldTransforms {
             input: Some(UserFieldTransform::new(|value| {
-                Ok(value.map(|value| json!(format!("{}:in", value.as_str().unwrap()))))
+                Ok(if value.is_undefined() {
+                    value
+                } else {
+                    Value::from(format!("{}:in", value.as_str().unwrap()))
+                })
             })),
             output: Some(UserFieldTransform::new(|value| {
-                Ok(value.map(|value| json!(format!("{}:out", value.as_str().unwrap()))))
+                Ok(if value.is_undefined() {
+                    value
+                } else {
+                    Value::from(format!("{}:out", value.as_str().unwrap()))
+                })
             })),
         }),
         ..Default::default()
@@ -539,7 +511,7 @@ async fn builtin_policies_transform_typed_records_once_and_preserve_adapter_id()
         UserFieldConfig {
             required: Some(false),
             field_name: Some("ignored_id".into()),
-            default_value: Some(json!("ignored")),
+            default_value: Some(Value::from("ignored")),
             transform: Some(FieldTransforms {
                 input: Some(UserFieldTransform::new(|_| {
                     Err(AuthError::bad_request("id input must not run"))
@@ -555,7 +527,7 @@ async fn builtin_policies_transform_typed_records_once_and_preserve_adapter_id()
         "logo".into(),
         UserFieldConfig {
             required: Some(false),
-            default_value: Some(json!("default-logo")),
+            default_value: Some(Value::from("default-logo")),
             ..Default::default()
         },
     );
@@ -565,7 +537,7 @@ async fn builtin_policies_transform_typed_records_once_and_preserve_adapter_id()
             required: Some(false),
             transform: Some(FieldTransforms {
                 output: Some(UserFieldTransform::new(|value| {
-                    assert_eq!(value, Some(Value::Null));
+                    assert_eq!(value, Value::Null);
                     Ok(value)
                 })),
                 ..Default::default()
@@ -595,7 +567,15 @@ async fn builtin_policies_transform_typed_records_once_and_preserve_adapter_id()
         organization.logo.typed().unwrap().as_deref(),
         Some("default-logo")
     );
-    assert_eq!(organization.metadata, Some(Value::Null));
+    // Upstream adapter.mjs:146 omits falsy create metadata before adapter input.
+    assert!(organization.metadata.is_undefined());
+    assert_eq!(
+        serde_json::to_value(&organization).unwrap(),
+        json!({
+            "id":"chosen-id", "name":"original:in:out", "slug":"original",
+            "logo":"default-logo", "createdAt":organization.created_at
+        })
+    );
     assert!(organization.additional_fields.is_empty());
     assert_eq!(
         store
@@ -619,18 +599,30 @@ async fn builtin_policies_transform_typed_records_once_and_preserve_adapter_id()
         .await
         .unwrap();
     assert_eq!(updated.name, "changed:in:out");
-    assert_eq!(updated.metadata, Some(Value::Null));
+    assert!(updated.metadata.is_undefined());
     let updated = store
         .update_organization(
             organization.id.typed().unwrap(),
             UpdateOrganization {
-                metadata: Some(json!({"literal":"value"})),
+                metadata: Some(Value::from_json(json!({"literal":"value"})).unwrap()),
                 ..Default::default()
             },
         )
         .await
         .unwrap();
-    assert_eq!(updated.metadata, Some(json!({"literal":"value"})));
+    // Upstream adapter.mjs:361 stringifies object update metadata before the adapter write.
+    assert_eq!(
+        updated.metadata,
+        Some(Value::from(r#"{"literal":"value"}"#))
+    );
+    assert_eq!(
+        serde_json::to_value(&updated).unwrap(),
+        json!({
+            "id":"chosen-id", "name":"changed:in:out", "slug":"original",
+            "logo":"default-logo", "createdAt":organization.created_at,
+            "metadata":r#"{"literal":"value"}"#
+        })
+    );
     assert_eq!(
         store
             .get_organization_by_id(organization.id.typed().unwrap())
@@ -638,7 +630,7 @@ async fn builtin_policies_transform_typed_records_once_and_preserve_adapter_id()
             .unwrap()
             .unwrap()
             .metadata,
-        Some(json!({"literal":"value"}))
+        Some(Value::from(r#"{"literal":"value"}"#))
     );
 
     let mut create = CreateOrganization::new("null-logo", "null-logo");
@@ -669,7 +661,7 @@ async fn builtin_policies_transform_typed_records_once_and_preserve_adapter_id()
             "target@example.com",
             "member",
             "owner",
-            Utc::now() + chrono::Duration::days(1),
+            (Utc::now() + chrono::Duration::days(1)).into(),
         ))
         .await
         .unwrap();
@@ -701,7 +693,7 @@ async fn builtin_policies_transform_typed_records_once_and_preserve_adapter_id()
             additional_fields: Default::default(),
             organization_id: organization.id.typed().unwrap().clone(),
             role: "editor".into(),
-            permission: json!({"member":["read"]}),
+            permission: Value::from_json(json!({"member":["read"]})).unwrap(),
         })
         .await
         .unwrap();
@@ -789,7 +781,7 @@ async fn memory_core_fields_keep_dynamic_values_and_output_omission() {
         "name".into(),
         UserFieldConfig {
             transform: Some(FieldTransforms {
-                input: Some(UserFieldTransform::new(|_| Ok(Some(json!(12))))),
+                input: Some(UserFieldTransform::new(|_| Ok(Value::from(12.0)))),
                 ..Default::default()
             }),
             ..Default::default()
@@ -797,12 +789,12 @@ async fn memory_core_fields_keep_dynamic_values_and_output_omission() {
     );
     store.configure_organization_fields(fields.clone()).unwrap();
     let mut input = CreateOrganization::new("original", "original");
-    input.slug = SchemaValue::Dynamic(json!(42));
+    input.slug = SchemaValue::Dynamic(Value::from(42.0));
     let organization = store.create_organization(input).await.unwrap();
     assert_eq!(organization.name.json().unwrap(), Some(json!(12)));
     assert_eq!(
         store
-            .get_organization_by_slug_value(&json!(42))
+            .get_organization_by_slug_value(&Value::from(42.0))
             .await
             .unwrap()
             .unwrap()
@@ -811,7 +803,7 @@ async fn memory_core_fields_keep_dynamic_values_and_output_omission() {
     );
     assert!(
         store
-            .get_organization_by_slug_value(&json!("42"))
+            .get_organization_by_slug_value(&Value::from("42"))
             .await
             .unwrap()
             .is_none()
@@ -823,7 +815,7 @@ async fn memory_core_fields_keep_dynamic_values_and_output_omission() {
         .unwrap()
         .transform
         .get_or_insert_default()
-        .output = Some(UserFieldTransform::new(|_| Ok(None)));
+        .output = Some(UserFieldTransform::new(|_| Ok(Value::Undefined)));
     store.configure_organization_fields(fields).unwrap();
     let omitted = store
         .get_organization_by_id(organization.id.typed().unwrap())

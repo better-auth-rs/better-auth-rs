@@ -15,7 +15,7 @@ mod memory_representation;
 
 use better_auth::{
     __private_core::{
-        AuthError, AuthResult,
+        AuthError, AuthResult, FieldValue,
         id::IdGeneration,
         store::{
             EphemeralStore,
@@ -123,7 +123,7 @@ async fn memory_serial_device_reference_reaches_output_as_a_number() -> AuthResu
     let mut input = contract::input("serial-reference");
     let _ = input
         .additional_fields
-        .insert("target".into(), json!("002"));
+        .insert("target".into(), FieldValue::from("002"));
     let created = auth.store().create_device_code(input).await?;
     let read = auth
         .store()

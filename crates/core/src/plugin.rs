@@ -656,7 +656,8 @@ impl<S: AuthSchema> AuthContext<S> {
         &self,
         input: &serde_json::Map<String, serde_json::Value>,
         create: bool,
-    ) -> AuthResult<serde_json::Map<String, serde_json::Value>> {
+    ) -> AuthResult<crate::FieldMap> {
+        let input = crate::FieldMap::from_json(input.clone())?;
         for (plugin, fields, has_default) in [
             (
                 "admin.enabled",
@@ -677,7 +678,7 @@ impl<S: AuthSchema> AuthContext<S> {
                 continue;
             }
             for name in fields {
-                if input.get(*name).is_some_and(crate::user_fields::is_truthy) {
+                if input.get(*name).is_some_and(crate::FieldValue::is_truthy) {
                     return Err(AuthError::FieldInput {
                         code: "FIELD_NOT_ALLOWED",
                         message: format!("{name} is not allowed to be set"),
@@ -685,7 +686,7 @@ impl<S: AuthSchema> AuthContext<S> {
                 }
             }
         }
-        self.config.user.parse_input(input, create)
+        self.config.user.parse_input(&input, create)
     }
 
     /// Extract a session token from the request, validate the session, and

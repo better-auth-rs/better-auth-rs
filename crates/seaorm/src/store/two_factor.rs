@@ -3,11 +3,9 @@ use super::instrumentation::database_operation;
 use super::plugin_models::{Entity, set};
 use crate::SeaOrmPluginModel;
 use async_trait::async_trait;
+use better_auth_core::{FieldMap, FieldValue, SchemaField};
 use chrono::Utc;
-use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DbBackend, EntityTrait, ExprTrait, QueryFilter, sea_query::Expr,
-};
-use serde_json::{Map, json};
+use sea_orm::{ColumnTrait, DbBackend, EntityTrait, ExprTrait, QueryFilter, sea_query::Expr};
 
 use better_auth_core::store::{TwoFactorStore, schema::EntityRole};
 
@@ -30,9 +28,9 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
 
     async fn prepare_two_factor_fields(
         &self,
-        input: Map<String, serde_json::Value>,
+        input: FieldMap,
         create: bool,
-    ) -> AuthResult<<P::TwoFactor as SeaOrmPluginModel>::ActiveModel> {
+    ) -> AuthResult<super::plugin_models::Write<P::TwoFactor>> {
         let config = self.model_fields.fields(EntityRole::TwoFactor);
         super::plugin_models::additional_fields::<P::TwoFactor>(
             config,
@@ -71,13 +69,7 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
             )
             .await?;
         for (row, output) in rows.iter_mut().zip(output) {
-            row.additional_fields = output
-                .into_iter()
-                .map(|(name, value)| Ok(value.json()?.map(|value| (name, value))))
-                .collect::<AuthResult<Vec<_>>>()?
-                .into_iter()
-                .flatten()
-                .collect();
+            row.additional_fields = output;
         }
         Ok(rows)
     }
@@ -90,18 +82,27 @@ where
     S: AuthSchema + Send + Sync,
 {
     async fn create_two_factor(&self, two_factor: CreateTwoFactor) -> AuthResult<TwoFactor> {
-        let mut fields = Map::from_iter([
-            ("secret".to_owned(), json!(two_factor.secret)),
-            ("backup_codes".to_owned(), json!(two_factor.backup_codes)),
-            ("user_id".to_owned(), json!(two_factor.user_id)),
-            ("verified".to_owned(), json!(two_factor.verified)),
-            ("failed_verification_count".to_owned(), json!(0)),
-            ("locked_until".to_owned(), serde_json::Value::Null),
+        let mut fields = FieldMap::from_iter([
+            ("secret".to_owned(), (two_factor.secret).into_field()),
+            (
+                "backup_codes".to_owned(),
+                (two_factor.backup_codes).into_field(),
+            ),
+            ("user_id".to_owned(), (two_factor.user_id).into_field()),
+            ("verified".to_owned(), (two_factor.verified).into_field()),
+            ("failed_verification_count".to_owned(), (0).into_field()),
+            ("locked_until".to_owned(), FieldValue::Null),
         ]);
         if P::TwoFactor::two_factor_storage() == TwoFactorStorage::Legacy {
             let now = Utc::now();
-            let _ = fields.insert("created_at".to_owned(), json!(now));
-            let _ = fields.insert("updated_at".to_owned(), json!(now));
+            let _ = fields.insert(
+                "created_at".to_owned(),
+                better_auth_core::FieldValue::Date((now).into()),
+            );
+            let _ = fields.insert(
+                "updated_at".to_owned(),
+                better_auth_core::FieldValue::Date((now).into()),
+            );
         }
         let mut active = self
             .prepare_two_factor_fields(two_factor.additional_fields, true)
@@ -112,7 +113,7 @@ where
             self.config().advanced.database.generate_id(),
         )?;
         let model = database_operation::<Entity<P::TwoFactor>, _>(self.config(), "create", async {
-            active.insert(self.connection()).await.map_err(map_db_err)
+            active.insert(self.connection()).await
         })
         .await?;
         Ok(self.project_two_factor_models(vec![model]).await?.remove(0))
@@ -142,7 +143,9 @@ where
         user_id: &str,
         backup_codes: &str,
     ) -> AuthResult<TwoFactor> {
-        let mut active = self.prepare_two_factor_fields(Map::new(), false).await?;
+        let mut active = self
+            .prepare_two_factor_fields(FieldMap::new(), false)
+            .await?;
         set::<P::TwoFactor>(
             &mut active,
             "backup_codes",
@@ -153,14 +156,14 @@ where
             set::<P::TwoFactor>(
                 &mut active,
                 "updated_at",
-                Utc::now(),
+                better_auth_core::FieldDate::from(Utc::now()),
                 self.config().advanced.database.generate_id(),
             )?;
         }
         let filter = P::TwoFactor::column("user_id")?
             .eq_id(user_id, self.config().advanced.database.generate_id())?;
         let model = database_operation::<Entity<P::TwoFactor>, _>(self.config(), "update", async {
-            super::updates::update_returning_one::<Entity<P::TwoFactor>, _>(
+            super::updates::update_record_returning_one::<Entity<P::TwoFactor>, _>(
                 self.connection(),
                 active,
                 filter.clone(),
@@ -194,9 +197,12 @@ where
         update: UpdateTwoFactor,
     ) -> AuthResult<TwoFactor> {
         let id = id.typed()?;
-        let mut fields = Map::from_iter([("id".to_owned(), json!(id.to_owned()))]);
+        let mut fields = FieldMap::from_iter([("id".to_owned(), (id.to_owned()).into_field())]);
         if P::TwoFactor::two_factor_storage() == TwoFactorStorage::Legacy {
-            let _ = fields.insert("updated_at".to_owned(), json!(Utc::now()));
+            let _ = fields.insert(
+                "updated_at".to_owned(),
+                better_auth_core::FieldValue::Date((Utc::now()).into()),
+            );
         }
         let mut active = self
             .prepare_two_factor_fields(update.additional_fields, false)
@@ -233,7 +239,7 @@ where
         let filter =
             P::TwoFactor::column("id")?.eq_id(id, self.config().advanced.database.generate_id())?;
         let model = database_operation::<Entity<P::TwoFactor>, _>(self.config(), "update", async {
-            super::updates::update_returning_one::<Entity<P::TwoFactor>, _>(
+            super::updates::update_record_returning_one::<Entity<P::TwoFactor>, _>(
                 self.connection(),
                 active,
                 filter.clone(),
@@ -253,7 +259,9 @@ where
         replacement: &str,
     ) -> AuthResult<bool> {
         let id = id.typed()?;
-        let active = self.prepare_two_factor_fields(Map::new(), false).await?;
+        let active = self
+            .prepare_two_factor_fields(FieldMap::new(), false)
+            .await?;
         let by_id =
             P::TwoFactor::column("id")?.eq_id(id, self.config().advanced.database.generate_id())?;
         let filter = by_id
@@ -261,10 +269,12 @@ where
             .and(P::TwoFactor::column("backup_codes")?.eq(previous));
         let row =
             database_operation::<Entity<P::TwoFactor>, _>(self.config(), "incrementOne", async {
-                let mut query = Entity::<P::TwoFactor>::update_many().set(active).col_expr(
-                    P::TwoFactor::column("backup_codes")?,
-                    Expr::value(replacement),
-                );
+                let mut query = active
+                    .update(self.connection().get_database_backend())?
+                    .col_expr(
+                        P::TwoFactor::column("backup_codes")?,
+                        Expr::value(replacement),
+                    );
                 if P::TwoFactor::two_factor_storage() == TwoFactorStorage::Legacy {
                     query = query
                         .col_expr(P::TwoFactor::column("updated_at")?, Expr::value(Utc::now()));
@@ -318,15 +328,17 @@ where
             .unwrap_or(0);
         if failures >= max_attempts {
             let locked_until = locked_until()?;
-            let active = self.prepare_two_factor_fields(Map::new(), false).await?;
+            let active = self
+                .prepare_two_factor_fields(FieldMap::new(), false)
+                .await?;
             let filter =
                 filter.and(P::TwoFactor::column("failed_verification_count")?.gte(max_attempts));
             let row = database_operation::<Entity<P::TwoFactor>, _>(
                 self.config(),
                 "incrementOne",
                 async {
-                    let query = Entity::<P::TwoFactor>::update_many()
-                        .set(active)
+                    let query = active
+                        .update(self.connection().get_database_backend())?
                         .col_expr(
                             P::TwoFactor::column("locked_until")?,
                             Expr::value(locked_until),
@@ -352,15 +364,17 @@ where
         locked_before: Option<chrono::DateTime<Utc>>,
     ) -> AuthResult<()> {
         let id = id.typed()?;
-        let active = self.prepare_two_factor_fields(Map::new(), false).await?;
+        let active = self
+            .prepare_two_factor_fields(FieldMap::new(), false)
+            .await?;
         let by_id =
             P::TwoFactor::column("id")?.eq_id(id, self.config().advanced.database.generate_id())?;
         let mut filter = by_id.clone();
         if let Some(expired) = locked_before {
             filter = filter.and(P::TwoFactor::column("locked_until")?.lte(expired));
         }
-        let update = Entity::<P::TwoFactor>::update_many()
-            .set(active)
+        let update = active
+            .update(self.connection().get_database_backend())?
             .col_expr(
                 P::TwoFactor::column("failed_verification_count")?,
                 Expr::value(0),

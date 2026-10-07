@@ -2,7 +2,7 @@ use super::{contract as fields, fixture};
 
 use better_auth::{
     __private_core::{
-        AuthResult, AuthSchema, AuthStore, DeviceCode, UpdateDeviceCode,
+        AuthResult, AuthSchema, AuthStore, DeviceCode, FieldValue, UpdateDeviceCode,
         store::EphemeralStore,
         user_fields::{UserConfig, UserFieldConfig},
     },
@@ -30,7 +30,7 @@ fn policies(alias: Option<&str>) -> UserConfig {
 fn display(row: &DeviceCode) -> Value {
     json!({
         "hasLabel": row.additional_fields.contains_key("label"),
-        "label": row.additional_fields.get("label").cloned().unwrap_or(Value::Null),
+        "label": row.additional_fields.get("label").cloned().unwrap_or(FieldValue::Null),
     })
 }
 
@@ -53,7 +53,7 @@ async fn observations<S: AuthSchema>(
         .build()
         .await?;
     let mut input = fields::input("empty-field-name");
-    input.additional_fields = [("label".into(), json!("label-created"))]
+    input.additional_fields = [("label".into(), FieldValue::from("label-created"))]
         .into_iter()
         .collect();
     let created = empty.store().create_device_code(input).await?;
@@ -67,7 +67,7 @@ async fn observations<S: AuthSchema>(
         .update_device_code(
             &created.id,
             UpdateDeviceCode {
-                additional_fields: [("label".into(), json!("label-updated"))]
+                additional_fields: [("label".into(), FieldValue::from("label-updated"))]
                     .into_iter()
                     .collect(),
                 ..Default::default()

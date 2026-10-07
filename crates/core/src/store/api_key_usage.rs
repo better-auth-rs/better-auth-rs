@@ -35,12 +35,6 @@ impl ApiKeyUsageWrite {
     }
 }
 
-fn timestamp(value: &str) -> AuthResult<DateTime<Utc>> {
-    DateTime::parse_from_rfc3339(value)
-        .map(|value| value.with_timezone(&Utc))
-        .map_err(|error| AuthError::internal(format!("Invalid stored API key timestamp: {error}")))
-}
-
 pub(super) async fn consume(
     store: &(impl ApiKeyStore + ?Sized),
     snapshot: &ApiKey,
@@ -58,16 +52,13 @@ pub(super) async fn consume(
             && interval != 0.0
             && amount != 0.0
         {
-            let previous = snapshot
-                .last_refill_at
-                .as_deref()
-                .map(timestamp)
-                .transpose()?;
-            let last = match previous {
-                Some(last) => last,
-                None => timestamp(&snapshot.created_at)?,
-            };
-            if (now.timestamp_millis() - last.timestamp_millis()) as f64 > interval {
+            let previous = snapshot.last_refill_at.as_ref();
+            let last = previous.unwrap_or(&snapshot.created_at).milliseconds();
+            if now.timestamp_millis() as f64 - last > interval {
+                let previous = previous
+                    .map(crate::FieldDate::to_datetime)
+                    .transpose()?
+                    .flatten();
                 refilled = store
                     .write_api_key_usage(
                         &snapshot.id,
@@ -108,8 +99,10 @@ pub(super) async fn consume(
         let (Some(window), Some(maximum)) = (row.rate_limit_time_window, row.rate_limit_max) else {
             break;
         };
-        let last = row.last_request.as_deref().map(timestamp).transpose()?;
-        let elapsed = last.map(|last| (now.timestamp_millis() - last.timestamp_millis()) as f64);
+        let elapsed = row
+            .last_request
+            .as_ref()
+            .map(|last| now.timestamp_millis() as f64 - last.milliseconds());
         let mutation = if let Some(elapsed) = elapsed {
             // Date truncates fractional milliseconds toward zero.
             let cutoff = DateTime::from_timestamp_millis(

@@ -83,7 +83,7 @@ impl<S: AuthSchema> AuthPlugin<S> for DisplayFields {
         let mut metadata = OpenApiPluginMetadata::from_routes(self.id(), Vec::new())?;
         if matches!(self, Self::Note) {
             for model in ["user", "session", "account", "verification"] {
-                metadata = metadata.model(model, &self.fields());
+                metadata = metadata.model(model, &self.fields())?;
             }
         }
         Ok(metadata)

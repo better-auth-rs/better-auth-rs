@@ -5,7 +5,8 @@
 //! Persistence traits describe application models; runtime readers consume projected views.
 
 use crate::SchemaValue;
-use chrono::{DateTime, Utc};
+#[cfg(test)]
+use chrono::Utc;
 use serde::{Deserialize, Serialize, Serializer};
 use std::borrow::Cow;
 
@@ -21,120 +22,74 @@ pub use account_view::AccountView;
 pub use verification_view::VerificationView;
 
 /// Public user response shape.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(
-    into = "serde_json::Map<String, serde_json::Value>",
-    try_from = "serde_json::Map<String, serde_json::Value>"
-)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct UserView {
     /// Configured application fields after output transforms.
-    #[serde(flatten)]
-    pub additional_fields: serde_json::Map<String, serde_json::Value>,
+    pub additional_fields: crate::FieldMap,
     /// Present optional core fields and enabled plugin fields. `None` preserves an unconfigured view.
-    #[serde(skip)]
     pub visible_fields: Option<std::collections::BTreeSet<String>>,
     pub id: SchemaValue<String>,
     pub name: SchemaValue<Option<String>>,
     pub email: Option<String>,
-    #[serde(rename = "emailVerified")]
     pub email_verified: bool,
     pub image: SchemaValue<Option<String>>,
-    #[serde(rename = "createdAt")]
-    #[serde(serialize_with = "crate::utils::date::serialize")]
-    pub created_at: DateTime<Utc>,
-    #[serde(rename = "updatedAt")]
-    #[serde(serialize_with = "crate::utils::date::serialize")]
-    pub updated_at: DateTime<Utc>,
-    #[serde(
-        rename = "isAnonymous",
-        default,
-        skip_serializing_if = "Option::is_none"
-    )]
+    pub created_at: crate::FieldDate,
+    pub updated_at: crate::FieldDate,
     pub is_anonymous: Option<bool>,
-    #[serde(
-        rename = "phoneNumber",
-        default,
-        skip_serializing_if = "Option::is_none"
-    )]
     pub phone_number: Option<String>,
-    #[serde(
-        rename = "phoneNumberVerified",
-        default,
-        skip_serializing_if = "Option::is_none"
-    )]
     pub phone_number_verified: Option<bool>,
     pub username: Option<String>,
-    #[serde(rename = "displayUsername")]
     pub display_username: Option<String>,
-    #[serde(rename = "twoFactorEnabled", default)]
     pub two_factor_enabled: Option<bool>,
     pub role: Option<String>,
-    #[serde(default)]
     pub banned: bool,
-    #[serde(rename = "banReason")]
     pub ban_reason: Option<String>,
-    #[serde(rename = "banExpires")]
-    #[serde(serialize_with = "crate::utils::date::serialize_option")]
-    pub ban_expires: Option<DateTime<Utc>>,
-    #[serde(skip)]
-    pub metadata: serde_json::Value,
+    pub ban_expires: Option<crate::FieldDate>,
+    pub metadata: crate::FieldValue,
 }
 
 /// Public session response shape.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(
-    into = "serde_json::Map<String, serde_json::Value>",
-    try_from = "serde_json::Map<String, serde_json::Value>"
-)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SessionView {
     /// Plugin field presence in the database projection or signed cache.
-    #[serde(skip)]
     pub visible_fields: Option<std::collections::BTreeSet<String>>,
     pub id: SchemaValue<String>,
-    #[serde(rename = "expiresAt")]
-    #[serde(serialize_with = "crate::utils::date::serialize")]
-    pub expires_at: DateTime<Utc>,
+    pub expires_at: crate::FieldDate,
     pub token: String,
-    #[serde(rename = "createdAt")]
-    #[serde(serialize_with = "crate::utils::date::serialize")]
-    pub created_at: DateTime<Utc>,
-    #[serde(rename = "updatedAt")]
-    #[serde(serialize_with = "crate::utils::date::serialize")]
-    pub updated_at: DateTime<Utc>,
-    #[serde(rename = "ipAddress")]
+    pub created_at: crate::FieldDate,
+    pub updated_at: crate::FieldDate,
     pub ip_address: Option<String>,
-    #[serde(rename = "userAgent")]
     pub user_agent: Option<String>,
-    #[serde(rename = "userId")]
     pub user_id: SchemaValue<String>,
-    #[serde(rename = "impersonatedBy")]
     pub impersonated_by: Option<String>,
-    #[serde(rename = "activeOrganizationId")]
     pub active_organization_id: Option<String>,
-    #[serde(
-        rename = "activeTeamId",
-        default,
-        skip_serializing_if = "Option::is_none"
-    )]
     pub active_team_id: Option<String>,
-    #[serde(skip)]
     pub active: bool,
-    #[serde(flatten)]
-    pub additional_fields: serde_json::Map<String, serde_json::Value>,
+    pub additional_fields: crate::FieldMap,
 }
 
 impl UserView {
     /// Read an application model without applying adapter output transforms.
     pub fn from_model<T: AuthUser>(user: &T) -> crate::AuthResult<Self> {
-        let model = serde_json::to_value(user)?;
+        let model = user.field_values()?;
         Ok(Self {
             additional_fields: user.projected_fields().cloned().unwrap_or_default(),
             visible_fields: user.field_presence().cloned(),
             id: user.id().into_owned(),
-            name: SchemaValue::from_json(model.get(T::serialized_field_name("name")).cloned()),
+            name: SchemaValue::from_field(
+                model
+                    .get(T::serialized_field_name("name"))
+                    .cloned()
+                    .unwrap_or_default(),
+            ),
             email: user.email().map(str::to_owned),
             email_verified: user.email_verified(),
-            image: SchemaValue::from_json(model.get(T::serialized_field_name("image")).cloned()),
+            image: SchemaValue::from_field(
+                model
+                    .get(T::serialized_field_name("image"))
+                    .cloned()
+                    .unwrap_or_default(),
+            ),
             created_at: user.created_at(),
             updated_at: user.updated_at(),
             is_anonymous: user.is_anonymous(),
@@ -143,14 +98,17 @@ impl UserView {
             username: user.username().map(str::to_owned),
             display_username: user.display_username().map(str::to_owned),
             two_factor_enabled: match model.get(T::serialized_field_name("twoFactorEnabled")) {
-                Some(value) => serde_json::from_value(value.clone())?,
+                Some(value) => value.decode()?,
                 None => Some(user.two_factor_enabled()),
             },
             role: user.role().map(str::to_owned),
             banned: user.banned(),
             ban_reason: user.ban_reason().map(str::to_owned),
             ban_expires: user.ban_expires(),
-            metadata: user.metadata().clone(),
+            metadata: model
+                .get(T::serialized_field_name("metadata"))
+                .cloned()
+                .unwrap_or(crate::FieldValue::Null),
         })
     }
 }
@@ -300,7 +258,7 @@ impl AuthUser for UserView {
     fn field_presence(&self) -> Option<&std::collections::BTreeSet<String>> {
         self.visible_fields.as_ref()
     }
-    fn projected_fields(&self) -> Option<&serde_json::Map<String, serde_json::Value>> {
+    fn projected_fields(&self) -> Option<&crate::FieldMap> {
         Some(&self.additional_fields)
     }
     const PLUGIN_FIELDS: &'static [&'static str] = &[
@@ -325,11 +283,11 @@ impl AuthUser for UserView {
     fn email_verified(&self) -> bool {
         self.email_verified
     }
-    fn created_at(&self) -> DateTime<Utc> {
-        self.created_at
+    fn created_at(&self) -> crate::FieldDate {
+        self.created_at.clone()
     }
-    fn updated_at(&self) -> DateTime<Utc> {
-        self.updated_at
+    fn updated_at(&self) -> crate::FieldDate {
+        self.updated_at.clone()
     }
     fn is_anonymous(&self) -> Option<bool> {
         self.is_anonymous
@@ -358,11 +316,8 @@ impl AuthUser for UserView {
     fn ban_reason(&self) -> Option<&str> {
         self.ban_reason.as_deref()
     }
-    fn ban_expires(&self) -> Option<DateTime<Utc>> {
-        self.ban_expires
-    }
-    fn metadata(&self) -> &serde_json::Value {
-        &self.metadata
+    fn ban_expires(&self) -> Option<crate::FieldDate> {
+        self.ban_expires.clone()
     }
 }
 
@@ -370,7 +325,7 @@ impl AuthSession for SessionView {
     fn field_presence(&self) -> Option<&std::collections::BTreeSet<String>> {
         self.visible_fields.as_ref()
     }
-    fn projected_fields(&self) -> Option<&serde_json::Map<String, serde_json::Value>> {
+    fn projected_fields(&self) -> Option<&crate::FieldMap> {
         Some(&self.additional_fields)
     }
 
@@ -382,17 +337,17 @@ impl AuthSession for SessionView {
     fn id(&self) -> SchemaValue<Cow<'_, str>> {
         self.id.as_ref().map(|id| Cow::Borrowed(id.as_str()))
     }
-    fn expires_at(&self) -> DateTime<Utc> {
-        self.expires_at
+    fn expires_at(&self) -> crate::FieldDate {
+        self.expires_at.clone()
     }
     fn token(&self) -> &str {
         &self.token
     }
-    fn created_at(&self) -> DateTime<Utc> {
-        self.created_at
+    fn created_at(&self) -> crate::FieldDate {
+        self.created_at.clone()
     }
-    fn updated_at(&self) -> DateTime<Utc> {
-        self.updated_at
+    fn updated_at(&self) -> crate::FieldDate {
+        self.updated_at.clone()
     }
     fn ip_address(&self) -> Option<&str> {
         self.ip_address.as_deref()
@@ -421,25 +376,11 @@ impl AuthSession for SessionView {
 // Plugin entity views
 // ---------------------------------------------------------------------------
 
-fn serialize_json_option_as_string<S>(
-    value: &SchemaValue<Option<serde_json::Value>>,
-    serializer: S,
-) -> Result<S::Ok, S::Error>
-where
-    S: Serializer,
-{
-    match value {
-        SchemaValue::Typed(Some(inner)) => serializer
-            .serialize_some(&serde_json::to_string(inner).map_err(serde::ser::Error::custom)?),
-        value => value.serialize(serializer),
-    }
-}
-
 /// Public organization response shape.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct OrganizationView {
-    #[serde(flatten)]
-    pub additional_fields: serde_json::Map<String, serde_json::Value>,
+    #[serde(with = "crate::field_value::serde::map", flatten)]
+    pub additional_fields: crate::FieldMap,
 
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub id: SchemaValue<String>,
@@ -449,13 +390,12 @@ pub struct OrganizationView {
     pub slug: SchemaValue<String>,
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub logo: SchemaValue<Option<String>>,
-    #[serde(serialize_with = "serialize_json_option_as_string")]
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
-    pub metadata: SchemaValue<Option<serde_json::Value>>,
+    pub metadata: SchemaValue<Option<crate::FieldValue>>,
     #[serde(rename = "createdAt")]
-    #[serde(serialize_with = "crate::schema_value::serialize_date")]
+    #[serde(with = "crate::field_value::serde::schema_date")]
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
-    pub created_at: SchemaValue<DateTime<Utc>>,
+    pub created_at: SchemaValue<crate::FieldDate>,
 }
 
 impl<T: AuthOrganization> From<&T> for OrganizationView {
@@ -475,8 +415,8 @@ impl<T: AuthOrganization> From<&T> for OrganizationView {
 /// Public invitation response shape.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct InvitationView {
-    #[serde(flatten)]
-    pub additional_fields: serde_json::Map<String, serde_json::Value>,
+    #[serde(with = "crate::field_value::serde::map", flatten)]
+    pub additional_fields: crate::FieldMap,
 
     #[serde(rename = "teamId")]
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
@@ -496,13 +436,13 @@ pub struct InvitationView {
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub inviter_id: SchemaValue<String>,
     #[serde(rename = "expiresAt")]
-    #[serde(serialize_with = "crate::schema_value::serialize_date")]
+    #[serde(with = "crate::field_value::serde::schema_date")]
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
-    pub expires_at: SchemaValue<DateTime<Utc>>,
+    pub expires_at: SchemaValue<crate::FieldDate>,
     #[serde(rename = "createdAt")]
-    #[serde(serialize_with = "crate::schema_value::serialize_date")]
+    #[serde(with = "crate::field_value::serde::schema_date")]
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
-    pub created_at: SchemaValue<DateTime<Utc>>,
+    pub created_at: SchemaValue<crate::FieldDate>,
 }
 
 impl<T: AuthInvitation> From<&T> for InvitationView {
@@ -526,8 +466,8 @@ impl<T: AuthInvitation> From<&T> for InvitationView {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PasskeyView {
     /// Declared application fields after adapter output projection.
-    #[serde(flatten, default)]
-    pub additional_fields: serde_json::Map<String, serde_json::Value>,
+    #[serde(with = "crate::field_value::serde::map", flatten, default)]
+    pub additional_fields: crate::FieldMap,
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub id: SchemaValue<String>,
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
@@ -547,7 +487,8 @@ pub struct PasskeyView {
     pub transports: Option<String>,
     #[serde(rename = "createdAt")]
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
-    pub created_at: SchemaValue<Option<String>>,
+    #[serde(with = "crate::field_value::serde::optional_schema_date")]
+    pub created_at: SchemaValue<Option<crate::FieldDate>>,
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     #[serde(deserialize_with = "crate::types_plugin::deserialize_display_string")]
     pub aaguid: SchemaValue<Option<String>>,
@@ -566,9 +507,7 @@ impl<T: AuthPasskey> From<&T> for PasskeyView {
             device_type: pk.device_type().to_owned(),
             backed_up: pk.backed_up(),
             transports: pk.transports().map(str::to_owned),
-            created_at: pk.created_at().as_ref().map(|date| {
-                date.map(|date| date.to_rfc3339_opts(chrono::SecondsFormat::Millis, true))
-            }),
+            created_at: pk.created_at().clone(),
             aaguid: pk.aaguid().clone(),
         }
     }
@@ -581,8 +520,8 @@ impl<T: AuthPasskey> From<&T> for PasskeyView {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ApiKeyView {
     /// Declared application fields after adapter output projection.
-    #[serde(flatten, default)]
-    pub additional_fields: serde_json::Map<String, serde_json::Value>,
+    #[serde(with = "crate::field_value::serde::map", flatten, default)]
+    pub additional_fields: crate::FieldMap,
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub id: SchemaValue<String>,
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
@@ -601,7 +540,8 @@ pub struct ApiKeyView {
     #[serde(serialize_with = "serialize_optional_number")]
     pub refill_amount: Option<f64>,
     #[serde(rename = "lastRefillAt")]
-    pub last_refill_at: Option<String>,
+    #[serde(default, with = "crate::field_value::serde::optional_date")]
+    pub last_refill_at: Option<crate::FieldDate>,
     pub enabled: bool,
     #[serde(rename = "rateLimitEnabled")]
     pub rate_limit_enabled: bool,
@@ -617,13 +557,17 @@ pub struct ApiKeyView {
     #[serde(serialize_with = "serialize_optional_number")]
     pub remaining: Option<f64>,
     #[serde(rename = "lastRequest")]
-    pub last_request: Option<String>,
+    #[serde(default, with = "crate::field_value::serde::optional_date")]
+    pub last_request: Option<crate::FieldDate>,
     #[serde(rename = "expiresAt")]
-    pub expires_at: Option<String>,
+    #[serde(default, with = "crate::field_value::serde::optional_date")]
+    pub expires_at: Option<crate::FieldDate>,
     #[serde(rename = "createdAt")]
-    pub created_at: String,
+    #[serde(with = "crate::field_value::serde::date")]
+    pub created_at: crate::FieldDate,
     #[serde(rename = "updatedAt")]
-    pub updated_at: String,
+    #[serde(with = "crate::field_value::serde::date")]
+    pub updated_at: crate::FieldDate,
     pub permissions: Option<serde_json::Value>,
     pub metadata: Option<serde_json::Value>,
 }
@@ -653,15 +597,15 @@ impl<T: AuthApiKey> From<&T> for ApiKeyView {
             config_id: ak.config_id().into_owned(),
             refill_interval: ak.refill_interval(),
             refill_amount: ak.refill_amount(),
-            last_refill_at: ak.last_refill_at().map(str::to_owned),
+            last_refill_at: ak.last_refill_at(),
             enabled: ak.enabled(),
             rate_limit_enabled: ak.rate_limit_enabled(),
             rate_limit_time_window: ak.rate_limit_time_window(),
             rate_limit_max: ak.rate_limit_max(),
             request_count: ak.request_count(),
             remaining: ak.remaining(),
-            last_request: ak.last_request().map(str::to_owned),
-            expires_at: ak.expires_at().map(str::to_owned),
+            last_request: ak.last_request(),
+            expires_at: ak.expires_at(),
             created_at: ak.created_at().to_owned(),
             updated_at: ak.updated_at().to_owned(),
             permissions: ak.permissions().and_then(|s| serde_json::from_str(s).ok()),
@@ -684,8 +628,8 @@ mod tests {
             email: Some("ada@example.com".to_string()),
             email_verified: true,
             image: Default::default(),
-            created_at: Utc::now(),
-            updated_at: Utc::now(),
+            created_at: Utc::now().into(),
+            updated_at: Utc::now().into(),
             is_anonymous: None,
             phone_number: None,
             phone_number_verified: None,
@@ -696,7 +640,7 @@ mod tests {
             banned: false,
             ban_reason: None,
             ban_expires: None,
-            metadata: serde_json::json!({}),
+            metadata: crate::FieldMap::new().into(),
         };
 
         let json = serde_json::to_value(UserView::from(&user)).expect("serialize user view");
@@ -748,10 +692,10 @@ mod tests {
         let session = SessionView {
             visible_fields: None,
             id: "session-1".to_string().into(),
-            expires_at: Utc::now(),
+            expires_at: Utc::now().into(),
             token: "token".to_string(),
-            created_at: Utc::now(),
-            updated_at: Utc::now(),
+            created_at: Utc::now().into(),
+            updated_at: Utc::now().into(),
             ip_address: Some("127.0.0.1".to_string()),
             user_agent: Some("agent".to_string()),
             user_id: "user-1".to_string().into(),

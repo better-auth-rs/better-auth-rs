@@ -3,6 +3,7 @@
     reason = "test setup intentionally discards created records"
 )]
 use super::{SeaOrmStore, bundled_schema::BundledSchema, migrator::run_migrations};
+use better_auth_core::FieldValue;
 use better_auth_core::user_fields::{FieldTransforms, UserFieldTransform};
 use better_auth_core::{
     AuthConfig, CreateInvitation, CreateMember, CreateOrganization, CreateOrganizationRole,
@@ -62,27 +63,28 @@ async fn check_json_policies(asynchronous: bool) {
     };
     use sea_orm::EntityTrait;
     use serde_json::{Value, json};
-    let input = |value: Option<Value>| {
-        value
-            .map(|value| {
-                let value: Value = match value {
-                    Value::String(value) => serde_json::from_str(&value)?,
-                    value => value,
-                };
-                serde_json::from_str(&value.to_string().replace("source", "stored"))
-                    .map_err(Into::into)
-            })
-            .transpose()
+    let input = |value: FieldValue| -> better_auth_core::AuthResult<FieldValue> {
+        if value.is_undefined() {
+            return Ok(value);
+        }
+        let value: Value = match value {
+            FieldValue::String(value) => serde_json::from_str(&value)?,
+            value => value.json()?.expect("defined JSON input"),
+        };
+        FieldValue::from_json(serde_json::from_str(
+            &value.to_string().replace("source", "stored"),
+        )?)
     };
-    let output = |value: Option<Value>| {
-        Ok(value.map(|value| {
-            json!(
-                value
-                    .as_str()
-                    .expect("SQLite JSON callbacks receive text")
-                    .replace("stored", "visible")
-            )
-        }))
+    let output = |value: FieldValue| -> better_auth_core::AuthResult<FieldValue> {
+        if value.is_undefined() {
+            return Ok(value);
+        }
+        Ok(FieldValue::String(
+            value
+                .as_str()
+                .expect("SQLite JSON callbacks receive text")
+                .replace("stored", "visible"),
+        ))
     };
     let store = store().await;
     let mut fields = OrganizationFields::default();
@@ -110,7 +112,7 @@ async fn check_json_policies(asynchronous: bool) {
         .create_organization_role(CreateOrganizationRole {
             organization_id: "org-a".into(),
             role: "json-role".into(),
-            permission: json!({"source":["read"]}),
+            permission: FieldValue::from_json(json!({"source":["read"]})).unwrap(),
             additional_fields: Default::default(),
         })
         .await
@@ -138,7 +140,7 @@ async fn check_json_policies(asynchronous: bool) {
         .update_organization_role(
             created.id.typed().unwrap(),
             UpdateOrganizationRole {
-                permission: Some(json!({"source":["write"]})),
+                permission: Some(FieldValue::from_json(json!({"source":["write"]})).unwrap()),
                 ..Default::default()
             },
         )
@@ -170,7 +172,6 @@ async fn team_list_starts_async_output_for_every_row_and_keeps_query_order() {
     use better_auth_core::{
         AuthResult, organization_fields::OrganizationFields, user_fields::UserFieldConfig,
     };
-    use serde_json::{Value, json};
     use tokio::sync::{mpsc, oneshot};
 
     let store = store().await;
@@ -186,7 +187,7 @@ async fn team_list_starts_async_output_for_every_row_and_keeps_query_order() {
     }
     let expected = store.list_organization_teams("org-a").await.unwrap();
     let (sender, mut receiver) =
-        mpsc::unbounded_channel::<(Option<Value>, oneshot::Sender<AuthResult<Option<Value>>>)>();
+        mpsc::unbounded_channel::<(FieldValue, oneshot::Sender<AuthResult<FieldValue>>)>();
     let mut fields = OrganizationFields::default();
     fields.team.fields_mut().insert(
         "name".into(),
@@ -209,10 +210,14 @@ async fn team_list_starts_async_output_for_every_row_and_keeps_query_order() {
     let controller = async {
         let (first, first_reply) = receiver.recv().await.unwrap();
         let (second, second_reply) = receiver.recv().await.unwrap();
-        assert_eq!(first, expected[0].name.json().unwrap());
-        assert_eq!(second, expected[1].name.json().unwrap());
-        second_reply.send(Ok(Some(json!("second result")))).unwrap();
-        first_reply.send(Ok(Some(json!("first result")))).unwrap();
+        assert_eq!(first, expected[0].name.field_value());
+        assert_eq!(second, expected[1].name.field_value());
+        second_reply
+            .send(Ok(FieldValue::String("second result".into())))
+            .unwrap();
+        first_reply
+            .send(Ok(FieldValue::String("first result".into())))
+            .unwrap();
     };
     let (rows, ()) = tokio::join!(store.list_organization_teams("org-a"), controller);
     let rows = rows.unwrap();
@@ -231,8 +236,6 @@ async fn async_capacity_output_failure_rolls_back_the_seat_and_membership() {
         organization_fields::OrganizationFields,
         user_fields::{UserFieldConfig, UserFieldType},
     };
-    use serde_json::json;
-
     let store = store().await;
     let team = store
         .create_team(CreateTeam {
@@ -249,7 +252,7 @@ async fn async_capacity_output_failure_rolls_back_the_seat_and_membership() {
             field_type: UserFieldType::Number,
             transform: Some(FieldTransforms {
                 output: Some(UserFieldTransform::new_async(|value| async move {
-                    assert_eq!(value, Some(json!(1)));
+                    assert_eq!(value, FieldValue::Number(1.0));
                     Err(AuthError::bad_request("capacity output failed"))
                 })),
                 ..Default::default()
@@ -280,7 +283,7 @@ async fn async_capacity_output_failure_rolls_back_the_seat_and_membership() {
             .unwrap()
             .unwrap()
             .additional_fields["memberCount"],
-        json!(0)
+        FieldValue::Number(0.0)
     );
 }
 
@@ -353,7 +356,7 @@ async fn team_capacity_deduplication_and_scoped_cleanup() {
         "invite@example.com",
         "member",
         "user-a",
-        chrono::Utc::now() + chrono::Duration::hours(1),
+        (chrono::Utc::now() + chrono::Duration::hours(1)).into(),
     );
     input.team_id = Some(a.id.typed().unwrap().clone());
     let invitation = store.create_invitation(input).await.unwrap();
@@ -384,7 +387,7 @@ async fn dynamic_roles_persist_json_and_organization_deletion_cascades() {
             additional_fields: Default::default(),
             organization_id: "org-a".into(),
             role: "editor".into(),
-            permission: serde_json::json!({"team": ["create"]}),
+            permission: FieldValue::from_json(serde_json::json!({"team": ["create"]})).unwrap(),
         })
         .await
         .unwrap();
@@ -393,7 +396,7 @@ async fn dynamic_roles_persist_json_and_organization_deletion_cascades() {
             additional_fields: Default::default(),
             organization_id: "org-b".into(),
             role: "editor".into(),
-            permission: serde_json::json!({}),
+            permission: FieldValue::from_json(serde_json::json!({})).unwrap(),
         })
         .await
         .unwrap();
@@ -403,12 +406,24 @@ async fn dynamic_roles_persist_json_and_organization_deletion_cascades() {
             UpdateOrganizationRole {
                 additional_fields: Default::default(),
                 role: Some("writer".into()),
-                permission: Some(serde_json::json!({"team": ["update"]})),
+                permission: Some(
+                    FieldValue::from_json(serde_json::json!({"team": ["update"]})).unwrap(),
+                ),
             },
         )
         .await
         .unwrap();
-    assert_eq!(updated.permission, serde_json::json!({"team": ["update"]}));
+    assert_eq!(
+        updated.permission.field_value(),
+        FieldValue::String("{\"team\":[\"update\"]}".into())
+    );
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(
+            updated.permission.field_value().as_str().unwrap()
+        )
+        .unwrap(),
+        serde_json::json!({"team": ["update"]})
+    );
     assert!(updated.updated_at.typed().unwrap().is_some());
     let team = store
         .create_team(CreateTeam {
@@ -481,7 +496,7 @@ async fn accepting_multiple_teams_rolls_back_every_write_when_one_team_is_full()
         .create_session(CreateSession {
             additional_fields: Default::default(),
             user_id: "user-b".into(),
-            expires_at: chrono::Utc::now() + chrono::Duration::hours(1),
+            expires_at: (chrono::Utc::now() + chrono::Duration::hours(1)).into(),
             ip_address: None,
             user_agent: None,
             impersonated_by: None,
@@ -494,7 +509,7 @@ async fn accepting_multiple_teams_rolls_back_every_write_when_one_team_is_full()
         "user-b@example.com",
         "member",
         "user-a",
-        chrono::Utc::now() + chrono::Duration::hours(1),
+        (chrono::Utc::now() + chrono::Duration::hours(1)).into(),
     );
     input.team_id = Some(format!(
         "{},{}",
@@ -605,7 +620,7 @@ async fn single_team_invitation_captures_cookie_before_switching_organization() 
         .create_session(CreateSession {
             additional_fields: Default::default(),
             user_id: "user-b".into(),
-            expires_at: chrono::Utc::now() + chrono::Duration::hours(1),
+            expires_at: (chrono::Utc::now() + chrono::Duration::hours(1)).into(),
             ip_address: None,
             user_agent: None,
             impersonated_by: None,
@@ -618,7 +633,7 @@ async fn single_team_invitation_captures_cookie_before_switching_organization() 
         "user-b@example.com",
         "member",
         "user-a",
-        chrono::Utc::now() + chrono::Duration::hours(1),
+        (chrono::Utc::now() + chrono::Duration::hours(1)).into(),
     );
     input.team_id = Some(team.id.typed().unwrap().clone());
     let invitation = store.create_invitation(input).await.unwrap();
@@ -683,7 +698,7 @@ async fn dynamic_team_limits_run_in_order_and_rollback_callback_failures() {
         .create_session(CreateSession {
             additional_fields: Default::default(),
             user_id: "user-b".into(),
-            expires_at: chrono::Utc::now() + chrono::Duration::hours(1),
+            expires_at: (chrono::Utc::now() + chrono::Duration::hours(1)).into(),
             ip_address: None,
             user_agent: None,
             impersonated_by: None,
@@ -696,7 +711,7 @@ async fn dynamic_team_limits_run_in_order_and_rollback_callback_failures() {
         "user-b@example.com",
         "member",
         "user-a",
-        chrono::Utc::now() + chrono::Duration::hours(1),
+        (chrono::Utc::now() + chrono::Duration::hours(1)).into(),
     );
     input.team_id = Some("first,second".into());
     let invitation = store.create_invitation(input).await.unwrap();
@@ -773,7 +788,7 @@ async fn application_team_and_invitation_fields_survive_persistence() {
     let team = store
         .create_team(CreateTeam {
             id: Some("application-team".into()),
-            created_at: Some(timestamp),
+            created_at: Some(timestamp.into()),
             name: "Application".into(),
             organization_id: "org-a".into(),
             ..Default::default()
@@ -781,28 +796,42 @@ async fn application_team_and_invitation_fields_survive_persistence() {
         .await
         .unwrap();
     assert_eq!(team.id, "application-team");
-    assert_eq!(team.created_at, timestamp);
+    assert_eq!(
+        team.created_at,
+        better_auth_core::FieldDate::from(timestamp)
+    );
     let team = store
         .update_team(
             team.id.typed().unwrap(),
             UpdateTeam {
                 organization_id: Some("org-b".into()),
-                updated_at: Some(Some(timestamp)),
+                updated_at: Some(Some(timestamp.into())),
                 ..Default::default()
             },
         )
         .await
         .unwrap();
     assert_eq!(team.organization_id, "org-b");
-    assert_eq!(team.updated_at, Some(timestamp));
-    let mut input =
-        CreateInvitation::new("org-a", "user-b@example.com", "admin", "user-a", timestamp);
+    assert_eq!(
+        team.updated_at,
+        Some(better_auth_core::FieldDate::from(timestamp))
+    );
+    let mut input = CreateInvitation::new(
+        "org-a",
+        "user-b@example.com",
+        "admin",
+        "user-a",
+        timestamp.into(),
+    );
     input.id = Some("application-invitation".into());
-    input.created_at = Some(timestamp);
+    input.created_at = Some(timestamp.into());
     input.status = Some(InvitationStatus::Rejected);
     let invitation = store.create_invitation(input).await.unwrap();
     assert_eq!(invitation.id, "application-invitation");
-    assert_eq!(invitation.created_at, timestamp);
+    assert_eq!(
+        invitation.created_at,
+        better_auth_core::FieldDate::from(timestamp)
+    );
     assert_eq!(invitation.status, InvitationStatus::Rejected);
 }
 

@@ -1,4 +1,4 @@
-use super::{SecondaryStore, decode, object};
+use super::{SecondaryStore, decode};
 use crate::store::VerificationStore;
 use crate::store::{VerificationCreateWriter, database_hooks::VerificationUpdate};
 use crate::types::CreateVerification;
@@ -43,9 +43,9 @@ impl<S: AuthSchema> SecondaryStore<S> {
             ) else {
                 continue;
             };
-            let mut record = VerificationView::from_fields(object(value)?)?;
+            let mut record = serde_json::from_value::<VerificationView>(value)?;
             record.expires_at = record.expires_at.converted_date();
-            if matches!(record.expires_at, crate::SchemaValue::InvalidDate) {
+            if record.expires_at.date_milliseconds()?.is_nan() {
                 continue;
             }
             for other in identifiers.iter().filter(|other| *other != identifier) {
@@ -97,7 +97,7 @@ impl<S: AuthSchema> SecondaryStore<S> {
         transaction: Option<&dyn crate::store::AuthTransaction<S>>,
     ) -> AuthResult<VerificationView> {
         let request = crate::hooks::current_request_hook_context();
-        input = input.with_timestamps(Utc::now());
+        input = input.with_timestamps(Utc::now().into());
         input.identifier = self
             .config
             .verification
@@ -214,13 +214,12 @@ impl<S: AuthSchema> SecondaryStore<S> {
             fields.extend(update.fields()?);
             let record = VerificationView::from_fields(fields)?;
             // Upstream uses a nullish fallback for TTL while preserving the null in the cached JSON.
-            let expiry = if record.expires_at.is_undefined()
-                || record.expires_at.json()? == Some(serde_json::Value::Null)
-            {
-                &old_expiry
-            } else {
-                &record.expires_at
-            };
+            let expiry =
+                if record.expires_at.is_undefined() || record.expires_at.field_value().is_null() {
+                    &old_expiry
+                } else {
+                    &record.expires_at
+                };
             let seconds = expiry.converted_cache_ttl(Utc::now())?;
             if seconds > 0 {
                 self.secondary()?
@@ -271,7 +270,7 @@ impl<S: AuthSchema> SecondaryStore<S> {
             return Ok(None);
         };
         decode(storage.get(&format!("verification:{identifier}")).await?)
-            .map(|value| VerificationView::from_fields(object(value)?))
+            .map(|value| serde_json::from_value(value).map_err(Into::into))
             .transpose()
     }
 
@@ -323,20 +322,14 @@ impl<S: AuthSchema> VerificationStore<S> for SecondaryStore<S> {
             .into();
         let identifier = input.identifier.typed()?.clone();
         // Reservation caches the original four fields; the adapter result is not reused here.
-        let cache = VerificationView::from_fields(serde_json::Map::from_iter([
-            ("id".into(), serde_json::Value::String(id.to_owned())),
+        let cache = VerificationView::from_fields(crate::FieldMap::from_iter([
+            ("id".into(), crate::FieldValue::String(id.to_owned())),
             (
                 "identifier".into(),
-                serde_json::Value::String(identifier.clone()),
+                crate::FieldValue::String(identifier.clone()),
             ),
-            (
-                "value".into(),
-                input.value.json()?.unwrap_or(serde_json::Value::Null),
-            ),
-            (
-                "expiresAt".into(),
-                input.expires_at.json()?.unwrap_or(serde_json::Value::Null),
-            ),
+            ("value".into(), input.value.field_value()),
+            ("expiresAt".into(), input.expires_at.field_value()),
         ]))?;
         let inserted = self.inner.reserve_verification(id, input).await?;
         if inserted {

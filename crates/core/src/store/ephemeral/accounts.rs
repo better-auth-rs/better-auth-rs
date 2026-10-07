@@ -4,11 +4,7 @@ use crate::store::database_hooks::{DatabaseHookControl, DatabaseHookUpdate};
 use crate::store::schema::EntityRole;
 
 impl EphemeralStore {
-    async fn account_records(
-        &self,
-        provider: &str,
-        account_id: &str,
-    ) -> AuthResult<Vec<serde_json::Map<String, Value>>> {
+    async fn account_records(&self, provider: &str, account_id: &str) -> AuthResult<Vec<FieldMap>> {
         self.model_fields.canonicalize_id(EntityRole::Account)?;
         let fields = self.config.account.field_schema();
         let provider =
@@ -21,8 +17,14 @@ impl EphemeralStore {
                 .snapshot()?
                 .iter()
                 .filter(|record| {
-                    record.get(fields.record_storage_key("providerId")) == Some(&provider)
-                        && record.get(fields.record_storage_key("accountId")) == Some(&account_id)
+                    record
+                        .get(fields.record_storage_key("providerId"))
+                        .unwrap_or(&Value::Undefined)
+                        .strict_equals(&provider)
+                        && record
+                            .get(fields.record_storage_key("accountId"))
+                            .unwrap_or(&Value::Undefined)
+                            .strict_equals(&account_id)
                 })
                 .take(2)
                 .cloned()
@@ -31,10 +33,7 @@ impl EphemeralStore {
         .await
     }
 
-    pub(super) async fn user_account_records(
-        &self,
-        user_id: &str,
-    ) -> AuthResult<Vec<Map<String, Value>>> {
+    pub(super) async fn user_account_records(&self, user_id: &str) -> AuthResult<Vec<FieldMap>> {
         self.model_fields.canonicalize_id(EntityRole::Account)?;
         let fields = self.config.account.field_schema();
         let user_id =
@@ -47,7 +46,10 @@ impl EphemeralStore {
                         .snapshot()?
                         .iter()
                         .filter(|record| {
-                            record.get(fields.record_storage_key("userId")) == Some(&user_id)
+                            record
+                                .get(fields.record_storage_key("userId"))
+                                .unwrap_or(&Value::Undefined)
+                                .strict_equals(&user_id)
                         })
                         .cloned()
                         .collect(),
@@ -61,7 +63,7 @@ impl EphemeralStore {
 
     pub(super) async fn output_accounts(
         &self,
-        records: &[Map<String, Value>],
+        records: &[FieldMap],
     ) -> AuthResult<Vec<AccountView>> {
         if !records.is_empty() {
             self.model_fields.canonicalize_id(EntityRole::Account)?;
@@ -77,10 +79,7 @@ impl EphemeralStore {
             .collect())
     }
 
-    pub(super) async fn output_account(
-        &self,
-        record: &Map<String, Value>,
-    ) -> AuthResult<AccountView> {
+    pub(super) async fn output_account(&self, record: &FieldMap) -> AuthResult<AccountView> {
         self.model_fields.canonicalize_id(EntityRole::Account)?;
         Ok(AccountView::from_adapter_fields(
             self.config
@@ -242,9 +241,18 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
         let record = self
             .raw("account", "findOne", |state| {
                 Ok(state.accounts.snapshot()?.into_iter().find(|record| {
-                    record.get(fields.record_storage_key("userId")) == Some(&user_id)
-                        && record.get(fields.record_storage_key("providerId")) == Some(&provider)
-                        && record.get(fields.record_storage_key("accountId")) == Some(&account_id)
+                    record
+                        .get(fields.record_storage_key("userId"))
+                        .unwrap_or(&Value::Undefined)
+                        .strict_equals(&user_id)
+                        && record
+                            .get(fields.record_storage_key("providerId"))
+                            .unwrap_or(&Value::Undefined)
+                            .strict_equals(&provider)
+                        && record
+                            .get(fields.record_storage_key("accountId"))
+                            .unwrap_or(&Value::Undefined)
+                            .strict_equals(&account_id)
                 }))
             })
             .await?;
@@ -398,7 +406,10 @@ impl EphemeralStore {
             self.memory_field_query(&schema, "userId", Value::String(user_id.to_owned()))?;
         self.raw("account", "deleteMany", |state| {
             state.accounts.retain(|record| {
-                record.get(schema.record_storage_key("userId")) != Some(&user_id)
+                !record
+                    .get(schema.record_storage_key("userId"))
+                    .unwrap_or(&Value::Undefined)
+                    .strict_equals(&user_id)
             })?;
             Ok(())
         })

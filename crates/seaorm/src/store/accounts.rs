@@ -21,12 +21,14 @@ fn stored_owner_id(
     value: Option<&sea_orm::Value>,
 ) -> AuthResult<better_auth_core::SchemaValue<String>> {
     value
-        .map(sea_orm::sea_query::sea_value_to_json_value)
+        .cloned()
+        .map(crate::__private_field_value)
+        .transpose()?
         .map(|value| {
             if value.is_null() {
-                Ok(better_auth_core::SchemaValue::from_json(Some(value)))
+                Ok(better_auth_core::SchemaValue::from_field(value))
             } else {
-                better_auth_core::SchemaValue::<String>::from_json(Some(value))
+                better_auth_core::SchemaValue::<String>::from_field(value)
                     .display_string()
                     .map(better_auth_core::SchemaValue::from)
             }
@@ -177,7 +179,7 @@ where
     where
         C: ConnectionTrait,
     {
-        create_account = create_account.with_timestamps(Utc::now());
+        create_account = create_account.with_timestamps(Utc::now().into());
         let hook_context = self.hook_context(tx);
         for hook in self.hooks() {
             if better_auth_core::observability::database::with_database_hook(
@@ -215,24 +217,21 @@ where
             "account",
             input
                 .get("id")
-                .and_then(serde_json::Value::as_str)
+                .and_then(better_auth_core::FieldValue::as_str)
                 .map(str::to_owned),
         )?;
-        let parsed = id.as_deref().map(S::Account::parse_id).transpose()?;
-        let mut active = S::Account::new_active(parsed, input)?;
-        if id.is_none() {
+        let mut active = super::record_write::RecordWrite::<
+            <S::Account as SeaOrmAccountModel>::Entity,
+        >::from_fields(input, S::Account::field_column)?;
+        if let Some(id) = id {
+            active.set(S::Account::id_column(), S::Account::parse_id(&id)?.into());
+        } else {
             active.not_set(S::Account::id_column());
         }
-        crate::reference_id::apply_bindings(
-            &mut active,
-            &fields,
-            db.get_database_backend(),
-            S::Account::field_column,
-        )?;
         let account = database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(
             self.config(),
             "create",
-            async { active.insert(db).await.map_err(map_db_err) },
+            async { active.insert(db).await },
         )
         .await?;
         let account = self.output_account(&account, db).await?;
@@ -497,32 +496,25 @@ where
                 )
             })
             .await?;
-        let mut active = <S::Account as SeaOrmAccountModel>::ActiveModel::default();
-        S::Account::apply_fields(&mut active, input)?;
-        crate::reference_id::apply_bindings(
-            &mut active,
-            &fields,
-            backend,
-            S::Account::field_column,
-        )?;
-        let reselect = match active.get(S::Account::id_column()) {
-            sea_orm::ActiveValue::Set(value) => S::Account::id_column().eq(value),
-            _ => S::Account::id_column().eq(account_id.clone()),
+        let active = super::record_write::RecordWrite::<<S::Account as SeaOrmAccountModel>::Entity>::from_fields(input, S::Account::field_column)?;
+        let reselect = match active.expression(S::Account::id_column(), backend)? {
+            Some(value) => S::Account::id_column().eq(value),
+            None => S::Account::id_column().eq(account_id.clone()),
         };
         let account = match database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(
             self.config(),
             "update",
             async {
-                super::updates::update_returning_one::<
-                        <S::Account as SeaOrmAccountModel>::Entity,
-                        _,
-                    >(
-                        self.connection(),
-                        active,
-                        S::Account::id_column().eq(account_id),
-                        reselect,
-                    )
-                    .await
+                super::updates::update_record_returning_one::<
+                    <S::Account as SeaOrmAccountModel>::Entity,
+                    _,
+                >(
+                    self.connection(),
+                    active,
+                    S::Account::id_column().eq(account_id),
+                    reselect,
+                )
+                .await
             },
         )
         .await?

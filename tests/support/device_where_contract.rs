@@ -1,8 +1,9 @@
 use better_auth::{AuthConfig, BetterAuth, plugins::DeviceAuthorizationPlugin};
 use better_auth_core::{
-    AuthContext, AuthError, AuthInitContext, AuthPlugin, AuthRequest, AuthResponse, AuthResult,
-    AuthRoute, AuthSchema, AuthStore, CreateDeviceCode, CreateUser, DeviceCode,
-    DeviceCodeOwnership, DeviceCodeWhere, WhereMode, WhereOperator,
+    AuthContext, AuthError, AuthInitContext, AuthPlugin, AuthRecordFields, AuthRequest,
+    AuthResponse, AuthResult, AuthRoute, AuthSchema, AuthStore, CreateDeviceCode, CreateUser,
+    DeviceCode, DeviceCodeOwnership, DeviceCodeWhere, FieldMap, FieldValue, WhereMode,
+    WhereOperator,
     error::DatabaseError,
     id::IdGeneration,
     store::{DeviceCodeStore, schema::EntityRole, transaction},
@@ -12,8 +13,12 @@ use better_auth_core::{
     },
 };
 use serde::Deserialize;
-use serde_json::{Map, Value, json};
+use serde_json::{Value, json};
 use std::sync::{Arc, Mutex};
+
+#[path = "device_where_values.rs"]
+mod values;
+use values::{observe, revive};
 
 type Trace = Arc<Mutex<Vec<Value>>>;
 const FIELDS: [(&str, UserFieldType); 7] = [
@@ -111,7 +116,7 @@ fn policies(trace: &Trace) -> UserConfig {
                             trace.lock().expect("Device Where trace lock").push(json!({
                                 "phase": phase,
                                 "field": name,
-                                "value": value.clone().unwrap_or_else(|| json!({"type":"undefined"})),
+                                "value": observe(&value)?,
                             }));
                             Ok(value)
                         })
@@ -173,24 +178,19 @@ fn canonical_numbers(value: &mut Value) -> AuthResult<()> {
 }
 
 #[expect(
-    clippy::expect_used,
     clippy::panic_in_result_fn,
     reason = "The contract compares complete rows after verifying their persisted identities"
 )]
 fn visible(row: &DeviceCode, seeded: &DeviceCode) -> AuthResult<Value> {
     assert_eq!(row.id, seeded.id);
     assert_eq!(row.user_id, seeded.user_id);
-    let mut value = serde_json::to_value(row)?;
-    let object = value.as_object_mut().expect("serialized Device object");
-    let _ = object.insert("id".into(), json!("<device-id>"));
-    let _ = object.insert("userId".into(), json!("<owner-id>"));
-    let date = object.remove("expiresAt").expect("native expiry");
-    let _ = object.insert("expiresAt".into(), json!({"type":"date", "value":date}));
+    let mut object = row.field_values()?;
+    let _ = object.insert("id".into(), FieldValue::from("<device-id>"));
+    let _ = object.insert("userId".into(), FieldValue::from("<owner-id>"));
     for (field, _) in FIELDS {
-        let _ = object
-            .entry(field)
-            .or_insert_with(|| json!({"type":"undefined"}));
+        let _ = object.entry(field.into()).or_insert(FieldValue::Undefined);
     }
+    let mut value = observe(&FieldValue::from(object))?;
     canonical_numbers(&mut value)?;
     Ok(value)
 }
@@ -253,7 +253,7 @@ fn stored_semantics(rows: &[Value], backend: &str) -> AuthResult<Vec<Value>> {
     clippy::panic_in_result_fn,
     reason = "Captured query shape and scalar input values must be complete before consumption"
 )]
-fn condition(case: &Case) -> AuthResult<DeviceCodeOwnership> {
+fn condition(case: &Case, source: &DeviceCode) -> AuthResult<DeviceCodeOwnership> {
     assert_eq!(case.condition.len(), 3);
     assert_eq!(
         case.condition.first(),
@@ -295,7 +295,7 @@ fn condition(case: &Case) -> AuthResult<DeviceCodeOwnership> {
             )));
         }
     };
-    Ok(DeviceCodeOwnership::Where(DeviceCodeWhere {
+    let mut condition = DeviceCodeWhere {
         field: query
             .get("field")
             .and_then(Value::as_str)
@@ -303,11 +303,31 @@ fn condition(case: &Case) -> AuthResult<DeviceCodeOwnership> {
             .into(),
         operator,
         mode,
-        value: query
-            .get("value")
-            .expect("captured predicate value")
-            .clone(),
-    }))
+        value: revive(query.get("value").expect("captured predicate value"))?,
+    };
+    if case.name.ends_with("same-object") {
+        use_returned_value(&mut condition, source)?;
+    }
+    assert_eq!(
+        observe(&condition.value)?,
+        query["value"],
+        "captured ownership value"
+    );
+    Ok(DeviceCodeOwnership::Where(condition))
+}
+
+fn use_returned_value(condition: &mut DeviceCodeWhere, source: &DeviceCode) -> AuthResult<()> {
+    let value = source
+        .additional_fields
+        .get(&condition.field)
+        .ok_or_else(|| AuthError::internal("The captured source field must exist"))?
+        .clone();
+    condition.value = if matches!(condition.operator, WhereOperator::In | WhereOperator::NotIn) {
+        FieldValue::from(vec![value])
+    } else {
+        value
+    };
+    Ok(())
 }
 
 #[expect(
@@ -347,7 +367,7 @@ pub(crate) async fn run<S: AuthSchema>(
         assert_eq!(owner.id.typed()?, "1", "Serial fixtures start with owner 1");
     }
     for case in cases {
-        let mut additional_fields = Map::new();
+        let mut additional_fields = FieldMap::new();
         let inputs = case
             .seed_events
             .iter()
@@ -358,7 +378,7 @@ pub(crate) async fn run<S: AuthSchema>(
             assert_eq!(event.get("field"), Some(&json!(name)));
             let value = event.get("value").expect("captured seed input");
             if value != &json!({"type":"undefined"}) {
-                let _ = additional_fields.insert(name.into(), value.clone());
+                let _ = additional_fields.insert(name.into(), revive(value)?);
             }
         }
         let seeded = auth
@@ -367,7 +387,10 @@ pub(crate) async fn run<S: AuthSchema>(
                 device_code: "ordinary-device".into(),
                 user_code: "ordinary-user".into(),
                 user_id: Some(owner.id.typed()?.clone()),
-                expires_at: "2032-01-02T03:04:05.000Z".parse().expect("fixed expiry"),
+                expires_at: "2032-01-02T03:04:05.000Z"
+                    .parse::<chrono::DateTime<chrono::Utc>>()
+                    .expect("fixed expiry")
+                    .into(),
                 status: "approved".into(),
                 last_polled_at: None,
                 polling_interval: Some(5000.0),
@@ -399,11 +422,28 @@ pub(crate) async fn run<S: AuthSchema>(
             "{backend}/{} before",
             case.name
         );
-        let ownership = condition(case)?;
+        let mut ownership = condition(case, &seeded)?;
         let consumed = if case.transaction {
             let expected = seeded.clone();
+            let select_source = case.name.starts_with("transaction-selected-");
             transaction(auth.store().as_ref(), move |tx| {
-                Box::pin(async move { tx.consume_device_code(&expected, &ownership).await })
+                Box::pin(async move {
+                    if select_source {
+                        let source = tx
+                            .get_device_code_by_device_code(&expected.device_code)
+                            .await?
+                            .ok_or_else(|| {
+                                AuthError::internal("The transaction must select the seeded Device")
+                            })?;
+                        let DeviceCodeOwnership::Where(condition) = &mut ownership else {
+                            return Err(AuthError::internal(
+                                "The captured transaction must use a Where condition",
+                            ));
+                        };
+                        use_returned_value(condition, &source)?;
+                    }
+                    tx.consume_device_code(&expected, &ownership).await
+                })
             })
             .await
         } else {
@@ -485,7 +525,20 @@ pub(crate) async fn run<S: AuthSchema>(
 }
 
 pub(crate) fn load(backend: &str) -> Result<Fixture, Box<dyn std::error::Error + Send + Sync>> {
+    load_fixture(backend, "device-where")
+}
+
+pub(crate) fn load_transactions(
+    backend: &str,
+) -> Result<Fixture, Box<dyn std::error::Error + Send + Sync>> {
+    load_fixture(backend, "device-where-transactions")
+}
+
+fn load_fixture(
+    backend: &str,
+    name: &str,
+) -> Result<Fixture, Box<dyn std::error::Error + Send + Sync>> {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join(format!("tests/fixtures/device-where-{backend}-1.7.6.json"));
+        .join(format!("tests/fixtures/{name}-{backend}-1.7.6.json"));
     Ok(serde_json::from_slice(&std::fs::read(path)?)?)
 }

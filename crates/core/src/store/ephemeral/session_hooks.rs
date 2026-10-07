@@ -37,7 +37,7 @@ impl SessionUpdate {
             active_organization_id,
             active_team_id
         );
-        session.updated_at = self.updated_at.unwrap_or_else(Utc::now);
+        session.updated_at = self.updated_at.unwrap_or_else(|| Utc::now().into());
         session.additional_fields.extend(self.additional_fields);
     }
 }
@@ -127,7 +127,10 @@ impl EphemeralStore {
         preserve: bool,
     ) -> AuthResult<Option<usize>> {
         let now = Utc::now();
-        let matches = |row: &SessionView| predicate(row) && (!preserve || row.expires_at > now);
+        let matches = |row: &SessionView| {
+            predicate(row)
+                && (!preserve || row.expires_at.milliseconds() > now.timestamp_millis() as f64)
+        };
         let sessions: Vec<_> = self
             .raw("session", "findMany", |state| {
                 Ok(crate::query::paginate_memory(
@@ -177,8 +180,8 @@ impl EphemeralStore {
                 let mut count = 0;
                 state.sessions.update_each(|session| {
                     if matches(session) {
-                        session.expires_at = expires_at;
-                        session.updated_at = expires_at;
+                        session.expires_at = expires_at.into();
+                        session.updated_at = expires_at.into();
                         session.additional_fields.extend(fields.clone());
                         count += 1;
                     }

@@ -251,7 +251,8 @@ impl OAuthProfileMapper for Mapper {
             name: self
                 .patch
                 .get("name")
-                .map(|value| better_auth_core::SchemaValue::from_json(Some(value.clone()))),
+                .map(|value| better_auth_core::SchemaValue::from_json(Some(value.clone())))
+                .transpose()?,
             image: self
                 .patch
                 .get("image")
@@ -260,12 +261,14 @@ impl OAuthProfileMapper for Mapper {
             email_verified: self
                 .patch
                 .get("emailVerified")
-                .map(|value| better_auth_core::SchemaValue::from_json(Some(value.clone()))),
-            additional_fields: self
-                .patch
-                .get("locale")
-                .map(|value| serde_json::Map::from_iter([("locale".into(), value.clone())]))
-                .unwrap_or_default(),
+                .map(|value| better_auth_core::SchemaValue::from_json(Some(value.clone())))
+                .transpose()?,
+            additional_fields: better_auth_core::FieldMap::from_json(
+                self.patch
+                    .get("locale")
+                    .map(|value| serde_json::Map::from_iter([("locale".into(), value.clone())]))
+                    .unwrap_or_default(),
+            )?,
             ..Default::default()
         })
     }

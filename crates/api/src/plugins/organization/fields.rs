@@ -137,7 +137,12 @@ pub(super) fn team(mut team: Team, ctx: &AuthContext<impl AuthSchema>) -> Team {
 pub(super) fn filter_response(path: &str, value: &mut Value, fields: &OrganizationFields) {
     fn filter(value: &mut Value, schema: &better_auth_core::user_fields::UserConfig) {
         match value {
-            Value::Object(map) => schema.filter_returned_fields(map),
+            Value::Object(map) => map.retain(|name, _| {
+                schema
+                    .fields()
+                    .get(name)
+                    .is_none_or(|field| field.returned())
+            }),
             Value::Array(items) => {
                 for item in items {
                     filter(item, schema);

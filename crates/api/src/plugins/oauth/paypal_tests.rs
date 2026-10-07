@@ -289,7 +289,8 @@ impl OAuthProfileMapper for Mapper {
                 .patch
                 .get("email")
                 .cloned()
-                .map(|v| SchemaValue::from_json(Some(v))),
+                .map(|v| SchemaValue::from_json(Some(v)))
+                .transpose()?,
             image: self
                 .patch
                 .get("image")
@@ -300,8 +301,9 @@ impl OAuthProfileMapper for Mapper {
                 .patch
                 .get("emailVerified")
                 .cloned()
-                .map(|v| SchemaValue::from_json(Some(v))),
-            additional_fields: extra,
+                .map(|v| SchemaValue::from_json(Some(v)))
+                .transpose()?,
+            additional_fields: better_auth_core::FieldMap::from_json(extra)?,
             ..Default::default()
         })
     }

@@ -2,7 +2,7 @@
 
 use better_auth_core::{
     AuthConfig, AuthError, AuthResult, AuthSchema, AuthStore, CreateAccount, CreateSession,
-    CreateUser, CreateVerification, SchemaValue, UpdateUser, UserView,
+    CreateUser, CreateVerification, FieldMap, FieldValue, SchemaValue, UpdateUser, UserView,
     store::EphemeralStore,
     types::ListUsersParams,
     user_fields::{FieldTransforms, UserConfig, UserFieldConfig, UserFieldTransform},
@@ -21,8 +21,8 @@ use tokio::sync::{mpsc, oneshot};
 
 struct Call {
     field: &'static str,
-    value: Option<Value>,
-    reply: oneshot::Sender<AuthResult<Option<Value>>>,
+    value: FieldValue,
+    reply: oneshot::Sender<AuthResult<FieldValue>>,
 }
 
 #[derive(Clone, Default)]
@@ -83,6 +83,12 @@ async fn next(receiver: &mut mpsc::UnboundedReceiver<Call>) -> AuthResult<Call> 
 }
 
 fn answer(call: Call, value: AuthResult<Option<Value>>) -> AuthResult<()> {
+    let value = value.and_then(|value| {
+        value
+            .map(FieldValue::from_json)
+            .transpose()
+            .map(|value| value.unwrap_or(FieldValue::Undefined))
+    });
     call.reply
         .send(value)
         .map_err(|_| AuthError::internal("Field callback was cancelled"))
@@ -98,7 +104,7 @@ async fn drive<T>(
         for (field, value, result) in expected {
             let call = next(&mut receiver).await?;
             assert_eq!(call.field, field);
-            assert_eq!(call.value, Some(value));
+            assert_eq!(call.value, FieldValue::from_json(value)?);
             answer(call, result)?;
         }
         AuthResult::Ok(())
@@ -177,7 +183,7 @@ async fn check_writes<S: AuthSchema>(store: &impl AuthStore<S>, gate: &Gate) -> 
         store.update_user(
             &id,
             UpdateUser {
-                name: SchemaValue::from_json(Some(json!("source"))),
+                name: SchemaValue::from_json(Some(json!("source")))?,
                 ..Default::default()
             },
         ),
@@ -203,19 +209,19 @@ async fn check_writes<S: AuthSchema>(store: &impl AuthStore<S>, gate: &Gate) -> 
         gate,
         store.create_session(CreateSession {
             user_id: id.clone().into(),
-            expires_at: chrono::Utc::now() + chrono::Duration::hours(1),
+            expires_at: (chrono::Utc::now() + chrono::Duration::hours(1)).into(),
             ip_address: None,
             user_agent: Some("source".into()),
             impersonated_by: None,
             active_organization_id: None,
-            additional_fields: serde_json::from_value(json!({"userAgent":"source"}))?,
+            additional_fields: FieldMap::from_iter([("userAgent".into(), "source".into())]),
         }),
         answers("session.input", "session.output"),
     )
     .await?;
     assert_eq!(
         session.additional_fields.get("userAgent"),
-        Some(&json!({"resolved":"stored"}))
+        Some(&FieldValue::from_json(json!({"resolved":"stored"}))?)
     );
     let verification = drive(
         gate,
@@ -331,20 +337,20 @@ async fn observe_batch<S: AuthSchema>(
     let controller = async {
         let a = next(&mut receiver).await?;
         let b = next(&mut receiver).await?;
-        assert_eq!((a.field, &a.value), ("name", &Some(json!("A"))));
-        assert_eq!((b.field, &b.value), ("name", &Some(json!("B"))));
+        assert_eq!((a.field, &a.value), ("name", &FieldValue::from("A")));
+        assert_eq!((b.field, &b.value), ("name", &FieldValue::from("B")));
         answer(b, Ok(Some(json!("B:resolved"))))?;
         let image_b = next(&mut receiver).await?;
         assert_eq!(
             (image_b.field, &image_b.value),
-            ("image", &Some(json!("B.png")))
+            ("image", &FieldValue::from("B.png"))
         );
         answer(image_b, Ok(Some(json!("B.png:resolved"))))?;
         answer(a, Ok(Some(json!("A:resolved"))))?;
         let image_a = next(&mut receiver).await?;
         assert_eq!(
             (image_a.field, &image_a.value),
-            ("image", &Some(json!("A.png")))
+            ("image", &FieldValue::from("A.png"))
         );
         answer(image_a, Ok(Some(json!("A.png:resolved"))))?;
         AuthResult::Ok(vec!["name:A", "name:B", "image:B.png", "image:A.png"])
@@ -437,7 +443,7 @@ async fn synchronous_input_rejects_async_callbacks_while_organization_adapters_a
             .into(),
         ),
     };
-    let input = serde_json::from_value(json!({"label":"normal"}))?;
+    let input = FieldMap::from_iter([("label".into(), "normal".into())]);
     assert!(matches!(
         config.parse_input(&input, true),
         Err(AuthError::Config(_))

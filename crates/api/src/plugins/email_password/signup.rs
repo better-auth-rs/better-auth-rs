@@ -6,9 +6,9 @@ use async_trait::async_trait;
 use better_auth_core::utils::password as password_utils;
 use better_auth_core::{
     AuthContext, AuthError, AuthRequest, AuthResult, AuthSchema, AuthSession, AuthUser,
-    CreateAccount, CreateSession, CreateUser, RequestMeta, wire::UserView,
+    CreateAccount, CreateSession, CreateUser, FieldMap, RequestMeta, SchemaField, wire::UserView,
 };
-use serde_json::{Map, Value, json};
+use serde_json::Value;
 
 use super::{EmailPasswordConfig, SignUpRequest, SignUpResponse};
 
@@ -26,18 +26,17 @@ pub trait OnExistingUserSignUp: Send + Sync {
 /// Input to the synchronous enumeration-safe user factory.
 pub struct SyntheticUserInput {
     /// Submitted core fields and fresh timestamps. The account identifier is provided separately.
-    pub core_fields: Map<String, Value>,
+    pub core_fields: FieldMap,
     /// Parsed fields from the application's user schema, excluding plugin-owned fields.
-    pub additional_fields: Map<String, Value>,
+    pub additional_fields: FieldMap,
     /// Fresh identifier that is never persisted.
     pub id: String,
 }
 
 /// Customize a synthetic signup user before the public user schema filters the response.
-pub type CustomSyntheticUser =
-    dyn Fn(SyntheticUserInput) -> AuthResult<Map<String, Value>> + Send + Sync;
+pub type CustomSyntheticUser = dyn Fn(SyntheticUserInput) -> AuthResult<FieldMap> + Send + Sync;
 
-type SignUpResult = SignUpResponse<Map<String, Value>>;
+type SignUpResult = SignUpResponse;
 
 pub(super) fn synthetic_response<S: AuthSchema>(
     body: &SignUpRequest,
@@ -45,14 +44,14 @@ pub(super) fn synthetic_response<S: AuthSchema>(
     config: &EmailPasswordConfig,
     ctx: &AuthContext<S>,
 ) -> AuthResult<SignUpResult> {
-    let now = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
-    let mut core = Map::from_iter([
-        ("name".into(), json!(body.name)),
-        ("email".into(), json!(body.email.to_lowercase())),
-        ("emailVerified".into(), json!(false)),
-        ("image".into(), json!(body.image)),
-        ("createdAt".into(), json!(now)),
-        ("updatedAt".into(), json!(now)),
+    let now = better_auth_core::FieldDate::from(chrono::Utc::now());
+    let mut core = FieldMap::from_iter([
+        ("name".into(), body.name.clone().into()),
+        ("email".into(), body.email.to_lowercase().into()),
+        ("emailVerified".into(), false.into()),
+        ("image".into(), body.image.clone().into_field()),
+        ("createdAt".into(), now.clone().into()),
+        ("updatedAt".into(), now.into()),
     ]);
     let id = ctx
         .config
@@ -73,13 +72,13 @@ pub(super) fn synthetic_response<S: AuthSchema>(
             ("displayUsername", create.display_username.as_ref()),
         ] {
             if let Some(value) = value {
-                let _ = core.insert(name.into(), json!(value));
+                let _ = core.insert(name.into(), value.clone().into_field());
             }
         }
         if let Some(phone) = &create.phone_number {
-            let _ = core.insert("phoneNumber".into(), json!(phone));
+            let _ = core.insert("phoneNumber".into(), phone.clone().into());
         }
-        let _ = core.insert("id".into(), json!(id));
+        let _ = core.insert("id".into(), id.into());
         core
     };
     Ok(SignUpResponse {
@@ -259,7 +258,7 @@ pub(super) async fn sign_up_core<S: AuthSchema>(
                         .create_session(CreateSession {
                             additional_fields: Default::default(),
                             user_id: user.id().into_owned(),
-                            expires_at: chrono::Utc::now() + expires_in,
+                            expires_at: (chrono::Utc::now() + expires_in).into(),
                             ip_address,
                             user_agent,
                             impersonated_by: None,

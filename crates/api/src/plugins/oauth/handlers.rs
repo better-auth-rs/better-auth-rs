@@ -308,10 +308,14 @@ pub(super) async fn complete_link_social(
                     id_token: (token_bundle.id_token)
                         .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
                         .unwrap_or_default(),
-                    access_token_expires_at: (tokens.access_token_expires_at)
+                    access_token_expires_at: tokens
+                        .access_token_expires_at
+                        .clone()
                         .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
                         .unwrap_or_default(),
-                    refresh_token_expires_at: (tokens.refresh_token_expires_at)
+                    refresh_token_expires_at: tokens
+                        .refresh_token_expires_at
+                        .clone()
                         .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
                         .unwrap_or_default(),
                     scope: ((!merged_scope.is_empty()).then_some(merged_scope))
@@ -350,10 +354,14 @@ pub(super) async fn complete_link_social(
             id_token: (token_bundle.id_token)
                 .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
                 .unwrap_or_default(),
-            access_token_expires_at: (tokens.access_token_expires_at)
+            access_token_expires_at: tokens
+                .access_token_expires_at
+                .clone()
                 .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
                 .unwrap_or_default(),
-            refresh_token_expires_at: (tokens.refresh_token_expires_at)
+            refresh_token_expires_at: tokens
+                .refresh_token_expires_at
+                .clone()
                 .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
                 .unwrap_or_default(),
             scope: Some(tokens.scopes.join(",")).into(),

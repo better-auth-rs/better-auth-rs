@@ -39,7 +39,7 @@ pub(super) async fn handle(
     schema
         .fields_mut()
         .retain(|name, _| !protected_fields.contains(&name.as_str()));
-    let fields = schema.parse_input(&body, false)?;
+    let fields = schema.parse_input(&better_auth_core::FieldMap::from_json(body)?, false)?;
     if fields.is_empty() {
         return Ok(AuthResponse::json(
             400,

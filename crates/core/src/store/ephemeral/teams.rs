@@ -7,12 +7,13 @@ use crate::{
     store::{OrganizationRoleStore, TeamStore},
 };
 use better_auth_schema_registry::EntityRole;
-use serde_json::{Map, json};
 #[async_trait]
 impl TeamStore for EphemeralStore {
     async fn create_team(&self, mut input: CreateTeam) -> AuthResult<Team> {
         let team = Team {
-            additional_fields: [("memberCount".into(), json!(0))].into_iter().collect(),
+            additional_fields: [("memberCount".into(), Value::Number(0.0))]
+                .into_iter()
+                .collect(),
             id: self
                 .generated_id("team", input.id, self.lock()?.teams.len())?
                 .map(crate::SchemaValue::Typed)
@@ -22,12 +23,12 @@ impl TeamStore for EphemeralStore {
             created_at: input
                 .additional_fields
                 .remove("createdAt")
-                .map(|value| crate::SchemaValue::from_json(Some(value)))
-                .unwrap_or_else(|| input.created_at.unwrap_or_else(Utc::now).into()),
+                .map(crate::SchemaValue::from_field)
+                .unwrap_or_else(|| input.created_at.unwrap_or_else(|| Utc::now().into()).into()),
             updated_at: input
                 .additional_fields
                 .remove("updatedAt")
-                .map(|value| crate::SchemaValue::from_json(Some(value)))
+                .map(crate::SchemaValue::from_field)
                 .unwrap_or_else(|| input.updated_at.into()),
         };
         let mut team: Team = self
@@ -41,14 +42,14 @@ impl TeamStore for EphemeralStore {
         self.output_team(team).await
     }
     async fn get_team(&self, id: &str) -> AuthResult<Option<Team>> {
-        let id = self.organization_query(EntityRole::Team, "id", json!(id))?;
+        let id = self.organization_query(EntityRole::Team, "id", Value::from(id))?;
         let row = self.lock()?.teams.get(&id)?;
         match row {
             Some(row) => self.output_team(row).await.map(Some),
             None => Ok(None),
         }
     }
-    async fn get_team_value(&self, id: &serde_json::Value) -> AuthResult<Option<Team>> {
+    async fn get_team_value(&self, id: &Value) -> AuthResult<Option<Team>> {
         let id = self.organization_query(EntityRole::Team, "id", id.clone())?;
         let rows = self.lock()?.teams.snapshot()?;
         match rows.into_iter().find(|row| row.id == id) {
@@ -57,26 +58,26 @@ impl TeamStore for EphemeralStore {
         }
     }
     async fn update_team(&self, id: &str, update: UpdateTeam) -> AuthResult<Team> {
-        let id = self.organization_query(EntityRole::Team, "id", json!(id))?;
-        let mut patch = Map::new();
+        let id = self.organization_query(EntityRole::Team, "id", Value::from(id))?;
+        let mut patch = FieldMap::new();
         if let Some(name) = update.name {
-            let _ = patch.insert("name".into(), json!(name));
+            let _ = patch.insert("name".into(), name.into_field());
         }
         if let Some(organization_id) = update.organization_id {
-            let _ = patch.insert("organizationId".into(), json!(organization_id));
+            let _ = patch.insert("organizationId".into(), Value::from(organization_id));
         }
         if let Some(created_at) = update.created_at {
-            let _ = patch.insert("createdAt".into(), json!(created_at));
+            let _ = patch.insert("createdAt".into(), Value::from(created_at));
         }
         if let Some(updated_at) = update.updated_at {
-            let _ = patch.insert("updatedAt".into(), json!(updated_at));
+            let _ = patch.insert("updatedAt".into(), updated_at.into_field());
         } else if !self
             .organization_fields()?
             .team
             .fields()
             .contains_key("updatedAt")
         {
-            let _ = patch.insert("updatedAt".into(), json!(Utc::now()));
+            let _ = patch.insert("updatedAt".into(), Value::from(Utc::now()));
         }
         let patch = self
             .prepare_record_patch(EntityRole::Team, patch, update.additional_fields)
@@ -105,27 +106,33 @@ impl TeamStore for EphemeralStore {
             let invitation_org = self.organization_query(
                 EntityRole::Invitation,
                 "organizationId",
-                json!(organization_id),
+                organization_id.field_value(),
             )?;
             let pending: Vec<_> = state
                 .invitations
                 .snapshot()?
                 .into_iter()
-                .filter(|row| row.organization_id == invitation_org && row.is_pending())
+                .filter(|row| {
+                    row.organization_id
+                        .field_value()
+                        .strict_equals(&invitation_org.field_value())
+                        && row.is_pending()
+                })
                 .collect();
             (organization_id, pending)
         };
         let invitation_org = self.organization_query(
             EntityRole::Invitation,
             "organizationId",
-            json!(organization_id),
+            organization_id.field_value(),
         )?;
         let pending = self
             .output_records(EntityRole::Invitation, snapshot.clone())
             .await?;
         let mut updates = Vec::new();
         for invitation in pending {
-            if *invitation.expires_at.typed()? <= Utc::now() {
+            if invitation.expires_at.typed()?.milliseconds() <= Utc::now().timestamp_millis() as f64
+            {
                 continue;
             }
             let Some(ids) = invitation.team_id.typed()?.as_ref() else {
@@ -140,11 +147,13 @@ impl TeamStore for EphemeralStore {
                     EntityRole::Invitation,
                     [(
                         "teamId".into(),
-                        json!((!retained.is_empty()).then(|| retained.join(","))),
+                        (!retained.is_empty())
+                            .then(|| retained.join(","))
+                            .into_field(),
                     )]
                     .into_iter()
                     .collect(),
-                    Map::new(),
+                    FieldMap::new(),
                 )
                 .await?;
             let current = self
@@ -166,13 +175,23 @@ impl TeamStore for EphemeralStore {
             .invitations
             .snapshot()?
             .into_iter()
-            .filter(|row| row.organization_id == invitation_org && row.is_pending())
+            .filter(|row| {
+                row.organization_id
+                    .field_value()
+                    .strict_equals(&invitation_org.field_value())
+                    && row.is_pending()
+            })
             .collect();
         let unchanged = pending.len() == snapshot.len()
             && pending.iter().zip(&snapshot).all(|(a, b)| {
                 a.id == b.id && a.team_id == b.team_id && a.expires_at == b.expires_at
             });
-        if team.organization_id != organization_id || !unchanged {
+        if !team
+            .organization_id
+            .field_value()
+            .strict_equals(&organization_id.field_value())
+            || !unchanged
+        {
             return Err(AuthError::conflict(
                 "Team invitations changed while field transforms were pending",
             ));
@@ -195,14 +214,21 @@ impl TeamStore for EphemeralStore {
         Ok(())
     }
     async fn list_organization_teams(&self, organization_id: &str) -> AuthResult<Vec<Team>> {
-        let organization_id =
-            self.organization_query(EntityRole::Team, "organizationId", json!(organization_id))?;
+        let organization_id = self.organization_query(
+            EntityRole::Team,
+            "organizationId",
+            Value::from(organization_id),
+        )?;
         let rows = self
             .lock()?
             .teams
             .snapshot()?
             .into_iter()
-            .filter(|row| row.organization_id == organization_id)
+            .filter(|row| {
+                row.organization_id
+                    .field_value()
+                    .strict_equals(&organization_id.field_value())
+            })
             .collect();
         let rows = crate::query::paginate_memory(
             rows,
@@ -212,14 +238,21 @@ impl TeamStore for EphemeralStore {
         self.output_records(EntityRole::Team, rows).await
     }
     async fn count_organization_teams(&self, organization_id: &str) -> AuthResult<u64> {
-        let organization_id =
-            self.organization_query(EntityRole::Team, "organizationId", json!(organization_id))?;
+        let organization_id = self.organization_query(
+            EntityRole::Team,
+            "organizationId",
+            Value::from(organization_id),
+        )?;
         Ok(self
             .lock()?
             .teams
             .snapshot()?
             .iter()
-            .filter(|row| row.organization_id == organization_id)
+            .filter(|row| {
+                row.organization_id
+                    .field_value()
+                    .strict_equals(&organization_id.field_value())
+            })
             .count() as u64)
     }
     async fn list_user_teams(&self, user_id: &str) -> AuthResult<Vec<Team>> {
@@ -397,7 +430,7 @@ impl TeamStore for EphemeralStore {
             id,
             team_id: team_id.to_owned(),
             user_id: user_id.to_owned(),
-            created_at: Utc::now(),
+            created_at: Utc::now().into(),
         };
         self.assign_insert_serial_id(&mut member.id, state.team_members.len());
         state.team_members.push(member.clone());
@@ -470,32 +503,35 @@ impl OrganizationRoleStore for EphemeralStore {
         let organization_id = self.organization_query(
             EntityRole::OrganizationRole,
             "organizationId",
-            json!(input.organization_id),
+            Value::from(input.organization_id.clone()),
         )?;
-        let role_name =
-            self.organization_query(EntityRole::OrganizationRole, "role", json!(input.role))?;
+        let role_name = self.organization_query(
+            EntityRole::OrganizationRole,
+            "role",
+            Value::from(input.role.clone()),
+        )?;
         let count = {
             let state = self.lock()?;
-            if state
-                .organization_roles
-                .snapshot()?
-                .iter()
-                .any(|role| role.organization_id == organization_id && role.role == role_name)
-            {
+            if state.organization_roles.snapshot()?.iter().any(|role| {
+                role.organization_id
+                    .field_value()
+                    .strict_equals(&organization_id.field_value())
+                    && role
+                        .role
+                        .field_value()
+                        .strict_equals(&role_name.field_value())
+            }) {
                 return Err(AuthError::bad_request("Role already exists"));
             }
             state.organization_roles.len()
         };
-        let permission = if self
-            .organization_fields()?
-            .organization_role
-            .fields()
-            .contains_key("permission")
-        {
-            crate::SchemaValue::Dynamic(json!(input.permission.to_string()))
-        } else {
-            input.permission.into()
-        };
+        let permission = crate::SchemaValue::from_field(
+            input
+                .permission
+                .stringify()?
+                .map(Value::String)
+                .unwrap_or_default(),
+        );
         let mut role = OrganizationRole {
             additional_fields: Default::default(),
             id: self
@@ -509,19 +545,19 @@ impl OrganizationRoleStore for EphemeralStore {
             updated_at: (None).into(),
         };
         if let Some(value) = input.additional_fields.remove("organizationId") {
-            role.organization_id = crate::SchemaValue::from_json(Some(value));
+            role.organization_id = crate::SchemaValue::from_field(value);
         }
         if let Some(value) = input.additional_fields.remove("role") {
-            role.role = crate::SchemaValue::from_json(Some(value));
+            role.role = crate::SchemaValue::from_field(value);
         }
         if let Some(value) = input.additional_fields.remove("permission") {
             role.permission = crate::SchemaValue::Dynamic(value);
         }
         if let Some(value) = input.additional_fields.remove("createdAt") {
-            role.created_at = crate::SchemaValue::from_json(Some(value));
+            role.created_at = crate::SchemaValue::from_field(value);
         }
         if let Some(value) = input.additional_fields.remove("updatedAt") {
-            role.updated_at = crate::SchemaValue::from_json(Some(value));
+            role.updated_at = crate::SchemaValue::from_field(value);
         }
         let mut role: OrganizationRole = self
             .store_record(
@@ -533,12 +569,15 @@ impl OrganizationRoleStore for EphemeralStore {
             .await?;
         {
             let mut state = self.lock()?;
-            if state
-                .organization_roles
-                .snapshot()?
-                .iter()
-                .any(|role| role.organization_id == organization_id && role.role == role_name)
-            {
+            if state.organization_roles.snapshot()?.iter().any(|role| {
+                role.organization_id
+                    .field_value()
+                    .strict_equals(&organization_id.field_value())
+                    && role
+                        .role
+                        .field_value()
+                        .strict_equals(&role_name.field_value())
+            }) {
                 return Err(AuthError::bad_request("Role already exists"));
             }
             self.assign_insert_serial_id(&mut role.id, state.organization_roles.len());
@@ -547,7 +586,7 @@ impl OrganizationRoleStore for EphemeralStore {
         self.output_organization_role(role).await
     }
     async fn get_organization_role(&self, id: &str) -> AuthResult<Option<OrganizationRole>> {
-        let id = self.organization_query(EntityRole::OrganizationRole, "id", json!(id))?;
+        let id = self.organization_query(EntityRole::OrganizationRole, "id", Value::from(id))?;
         let row = self.lock()?.organization_roles.get(&id)?;
         match row {
             Some(row) => self.output_organization_role(row).await.map(Some),
@@ -561,14 +600,18 @@ impl OrganizationRoleStore for EphemeralStore {
         let organization_id = self.organization_query(
             EntityRole::OrganizationRole,
             "organizationId",
-            json!(organization_id),
+            Value::from(organization_id),
         )?;
         let rows = self
             .lock()?
             .organization_roles
             .snapshot()?
             .into_iter()
-            .filter(|row| row.organization_id == organization_id)
+            .filter(|row| {
+                row.organization_id
+                    .field_value()
+                    .strict_equals(&organization_id.field_value())
+            })
             .collect();
         let rows = crate::query::paginate_memory(
             rows,
@@ -585,19 +628,32 @@ impl OrganizationRoleStore for EphemeralStore {
     ) -> AuthResult<Vec<OrganizationRole>> {
         let names = names
             .iter()
-            .map(|name| self.organization_query(EntityRole::OrganizationRole, "role", json!(name)))
+            .map(|name| {
+                self.organization_query(
+                    EntityRole::OrganizationRole,
+                    "role",
+                    Value::from(name.as_str()),
+                )
+            })
             .collect::<AuthResult<Vec<_>>>()?;
         let organization_id = self.organization_query(
             EntityRole::OrganizationRole,
             "organizationId",
-            json!(organization_id),
+            Value::from(organization_id),
         )?;
         let rows = self
             .lock()?
             .organization_roles
             .snapshot()?
             .into_iter()
-            .filter(|row| row.organization_id == organization_id && names.contains(&row.role))
+            .filter(|row| {
+                row.organization_id
+                    .field_value()
+                    .strict_equals(&organization_id.field_value())
+                    && names
+                        .iter()
+                        .any(|name| name.field_value().same_value_zero(&row.role.field_value()))
+            })
             .collect();
         let rows = crate::query::paginate_memory(
             rows,
@@ -613,22 +669,27 @@ impl OrganizationRoleStore for EphemeralStore {
         key: crate::store::OrganizationRoleKey<'_>,
     ) -> AuthResult<Option<OrganizationRole>> {
         let (key_field, key_value) = match key {
-            crate::store::OrganizationRoleKey::Id(id) => ("id", json!(id)),
-            crate::store::OrganizationRoleKey::Name(name) => ("role", json!(name)),
+            crate::store::OrganizationRoleKey::Id(id) => ("id", Value::from(id)),
+            crate::store::OrganizationRoleKey::Name(name) => ("role", Value::from(name)),
         };
         let key_value =
             self.organization_query(EntityRole::OrganizationRole, key_field, key_value)?;
         let organization_id = self.organization_query(
             EntityRole::OrganizationRole,
             "organizationId",
-            json!(organization_id),
+            Value::from(organization_id),
         )?;
         let rows = self.lock()?.organization_roles.snapshot()?;
         let row = rows.into_iter().find(|row| {
-            row.organization_id == organization_id
+            row.organization_id
+                .field_value()
+                .strict_equals(&organization_id.field_value())
                 && match key {
                     crate::store::OrganizationRoleKey::Id(_) => row.id == key_value,
-                    crate::store::OrganizationRoleKey::Name(_) => row.role == key_value,
+                    crate::store::OrganizationRoleKey::Name(_) => row
+                        .role
+                        .field_value()
+                        .strict_equals(&key_value.field_value()),
                 }
         });
         match row {
@@ -640,14 +701,18 @@ impl OrganizationRoleStore for EphemeralStore {
         let organization_id = self.organization_query(
             EntityRole::OrganizationRole,
             "organizationId",
-            json!(organization_id),
+            Value::from(organization_id),
         )?;
         Ok(self
             .lock()?
             .organization_roles
             .snapshot()?
             .iter()
-            .filter(|row| row.organization_id == organization_id)
+            .filter(|row| {
+                row.organization_id
+                    .field_value()
+                    .strict_equals(&organization_id.field_value())
+            })
             .count() as u64)
     }
     async fn update_organization_role(
@@ -655,22 +720,16 @@ impl OrganizationRoleStore for EphemeralStore {
         id: &str,
         mut update: UpdateOrganizationRole,
     ) -> AuthResult<OrganizationRole> {
-        let id = self.organization_query(EntityRole::OrganizationRole, "id", json!(id))?;
-        let mut patch = Map::new();
+        let id = self.organization_query(EntityRole::OrganizationRole, "id", Value::from(id))?;
+        let mut patch = FieldMap::new();
         if let Some(name) = update.role {
-            let _ = patch.insert("role".into(), json!(name));
+            let _ = patch.insert("role".into(), Value::from(name));
         }
         if let Some(permission) = update.permission {
-            let value = if self
-                .organization_fields()?
-                .organization_role
-                .fields()
-                .contains_key("permission")
-            {
-                json!(permission.to_string())
-            } else {
-                permission
-            };
+            let value = permission
+                .stringify()?
+                .map(Value::String)
+                .unwrap_or_default();
             let _ = patch.insert("permission".into(), value);
         }
         if !self
@@ -679,11 +738,11 @@ impl OrganizationRoleStore for EphemeralStore {
             .fields()
             .contains_key("updatedAt")
         {
-            let _ = patch.insert("updatedAt".into(), json!(Utc::now()));
+            let _ = patch.insert("updatedAt".into(), Value::from(Utc::now()));
         }
         for name in ["id", "organizationId", "role", "createdAt", "updatedAt"] {
             if let Some(value) = update.additional_fields.remove(name) {
-                let _ = patch.entry(name).or_insert(value);
+                let _ = patch.entry(name.to_owned()).or_insert(value);
             }
         }
         let patch = self
@@ -706,7 +765,7 @@ impl OrganizationRoleStore for EphemeralStore {
         self.output_organization_role(role).await
     }
     async fn delete_organization_role(&self, id: &str) -> AuthResult<()> {
-        let id = self.organization_query(EntityRole::OrganizationRole, "id", json!(id))?;
+        let id = self.organization_query(EntityRole::OrganizationRole, "id", Value::from(id))?;
         let _ = self.lock()?.organization_roles.remove(&id)?;
         Ok(())
     }
@@ -754,7 +813,7 @@ async fn memory_organization_deletion_cleans_teams_and_roles() {
             additional_fields: Default::default(),
             organization_id: org.id.typed().unwrap().clone(),
             role: "editor".into(),
-            permission: serde_json::json!({"team":["create"]}),
+            permission: Value::from_json(serde_json::json!({"team":["create"]})).unwrap(),
         })
         .await
         .unwrap();
@@ -791,7 +850,6 @@ async fn memory_team_deletion_rolls_back_invitation_output_errors() {
         organization_fields::OrganizationFields,
         user_fields::{UserConfig, UserFieldConfig},
     };
-    use serde_json::json;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     for (failure_stage, asynchronous) in [
@@ -810,7 +868,7 @@ async fn memory_team_deletion_rolls_back_invitation_output_errors() {
                         "marker".into(),
                         UserFieldConfig {
                             required: Some(false),
-                            default_value: Some(json!("created")),
+                            default_value: Some(Value::from("created")),
                             ..Default::default()
                         },
                     )]
@@ -844,7 +902,7 @@ async fn memory_team_deletion_rolls_back_invitation_output_errors() {
                 "recipient@example.com",
                 "member",
                 "owner",
-                expires,
+                expires.into(),
             );
             input.team_id = Some(team.id.typed().unwrap().clone());
             live.push(store.create_invitation(input).await.unwrap().id);
@@ -855,15 +913,15 @@ async fn memory_team_deletion_rolls_back_invitation_output_errors() {
                 "other@example.com",
                 "member",
                 "owner",
-                expires,
+                expires.into(),
             );
             if failure_stage == "expired" {
                 input.team_id = Some(team.id.typed().unwrap().clone());
-                input.expires_at = Utc::now() - chrono::Duration::days(1);
+                input.expires_at = (Utc::now() - chrono::Duration::days(1)).into();
             }
             let _ = input
                 .additional_fields
-                .insert("marker".into(), json!("read-fail"));
+                .insert("marker".into(), Value::from("read-fail"));
             let _ = store.create_invitation(input).await.unwrap();
         }
         let updates = Arc::new(AtomicUsize::new(0));
@@ -871,13 +929,13 @@ async fn memory_team_deletion_rolls_back_invitation_output_errors() {
         let mut failing = config.clone();
         let marker = failing.invitation.fields_mut().get_mut("marker").unwrap();
         marker.on_update = Some(Arc::new(move || {
-            json!(format!(
+            Value::from(format!(
                 "updated-{}",
                 count.fetch_add(1, Ordering::SeqCst) + 1
             ))
         }));
         let output = |value| {
-            if value == Some(json!("read-fail")) || value == Some(json!("updated-2")) {
+            if value == Value::from("read-fail") || value == Value::from("updated-2") {
                 Err(AuthError::bad_request("invitation output failed"))
             } else {
                 Ok(value)
@@ -921,7 +979,10 @@ async fn memory_team_deletion_rolls_back_invitation_output_errors() {
                 .unwrap()
                 .unwrap();
             assert_eq!(row.team_id.typed().unwrap().as_deref(), team.id.as_str());
-            assert_eq!(row.additional_fields.get("marker"), Some(&json!("created")));
+            assert_eq!(
+                row.additional_fields.get("marker"),
+                Some(&Value::from("created"))
+            );
         }
     }
 }

@@ -101,9 +101,5 @@ pub(super) fn validate(
             ("teamId", BaseField::String, false),
         ],
     )?;
-    let body = Value::Object(body);
-    Ok(ValidatedBody::new(
-        Some(body.clone()),
-        serde_json::from_value::<AddMemberInput>(body)?,
-    ))
+    super::super::request::typed::<AddMemberInput>(body)
 }

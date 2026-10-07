@@ -18,7 +18,7 @@ impl OpenApiPluginMetadata {
             ("team", &fields.team),
         ] {
             if self.models.contains_key(model) {
-                self = self.model(model, fields);
+                self = self.model(model, fields)?;
             }
         }
         for (key, model, pointer, base_last, partial, force_optional) in [
@@ -108,7 +108,7 @@ impl OpenApiPluginMetadata {
             for field in role.fields_mut().values_mut() {
                 field.required = Some(false);
             }
-            self = self.model("organizationRole", &role);
+            self = self.model("organizationRole", &role)?;
         }
         Ok(self)
     }

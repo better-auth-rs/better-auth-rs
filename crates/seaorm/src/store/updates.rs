@@ -1,19 +1,20 @@
-use sea_orm::{ActiveModelTrait, ConnectionTrait, EntityTrait, QueryFilter, sea_query::SimpleExpr};
+use sea_orm::{ConnectionTrait, EntityTrait, QueryFilter, sea_query::SimpleExpr};
 
 use super::map_db_err;
 use crate::error::AuthResult;
 
-pub(super) async fn update_returning_one<E, C>(
+pub(super) async fn update_record_returning_one<E: EntityTrait, C: ConnectionTrait>(
     db: &C,
-    active: impl ActiveModelTrait<Entity = E>,
+    record: super::record_write::RecordWrite<E>,
     filter: SimpleExpr,
     reselect: SimpleExpr,
-) -> AuthResult<Option<E::Model>>
-where
-    E: EntityTrait,
-    C: ConnectionTrait,
-{
-    execute_update_returning_one(db, E::update_many().set(active).filter(filter), reselect).await
+) -> AuthResult<Option<E::Model>> {
+    execute_update_returning_one(
+        db,
+        record.update(db.get_database_backend())?.filter(filter),
+        reselect,
+    )
+    .await
 }
 
 pub(super) async fn execute_update_returning_one<E, C>(

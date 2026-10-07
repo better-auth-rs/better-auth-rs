@@ -162,7 +162,7 @@ impl OAuthProfileMapper for Mapper {
             name: Some(Some("Mapped Twitch Reader".into()).into()),
             image: Some(None),
             email_verified: Some(Some(false).into()),
-            additional_fields: [("locale".into(), json!("en-GB"))].into_iter().collect(),
+            additional_fields: [("locale".into(), "en-GB".into())].into_iter().collect(),
             ..Default::default()
         })
     }
@@ -184,7 +184,7 @@ impl OAuthUserInfoHandler for Custom {
                 email: Some("custom-twitch@example.test".into()).into(),
                 image: Some(None),
                 email_verified: Some(true).into(),
-                additional_fields: [("source".into(), json!("custom"))].into_iter().collect(),
+                additional_fields: [("source".into(), "custom".into())].into_iter().collect(),
             },
             data: json!({"sub":"ordinary-twitch-user", "source":"custom"}),
         }))

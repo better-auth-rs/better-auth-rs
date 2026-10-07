@@ -21,8 +21,8 @@ pub(super) async fn assert_not_locked(
     if !state.is_sign_in() || !config.enabled {
         return Ok(());
     }
-    if let Some(until) = factor.locked_until {
-        if until > Utc::now() {
+    if let Some(until) = &factor.locked_until {
+        if until.milliseconds() > Utc::now().timestamp_millis() as f64 {
             return Err(AuthError::Upstream {
                 status: 429,
                 code: "ACCOUNT_TEMPORARILY_LOCKED",
@@ -69,7 +69,7 @@ pub(super) async fn reset_failures(
 pub(super) struct ChallengeAttempt {
     identifier: String,
     failures: usize,
-    expires_at: better_auth_core::SchemaValue<chrono::DateTime<Utc>>,
+    expires_at: better_auth_core::SchemaValue<better_auth_core::FieldDate>,
 }
 
 pub(super) async fn begin_attempt<S: better_auth_core::AuthSchema>(

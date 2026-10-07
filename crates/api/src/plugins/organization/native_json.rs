@@ -1,67 +1,71 @@
-use better_auth_core::{AuthResult, SchemaValue, user_fields::is_truthy};
+use better_auth_core::{AuthResult, SchemaValue};
 use serde_json::Value;
 
 pub(super) fn metadata(
-    value: SchemaValue<Option<Value>>,
+    value: SchemaValue<Option<better_auth_core::FieldValue>>,
     create: bool,
-) -> AuthResult<SchemaValue<Option<Value>>> {
-    let raw = match value {
-        SchemaValue::Typed(Some(value)) => Value::String(value.to_string()),
-        SchemaValue::Dynamic(value) => value,
-        SchemaValue::InvalidDate => Value::Null,
-        SchemaValue::Typed(None) | SchemaValue::Undefined => return Ok(SchemaValue::Undefined),
-    };
-    if !is_truthy(&raw) || (create && !raw.is_string()) {
+) -> AuthResult<SchemaValue<Option<better_auth_core::FieldValue>>> {
+    use better_auth_core::FieldValue;
+    let raw = value.into_field_value();
+    if !raw.is_truthy() || (create && !raw.is_string()) {
         return Ok(SchemaValue::Undefined);
     }
     let parsed = if create {
-        raw.as_str().map(parse_json).transpose()?
+        raw.as_str()
+            .map(|text| FieldValue::from_json(parse_json(text)?))
+            .transpose()?
     } else {
         parse_metadata(raw)?
     };
     Ok(parsed.map(SchemaValue::Dynamic).unwrap_or_default())
 }
 
-fn parse_metadata(value: Value) -> AuthResult<Option<Value>> {
-    let Value::String(text) = value else {
+fn parse_metadata(
+    value: better_auth_core::FieldValue,
+) -> AuthResult<Option<better_auth_core::FieldValue>> {
+    use better_auth_core::FieldValue;
+    let FieldValue::String(text) = value else {
         return Ok(Some(value));
     };
     let trimmed = text.trim();
-    let mut parsed = match trimmed.to_ascii_lowercase().as_str() {
+    let parsed = match trimmed.to_ascii_lowercase().as_str() {
         "undefined" => return Ok(None),
-        "nan" | "infinity" | "-infinity" | "null" => Value::Null,
-        "true" => Value::Bool(true),
-        "false" => Value::Bool(false),
-        _ => parse_json(trimmed)?,
+        "nan" => FieldValue::Number(f64::NAN),
+        "infinity" => FieldValue::Number(f64::INFINITY),
+        "-infinity" => FieldValue::Number(f64::NEG_INFINITY),
+        "null" => FieldValue::Null,
+        "true" => FieldValue::Bool(true),
+        "false" => FieldValue::Bool(false),
+        _ => FieldValue::from_json(parse_json(trimmed)?)?,
     };
-    fn normalize(value: &mut Value) -> AuthResult<()> {
-        match value {
-            Value::Object(fields) => {
+    fn revive(value: FieldValue) -> AuthResult<FieldValue> {
+        Ok(match value {
+            FieldValue::Object(fields) => {
                 if fields.contains_key("__proto__") || fields.contains_key("constructor") {
                     better_auth_core::observability::logger::current()
                         .error("Organization JSON contains a prototype pollution key", &[]);
                     return Err(better_auth_core::AuthResponse::new(500).into());
                 }
-                for value in fields.values_mut() {
-                    normalize(value)?;
-                }
+                fields
+                    .iter()
+                    .map(|(name, value)| Ok((name.clone(), revive(value.clone())?)))
+                    .collect::<AuthResult<better_auth_core::FieldMap>>()?
+                    .into()
             }
-            Value::Array(values) => {
-                for value in values {
-                    normalize(value)?;
-                }
-            }
-            Value::String(value) => {
-                if let Some(date) = metadata_date(value) {
-                    *value = date.to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
-                }
-            }
-            _ => {}
-        }
-        Ok(())
+            FieldValue::Array(values) => values
+                .iter()
+                .cloned()
+                .map(revive)
+                .collect::<AuthResult<Vec<_>>>()?
+                .into(),
+            FieldValue::String(value) => match metadata_date(&value) {
+                Some(date) => date.into(),
+                None => FieldValue::String(value),
+            },
+            value => value,
+        })
     }
-    normalize(&mut parsed)?;
-    Ok(Some(parsed))
+    Ok(Some(revive(parsed)?))
 }
 
 fn metadata_date(text: &str) -> Option<chrono::DateTime<chrono::Utc>> {
@@ -125,11 +129,10 @@ fn metadata_date(text: &str) -> Option<chrono::DateTime<chrono::Utc>> {
     better_auth_core::utils::date::normalize_components(year, month, day, millis)
 }
 
-pub(super) fn permission(value: &SchemaValue<Value>) -> AuthResult<Value> {
-    match value {
-        SchemaValue::Typed(value) => Ok(value.clone()),
-        value => parse_json(&value.display_string()?),
-    }
+pub(super) fn permission(
+    value: &SchemaValue<better_auth_core::FieldValue>,
+) -> AuthResult<better_auth_core::FieldValue> {
+    better_auth_core::FieldValue::from_json(parse_json(&value.display_string()?)?)
 }
 
 pub(super) fn parse_json(text: &str) -> AuthResult<Value> {
@@ -149,12 +152,32 @@ mod tests {
 
     #[test]
     fn metadata_dates_follow_the_upstream_component_parser() {
-        let parsed = parse_metadata(json!(r#"{"fraction":"2026-01-02T03:04:05.1234Z","overflow":"2026-02-30T25:00:00+02:00","year":"0099-01-01T00:00:00Z","untouched":"2026-01-02T03:04:05.12345678Z"}"#)).unwrap();
+        let parsed = parse_metadata(better_auth_core::FieldValue::from_json(json!(r#"{"fraction":"2026-01-02T03:04:05.1234Z","overflow":"2026-02-30T25:00:00+02:00","year":"0099-01-01T00:00:00Z","untouched":"2026-01-02T03:04:05.12345678Z"}"#)).unwrap()).unwrap();
+        let fields = parsed.as_ref().unwrap().as_object().unwrap();
+        assert!(fields["fraction"].as_date().is_some());
+        assert!(fields["overflow"].as_date().is_some());
+        assert!(fields["year"].as_date().is_some());
+        assert!(fields["untouched"].as_str().is_some());
         assert_eq!(
-            parsed,
+            parsed.map(|value| value.json().unwrap().unwrap()),
             Some(
                 json!({"fraction":"2026-01-02T03:04:06.234Z","overflow":"2026-03-02T23:00:00.000Z","year":"1999-01-01T00:00:00.000Z","untouched":"2026-01-02T03:04:05.12345678Z"})
             )
         );
+    }
+
+    #[test]
+    fn metadata_parser_preserves_nonfinite_values_until_serialization() -> AuthResult<()> {
+        for (text, expected) in [
+            ("NaN", f64::NAN),
+            ("Infinity", f64::INFINITY),
+            ("-Infinity", f64::NEG_INFINITY),
+        ] {
+            let parsed = parse_metadata(text.into())?.unwrap();
+            let number = parsed.as_f64().unwrap();
+            assert!(number == expected || number.is_nan() && expected.is_nan());
+            assert_eq!(parsed.json()?, Some(Value::Null));
+        }
+        Ok(())
     }
 }

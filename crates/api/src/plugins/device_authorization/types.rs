@@ -44,7 +44,7 @@ pub(super) struct DeviceCodeResponse {
 pub(super) struct DeviceTokenResponse {
     pub access_token: String,
     pub token_type: &'static str,
-    pub expires_in: i64,
+    pub expires_in: better_auth_core::SchemaValue<f64>,
     pub scope: String,
 }
 

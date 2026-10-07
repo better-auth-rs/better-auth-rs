@@ -1,6 +1,8 @@
 use super::types::RoleInput;
 use crate::plugins::json_body;
-use better_auth_core::{AuthError, AuthResult, SchemaValue, user_fields::UserConfig};
+use better_auth_core::{
+    AuthError, AuthResult, FieldMap, FieldValue, SchemaValue, user_fields::UserConfig,
+};
 use serde_json::{Map, Value};
 
 pub(super) fn string_operation<'a>(
@@ -34,7 +36,7 @@ pub(super) fn validate(
     schema: &UserConfig,
     body: Map<String, Value>,
     base: &[(&str, BaseField, bool)],
-) -> AuthResult<Map<String, Value>> {
+) -> AuthResult<FieldMap> {
     let mut errors = Vec::new();
     let output = fields(schema, &body, base, "body", false, false, &mut errors)?;
     finish(errors)?;
@@ -75,7 +77,7 @@ pub(super) fn fields(
     partial: bool,
     base_wins: bool,
     errors: &mut Vec<String>,
-) -> AuthResult<Map<String, Value>> {
+) -> AuthResult<FieldMap> {
     let mut names = indexmap::IndexSet::new();
     let configured = schema
         .fields()
@@ -89,13 +91,18 @@ pub(super) fn fields(
         names.extend(base.iter().map(|(name, _, _)| *name));
         names.extend(configured);
     }
-    let mut output = Map::new();
+    let mut output = FieldMap::new();
     for name in names {
         let builtin = base.iter().find(|(key, _, _)| *key == name);
         let field = schema.fields().get(name).filter(|field| field.input());
         let location = format!("{prefix}.{name}");
         if let Some(field) = field.filter(|_| !base_wins || builtin.is_none()) {
-            match field.validate_organization_input(body.get(name), &location, partial) {
+            let value = body
+                .get(name)
+                .cloned()
+                .map(FieldValue::from_json)
+                .transpose()?;
+            match field.validate_organization_input(value.as_ref(), &location, partial) {
                 Ok(Some(value)) => {
                     let _ = output.insert(name.into(), value);
                 }
@@ -112,7 +119,7 @@ pub(super) fn fields(
                 errors,
             )?
         {
-            let _ = output.insert(name.into(), value);
+            let _ = output.insert(name.into(), FieldValue::from_json(value)?);
         }
     }
     Ok(output)
@@ -130,7 +137,7 @@ fn field_value(
     }
     if matches!(kind, BaseField::CoercedString) {
         return Ok(Some(
-            SchemaValue::<Value>::from_json(value.cloned())
+            SchemaValue::<FieldValue>::from_json(value.cloned())?
                 .display_string()?
                 .into(),
         ));
@@ -195,45 +202,36 @@ fn field_value(
 pub(super) fn parse_roles(value: &SchemaValue<RoleInput>) -> AuthResult<SchemaValue<String>> {
     match value {
         SchemaValue::Typed(value) => Ok(value.joined().into()),
-        SchemaValue::Dynamic(value @ Value::Array(_)) => {
-            SchemaValue::<Value>::Dynamic(value.clone())
+        SchemaValue::Dynamic(value @ FieldValue::Array(_)) => {
+            SchemaValue::<FieldValue>::Dynamic(value.clone())
                 .display_string()
                 .map(Into::into)
         }
         SchemaValue::Dynamic(value) => Ok(SchemaValue::Dynamic(value.clone())),
         SchemaValue::Undefined => Ok(SchemaValue::Undefined),
-        SchemaValue::InvalidDate => Ok(SchemaValue::InvalidDate),
     }
 }
 
-pub(super) fn invitation_team_ids(value: Option<Value>) -> SchemaValue<Vec<String>> {
+pub(super) fn invitation_team_ids(value: FieldValue) -> SchemaValue<Vec<String>> {
     match value {
-        Some(Value::String(value)) => vec![value].into(),
-        None | Some(Value::Null) => Vec::new().into(),
-        value => SchemaValue::from_json(value),
+        FieldValue::String(value) => vec![value].into(),
+        FieldValue::Undefined | FieldValue::Null => Vec::new().into(),
+        value => SchemaValue::from_field(value),
     }
 }
 
-fn has_team_length(value: &Value) -> AuthResult<bool> {
+fn has_team_length(value: &FieldValue) -> AuthResult<bool> {
     match value {
-        Value::Null => Err(better_auth_core::AuthResponse::new(500).into()),
-        Value::Array(values) => Ok(!values.is_empty()),
-        Value::String(value) => Ok(!value.is_empty()),
-        Value::Object(value) => {
-            let length = value.get("length");
-            let positive = match length {
-                Some(Value::Bool(value)) => *value,
-                Some(Value::Number(value)) => value.as_f64().is_some_and(|value| value > 0.0),
-                Some(Value::String(_) | Value::Array(_)) => {
-                    let length =
-                        SchemaValue::<Value>::from_json(length.cloned()).display_string()?;
-                    better_auth_core::organization_fields::numeric_filter(&length)
-                        .is_some_and(|value| value > 0.0)
-                }
-                _ => false,
-            };
-            Ok(positive)
+        FieldValue::Undefined | FieldValue::Null => {
+            Err(better_auth_core::AuthResponse::new(500).into())
         }
+        FieldValue::Array(values) => Ok(!values.is_empty()),
+        FieldValue::String(value) => Ok(!value.is_empty()),
+        FieldValue::Utf16String(value) => Ok(!value.as_utf16().is_empty()),
+        FieldValue::Object(value) => better_auth_core::query::field_number(
+            value.get("length").unwrap_or(&FieldValue::Undefined),
+        )
+        .map(|length| length > 0.0),
         _ => Ok(false),
     }
 }
@@ -241,32 +239,28 @@ fn has_team_length(value: &Value) -> AuthResult<bool> {
 pub(super) fn invitation_team_alias(
     teams: &SchemaValue<Vec<String>>,
 ) -> AuthResult<SchemaValue<String>> {
-    let value = teams.json()?.ok_or_else(|| {
-        better_auth_core::AuthError::from(better_auth_core::AuthResponse::new(500))
-    })?;
+    let value = teams.field_value();
     if !has_team_length(&value)? {
         return Ok(SchemaValue::Undefined);
     }
-    Ok(SchemaValue::from_json(match value {
-        Value::Array(values) => values.into_iter().next(),
-        Value::Object(values) => values.get("0").cloned(),
-        _ => None,
+    Ok(SchemaValue::from_field(match value {
+        FieldValue::Array(values) => values.first().cloned().unwrap_or_default(),
+        FieldValue::Object(values) => values.get("0").cloned().unwrap_or_default(),
+        _ => FieldValue::Undefined,
     }))
 }
 
 pub(super) fn join_invitation_teams(
     teams: &SchemaValue<Vec<String>>,
 ) -> AuthResult<Option<String>> {
-    let value = teams.json()?.ok_or_else(|| {
-        better_auth_core::AuthError::from(better_auth_core::AuthResponse::new(500))
-    })?;
+    let value = teams.field_value();
     if !has_team_length(&value)? {
         return Ok(None);
     }
     if !value.is_array() {
         return Err(better_auth_core::AuthResponse::new(500).into());
     }
-    SchemaValue::<Value>::Dynamic(value)
+    SchemaValue::<FieldValue>::Dynamic(value)
         .display_string()
         .map(Some)
 }

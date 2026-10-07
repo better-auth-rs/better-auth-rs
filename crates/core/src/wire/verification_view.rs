@@ -1,7 +1,5 @@
-use crate::{AuthResult, SchemaValue};
-use chrono::{DateTime, Utc};
+use crate::{AuthRecordFields, AuthResult, FromFieldMap, SchemaValue};
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value};
 
 /// A database projection or an untransformed secondary verification snapshot.
 /// Omitted core fields remain omitted; pure secondary creation does not generate an adapter ID.
@@ -17,60 +15,53 @@ pub struct VerificationView {
     #[serde(
         default,
         skip_serializing_if = "SchemaValue::is_undefined",
-        serialize_with = "crate::schema_value::serialize_date"
+        with = "crate::field_value::serde::schema_date"
     )]
-    pub expires_at: SchemaValue<DateTime<Utc>>,
+    pub expires_at: SchemaValue<crate::FieldDate>,
     #[serde(
         default,
         skip_serializing_if = "SchemaValue::is_undefined",
-        serialize_with = "crate::schema_value::serialize_date"
+        with = "crate::field_value::serde::schema_date"
     )]
-    pub created_at: SchemaValue<DateTime<Utc>>,
+    pub created_at: SchemaValue<crate::FieldDate>,
     #[serde(
         default,
         skip_serializing_if = "SchemaValue::is_undefined",
-        serialize_with = "crate::schema_value::serialize_date"
+        with = "crate::field_value::serde::schema_date"
     )]
-    pub updated_at: SchemaValue<DateTime<Utc>>,
-    #[serde(flatten)]
-    pub additional_fields: indexmap::IndexMap<String, SchemaValue<Value>>,
+    pub updated_at: SchemaValue<crate::FieldDate>,
+    #[serde(with = "crate::field_value::serde::map", flatten)]
+    pub additional_fields: crate::FieldMap,
 }
 
 impl VerificationView {
     /// Decode cached or adapter-projected fields without running field policies again.
     /// Preserve projected date values before JSON serialization loses invalid-date provenance.
-    pub fn from_adapter_fields(mut fields: indexmap::IndexMap<String, SchemaValue<Value>>) -> Self {
+    pub fn from_adapter_fields(mut fields: crate::FieldMap) -> Self {
         Self {
-            id: fields.shift_remove("id").unwrap_or_default().into_field(),
-            identifier: fields
-                .shift_remove("identifier")
-                .unwrap_or_default()
-                .into_field(),
-            value: fields
-                .shift_remove("value")
-                .unwrap_or_default()
-                .into_field(),
-            expires_at: fields
-                .shift_remove("expiresAt")
-                .unwrap_or_default()
-                .into_field(),
-            created_at: fields
-                .shift_remove("createdAt")
-                .unwrap_or_default()
-                .into_field(),
-            updated_at: fields
-                .shift_remove("updatedAt")
-                .unwrap_or_default()
-                .into_field(),
+            id: SchemaValue::from_field(fields.shift_remove("id").unwrap_or_default()),
+            identifier: SchemaValue::from_field(
+                fields.shift_remove("identifier").unwrap_or_default(),
+            ),
+            value: SchemaValue::from_field(fields.shift_remove("value").unwrap_or_default()),
+            expires_at: SchemaValue::from_field(
+                fields.shift_remove("expiresAt").unwrap_or_default(),
+            ),
+            created_at: SchemaValue::from_field(
+                fields.shift_remove("createdAt").unwrap_or_default(),
+            ),
+            updated_at: SchemaValue::from_field(
+                fields.shift_remove("updatedAt").unwrap_or_default(),
+            ),
             additional_fields: fields,
         }
     }
 
-    pub fn from_fields(fields: Map<String, Value>) -> AuthResult<Self> {
-        serde_json::from_value(Value::Object(fields)).map_err(Into::into)
+    pub fn from_fields(fields: crate::FieldMap) -> AuthResult<Self> {
+        Self::from_field_values(fields)
     }
 
-    pub fn fields(&self) -> AuthResult<Map<String, Value>> {
-        serde_json::from_value(serde_json::to_value(self)?).map_err(Into::into)
+    pub fn fields(&self) -> AuthResult<crate::FieldMap> {
+        self.field_values()
     }
 }

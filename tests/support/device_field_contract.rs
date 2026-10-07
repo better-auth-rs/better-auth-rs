@@ -3,7 +3,7 @@ use better_auth::{
     __private_core::{
         AuthContext, AuthError, AuthInitContext, AuthPlugin, AuthRequest, AuthResponse, AuthResult,
         AuthRoute, AuthSchema, AuthStore, CreateDeviceCode, CreateUser, DeviceCode,
-        DeviceCodeOwnership, UpdateDeviceCode,
+        DeviceCodeOwnership, FieldMap, FieldValue, UpdateDeviceCode,
         store::schema::EntityRole,
         user_fields::{
             FieldTransforms, UserConfig, UserFieldConfig, UserFieldTransform, UserFieldType,
@@ -55,7 +55,7 @@ pub(crate) fn policies(failure: Arc<AtomicU8>) -> UserConfig {
                     UserFieldConfig {
                         field_name: Some("stored_label".into()),
                         required: Some(false),
-                        default_value: Some(json!(" Default ")),
+                        default_value: Some(FieldValue::from(" Default ")),
                         transform: Some(FieldTransforms {
                             input: Some(UserFieldTransform::new(move |value| {
                                 if input_failure.load(Ordering::SeqCst) == 1 {
@@ -63,10 +63,10 @@ pub(crate) fn policies(failure: Arc<AtomicU8>) -> UserConfig {
                                         "ordinary additional input error",
                                     ));
                                 }
-                                Ok(value.map(|value| match value {
-                                    Value::String(value) => json!(value.trim()),
+                                Ok(match value {
+                                    FieldValue::String(value) => FieldValue::from(value.trim()),
                                     value => value,
-                                }))
+                                })
                             })),
                             output: Some(UserFieldTransform::new(move |value| {
                                 if failure.load(Ordering::SeqCst) == 2 {
@@ -74,10 +74,12 @@ pub(crate) fn policies(failure: Arc<AtomicU8>) -> UserConfig {
                                         "ordinary additional output error",
                                     ));
                                 }
-                                Ok(value.map(|value| match value {
-                                    Value::String(value) => json!(format!("{value}:out")),
+                                Ok(match value {
+                                    FieldValue::String(value) => {
+                                        FieldValue::from(format!("{value}:out"))
+                                    }
                                     value => value,
-                                }))
+                                })
                             })),
                         }),
                         ..Default::default()
@@ -107,8 +109,8 @@ pub(crate) fn policies(failure: Arc<AtomicU8>) -> UserConfig {
                         field_type: UserFieldType::Number,
                         field_name: Some("stored_revision".into()),
                         required: Some(false),
-                        default_value: Some(json!(1.5)),
-                        on_update: Some(Arc::new(|| json!(2.5))),
+                        default_value: Some(FieldValue::from(1.5)),
+                        on_update: Some(Arc::new(|| FieldValue::from(2.5))),
                         ..Default::default()
                     },
                 ),
@@ -128,18 +130,25 @@ pub(crate) fn input(label: &str) -> CreateDeviceCode {
         user_code: format!("ordinary-user:{label}"),
         user_id: None,
         expires_at: "2030-01-01T00:00:00Z"
-            .parse()
-            .expect("fixed fixture date parses"),
+            .parse::<chrono::DateTime<chrono::Utc>>()
+            .expect("fixed fixture date parses")
+            .into(),
         status: "pending".into(),
         last_polled_at: None,
         polling_interval: Some(5000.0),
         client_id: Some("ordinary-client".into()),
         scope: Some("read".into()).into(),
         additional_fields: [
-            ("activatedAt".into(), json!("2029-01-02T03:04:05.000Z")),
+            (
+                "activatedAt".into(),
+                FieldValue::from("2029-01-02T03:04:05.000Z"),
+            ),
             (
                 "details".into(),
-                json!({"channel":"ordinary","enabled":true}),
+                FieldValue::from(FieldMap::from([
+                    ("channel".into(), FieldValue::from("ordinary")),
+                    ("enabled".into(), FieldValue::from(true)),
+                ])),
             ),
         ]
         .into_iter()
@@ -153,7 +162,13 @@ pub(crate) fn input(label: &str) -> CreateDeviceCode {
 )]
 fn observe(name: &str, row: &DeviceCode) -> AuthResult<Value> {
     let serialized = serde_json::to_value(row)?;
-    assert_eq!(serialized.get("label"), row.additional_fields.get("label"));
+    let label = row
+        .additional_fields
+        .get("label")
+        .map(FieldValue::json)
+        .transpose()?
+        .flatten();
+    assert_eq!(serialized.get("label"), label.as_ref());
     assert!(serialized.get("additional_fields").is_none());
     Ok(json!({"name":name, "scope":row.scope.json()?, "fields":row.additional_fields}))
 }
@@ -195,7 +210,9 @@ pub(crate) async fn contract<S: AuthSchema>(
         .update_device_code(
             &created.id,
             UpdateDeviceCode {
-                additional_fields: [("label".into(), json!(" Changed "))].into_iter().collect(),
+                additional_fields: [("label".into(), FieldValue::from(" Changed "))]
+                    .into_iter()
+                    .collect(),
                 ..Default::default()
             },
         )
@@ -229,7 +246,9 @@ pub(crate) async fn contract<S: AuthSchema>(
         .update_device_code(
             &created.id,
             UpdateDeviceCode {
-                additional_fields: [("label".into(), json!(" Final "))].into_iter().collect(),
+                additional_fields: [("label".into(), FieldValue::from(" Final "))]
+                    .into_iter()
+                    .collect(),
                 ..Default::default()
             },
         )

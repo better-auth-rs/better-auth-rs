@@ -1,7 +1,7 @@
 //! Entity traits for the Better Auth framework.
 //!
 //! These traits define the interface that entity types must implement.
-//! The framework uses trait methods and model serialization to read entity fields.
+//! The framework uses trait methods and native field extraction to read entity fields.
 //! Custom models may use their own field names and additional fields.
 //!
 //! Implement these traits manually for any custom types used inside the auth
@@ -9,19 +9,61 @@
 
 use std::borrow::Cow;
 
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use serde::Serialize;
 
 use crate::{SchemaValue, types::InvitationStatus};
 
+/// Extract native adapter fields without converting object values to JSON.
+pub trait AuthRecordFields {
+    fn field_values(&self) -> crate::AuthResult<crate::FieldMap>;
+
+    /// Deep-copy runtime objects through one graph context while retaining record state.
+    fn structured_clone(
+        &self,
+        context: &mut crate::StructuredCloneContext,
+    ) -> crate::AuthResult<Self>
+    where
+        Self: FromFieldMap,
+    {
+        Self::from_field_values(context.clone_map(&self.field_values()?))
+    }
+}
+
+/// Reconstruct a runtime record from native adapter fields.
+pub trait FromFieldMap: Sized {
+    fn from_field_values(fields: crate::FieldMap) -> crate::AuthResult<Self>;
+}
+
+impl AuthRecordFields for crate::FieldMap {
+    fn field_values(&self) -> crate::AuthResult<Self> {
+        Ok(self.clone())
+    }
+
+    fn structured_clone(
+        &self,
+        context: &mut crate::StructuredCloneContext,
+    ) -> crate::AuthResult<Self> {
+        Ok(context.clone_map(self))
+    }
+}
+
+impl FromFieldMap for crate::FieldMap {
+    fn from_field_values(fields: Self) -> crate::AuthResult<Self> {
+        Ok(fields)
+    }
+}
+
 /// Trait representing a user entity.
 ///
-/// The framework reads `name`, `image`, and nullable `twoFactorEnabled` from model serialization.
+/// The framework reads `name`, `image`, and nullable `twoFactorEnabled` from native field extraction.
 /// Other core fields use getters. The `two_factor_enabled` getter supplies truthiness to runtime guards.
 /// Custom types must provide all framework fields and may have additional fields.
 /// If serialized keys differ, override [`Self::serialized_field_name`].
 /// `AuthEntity` generates the serialized field mapping for derived models.
-pub trait AuthUser: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static {
+pub trait AuthUser:
+    AuthRecordFields + Clone + Send + Sync + Serialize + std::fmt::Debug + 'static
+{
     /// Field presence for runtime records and signed snapshots. Database models use `None`.
     /// A missing optional core field differs from a present field containing JSON null.
     fn field_presence(&self) -> Option<&std::collections::BTreeSet<String>> {
@@ -29,7 +71,7 @@ pub trait AuthUser: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static 
     }
     /// Already projected application fields, for views reconstructed from session caches.
     /// Storage models return `None` so the output transform runs exactly once per database read.
-    fn projected_fields(&self) -> Option<&serde_json::Map<String, serde_json::Value>> {
+    fn projected_fields(&self) -> Option<&crate::FieldMap> {
         None
     }
     /// Plugin fields that the entity and store can read and persist.
@@ -51,8 +93,8 @@ pub trait AuthUser: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static 
     fn id(&self) -> SchemaValue<Cow<'_, str>>;
     fn email(&self) -> Option<&str>;
     fn email_verified(&self) -> bool;
-    fn created_at(&self) -> DateTime<Utc>;
-    fn updated_at(&self) -> DateTime<Utc>;
+    fn created_at(&self) -> crate::FieldDate;
+    fn updated_at(&self) -> crate::FieldDate;
     fn is_anonymous(&self) -> Option<bool> {
         None
     }
@@ -68,12 +110,13 @@ pub trait AuthUser: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static 
     fn role(&self) -> Option<&str>;
     fn banned(&self) -> bool;
     fn ban_reason(&self) -> Option<&str>;
-    fn ban_expires(&self) -> Option<DateTime<Utc>>;
-    fn metadata(&self) -> &serde_json::Value;
+    fn ban_expires(&self) -> Option<crate::FieldDate>;
 }
 
 /// Trait representing a session entity.
-pub trait AuthSession: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static {
+pub trait AuthSession:
+    AuthRecordFields + Clone + Send + Sync + Serialize + std::fmt::Debug + 'static
+{
     /// Optional field presence for runtime records; database models expose every mapped column.
     fn field_presence(&self) -> Option<&std::collections::BTreeSet<String>> {
         None
@@ -83,7 +126,7 @@ pub trait AuthSession: Clone + Send + Sync + Serialize + std::fmt::Debug + 'stat
         name
     }
     /// Already projected fields from a cached session view.
-    fn projected_fields(&self) -> Option<&serde_json::Map<String, serde_json::Value>> {
+    fn projected_fields(&self) -> Option<&crate::FieldMap> {
         None
     }
 
@@ -99,10 +142,10 @@ pub trait AuthSession: Clone + Send + Sync + Serialize + std::fmt::Debug + 'stat
     }
 
     fn id(&self) -> SchemaValue<Cow<'_, str>>;
-    fn expires_at(&self) -> DateTime<Utc>;
+    fn expires_at(&self) -> crate::FieldDate;
     fn token(&self) -> &str;
-    fn created_at(&self) -> DateTime<Utc>;
-    fn updated_at(&self) -> DateTime<Utc>;
+    fn created_at(&self) -> crate::FieldDate;
+    fn updated_at(&self) -> crate::FieldDate;
     fn ip_address(&self) -> Option<&str>;
     fn user_agent(&self) -> Option<&str>;
     fn user_id(&self) -> SchemaValue<Cow<'_, str>>;
@@ -132,7 +175,9 @@ fn require_plugin_fields(
 }
 
 /// Trait representing an account entity (OAuth provider linking).
-pub trait AuthAccount: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static {
+pub trait AuthAccount:
+    AuthRecordFields + Clone + Send + Sync + Serialize + std::fmt::Debug + 'static
+{
     /// Optional field presence for runtime records; database models expose every mapped column.
     fn field_presence(&self) -> Option<&std::collections::BTreeSet<String>> {
         None
@@ -144,18 +189,20 @@ pub trait AuthAccount: Clone + Send + Sync + Serialize + std::fmt::Debug + 'stat
     fn access_token(&self) -> Option<&str>;
     fn refresh_token(&self) -> Option<&str>;
     fn id_token(&self) -> Option<&str>;
-    fn access_token_expires_at(&self) -> Option<DateTime<Utc>>;
-    fn refresh_token_expires_at(&self) -> Option<DateTime<Utc>>;
+    fn access_token_expires_at(&self) -> Option<crate::FieldDate>;
+    fn refresh_token_expires_at(&self) -> Option<crate::FieldDate>;
     fn scope(&self) -> Option<&str>;
     fn password(&self) -> Option<&str>;
-    fn created_at(&self) -> DateTime<Utc>;
-    fn updated_at(&self) -> DateTime<Utc>;
+    fn created_at(&self) -> crate::FieldDate;
+    fn updated_at(&self) -> crate::FieldDate;
 }
 
 /// Trait representing an organization entity.
-pub trait AuthOrganization: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static {
+pub trait AuthOrganization:
+    AuthRecordFields + Clone + Send + Sync + Serialize + std::fmt::Debug + 'static
+{
     /// Application fields already projected by the adapter.
-    fn projected_fields(&self) -> Option<&serde_json::Map<String, serde_json::Value>> {
+    fn projected_fields(&self) -> Option<&crate::FieldMap> {
         None
     }
 
@@ -163,14 +210,16 @@ pub trait AuthOrganization: Clone + Send + Sync + Serialize + std::fmt::Debug + 
     fn name(&self) -> &SchemaValue<String>;
     fn slug(&self) -> &SchemaValue<String>;
     fn logo(&self) -> &SchemaValue<Option<String>>;
-    fn metadata(&self) -> &SchemaValue<Option<serde_json::Value>>;
-    fn created_at(&self) -> &SchemaValue<DateTime<Utc>>;
+    fn metadata(&self) -> &SchemaValue<Option<crate::FieldValue>>;
+    fn created_at(&self) -> &SchemaValue<crate::FieldDate>;
 }
 
 /// Trait representing an organization member entity.
-pub trait AuthMember: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static {
+pub trait AuthMember:
+    AuthRecordFields + Clone + Send + Sync + Serialize + std::fmt::Debug + 'static
+{
     /// Application fields already projected by the adapter.
-    fn projected_fields(&self) -> Option<&serde_json::Map<String, serde_json::Value>> {
+    fn projected_fields(&self) -> Option<&crate::FieldMap> {
         None
     }
 
@@ -178,13 +227,15 @@ pub trait AuthMember: Clone + Send + Sync + Serialize + std::fmt::Debug + 'stati
     fn organization_id(&self) -> &SchemaValue<String>;
     fn user_id(&self) -> &SchemaValue<String>;
     fn role(&self) -> &SchemaValue<String>;
-    fn created_at(&self) -> &SchemaValue<DateTime<Utc>>;
+    fn created_at(&self) -> &SchemaValue<crate::FieldDate>;
 }
 
 /// Trait representing an invitation entity.
-pub trait AuthInvitation: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static {
+pub trait AuthInvitation:
+    AuthRecordFields + Clone + Send + Sync + Serialize + std::fmt::Debug + 'static
+{
     /// Application fields already projected by the adapter.
-    fn projected_fields(&self) -> Option<&serde_json::Map<String, serde_json::Value>> {
+    fn projected_fields(&self) -> Option<&crate::FieldMap> {
         None
     }
 
@@ -194,8 +245,8 @@ pub trait AuthInvitation: Clone + Send + Sync + Serialize + std::fmt::Debug + 's
     fn role(&self) -> &SchemaValue<String>;
     fn status(&self) -> &SchemaValue<InvitationStatus>;
     fn inviter_id(&self) -> &SchemaValue<String>;
-    fn expires_at(&self) -> &SchemaValue<DateTime<Utc>>;
-    fn created_at(&self) -> &SchemaValue<DateTime<Utc>>;
+    fn expires_at(&self) -> &SchemaValue<crate::FieldDate>;
+    fn created_at(&self) -> &SchemaValue<crate::FieldDate>;
 
     /// Check if the invitation is still pending.
     fn is_pending(&self) -> bool {
@@ -204,26 +255,30 @@ pub trait AuthInvitation: Clone + Send + Sync + Serialize + std::fmt::Debug + 's
 
     /// Check if the invitation has expired.
     fn is_expired(&self) -> crate::AuthResult<bool> {
-        Ok(*self.expires_at().typed()? < Utc::now())
+        Ok(self.expires_at().is_before(Utc::now()))
     }
     /// Comma-separated invited team identifiers.
     fn team_id(&self) -> &SchemaValue<Option<String>>;
 }
 
 /// Trait representing a verification token entity.
-pub trait AuthVerification: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static {
+pub trait AuthVerification:
+    AuthRecordFields + Clone + Send + Sync + Serialize + std::fmt::Debug + 'static
+{
     fn id(&self) -> Cow<'_, str>;
     fn identifier(&self) -> &str;
     fn value(&self) -> &str;
-    fn expires_at(&self) -> DateTime<Utc>;
-    fn created_at(&self) -> DateTime<Utc>;
-    fn updated_at(&self) -> DateTime<Utc>;
+    fn expires_at(&self) -> crate::FieldDate;
+    fn created_at(&self) -> crate::FieldDate;
+    fn updated_at(&self) -> crate::FieldDate;
 }
 
 /// Trait representing a two-factor authentication entity.
-pub trait AuthTwoFactor: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static {
+pub trait AuthTwoFactor:
+    AuthRecordFields + Clone + Send + Sync + Serialize + std::fmt::Debug + 'static
+{
     /// Return application fields when the entity already contains an adapter projection.
-    fn additional_fields(&self) -> Option<&serde_json::Map<String, serde_json::Value>> {
+    fn additional_fields(&self) -> Option<&crate::FieldMap> {
         None
     }
     fn id(&self) -> SchemaValue<Cow<'_, str>>;
@@ -232,15 +287,17 @@ pub trait AuthTwoFactor: Clone + Send + Sync + Serialize + std::fmt::Debug + 'st
     fn user_id(&self) -> Cow<'_, str>;
     fn verified(&self) -> Option<bool>;
     fn failed_verification_count(&self) -> Option<i64>;
-    fn locked_until(&self) -> Option<DateTime<Utc>>;
-    fn created_at(&self) -> &SchemaValue<DateTime<Utc>>;
-    fn updated_at(&self) -> &SchemaValue<DateTime<Utc>>;
+    fn locked_until(&self) -> Option<crate::FieldDate>;
+    fn created_at(&self) -> &SchemaValue<crate::FieldDate>;
+    fn updated_at(&self) -> &SchemaValue<crate::FieldDate>;
 }
 
 /// Trait representing an API key entity.
-pub trait AuthApiKey: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static {
+pub trait AuthApiKey:
+    AuthRecordFields + Clone + Send + Sync + Serialize + std::fmt::Debug + 'static
+{
     /// Return application fields when the entity already contains an adapter projection.
-    fn additional_fields(&self) -> Option<&serde_json::Map<String, serde_json::Value>> {
+    fn additional_fields(&self) -> Option<&crate::FieldMap> {
         None
     }
     fn id(&self) -> SchemaValue<Cow<'_, str>>;
@@ -256,25 +313,27 @@ pub trait AuthApiKey: Clone + Send + Sync + Serialize + std::fmt::Debug + 'stati
     fn config_id(&self) -> Cow<'_, str>;
     fn refill_interval(&self) -> Option<f64>;
     fn refill_amount(&self) -> Option<f64>;
-    fn last_refill_at(&self) -> Option<&str>;
+    fn last_refill_at(&self) -> Option<crate::FieldDate>;
     fn enabled(&self) -> bool;
     fn rate_limit_enabled(&self) -> bool;
     fn rate_limit_time_window(&self) -> Option<f64>;
     fn rate_limit_max(&self) -> Option<f64>;
     fn request_count(&self) -> Option<f64>;
     fn remaining(&self) -> Option<f64>;
-    fn last_request(&self) -> Option<&str>;
-    fn expires_at(&self) -> Option<&str>;
-    fn created_at(&self) -> &str;
-    fn updated_at(&self) -> &str;
+    fn last_request(&self) -> Option<crate::FieldDate>;
+    fn expires_at(&self) -> Option<crate::FieldDate>;
+    fn created_at(&self) -> crate::FieldDate;
+    fn updated_at(&self) -> crate::FieldDate;
     fn permissions(&self) -> Option<&str>;
     fn metadata(&self) -> Option<&str>;
 }
 
 /// Trait representing a passkey entity.
-pub trait AuthPasskey: Clone + Send + Sync + Serialize + std::fmt::Debug + 'static {
+pub trait AuthPasskey:
+    AuthRecordFields + Clone + Send + Sync + Serialize + std::fmt::Debug + 'static
+{
     /// Return application fields when the entity already contains an adapter projection.
-    fn additional_fields(&self) -> Option<&serde_json::Map<String, serde_json::Value>> {
+    fn additional_fields(&self) -> Option<&crate::FieldMap> {
         None
     }
     fn id(&self) -> SchemaValue<Cow<'_, str>>;
@@ -286,8 +345,8 @@ pub trait AuthPasskey: Clone + Send + Sync + Serialize + std::fmt::Debug + 'stat
     fn device_type(&self) -> &str;
     fn backed_up(&self) -> bool;
     fn transports(&self) -> Option<&str>;
-    fn created_at(&self) -> &SchemaValue<Option<DateTime<Utc>>>;
-    fn updated_at(&self) -> &SchemaValue<DateTime<Utc>>;
+    fn created_at(&self) -> &SchemaValue<Option<crate::FieldDate>>;
+    fn updated_at(&self) -> &SchemaValue<crate::FieldDate>;
     fn aaguid(&self) -> &SchemaValue<Option<String>>;
     fn credential(&self) -> &SchemaValue<String>;
 }
@@ -296,15 +355,10 @@ pub trait AuthPasskey: Clone + Send + Sync + Serialize + std::fmt::Debug + 'stat
 ///
 /// This is a concrete framework type (not generic) used to project
 /// user fields into member responses.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(
-    into = "serde_json::Map<String, serde_json::Value>",
-    try_from = "serde_json::Map<String, serde_json::Value>"
-)]
+#[derive(Debug, Clone)]
 pub struct MemberUserView {
     /// Optional field presence inherited from the source user.
     pub visible_fields: Option<std::collections::BTreeSet<String>>,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub id: SchemaValue<String>,
     pub email: Option<String>,
     pub name: SchemaValue<Option<String>>,
@@ -312,6 +366,7 @@ pub struct MemberUserView {
 }
 
 mod member_user_view;
+mod record_fields;
 
 impl MemberUserView {
     /// Retain the runtime identity fields used in organization member responses.
@@ -325,5 +380,3 @@ impl MemberUserView {
         }
     }
 }
-
-use serde::Deserialize;

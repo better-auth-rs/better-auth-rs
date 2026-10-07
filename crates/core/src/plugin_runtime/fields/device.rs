@@ -70,7 +70,7 @@ impl ModelFields {
                         } else {
                             WhereOperator::NotIn
                         },
-                        value: Value::Array(values.clone()),
+                        value: values.clone().into(),
                         mode: WhereMode::Sensitive,
                     },
                     logical,
@@ -126,7 +126,14 @@ impl ModelFields {
                 "DeviceCode FieldEquals supports only declared string, number, and boolean fields without references",
             ));
         }
-        if value.is_array() || value.is_object() {
+        if !matches!(
+            value,
+            Value::Null
+                | Value::Bool(_)
+                | Value::String(_)
+                | Value::Utf16String(_)
+                | Value::Number(_)
+        ) {
             return Err(AuthError::config(
                 "DeviceCode FieldEquals requires a scalar null, string, number, or boolean value",
             ));
@@ -151,10 +158,12 @@ impl ModelFields {
                 "DeviceCode field sets support only declared string and number fields without references",
             ));
         }
-        if values
-            .iter()
-            .any(|value| !matches!(value, Value::Null | Value::String(_) | Value::Number(_)))
-        {
+        if values.iter().any(|value| {
+            !matches!(
+                value,
+                Value::Null | Value::String(_) | Value::Utf16String(_) | Value::Number(_)
+            )
+        }) {
             return Err(AuthError::config(
                 "DeviceCode field sets require scalar null, string, or number candidates",
             ));
@@ -166,13 +175,13 @@ impl ModelFields {
     pub async fn device_code_fields_for_storage(
         &self,
         scope: SchemaValue<Option<String>>,
-        mut additional_fields: Map<String, Value>,
+        mut additional_fields: FieldMap,
         create: bool,
-    ) -> AuthResult<Map<String, Value>> {
+    ) -> AuthResult<FieldMap> {
         // The typed scope owns omission too; application fields cannot supply an omitted native value.
-        let _ = additional_fields.remove("scope");
-        let core = scope
-            .json()?
+        let _ = additional_fields.shift_remove("scope");
+        let core = (!scope.is_undefined())
+            .then(|| scope.into_field_value())
             .into_iter()
             .map(|value| ("scope".into(), value))
             .collect();
@@ -182,8 +191,8 @@ impl ModelFields {
     }
 
     pub(crate) fn take_device_code_scope(
-        fields: &mut Map<String, Value>,
-    ) -> AuthResult<Option<Option<String>>> {
+        fields: &mut FieldMap,
+    ) -> Option<SchemaValue<Option<String>>> {
         optional_string(fields, "scope")
     }
 
@@ -196,18 +205,18 @@ impl ModelFields {
             .iter()
             .map(|row| {
                 let mut storage = row.additional_fields.clone();
-                if let Some(scope) = row.scope.json()? {
-                    let _ = storage.insert("scope".into(), scope);
+                if !row.scope.is_undefined() {
+                    let _ = storage.insert("scope".into(), row.scope.field_value());
                 }
-                Ok(AdapterRecord::new(Map::new(), storage))
+                AdapterRecord::new(FieldMap::new(), storage)
             })
-            .collect::<AuthResult<Vec<_>>>()?;
+            .collect();
         let output = self
             .fields(EntityRole::DeviceCode)
             .project_memory_adapter_records(records)
             .await?;
         for (row, output) in rows.iter_mut().zip(output) {
-            self.assign_device_code_output(row, output)?;
+            self.assign_device_code_output(row, output);
         }
         Ok(rows)
     }
@@ -225,16 +234,12 @@ impl ModelFields {
             .project_adapter_records_with_capabilities(records, capabilities, supports_native_dates)
             .await?;
         for (row, output) in rows.iter_mut().zip(output) {
-            self.assign_device_code_output(row, output)?;
+            self.assign_device_code_output(row, output);
         }
         Ok(rows)
     }
 
-    pub(crate) fn assign_device_code_output(
-        &self,
-        row: &mut DeviceCode,
-        mut output: indexmap::IndexMap<String, SchemaValue<Value>>,
-    ) -> AuthResult<()> {
+    pub(crate) fn assign_device_code_output(&self, row: &mut DeviceCode, mut output: FieldMap) {
         if self
             .fields(EntityRole::DeviceCode)
             .fields()
@@ -242,22 +247,10 @@ impl ModelFields {
         {
             row.scope = output
                 .shift_remove("scope")
-                .map(|value| value.json())
-                .transpose()?
-                .flatten()
-                .map(serde_json::from_value)
-                .transpose()?
-                .map(SchemaValue::Typed)
+                .map(SchemaValue::from_field)
                 .unwrap_or_default();
         }
-        row.additional_fields = output
-            .into_iter()
-            .map(|(name, value)| Ok(value.json()?.map(|value| (name, value))))
-            .collect::<AuthResult<Vec<_>>>()?
-            .into_iter()
-            .flatten()
-            .collect();
-        Ok(())
+        row.additional_fields = output;
     }
 }
 
@@ -289,7 +282,16 @@ fn validate_query(
             "DeviceCode Where supports scope and declared scalar, array, or JSON fields; Date fields require a query representation that preserves adapter semantics",
         ));
     }
-    let scalar = |value: &Value| !value.is_array() && !value.is_object();
+    let scalar = |value: &Value| {
+        matches!(
+            value,
+            Value::Null
+                | Value::Bool(_)
+                | Value::String(_)
+                | Value::Utf16String(_)
+                | Value::Number(_)
+        )
+    };
     if matches!(query.operator, WhereOperator::In | WhereOperator::NotIn) {
         if !query
             .value
@@ -323,19 +325,25 @@ fn validate_finite_binding(field: &UserFieldConfig, value: &Value) -> AuthResult
     let nonfinite = if field.references_id() {
         value
             .as_array()
-            .map_or(std::slice::from_ref(value), Vec::as_slice)
+            .unwrap_or_else(|| std::slice::from_ref(value))
             .iter()
             .try_fold(false, |nonfinite, value| {
-                crate::query::number(value).map(|number| nonfinite || !number.is_finite())
+                crate::query::field_number(value).map(|number| nonfinite || !number.is_finite())
             })?
     } else {
         match value {
+            Value::Number(value) => !value.is_finite(),
             Value::String(_) => parsed(value).is_some_and(|number| !number.is_finite()),
-            Value::Array(values) => values
-                .iter()
-                .map(parsed)
-                .collect::<Option<Vec<_>>>()
-                .is_some_and(|values| values.iter().any(|number| !number.is_finite())),
+            Value::Array(values) => {
+                values
+                    .iter()
+                    .any(|value| matches!(value, Value::Number(number) if !number.is_finite()))
+                    || values
+                        .iter()
+                        .map(parsed)
+                        .collect::<Option<Vec<_>>>()
+                        .is_some_and(|values| values.iter().any(|number| !number.is_finite()))
+            }
             _ => false,
         }
     };

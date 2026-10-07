@@ -66,14 +66,14 @@ fn storage_name(fields: &UserConfig) -> &str {
 
 #[derive(Default)]
 pub(crate) struct ApiKeyFieldPatch {
-    pub name: Option<Option<String>>,
-    pub additional_fields: Map<String, Value>,
+    pub name: Option<SchemaValue<Option<String>>>,
+    pub additional_fields: FieldMap,
 }
 
 impl ApiKeyFieldPatch {
     pub(crate) fn apply(self, row: &mut ApiKey) {
         if let Some(name) = self.name {
-            row.name = name.into();
+            row.name = name;
         }
         row.additional_fields.extend(self.additional_fields);
     }
@@ -82,30 +82,25 @@ impl ApiKeyFieldPatch {
 impl ModelFields {
     pub(crate) async fn api_key_fields_for_storage(
         &self,
-        name: Option<Option<String>>,
-        mut extras: Map<String, Value>,
+        name: Option<SchemaValue<Option<String>>>,
+        mut extras: FieldMap,
         create: bool,
         bind: impl Fn(&UserFieldConfig, Value) -> AuthResult<Value>,
     ) -> AuthResult<ApiKeyFieldPatch> {
-        let _ = extras.remove("name");
+        let _ = extras.shift_remove("name");
         let core = name
             .into_iter()
-            .map(|name| {
-                (
-                    "name".to_owned(),
-                    name.map(Value::String).unwrap_or(Value::Null),
-                )
-            })
+            .map(|name| ("name".to_owned(), name.into_field_value()))
             .collect();
         let config = self.fields(EntityRole::ApiKey);
         let mut fields = config
             .organization_storage_fields(core, extras, create)
             .await?;
-        let name = optional_string(&mut fields, storage_name(config))?;
+        let name = optional_string(&mut fields, storage_name(config));
         for (name, field) in config.fields() {
             let storage = resolve_field_name(field.field_name.as_deref(), name);
             if let Some(value) = fields.get_mut(storage) {
-                *value = bind(field, value.take())?;
+                *value = bind(field, std::mem::take(value))?;
             }
         }
         Ok(ApiKeyFieldPatch {
@@ -130,21 +125,10 @@ impl ModelFields {
             if fields.fields().contains_key("name") {
                 row.name = output
                     .shift_remove("name")
-                    .map(|value| value.json())
-                    .transpose()?
-                    .flatten()
-                    .map(serde_json::from_value)
-                    .transpose()?
-                    .map(SchemaValue::Typed)
+                    .map(SchemaValue::from_field)
                     .unwrap_or_default();
             }
-            row.additional_fields = output
-                .into_iter()
-                .map(|(name, value)| Ok(value.json()?.map(|value| (name, value))))
-                .collect::<AuthResult<Vec<_>>>()?
-                .into_iter()
-                .flatten()
-                .collect();
+            row.additional_fields = output;
         }
         Ok(rows)
     }

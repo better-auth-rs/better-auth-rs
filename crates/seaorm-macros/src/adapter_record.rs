@@ -53,14 +53,14 @@ pub(super) fn generate(
         aliases.dedup();
         columns.push(quote!(#(#aliases)|* => Ok(Column::#column),));
         let decoded = if rust_name == "id" || identity::is_reference(role, field)? {
-            identity::decode(field, core)
+            identity::decode(field, core, seaorm)
         } else {
-            quote!(#core::serde_json::from_value(value)?)
+            decode_field(field, seaorm)
         };
         setters.push(
             quote!(#(#aliases)|* => active.#ident = #seaorm::sea_orm::ActiveValue::Set(#decoded),),
         );
-        let value = field_value(field, core);
+        let value = field_value(field, seaorm);
         values.push(quote!(Column::#column => #value,));
         if known.contains(&rust_name.as_str()) {
             core_values.push(quote!((#logical.to_owned(), #value),));
@@ -95,8 +95,8 @@ pub(super) fn generate(
         quote! {
             if !config.fields().contains_key("userId") {
                 if let Some(id) = logical.remove("userId") {
-                    let id = #core::SchemaValue::<String>::from_json(Some(id)).display_string()?;
-                    let _ = logical.insert("userId".into(), #core::serde_json::Value::String(id));
+                    let id = #core::SchemaValue::<String>::from_field(id).display_string()?;
+                    let _ = logical.insert("userId".into(), #core::FieldValue::String(id));
                 }
             }
         }
@@ -128,17 +128,17 @@ pub(super) fn generate(
                 ))
             }
 
-            fn new_active(id: Option<Self::Id>, mut fields: #core::serde_json::Map<String, #core::serde_json::Value>) -> #core::AuthResult<ActiveModel> {
+            fn new_active(id: Option<Self::Id>, mut fields: #core::FieldMap) -> #core::AuthResult<ActiveModel> {
                 let _ = fields.remove("id");
                 if let Some(id) = id {
-                    let _ = fields.insert("id".into(), #core::serde_json::to_value(id)?);
+                    let _ = fields.insert("id".into(), #core::FieldValue::String(id.to_string()));
                 }
                 let mut active = <ActiveModel as Default>::default();
                 Self::apply_fields(&mut active, fields)?;
                 Ok(active)
             }
 
-            fn apply_fields(active: &mut ActiveModel, fields: #core::serde_json::Map<String, #core::serde_json::Value>) -> #core::AuthResult<()> {
+            fn apply_fields(active: &mut ActiveModel, fields: #core::FieldMap) -> #core::AuthResult<()> {
                 for (name, value) in fields {
                     match name.as_str() {
                         #(#setters)*
@@ -149,13 +149,13 @@ pub(super) fn generate(
             }
 
             fn record_fields(&self, config: &#core::user_fields::UserConfig) -> #core::AuthResult<#core::user_fields::AdapterRecord> {
-                let mut logical = #core::serde_json::Map::from_iter([#(#core_values)*]);
+                let mut logical = #core::FieldMap::from_iter([#(#core_values)*]);
                 if let Some(id) = logical.remove("id") {
-                    let id = #core::SchemaValue::<String>::from_json(Some(id)).display_string()?;
-                    let _ = logical.insert("id".into(), #core::serde_json::Value::String(id));
+                    let id = #core::SchemaValue::<String>::from_field(id).display_string()?;
+                    let _ = logical.insert("id".into(), #core::FieldValue::String(id));
                 }
                 #reference_output
-                let mut storage = #core::serde_json::Map::new();
+                let mut storage = #core::FieldMap::new();
                 for (name, field) in config.fields() {
                     if name == "id" { continue; }
                     let name = #core::store::schema::resolve_field_name(field.field_name.as_deref(), name);
@@ -168,35 +168,23 @@ pub(super) fn generate(
     })
 }
 
-pub(super) fn field_value(field: &syn::Field, core: &TokenStream) -> TokenStream {
-    let ident = &field.ident;
-    match date_field(&field.ty) {
-        Some(false) => {
-            quote!(#core::utils::date::serialize(&self.#ident, #core::serde_json::value::Serializer)?)
-        }
-        Some(true) => {
-            quote!(#core::utils::date::serialize_option(&self.#ident, #core::serde_json::value::Serializer)?)
-        }
-        None => quote!(#core::serde_json::to_value(&self.#ident)?),
-    }
+pub(super) fn field_value(field: &syn::Field, seaorm: &TokenStream) -> TokenStream {
+    let ident = field.ident.as_ref().expect("named model field");
+    let column = format_ident!(
+        "{}",
+        serde_rename_rule::RenameRule::PascalCase.apply_to_field(&ident.to_string())
+    );
+    quote!(#seaorm::__private_field_value(#seaorm::sea_orm::ModelTrait::get(self, Column::#column))?)
 }
 
-fn date_field(ty: &syn::Type) -> Option<bool> {
-    let syn::Type::Path(path) = ty else {
-        return None;
-    };
-    let segment = path.path.segments.last()?;
-    if segment.ident == "DateTime" || segment.ident == "DateTimeUtc" {
-        return Some(false);
+pub(super) fn decode_field(field: &syn::Field, seaorm: &TokenStream) -> TokenStream {
+    decode_type(&field.ty, seaorm)
+}
+
+pub(super) fn decode_type(ty: &syn::Type, seaorm: &TokenStream) -> TokenStream {
+    if let Some(inner) = identity::optional_inner(ty) {
+        quote!(if value.is_null() { None } else { Some(#seaorm::__private_field_decode::<#inner>(value)?) })
+    } else {
+        quote!(#seaorm::__private_field_decode::<#ty>(value)?)
     }
-    if segment.ident != "Option" {
-        return None;
-    }
-    let syn::PathArguments::AngleBracketed(arguments) = &segment.arguments else {
-        return None;
-    };
-    let syn::GenericArgument::Type(inner) = arguments.args.first()? else {
-        return None;
-    };
-    date_field(inner).map(|_| true)
 }

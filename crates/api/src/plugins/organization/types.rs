@@ -1,9 +1,11 @@
-use better_auth_core::SchemaValue;
 use better_auth_core::entity::MemberUserView;
 use better_auth_core::entity::{AuthMember, AuthOrganization};
+use better_auth_core::{SchemaField, SchemaValue};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use validator::Validate;
+
+mod input_fields;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize)]
 #[serde(untagged)]
@@ -40,6 +42,24 @@ pub enum RoleInput {
     Many(Vec<String>),
 }
 
+impl better_auth_core::SchemaField for RoleInput {
+    fn from_field(
+        value: better_auth_core::FieldValue,
+    ) -> Result<Self, better_auth_core::FieldValue> {
+        match String::from_field(value) {
+            Ok(value) => Ok(Self::One(value)),
+            Err(value) => Vec::<String>::from_field(value).map(Self::Many),
+        }
+    }
+
+    fn into_field(self) -> better_auth_core::FieldValue {
+        match self {
+            Self::One(value) => value.into_field(),
+            Self::Many(value) => value.into_field(),
+        }
+    }
+}
+
 impl RoleInput {
     pub fn joined(&self) -> String {
         match self {
@@ -67,14 +87,15 @@ impl RoleInput {
 
 fn deserialize_present_metadata<'de, D: serde::Deserializer<'de>>(
     deserializer: D,
-) -> Result<Option<serde_json::Value>, D::Error> {
-    serde_json::Value::deserialize(deserializer).map(Some)
+) -> Result<Option<better_auth_core::FieldValue>, D::Error> {
+    better_auth_core::field_value::serde::value::deserialize(deserializer).map(Some)
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, Validate)]
 pub struct CreateOrganizationRequest {
     #[serde(flatten)]
-    pub additional_fields: serde_json::Map<String, serde_json::Value>,
+    #[serde(with = "better_auth_core::field_value::serde::map")]
+    pub additional_fields: better_auth_core::FieldMap,
 
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub name: SchemaValue<String>,
@@ -83,7 +104,7 @@ pub struct CreateOrganizationRequest {
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub logo: SchemaValue<Option<String>>,
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
-    pub metadata: SchemaValue<Option<serde_json::Value>>,
+    pub metadata: SchemaValue<Option<better_auth_core::FieldValue>>,
     #[serde(rename = "userId")]
     pub user_id: Option<String>,
     #[serde(rename = "keepCurrentActiveOrganization")]
@@ -93,7 +114,8 @@ pub struct CreateOrganizationRequest {
 #[derive(Debug, Clone, Deserialize, Validate)]
 pub struct UpdateOrganizationData {
     #[serde(flatten)]
-    pub additional_fields: serde_json::Map<String, serde_json::Value>,
+    #[serde(with = "better_auth_core::field_value::serde::map")]
+    pub additional_fields: better_auth_core::FieldMap,
 
     #[serde(default, deserialize_with = "deserialize_nullable_string_field")]
     pub name: NullableStringField,
@@ -102,7 +124,7 @@ pub struct UpdateOrganizationData {
     #[serde(default, deserialize_with = "deserialize_nullable_string_field")]
     pub logo: NullableStringField,
     #[serde(default, deserialize_with = "deserialize_present_metadata")]
-    pub metadata: Option<serde_json::Value>,
+    pub metadata: Option<better_auth_core::FieldValue>,
 }
 
 #[derive(Debug, Clone, Deserialize, Validate)]
@@ -158,7 +180,8 @@ pub struct GetFullOrganizationQuery {
 #[derive(Debug, Clone, Deserialize, Serialize, Validate)]
 pub struct InviteMemberRequest {
     #[serde(flatten)]
-    pub additional_fields: serde_json::Map<String, serde_json::Value>,
+    #[serde(with = "better_auth_core::field_value::serde::map")]
+    pub additional_fields: better_auth_core::FieldMap,
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub email: SchemaValue<String>,
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
@@ -325,7 +348,8 @@ pub struct RemovedMember {
 #[derive(Debug, Serialize)]
 pub struct BasicMemberResponse {
     #[serde(flatten)]
-    pub additional_fields: serde_json::Map<String, serde_json::Value>,
+    #[serde(with = "better_auth_core::field_value::serde::map")]
+    pub additional_fields: better_auth_core::FieldMap,
 
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub id: SchemaValue<String>,
@@ -340,7 +364,7 @@ pub struct BasicMemberResponse {
     #[serde(rename = "createdAt")]
     #[serde(serialize_with = "better_auth_core::schema_value::serialize_date")]
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
-    pub created_at: SchemaValue<chrono::DateTime<chrono::Utc>>,
+    pub created_at: SchemaValue<better_auth_core::FieldDate>,
 }
 
 #[derive(Debug, Serialize)]
@@ -386,7 +410,8 @@ pub struct UserInvitationResponse<I: Serialize> {
 #[derive(Debug, Clone, Serialize)]
 pub struct CreatedOrganizationResponse {
     #[serde(flatten)]
-    pub additional_fields: serde_json::Map<String, serde_json::Value>,
+    #[serde(with = "better_auth_core::field_value::serde::map")]
+    pub additional_fields: better_auth_core::FieldMap,
 
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub id: SchemaValue<String>,
@@ -399,16 +424,17 @@ pub struct CreatedOrganizationResponse {
     #[serde(rename = "createdAt")]
     #[serde(serialize_with = "better_auth_core::schema_value::serialize_date")]
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
-    pub created_at: SchemaValue<chrono::DateTime<chrono::Utc>>,
+    pub created_at: SchemaValue<better_auth_core::FieldDate>,
 
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
-    pub metadata: SchemaValue<Option<serde_json::Value>>,
+    pub metadata: SchemaValue<Option<better_auth_core::FieldValue>>,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct OrganizationResponse {
     #[serde(flatten)]
-    pub additional_fields: serde_json::Map<String, serde_json::Value>,
+    #[serde(with = "better_auth_core::field_value::serde::map")]
+    pub additional_fields: better_auth_core::FieldMap,
 
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub id: SchemaValue<String>,
@@ -421,10 +447,10 @@ pub struct OrganizationResponse {
     #[serde(rename = "createdAt")]
     #[serde(serialize_with = "better_auth_core::schema_value::serialize_date")]
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
-    pub created_at: SchemaValue<chrono::DateTime<chrono::Utc>>,
+    pub created_at: SchemaValue<better_auth_core::FieldDate>,
 
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
-    pub metadata: SchemaValue<Option<serde_json::Value>>,
+    pub metadata: SchemaValue<Option<better_auth_core::FieldValue>>,
 }
 
 impl CreatedOrganizationResponse {
@@ -456,13 +482,7 @@ impl OrganizationResponse {
             slug: organization.slug().clone(),
             logo: organization.logo().clone(),
             created_at: organization.created_at().clone(),
-            metadata: organization.metadata().clone().map(|value| {
-                Some(
-                    value
-                        .map(|value| serde_json::Value::String(value.to_string()))
-                        .unwrap_or(serde_json::Value::Null),
-                )
-            }),
+            metadata: organization.metadata().clone(),
         }
     }
 }
@@ -474,7 +494,8 @@ impl OrganizationResponse {
 #[derive(Debug, Clone, Serialize)]
 pub struct MemberResponse {
     #[serde(flatten)]
-    pub additional_fields: serde_json::Map<String, serde_json::Value>,
+    #[serde(with = "better_auth_core::field_value::serde::map")]
+    pub additional_fields: better_auth_core::FieldMap,
 
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub id: SchemaValue<String>,
@@ -489,7 +510,7 @@ pub struct MemberResponse {
     #[serde(rename = "createdAt")]
     #[serde(serialize_with = "better_auth_core::schema_value::serialize_date")]
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
-    pub created_at: SchemaValue<chrono::DateTime<chrono::Utc>>,
+    pub created_at: SchemaValue<better_auth_core::FieldDate>,
     pub user: MemberUserView,
 }
 

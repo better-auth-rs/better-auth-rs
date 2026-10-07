@@ -82,7 +82,11 @@ pub(crate) async fn list_members_core(
         sort_by: query.sort_by.clone(),
         sort_direction: query.sort_direction.clone(),
         filter_field: query.filter_field.clone(),
-        filter_value: query.filter_value.clone(),
+        filter_value: query
+            .filter_value
+            .clone()
+            .map(better_auth_core::FieldValue::from_json)
+            .transpose()?,
         filter_operator: query.filter_operator.clone(),
     };
     let (members_raw, total) = ctx

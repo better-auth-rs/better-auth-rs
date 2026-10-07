@@ -7,7 +7,7 @@ impl EphemeralStore {
         id: &str,
         subject: Option<(&str, &str)>,
     ) -> AuthResult<()> {
-        let id = self.organization_query(EntityRole::Member, "id", serde_json::json!(id))?;
+        let id = self.organization_query(EntityRole::Member, "id", Value::from(id))?;
         let (organization_id, user_id) = match subject {
             Some((organization_id, user_id)) => (organization_id.into(), user_id.into()),
             None => {

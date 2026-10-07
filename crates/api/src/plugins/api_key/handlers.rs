@@ -344,7 +344,7 @@ fn json_truthy(value: &serde_json::Value) -> bool {
     }
 }
 
-fn expiration_date(seconds: Option<f64>) -> AuthResult<Option<String>> {
+fn expiration_date(seconds: Option<f64>) -> AuthResult<Option<better_auth_core::FieldDate>> {
     let Some(seconds) = seconds.filter(|seconds| *seconds != 0.0) else {
         return Ok(None);
     };
@@ -358,9 +358,7 @@ fn expiration_date(seconds: Option<f64>) -> AuthResult<Option<String>> {
     let date = chrono::Utc::now()
         .checked_add_signed(duration)
         .ok_or_else(|| better_auth_core::AuthError::bad_request("expiresIn is out of range"))?;
-    Ok(Some(
-        date.to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
-    ))
+    Ok(Some(date.into()))
 }
 
 pub(crate) async fn get_key_core(
@@ -534,7 +532,7 @@ pub(super) async fn update_key_for_user(
         ));
     }
     let update = UpdateApiKey {
-        name: body.name.clone(),
+        name: body.name.clone().map(|value| Some(value).into()),
         enabled: body.enabled,
         remaining: body.remaining,
         rate_limit_enabled: body.rate_limit_enabled,

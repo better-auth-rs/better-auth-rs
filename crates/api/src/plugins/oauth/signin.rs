@@ -245,10 +245,14 @@ pub(super) async fn process_oauth_sign_in(
                         id_token: (token_bundle.id_token.clone())
                             .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
                             .unwrap_or_default(),
-                        access_token_expires_at: (tokens.access_token_expires_at)
+                        access_token_expires_at: tokens
+                            .access_token_expires_at
+                            .clone()
                             .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
                             .unwrap_or_default(),
-                        refresh_token_expires_at: (tokens.refresh_token_expires_at)
+                        refresh_token_expires_at: tokens
+                            .refresh_token_expires_at
+                            .clone()
                             .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
                             .unwrap_or_default(),
                         ..Default::default()
@@ -345,10 +349,12 @@ pub(super) async fn process_oauth_sign_in(
                     .unwrap_or_else(|| existing_account.id_token.clone()),
                 access_token_expires_at: tokens
                     .access_token_expires_at
+                    .clone()
                     .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
                     .unwrap_or_else(|| existing_account.access_token_expires_at.clone()),
                 refresh_token_expires_at: tokens
                     .refresh_token_expires_at
+                    .clone()
                     .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
                     .unwrap_or_else(|| existing_account.refresh_token_expires_at.clone()),
                 ..existing_account.clone()
@@ -426,10 +432,14 @@ pub(super) async fn process_oauth_sign_in(
                 id_token: (token_bundle.id_token)
                     .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
                     .unwrap_or_default(),
-                access_token_expires_at: (tokens.access_token_expires_at)
+                access_token_expires_at: tokens
+                    .access_token_expires_at
+                    .clone()
                     .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
                     .unwrap_or_default(),
-                refresh_token_expires_at: (tokens.refresh_token_expires_at)
+                refresh_token_expires_at: tokens
+                    .refresh_token_expires_at
+                    .clone()
                     .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
                     .unwrap_or_default(),
                 scope: ((!tokens.scopes.is_empty()).then(|| tokens.scopes.join(",")))
@@ -572,10 +582,14 @@ pub(super) async fn process_oauth_sign_in(
             id_token: (token_bundle.id_token)
                 .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
                 .unwrap_or_default(),
-            access_token_expires_at: (tokens.access_token_expires_at)
+            access_token_expires_at: tokens
+                .access_token_expires_at
+                .clone()
                 .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
                 .unwrap_or_default(),
-            refresh_token_expires_at: (tokens.refresh_token_expires_at)
+            refresh_token_expires_at: tokens
+                .refresh_token_expires_at
+                .clone()
                 .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
                 .unwrap_or_default(),
             scope: ((!tokens.scopes.is_empty()).then(|| tokens.scopes.join(",")))
@@ -729,9 +743,10 @@ pub(super) async fn validate_provider_user<S: better_auth_core::AuthSchema>(
     } else if user.email.is_undefined() {
         let _ = fields.remove("email");
     } else {
-        let _ = fields.insert("email".into(), serde_json::Value::Null);
+        let _ = fields.insert("email".into(), better_auth_core::FieldValue::Null);
     }
-    if let Some(verified) = user.email_verified.json()? {
+    let verified = user.email_verified.field_value();
+    if !verified.is_undefined() {
         let _ = fields.insert("emailVerified".into(), verified);
     } else {
         let _ = fields.remove("emailVerified");
@@ -742,9 +757,10 @@ pub(super) async fn validate_provider_user<S: better_auth_core::AuthSchema>(
     if let Some(image) = &user.image {
         let _ = fields.insert(
             "image".into(),
-            image
-                .clone()
-                .map_or(serde_json::Value::Null, serde_json::Value::String),
+            image.clone().map_or(
+                better_auth_core::FieldValue::Null,
+                better_auth_core::FieldValue::String,
+            ),
         );
     }
     crate::plugins::user_admission::validate(

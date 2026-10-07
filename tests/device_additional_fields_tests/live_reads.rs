@@ -2,7 +2,7 @@ use super::{contract as fields, fixture};
 
 use better_auth::{
     __private_core::{
-        AuthResult, AuthSchema, AuthStore, UpdateDeviceCode,
+        AuthResult, AuthSchema, AuthStore, FieldValue, UpdateDeviceCode,
         store::EphemeralStore,
         user_fields::{FieldTransforms, UserConfig, UserFieldConfig, UserFieldTransform},
     },
@@ -43,8 +43,8 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, backend: &str) -> A
         .await?;
     let mut input = fields::input("live-fields");
     input.additional_fields = [
-        ("label".into(), json!("label-before")),
-        ("note".into(), json!("note-before")),
+        ("label".into(), FieldValue::from("label-before")),
+        ("note".into(), FieldValue::from("note-before")),
     ]
     .into_iter()
     .collect();
@@ -73,7 +73,7 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, backend: &str) -> A
                     .update_device_code(
                         &id,
                         UpdateDeviceCode {
-                            additional_fields: [("note".into(), json!("note-after"))]
+                            additional_fields: [("note".into(), FieldValue::from("note-after"))]
                                 .into_iter()
                                 .collect(),
                             ..Default::default()
@@ -84,8 +84,10 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, backend: &str) -> A
                     .lock()
                     .expect("ordinary trace lock")
                     .push(json!(["note-write", "note-after"]));
-                Ok(value
-                    .map(|value| json!(format!("{}:out", value.as_str().expect("string label")))))
+                Ok(FieldValue::from(format!(
+                    "{}:out",
+                    value.as_str().expect("string label")
+                )))
             }
         })),
         ..Default::default()
@@ -100,7 +102,10 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, backend: &str) -> A
                 .lock()
                 .expect("ordinary trace lock")
                 .push(json!(["note", value]));
-            Ok(value.map(|value| json!(format!("{}:out", value.as_str().expect("string note")))))
+            Ok(FieldValue::from(format!(
+                "{}:out",
+                value.as_str().expect("string note")
+            )))
         })),
         ..Default::default()
     });
@@ -117,7 +122,7 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, backend: &str) -> A
             .update_device_code(
                 &created.id,
                 UpdateDeviceCode {
-                    additional_fields: [("note".into(), json!("note-before"))]
+                    additional_fields: [("note".into(), FieldValue::from("note-before"))]
                         .into_iter()
                         .collect(),
                     ..Default::default()

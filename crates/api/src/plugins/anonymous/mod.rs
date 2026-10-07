@@ -318,7 +318,10 @@ impl AnonymousPlugin {
                             .get_user_session_snapshots(&user_id)
                             .await?
                             .into_iter()
-                            .find(|(session, _)| session.expires_at() > chrono::Utc::now());
+                            .find(|(session, _)| {
+                                session.expires_at().milliseconds()
+                                    > chrono::Utc::now().timestamp_millis() as f64
+                            });
                         if let Some((session, snapshot)) = session {
                             Some(better_auth_core::session::SessionData {
                                 user: ctx.internal_user_view(&user).await?,

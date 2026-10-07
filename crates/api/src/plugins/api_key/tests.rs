@@ -30,7 +30,7 @@ async fn create_test_context_with_user() -> (AuthContext<TestSchema>, UserView, 
         .create_session(CreateSession {
             additional_fields: Default::default(),
             user_id: user.id().into_owned(),
-            expires_at: Utc::now() + Duration::hours(24),
+            expires_at: (Utc::now() + Duration::hours(24)).into(),
             ip_address: Some("127.0.0.1".to_string()),
             user_agent: Some("test-agent".to_string()),
             impersonated_by: None,
@@ -63,7 +63,7 @@ async fn create_user_with_session(
         .create_session(CreateSession {
             additional_fields: Default::default(),
             user_id: user.id().into_owned(),
-            expires_at: Utc::now() + Duration::hours(24),
+            expires_at: (Utc::now() + Duration::hours(24)).into(),
             ip_address: None,
             user_agent: None,
             impersonated_by: None,
@@ -437,7 +437,7 @@ async fn test_verify_expired_key() {
     )
     .await;
 
-    let past = (Utc::now() - Duration::hours(1)).to_rfc3339();
+    let past = better_auth_core::FieldDate::from(Utc::now() - Duration::hours(1));
     let update = UpdateApiKey {
         expires_at: Some(Some(past)),
         ..Default::default()
@@ -551,7 +551,7 @@ async fn test_delete_all_expired() {
     .await;
 
     // Expire the first key
-    let past = (Utc::now() - Duration::hours(1)).to_rfc3339();
+    let past = better_auth_core::FieldDate::from(Utc::now() - Duration::hours(1));
     ctx.database
         .update_api_key(
             &id1.clone().into(),

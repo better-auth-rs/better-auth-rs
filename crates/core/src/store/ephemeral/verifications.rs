@@ -8,7 +8,7 @@ use crate::store::{
 impl EphemeralStore {
     pub(super) async fn output_verifications(
         &self,
-        records: &[Map<String, Value>],
+        records: &[FieldMap],
     ) -> AuthResult<Vec<VerificationView>> {
         Ok(self
             .config
@@ -23,7 +23,7 @@ impl EphemeralStore {
 
     pub(super) async fn output_verification(
         &self,
-        record: &Map<String, Value>,
+        record: &FieldMap,
     ) -> AuthResult<VerificationView> {
         Ok(VerificationView::from_adapter_fields(
             self.config
@@ -44,7 +44,7 @@ impl EphemeralStore {
 
     pub(super) fn verification_field<'a>(
         &self,
-        record: &'a Map<String, Value>,
+        record: &'a FieldMap,
         name: &str,
     ) -> Option<&'a Value> {
         record.get(
@@ -183,18 +183,31 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
                     .snapshot()?
                     .iter()
                     .filter(|row| {
-                        self.verification_field(row, "identifier") == Some(&bound_identifier)
+                        self.verification_field(row, "identifier")
+                            .unwrap_or(&Value::Undefined)
+                            .strict_equals(&bound_identifier)
                     })
                     .cloned()
                     .collect())
             })
             .await?;
-        let latest = records.iter().min_by_key(|row| {
-            std::cmp::Reverse(
-                self.verification_field(row, "createdAt")
-                    .and_then(Value::as_str),
-            )
-        });
+        let mut latest = None;
+        for row in &records {
+            let newer = match latest {
+                None => true,
+                Some(current) => {
+                    crate::query::field_compare(
+                        self.verification_field(row, "createdAt")
+                            .unwrap_or(&Value::Undefined),
+                        self.verification_field(current, "createdAt")
+                            .unwrap_or(&Value::Undefined),
+                    )? == Some(std::cmp::Ordering::Greater)
+                }
+            };
+            if newer {
+                latest = Some(row);
+            }
+        }
         futures_util::future::OptionFuture::from(latest.map(|row| self.output_verification(row)))
             .await
             .transpose()
@@ -213,8 +226,13 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
                     .snapshot()?
                     .iter()
                     .find(|row| {
-                        self.verification_field(row, "identifier") == Some(&bound_identifier)
-                            && self.verification_field(row, "value") == Some(&bound_value)
+                        self.verification_field(row, "identifier")
+                            .unwrap_or(&Value::Undefined)
+                            .strict_equals(&bound_identifier)
+                            && self
+                                .verification_field(row, "value")
+                                .unwrap_or(&Value::Undefined)
+                                .strict_equals(&bound_value)
                     })
                     .cloned())
             })
@@ -235,7 +253,11 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
                     .verifications
                     .snapshot()?
                     .iter()
-                    .find(|row| self.verification_field(row, "value") == Some(&bound_value))
+                    .find(|row| {
+                        self.verification_field(row, "value")
+                            .unwrap_or(&Value::Undefined)
+                            .strict_equals(&bound_value)
+                    })
                     .cloned())
             })
             .await?;
@@ -259,7 +281,9 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
                     .snapshot()?
                     .iter()
                     .find(|row| {
-                        self.verification_field(row, "identifier") == Some(&bound_identifier)
+                        self.verification_field(row, "identifier")
+                            .unwrap_or(&Value::Undefined)
+                            .strict_equals(&bound_identifier)
                     })
                     .cloned())
             })
@@ -303,7 +327,11 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
         let bound_identifier = self.verification_query("identifier", identifier)?;
         let _ = self
             .delete_verifications_with_hooks(
-                |row| self.verification_field(row, "identifier") == Some(&bound_identifier),
+                |row| {
+                    self.verification_field(row, "identifier")
+                        .unwrap_or(&Value::Undefined)
+                        .strict_equals(&bound_identifier)
+                },
                 false,
             )
             .await?;
@@ -312,19 +340,22 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
     async fn delete_verification(&self, id: &str) -> AuthResult<()> {
         let _ = self
             .delete_verifications_with_hooks(
-                |row| row.get("id") == Some(&Value::String(id.to_owned())),
+                |row| row.get("id").and_then(Value::as_str) == Some(id),
                 false,
             )
             .await?;
         Ok(())
     }
     async fn delete_expired_verifications(&self) -> AuthResult<usize> {
-        let now = Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+        let now = Utc::now();
         self.delete_verifications_with_hooks(
             |row| {
-                self.verification_field(row, "expiresAt")
-                    .and_then(Value::as_str)
-                    .is_some_and(|value| value < now.as_str())
+                crate::SchemaValue::<crate::FieldDate>::from_field(
+                    self.verification_field(row, "expiresAt")
+                        .cloned()
+                        .unwrap_or_default(),
+                )
+                .is_before(now)
             },
             true,
         )

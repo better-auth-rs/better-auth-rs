@@ -337,13 +337,16 @@ fn mapper_fields(sample: &Value) -> OAuthProfile {
         email_verified: patch.get("emailVerified").map(|value| {
             SchemaValue::from(serde_json::from_value::<Option<bool>>(value.clone()).unwrap())
         }),
-        additional_fields: patch
-            .iter()
-            .filter(|(key, _)| {
-                !matches!(key.as_str(), "name" | "email" | "image" | "emailVerified")
-            })
-            .map(|(key, value)| (key.clone(), value.clone()))
-            .collect(),
+        additional_fields: better_auth_core::FieldMap::from_json(
+            patch
+                .iter()
+                .filter(|(key, _)| {
+                    !matches!(key.as_str(), "name" | "email" | "image" | "emailVerified")
+                })
+                .map(|(key, value)| (key.clone(), value.clone()))
+                .collect(),
+        )
+        .unwrap(),
     }
 }
 

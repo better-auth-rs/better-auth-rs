@@ -6,9 +6,9 @@ use crate::user_fields::project_adapter_value;
 impl EphemeralStore {
     async fn prepare_two_factor_fields(
         &self,
-        fields: Map<String, Value>,
+        fields: FieldMap,
         create: bool,
-    ) -> AuthResult<Map<String, Value>> {
+    ) -> AuthResult<FieldMap> {
         self.model_fields
             .fields(EntityRole::TwoFactor)
             .storage_fields_with_binding(fields, create, |_, field, value| {
@@ -22,7 +22,7 @@ impl EphemeralStore {
         mut snapshot: TwoFactor,
         source: RowRef<TwoFactor>,
     ) -> AuthResult<TwoFactor> {
-        let mut output = Map::new();
+        let mut output = FieldMap::new();
         for (name, field) in self.model_fields.fields(EntityRole::TwoFactor).fields() {
             let value = source.read(|row| {
                 Ok(row
@@ -30,12 +30,14 @@ impl EphemeralStore {
                     .get(resolve_field_name(field.field_name.as_deref(), name))
                     .cloned())
             })?;
-            if let Some(value) = project_adapter_value(value, field, field.references_id(), true)
-                .await?
-                .json()?
-            {
-                let _ = output.insert(name.to_owned(), value);
-            }
+            let value = project_adapter_value(
+                value.unwrap_or_default(),
+                field,
+                field.references_id(),
+                true,
+            )
+            .await?;
+            let _ = output.insert(name.to_owned(), value);
         }
         snapshot.additional_fields = output;
         Ok(snapshot)
@@ -81,7 +83,7 @@ impl TwoFactorStore for EphemeralStore {
             .await?;
         self.write_two_factor_row(
             "update",
-            |factor| factor.id == *id,
+            |factor| factor.id.field_value().strict_equals(&id.field_value()),
             |factor| {
                 if let Some(secret) = update.secret {
                     factor.secret = secret;
@@ -104,10 +106,15 @@ impl TwoFactorStore for EphemeralStore {
         previous: &str,
         replacement: &str,
     ) -> AuthResult<bool> {
-        let fields = self.prepare_two_factor_fields(Map::new(), false).await?;
+        let fields = self
+            .prepare_two_factor_fields(FieldMap::new(), false)
+            .await?;
         self.write_two_factor_row(
             "incrementOne",
-            |factor| factor.id == *id && factor.backup_codes == previous,
+            |factor| {
+                factor.id.field_value().strict_equals(&id.field_value())
+                    && factor.backup_codes == previous
+            },
             |factor| {
                 factor.backup_codes = replacement.to_owned();
                 factor.additional_fields.extend(fields);
@@ -125,7 +132,7 @@ impl TwoFactorStore for EphemeralStore {
         let failures = self
             .write_two_factor_row(
                 "incrementOne",
-                |factor| factor.id == *id,
+                |factor| factor.id.field_value().strict_equals(&id.field_value()),
                 |factor| {
                     let failures = factor.failed_verification_count.unwrap_or(0) + 1;
                     factor.failed_verification_count = Some(failures);
@@ -136,18 +143,20 @@ impl TwoFactorStore for EphemeralStore {
             .unwrap_or(0);
         if failures >= max_attempts {
             let locked_until = locked_until()?;
-            let fields = self.prepare_two_factor_fields(Map::new(), false).await?;
+            let fields = self
+                .prepare_two_factor_fields(FieldMap::new(), false)
+                .await?;
             let _ = self
                 .write_two_factor_row(
                     "incrementOne",
                     |factor| {
-                        factor.id == *id
+                        factor.id.field_value().strict_equals(&id.field_value())
                             && factor
                                 .failed_verification_count
                                 .is_some_and(|failures| failures >= max_attempts)
                     },
                     |factor| {
-                        factor.locked_until = Some(locked_until);
+                        factor.locked_until = Some(locked_until.into());
                         factor.additional_fields.extend(fields);
                     },
                 )
@@ -160,7 +169,9 @@ impl TwoFactorStore for EphemeralStore {
         id: &crate::SchemaValue<String>,
         locked_before: Option<chrono::DateTime<Utc>>,
     ) -> AuthResult<()> {
-        let fields = self.prepare_two_factor_fields(Map::new(), false).await?;
+        let fields = self
+            .prepare_two_factor_fields(FieldMap::new(), false)
+            .await?;
         let _ = self
             .write_two_factor_row(
                 if locked_before.is_some() {
@@ -169,12 +180,15 @@ impl TwoFactorStore for EphemeralStore {
                     "update"
                 },
                 |factor| {
-                    factor.id == *id
+                    factor.id.field_value().strict_equals(&id.field_value())
                         && locked_before.is_none_or(|before| {
                             // The upstream Memory adapter compares a null lock as epoch zero.
                             factor
                                 .locked_until
-                                .map_or(before.timestamp_millis() >= 0, |until| until <= before)
+                                .as_ref()
+                                .map_or(before.timestamp_millis() >= 0, |until| {
+                                    until.milliseconds() <= before.timestamp_millis() as f64
+                                })
                         })
                 },
                 |factor| {
@@ -236,7 +250,9 @@ impl TwoFactorStore for EphemeralStore {
         user_id: &str,
         backup_codes: &str,
     ) -> AuthResult<TwoFactor> {
-        let fields = self.prepare_two_factor_fields(Map::new(), false).await?;
+        let fields = self
+            .prepare_two_factor_fields(FieldMap::new(), false)
+            .await?;
         self.write_two_factor_row(
             "update",
             |factor| factor.user_id == user_id,
@@ -299,7 +315,7 @@ mod tests {
                 .expect("read record")
                 .expect("existing record");
             assert_eq!(stored.failed_verification_count, Some(expected));
-            assert_eq!(stored.locked_until, (expected == 2).then_some(lock));
+            assert_eq!(stored.locked_until, (expected == 2).then(|| lock.into()));
             assert_eq!(stored.verified, Some(true));
             assert_eq!(stored.secret, factor.secret);
             assert_eq!(stored.backup_codes, factor.backup_codes);

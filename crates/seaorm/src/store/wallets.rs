@@ -6,67 +6,10 @@ use better_auth_core::store::WalletStore;
 use better_auth_core::store::schema::EntityRole;
 use better_auth_core::types::{CreateWalletAddress, WalletAddress};
 use better_auth_core::{AuthResult, AuthSchema};
-use sea_orm::{
-    ActiveModelBehavior, ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, DbBackend,
-    EntityName, EntityTrait, Iden, Iterable, QueryFilter, QueryTrait,
-    sea_query::{Expr, Query, Value},
-};
-use serde_json::{Map, json};
+use better_auth_core::{FieldMap, SchemaField};
+use sea_orm::{ColumnTrait, ConnectionTrait, DbBackend, EntityTrait, QueryFilter};
 
 use super::{SeaOrmStore, map_db_err};
-
-async fn insert_wallet<M: SeaOrmPluginModel>(
-    connection: &impl ConnectionTrait,
-    active: M::ActiveModel,
-) -> AuthResult<M> {
-    if connection.get_database_backend() != DbBackend::Sqlite {
-        return active.insert(connection).await.map_err(map_db_err);
-    }
-    let active = active
-        .before_save(connection, true)
-        .await
-        .map_err(map_db_err)?;
-    let created_at = M::column("created_at")?;
-    let mut insert = Entity::<M>::insert(active.clone());
-    if let ActiveValue::Set(Value::ChronoDateTimeUtc(value))
-    | ActiveValue::Unchanged(Value::ChronoDateTimeUtc(value)) = active.get(created_at)
-    {
-        use super::record_bindings::{self, Binding};
-
-        let date =
-            better_auth_core::utils::date::serialize_option(&value, serde_json::value::Serializer)?;
-        let mut columns = Vec::new();
-        let mut bindings = Vec::new();
-        for column in <M::Entity as EntityTrait>::Column::iter() {
-            if let ActiveValue::Set(value) | ActiveValue::Unchanged(value) = active.get(column) {
-                columns.push(column);
-                bindings.push(if column.to_string() == created_at.to_string() {
-                    Binding::Raw(date.clone())
-                } else {
-                    Binding::Native(value)
-                });
-            }
-        }
-        let values = record_bindings::bind(DbBackend::Sqlite, bindings)?;
-        let values = columns
-            .iter()
-            .zip(values)
-            .map(|(column, value)| column.save_as(Expr::val(value)));
-        // Keep SeaORM's insert executor and primary-key metadata; only replace the native date binding.
-        *insert.query() = Query::insert()
-            .into_table(Entity::<M>::default().table_ref())
-            .columns(columns.iter().copied())
-            .values_panic(values)
-            .to_owned();
-    }
-    let model = insert
-        .exec_with_returning(connection)
-        .await
-        .map_err(map_db_err)?;
-    M::ActiveModel::after_save(model, connection, true)
-        .await
-        .map_err(map_db_err)
-}
 
 #[async_trait]
 impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> WalletStore
@@ -138,12 +81,12 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         connection: &impl ConnectionTrait,
         value: CreateWalletAddress,
     ) -> AuthResult<WalletAddress> {
-        let native = Map::from_iter([
-            ("user_id".to_owned(), json!(value.user_id)),
-            ("address".to_owned(), json!(value.address)),
-            ("chain_id".to_owned(), json!(value.chain_id)),
-            ("is_primary".to_owned(), json!(value.is_primary)),
-            ("created_at".to_owned(), json!(value.created_at)),
+        let native = FieldMap::from_iter([
+            ("user_id".to_owned(), (value.user_id).into_field()),
+            ("address".to_owned(), (value.address).into_field()),
+            ("chain_id".to_owned(), (value.chain_id).into_field()),
+            ("is_primary".to_owned(), (value.is_primary).into_field()),
+            ("created_at".to_owned(), (value.created_at).into_field()),
         ]);
         let mut active = super::plugin_models::additional_fields::<P::WalletAddress>(
             self.model_fields.fields(EntityRole::WalletAddress),
@@ -160,7 +103,7 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         )?;
         let model =
             database_operation::<Entity<P::WalletAddress>, _>(self.config(), "create", async {
-                insert_wallet::<P::WalletAddress>(connection, active).await
+                active.insert(connection).await
             })
             .await?;
         self.project_wallet_model(model).await
@@ -189,13 +132,7 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
             )
             .await?
             .remove(0);
-        row.additional_fields = output
-            .into_iter()
-            .map(|(name, value)| Ok(value.json()?.map(|value| (name, value))))
-            .collect::<AuthResult<Vec<_>>>()?
-            .into_iter()
-            .flatten()
-            .collect();
+        row.additional_fields = output;
         Ok(row)
     }
 }

@@ -64,16 +64,16 @@ pub trait AuthTransaction<S: AuthSchema>:
     /// Query a user ID through this transaction without string coercion.
     async fn get_user_by_id_value(
         &self,
-        id: &serde_json::Value,
+        id: &crate::FieldValue,
     ) -> AuthResult<Option<crate::UserView>> {
-        self.get_user_by_id_field(&crate::SchemaValue::from_json(Some(id.clone())))
+        self.get_user_by_id_field(&crate::SchemaValue::from_field(id.clone()))
             .await
     }
     /// Run `get_member_value` through this transaction's organization adapter.
     async fn get_member_value(
         &self,
-        _organization_id: &serde_json::Value,
-        _user_id: &serde_json::Value,
+        _organization_id: &crate::FieldValue,
+        _user_id: &crate::FieldValue,
     ) -> AuthResult<Option<crate::Member>> {
         Err(AuthError::config(
             "The store must support transactional organization operations",
@@ -82,20 +82,20 @@ pub trait AuthTransaction<S: AuthSchema>:
     /// Run `get_organization_by_id_value` through this transaction's organization adapter.
     async fn get_organization_by_id_value(
         &self,
-        _id: &serde_json::Value,
+        _id: &crate::FieldValue,
     ) -> AuthResult<Option<crate::Organization>> {
         Err(AuthError::config(
             "The store must support transactional organization operations",
         ))
     }
     /// Run `get_team_value` through this transaction's organization adapter.
-    async fn get_team_value(&self, _id: &serde_json::Value) -> AuthResult<Option<crate::Team>> {
+    async fn get_team_value(&self, _id: &crate::FieldValue) -> AuthResult<Option<crate::Team>> {
         Err(AuthError::config(
             "The store must support transactional organization operations",
         ))
     }
     /// Run `count_organization_members_value` through this transaction's organization adapter.
-    async fn count_organization_members_value(&self, _id: &serde_json::Value) -> AuthResult<i64> {
+    async fn count_organization_members_value(&self, _id: &crate::FieldValue) -> AuthResult<i64> {
         Err(AuthError::config(
             "The store must support transactional organization operations",
         ))
@@ -366,7 +366,7 @@ pub trait UserStore<S: AuthSchema>: Send + Sync {
     /// Query an ID supplied through a replacement organization schema.
     async fn get_user_by_id_value(
         &self,
-        id: &serde_json::Value,
+        id: &crate::FieldValue,
     ) -> AuthResult<Option<crate::wire::UserView>> {
         let id = id.as_str().ok_or_else(|| {
             crate::AuthError::config(
@@ -567,7 +567,7 @@ pub trait SessionStore<S: AuthSchema>: Send + Sync {
     async fn update_session_fields(
         &self,
         token: &str,
-        fields: serde_json::Map<String, serde_json::Value>,
+        fields: crate::FieldMap,
     ) -> AuthResult<Option<crate::wire::SessionView>>;
     async fn get_user_sessions(&self, user_id: &str) -> AuthResult<Vec<crate::wire::SessionView>>;
     /// List stored sessions with optional secondary projections that preserve absent fields.
@@ -806,7 +806,7 @@ pub struct ListOrganizationMembersParams {
     /// Client-visible field name used for filtering.
     pub filter_field: Option<String>,
     /// Filter value paired with `filter_field`.
-    pub filter_value: Option<serde_json::Value>,
+    pub filter_value: Option<crate::FieldValue>,
     /// Filter operator (`eq`, `ne`, `contains`, `gt`, `gte`, `lt`, `lte`).
     pub filter_operator: Option<String>,
 }
@@ -856,7 +856,7 @@ pub trait OrganizationStore: Send + Sync {
     /// Query an ID supplied through a replacement organization schema.
     async fn get_organization_by_id_value(
         &self,
-        id: &serde_json::Value,
+        id: &crate::FieldValue,
     ) -> AuthResult<Option<Organization>> {
         let id = id.as_str().ok_or_else(|| {
             crate::AuthError::config(
@@ -870,7 +870,7 @@ pub trait OrganizationStore: Send + Sync {
     /// Look up a slug whose type was replaced by an application schema.
     async fn get_organization_by_slug_value(
         &self,
-        slug: &serde_json::Value,
+        slug: &crate::FieldValue,
     ) -> AuthResult<Option<Organization>> {
         let slug = slug.as_str().ok_or_else(|| {
             crate::AuthError::config(
@@ -907,8 +907,8 @@ pub trait MemberStore: Send + Sync {
     /// Query member references supplied through a replacement organization schema.
     async fn get_member_value(
         &self,
-        organization_id: &serde_json::Value,
-        user_id: &serde_json::Value,
+        organization_id: &crate::FieldValue,
+        user_id: &crate::FieldValue,
     ) -> AuthResult<Option<Member>> {
         let organization_id = organization_id.as_str().ok_or_else(|| {
             crate::AuthError::config(
@@ -936,8 +936,8 @@ pub trait MemberStore: Send + Sync {
     /// Query member references accepted by a replacement organization schema.
     async fn get_member_with_user_value(
         &self,
-        organization_id: &serde_json::Value,
-        user_id: &serde_json::Value,
+        organization_id: &crate::FieldValue,
+        user_id: &crate::FieldValue,
     ) -> AuthResult<Option<MemberUser>> {
         let organization_id = organization_id.as_str().ok_or_else(|| {
             AuthError::config(
@@ -983,9 +983,9 @@ pub trait MemberStore: Send + Sync {
     /// Count using an organization ID accepted by the configured member schema.
     async fn count_organization_members_value(
         &self,
-        org_id: &serde_json::Value,
+        org_id: &crate::FieldValue,
     ) -> AuthResult<i64> {
-        let id = crate::SchemaValue::<String>::from_json(Some(org_id.clone()));
+        let id = crate::SchemaValue::<String>::from_field(org_id.clone());
         self.count_organization_members(id.typed()?).await
     }
     async fn count_organization_owners(&self, org_id: &str) -> AuthResult<i64>;
@@ -1240,7 +1240,7 @@ pub trait TeamStore: Send + Sync {
     async fn create_team(&self, input: crate::CreateTeam) -> AuthResult<crate::Team>;
     async fn get_team(&self, id: &str) -> AuthResult<Option<crate::Team>>;
     /// Query an ID supplied by a replacement Organization field schema.
-    async fn get_team_value(&self, id: &serde_json::Value) -> AuthResult<Option<crate::Team>> {
+    async fn get_team_value(&self, id: &crate::FieldValue) -> AuthResult<Option<crate::Team>> {
         match id.as_str() {
             Some(id) => self.get_team(id).await,
             None => Err(crate::AuthError::config(
@@ -1323,6 +1323,29 @@ pub struct RateLimitRecord {
     pub key: String,
     pub count: f64,
     pub last_request: i64,
+}
+
+impl crate::AuthRecordFields for RateLimitRecord {
+    fn field_values(&self) -> AuthResult<crate::FieldMap> {
+        Ok([
+            ("id".into(), self.id.field_value()),
+            ("key".into(), self.key.clone().into()),
+            ("count".into(), self.count.into()),
+            ("lastRequest".into(), self.last_request.into()),
+        ]
+        .into())
+    }
+}
+
+impl crate::FromFieldMap for RateLimitRecord {
+    fn from_field_values(mut fields: crate::FieldMap) -> AuthResult<Self> {
+        Ok(Self {
+            id: crate::SchemaValue::from_field(fields.remove("id").unwrap_or_default()),
+            key: fields.remove("key").unwrap_or_default().decode()?,
+            count: fields.remove("count").unwrap_or_default().decode()?,
+            last_request: fields.remove("lastRequest").unwrap_or_default().decode()?,
+        })
+    }
 }
 
 /// Atomically consume an allowance using the database adapter's comparison semantics.

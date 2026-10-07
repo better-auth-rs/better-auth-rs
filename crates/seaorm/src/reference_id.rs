@@ -1,6 +1,7 @@
 //! Bind declared ID references through the configured generation policy and storage type.
 
 use better_auth_core::store::schema::resolve_field_name;
+use better_auth_core::{FieldMap, FieldValue};
 use sea_orm::sea_query::{ArrayType, ColumnType, Nullable, Value, ValueType, ValueTypeErr};
 use sea_orm::{ColIdx, QueryResult, TryGetError, TryGetable};
 use serde::{Deserialize, Deserializer, Serialize};
@@ -8,12 +9,12 @@ use serde::{Deserialize, Deserializer, Serialize};
 pub(crate) fn input_binding<C: sea_orm::ColumnTrait>(
     name: &str,
     field: &better_auth_core::user_fields::UserFieldConfig,
-    value: serde_json::Value,
+    value: FieldValue,
     policy: &better_auth_core::id::IdGeneration,
     column: impl Fn(&str) -> better_auth_core::AuthResult<C>,
     native_json_field: impl Fn(&str) -> bool,
     backend: sea_orm::DbBackend,
-) -> better_auth_core::AuthResult<serde_json::Value> {
+) -> better_auth_core::AuthResult<FieldValue> {
     if matches!(policy, better_auth_core::id::IdGeneration::Serial) && field.references_id() {
         let text_column = matches!(
             column(name)?.def().get_column_type(),
@@ -21,27 +22,40 @@ pub(crate) fn input_binding<C: sea_orm::ColumnTrait>(
         );
         return serial_reference(value, text_column);
     }
-    if !field.references_id()
+    use better_auth_core::user_fields::UserFieldType;
+    if backend != sea_orm::DbBackend::Postgres
+        && matches!(field.field_type, UserFieldType::Json)
+        && (!native_json_field(name) || field.references_id())
         && matches!(
-            field.field_type,
-            better_auth_core::user_fields::UserFieldType::Json
+            value,
+            FieldValue::Null | FieldValue::Object(_) | FieldValue::Array(_) | FieldValue::Date(_)
         )
-        && value.is_null()
-        && native_json_field(name)
+        || matches!(
+            field.field_type,
+            UserFieldType::StringArray | UserFieldType::NumberArray
+        ) && value.is_array()
     {
-        // SQLx serializes native JSON bindings; encoding null here would create a JSON string.
-        return Ok(value);
+        return value.stringify()?.map(FieldValue::String).ok_or_else(|| {
+            better_auth_core::AuthError::internal("SQL JSON encoding returned undefined")
+        });
     }
-    field.adapter_input(
-        value,
-        backend == sea_orm::DbBackend::Postgres,
-        native_json_field(name),
-    )
+    if backend == sea_orm::DbBackend::Sqlite
+        && matches!(field.field_type, UserFieldType::Date)
+        && let FieldValue::Date(date) = value
+    {
+        return crate::store::record_bindings::sqlite_date(date);
+    }
+    if backend != sea_orm::DbBackend::Postgres
+        && let FieldValue::Bool(value) = value
+    {
+        return Ok(FieldValue::Number(f64::from(u8::from(value))));
+    }
+    Ok(value)
 }
 
 /// Apply Serial conversion after field transforms and before typed model decoding.
 pub(crate) fn prepare_fields<C: sea_orm::ColumnTrait>(
-    fields: &mut serde_json::Map<String, serde_json::Value>,
+    fields: &mut FieldMap,
     policy: &better_auth_core::id::IdGeneration,
     config: Option<&better_auth_core::user_fields::UserConfig>,
     column: impl Fn(&str) -> better_auth_core::AuthResult<C>,
@@ -64,98 +78,37 @@ pub(crate) fn prepare_fields<C: sea_orm::ColumnTrait>(
                 column.def().get_column_type(),
                 ColumnType::String(_) | ColumnType::Text | ColumnType::Char(_)
             );
-            *value = serial_reference(value.take(), text)?;
+            *value = serial_reference(std::mem::take(value), text)?;
         }
     }
     Ok(())
 }
 
 fn serial_reference(
-    value: serde_json::Value,
+    value: FieldValue,
     text_column: bool,
-) -> better_auth_core::AuthResult<serde_json::Value> {
-    use serde_json::Value;
-    let convert = |value: Value| {
+) -> better_auth_core::AuthResult<FieldValue> {
+    let convert = |value: FieldValue| {
         if value.is_null() {
-            return Ok(Value::Null);
+            return Ok(FieldValue::Null);
         }
         let number = better_auth_core::query::number(&value)?;
         let text = better_auth_core::schema_value::number_string(number);
         if text_column {
-            Ok(Value::String(text))
+            Ok(FieldValue::String(text))
         } else {
-            Ok(serde_json::from_str(&text)?)
+            Ok(FieldValue::Number(number))
         }
     };
     match value {
-        Value::Array(values) => values
-            .into_iter()
+        FieldValue::Array(values) => values
+            .iter()
+            .cloned()
             .map(convert)
             .collect::<better_auth_core::AuthResult<Vec<_>>>()
-            .map(Value::Array),
+            .map(FieldValue::from),
         value => convert(value),
     }
-}
-
-pub(crate) fn apply_bindings<A: sea_orm::ActiveModelTrait>(
-    active: &mut A,
-    fields: &better_auth_core::user_fields::UserConfig,
-    backend: sea_orm::DbBackend,
-    column: impl Fn(&str) -> better_auth_core::AuthResult<<A::Entity as sea_orm::EntityTrait>::Column>,
-) -> better_auth_core::AuthResult<()> {
-    for (name, field) in fields.fields() {
-        if name != "id"
-            && matches!(
-                field.field_type,
-                better_auth_core::user_fields::UserFieldType::Json
-            )
-            && !field.references_id()
-        {
-            use sea_orm::ColumnTrait;
-            let column = column(resolve_field_name(field.field_name.as_deref(), name))?;
-            if backend != sea_orm::DbBackend::Postgres
-                && matches!(
-                    column.def().get_column_type(),
-                    ColumnType::Json | ColumnType::JsonBinary
-                )
-                && matches!(
-                    active.get(column),
-                    sea_orm::ActiveValue::Set(Value::Json(None))
-                )
-            {
-                // Non-native JSON adapters send the JSON literal null, not SQL NULL.
-                active
-                    .try_set(column, Value::Json(Some(Box::new(serde_json::Value::Null))))
-                    .map_err(crate::store::map_db_err)?;
-            } else if backend == sea_orm::DbBackend::Sqlite
-                && matches!(
-                    column.def().get_column_type(),
-                    ColumnType::String(_) | ColumnType::Text | ColumnType::Char(_)
-                )
-                && let sea_orm::ActiveValue::Set(value) = active.get(column)
-            {
-                active
-                    .try_set(column, binding(value, backend)?)
-                    .map_err(crate::store::map_db_err)?;
-            }
-            continue;
-        }
-        if name == "id" || !field.references_id() {
-            continue;
-        }
-        let column = column(resolve_field_name(field.field_name.as_deref(), name))?;
-        if let sea_orm::ActiveValue::Set(value) = active.get(column) {
-            use sea_orm::ColumnTrait;
-            let text_column = matches!(
-                column.def().get_column_type(),
-                ColumnType::String(_) | ColumnType::Text | ColumnType::Char(_)
-            );
-            if backend != sea_orm::DbBackend::Postgres || text_column {
-                active.set(column, binding(value, backend)?);
-            }
-        }
-    }
-    Ok(())
 }
 
 /// A database ID reference whose public field may have a non-string input type.
@@ -206,7 +159,7 @@ pub(crate) fn binding(
     value: Value,
     backend: sea_orm::DbBackend,
 ) -> better_auth_core::AuthResult<Value> {
-    use better_auth_core::{AuthError, SchemaValue};
+    use better_auth_core::AuthError;
     match (backend, value) {
         // The pinned Bun SQLite driver uses signed 52-bit integers; other adapters do not share this boundary.
         (sea_orm::DbBackend::Sqlite, Value::Double(Some(value)))
@@ -221,10 +174,7 @@ pub(crate) fn binding(
         }
         // node-postgres sends number and boolean parameters as their JavaScript string values.
         (sea_orm::DbBackend::Postgres, Value::Double(Some(value))) => {
-            let number = serde_json::Number::from_f64(value)
-                .ok_or_else(|| AuthError::internal("Reference number must be finite"))?;
-            let text = SchemaValue::<String>::Dynamic(serde_json::Value::Number(number))
-                .display_string()?;
+            let text = better_auth_core::schema_value::number_string(value);
             Ok(Value::String(Some(text)))
         }
         (sea_orm::DbBackend::Postgres, Value::BigInt(Some(value))) => {
@@ -311,9 +261,17 @@ mod tests {
                         transform: Some(better_auth_core::user_fields::FieldTransforms {
                             input: Some(better_auth_core::user_fields::UserFieldTransform::new(
                                 move |value| {
-                                    assert_eq!(value, Some(json!("alias")));
+                                    assert_eq!(
+                                        value,
+                                        better_auth_core::FieldValue::String("alias".into())
+                                    );
                                     let _ = observed.fetch_add(1, Ordering::SeqCst);
-                                    Ok(Some(json!(["0x10", null, [], ["1e0"]])))
+                                    better_auth_core::FieldValue::from_json(json!([
+                                        "0x10",
+                                        null,
+                                        [],
+                                        ["1e0"]
+                                    ]))
                                 },
                             )),
                             ..Default::default()
@@ -328,9 +286,15 @@ mod tests {
             (IdGeneration::Serial, json!([16, null, 0, 1])),
             (IdGeneration::Random, json!("[\"0x10\",null,[],[\"1e0\"]]")),
         ] {
+            let expected = better_auth_core::FieldValue::from_json(expected).unwrap();
             let values = config
                 .storage_fields_with_binding(
-                    [("owner".into(), json!("alias"))].into_iter().collect(),
+                    [(
+                        "owner".into(),
+                        better_auth_core::FieldValue::String("alias".into()),
+                    )]
+                    .into_iter()
+                    .collect(),
                     true,
                     |name, field, value| {
                         input_binding(

@@ -2,8 +2,8 @@
 
 use crate::store::schema::resolve_field_name;
 use crate::{AuthError, AuthResult};
+use crate::{FieldMap, FieldValue as Value};
 use indexmap::IndexMap;
-use serde_json::{Map, Value};
 use std::sync::{Arc, LazyLock};
 mod adapter;
 pub use adapter::FieldOutputCapabilities;
@@ -140,9 +140,14 @@ impl UserFieldConfig {
     }
 
     pub(crate) fn normalize_date(&self, value: &mut Value) -> AuthResult<()> {
-        if matches!(self.field_type, UserFieldType::Date) && value.is_string() {
-            let date: chrono::DateTime<chrono::Utc> = serde_json::from_value(value.clone())?;
-            *value = Value::String(date.to_rfc3339_opts(chrono::SecondsFormat::Millis, true));
+        if matches!(self.field_type, UserFieldType::Date)
+            && let Value::String(text) = value
+        {
+            *value = Value::Date(
+                crate::utils::date::parse_adapter_date(text)
+                    .map(crate::FieldDate::from)
+                    .unwrap_or_else(crate::FieldDate::invalid),
+            );
         }
         Ok(())
     }
@@ -157,13 +162,7 @@ impl UserFieldConfig {
 
 /// JavaScript truthiness used by upstream protected-field checks.
 pub fn is_truthy(value: &Value) -> bool {
-    match value {
-        Value::Null => false,
-        Value::Bool(value) => *value,
-        Value::Number(value) => value.as_f64() != Some(0.0),
-        Value::String(value) => !value.is_empty(),
-        Value::Array(_) | Value::Object(_) => true,
-    }
+    value.is_truthy()
 }
 
 pub(crate) fn fields_or_empty(
@@ -185,12 +184,8 @@ impl UserConfig {
     }
 
     /// Parse public input. Updates omit missing fields and never apply creation defaults.
-    pub fn parse_input(
-        &self,
-        input: &Map<String, Value>,
-        create: bool,
-    ) -> AuthResult<Map<String, Value>> {
-        let mut parsed = Map::new();
+    pub fn parse_input(&self, input: &FieldMap, create: bool) -> AuthResult<FieldMap> {
+        let mut parsed = FieldMap::new();
         for (name, field) in self.fields() {
             let value = if let Some(value) = input.get(name) {
                 if !field.input() {
@@ -214,7 +209,7 @@ impl UserConfig {
                         })?,
                     )
                 } else if let Some(transform) = field.input_transform() {
-                    transform.call_sync(Some(value.clone()))?
+                    Some(transform.call_sync(value.clone())?)
                 } else {
                     Some(value.clone())
                 }
@@ -232,7 +227,7 @@ impl UserConfig {
             } else {
                 continue;
             };
-            if let Some(value) = value {
+            if let Some(value) = value.filter(|value| !value.is_undefined()) {
                 let _ = parsed.insert(name.clone(), value);
             }
         }
@@ -240,11 +235,7 @@ impl UserConfig {
     }
 
     /// Parse an OAuth provider profile without trusting protected application fields.
-    pub fn parse_provider_input(
-        &self,
-        profile: &Map<String, Value>,
-        create: bool,
-    ) -> AuthResult<Map<String, Value>> {
+    pub fn parse_provider_input(&self, profile: &FieldMap, create: bool) -> AuthResult<FieldMap> {
         let allowed = profile
             .iter()
             .filter(|(name, _)| self.fields().get(*name).is_some_and(|field| field.input()))
@@ -254,21 +245,17 @@ impl UserConfig {
     }
 
     /// Map configured fields to application storage columns and await adapter transforms.
-    pub async fn storage_fields(
-        &self,
-        input: Map<String, Value>,
-        create: bool,
-    ) -> AuthResult<Map<String, Value>> {
+    pub async fn storage_fields(&self, input: FieldMap, create: bool) -> AuthResult<FieldMap> {
         self.storage_fields_async(input, create, false).await
     }
 
     async fn storage_fields_async(
         &self,
-        input: Map<String, Value>,
+        input: FieldMap,
         create: bool,
         preserve_id: bool,
-    ) -> AuthResult<Map<String, Value>> {
-        let mut output = Map::new();
+    ) -> AuthResult<FieldMap> {
+        let mut output = FieldMap::new();
         for (name, field) in self.fields() {
             if preserve_id && name == "id" {
                 continue;
@@ -293,37 +280,39 @@ impl UserFieldConfig {
         let Some(value) = self.storage_value(input, create)? else {
             return Ok(None);
         };
-        match self.input_transform() {
+        let value = match self.input_transform() {
             Some(transform) => transform.call(value).await,
             None => Ok(value),
-        }
+        }?;
+        Ok((!value.is_undefined()).then_some(value))
     }
 
-    // The outer option omits a field. The inner option passes undefined to its callback.
-    fn storage_value(
-        &self,
-        input: Option<&Value>,
-        create: bool,
-    ) -> AuthResult<Option<Option<Value>>> {
-        let mut value = input.cloned().or_else(|| {
-            if create {
-                self.default_value()
+    // The option skips a field; Undefined can still reach a configured callback.
+    fn storage_value(&self, input: Option<&Value>, create: bool) -> AuthResult<Option<Value>> {
+        let mut value = input.cloned().unwrap_or_default();
+        if value.is_undefined()
+            && if create {
+                self.default_value.is_none()
+                    && self.default_value_fn.is_none()
+                    && self.input_transform().is_none()
             } else {
-                self.on_update.as_ref().map(|update| update())
+                self.on_update.is_none()
             }
-        });
-        if value.is_none() && (!create || self.input_transform().is_none()) {
+        {
             return Ok(None);
         }
+        self.normalize_date(&mut value)?;
         if create
-            && self.required == Some(true)
-            && value == Some(Value::Null)
+            && (value.is_undefined() || (self.required == Some(true) && value.is_null()))
             && let Some(default) = self.default_value()
         {
-            value = Some(default);
+            value = default;
         }
-        if let Some(value) = value.as_mut() {
-            self.normalize_date(value)?;
+        if !create
+            && value.is_undefined()
+            && let Some(update) = &self.on_update
+        {
+            value = update();
         }
         Ok(Some(value))
     }

@@ -181,7 +181,7 @@ impl OneTimeTokenPlugin {
         let Some((session, user)) = find_session(ctx, verification.value.typed()?).await? else {
             return message_error("Session not found");
         };
-        let response = if session.expires_at < Utc::now() {
+        let response = if session.expires_at.milliseconds() < Utc::now().timestamp_millis() as f64 {
             message_error("Session expired")?
         } else {
             AuthResponse::json(

@@ -30,7 +30,8 @@ mod pagination;
 mod passkeys;
 mod plugin_models;
 mod rate_limits;
-mod record_bindings;
+pub(crate) mod record_bindings;
+mod record_write;
 mod runtime;
 mod schema_preflight;
 mod session_delete;
@@ -68,7 +69,6 @@ use async_trait::async_trait;
 use better_auth_core::store::{
     AuthTransaction, BoxedTransactionValue, TransactionStore, TransactionWork,
 };
-use chrono::{DateTime, Utc};
 use sea_orm::{DatabaseConnection, DbErr, SqlErr, TransactionTrait};
 
 use crate::config::AuthConfig;
@@ -212,10 +212,10 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         &self,
         model: &str,
         supplied: Option<String>,
-        mut fields: serde_json::Map<String, serde_json::Value>,
-    ) -> AuthResult<serde_json::Map<String, serde_json::Value>> {
+        mut fields: better_auth_core::FieldMap,
+    ) -> AuthResult<better_auth_core::FieldMap> {
         if let Some(id) = self.generated_id(model, supplied)? {
-            let _ = fields.insert("id".into(), serde_json::Value::String(id));
+            let _ = fields.insert("id".into(), better_auth_core::FieldValue::String(id));
         }
         Ok(fields)
     }
@@ -284,8 +284,8 @@ where
 {
     async fn get_member_value(
         &self,
-        organization_id: &serde_json::Value,
-        user_id: &serde_json::Value,
+        organization_id: &better_auth_core::FieldValue,
+        user_id: &better_auth_core::FieldValue,
     ) -> AuthResult<Option<better_auth_core::Member>> {
         self.store
             .get_member_value_with_connection(&self.tx, organization_id, user_id)
@@ -293,7 +293,7 @@ where
     }
     async fn get_organization_by_id_value(
         &self,
-        id: &serde_json::Value,
+        id: &better_auth_core::FieldValue,
     ) -> AuthResult<Option<better_auth_core::Organization>> {
         self.store
             .get_organization_by_id_value_with_connection(&self.tx, id)
@@ -301,13 +301,16 @@ where
     }
     async fn get_team_value(
         &self,
-        id: &serde_json::Value,
+        id: &better_auth_core::FieldValue,
     ) -> AuthResult<Option<better_auth_core::Team>> {
         self.store
             .get_team_value_with_connection(&self.tx, id)
             .await
     }
-    async fn count_organization_members_value(&self, id: &serde_json::Value) -> AuthResult<i64> {
+    async fn count_organization_members_value(
+        &self,
+        id: &better_auth_core::FieldValue,
+    ) -> AuthResult<i64> {
         self.store
             .count_organization_members_with_connection(&self.tx, id)
             .await
@@ -675,19 +678,6 @@ pub(crate) fn map_db_err(err: DbErr) -> AuthError {
 
 pub(crate) fn cancelled_by_hook(operation: &str) -> AuthError {
     AuthError::forbidden(format!("{operation} cancelled by database hook"))
-}
-
-fn parse_rfc3339(value: &str, field: &str) -> Result<DateTime<Utc>, AuthError> {
-    DateTime::parse_from_rfc3339(value)
-        .map(|dt| dt.with_timezone(&Utc))
-        .map_err(|_| AuthError::bad_request(format!("Invalid RFC 3339 timestamp for {field}")))
-}
-
-fn parse_optional_rfc3339(
-    value: Option<&str>,
-    field: &str,
-) -> Result<Option<DateTime<Utc>>, AuthError> {
-    value.map(|inner| parse_rfc3339(inner, field)).transpose()
 }
 
 #[cfg(test)]

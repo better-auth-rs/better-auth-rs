@@ -36,7 +36,7 @@ pub struct DeviceGrantAuthorization {
     /// Client identifier that owns the issued code.
     pub client_id: String,
     /// Logical stored fields; native code, owner, status, and scope remain authoritative.
-    pub additional_fields: Map<String, Value>,
+    pub additional_fields: better_auth_core::FieldMap,
 }
 
 /// Request authorization and session redemption policy for one Device plugin.
@@ -188,7 +188,7 @@ impl DeviceAuthorizationPlugin {
                 }
                 DeviceGrantAuthorization {
                     client_id: client_id.to_owned(),
-                    additional_fields: Map::new(),
+                    additional_fields: Default::default(),
                 }
             }
         };

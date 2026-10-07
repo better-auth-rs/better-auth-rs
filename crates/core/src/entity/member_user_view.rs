@@ -1,40 +1,61 @@
 use super::MemberUserView;
-use serde_json::{Map, Value, json};
+use crate::{AuthRecordFields, AuthResult, FieldMap, FromFieldMap, SchemaField, SchemaValue};
 
-impl From<MemberUserView> for Map<String, Value> {
-    fn from(user: MemberUserView) -> Self {
-        let mut fields = Map::new();
-        if !user.id.is_undefined() {
-            let _ = fields.insert("id".into(), json!(user.id));
+impl AuthRecordFields for MemberUserView {
+    fn field_values(&self) -> AuthResult<FieldMap> {
+        let mut fields = FieldMap::new();
+        if !self.id.is_undefined() {
+            let _ = fields.insert("id".into(), self.id.field_value());
         }
         for (name, value) in [
-            ("email", json!(user.email)),
-            ("name", json!(user.name)),
-            ("image", json!(user.image)),
+            ("email", self.email.clone().into_field()),
+            ("name", self.name.field_value()),
+            ("image", self.image.field_value()),
         ] {
-            if user
+            if self
                 .visible_fields
                 .as_ref()
                 .is_none_or(|fields| fields.contains(name))
             {
-                let _ = fields.insert(name.into(), json!(value));
+                let _ = fields.insert(name.into(), value);
             }
         }
-        fields
+        Ok(fields)
+    }
+
+    fn structured_clone(&self, context: &mut crate::StructuredCloneContext) -> AuthResult<Self> {
+        let mut user = self.clone();
+        user.id = context.clone_field(&self.id)?;
+        user.name = context.clone_field(&self.name)?;
+        user.image = context.clone_field(&self.image)?;
+        Ok(user)
     }
 }
 
-impl TryFrom<Map<String, Value>> for MemberUserView {
-    type Error = serde_json::Error;
-
-    fn try_from(mut fields: Map<String, Value>) -> Result<Self, Self::Error> {
-        let visible_fields = Some(fields.keys().cloned().collect());
+impl FromFieldMap for MemberUserView {
+    fn from_field_values(mut fields: FieldMap) -> AuthResult<Self> {
         Ok(Self {
-            visible_fields,
-            id: crate::SchemaValue::from_json(fields.remove("id")),
-            email: serde_json::from_value(fields.remove("email").unwrap_or(Value::Null))?,
-            name: crate::SchemaValue::from_json(fields.remove("name")),
-            image: crate::SchemaValue::from_json(fields.remove("image")),
+            visible_fields: Some(fields.keys().cloned().collect()),
+            id: SchemaValue::from_field(fields.remove("id").unwrap_or_default()),
+            email: fields.remove("email").unwrap_or_default().decode()?,
+            name: SchemaValue::from_field(fields.remove("name").unwrap_or_default()),
+            image: SchemaValue::from_field(fields.remove("image").unwrap_or_default()),
         })
+    }
+}
+
+impl serde::Serialize for MemberUserView {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        crate::field_value::serde::map::serialize(
+            &self.field_values().map_err(serde::ser::Error::custom)?,
+            serializer,
+        )
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for MemberUserView {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Self::from_field_values(crate::field_value::serde::map::deserialize(deserializer)?)
+            .map_err(serde::de::Error::custom)
     }
 }

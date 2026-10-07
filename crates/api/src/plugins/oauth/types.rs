@@ -81,8 +81,7 @@ pub(crate) struct AccessTokenResponse {
         skip_serializing_if = "better_auth_core::SchemaValue::is_undefined",
         serialize_with = "better_auth_core::schema_value::serialize_optional_date"
     )]
-    pub access_token_expires_at:
-        better_auth_core::SchemaValue<Option<chrono::DateTime<chrono::Utc>>>,
+    pub access_token_expires_at: better_auth_core::SchemaValue<Option<better_auth_core::FieldDate>>,
     pub scopes: Vec<String>,
     #[serde(skip_serializing_if = "better_auth_core::SchemaValue::is_undefined")]
     pub id_token: better_auth_core::SchemaValue<Option<String>>,
@@ -95,16 +94,16 @@ pub(crate) struct RefreshTokenResponse {
     pub access_token: Option<String>,
     #[serde(
         skip_serializing_if = "Option::is_none",
-        serialize_with = "better_auth_core::utils::date::serialize_option"
+        serialize_with = "better_auth_core::field_value::serde::optional_date::serialize"
     )]
-    pub access_token_expires_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub access_token_expires_at: Option<better_auth_core::FieldDate>,
     pub refresh_token: String,
     #[serde(
         skip_serializing_if = "better_auth_core::SchemaValue::is_undefined",
         serialize_with = "better_auth_core::schema_value::serialize_optional_date"
     )]
     pub refresh_token_expires_at:
-        better_auth_core::SchemaValue<Option<chrono::DateTime<chrono::Utc>>>,
+        better_auth_core::SchemaValue<Option<better_auth_core::FieldDate>>,
     #[serde(skip_serializing_if = "better_auth_core::SchemaValue::is_undefined")]
     pub scope: better_auth_core::SchemaValue<Option<String>>,
     #[serde(skip_serializing_if = "better_auth_core::SchemaValue::is_undefined")]
@@ -131,7 +130,8 @@ pub(crate) struct AccountInfoUser {
     )]
     pub email_verified: better_auth_core::SchemaValue<Option<bool>>,
     #[serde(flatten)]
-    pub additional_fields: serde_json::Map<String, serde_json::Value>,
+    #[serde(with = "better_auth_core::field_value::serde::map")]
+    pub additional_fields: better_auth_core::FieldMap,
 }
 
 #[derive(Debug, Serialize)]

@@ -198,10 +198,13 @@ fn vk_profile(profile: Value) -> Result<OAuthUserInfo, String> {
             .transpose()
             .map_err(|error| format!("Invalid VK avatar: {error}"))?,
         email_verified: Some(false).into(),
-        additional_fields: ["first_name", "last_name", "birthday", "sex"]
-            .into_iter()
-            .filter_map(|field| user.get(field).map(|value| (field.into(), value.clone())))
-            .collect(),
+        additional_fields: better_auth_core::FieldMap::from_json(
+            ["first_name", "last_name", "birthday", "sex"]
+                .into_iter()
+                .filter_map(|field| user.get(field).map(|value| (field.into(), value.clone())))
+                .collect(),
+        )
+        .map_err(|error| error.to_string())?,
     })
 }
 
@@ -235,7 +238,8 @@ fn salesforce_profile(profile: Value) -> Result<OAuthUserInfo, String> {
 }
 
 fn google_profile(v: Value) -> Result<OAuthUserInfo, String> {
-    let verified = SchemaValue::from_json(v.get("email_verified").cloned());
+    let verified = SchemaValue::from_json(v.get("email_verified").cloned())
+        .map_err(|error| error.to_string())?;
     openid_profile(v, "Google", verified)
 }
 
@@ -368,7 +372,8 @@ fn slack_profile(v: Value) -> Result<OAuthUserInfo, String> {
             .map(serde_json::from_value)
             .transpose()
             .map_err(|error| format!("Invalid Slack picture: {error}"))?,
-        email_verified: SchemaValue::from_json(v.get("email_verified").cloned()),
+        email_verified: SchemaValue::from_json(v.get("email_verified").cloned())
+            .map_err(|error| error.to_string())?,
     })
 }
 
@@ -580,7 +585,8 @@ fn discord_profile(v: Value) -> Result<OAuthUserInfo, String> {
             .map(serde_json::from_value)
             .transpose()
             .map_err(|error| format!("Invalid Discord image: {error}"))?,
-        email_verified: SchemaValue::from_json(v.get("verified").cloned()),
+        email_verified: SchemaValue::from_json(v.get("verified").cloned())
+            .map_err(|error| error.to_string())?,
     })
 }
 

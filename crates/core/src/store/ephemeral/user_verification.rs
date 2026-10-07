@@ -70,7 +70,8 @@ impl EphemeralStore {
             self.memory_field_query(&schema, "userId", Value::String(user_id.to_owned()))?;
         self.raw("account", "deleteMany", |state| {
             state.accounts.retain(|row| {
-                row.get(schema.record_storage_key("userId")) != Some(&account_user_id)
+                !row.get(schema.record_storage_key("userId"))
+                    .is_some_and(|value| value.strict_equals(&account_user_id))
             })?;
             Ok(())
         })

@@ -1,5 +1,6 @@
 //! Typed model bindings for Organization plugin persistence.
 
+use better_auth_core::FieldMap;
 use better_auth_core::{
     AuthResult,
     user_fields::{AdapterRecord, UserConfig},
@@ -9,7 +10,6 @@ use sea_orm::{
     IntoActiveModel,
 };
 use serde::Serialize;
-use serde_json::{Map, Value};
 use std::marker::PhantomData;
 
 /// A typed organization model. Derive this binding with `AuthEntity` and an organization entity role.
@@ -36,7 +36,7 @@ pub trait SeaOrmOrganizationModel:
     fn record_from_fields(
         &self,
         fields: &UserConfig,
-        projected: Map<String, Value>,
+        projected: FieldMap,
     ) -> AuthResult<Self::Record>;
     /// Project one stored model with the same policy ordering as a batch.
     fn record(
@@ -75,10 +75,10 @@ pub trait SeaOrmOrganizationModel:
     /// Return whether the column references another model ID.
     fn is_id_reference(column: &Self::Column) -> bool;
     /// Assign typed fields in an insert or update.
-    fn apply_fields(active: &mut Self::ActiveModel, fields: Map<String, Value>) -> AuthResult<()>;
+    fn apply_fields(active: &mut Self::ActiveModel, fields: FieldMap) -> AuthResult<()>;
 
     /// Construct an insert or partial update without bypassing typed column conversion.
-    fn active(fields: Map<String, Value>) -> AuthResult<Self::ActiveModel> {
+    fn active(fields: FieldMap) -> AuthResult<Self::ActiveModel> {
         let mut active = <Self::ActiveModel as Default>::default();
         Self::apply_fields(&mut active, fields)?;
         Ok(active)

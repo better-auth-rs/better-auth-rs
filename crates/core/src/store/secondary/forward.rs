@@ -91,7 +91,7 @@ impl<S: AuthSchema> OrganizationStore for SecondaryStore<S> {
 
     async fn get_organization_by_id_value(
         &self,
-        id: &serde_json::Value,
+        id: &crate::FieldValue,
     ) -> AuthResult<Option<Organization>> {
         self.inner.get_organization_by_id_value(id).await
     }
@@ -113,7 +113,7 @@ impl<S: AuthSchema> OrganizationStore for SecondaryStore<S> {
     }
     async fn get_organization_by_slug_value(
         &self,
-        slug: &serde_json::Value,
+        slug: &crate::FieldValue,
     ) -> AuthResult<Option<Organization>> {
         self.inner.get_organization_by_slug_value(slug).await
     }
@@ -143,8 +143,8 @@ impl<S: AuthSchema> MemberStore for SecondaryStore<S> {
 
     async fn get_member_value(
         &self,
-        organization_id: &serde_json::Value,
-        user_id: &serde_json::Value,
+        organization_id: &crate::FieldValue,
+        user_id: &crate::FieldValue,
     ) -> AuthResult<Option<Member>> {
         self.inner.get_member_value(organization_id, user_id).await
     }
@@ -166,8 +166,8 @@ impl<S: AuthSchema> MemberStore for SecondaryStore<S> {
     }
     async fn get_member_with_user_value(
         &self,
-        organization_id: &serde_json::Value,
-        user_id: &serde_json::Value,
+        organization_id: &crate::FieldValue,
+        user_id: &crate::FieldValue,
     ) -> AuthResult<Option<MemberUser>> {
         self.inner
             .get_member_with_user_value(organization_id, user_id)
@@ -209,7 +209,7 @@ impl<S: AuthSchema> MemberStore for SecondaryStore<S> {
     }
     async fn count_organization_members_value(
         &self,
-        org_id: &serde_json::Value,
+        org_id: &crate::FieldValue,
     ) -> AuthResult<i64> {
         self.inner.count_organization_members_value(org_id).await
     }
@@ -493,7 +493,7 @@ impl<S: AuthSchema> WalletStore for SecondaryStore<S> {
 
 #[async_trait]
 impl<S: AuthSchema> TeamStore for SecondaryStore<S> {
-    async fn get_team_value(&self, id: &serde_json::Value) -> AuthResult<Option<Team>> {
+    async fn get_team_value(&self, id: &crate::FieldValue) -> AuthResult<Option<Team>> {
         self.inner.get_team_value(id).await
     }
     async fn create_team(&self, input: crate::CreateTeam) -> AuthResult<crate::Team> {

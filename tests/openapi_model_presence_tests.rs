@@ -73,7 +73,7 @@ impl<S: AuthSchema> AuthPlugin<S> for ExplicitPasskey {
     fn openapi(&self) -> AuthResult<OpenApiPluginMetadata> {
         Ok(
             OpenApiPluginMetadata::from_routes("ordinary-explicit-passkey", Vec::new())?
-                .model("passkey", &fields((!self.empty).then_some("name"))),
+                .model("passkey", &fields((!self.empty).then_some("name")))?,
         )
     }
 

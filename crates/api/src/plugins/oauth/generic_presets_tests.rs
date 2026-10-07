@@ -239,7 +239,7 @@ impl OAuthProfileMapper for Mapper {
             name: Some(Some("Mapped Reader".into()).into()),
             email: Some(Some("mapped@example.test".into()).into()),
             email_verified: Some(Some(true).into()),
-            additional_fields: [("favoriteColor".into(), json!("blue"))]
+            additional_fields: [("favoriteColor".into(), "blue".into())]
                 .into_iter()
                 .collect(),
             ..Default::default()

@@ -40,7 +40,9 @@ impl EphemeralStore {
             .raw("verification", "update", |state| {
                 Ok({
                     let row = state.verifications.find_mut(|row| {
-                        self.verification_field(row, "identifier") == Some(&bound_identifier)
+                        self.verification_field(row, "identifier")
+                            .unwrap_or(&Value::Undefined)
+                            .strict_equals(&bound_identifier)
                     })?;
                     if let Some(mut record) = row {
                         record.extend(patch);
@@ -65,7 +67,7 @@ impl EphemeralStore {
 
     pub(super) async fn delete_verifications_with_hooks(
         &self,
-        predicate: impl Fn(&Map<String, Value>) -> bool + Send + Sync,
+        predicate: impl Fn(&FieldMap) -> bool + Send + Sync,
         many: bool,
     ) -> AuthResult<usize> {
         let rows: Vec<_> = self
@@ -162,12 +164,14 @@ impl EphemeralStore {
                 return Ok(None);
             }
         }
-        let id = snapshot.id.json()?;
+        let id = snapshot.id.field_value();
         let Some(consumed) = self
             .raw("verification", "consumeOne", |state| {
-                state
-                    .verifications
-                    .remove_first(|row| row.get("id") == id.as_ref())
+                state.verifications.remove_first(|row| {
+                    row.get("id")
+                        .unwrap_or(&Value::Undefined)
+                        .strict_equals(&id)
+                })
             })
             .await?
         else {
@@ -177,7 +181,10 @@ impl EphemeralStore {
         let bound_identifier = self.verification_query("identifier", identifier)?;
         self.raw("verification", "deleteMany", |state| {
             state.verifications.retain(|row| {
-                self.verification_field(row, "identifier") != Some(&bound_identifier)
+                !self
+                    .verification_field(row, "identifier")
+                    .unwrap_or(&Value::Undefined)
+                    .strict_equals(&bound_identifier)
             })?;
             Ok(())
         })

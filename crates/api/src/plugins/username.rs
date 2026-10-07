@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use better_auth_core::user_fields::{UserConfig, UserFieldConfig};
 use better_auth_core::{
     AuthContext, AuthInitContext, AuthPlugin, AuthRequest, AuthResponse, AuthResult, AuthRoute,
-    AuthSchema, AuthUser, BeforeRequestAction, HttpMethod,
+    AuthSchema, AuthUser, BeforeRequestAction, FieldValue, HttpMethod,
 };
 use serde_json::Value;
 
@@ -43,9 +43,7 @@ impl UsernamePlugin {
                 field_name: config.username_field_name.clone(),
                 transform: Some(FieldTransforms {
                     input: Some(UserFieldTransform::new(move |value| match value {
-                        Some(Value::String(value)) => {
-                            config.normalize(&value).map(|value| Some(value.into()))
-                        }
+                        FieldValue::String(value) => config.normalize(&value).map(Into::into),
                         value => Ok(value),
                     })),
                     ..Default::default()
@@ -62,9 +60,9 @@ impl UsernamePlugin {
                     field_name: config.display_username_field_name.clone(),
                     transform: Some(FieldTransforms {
                         input: Some(UserFieldTransform::new(move |value| match value {
-                            Some(Value::String(value)) => config
-                                .normalize_display(&value)
-                                .map(|value| Some(value.into())),
+                            FieldValue::String(value) => {
+                                config.normalize_display(&value).map(Into::into)
+                            }
                             value => Ok(value),
                         })),
                         ..Default::default()
@@ -95,7 +93,7 @@ impl<S: AuthSchema> AuthPlugin<S> for UsernamePlugin {
             <Self as better_auth_core::AuthPlugin<S>>::name(self),
             <Self as better_auth_core::AuthPlugin<S>>::routes(self),
         )?
-        .model("user", &self.fields());
+        .model("user", &self.fields())?;
         if !self.config.display_username {
             metadata = metadata.remove_field("user", "displayUsername");
         }

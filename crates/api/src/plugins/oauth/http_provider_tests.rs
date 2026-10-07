@@ -7,7 +7,7 @@
 
 use super::*;
 use better_auth_core::AuthError;
-use serde_json::{Map, Value, json};
+use serde_json::{Value, json};
 use std::sync::Mutex;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 
@@ -398,9 +398,12 @@ impl OAuthProfileMapper for Mapper {
             name: Some(serde_json::from_value(patch["name"].clone())?),
             image: Some(serde_json::from_value(patch["image"].clone())?),
             email_verified: (patch["emailVerified"].as_bool()).map(|value| Some(value).into()),
-            additional_fields: [("locale".into(), patch["locale"].clone())]
-                .into_iter()
-                .collect(),
+            additional_fields: [(
+                "locale".into(),
+                better_auth_core::FieldValue::from_json(patch["locale"].clone())?,
+            )]
+            .into_iter()
+            .collect(),
             ..Default::default()
         })
     }
@@ -422,7 +425,7 @@ impl OAuthUserInfoHandler for CustomProfile {
                 name: serde_json::from_value(self.0["name"].clone()).unwrap(),
                 image: Some(serde_json::from_value(self.0["image"].clone()).unwrap()),
                 email_verified: Some(self.0["emailVerified"].as_bool().unwrap()).into(),
-                additional_fields: Map::new(),
+                additional_fields: Default::default(),
             },
             data: json!({"id":self.1}),
         }))
@@ -430,7 +433,7 @@ impl OAuthUserInfoHandler for CustomProfile {
 }
 
 fn public_user(user: OAuthUserInfo) -> Value {
-    let mut output = user.additional_fields;
+    let mut output = user.additional_fields.json().unwrap();
     let _ = output.insert("name".into(), json!(user.name));
     if !user.email.is_undefined() {
         let _ = output.insert("email".into(), json!(user.email));

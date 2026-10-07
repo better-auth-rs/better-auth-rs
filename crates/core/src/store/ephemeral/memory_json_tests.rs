@@ -4,7 +4,7 @@ use crate::organization_fields::OrganizationFields;
 use crate::user_fields::{
     FieldTransforms, UserConfig, UserFieldConfig, UserFieldTransform, UserFieldType,
 };
-use serde_json::json;
+use serde_json::{Value as JsonValue, json};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 mod organization;
@@ -29,7 +29,7 @@ const FIELDS: [(&str, &str, UserFieldType); 5] = [
     ),
 ];
 
-type Events = Arc<Mutex<Vec<Value>>>;
+type Events = Arc<Mutex<Vec<JsonValue>>>;
 
 fn transform(
     events: &Events,
@@ -39,13 +39,14 @@ fn transform(
 ) -> UserFieldTransform {
     let events = events.clone();
     UserFieldTransform::new(move |value| {
-        let value =
-            value.ok_or_else(|| AuthError::internal("Expected the supplied display field"))?;
+        if value.is_undefined() {
+            return Err(AuthError::internal("Expected the supplied display field"));
+        }
         events
             .lock()
             .map_err(|_| AuthError::internal("Display event lock poisoned"))?
-            .push(json!([phase, model, field, value]));
-        Ok(Some(value))
+            .push(json!([phase, model, field, value.json()?]));
+        Ok(value)
     })
 }
 
@@ -74,13 +75,16 @@ fn fields(model: &'static str, events: &Events) -> UserConfig {
     }
 }
 
-fn input(label: &str, updated: bool) -> Map<String, Value> {
+fn input(label: &str, updated: bool) -> FieldMap {
     [
-        ("settings".into(), json!({"label": label})),
+        (
+            "settings".into(),
+            FieldMap::from_iter([("label".into(), label.into())]).into(),
+        ),
         ("nullableSettings".into(), Value::Null),
         (
             "encodedSettings".into(),
-            json!(if updated {
+            Value::from(if updated {
                 r#"{"kind":"updated"}"#
             } else {
                 r#"{"kind":"text"}"#
@@ -89,22 +93,26 @@ fn input(label: &str, updated: bool) -> Map<String, Value> {
         (
             "labels".into(),
             if updated {
-                json!(["updated"])
+                vec!["updated".into()].into()
             } else {
-                json!(["alpha", "beta"])
+                vec!["alpha".into(), "beta".into()].into()
             },
         ),
         (
             "displayOrder".into(),
-            if updated { json!([3]) } else { json!([1, 2]) },
+            if updated {
+                vec![3.into()].into()
+            } else {
+                vec![1.into(), 2.into()].into()
+            },
         ),
     ]
     .into_iter()
     .collect()
 }
 
-fn display(fields: &Map<String, Value>) -> AuthResult<Value> {
-    FIELDS
+fn display(fields: &FieldMap) -> AuthResult<JsonValue> {
+    let fields = FIELDS
         .iter()
         .map(|(name, _, _)| {
             fields
@@ -115,8 +123,8 @@ fn display(fields: &Map<String, Value>) -> AuthResult<Value> {
                     AuthError::internal(format!("Missing returned display field {name}"))
                 })
         })
-        .collect::<AuthResult<Map<_, _>>>()
-        .map(Value::Object)
+        .collect::<AuthResult<FieldMap>>()?;
+    Ok(JsonValue::Object(fields.json()?))
 }
 
 struct Fixture {
@@ -147,7 +155,11 @@ impl Fixture {
         Ok(Self { store, events })
     }
 
-    fn stored_physical(&self, model: &str, id: &crate::SchemaValue<String>) -> AuthResult<Value> {
+    fn stored_physical(
+        &self,
+        model: &str,
+        id: &crate::SchemaValue<String>,
+    ) -> AuthResult<JsonValue> {
         let state = self.store.lock()?;
         let fields = match model {
             "user" => state.users.get(id)?.map(|row| row.additional_fields),
@@ -177,15 +189,15 @@ impl Fixture {
                         AuthError::internal(format!("Missing stored display field {alias}"))
                     })
             })
-            .collect::<AuthResult<Map<_, _>>>()?;
-        Ok(json!({"model": model, "fields": fields}))
+            .collect::<AuthResult<FieldMap>>()?;
+        Ok(json!({"model": model, "fields": fields.json()?}))
     }
 
     fn observe(
         &self,
-        operations: &mut Vec<Value>,
+        operations: &mut Vec<JsonValue>,
         name: &str,
-        result: Value,
+        result: JsonValue,
         rows: &[(&str, &crate::SchemaValue<String>)],
     ) -> AuthResult<()> {
         let stored = rows
@@ -206,17 +218,17 @@ impl Fixture {
 
     fn point(
         &self,
-        operations: &mut Vec<Value>,
+        operations: &mut Vec<JsonValue>,
         name: &str,
         model: &str,
         id: &crate::SchemaValue<String>,
-        fields: &Map<String, Value>,
+        fields: &FieldMap,
     ) -> AuthResult<()> {
         self.observe(operations, name, display(fields)?, &[(model, id)])
     }
 }
 
-async fn users(fixture: &Fixture) -> AuthResult<(Value, UserView, UserView)> {
+async fn users(fixture: &Fixture) -> AuthResult<(JsonValue, UserView, UserView)> {
     let mut operations = Vec::new();
     let mut user = CreateUser::new()
         .with_name("Display User A")
@@ -278,12 +290,12 @@ async fn users(fixture: &Fixture) -> AuthResult<(Value, UserView, UserView)> {
     ))
 }
 
-async fn sessions(fixture: &Fixture, user: &UserView) -> AuthResult<Value> {
+async fn sessions(fixture: &Fixture, user: &UserView) -> AuthResult<JsonValue> {
     let mut operations = Vec::new();
     let create = |label| CreateSession {
         additional_fields: input(label, false),
         user_id: user.id.clone(),
-        expires_at: Utc::now() + chrono::Duration::days(7),
+        expires_at: (Utc::now() + chrono::Duration::days(7)).into(),
         ip_address: None,
         user_agent: None,
         impersonated_by: None,
@@ -331,7 +343,7 @@ async fn sessions(fixture: &Fixture, user: &UserView) -> AuthResult<Value> {
     Ok(json!({"name": "session", "operations": operations}))
 }
 
-async fn contract() -> AuthResult<Value> {
+async fn contract() -> AuthResult<JsonValue> {
     let fixture = Fixture::new()?;
     let (user_group, user_a, user_b) = users(&fixture).await?;
     let session_group = sessions(&fixture, &user_a).await?;
@@ -348,7 +360,7 @@ async fn contract() -> AuthResult<Value> {
     reason = "The fixture and ordinary adapter operations must succeed before complete contract comparison."
 )]
 async fn memory_core_json_matches_pinned_display_contract() {
-    let expected: Value = serde_json::from_str(include_str!(
+    let expected: JsonValue = serde_json::from_str(include_str!(
         "../../../../../tests/fixtures/memory-core-json-1.7.6.json"
     ))
     .expect("Read the pinned Memory display contract");

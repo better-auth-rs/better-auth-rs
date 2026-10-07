@@ -49,11 +49,15 @@ fn token_json(token: OAuthTokenSet) -> Value {
         ("idToken", token.id_token.map(Value::String)),
         (
             "accessTokenExpiresAt",
-            token.access_token_expires_at.map(|value| json!(value)),
+            token
+                .access_token_expires_at
+                .map(|value| json!(better_auth_core::SchemaValue::Typed(value))),
         ),
         (
             "refreshTokenExpiresAt",
-            token.refresh_token_expires_at.map(|value| json!(value)),
+            token
+                .refresh_token_expires_at
+                .map(|value| json!(better_auth_core::SchemaValue::Typed(value))),
         ),
         ("raw", token.raw),
     ] {

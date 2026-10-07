@@ -4,7 +4,7 @@ use super::{
     organization_models::{self as models, Entity},
 };
 use crate::SeaOrmOrganizationModel;
-use better_auth_core::{AuthResult, user_fields::UserConfig};
+use better_auth_core::{AuthResult, SchemaField, user_fields::UserConfig};
 use sea_orm::{
     ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter,
     sea_query::{Expr, ExprTrait, SimpleExpr},
@@ -45,7 +45,7 @@ pub(super) async fn reserve<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
     policy: &better_auth_core::id::IdGeneration,
 ) -> AuthResult<bool> {
     let active = models::active::<M>(
-        models::values([("member_count", serde_json::json!(actual))]),
+        models::values([("member_count", (actual).into_field())]),
         Default::default(),
         fields,
         false,
@@ -53,8 +53,8 @@ pub(super) async fn reserve<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
         policy,
     )
     .await?;
-    let changed = Entity::<M>::update_many()
-        .set(active)
+    let changed = active
+        .update(conn.get_database_backend())?
         .filter(M::column("id")?.eq_id(id, policy)?)
         .filter(M::column("member_count")?.lt(actual))
         .exec(conn)

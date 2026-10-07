@@ -263,7 +263,7 @@ struct Mapper {
     events: Events,
     seen: Arc<Mutex<Vec<Value>>>,
     email: Option<SchemaValue<Option<String>>>,
-    additional_fields: serde_json::Map<String, Value>,
+    additional_fields: better_auth_core::FieldMap,
     barrier: Option<(Arc<Notify>, Arc<Notify>)>,
     error: Option<String>,
 }
@@ -315,13 +315,16 @@ async fn normal_profiles_match_capture_and_await_the_mapper_before_the_email_che
             events: events.clone(),
             seen: seen.clone(),
             email,
-            additional_fields: sample["mapperPatch"]
-                .as_object()
-                .unwrap()
-                .iter()
-                .filter(|(key, _)| key.as_str() != "email")
-                .map(|(key, value)| (key.clone(), value.clone()))
-                .collect(),
+            additional_fields: better_auth_core::FieldMap::from_json(
+                sample["mapperPatch"]
+                    .as_object()
+                    .unwrap()
+                    .iter()
+                    .filter(|(key, _)| key.as_str() != "email")
+                    .map(|(key, value)| (key.clone(), value.clone()))
+                    .collect(),
+            )
+            .unwrap(),
             error: None,
             barrier: barrier.then(|| (started.clone(), resume.clone())),
         }));

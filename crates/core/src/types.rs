@@ -1,5 +1,4 @@
 pub use crate::types_account::{CreateAccount, CreateVerification, UpdateAccount};
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::ops::Index;
@@ -55,7 +54,7 @@ pub struct AuthRequest {
     /// Cookie updates from session middleware, shared by normalized request clones.
     response_headers: std::sync::Arc<std::sync::Mutex<Headers>>,
     server_only: bool,
-    server_context: std::sync::Arc<std::sync::Mutex<serde_json::Map<String, serde_json::Value>>>,
+    server_context: std::sync::Arc<std::sync::Mutex<crate::FieldMap>>,
     headers_present: bool,
     new_session: std::sync::Arc<std::sync::Mutex<Option<crate::session::SessionData>>>,
     session_snapshot: std::sync::Arc<std::sync::Mutex<Option<crate::session::SessionData>>>,
@@ -238,13 +237,15 @@ impl Index<&str> for Headers {
 pub struct CreateUser {
     /// Seeded creation time; omission uses the adapter creation time.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub created_at: Option<DateTime<Utc>>,
+    #[serde(with = "crate::field_value::serde::optional_date")]
+    pub created_at: Option<crate::FieldDate>,
     /// Seeded update time; omission uses the adapter creation time.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub updated_at: Option<DateTime<Utc>>,
+    #[serde(with = "crate::field_value::serde::optional_date")]
+    pub updated_at: Option<crate::FieldDate>,
     /// Application user fields keyed by their public schema names.
-    #[serde(default)]
-    pub additional_fields: serde_json::Map<String, serde_json::Value>,
+    #[serde(with = "crate::field_value::serde::map", default)]
+    pub additional_fields: crate::FieldMap,
     pub id: Option<String>,
     pub email: Option<String>,
     #[serde(default, skip_serializing_if = "crate::SchemaValue::is_undefined")]
@@ -270,16 +271,18 @@ pub struct CreateUser {
     pub role: Option<String>,
     pub banned: Option<bool>,
     pub ban_reason: Option<String>,
-    pub ban_expires: Option<DateTime<Utc>>,
-    pub metadata: Option<serde_json::Value>,
+    #[serde(with = "crate::field_value::serde::optional_date", default)]
+    pub ban_expires: Option<crate::FieldDate>,
+    #[serde(with = "crate::field_value::serde::optional_value", default)]
+    pub metadata: Option<crate::FieldValue>,
 }
 
 /// User update data
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct UpdateUser {
     /// Application user fields keyed by their public schema names.
-    #[serde(default)]
-    pub additional_fields: serde_json::Map<String, serde_json::Value>,
+    #[serde(with = "crate::field_value::serde::map", default)]
+    pub additional_fields: crate::FieldMap,
     pub email: Option<String>,
     #[serde(default, skip_serializing_if = "crate::SchemaValue::is_undefined")]
     pub name: crate::SchemaValue<Option<String>>,
@@ -319,11 +322,12 @@ pub struct UpdateUser {
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
-        deserialize_with = "deserialize_nullable_update"
+        with = "crate::field_value::serde::date_update"
     )]
-    pub ban_expires: Option<Option<DateTime<Utc>>>,
+    pub ban_expires: Option<Option<crate::FieldDate>>,
     pub two_factor_enabled: Option<bool>,
-    pub metadata: Option<serde_json::Value>,
+    #[serde(with = "crate::field_value::serde::optional_value", default)]
+    pub metadata: Option<crate::FieldValue>,
 }
 
 fn deserialize_nullable_update<'de, D, T>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
@@ -338,9 +342,9 @@ where
 #[derive(Debug, Clone)]
 pub struct CreateSession {
     /// Trusted application fields written with the initial session record.
-    pub additional_fields: serde_json::Map<String, serde_json::Value>,
+    pub additional_fields: crate::FieldMap,
     pub user_id: crate::SchemaValue<String>,
-    pub expires_at: DateTime<Utc>,
+    pub expires_at: crate::FieldDate,
     pub ip_address: Option<String>,
     pub user_agent: Option<String>,
     pub impersonated_by: Option<String>,
@@ -396,7 +400,7 @@ impl CreateUser {
         self
     }
 
-    pub fn with_metadata(mut self, metadata: serde_json::Value) -> Self {
+    pub fn with_metadata(mut self, metadata: crate::FieldValue) -> Self {
         self.metadata = Some(metadata);
         self
     }
@@ -828,7 +832,7 @@ pub struct UpdateUserRequest {
     #[serde(default, skip_serializing_if = "crate::SchemaValue::is_undefined")]
     pub image: crate::SchemaValue<Option<String>>,
     pub role: Option<String>,
-    pub metadata: Option<serde_json::Value>,
+    pub metadata: Option<crate::FieldValue>,
 }
 
 #[derive(Debug, Serialize)]
@@ -930,7 +934,7 @@ pub struct ListUsersParams {
     pub sort_by: Option<String>,
     pub sort_direction: Option<String>,
     pub filter_field: Option<String>,
-    pub filter_value: Option<serde_json::Value>,
+    pub filter_value: Option<crate::FieldValue>,
     pub filter_operator: Option<String>,
 }
 
@@ -1013,9 +1017,9 @@ mod tests {
             id: "key-123".into(),
             token: "key-token".into(),
             user_id: "user-123".into(),
-            created_at: now,
-            updated_at: now,
-            expires_at: now,
+            created_at: now.into(),
+            updated_at: now.into(),
+            expires_at: now.into(),
             ip_address: None,
             user_agent: None,
             impersonated_by: None,
@@ -1124,7 +1128,9 @@ mod tests {
             .with_email_verified(true)
             .with_username("testuser")
             .with_role("admin")
-            .with_metadata(serde_json::json!({"key": "val"}));
+            .with_metadata(
+                crate::FieldValue::from_json(serde_json::json!({"key": "val"})).unwrap(),
+            );
 
         assert!(cu.id.is_none()); // ID generation is delegated to the model/store path
         assert_eq!(cu.email.as_deref(), Some("test@example.com"));

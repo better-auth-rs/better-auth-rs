@@ -113,8 +113,9 @@ where
 
     pub(crate) async fn apply_session_field_updates(
         &self,
-        active: &mut <S::Session as SeaOrmSessionModel>::ActiveModel,
-    ) -> AuthResult<()> {
+        active: <S::Session as SeaOrmSessionModel>::ActiveModel,
+    ) -> AuthResult<super::record_write::RecordWrite<<S::Session as SeaOrmSessionModel>::Entity>>
+    {
         self.validate_session_fields()?;
         let schema = self.config().session.field_schema();
         let fields = schema
@@ -130,13 +131,9 @@ where
                 )
             })
             .await?;
-        S::Session::apply_fields(active, fields)?;
-        crate::reference_id::apply_bindings(
-            active,
-            &self.config().session.field_schema(),
-            self.connection().get_database_backend(),
-            S::Session::field_column,
-        )
+        let mut active = super::record_write::RecordWrite::from_active(active);
+        active.apply_fields(fields, S::Session::field_column)?;
+        Ok(active)
     }
 
     pub(crate) async fn before_runtime_session_in_tx(
@@ -227,18 +224,19 @@ where
         let parsed = id.as_deref().map(S::Session::parse_id).transpose()?;
         let mut fields = self.config().session.default_fields();
         fields.extend(std::mem::take(&mut create_session.additional_fields));
-        let mut plugin_fields = serde_json::Map::new();
+        let mut plugin_fields = better_auth_core::FieldMap::new();
         for name in ["impersonatedBy", "activeOrganizationId", "activeTeamId"] {
             if let Some(value) = fields.remove(name) {
                 let _ = plugin_fields.insert(name.into(), value);
             }
         }
+        let expires_at = create_session.expires_at.clone();
         let mut active = S::Session::new_active(
             parsed,
             better_auth_core::id::random_id(None),
             create_session,
             now,
-        );
+        )?;
         if id.is_none() {
             active.not_set(S::Session::id_column());
         }
@@ -257,18 +255,17 @@ where
                 )
             })
             .await?;
-        S::Session::apply_fields(&mut active, fields)?;
-        S::Session::apply_fields(&mut active, plugin_fields)?;
-        crate::reference_id::apply_bindings(
-            &mut active,
-            &self.config().session.field_schema(),
-            db.get_database_backend(),
-            S::Session::field_column,
-        )?;
+        let mut active = super::record_write::RecordWrite::from_active(active);
+        active.native_field(
+            S::Session::expires_at_column(),
+            better_auth_core::FieldValue::Date(expires_at),
+        );
+        active.apply_fields(fields, S::Session::field_column)?;
+        active.apply_fields(plugin_fields, S::Session::field_column)?;
         let session = database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
             self.config(),
             "create",
-            async { active.insert(db).await.map_err(map_db_err) },
+            async { active.insert(db).await },
         )
         .await?;
         let session = self.output_session(&session, db).await?;
@@ -392,24 +389,30 @@ where
                 },
             )
             .await?;
-        let _ = update.updated_at.get_or_insert_with(Utc::now);
+        let _ = update.updated_at.get_or_insert_with(|| Utc::now().into());
+        let dates = [
+            ("expiresAt", update.expires_at.take()),
+            ("createdAt", update.created_at.take()),
+            ("updatedAt", update.updated_at.take()),
+        ];
         S::Session::apply_update(&mut active, update)?;
-        S::Session::apply_fields(&mut active, fields)?;
-        crate::reference_id::apply_bindings(
-            &mut active,
-            &self.config().session.field_schema(),
-            db.get_database_backend(),
-            S::Session::field_column,
-        )?;
+        let mut active = super::record_write::RecordWrite::from_active(active);
+        for (name, value) in dates {
+            if let Some(date) = value {
+                active.native_field(
+                    S::Session::field_column(name)?,
+                    better_auth_core::FieldValue::Date(date),
+                );
+            }
+        }
+        active.apply_fields(fields, S::Session::field_column)?;
         let session = database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
             self.config(),
             "update",
-            super::updates::update_returning_one::<<S::Session as SeaOrmSessionModel>::Entity, _>(
-                db,
-                active,
-                S::Session::token_column().eq(token),
-                reselect,
-            ),
+            super::updates::update_record_returning_one::<
+                <S::Session as SeaOrmSessionModel>::Entity,
+                _,
+            >(db, active, S::Session::token_column().eq(token), reselect),
         )
         .await?;
         match session.as_ref() {
@@ -712,7 +715,7 @@ where
     async fn update_session_fields(
         &self,
         token: &str,
-        fields: serde_json::Map<String, serde_json::Value>,
+        fields: better_auth_core::FieldMap,
     ) -> AuthResult<Option<better_auth_core::wire::SessionView>> {
         self.update_session_with_connection(
             self.connection(),
@@ -736,8 +739,8 @@ where
             None,
             token,
             SessionUpdate {
-                expires_at: Some(expires_at),
-                updated_at: Some(Utc::now()),
+                expires_at: Some(expires_at.into()),
+                updated_at: Some(Utc::now().into()),
                 ..Default::default()
             },
         )

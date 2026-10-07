@@ -197,8 +197,8 @@ where
     D: Deserializer<'de>,
 {
     let value = serde_json::Value::deserialize(deserializer)?;
-    better_auth_core::SchemaValue::<String>::Dynamic(value)
-        .display_string()
+    better_auth_core::SchemaValue::<String>::from_json(Some(value))
+        .and_then(|value| value.display_string())
         .map(Some)
         .map_err(serde::de::Error::custom)
 }

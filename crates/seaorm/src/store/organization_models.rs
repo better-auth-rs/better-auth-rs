@@ -2,12 +2,12 @@ use super::id_filter::IdColumn;
 use crate::SeaOrmOrganizationModel;
 use better_auth_core::store::schema::resolve_field_name;
 use better_auth_core::{AuthError, AuthResult, user_fields::UserConfig};
+use better_auth_core::{FieldMap, FieldValue};
 use sea_orm::{ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter};
-use serde_json::{Map, Value};
 
 pub(super) type Entity<M> = <M as SeaOrmOrganizationModel>::Entity;
 
-pub(super) fn values<const N: usize>(fields: [(&str, Value); N]) -> Map<String, Value> {
+pub(super) fn values<const N: usize>(fields: [(&str, FieldValue); N]) -> FieldMap {
     fields
         .into_iter()
         .map(|(name, value)| (name.to_owned(), value))
@@ -15,13 +15,13 @@ pub(super) fn values<const N: usize>(fields: [(&str, Value); N]) -> Map<String, 
 }
 
 pub(super) async fn active<M: SeaOrmOrganizationModel>(
-    core: Map<String, Value>,
-    input: Map<String, Value>,
+    core: FieldMap,
+    input: FieldMap,
     config: &UserConfig,
     create: bool,
     backend: sea_orm::DbBackend,
     policy: &better_auth_core::id::IdGeneration,
-) -> AuthResult<M::ActiveModel> {
+) -> AuthResult<super::record_write::RecordWrite<Entity<M>>> {
     let core = core
         .into_iter()
         .map(|(name, value)| {
@@ -31,7 +31,7 @@ pub(super) async fn active<M: SeaOrmOrganizationModel>(
                 value,
             ))
         })
-        .collect::<AuthResult<Map<_, _>>>()?;
+        .collect::<AuthResult<FieldMap>>()?;
     let mut fields = config
         .organization_storage_fields(core, input, create)
         .await?;
@@ -46,10 +46,14 @@ pub(super) async fn active<M: SeaOrmOrganizationModel>(
                 column.def().get_column_type(),
                 sea_orm::ColumnType::Json | sea_orm::ColumnType::JsonBinary
             );
-            *value = field.adapter_input(
+            *value = crate::reference_id::input_binding(
+                storage_name,
+                field,
                 std::mem::take(value),
-                backend == sea_orm::DbBackend::Postgres,
-                native_json,
+                policy,
+                M::column,
+                |_| native_json,
+                backend,
             )?;
         }
     }
@@ -60,15 +64,25 @@ pub(super) async fn active<M: SeaOrmOrganizationModel>(
         M::column,
         M::is_id_reference,
     )?;
-    let mut active = M::active(fields)?;
-    crate::reference_id::apply_bindings(&mut active, config, backend, M::column)?;
+    let mut active = super::record_write::RecordWrite::<Entity<M>>::default();
+    for (name, value) in fields {
+        let configured = config.fields().iter().any(|(logical, field)| {
+            resolve_field_name(field.field_name.as_deref(), logical) == name
+        });
+        let column = M::column(&name)?;
+        if configured {
+            active.field(column, value);
+        } else {
+            active.native_field(column, value);
+        }
+    }
     Ok(active)
 }
 
 pub(super) async fn insert<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
     conn: &C,
-    core: Map<String, Value>,
-    input: Map<String, Value>,
+    core: FieldMap,
+    input: FieldMap,
     config: &UserConfig,
     policy: &better_auth_core::id::IdGeneration,
 ) -> AuthResult<M::Record> {
@@ -82,8 +96,7 @@ pub(super) async fn insert<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
     )
     .await?
     .insert(conn)
-    .await
-    .map_err(super::map_db_err)?
+    .await?
     .record(
         config,
         conn.get_database_backend() == sea_orm::DbBackend::Postgres,
@@ -106,8 +119,8 @@ pub(super) async fn find<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
 pub(super) async fn update<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
     conn: &C,
     id: &str,
-    core: Map<String, Value>,
-    input: Map<String, Value>,
+    core: FieldMap,
+    input: FieldMap,
     config: &UserConfig,
     policy: &better_auth_core::id::IdGeneration,
 ) -> AuthResult<M::Record> {
@@ -120,8 +133,8 @@ pub(super) async fn update<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
         policy,
     )
     .await?;
-    let _ = Entity::<M>::update_many()
-        .set(active)
+    let _ = active
+        .update(conn.get_database_backend())?
         .filter(M::column("id")?.eq_id(id, policy)?)
         .exec(conn)
         .await

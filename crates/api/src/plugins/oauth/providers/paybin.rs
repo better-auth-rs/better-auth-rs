@@ -98,9 +98,10 @@ pub(super) fn decode_profile(profile: Value) -> Result<OAuthUserInfo, String> {
         })
         .unwrap_or_default()
         .to_owned();
-    let verified = super::profile_email_verified(&better_auth_core::SchemaValue::from_json(
-        profile.get("email_verified").cloned(),
-    ))
+    let verified = super::profile_email_verified(
+        &better_auth_core::SchemaValue::from_json(profile.get("email_verified").cloned())
+            .map_err(|error| error.to_string())?,
+    )
     .map_err(|error| error.to_string())?;
     Ok(OAuthUserInfo {
         id: profile

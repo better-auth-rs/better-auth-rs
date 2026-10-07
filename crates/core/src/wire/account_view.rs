@@ -1,7 +1,5 @@
-use crate::{AuthResult, SchemaValue};
-use chrono::{DateTime, Utc};
+use crate::{AuthRecordFields, AuthResult, FromFieldMap, SchemaValue};
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value};
 
 /// A projected account returned by the adapter and trusted database hooks.
 /// Field readers must require a type only when an operation needs that type.
@@ -25,15 +23,15 @@ pub struct AccountView {
     #[serde(
         default,
         skip_serializing_if = "SchemaValue::is_undefined",
-        serialize_with = "crate::schema_value::serialize_optional_date"
+        with = "crate::field_value::serde::optional_schema_date"
     )]
-    pub access_token_expires_at: SchemaValue<Option<DateTime<Utc>>>,
+    pub access_token_expires_at: SchemaValue<Option<crate::FieldDate>>,
     #[serde(
         default,
         skip_serializing_if = "SchemaValue::is_undefined",
-        serialize_with = "crate::schema_value::serialize_optional_date"
+        with = "crate::field_value::serde::optional_schema_date"
     )]
-    pub refresh_token_expires_at: SchemaValue<Option<DateTime<Utc>>>,
+    pub refresh_token_expires_at: SchemaValue<Option<crate::FieldDate>>,
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub scope: SchemaValue<Option<String>>,
     // Account cookies serialize this view. Keep the password out of every implicit serialization.
@@ -42,21 +40,25 @@ pub struct AccountView {
     #[serde(
         default,
         skip_serializing_if = "SchemaValue::is_undefined",
-        serialize_with = "crate::schema_value::serialize_date"
+        with = "crate::field_value::serde::schema_date"
     )]
-    pub created_at: SchemaValue<DateTime<Utc>>,
+    pub created_at: SchemaValue<crate::FieldDate>,
     #[serde(
         default,
         skip_serializing_if = "SchemaValue::is_undefined",
-        serialize_with = "crate::schema_value::serialize_date"
+        with = "crate::field_value::serde::schema_date"
     )]
-    pub updated_at: SchemaValue<DateTime<Utc>>,
-    #[serde(flatten, serialize_with = "serialize_additional_fields")]
-    pub additional_fields: indexmap::IndexMap<String, SchemaValue<Value>>,
+    pub updated_at: SchemaValue<crate::FieldDate>,
+    #[serde(
+        deserialize_with = "crate::field_value::serde::map::deserialize",
+        flatten,
+        serialize_with = "serialize_additional_fields"
+    )]
+    pub additional_fields: crate::FieldMap,
 }
 
 fn serialize_additional_fields<S: serde::Serializer>(
-    fields: &indexmap::IndexMap<String, SchemaValue<Value>>,
+    fields: &crate::FieldMap,
     serializer: S,
 ) -> Result<S::Ok, S::Error> {
     use serde::ser::SerializeMap;
@@ -64,7 +66,7 @@ fn serialize_additional_fields<S: serde::Serializer>(
     for (name, value) in fields {
         // Explicit native construction must not bypass the account cookie password boundary.
         if name != "password" && !value.is_undefined() {
-            output.serialize_entry(name, value)?;
+            output.serialize_entry(name, &crate::field_value::serde::Json(value))?;
         }
     }
     output.end()
@@ -73,72 +75,52 @@ fn serialize_additional_fields<S: serde::Serializer>(
 impl AccountView {
     /// Read a complete trusted adapter projection, including the password when present.
     /// Do not use this method to construct account cookies or public account-list responses.
-    pub fn internal_fields(&self) -> AuthResult<Map<String, Value>> {
-        let mut fields = serde_json::from_value::<Map<String, Value>>(serde_json::to_value(self)?)?;
-        if let Some(password) = self.password.json()? {
-            let _ = fields.insert("password".into(), password);
-        }
-        Ok(fields)
+    pub fn internal_fields(&self) -> AuthResult<crate::FieldMap> {
+        self.field_values()
     }
 
     /// Preserve projected date values before JSON serialization loses invalid-date provenance.
-    pub fn from_adapter_fields(mut fields: indexmap::IndexMap<String, SchemaValue<Value>>) -> Self {
+    pub fn from_adapter_fields(mut fields: crate::FieldMap) -> Self {
         Self {
-            id: fields.shift_remove("id").unwrap_or_default().into_field(),
-            account_id: fields
-                .shift_remove("accountId")
-                .unwrap_or_default()
-                .into_field(),
-            provider_id: fields
-                .shift_remove("providerId")
-                .unwrap_or_default()
-                .into_field(),
-            user_id: fields
-                .shift_remove("userId")
-                .unwrap_or_default()
-                .into_field(),
-            access_token: fields
-                .shift_remove("accessToken")
-                .unwrap_or_default()
-                .into_field(),
-            refresh_token: fields
-                .shift_remove("refreshToken")
-                .unwrap_or_default()
-                .into_field(),
-            id_token: fields
-                .shift_remove("idToken")
-                .unwrap_or_default()
-                .into_field(),
-            access_token_expires_at: fields
-                .shift_remove("accessTokenExpiresAt")
-                .unwrap_or_default()
-                .into_field(),
-            refresh_token_expires_at: fields
-                .shift_remove("refreshTokenExpiresAt")
-                .unwrap_or_default()
-                .into_field(),
-            scope: fields
-                .shift_remove("scope")
-                .unwrap_or_default()
-                .into_field(),
-            password: fields
-                .shift_remove("password")
-                .unwrap_or_default()
-                .into_field(),
-            created_at: fields
-                .shift_remove("createdAt")
-                .unwrap_or_default()
-                .into_field(),
-            updated_at: fields
-                .shift_remove("updatedAt")
-                .unwrap_or_default()
-                .into_field(),
+            id: SchemaValue::from_field(fields.shift_remove("id").unwrap_or_default()),
+            account_id: SchemaValue::from_field(
+                fields.shift_remove("accountId").unwrap_or_default(),
+            ),
+            provider_id: SchemaValue::from_field(
+                fields.shift_remove("providerId").unwrap_or_default(),
+            ),
+            user_id: SchemaValue::from_field(fields.shift_remove("userId").unwrap_or_default()),
+            access_token: SchemaValue::from_field(
+                fields.shift_remove("accessToken").unwrap_or_default(),
+            ),
+            refresh_token: SchemaValue::from_field(
+                fields.shift_remove("refreshToken").unwrap_or_default(),
+            ),
+            id_token: SchemaValue::from_field(fields.shift_remove("idToken").unwrap_or_default()),
+            access_token_expires_at: SchemaValue::from_field(
+                fields
+                    .shift_remove("accessTokenExpiresAt")
+                    .unwrap_or_default(),
+            ),
+            refresh_token_expires_at: SchemaValue::from_field(
+                fields
+                    .shift_remove("refreshTokenExpiresAt")
+                    .unwrap_or_default(),
+            ),
+            scope: SchemaValue::from_field(fields.shift_remove("scope").unwrap_or_default()),
+            password: SchemaValue::from_field(fields.shift_remove("password").unwrap_or_default()),
+            created_at: SchemaValue::from_field(
+                fields.shift_remove("createdAt").unwrap_or_default(),
+            ),
+            updated_at: SchemaValue::from_field(
+                fields.shift_remove("updatedAt").unwrap_or_default(),
+            ),
             additional_fields: fields,
         }
     }
 
     /// Decode an adapter result without validating a replacement field's default Rust type.
-    pub fn from_fields(fields: Map<String, Value>) -> AuthResult<Self> {
-        serde_json::from_value(Value::Object(fields)).map_err(Into::into)
+    pub fn from_fields(fields: crate::FieldMap) -> AuthResult<Self> {
+        Self::from_field_values(fields)
     }
 }

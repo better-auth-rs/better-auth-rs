@@ -85,7 +85,7 @@ impl OpenApiBuilder {
         self
     }
 
-    pub fn user_input(self, mut fields: UserConfig) -> Self {
+    pub fn user_input(self, mut fields: UserConfig) -> crate::AuthResult<Self> {
         let mut properties = Map::new();
         let mut required = Vec::new();
         fields
@@ -95,7 +95,7 @@ impl OpenApiBuilder {
             if !field.input() {
                 continue;
             }
-            let _ = properties.insert(name.clone(), super::field_schema::input_property(field));
+            let _ = properties.insert(name.clone(), super::field_schema::input_property(field)?);
             if field.required == Some(true)
                 && field.default_value.is_none()
                 && field.default_value_fn.is_none()
@@ -103,7 +103,7 @@ impl OpenApiBuilder {
                 required.push(name.clone());
             }
         }
-        self.user_input_properties(properties, required)
+        Ok(self.user_input_properties(properties, required))
     }
 
     pub fn user_input_properties(
@@ -116,18 +116,21 @@ impl OpenApiBuilder {
         self
     }
 
-    pub fn model(self, logical_name: &str, fields: &UserConfig) -> Self {
+    pub fn model(self, logical_name: &str, fields: &UserConfig) -> crate::AuthResult<Self> {
         let mut properties = Map::new();
         let mut required = Vec::new();
         let mut fields: Vec<_> = fields.fields().iter().collect();
         fields.sort_by_key(|(name, _)| property_key_order(name));
         for (name, field) in fields {
-            let _ = properties.insert(name.clone(), super::field_schema::component_property(field));
+            let _ = properties.insert(
+                name.clone(),
+                super::field_schema::component_property(field)?,
+            );
             if field.required == Some(true) && field.returned() && !required.contains(name) {
                 required.push(name.clone());
             }
         }
-        self.model_properties(logical_name, properties, required)
+        Ok(self.model_properties(logical_name, properties, required))
     }
 
     pub fn model_properties(

@@ -270,15 +270,13 @@ impl ApiKeyPlugin {
         if !api_key.enabled {
             return Err(ApiKeyErrorCode::KeyDisabled.into());
         }
-        if let Some(expires_at) = api_key.expires_at.as_deref() {
-            let expiration = chrono::DateTime::parse_from_rfc3339(expires_at).map_err(|error| {
-                AuthError::internal(format!("Invalid stored API key expiration: {error}"))
-            })?;
-            if chrono::Utc::now() > expiration {
-                super::storage::delete_for_verification(config, ctx, &api_key).await?;
-                return Err(ApiKeyErrorCode::KeyExpired.into());
-            }
+        if let Some(expires_at) = &api_key.expires_at
+            && chrono::Utc::now().timestamp_millis() as f64 > expires_at.milliseconds()
+        {
+            super::storage::delete_for_verification(config, ctx, &api_key).await?;
+            return Err(ApiKeyErrorCode::KeyExpired.into());
         }
+
         if let Some(required) = input.permissions {
             let permitted = api_key.permissions.as_deref().is_some_and(|permissions| {
                 super::handlers::check_permissions(permissions, required)
@@ -355,9 +353,9 @@ impl ApiKeyPlugin {
                         "userId": session.user_id,
                         "userAgent": session.user_agent,
                         "ipAddress": session.ip_address,
-                        "createdAt": session.created_at,
-                        "updatedAt": session.updated_at,
-                        "expiresAt": session.expires_at,
+                        "createdAt": better_auth_core::FieldValue::from(session.created_at.clone()).json()?,
+                        "updatedAt": better_auth_core::FieldValue::from(session.updated_at.clone()).json()?,
+                        "expiresAt": better_auth_core::FieldValue::from(session.expires_at.clone()).json()?,
                     },
                 }),
             )?)));
@@ -472,19 +470,13 @@ impl ApiKeyPlugin {
 
                 let now = chrono::Utc::now();
                 let expires_at = match view.expires_at {
-                    Some(value) => chrono::DateTime::parse_from_rfc3339(&value)
-                        .map_err(|error| {
-                            AuthError::internal(format!(
-                                "Invalid stored API key expiration: {error}"
-                            ))
-                        })?
-                        .with_timezone(&chrono::Utc),
+                    Some(value) => value,
                     // Upstream passes its session lifetime in seconds to getDate(..., "ms").
-                    None => {
-                        now + chrono::Duration::milliseconds(
+                    None => (now
+                        + chrono::Duration::milliseconds(
                             ctx.config.session.expires_in().num_seconds(),
-                        )
-                    }
+                        ))
+                    .into(),
                 };
                 let meta = endpoint.request.map(|req| {
                     better_auth_core::RequestMeta::from_request_with_config(
@@ -497,8 +489,8 @@ impl ApiKeyPlugin {
                     id: view.id,
                     token: key.to_owned(),
                     user_id: user.id().into_owned(),
-                    created_at: now,
-                    updated_at: now,
+                    created_at: now.into(),
+                    updated_at: now.into(),
                     expires_at,
                     ip_address: meta.as_ref().and_then(|meta| meta.ip_address.clone()),
                     user_agent: meta.and_then(|meta| meta.user_agent),

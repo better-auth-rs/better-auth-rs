@@ -2,10 +2,14 @@
 
 use std::collections::HashMap;
 
+use crate::plugins::organization::request::{from_fields, object, take};
 use better_auth_core::types::{
     CreateOrganizationRole, HttpMethod, OrganizationRole, UpdateOrganizationRole,
 };
-use better_auth_core::{AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, AuthSchema};
+use better_auth_core::{
+    AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, AuthSchema, FieldMap,
+    FieldValue, FromFieldMap, SchemaField,
+};
 use serde::Deserialize;
 use serde_json::json;
 use validator::Validate;
@@ -17,65 +21,53 @@ type Permissions = HashMap<String, Vec<String>>;
 
 // Preserve request order because upstream returns missingPermissions in that order.
 #[derive(Clone)]
-struct RequestedPermissions(Vec<(String, serde_json::Value)>);
+struct RequestedPermissions(FieldMap);
 
 impl RequestedPermissions {
-    fn dynamic(value: &serde_json::Value) -> Self {
-        use serde_json::Value;
+    fn dynamic(value: &FieldValue) -> Self {
+        let units = match value {
+            FieldValue::String(value) => Some(value.encode_utf16().collect::<Vec<_>>()),
+            FieldValue::Utf16String(value) => Some(value.as_utf16().to_vec()),
+            _ => None,
+        };
         Self(match value {
-            Value::Object(fields) => fields
-                .iter()
-                .map(|(key, value)| (key.clone(), value.clone()))
-                .collect(),
-            Value::Array(values) => values
+            FieldValue::Object(fields) => (**fields).clone(),
+            FieldValue::Array(values) => values
                 .iter()
                 .enumerate()
                 .map(|(index, value)| (index.to_string(), value.clone()))
                 .collect(),
-            Value::String(value) => value
-                .chars()
+            _ => units
+                .into_iter()
+                .flatten()
                 .enumerate()
-                .map(|(index, value)| (index.to_string(), json!(value.to_string())))
+                .map(|(index, unit)| {
+                    (
+                        index.to_string(),
+                        better_auth_core::Utf16String::from_units(vec![unit]).into(),
+                    )
+                })
                 .collect(),
-            _ => Vec::new(),
         })
     }
 }
 
-impl<'de> Deserialize<'de> for RequestedPermissions {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        struct Visitor;
-        impl<'de> serde::de::Visitor<'de> for Visitor {
-            type Value = RequestedPermissions;
-            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                formatter.write_str("an object mapping resources to action arrays")
-            }
-            fn visit_map<M: serde::de::MapAccess<'de>>(
-                self,
-                mut map: M,
-            ) -> Result<Self::Value, M::Error> {
-                let mut permissions = Vec::new();
-                while let Some((key, actions)) = map.next_entry::<String, Vec<String>>()? {
-                    permissions.push((key, json!(actions)));
-                }
-                Ok(RequestedPermissions(permissions))
-            }
+impl SchemaField for RequestedPermissions {
+    fn from_field(value: FieldValue) -> Result<Self, FieldValue> {
+        match value {
+            FieldValue::Object(fields) => Ok(Self((*fields).clone())),
+            value => Err(value),
         }
-        deserializer.deserialize_map(Visitor)
+    }
+
+    fn into_field(self) -> FieldValue {
+        self.0.into()
     }
 }
 
-impl serde::Serialize for RequestedPermissions {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.collect_map(self.0.iter().map(|(resource, actions)| (resource, actions)))
-    }
-}
-
-#[derive(Clone, Deserialize, Validate)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, Validate)]
 pub(in crate::plugins::organization) struct CreateRole {
-    #[serde(default)]
-    additional_fields: OptionalField<serde_json::Map<String, serde_json::Value>>,
+    additional_fields: OptionalField<FieldMap>,
     organization_id: Option<String>,
     role: String,
     permission: RequestedPermissions,
@@ -89,19 +81,16 @@ pub(in crate::plugins::organization) struct RoleSelector {
     role_id: Option<String>,
 }
 
-#[derive(Clone, Deserialize, Validate)]
+#[derive(Clone, Validate)]
 pub(in crate::plugins::organization) struct UpdateRole {
-    #[serde(flatten)]
     selector: RoleSelector,
     data: RoleUpdate,
+    configured_fields: FieldMap,
 }
 
-#[derive(Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone)]
 pub(in crate::plugins::organization) struct RoleUpdate {
-    #[serde(default)]
     role_name: OptionalField<String>,
-    #[serde(default)]
     permission: OptionalField<RequestedPermissions>,
 }
 
@@ -112,20 +101,102 @@ enum OptionalField<T> {
     Null,
     Value(T),
 }
-impl<'de, T: Deserialize<'de>> Deserialize<'de> for OptionalField<T> {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        Ok(match Option::<T>::deserialize(deserializer)? {
-            Some(value) => Self::Value(value),
-            None => Self::Null,
-        })
+
+impl<T: SchemaField> SchemaField for OptionalField<T> {
+    fn from_field(value: FieldValue) -> Result<Self, FieldValue> {
+        match value {
+            FieldValue::Undefined => Ok(Self::Missing),
+            FieldValue::Null => Ok(Self::Null),
+            value => T::from_field(value).map(Self::Value),
+        }
+    }
+
+    fn into_field(self) -> FieldValue {
+        match self {
+            Self::Missing => FieldValue::Undefined,
+            Self::Null => FieldValue::Null,
+            Self::Value(value) => value.into_field(),
+        }
     }
 }
+
 impl<T> OptionalField<T> {
     fn into_option(self) -> Option<T> {
         match self {
             Self::Value(value) => Some(value),
             _ => None,
         }
+    }
+}
+
+impl FromFieldMap for CreateRole {
+    fn from_field_values(mut fields: FieldMap) -> AuthResult<Self> {
+        let additional_fields = match fields.remove("additionalFields") {
+            None | Some(FieldValue::Undefined) => OptionalField::Missing,
+            Some(FieldValue::Null) => OptionalField::Null,
+            Some(FieldValue::Object(fields)) => OptionalField::Value((*fields).clone()),
+            Some(_) => {
+                return Err(AuthError::internal(
+                    "Validated additionalFields is not an object",
+                ));
+            }
+        };
+        Ok(Self {
+            additional_fields,
+            organization_id: take(&mut fields, "organizationId")?,
+            role: take(&mut fields, "role")?,
+            permission: take(&mut fields, "permission")?,
+        })
+    }
+}
+from_fields!(RoleSelector {
+    organization_id: "organizationId",
+    role_name: "roleName",
+    role_id: "roleId"
+});
+from_fields!(RoleUpdate {
+    role_name: "roleName",
+    permission: "permission"
+});
+impl FromFieldMap for UpdateRole {
+    fn from_field_values(mut fields: FieldMap) -> AuthResult<Self> {
+        let data = RoleUpdate::from_field_values(object(&mut fields, "data")?)?;
+        Ok(Self {
+            selector: RoleSelector::from_field_values(fields)?,
+            data,
+            configured_fields: FieldMap::new(),
+        })
+    }
+}
+
+impl UpdateRole {
+    pub(in crate::plugins::organization) fn validated(
+        mut fields: FieldMap,
+        schema: &better_auth_core::user_fields::UserConfig,
+    ) -> AuthResult<Self> {
+        let mut data = object(&mut fields, "data")?;
+        let configured_fields = data
+            .iter()
+            .filter(|(name, _)| {
+                schema
+                    .fields()
+                    .get(*name)
+                    .is_some_and(|field| field.input())
+            })
+            .map(|(name, value)| (name.clone(), value.clone()))
+            .collect();
+        if schema
+            .fields()
+            .get("permission")
+            .is_some_and(|field| field.input())
+        {
+            let _ = data.remove("permission");
+        }
+        Ok(Self {
+            selector: RoleSelector::from_field_values(fields)?,
+            data: RoleUpdate::from_field_values(data)?,
+            configured_fields,
+        })
     }
 }
 
@@ -292,11 +363,22 @@ async fn validate_permissions(
     let mut missing = Vec::new();
     for (resource, actions) in &permission.0 {
         let actions = match actions {
-            serde_json::Value::Array(actions) => actions.clone(),
-            serde_json::Value::String(actions) => actions
+            FieldValue::Array(actions) => actions.to_vec(),
+            FieldValue::String(actions) => actions
                 .chars()
-                .map(|value| json!(value.to_string()))
+                .map(|value| FieldValue::from(value.to_string()))
                 .collect(),
+            FieldValue::Utf16String(actions) => {
+                char::decode_utf16(actions.as_utf16().iter().copied())
+                    .map(|character| match character {
+                        Ok(character) => FieldValue::from(character.to_string()),
+                        Err(error) => better_auth_core::Utf16String::from_units(vec![
+                            error.unpaired_surrogate(),
+                        ])
+                        .into(),
+                    })
+                    .collect()
+            }
             _ => {
                 return Err(AuthError::internal(
                     "Role permission actions are not iterable",
@@ -318,9 +400,8 @@ async fn validate_permissions(
                 false
             };
             if !allowed {
-                let requested =
-                    better_auth_core::SchemaValue::<serde_json::Value>::Dynamic(requested)
-                        .display_string()?;
+                let requested = better_auth_core::SchemaValue::<FieldValue>::Dynamic(requested)
+                    .display_string()?;
                 missing.push(format!("{resource}:{requested}"));
             }
         }
@@ -396,7 +477,7 @@ pub async fn handle_role_request(
                 return Ok(Some(response));
             }
             unused_name(&name, &organization_id, config, ctx).await?;
-            let permission = serde_json::to_value(body.permission)?;
+            let permission = body.permission.into_field();
             let mut role = ctx
                 .database
                 .create_organization_role(CreateOrganizationRole {
@@ -409,7 +490,7 @@ pub async fn handle_role_request(
             role.permission = permission.clone().into();
             AuthResponse::json(
                 200,
-                &json!({"success":true,"roleData":role,"statements":permission}),
+                &json!({"success":true,"roleData":role,"statements":better_auth_core::SchemaValue::Typed(permission)}),
             )?
         }
         (HttpMethod::Get, "/organization/list-roles" | "/organization/get-role") => {
@@ -496,38 +577,22 @@ pub async fn handle_role_request(
         }
         (HttpMethod::Post, "/organization/update-role") => {
             let body: UpdateRole = super::super::request::read(req, &config.schema)?;
-            let raw = req.input_body()?;
-            let raw_data = raw
-                .as_ref()
-                .and_then(|value| value.get("data"))
-                .and_then(serde_json::Value::as_object)
-                .ok_or_else(|| AuthError::internal("Validated role data is missing"))?;
-            let schema = &config.schema.organization_role;
-            let overrides_permission = schema
+            let overrides_permission = config
+                .schema
+                .organization_role
                 .fields()
                 .get("permission")
                 .is_some_and(|field| field.input());
-            let mut fields: serde_json::Map<String, serde_json::Value> = raw_data
-                .iter()
-                .filter(|(name, _)| {
-                    schema
-                        .fields()
-                        .get(*name)
-                        .is_some_and(|field| field.input())
-                })
-                .map(|(name, value)| (name.clone(), value.clone()))
-                .collect();
+            let mut fields = body.configured_fields;
             let requested = body.data.permission.into_option();
             let permission = if overrides_permission {
                 fields.remove("permission")
             } else {
-                requested.as_ref().map(serde_json::to_value).transpose()?
+                requested.clone().map(SchemaField::into_field)
             }
-            .filter(better_auth_core::user_fields::is_truthy);
+            .filter(FieldValue::is_truthy);
             let requested = requested.unwrap_or_else(|| {
-                RequestedPermissions::dynamic(
-                    permission.as_ref().unwrap_or(&serde_json::Value::Null),
-                )
+                RequestedPermissions::dynamic(permission.as_ref().unwrap_or(&FieldValue::Null))
             });
             let _ = require_ac(config)?;
             let (organization_id, member_role) = authorize_member(
@@ -539,12 +604,7 @@ pub async fn handle_role_request(
             )
             .await?;
             let mut role = select_role(&body.selector, &organization_id, ctx).await?;
-            role.permission = if role
-                .permission
-                .json()?
-                .as_ref()
-                .is_some_and(better_auth_core::user_fields::is_truthy)
-            {
+            role.permission = if role.permission.is_truthy()? {
                 super::super::native_json::permission(&role.permission)?.into()
             } else {
                 better_auth_core::SchemaValue::Undefined
@@ -608,13 +668,8 @@ pub async fn handle_role_request(
             }
             if let Some(permission) = permission {
                 updated.permission = permission.into();
-            } else if !updated
-                .permission
-                .json()?
-                .as_ref()
-                .is_some_and(better_auth_core::user_fields::is_truthy)
-            {
-                updated.permission = serde_json::Value::Null.into();
+            } else if !updated.permission.is_truthy()? {
+                updated.permission = FieldValue::Null.into();
             }
             AuthResponse::json(200, &json!({"success":true,"roleData":updated}))?
         }

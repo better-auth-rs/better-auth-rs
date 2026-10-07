@@ -274,7 +274,7 @@ impl<S: AuthSchema> SessionManager<S> {
         let create_session = CreateSession {
             additional_fields: Default::default(),
             user_id: user.id().into_owned(),
-            expires_at,
+            expires_at: expires_at.into(),
             ip_address,
             user_agent,
             impersonated_by: None,
@@ -290,7 +290,9 @@ impl<S: AuthSchema> SessionManager<S> {
         let Some(session) = self.database.get_session(token).await? else {
             return Ok(None);
         };
-        if session.expires_at() < Utc::now() || !session.active() {
+        if session.expires_at().milliseconds() < Utc::now().timestamp_millis() as f64
+            || !session.active()
+        {
             self.database.delete_session(token).await?;
             return Ok(None);
         }
@@ -307,9 +309,10 @@ impl<S: AuthSchema> SessionManager<S> {
 
     fn needs_refresh(&self, session: &impl AuthSession) -> bool {
         !self.config.session.disable_session_refresh()
-            && session.expires_at() - self.config.session.expires_in()
-                + self.config.session.update_age()
-                <= Utc::now()
+            && session.expires_at().milliseconds()
+                - self.config.session.expires_in().num_milliseconds() as f64
+                + self.config.session.update_age().num_milliseconds() as f64
+                <= Utc::now().timestamp_millis() as f64
     }
 
     /// Resolve an HTTP session and queue any cookie updates on the request.
@@ -406,7 +409,8 @@ impl<S: AuthSchema> SessionManager<S> {
                     &payload.version
                 }) == cache.version.resolve(&payload.data).await?
                 && expires >= Utc::now().timestamp_millis()
-                && payload.data.session.expires_at >= Utc::now()
+                && payload.data.session.expires_at.milliseconds()
+                    >= Utc::now().timestamp_millis() as f64
             {
                 if !self.capabilities.server_sessions()
                     && let Some(update_age) = cache.refresh_age()
@@ -470,7 +474,9 @@ impl<S: AuthSchema> SessionManager<S> {
             }
         };
         req.set_session_snapshot(Some(data.clone()))?;
-        if session.expires_at() < Utc::now() || !session.active() {
+        if session.expires_at().milliseconds() < Utc::now().timestamp_millis() as f64
+            || !session.active()
+        {
             self.clear_cookies(req)?;
             if !self.config.session.defer_session_refresh || is_post {
                 self.database.delete_session(&token).await?;
@@ -608,7 +614,10 @@ impl<S: AuthSchema> SessionManager<S> {
         // Filter out expired sessions
         let active_sessions = sessions
             .into_iter()
-            .filter(|session| session.expires_at() > now && session.active())
+            .filter(|session| {
+                session.expires_at().milliseconds() > now.timestamp_millis() as f64
+                    && session.active()
+            })
             .collect();
 
         Ok(active_sessions)
@@ -624,10 +633,10 @@ impl<S: AuthSchema> SessionManager<S> {
             .get_user_session_snapshots(user_id.as_ref())
             .await?;
         let mut views = Vec::new();
-        for (session, cached) in snapshots
-            .into_iter()
-            .filter(|(session, _)| session.expires_at() > Utc::now() && session.active())
-        {
+        for (session, cached) in snapshots.into_iter().filter(|(session, _)| {
+            session.expires_at().milliseconds() > Utc::now().timestamp_millis() as f64
+                && session.active()
+        }) {
             let view = if let Some(mut view) = cached {
                 view.filter_returned_fields(&self.config.session);
                 view
@@ -701,7 +710,10 @@ impl<S: AuthSchema> SessionManager<S> {
     /// If `fresh_age` is `None`, the session is never considered fresh.
     pub fn is_session_fresh(&self, session: &impl AuthSession) -> bool {
         match self.config.session.fresh_age {
-            Some(fresh_age) => session.created_at() + fresh_age > Utc::now(),
+            Some(fresh_age) => {
+                session.created_at().milliseconds() + fresh_age.num_milliseconds() as f64
+                    > Utc::now().timestamp_millis() as f64
+            }
             None => false,
         }
     }
@@ -875,10 +887,10 @@ mod tests {
         let session = SessionView {
             visible_fields: None,
             id: "s1".into(),
-            expires_at: Utc::now() + Duration::hours(1),
+            expires_at: (Utc::now() + Duration::hours(1)).into(),
             token: "tok".into(),
-            created_at: Utc::now(),
-            updated_at: Utc::now(),
+            created_at: Utc::now().into(),
+            updated_at: Utc::now().into(),
             ip_address: None,
             user_agent: None,
             user_id: "u1".into(),
@@ -902,10 +914,10 @@ mod tests {
         let session = SessionView {
             visible_fields: None,
             id: "s1".into(),
-            expires_at: Utc::now() + Duration::hours(1),
+            expires_at: (Utc::now() + Duration::hours(1)).into(),
             token: "tok".into(),
-            created_at: Utc::now() - Duration::minutes(20),
-            updated_at: Utc::now(),
+            created_at: (Utc::now() - Duration::minutes(20)).into(),
+            updated_at: Utc::now().into(),
             ip_address: None,
             user_agent: None,
             user_id: "u1".into(),
@@ -925,10 +937,10 @@ mod tests {
         let session = SessionView {
             visible_fields: None,
             id: "s1".into(),
-            expires_at: Utc::now() + Duration::hours(1),
+            expires_at: (Utc::now() + Duration::hours(1)).into(),
             token: "tok".into(),
-            created_at: Utc::now(),
-            updated_at: Utc::now(),
+            created_at: Utc::now().into(),
+            updated_at: Utc::now().into(),
             ip_address: None,
             user_agent: None,
             user_id: "u1".into(),
@@ -979,7 +991,7 @@ mod tests {
         let token = session.token().to_string();
 
         // Move the stored expiry back so the refresh is observable.
-        let stale = session.expires_at() - Duration::minutes(30);
+        let stale = session.expires_at().to_datetime().unwrap().unwrap() - Duration::minutes(30);
         let _ = db.update_session_expiry(&token, stale).await.unwrap();
 
         let returned = mgr
@@ -994,7 +1006,7 @@ mod tests {
             .expect("session should still be stored");
 
         assert!(
-            returned.expires_at() > stale,
+            returned.expires_at().milliseconds() > stale.timestamp_millis() as f64,
             "refresh should have extended the expiry"
         );
         assert_eq!(
