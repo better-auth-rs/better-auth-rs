@@ -276,9 +276,12 @@ async fn test_spec_driven_endpoint_validation() {
             access_token: (Some("mock-access-token".to_string())).into(),
             refresh_token: (Some("mock-refresh-token".to_string())).into(),
             id_token: Default::default(),
-            access_token_expires_at: (Some(chrono::Utc::now() + chrono::Duration::hours(1))).into(),
-            refresh_token_expires_at: (Some(chrono::Utc::now() + chrono::Duration::hours(2)))
+            access_token_expires_at: Some((chrono::Utc::now() + chrono::Duration::hours(1)).into())
                 .into(),
+            refresh_token_expires_at: Some(
+                (chrono::Utc::now() + chrono::Duration::hours(2)).into(),
+            )
+            .into(),
             scope: (Some("openid,email,profile".to_string())).into(),
             password: Default::default(),
             ..Default::default()

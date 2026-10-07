@@ -6,7 +6,7 @@ use better_auth_core::{
     store::{EphemeralStore, StatelessSchema, UserStore},
     user_fields::UserFieldConfig,
 };
-use serde_json::{Value, json};
+use serde_json::Value;
 use std::sync::{
     Arc,
     atomic::{AtomicBool, AtomicUsize, Ordering},
@@ -76,7 +76,7 @@ async fn check<S: AuthSchema>(
             name.replace(' ', "-").to_lowercase()
         ));
         user.name = Some(name.into()).into();
-        let _ = user.additional_fields.insert("note".into(), json!(note));
+        let _ = user.additional_fields.insert("note".into(), note.into());
         let _ = store.create_user(user).await?;
     }
     projection.calls.store(0, Ordering::SeqCst);

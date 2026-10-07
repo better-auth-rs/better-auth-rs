@@ -1151,7 +1151,7 @@ mod sqlite {
                 required: Some(false),
                 transform: Some(FieldTransforms {
                     input: Some(UserFieldTransform::new(|value| {
-                        if value.as_ref() == Some(&json!("reject")) {
+                        if value.as_str() == Some("reject") {
                             Err(AuthError::internal("rejected transform"))
                         } else {
                             Ok(value)
@@ -1195,7 +1195,7 @@ mod sqlite {
             if kind == "transform" {
                 let _ = update
                     .additional_fields
-                    .insert("note".into(), json!("reject"));
+                    .insert("note".into(), "reject".into());
             }
             let result = store.update_user(id, update).instrument(capture_span).await;
             match kind {
@@ -1420,7 +1420,7 @@ async fn check_plugin_operations(
         let key = store
             .create_jwk(better_auth_core::CreateJwk {
                 additional_fields: Default::default(),
-                created_at: chrono::Utc::now(),
+                created_at: chrono::Utc::now().into(),
                 public_key: "public".into(),
                 private_key: "private".into(),
                 expires_at: None,
@@ -1440,7 +1440,7 @@ async fn check_plugin_operations(
                 address: "0x123".into(),
                 chain_id: 1,
                 is_primary: true,
-                created_at: chrono::Utc::now(),
+                created_at: chrono::Utc::now().into(),
             })
             .await?;
         assert_eq!(
@@ -1517,7 +1517,7 @@ async fn check_device_operations(
                 device_code: "device-secret".into(),
                 user_code: "ABCD2345".into(),
                 user_id: None,
-                expires_at: chrono::Utc::now() + chrono::Duration::minutes(10),
+                expires_at: (chrono::Utc::now() + chrono::Duration::minutes(10)).into(),
                 status: "pending".into(),
                 last_polled_at: None,
                 polling_interval: Some(5_000.0),
@@ -1569,7 +1569,7 @@ async fn check_device_operations(
             .update_device_code(
                 &code.id,
                 better_auth_core::UpdateDeviceCode {
-                    last_polled_at: Some(Some(chrono::Utc::now())),
+                    last_polled_at: Some(Some(chrono::Utc::now().into())),
                     ..Default::default()
                 },
             )

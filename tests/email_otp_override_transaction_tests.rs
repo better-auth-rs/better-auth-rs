@@ -237,7 +237,7 @@ async fn run(reuse: bool, outcome: &'static str) -> Value {
         .get_verification_including_expired(IDENTIFIER)
         .await
         .unwrap();
-    let rows: Vec<Value> = verification.into_iter().map(|row| json!({"value":row.value, "originalExpiry":row.expires_at.typed().unwrap() == &expiry})).collect();
+    let rows: Vec<Value> = verification.into_iter().map(|row| json!({"value":row.value, "originalExpiry":row.expires_at.typed().unwrap() == &expiry.into()})).collect();
     let contexts: Vec<Value> = serde_json::from_str(include_str!(
         "fixtures/background-otp-context-upstream.json"
     ))

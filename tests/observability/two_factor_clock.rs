@@ -1,7 +1,7 @@
 use super::{Capture, config};
 use better_auth::{AuthError, AuthResult};
 use better_auth_core::{
-    CreateTwoFactor,
+    CreateTwoFactor, FieldValue,
     store::{EphemeralStore, MemoryCacheAdapter, TwoFactorStore, secondary::SecondaryStore},
 };
 use serde_json::{Value, json};
@@ -83,7 +83,7 @@ async fn check(store: &impl TwoFactorStore, collection: &str) -> AuthResult<()> 
             case["name"]
         );
         assert_eq!(
-            json!({"failedVerificationCount":stored.failed_verification_count,"lockedUntil":stored.locked_until}),
+            json!({"failedVerificationCount":stored.failed_verification_count,"lockedUntil":stored.locked_until.map_or(FieldValue::Null, FieldValue::Date).json()?}),
             case["stored"],
             "{}",
             case["name"]

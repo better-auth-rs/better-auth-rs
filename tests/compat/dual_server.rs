@@ -520,10 +520,10 @@ pub async fn seed_rust_oauth_account(auth: &TestAuth, user_id: &str, seed: &OAut
                 .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
                 .unwrap_or_default(),
             access_token_expires_at: (access_token_expires_at)
-                .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                .map(|value| better_auth_core::SchemaValue::Typed(Some(value.into())))
                 .unwrap_or_default(),
             refresh_token_expires_at: (refresh_token_expires_at)
-                .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                .map(|value| better_auth_core::SchemaValue::Typed(Some(value.into())))
                 .unwrap_or_default(),
             scope: (seed.scope.clone())
                 .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))

@@ -145,8 +145,8 @@ async fn observe<S: AuthSchema>(
                 email_verified: Some(true),
                 role: Some(role.into()),
                 banned: Some(false),
-                created_at: Some(created_at),
-                updated_at: Some(created_at),
+                created_at: Some(created_at.into()),
+                updated_at: Some(created_at.into()),
                 ..Default::default()
             })
             .await?;

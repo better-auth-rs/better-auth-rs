@@ -309,7 +309,7 @@ async fn extractor_refreshes_valid_sessions_through_session_manager() {
     let session = CurrentSession::<Schema>::from_request_parts(&mut request(&token), &auth)
         .await
         .unwrap();
-    assert!(session.session.expires_at > previous_expiry);
+    assert!(session.session.expires_at.milliseconds() > previous_expiry.timestamp_millis() as f64);
     assert_eq!(
         auth.store()
             .get_session(&token)

@@ -151,15 +151,17 @@ async fn sqlite_and_ephemeral_delete_hooks_receive_one_transformed_hidden_snapsh
                 required: Some(false),
                 returned: Some(false),
                 field_name: Some("deviceLabel".into()),
-                default_value: Some(serde_json::json!("raw")),
+                default_value: Some("raw".into()),
                 transform: Some(FieldTransforms {
                     output: Some(UserFieldTransform::new(move |value| {
                         if rejected.load(Ordering::SeqCst) {
                             return Err(AuthError::internal("snapshot rejected"));
                         }
-                        Ok(value.map(|value| {
-                            serde_json::json!(format!("{}:out", value.as_str().unwrap()))
-                        }))
+                        Ok(if value.is_undefined() {
+                            value
+                        } else {
+                            format!("{}:out", value.as_str().unwrap()).into()
+                        })
                     })),
                     ..Default::default()
                 }),
@@ -647,7 +649,10 @@ async fn check_token_batch<S: AuthSchema>(
         for token in [first.token(), second.token()] {
             let row = store.get_session(token).await.unwrap();
             if preserve {
-                assert!(row.is_none_or(|row| row.expires_at() <= Utc::now()));
+                assert!(
+                    row.is_none_or(|row| row.expires_at().milliseconds()
+                        <= Utc::now().timestamp_millis() as f64)
+                );
             } else {
                 assert!(row.is_none());
             }
