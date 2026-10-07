@@ -4,6 +4,7 @@ use better_auth::{
     integrations::axum::AxumIntegration,
     plugins::{
         EmailPasswordPlugin, EmailVerificationPlugin,
+        email_verification::EmailVerificationConfig,
         oauth::{OAuthPlugin, OAuthProvider},
     },
 };
@@ -40,9 +41,25 @@ pub(super) async fn auth<S: AuthSchema>(
     provider.get_user_info = Some(callbacks.clone());
     provider.override_user_info_on_sign_in = scenario.override_user_info;
     provider.require_email_verification = scenario.require_email_verification.then_some(true);
+    let verification = scenario.send_on_sign_in.then(|| {
+        let mut config = EmailVerificationConfig {
+            send_on_sign_in: true,
+            ..Default::default()
+        };
+        if scenario.email_sender {
+            config.send_verification_email = Some(Arc::new(email::Sender(events.clone())));
+        }
+        config
+    });
+    let mut oauth = OAuthPlugin::new().add_provider("google", provider);
+    if let Some(config) = &verification {
+        oauth = oauth.with_email_verification(Arc::new(EmailVerificationPlugin::with_config(
+            config.clone(),
+        )));
+    }
     let mut builder = BetterAuth::new(config)
         .store_arc(store)
-        .plugin(OAuthPlugin::new().add_provider("google", provider))
+        .plugin(oauth)
         .plugin(EmailPasswordPlugin::new().password_hasher(callbacks.clone()))
         .validate_user_info(callbacks.clone())
         .on_api_error(callbacks)
@@ -50,13 +67,8 @@ pub(super) async fn auth<S: AuthSchema>(
             enabled: Some(false),
             ..Default::default()
         });
-    if scenario.send_on_sign_in {
-        let mut verification = EmailVerificationPlugin::new().send_on_sign_in(true);
-        if scenario.email_sender {
-            verification = verification
-                .custom_send_verification_email(Arc::new(email::Sender(events.clone())));
-        }
-        builder = builder.plugin(verification);
+    if let Some(config) = verification {
+        builder = builder.plugin(EmailVerificationPlugin::with_config(config));
     }
     let auth = Arc::new(builder.build().await?);
     Ok(Harness { auth, flow })

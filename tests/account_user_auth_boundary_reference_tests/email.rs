@@ -125,7 +125,14 @@ fn assert_events(actual: &[Value], case: &Case, scenario: &Scenario) -> TestResu
         .iter()
         .filter(|event| event["kind"] == "logger")
         .collect();
-    assert_eq!(logs.len(), usize::from(scenario.email_sender));
+    assert_eq!(
+        logs.len(),
+        usize::from(scenario.email_sender),
+        "scenario={}, backend={}, joins={}",
+        case.scenario,
+        case.backend,
+        case.joins
+    );
     let admissions: Vec<_> = actual
         .iter()
         .filter(|event| event["kind"] == "admission")
