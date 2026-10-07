@@ -24,7 +24,7 @@ use better_auth::{
     __private_core::{
         __private_async_trait::async_trait,
         AuthContext, AuthError, AuthInitContext, AuthPlugin, AuthRequest, AuthResponse, AuthResult,
-        AuthRoute, AuthSchema, AuthStore, CreateUser,
+        AuthRoute, AuthSchema, AuthStore, CreateUser, FieldValue,
         store::{EphemeralStore, schema::EntityRole},
         user_fields::{
             FieldTransforms, UserConfig, UserFieldConfig, UserFieldTransform, UserFieldType,
@@ -64,12 +64,13 @@ fn config() -> AuthConfig {
     config
 }
 
-fn push(trace: &Trace, phase: &str, name: &str, value: &Option<Value>) {
+fn push(trace: &Trace, phase: &str, name: &str, value: &FieldValue) -> AuthResult<()> {
     trace.lock().expect("callback trace lock").push(json!([
         phase,
         name,
-        value.clone().unwrap_or_else(|| json!({"type":"undefined"}))
+        value.json()?.unwrap_or_else(|| json!({"type":"undefined"}))
     ]));
+    Ok(())
 }
 
 fn take(trace: &Trace) -> Vec<Value> {
@@ -83,37 +84,37 @@ fn fields(trace: Option<&Trace>, mode: &Arc<AtomicU8>) -> UserConfig {
             "enabledFlag",
             "stored_enabled_flag",
             UserFieldType::Boolean,
-            json!(0),
+            FieldValue::from(0.0),
         ),
         (
             "disabledFlag",
             "stored_disabled_flag",
             UserFieldType::Boolean,
-            json!(1),
+            FieldValue::from(1.0),
         ),
         (
             "labels",
             "stored_labels",
             UserFieldType::StringArray,
-            json!("[\"changed\",\"third\"]"),
+            FieldValue::from("[\"changed\",\"third\"]"),
         ),
         (
             "scores",
             "stored_scores",
             UserFieldType::NumberArray,
-            json!("[4,5.5]"),
+            FieldValue::from("[4,5.5]"),
         ),
         (
             "shortDate",
             "stored_short_date",
             UserFieldType::Date,
-            json!("2030-02-03"),
+            FieldValue::from("2030-02-03"),
         ),
         (
             "invalidDate",
             "stored_invalid_date",
             UserFieldType::Date,
-            json!("not-a-date"),
+            FieldValue::from("not-a-date"),
         ),
     ] {
         let transform = trace.map(|trace| {
@@ -122,11 +123,11 @@ fn fields(trace: Option<&Trace>, mode: &Arc<AtomicU8>) -> UserConfig {
             let mode = mode.clone();
             FieldTransforms {
                 input: Some(UserFieldTransform::new(move |value| {
-                    push(&input_trace, "input", name, &value);
+                    push(&input_trace, "input", name, &value)?;
                     Ok(value)
                 })),
                 output: Some(UserFieldTransform::new(move |value| {
-                    push(&output_trace, "output", name, &value);
+                    push(&output_trace, "output", name, &value)?;
                     let mode = mode.load(Ordering::SeqCst);
                     if mode == 2 && name == "labels" {
                         return Err(AuthError::internal(ERROR));
@@ -134,7 +135,7 @@ fn fields(trace: Option<&Trace>, mode: &Arc<AtomicU8>) -> UserConfig {
                     Ok(if mode == 0 {
                         value
                     } else {
-                        Some(replacement.clone())
+                        replacement.clone()
                     })
                 })),
             }

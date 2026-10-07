@@ -1,23 +1,25 @@
 use better_auth::__private_core::{
     AuthError, AuthResult, AuthSchema, AuthStore, CreateApiKey, CreateDeviceCode, CreateJwk,
-    CreatePasskey, CreateTwoFactor, CreateWalletAddress, Jwk, Passkey, PasskeyCredentialState,
-    PasskeyStorage, WalletAddress, wire::PasskeyView,
+    CreatePasskey, CreateTwoFactor, CreateWalletAddress, FieldMap, FieldValue, Jwk, Passkey,
+    PasskeyCredentialState, PasskeyStorage, WalletAddress, wire::PasskeyView,
 };
-use serde_json::{Map, Value, json};
+use better_auth::seaorm::sea_orm::entity::prelude::DateTimeUtc;
+use serde_json::{Value, json};
 
 use super::{ADDRESS, DATE, EXTRA_DATE};
 
-fn input() -> Map<String, Value> {
-    [
-        ("enabledFlag".into(), json!(true)),
-        ("disabledFlag".into(), json!(false)),
-        ("labels".into(), json!(["first", "second"])),
-        ("scores".into(), json!([1, 2.5])),
-        ("shortDate".into(), json!(EXTRA_DATE)),
-        ("invalidDate".into(), json!(EXTRA_DATE)),
-    ]
-    .into_iter()
-    .collect()
+fn input() -> FieldMap {
+    FieldMap::from([
+        ("enabledFlag".into(), true.into()),
+        ("disabledFlag".into(), false.into()),
+        (
+            "labels".into(),
+            vec!["first".into(), "second".into()].into(),
+        ),
+        ("scores".into(), vec![1.0.into(), 2.5.into()].into()),
+        ("shortDate".into(), EXTRA_DATE.into()),
+        ("invalidDate".into(), EXTRA_DATE.into()),
+    ])
 }
 
 #[expect(
@@ -47,35 +49,57 @@ fn passkey_value(row: &Passkey, storage: PasskeyStorage) -> AuthResult<Value> {
     Ok(value)
 }
 
-fn jwk_value(row: &Jwk) -> Value {
-    let mut fields = row.additional_fields.clone();
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "The observation rejects collisions between plugin columns and additional fields before serializing the complete row."
+)]
+fn jwk_value(row: &Jwk) -> AuthResult<Value> {
+    let mut fields = row.additional_fields.json()?;
     for (name, value) in [
         ("id", json!(row.id)),
         ("publicKey", json!(row.public_key)),
         ("privateKey", json!(row.private_key)),
-        ("createdAt", json!(row.created_at)),
-        ("expiresAt", json!(row.expires_at)),
+        (
+            "createdAt",
+            json!(FieldValue::Date(row.created_at.clone()).json()?),
+        ),
+        (
+            "expiresAt",
+            json!(
+                row.expires_at
+                    .clone()
+                    .map_or(FieldValue::Null, FieldValue::Date)
+                    .json()?
+            ),
+        ),
         ("alg", json!(row.alg)),
         ("crv", json!(row.crv)),
     ] {
         assert!(fields.insert(name.into(), value).is_none());
     }
-    Value::Object(fields)
+    Ok(Value::Object(fields))
 }
 
-fn wallet_value(row: &WalletAddress) -> Value {
-    let mut fields = row.additional_fields.clone();
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "The observation rejects collisions between plugin columns and additional fields before serializing the complete row."
+)]
+fn wallet_value(row: &WalletAddress) -> AuthResult<Value> {
+    let mut fields = row.additional_fields.json()?;
     for (name, value) in [
         ("id", json!(row.id)),
         ("userId", json!(row.user_id)),
         ("address", json!(row.address)),
         ("chainId", json!(row.chain_id)),
         ("isPrimary", json!(row.is_primary)),
-        ("createdAt", json!(row.created_at)),
+        (
+            "createdAt",
+            json!(FieldValue::Date(row.created_at.clone()).json()?),
+        ),
     ] {
         assert!(fields.insert(name.into(), value).is_none());
     }
-    Value::Object(fields)
+    Ok(Value::Object(fields))
 }
 
 pub(super) async fn create<S: AuthSchema>(
@@ -135,8 +159,9 @@ pub(super) async fn create<S: AuthSchema>(
                     user_code: "ordinary-user".into(),
                     user_id: Some(owner.into()),
                     expires_at: "2032-01-02T03:04:05.000Z"
-                        .parse()
-                        .expect("fixed expiration"),
+                        .parse::<DateTimeUtc>()
+                        .expect("fixed expiration")
+                        .into(),
                     status: "pending".into(),
                     last_polled_at: None,
                     polling_interval: Some(5000.0),
@@ -162,14 +187,17 @@ pub(super) async fn create<S: AuthSchema>(
                 .create_jwk(CreateJwk {
                     public_key: "public".into(),
                     private_key: "private".into(),
-                    created_at: DATE.parse().expect("fixed creation date"),
+                    created_at: DATE
+                        .parse::<DateTimeUtc>()
+                        .expect("fixed creation date")
+                        .into(),
                     expires_at: None,
                     alg: "EdDSA".into(),
                     crv: None,
                     additional_fields: input(),
                 })
                 .await?,
-        ),
+        )?,
         "walletAddress" => wallet_value(
             &store
                 .create_wallet_address(CreateWalletAddress {
@@ -177,11 +205,14 @@ pub(super) async fn create<S: AuthSchema>(
                     address: ADDRESS.into(),
                     chain_id: 1,
                     is_primary: false,
-                    created_at: DATE.parse().expect("fixed creation date"),
+                    created_at: DATE
+                        .parse::<DateTimeUtc>()
+                        .expect("fixed creation date")
+                        .into(),
                     additional_fields: input(),
                 })
                 .await?,
-        ),
+        )?,
         _ => return Err(AuthError::internal("Unknown plugin output model")),
     })
 }
@@ -212,13 +243,13 @@ pub(super) async fn read<S: AuthSchema>(
                 .await?
                 .expect("stored TwoFactor"),
         )?,
-        "jwks" => jwk_value(&store.get_jwk(id).await?.expect("stored JWK")),
+        "jwks" => jwk_value(&store.get_jwk(id).await?.expect("stored JWK"))?,
         "walletAddress" => wallet_value(
             &store
                 .get_wallet_address(ADDRESS, Some(1))
                 .await?
                 .expect("stored Wallet Address"),
-        ),
+        )?,
         _ => return Err(AuthError::internal("Unknown plugin output model")),
     })
 }
