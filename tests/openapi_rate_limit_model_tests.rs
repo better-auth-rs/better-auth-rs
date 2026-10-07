@@ -47,7 +47,7 @@ impl<S: AuthSchema> AuthPlugin<S> for RateLimitModel {
                         "count".into(),
                         UserFieldConfig {
                             required: Some(false),
-                            default_value: Some(json!("plugin-count")),
+                            default_value: Some("plugin-count".into()),
                             ..Default::default()
                         },
                     ),
@@ -58,7 +58,7 @@ impl<S: AuthSchema> AuthPlugin<S> for RateLimitModel {
                             input: Some(false),
                             default_value_fn: Some(Arc::new(move || {
                                 let _ = calls.fetch_add(1, Ordering::SeqCst);
-                                json!("plugin-label")
+                                "plugin-label".into()
                             })),
                             ..Default::default()
                         },

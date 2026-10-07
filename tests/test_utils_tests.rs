@@ -16,7 +16,9 @@ use better_auth_core::store::database_hooks::{
 };
 use better_auth_core::store::{EphemeralStore, StatelessSchema};
 use better_auth_core::user_fields::{UserFieldConfig, UserFieldType};
-use better_auth_core::{AuthError, AuthResult, CreateUser, CreateVerification, Organization};
+use better_auth_core::{
+    AuthError, AuthResult, CreateUser, CreateVerification, FieldDate, FieldValue, Organization,
+};
 use chrono::{Duration, Utc};
 use serde_json::json;
 use std::sync::{Arc, Mutex};
@@ -86,7 +88,7 @@ fn config(calls: Arc<Mutex<Vec<String>>>) -> AuthConfig {
         UserFieldConfig {
             field_type: UserFieldType::String,
             required: Some(false),
-            default_value: Some(json!("default")),
+            default_value: Some("default".into()),
             ..Default::default()
         },
     );
@@ -109,14 +111,15 @@ async fn contract<S: AuthSchema>(
 ) -> AuthResult<()> {
     let test = auth.test()?;
     assert!(test.organization().is_none());
-    let date = chrono::DateTime::parse_from_rfc3339("2020-01-01T00:00:00Z")
+    let date: FieldDate = chrono::DateTime::parse_from_rfc3339("2020-01-01T00:00:00Z")
         .unwrap()
-        .with_timezone(&Utc);
+        .with_timezone(&Utc)
+        .into();
     let input = test.create_user(CreateUser {
         id: Some("supplied-user".into()),
         email: Some("TEST@example.com".into()),
-        created_at: Some(date),
-        updated_at: Some(date),
+        created_at: Some(date.clone()),
+        updated_at: Some(date.clone()),
         ..Default::default()
     })?;
     assert_eq!(*generated.lock().unwrap(), ["user"]);
@@ -140,11 +143,20 @@ async fn contract<S: AuthSchema>(
     assert_ne!(login.session.id, "injected");
     assert_ne!(login.token, "injected");
     assert_eq!(login.session.user_id, user.id);
-    assert_eq!(login.session.additional_fields["label"], "selected");
+    assert_eq!(
+        login.session.additional_fields["label"],
+        FieldValue::from("selected")
+    );
     assert_eq!(login.session.ip_address.as_deref(), Some(""));
     assert_eq!(login.session.user_agent.as_deref(), Some(""));
-    assert!(login.session.expires_at >= start + Duration::seconds(400));
-    assert!(login.session.expires_at <= Utc::now() + Duration::seconds(400));
+    assert!(
+        login.session.expires_at.milliseconds()
+            >= (start + Duration::seconds(400)).timestamp_millis() as f64
+    );
+    assert!(
+        login.session.expires_at.milliseconds()
+            <= (Utc::now() + Duration::seconds(400)).timestamp_millis() as f64
+    );
     assert_eq!(
         login.headers["cookie"],
         format!("fixture.token={}", login.cookies[0].value)
@@ -307,7 +319,7 @@ impl<S: AuthSchema> DatabaseHooks<S> for CancellingHooks {
         _: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<DatabaseHookControl> {
         Ok(
-            if input.additional_fields.get("label") == Some(&json!("cancel")) {
+            if input.additional_fields.get("label") == Some(&FieldValue::from("cancel")) {
                 DatabaseHookControl::Cancel
             } else {
                 DatabaseHookControl::Continue
@@ -319,7 +331,7 @@ impl<S: AuthSchema> DatabaseHooks<S> for CancellingHooks {
         input: &better_auth_core::wire::SessionView,
         _: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
-        if input.additional_fields.get("label") == Some(&json!("fail-after")) {
+        if input.additional_fields.get("label") == Some(&FieldValue::from("fail-after")) {
             Err(AuthError::internal("after failed"))
         } else {
             Ok(())
@@ -367,7 +379,10 @@ async fn failures<S: AuthSchema>(auth: BetterAuth<S>) -> AuthResult<()> {
         .get_user_sessions(user.id.typed()?)
         .await?;
     assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0].additional_fields["label"], "fail-after");
+    assert_eq!(
+        rows[0].additional_fields["label"],
+        FieldValue::from("fail-after")
+    );
     Ok(())
 }
 #[tokio::test]
@@ -711,7 +726,7 @@ async fn metadata_contract<S: AuthSchema>(auth: BetterAuth<S>, sql: bool) -> Aut
         json!({"key":"value"}),
     ] {
         let draft = organization.create_organization(Organization {
-            metadata: better_auth_core::SchemaValue::Dynamic(value.clone()),
+            metadata: better_auth_core::SchemaValue::Dynamic(FieldValue::from_json(value.clone())?),
             ..Default::default()
         })?;
         assert_eq!(serde_json::to_value(&draft)?["metadata"], value);

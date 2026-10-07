@@ -26,7 +26,7 @@ struct CallbackCalls {
 fn string(required: bool, default: Option<&str>) -> UserFieldConfig {
     UserFieldConfig {
         required: Some(required),
-        default_value: default.map(|value| json!(value)),
+        default_value: default.map(Into::into),
         ..Default::default()
     }
 }
@@ -116,7 +116,7 @@ impl<S: AuthSchema> AuthPlugin<S> for RegisteredFields {
                     field_name: Some("stored_wallet_label".into()),
                     default_value_fn: Some(Arc::new(move || {
                         let _ = defaults.default.fetch_add(1, Ordering::SeqCst);
-                        json!("wallet-default")
+                        "wallet-default".into()
                     })),
                     transform: Some(FieldTransforms {
                         input: Some(UserFieldTransform::new(move |value| {

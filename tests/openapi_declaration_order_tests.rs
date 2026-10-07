@@ -33,7 +33,7 @@ impl<S: AuthSchema> AuthPlugin<S> for DisplayField {
                         UserFieldConfig {
                             required: Some(true),
                             field_name: Some("stored_label".into()),
-                            default_value: Some(json!("display-label")),
+                            default_value: Some("display-label".into()),
                             ..Default::default()
                         },
                     )]

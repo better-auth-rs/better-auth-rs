@@ -1,10 +1,12 @@
-use super::core::user_fields::{
-    FieldTransforms, UserConfig, UserFieldConfig, UserFieldReference, UserFieldTransform,
-    UserFieldType,
+use super::core::{
+    FieldMap, FieldValue,
+    user_fields::{
+        FieldTransforms, UserConfig, UserFieldConfig, UserFieldReference, UserFieldTransform,
+        UserFieldType,
+    },
 };
 use super::*;
 use better_auth::plugins::last_login_method::{LastLoginMethodConfig, LastLoginMethodPlugin};
-use serde_json::json;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 fn configured_fields(name: &str, calls: &Arc<AtomicUsize>) -> UserConfig {
@@ -59,7 +61,7 @@ fn configured_fields(name: &str, calls: &Arc<AtomicUsize>) -> UserConfig {
                     "label",
                     UserFieldConfig {
                         field_name: Some("display_label".into()),
-                        default_value: Some(json!("hello")),
+                        default_value: Some("hello".into()),
                         ..Default::default()
                     },
                 ),
@@ -67,7 +69,7 @@ fn configured_fields(name: &str, calls: &Arc<AtomicUsize>) -> UserConfig {
                     "count",
                     UserFieldConfig {
                         field_type: UserFieldType::Number,
-                        default_value: Some(json!(7)),
+                        default_value: Some(7.0.into()),
                         ..Default::default()
                     },
                 ),
@@ -75,7 +77,13 @@ fn configured_fields(name: &str, calls: &Arc<AtomicUsize>) -> UserConfig {
                     "settings",
                     UserFieldConfig {
                         field_type: UserFieldType::Json,
-                        default_value: Some(json!({"theme":"light","tags":["ordinary"]})),
+                        default_value: Some(
+                            FieldMap::from([
+                                ("theme".into(), "light".into()),
+                                ("tags".into(), vec!["ordinary".into()].into()),
+                            ])
+                            .into(),
+                        ),
                         ..Default::default()
                     },
                 ),
@@ -93,7 +101,7 @@ fn configured_fields(name: &str, calls: &Arc<AtomicUsize>) -> UserConfig {
                     "nothing",
                     UserFieldConfig {
                         field_type: UserFieldType::Json,
-                        default_value: Some(Value::Null),
+                        default_value: Some(FieldValue::Null),
                         ..Default::default()
                     },
                 ),
@@ -158,14 +166,14 @@ fn configured_fields(name: &str, calls: &Arc<AtomicUsize>) -> UserConfig {
         }
         "factories" => {
             let count = calls.clone();
-            let default_value_fn: Arc<dyn Fn() -> Value + Send + Sync> = Arc::new(move || {
+            let default_value_fn: Arc<dyn Fn() -> FieldValue + Send + Sync> = Arc::new(move || {
                 let _ = count.fetch_add(1, Ordering::SeqCst);
-                json!("hello")
+                "hello".into()
             });
             let count = calls.clone();
-            let on_update: Arc<dyn Fn() -> Value + Send + Sync> = Arc::new(move || {
+            let on_update: Arc<dyn Fn() -> FieldValue + Send + Sync> = Arc::new(move || {
                 let _ = count.fetch_add(1, Ordering::SeqCst);
-                json!("updated")
+                "updated".into()
             });
             let _ = fields.fields_mut().insert(
                 "label".into(),

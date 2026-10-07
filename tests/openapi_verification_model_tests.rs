@@ -111,7 +111,7 @@ async fn verification_component_follows_final_storage_configuration()
             UserFieldConfig {
                 required: Some(false),
                 field_name: Some("stored_caption".into()),
-                default_value: Some(json!("application caption")),
+                default_value: Some("application caption".into()),
                 ..Default::default()
             },
         )]

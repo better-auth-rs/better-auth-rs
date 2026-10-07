@@ -29,7 +29,7 @@ impl<S: AuthSchema> AuthPlugin<S> for ExplicitModels {
                         "label".into(),
                         UserFieldConfig {
                             required: Some(true),
-                            default_value: Some(json!(name)),
+                            default_value: Some(name.into()),
                             ..Default::default()
                         },
                     )]

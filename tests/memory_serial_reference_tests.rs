@@ -1,6 +1,6 @@
 use better_auth_core::{
-    AuthConfig, CreateAccount, CreateSession, CreateUser, CreateVerification, UpdateAccount,
-    UpdateUser,
+    AuthConfig, CreateAccount, CreateSession, CreateUser, CreateVerification, FieldDate, FieldMap,
+    UpdateAccount, UpdateUser,
     id::IdGeneration,
     store::{
         AccountStore, EphemeralStore, SessionStore, UserStore, VerificationStore,
@@ -55,11 +55,20 @@ async fn memory_reference_fields_match_pinned_conversion_and_callback_values() {
                     field_name: Some("storedReference".into()),
                     transform: Some(FieldTransforms {
                         input: Some(UserFieldTransform::new(move |value| {
-                            input_trace.lock().unwrap().push(json!(["input", value]));
-                            Ok(value.map(|value| json!(value.as_str().unwrap().trim())))
+                            input_trace
+                                .lock()
+                                .unwrap()
+                                .push(json!(["input", value.json()?]));
+                            if value.is_undefined() {
+                                return Ok(value);
+                            }
+                            Ok(value.as_str().unwrap().trim().into())
                         })),
                         output: Some(UserFieldTransform::new(move |value| {
-                            output_trace.lock().unwrap().push(json!(["output", value]));
+                            output_trace
+                                .lock()
+                                .unwrap()
+                                .push(json!(["output", value.json()?]));
                             Ok(value)
                         })),
                     }),
@@ -90,8 +99,8 @@ async fn memory_reference_fields_match_pinned_conversion_and_callback_values() {
             (
                 "defaulted".into(),
                 UserFieldConfig {
-                    default_value: Some(json!("003")),
-                    on_update: Some(Arc::new(|| json!("004"))),
+                    default_value: Some("003".into()),
+                    on_update: Some(Arc::new(|| "004".into())),
                     ..reference()
                 },
             ),
@@ -108,9 +117,13 @@ async fn memory_reference_fields_match_pinned_conversion_and_callback_values() {
             _ => unreachable!(),
         }
         let store = EphemeralStore::new(Arc::new(config));
-        let extras = json!({"reference": " 002 ", "references": ["002", null, true], "nullable": null, "boolean": true}).as_object().unwrap().clone();
-        let patch = Map::from_iter([("reference".into(), json!(" 005 "))]);
-        let expires_at = "2100-01-01T00:00:00Z".parse().unwrap();
+        let extras = FieldMap::from_json(json!({"reference": " 002 ", "references": ["002", null, true], "nullable": null, "boolean": true}).as_object().unwrap().clone()).unwrap();
+        let patch = FieldMap::from([("reference".into(), " 005 ".into())]);
+        let expires_at = FieldDate::from(
+            "2100-01-01T00:00:00Z"
+                .parse::<chrono::DateTime<chrono::Utc>>()
+                .unwrap(),
+        );
         let (created, updated) = match model {
             "user" => {
                 let mut input = CreateUser::new()
@@ -208,10 +221,10 @@ async fn memory_reference_fields_match_pinned_conversion_and_callback_values() {
     config.user.additional_fields = Some([("reference".into(), reference())].into_iter().collect());
     let store = EphemeralStore::new(Arc::new(config));
     let mut input = CreateUser::new().with_email("random@serial-reference.test");
-    input.additional_fields = [("reference".into(), json!("002"))].into_iter().collect();
+    input.additional_fields = [("reference".into(), "002".into())].into_iter().collect();
     let row = store.create_user(input).await.unwrap();
     assert_eq!(
-        json!({"families": families, "random": row.additional_fields["reference"]}),
+        json!({"families": families, "random": row.additional_fields["reference"].json().unwrap()}),
         expected
     );
 }

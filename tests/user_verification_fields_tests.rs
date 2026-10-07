@@ -3,7 +3,7 @@
 use better_auth::config::{FieldTransforms, UserFieldTransform};
 use better_auth_core::{
     AuthConfig, AuthResult, AuthSchema, AuthStore, CreateAccount, CreateSession, CreateUser,
-    UpdateUser, UserView,
+    FieldMap, FieldValue, UpdateUser, UserView,
     store::{
         EphemeralStore, RuntimeStore,
         database_hooks::{DatabaseHookContext, DatabaseHookUpdate, DatabaseHooks},
@@ -68,7 +68,7 @@ async fn seed_access<S: AuthSchema>(store: &dyn AuthStore<S>) -> String {
     let _ = store
         .create_session(CreateSession {
             user_id: id.clone().into(),
-            expires_at: chrono::Utc::now() + chrono::Duration::hours(1),
+            expires_at: (chrono::Utc::now() + chrono::Duration::hours(1)).into(),
             additional_fields: Default::default(),
             ip_address: None,
             user_agent: None,
@@ -212,7 +212,10 @@ async fn verification_uses_mapped_fields_and_transforms_serial_references_once()
             transform: Some(FieldTransforms {
                 input: Some(UserFieldTransform::new(move |value| {
                     let _ = observed.fetch_add(1, Ordering::SeqCst);
-                    Ok(value.map(|value| json!({"stored":value})))
+                    Ok(match value {
+                        FieldValue::Undefined => FieldValue::Undefined,
+                        value => FieldMap::from([("stored".into(), value)]).into(),
+                    })
                 })),
                 ..Default::default()
             }),
@@ -229,10 +232,13 @@ async fn verification_uses_mapped_fields_and_transforms_serial_references_once()
             }),
             transform: Some(FieldTransforms {
                 input: Some(UserFieldTransform::new(|value| {
-                    Ok(value.map(|value| {
-                        assert_eq!(value, json!("sponsor"));
-                        json!("1.6e1")
-                    }))
+                    Ok(match value {
+                        FieldValue::Undefined => FieldValue::Undefined,
+                        value => {
+                            assert_eq!(value, FieldValue::from("sponsor"));
+                            "1.6e1".into()
+                        }
+                    })
                 })),
                 ..Default::default()
             }),
@@ -260,10 +266,12 @@ async fn verification_uses_mapped_fields_and_transforms_serial_references_once()
             vec![Arc::new(Patch {
                 update: UpdateUser {
                     name: Some("Before mapping".into()).into(),
-                    image: better_auth_core::SchemaValue::from_json(Some(json!({"source":"hook"}))),
+                    image: better_auth_core::SchemaValue::from_field(
+                        FieldMap::from([("source".into(), "hook".into())]).into(),
+                    ),
                     additional_fields: [
-                        ("name".into(), json!("Final")),
-                        ("sponsor".into(), json!("sponsor")),
+                        ("name".into(), "Final".into()),
+                        ("sponsor".into(), "sponsor".into()),
                     ]
                     .into_iter()
                     .collect(),
@@ -296,7 +304,7 @@ async fn verification_uses_mapped_fields_and_transforms_serial_references_once()
     );
     assert_eq!(
         verified.additional_fields.get("sponsor"),
-        Some(&json!("16"))
+        Some(&FieldValue::from("16"))
     );
     assert_eq!(inputs.load(Ordering::SeqCst), 1);
     assert_eq!(after.load(Ordering::SeqCst), 1);
