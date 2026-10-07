@@ -116,6 +116,7 @@ jobs:
           key: rust-v1-${{ runner.os }}-${{ runner.arch }}-${{ env.CHECK_STAGE }}-${{ hashFiles('devenv.lock', 'devenv.nix', 'devenv.yaml') }}-${{ hashFiles('**/Cargo.toml', '**/Cargo.lock', '**/.cargo/config', '**/.cargo/config.toml', '**/rust-toolchain', '**/rust-toolchain.toml') }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
             rust-v1-${{ runner.os }}-${{ runner.arch }}-${{ env.CHECK_STAGE }}-${{ hashFiles('devenv.lock', 'devenv.nix', 'devenv.yaml') }}-${{ hashFiles('**/Cargo.toml', '**/Cargo.lock', '**/.cargo/config', '**/.cargo/config.toml', '**/rust-toolchain', '**/rust-toolchain.toml') }}-
+            rust-v1-${{ runner.os }}-${{ runner.arch }}-${{ env.CHECK_STAGE }}-${{ hashFiles('devenv.lock', 'devenv.nix', 'devenv.yaml') }}-
           path: |
             ~/.cargo/registry
             ~/.cargo/git
