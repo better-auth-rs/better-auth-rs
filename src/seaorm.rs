@@ -7,7 +7,7 @@ pub use better_auth_seaorm::{
     AuthEntity, Database, DatabaseConnection, DatabaseHookUpdate, HookControl, OrganizationModels,
     PluginModels, ReferenceId, SeaOrmHookContext, SeaOrmHooks, SeaOrmOrganizationModel,
     SeaOrmOrganizationSchema, SeaOrmPluginModel, SeaOrmPluginSchema, SeaOrmStore, SessionUpdate,
-    SqlNumber, SqlText, VerificationUpdate, current_request_hook_context, sea_orm,
+    SqlNumber, SqlText, VerificationUpdate, current_request_hook_context, field_value, sea_orm,
 };
 
 #[doc(hidden)]
