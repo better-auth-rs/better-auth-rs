@@ -223,11 +223,7 @@ impl<'a, S: AuthSchema> TestUtilsApi<'a, S> {
                         .with_description("User validation requires an endpoint context")
                         .into_auth_error()
                 })?;
-            let endpoint = EndpointContext::new(
-                Some(&current.request),
-                current.body.unwrap_or(Value::Null),
-                self.auth,
-            );
+            let endpoint = EndpointContext::new(Some(&current.request), current.body, self.auth);
             user_admission::validate_create(
                 &user,
                 UserValidationSource::new("test", UserValidationAction::CreateUser),

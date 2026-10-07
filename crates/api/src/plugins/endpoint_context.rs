@@ -2,7 +2,7 @@
 
 use better_auth_core::{
     AuthContext, AuthInitContext, AuthPlugin, AuthRequest, AuthResponse, AuthResult, AuthRoute,
-    AuthSchema, BeforeRequestAction,
+    AuthSchema, BeforeRequestAction, FieldValue,
 };
 mod owned;
 pub use owned::OwnedEndpointContext;
@@ -20,7 +20,7 @@ pub struct EndpointContext<'a, S: AuthSchema> {
     /// Values captured from the matched endpoint template.
     pub params: std::collections::HashMap<String, String>,
     /// Input after endpoint validation and unknown-field filtering.
-    pub body: Value,
+    pub body: FieldValue,
     /// Full typed runtime, including the store, options, metadata, and extensions.
     pub auth: &'a AuthContext<S>,
     /// Active transaction. Use this store for database work inside transactional callbacks.
@@ -104,7 +104,7 @@ impl<'a, S: AuthSchema> EndpointContext<'a, S> {
     pub fn native(
         input_request: Option<&'a AuthRequest>,
         original_request: Option<&'a AuthRequest>,
-        body: Value,
+        body: FieldValue,
         auth: &'a AuthContext<S>,
     ) -> Self {
         let mut context = Self::new(input_request, body, auth);
@@ -115,7 +115,11 @@ impl<'a, S: AuthSchema> EndpointContext<'a, S> {
 
     /// Construct an endpoint context from its request, validated body, and runtime.
     /// Set `transaction` when the caller executes inside an active database transaction.
-    pub fn new(request: Option<&'a AuthRequest>, body: Value, auth: &'a AuthContext<S>) -> Self {
+    pub fn new(
+        request: Option<&'a AuthRequest>,
+        body: FieldValue,
+        auth: &'a AuthContext<S>,
+    ) -> Self {
         Self {
             input_request: request,
             request: request.and_then(|request| {

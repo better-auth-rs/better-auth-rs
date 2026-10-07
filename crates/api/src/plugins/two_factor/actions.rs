@@ -355,7 +355,11 @@ pub(super) async fn send_otp_core<S: better_auth_core::AuthSchema>(
         (None, None) => return Err(AuthError::bad_request("otp isn't configured")),
     };
     let state = resolve_two_factor_state(req, ctx).await?;
-    let mut endpoint = crate::plugins::endpoint_context::EndpointContext::new(Some(req), body, ctx);
+    let mut endpoint = crate::plugins::endpoint_context::EndpointContext::new(
+        Some(req),
+        better_auth_core::FieldValue::from_json(body)?,
+        ctx,
+    );
     if let ResolvedTwoFactorState::Session { user, session, .. } = &state {
         endpoint.session = Some((user.clone(), *session.clone()));
     }

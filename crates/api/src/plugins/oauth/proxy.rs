@@ -738,7 +738,7 @@ impl OAuthProxyPlugin {
                 Some(provider_profile.as_ref().unwrap_or(&serde_json::json!({}))),
                 &crate::plugins::endpoint_context::EndpointContext::new(
                     Some(req),
-                    Value::Null,
+                    better_auth_core::FieldValue::Null,
                     ctx,
                 ),
             )

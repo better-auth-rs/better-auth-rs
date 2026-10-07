@@ -22,7 +22,7 @@ impl OtpCallbacksFixture {
         self.events.lock().unwrap().push(json!({
             "name":name, "data":data, "path":endpoint.path,
             "requestPath":request.map(|req| req.path()),
-            "body":endpoint.body, "header":request.and_then(|req| req.headers.get("x-callback-tag")),
+            "body":endpoint.body.json().expect("The callback body must serialize"), "header":request.and_then(|req| req.headers.get("x-callback-tag")),
             "basePath": endpoint.auth.config.base_path,
             "hasResponse":endpoint.response.is_some(),
             "sessionEmail":endpoint.session.as_ref().and_then(|(user,_)|user.email.as_ref()),

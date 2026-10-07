@@ -20,7 +20,7 @@ struct Graph {
 fn session_input(user_id: &str) -> CreateSession {
     CreateSession {
         user_id: user_id.into(),
-        expires_at: Utc::now() + chrono::Duration::hours(1),
+        expires_at: (Utc::now() + chrono::Duration::hours(1)).into(),
         ip_address: None,
         user_agent: None,
         impersonated_by: None,

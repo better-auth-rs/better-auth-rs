@@ -41,7 +41,7 @@ struct Capture(Trace);
 impl CustomSessionCallback<StatelessSchema> for Capture {
     async fn customize(
         &self,
-        input: CustomSessionInput,
+        mut input: CustomSessionInput,
         request: &AuthRequest,
         _: &AuthContext<StatelessSchema>,
     ) -> AuthResult<Value> {
@@ -53,6 +53,8 @@ impl CustomSessionCallback<StatelessSchema> for Capture {
                 user: Box::new(input.data.user.clone()),
             });
         request.set_response_header("x-custom-session", "observed")?;
+        // This callback selects JSON output, whose Rust value cannot represent a lone surrogate.
+        let _ = input.data.user.additional_fields.remove("loneSurrogate");
         Ok(serde_json::to_value(input)?)
     }
 }
@@ -76,7 +78,23 @@ impl AfterEndpointHook<StatelessSchema> for AfterHook {
             .push(Event::After);
         let _ = response.headers.insert("x-after-hook", "observed");
         if self.replace_list && request.path() == LIST_PATH {
-            let mut value: Value = serde_json::from_slice(response.body.bytes()?.as_ref())?;
+            let FieldValue::Array(mut sessions) = response.body.field_value()? else {
+                return Err(AuthError::internal(
+                    "Expected a device session list to replace",
+                ));
+            };
+            let Some(FieldValue::Object(session)) = Arc::make_mut(&mut sessions).first_mut() else {
+                return Err(AuthError::internal("Expected a device session to replace"));
+            };
+            let Some(FieldValue::Object(user)) = Arc::make_mut(session).get_mut("user") else {
+                return Err(AuthError::internal(
+                    "Expected a device session user to replace",
+                ));
+            };
+            let _ = Arc::make_mut(user).remove("loneSurrogate");
+            let mut value = FieldValue::Array(sessions)
+                .json()?
+                .ok_or_else(|| AuthError::internal("Expected a JSON session list"))?;
             let user = value
                 .as_array_mut()
                 .and_then(|sessions| sessions.first_mut())
@@ -119,6 +137,10 @@ impl Fixture {
             ("ownUndefined", FieldValue::Undefined),
             ("left", shared.clone()),
             ("right", shared.clone()),
+            (
+                "loneSurrogate",
+                better_auth_core::Utf16String::from_units(vec![0xd800]).into(),
+            ),
         ] {
             let _ = config.user.fields_mut().insert(
                 name.into(),
@@ -241,6 +263,9 @@ async fn check_native_fields(path: &str) {
         fields.get("ownUndefined"),
         Some(FieldValue::Undefined)
     ));
+    assert!(
+        matches!(fields.get("loneSurrogate"), Some(FieldValue::Utf16String(value)) if value.as_utf16() == [0xd800])
+    );
     for name in ["left", "right"] {
         assert!(
             fields

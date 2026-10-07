@@ -314,7 +314,7 @@ async fn redeem<S: AuthSchema>(
     ownership: DeviceCodeOwnership,
     prepared_tenant: Value,
 ) -> AuthResult<Value> {
-    let mut endpoint = EndpointContext::native(None, None, Value::Null, context);
+    let mut endpoint = EndpointContext::native(None, None, FieldValue::Null, context);
     endpoint.transaction = transaction;
     let store: &dyn DeviceCodeStore = match transaction {
         Some(transaction) => transaction,

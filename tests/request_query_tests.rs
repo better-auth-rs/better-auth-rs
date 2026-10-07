@@ -38,7 +38,7 @@ impl AuthPlugin<StatelessSchema> for Probe {
     ) -> AuthResult<Option<AuthResponse>> {
         let endpoint = better_auth::plugins::endpoint_context::EndpointContext::new(
             Some(req),
-            Value::Null,
+            better_auth_core::FieldValue::Null,
             ctx,
         );
         AuthResponse::json(200,&json!({"query":req.query,"scope":current_request_hook_context().unwrap().query,"original":endpoint.request.map(|request|request.query.clone())})).map(Some).map_err(Into::into)

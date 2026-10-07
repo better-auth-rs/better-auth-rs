@@ -17,7 +17,7 @@ async fn observe<S: AuthSchema>(
     mode: &'static str,
     owner: &str,
 ) -> AuthResult<Value> {
-    let mut endpoint = EndpointContext::native(None, None, Value::Null, ctx);
+    let mut endpoint = EndpointContext::native(None, None, FieldValue::Null, ctx);
     endpoint.transaction = transaction;
     let store: &dyn DeviceCodeStore = match transaction {
         Some(transaction) => transaction,
@@ -164,7 +164,7 @@ async fn redeemed_user<S: AuthSchema>(
     transaction: Option<&dyn AuthTransaction<S>>,
     code: &str,
 ) -> AuthResult<Value> {
-    let mut endpoint = EndpointContext::native(None, None, Value::Null, context);
+    let mut endpoint = EndpointContext::native(None, None, FieldValue::Null, context);
     endpoint.transaction = transaction;
     let result = redeem_device_code(
         &endpoint,

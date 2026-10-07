@@ -191,7 +191,7 @@ impl EmailVerificationPlugin {
         let current_session = ctx.require_session(req).await.ok();
         let mut endpoint = crate::plugins::endpoint_context::EndpointContext::new(
             Some(req),
-            serde_json::Value::Null,
+            better_auth_core::FieldValue::Null,
             ctx,
         );
         endpoint.session = current_session.clone();
@@ -249,7 +249,11 @@ impl EmailVerificationPlugin {
             .map(|request| request.body_as_json())
             .transpose()?
             .unwrap_or(serde_json::Value::Null);
-        let endpoint = crate::plugins::endpoint_context::EndpointContext::new(request, body, ctx);
+        let endpoint = crate::plugins::endpoint_context::EndpointContext::new(
+            request,
+            better_auth_core::FieldValue::from_json(body)?,
+            ctx,
+        );
         self.send_verification_email_at(user, email, callback_url, &endpoint)
             .await
     }

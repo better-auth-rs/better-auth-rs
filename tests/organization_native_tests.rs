@@ -337,7 +337,11 @@ async fn scenario<S: AuthSchema>(auth: Arc<BetterAuth<S>>, state: Arc<State>) ->
         transaction(store.as_ref(), move |tx| {
             Box::pin(async move {
                 let _ = tx.create_user(user("target")).await?;
-                let mut endpoint = EndpointContext::new(None, json!({}), auth.context());
+                let mut endpoint = EndpointContext::new(
+                    None,
+                    better_auth_core::FieldMap::new().into(),
+                    auth.context(),
+                );
                 endpoint.transaction = Some(tx);
                 let result = match endpoint.organization()?.add_member(Some(body)).await {
                     Ok(result) => result,

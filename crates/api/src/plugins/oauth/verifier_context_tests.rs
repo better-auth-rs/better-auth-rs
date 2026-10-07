@@ -232,7 +232,7 @@ async fn observe(
     request.body = Some(serde_json::to_vec(&body)?);
     let routes = <OAuthPlugin as AuthPlugin<BundledSchema>>::routes(&plugin);
     let dispatcher = EndpointDispatcher::new(Arc::new(Vec::new()), Default::default(), routes);
-    let mut scope = RequestHookContext::from_request(&request);
+    let mut scope = RequestHookContext::from_request(&request)?;
     scope.is_http = http;
     let response = with_request_hook_context_value(
         scope,
@@ -447,7 +447,7 @@ async fn exercise_endpoint_verifier(
             Box::pin(async move {
                 let _ = calls.fetch_add(1, Ordering::SeqCst);
                 assert_eq!(context.path, Some(path));
-                assert_eq!(context.body, body);
+                assert_eq!(context.body.json()?, Some(body));
                 assert_eq!(context.query(), query.as_ref());
                 assert!(context.params.is_empty());
                 assert!(context.transaction.is_none());
@@ -540,7 +540,7 @@ async fn exercise_endpoint_verifier(
     context.extensions = init.extensions;
     let dispatcher =
         EndpointDispatcher::new(Arc::new(Vec::new()), Default::default(), plugin.routes());
-    let mut scope = RequestHookContext::from_request(&request);
+    let mut scope = RequestHookContext::from_request(&request)?;
     scope.is_http = http;
     let response = with_request_hook_context_value(
         scope,

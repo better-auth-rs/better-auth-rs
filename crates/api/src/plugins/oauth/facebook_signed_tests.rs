@@ -277,7 +277,7 @@ impl App {
             route.allowed_media_types.clone()
         };
         request.parse_http_body(&allowed)?;
-        let mut scope = better_auth_core::hooks::RequestHookContext::from_request(&request);
+        let mut scope = better_auth_core::hooks::RequestHookContext::from_request(&request)?;
         scope.is_http = true;
         better_auth_core::hooks::with_request_hook_context_value(scope, async {
             better_auth_core::hooks::set_request_hook_route(request.path(), Some(&route));

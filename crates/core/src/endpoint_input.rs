@@ -133,6 +133,23 @@ pub(crate) struct EndpointBody {
 }
 
 impl AuthRequest {
+    // The HTTP media parser must select its policy before any hook decodes raw request bytes.
+    pub(crate) fn hook_field_value(&self) -> AuthResult<FieldValue> {
+        if let Some(body) = self
+            .endpoint_body
+            .as_ref()
+            .filter(|body| body.source == self.body)
+        {
+            body.value.projection.field_value()
+        } else {
+            self.parsed_http_body()
+                .cloned()
+                .map(FieldValue::from_json)
+                .transpose()
+                .map(Option::unwrap_or_default)
+        }
+    }
+
     /// Return endpoint input without changing the original Request bytes.
     pub fn input_body(&self) -> AuthResult<Option<Value>> {
         if let Some(body) = self
@@ -296,7 +313,7 @@ fn merge_value(target: &mut Value, patch: Value) {
 
 /// Install handler inputs while preserving the raw scope for endpoint after hooks.
 pub fn with_validated_input<T>(
-    body: Option<Value>,
+    body: FieldValue,
     query: Option<Value>,
     future: impl std::future::Future<Output = T>,
 ) -> impl std::future::Future<Output = T> {

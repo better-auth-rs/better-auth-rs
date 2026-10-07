@@ -276,7 +276,9 @@ impl PhoneNumberPlugin {
     ) -> AuthResult<()> {
         let endpoint = EndpointContext::new(
             Some(req),
-            json!({"phoneNumber":otp.phone_number,"code":otp.code}),
+            better_auth_core::FieldValue::from_json(
+                json!({"phoneNumber":otp.phone_number,"code":otp.code}),
+            )?,
             ctx,
         );
         self.consume_with_context(&endpoint, otp).await
@@ -327,7 +329,11 @@ impl PhoneNumberPlugin {
                 "sendOTP not implemented",
             ));
         }
-        let endpoint = EndpointContext::new(Some(req), body.clone(), ctx);
+        let endpoint = EndpointContext::new(
+            Some(req),
+            better_auth_core::FieldValue::from_json(body.clone())?,
+            ctx,
+        );
         self.validate(phone).await?;
         let code = self.save_otp(ctx, phone.to_owned(), true).await?;
         let task = self.delivery(
@@ -361,7 +367,11 @@ impl PhoneNumberPlugin {
             Err(response) => return Ok(response),
         };
         let phone = string(&body, "phoneNumber");
-        let mut endpoint = EndpointContext::new(Some(req), body.clone(), ctx);
+        let mut endpoint = EndpointContext::new(
+            Some(req),
+            better_auth_core::FieldValue::from_json(body.clone())?,
+            ctx,
+        );
         self.consume_with_context(
             &endpoint,
             PhoneOtp {
@@ -479,7 +489,11 @@ impl PhoneNumberPlugin {
         if self.require_verification && user.phone_number_verified() != Some(true) {
             let code = self.save_otp(ctx, phone.to_owned(), false).await?;
             if self.has_sender(ctx, Delivery::Verification) {
-                let endpoint = EndpointContext::new(Some(req), body.clone(), ctx);
+                let endpoint = EndpointContext::new(
+                    Some(req),
+                    better_auth_core::FieldValue::from_json(body.clone())?,
+                    ctx,
+                );
                 let task = self.delivery(
                     PhoneOtp {
                         phone_number: phone.to_owned(),
@@ -583,7 +597,11 @@ impl PhoneNumberPlugin {
             .save_otp(ctx, format!("{phone}-request-password-reset"), true)
             .await?;
         if user.is_some() && self.has_sender(ctx, Delivery::PasswordReset) {
-            let endpoint = EndpointContext::new(Some(req), body.clone(), ctx);
+            let endpoint = EndpointContext::new(
+                Some(req),
+                better_auth_core::FieldValue::from_json(body.clone())?,
+                ctx,
+            );
             let task = self.delivery(
                 PhoneOtp {
                     phone_number: phone.to_owned(),
@@ -613,7 +631,11 @@ impl PhoneNumberPlugin {
         let phone = string(&body, "phoneNumber");
         let password = string(&body, "newPassword");
         self.verify_stored_otp(
-            &EndpointContext::new(Some(req), body.clone(), ctx),
+            &EndpointContext::new(
+                Some(req),
+                better_auth_core::FieldValue::from_json(body.clone())?,
+                ctx,
+            ),
             &format!("{phone}-request-password-reset"),
             string(&body, "otp"),
         )

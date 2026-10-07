@@ -53,7 +53,7 @@ async fn run<S: AuthSchema>(
         .create_session(CreateSession {
             additional_fields: Default::default(),
             user_id: user.id.clone(),
-            expires_at: date("2099-01-01T00:00:00Z")?,
+            expires_at: date("2099-01-01T00:00:00Z")?.into(),
             ip_address: None,
             user_agent: None,
             impersonated_by: None,

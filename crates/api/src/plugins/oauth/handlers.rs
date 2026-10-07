@@ -386,7 +386,7 @@ async fn sign_in_with_id_token_core(
 ) -> AuthResult<AuthResponse> {
     let mut endpoint = crate::plugins::endpoint_context::EndpointContext::new(
         Some(req),
-        req.input_body()?.unwrap_or_default(),
+        req.input_field_value()?,
         ctx,
     );
     endpoint.session = req
@@ -469,7 +469,7 @@ async fn link_with_id_token_core(
 ) -> AuthResult<SocialSignInResponse> {
     let mut endpoint = crate::plugins::endpoint_context::EndpointContext::new(
         Some(req),
-        req.input_body()?.unwrap_or_default(),
+        req.input_field_value()?,
         ctx,
     );
     endpoint.session = req

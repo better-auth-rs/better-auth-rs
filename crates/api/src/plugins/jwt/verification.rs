@@ -20,7 +20,11 @@ impl JwtPlugin {
     ) -> AuthResult<Option<Map<String, Value>>> {
         ctx.with_native_context(Default::default(), |resolved| async move {
             let body = verification_body(token, issuer);
-            let mut endpoint = EndpointContext::new(None, body, &resolved);
+            let mut endpoint = EndpointContext::new(
+                None,
+                better_auth_core::FieldValue::from_json(body)?,
+                &resolved,
+            );
             endpoint.path = Some("virtual:");
             self.verify_in_endpoint(token, issuer, &endpoint).await
         })

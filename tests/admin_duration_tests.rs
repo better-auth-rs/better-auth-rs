@@ -123,7 +123,7 @@ async fn admin_configuration_preserves_fractional_ban_and_impersonation_lifetime
         let actor = store
             .create_session(CreateSession {
                 user_id: "admin".into(),
-                expires_at: valid_until,
+                expires_at: valid_until.into(),
                 additional_fields: Default::default(),
                 ip_address: None,
                 user_agent: None,

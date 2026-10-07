@@ -42,7 +42,11 @@ impl EmailOtpPlugin {
         ctx: &AuthContext<impl AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let body = body!(req);
-        let endpoint = EndpointContext::new(Some(req), body.value(), ctx);
+        let endpoint = EndpointContext::new(
+            Some(req),
+            better_auth_core::FieldValue::from_json(body.value())?,
+            ctx,
+        );
         if !self.has_sender(ctx) {
             return Err(AuthError::bad_request(
                 "send email verification is not implemented",
@@ -169,7 +173,9 @@ impl EmailOtpPlugin {
 
                 let endpoint = EndpointContext::new(
                     Some(req),
-                    serde_json::Value::Object(body.fields().clone()),
+                    better_auth_core::FieldValue::from_json(serde_json::Value::Object(
+                        body.fields().clone(),
+                    ))?,
                     ctx,
                 );
                 crate::plugins::user_admission::create_user(input, "email-otp", &endpoint).await?
@@ -185,7 +191,11 @@ impl EmailOtpPlugin {
         ctx: &AuthContext<impl AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let body = body!(req);
-        let endpoint = EndpointContext::new(Some(req), body.value(), ctx);
+        let endpoint = EndpointContext::new(
+            Some(req),
+            better_auth_core::FieldValue::from_json(body.value())?,
+            ctx,
+        );
         let email = body.get("email").to_lowercase();
         let kind = EmailOtpType::ForgetPassword;
         let otp = self.resolve_otp(&endpoint, &email, kind).await?;
@@ -293,7 +303,11 @@ impl EmailOtpPlugin {
         ctx: &AuthContext<impl AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let body = body!(req);
-        let mut endpoint = EndpointContext::new(Some(req), body.value(), ctx);
+        let mut endpoint = EndpointContext::new(
+            Some(req),
+            better_auth_core::FieldValue::from_json(body.value())?,
+            ctx,
+        );
         let (user, session) = ctx
             .require_authoritative_session(req)
             .await

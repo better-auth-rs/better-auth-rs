@@ -51,9 +51,9 @@ impl<S: AuthSchema> EndpointDispatcher<S> {
         }
         request.path = "/".into();
         request.set_server_only();
-        let mut scope = RequestHookContext::from_request(&request);
+        let mut scope = RequestHookContext::from_request(&request)?;
         scope.path = None;
-        scope.body = request.input_body()?;
+        scope.body = request.input_field_value()?;
         scope.operation_id = Some(route.operation_id.clone());
         scope.meta = crate::RequestMeta::from_request_with_config(
             &request,
@@ -221,17 +221,19 @@ impl<S: AuthSchema> EndpointDispatcher<S> {
                             request.path = "virtual:".into();
                         }
                         let future = crate::endpoint_input::with_validated_input(
-                            request.input_body()?,
+                            request.input_field_value()?,
                             request.query.clone(),
                             handler(request.clone()),
                         );
                         if request.is_server_only() {
-                            let mut scope = crate::hooks::current_request_hook_context()
-                                .unwrap_or_else(|| RequestHookContext::from_request(&request));
+                            let mut scope = match crate::hooks::current_request_hook_context() {
+                                Some(scope) => scope,
+                                None => RequestHookContext::from_request(&request)?,
+                            };
                             scope.path = Some("virtual:".into());
                             scope.request = request.clone();
                             scope.query = request.query.clone();
-                            scope.body = request.input_body()?;
+                            scope.body = request.input_field_value()?;
                             scope.operation_id =
                                 route.as_ref().map(|route| route.operation_id.clone());
                             with_request_hook_context_value(scope, future).await

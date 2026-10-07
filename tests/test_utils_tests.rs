@@ -580,7 +580,7 @@ async fn admission_requires_endpoint_and_transactional_helpers_commit_or_roll_ba
             Box::pin(async move {
                 let mut endpoint = better_auth::plugins::endpoint_context::EndpointContext::new(
                     None,
-                    json!({}),
+                    FieldMap::new().into(),
                     runtime.context(),
                 );
                 endpoint.path = Some("/seed");
@@ -683,7 +683,7 @@ async fn organization_helpers_keep_the_outer_adapter_inside_a_transaction() -> A
             Box::pin(async move {
                 let mut endpoint = better_auth::plugins::endpoint_context::EndpointContext::new(
                     None,
-                    json!({}),
+                    FieldMap::new().into(),
                     runtime.context(),
                 );
                 endpoint.transaction = Some(tx);

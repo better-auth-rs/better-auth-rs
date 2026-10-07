@@ -62,7 +62,7 @@ impl<'a, S: AuthSchema> PhoneNumberApi<'a, S> {
                     let mut endpoint = EndpointContext::native(
                         Some(&request),
                         request.original_request(),
-                        request.input_body()?.unwrap_or_default(),
+                        request.input_field_value()?,
                         &context,
                     );
                     endpoint.transaction = self.transaction;

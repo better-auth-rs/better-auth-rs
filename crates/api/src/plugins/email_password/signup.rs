@@ -141,7 +141,7 @@ pub(super) async fn sign_up_core<S: AuthSchema>(
                 .await?;
                 let mut endpoint = crate::plugins::endpoint_context::EndpointContext::new(
                     Some(&request),
-                    endpoint_body,
+                    better_auth_core::FieldValue::from_json(endpoint_body)?,
                     &auth,
                 );
                 endpoint.transaction = Some(tx);
@@ -190,7 +190,7 @@ pub(super) async fn sign_up_core<S: AuthSchema>(
             Box::pin(async move {
                 let mut endpoint = crate::plugins::endpoint_context::EndpointContext::new(
                     Some(&admission_request),
-                    endpoint_body,
+                    better_auth_core::FieldValue::from_json(endpoint_body)?,
                     &admission_context,
                 );
                 endpoint.transaction = Some(tx);

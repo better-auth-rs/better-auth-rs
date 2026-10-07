@@ -105,7 +105,7 @@ async fn build(hooks: &Hooks) -> AuthResult<BetterAuth<S>> {
    .hooks(EndpointHooks{before:Some(Arc::new(hooks.clone())),after:Some(Arc::new(hooks.clone()))})
    .plugin(EmailOtpPlugin::new().callbacks(EmailOtpCallbacks::<S>::default().generate(move |_,_,endpoint|{
        let mut state=generator.0.lock().map_err(|_|AuthError::internal("test state poisoned"))?;
-       state.events.push(json!({"phase":"generator","path":endpoint.path,"body":endpoint.body,"request":endpoint.request.is_some(),"ambient":better_auth_core::hooks::current_request_hook_context().map(|value|value.path)}));
+       state.events.push(json!({"phase":"generator","path":endpoint.path,"body":endpoint.body.json()?,"request":endpoint.request.is_some(),"ambient":better_auth_core::hooks::current_request_hook_context().map(|value|value.path)}));
        if state.mode=="ordinary" {return Err(AuthError::internal("generator failed"));}
        Ok(Some("123456".into()))
    })))

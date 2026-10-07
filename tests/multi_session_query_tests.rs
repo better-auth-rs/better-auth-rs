@@ -47,8 +47,9 @@ async fn run<S: AuthSchema>(
                 } else {
                     "2099-01-01T00:00:00Z"
                 })
-                .parse()
-                .map_err(|error: chrono::ParseError| AuthError::internal(error.to_string()))?,
+                .parse::<chrono::DateTime<chrono::Utc>>()
+                .map_err(|error: chrono::ParseError| AuthError::internal(error.to_string()))?
+                .into(),
                 ip_address: None,
                 user_agent: None,
                 impersonated_by: None,

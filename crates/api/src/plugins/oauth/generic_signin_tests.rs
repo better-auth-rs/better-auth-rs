@@ -407,8 +407,11 @@ async fn sign_in_preserves_scopes_and_account_cookie_while_explicit_link_merges_
             cookie.access_token.typed().unwrap().as_deref(),
             Some(expected_token)
         );
-        let endpoint =
-            crate::plugins::endpoint_context::EndpointContext::new(None, Value::Null, &ctx);
+        let endpoint = crate::plugins::endpoint_context::EndpointContext::new(
+            None,
+            better_auth_core::FieldValue::Null,
+            &ctx,
+        );
         super::handlers::complete_link_social(
             "generic",
             &super::providers::OAuthUserInfo {

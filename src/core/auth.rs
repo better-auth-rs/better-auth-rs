@@ -441,7 +441,7 @@ impl<S: AuthSchema> BetterAuth<S> {
             req = req.with_url(url);
         }
 
-        let mut request_context = RequestHookContext::from_request(&req);
+        let mut request_context = RequestHookContext::from_request(&req)?;
         request_context.is_http = true;
         request_context.meta = better_auth_core::RequestMeta::from_request_with_config(
             &req,

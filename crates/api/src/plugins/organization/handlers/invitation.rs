@@ -308,7 +308,7 @@ pub(crate) async fn invite_member_core(
     let invitation_view = InvitationView::from(&invitation);
     let mut endpoint = crate::plugins::endpoint_context::EndpointContext::new(
         request,
-        serde_json::to_value(body)?,
+        better_auth_core::FieldValue::from_json(serde_json::to_value(body)?)?,
         ctx,
     );
     endpoint.session = Some((user_view.clone(), session_view));

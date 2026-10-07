@@ -10,7 +10,7 @@ pub struct OwnedEndpointContext<S: AuthSchema> {
     request: Option<AuthRequest>,
     path: Option<String>,
     params: HashMap<String, String>,
-    body: serde_json::Value,
+    body: better_auth_core::FieldValue,
     auth: AuthContext<S>,
     transaction: Option<Arc<dyn better_auth_core::store::AuthTransaction<S>>>,
     session: Option<(

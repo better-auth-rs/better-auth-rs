@@ -236,7 +236,8 @@ async fn exercise_batch<S: AuthSchema>(
     }
     let mut calls = storage.arm(mode);
     let mut task = tokio::spawn(with_request_hook_context_value(
-        RequestHookContext::from_request(&AuthRequest::new(HttpMethod::Get, "/api-key/list")),
+        RequestHookContext::from_request(&AuthRequest::new(HttpMethod::Get, "/api-key/list"))
+            .unwrap(),
         async move { super::list(&config, &context, owner.id.typed().unwrap(), None).await },
     ));
     let width = if mode == Mode::Get { 1 } else { 2 };

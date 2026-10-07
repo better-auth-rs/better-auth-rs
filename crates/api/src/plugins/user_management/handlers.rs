@@ -129,7 +129,7 @@ pub(crate) async fn change_email_core<S: better_auth_core::AuthSchema>(
     );
     let mut endpoint = crate::plugins::endpoint_context::EndpointContext::new(
         Some(req),
-        serde_json::to_value(body)?,
+        better_auth_core::FieldValue::from_json(serde_json::to_value(body)?)?,
         ctx,
     );
     endpoint.session = Some((user.clone(), session.clone()));
@@ -249,7 +249,7 @@ pub(crate) async fn delete_user_core<S: better_auth_core::AuthSchema>(
         );
         let mut endpoint = crate::plugins::endpoint_context::EndpointContext::new(
             Some(req),
-            serde_json::to_value(body)?,
+            better_auth_core::FieldValue::from_json(serde_json::to_value(body)?)?,
             ctx,
         );
         endpoint.session = Some((user.clone(), session.clone()));

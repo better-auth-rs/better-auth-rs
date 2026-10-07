@@ -287,7 +287,7 @@ pub(super) async fn handle_callback(
     };
     let mut endpoint = crate::plugins::endpoint_context::EndpointContext::new(
         Some(req),
-        callback_body.clone(),
+        better_auth_core::FieldValue::from_json(callback_body.clone())?,
         ctx,
     );
     endpoint.path = Some(super::signin::callback_path(req));

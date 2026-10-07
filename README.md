@@ -11,7 +11,7 @@ Custom adapters must provide a credential-account point query independent of lis
 
 Sessions use signed cookies. Response headers preserve repeated cookie writes in order; explicit expiration removes earlier values and chunks. Enable `SessionConfig.bearer` explicitly for Authorization header authentication; see the [session guide](docs/content/docs/authentication/sessions.mdx) for cache and application field configuration. Use [Custom Session](docs/content/docs/plugins/custom-session.mdx) to transform public session responses with typed application context. Use [Multi Session](docs/content/docs/plugins/multi-session.mdx) to remember and switch between accounts, with adapter-specific session selection and joined field projection.
 
-Endpoint responses retain native fields until a JSON or byte boundary. Read `AuthResponse.body` with `field_value()`, `json()`, or `bytes()`; see [response hooks](docs/content/docs/concepts/plugins.mdx) for native values and replacement behavior.
+Endpoint responses and hook contexts retain native fields until a JSON or byte boundary. Read `AuthResponse.body` with `field_value()`, `json()`, or `bytes()`; hook and endpoint context bodies use `FieldValue`. See [response hooks](docs/content/docs/concepts/plugins.mdx) for native values and replacement behavior.
 
 Use `BetterAuth::stateless(config)` without an application schema or database. Encrypted session and OAuth cookies survive adapter restart; process-local users and plugin records do not. See [stateless sessions](docs/content/docs/authentication/sessions.mdx#stateless-sessions) for storage defaults, hooks, and revocation behavior.
 

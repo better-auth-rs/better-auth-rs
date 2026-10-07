@@ -147,7 +147,7 @@ fn input(user_id: String) -> CreateSession {
     CreateSession {
         additional_fields: Default::default(),
         user_id: user_id.into(),
-        expires_at: Utc::now() + Duration::hours(1),
+        expires_at: (Utc::now() + Duration::hours(1)).into(),
         ip_address: None,
         user_agent: None,
         impersonated_by: None,

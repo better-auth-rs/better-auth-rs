@@ -139,7 +139,7 @@ impl MagicLinkPlugin {
         };
         let endpoint = super::endpoint_context::EndpointContext::new(
             Some(req),
-            serde_json::to_value(&body)?,
+            better_auth_core::FieldValue::from_json(serde_json::to_value(&body)?)?,
             ctx,
         );
         let token = match &self.config.generate_token {
@@ -260,7 +260,7 @@ impl MagicLinkPlugin {
 
                 let endpoint = super::endpoint_context::EndpointContext::new(
                     Some(req),
-                    serde_json::Value::Null,
+                    better_auth_core::FieldValue::Null,
                     ctx,
                 );
                 if let Err(rejection) = super::user_admission::validate_create(

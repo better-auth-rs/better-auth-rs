@@ -105,7 +105,7 @@ async fn check_order<S: AuthSchema>(
     let session = store
         .create_session(CreateSession {
             user_id: user_id.clone(),
-            expires_at: Utc::now() + Duration::hours(1),
+            expires_at: (Utc::now() + Duration::hours(1)).into(),
             ip_address: None,
             user_agent: None,
             impersonated_by: None,
@@ -453,7 +453,7 @@ async fn missing_public_ids_preserve_pinned_commit_and_retained_row_behavior() {
                     .create_session(CreateSession {
                         additional_fields: Default::default(),
                         user_id: "owner".into(),
-                        expires_at: Utc::now() + Duration::hours(1),
+                        expires_at: (Utc::now() + Duration::hours(1)).into(),
                         ip_address: None,
                         user_agent: None,
                         impersonated_by: None,

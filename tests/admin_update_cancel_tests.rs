@@ -155,7 +155,9 @@ async fn observe<S: AuthSchema>(
         .store()
         .create_session(CreateSession {
             user_id: "actor".into(),
-            expires_at: "2099-01-01T00:00:00Z".parse()?,
+            expires_at: "2099-01-01T00:00:00Z"
+                .parse::<chrono::DateTime<chrono::Utc>>()?
+                .into(),
             additional_fields: Default::default(),
             ip_address: None,
             user_agent: None,

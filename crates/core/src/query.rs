@@ -157,8 +157,10 @@ mod tests {
                     raw
                 );
             }
+            Ok(())
         })
-        .await;
+        .await
+        .unwrap();
     }
 }
 

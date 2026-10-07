@@ -49,7 +49,11 @@ impl JwtPlugin {
         ctx: &AuthContext<S>,
     ) -> AuthResult<String> {
         ctx.with_native_context(Default::default(), |resolved| async move {
-            let mut endpoint = EndpointContext::new(None, json!({"payload":payload}), &resolved);
+            let mut endpoint = EndpointContext::new(
+                None,
+                better_auth_core::FieldValue::from_json(json!({"payload":payload}))?,
+                &resolved,
+            );
             endpoint.path = Some("virtual:");
             self.sign_in_endpoint(payload, options, &endpoint).await
         })

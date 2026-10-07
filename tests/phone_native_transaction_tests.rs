@@ -135,7 +135,11 @@ async fn phone_native_consumption_preserves_transaction_cache_and_hook_failure_o
         let emitted = events.clone();
         let result: AuthResult<()> = transaction(auth.store().as_ref(), move |tx| {
             Box::pin(async move {
-                let mut endpoint = EndpointContext::new(None, json!({}), runtime.context());
+                let mut endpoint = EndpointContext::new(
+                    None,
+                    better_auth_core::FieldMap::new().into(),
+                    runtime.context(),
+                );
                 endpoint.transaction = Some(tx);
                 assert!(
                     endpoint

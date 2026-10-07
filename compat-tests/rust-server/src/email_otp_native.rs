@@ -83,7 +83,7 @@ impl EmailOtpNativeFixture {
         let generator = self.clone();
         let sender = self.clone();
         builder.plugin(EmailOtpPlugin::new().disable_sign_up(true).reuse_otp(true).storage(storage).callbacks(EmailOtpCallbacks::<TestSchema>::default()
-   .generate(move |email,kind,endpoint|{let mut state=generator.state.lock().unwrap();state.generated+=1;state.events.push(json!({"data":{"email":email,"type":kind},"body":endpoint.body,"path":endpoint.path,"hasRequest":endpoint.request.is_some()}));if state.fail=="generate"{return Err(rejected());}Ok(Some(format!("{:06}:tail",state.generated)))})
+   .generate(move |email,kind,endpoint|{let mut state=generator.state.lock().unwrap();state.generated+=1;state.events.push(json!({"data":{"email":email,"type":kind},"body":endpoint.body.json()?,"path":endpoint.path,"hasRequest":endpoint.request.is_some()}));if state.fail=="generate"{return Err(rejected());}Ok(Some(format!("{:06}:tail",state.generated)))})
    .send(move |_,_|{let sender=sender.clone();Ok(Some(Box::pin(async move{sender.state.lock().unwrap().sent+=1;Ok(())})))})))
     }
     pub(super) fn reset(&self) {

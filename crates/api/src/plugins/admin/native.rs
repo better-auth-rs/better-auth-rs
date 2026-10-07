@@ -39,8 +39,9 @@ impl<'a, S: AuthSchema> AdminApi<'a, S> {
                     let request = AuthRequest::new(HttpMethod::Post, "/admin/create-user")
                         .with_optional_headers(headers.cloned());
                     let mut hook_context =
-                        better_auth_core::RequestHookContext::from_request(&request);
-                    hook_context.body = Some(serde_json::to_value(body)?);
+                        better_auth_core::RequestHookContext::from_request(&request)?;
+                    hook_context.body =
+                        better_auth_core::FieldValue::from_json(serde_json::to_value(body)?)?;
                     better_auth_core::with_request_hook_context_value(hook_context, async {
                         let session = if headers.is_some() {
                             let session = context

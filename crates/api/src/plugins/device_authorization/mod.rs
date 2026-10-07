@@ -274,7 +274,11 @@ impl DeviceAuthorizationPlugin {
         )?;
 
         let authorization = if self.config.grant_fields.is_some() {
-            let endpoint = EndpointContext::new(Some(req), serde_json::to_value(&body)?, ctx);
+            let endpoint = EndpointContext::new(
+                Some(req),
+                better_auth_core::FieldValue::from_json(serde_json::to_value(&body)?)?,
+                ctx,
+            );
             self.authorize_request(&body, &endpoint).await?
         } else {
             let Some(client_id) = body.client_id.as_ref() else {
@@ -367,7 +371,11 @@ impl DeviceAuthorizationPlugin {
             return device_error_response(400, "invalid_grant", INVALID_CLIENT_ID);
         }
 
-        let endpoint = EndpointContext::new(Some(req), serde_json::to_value(&body)?, ctx);
+        let endpoint = EndpointContext::new(
+            Some(req),
+            better_auth_core::FieldValue::from_json(serde_json::to_value(&body)?)?,
+            ctx,
+        );
         let client_id = body.client_id;
         let grant = self.configured_grant(ctx)?;
         let redemption = redeem_device_code(

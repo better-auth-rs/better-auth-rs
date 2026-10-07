@@ -214,7 +214,10 @@ async fn seed(store: &EphemeralStore) -> AuthResult<()> {
             .create_session(CreateSession {
                 user_id: format!("user-{suffix}").into(),
                 user_agent: Some(format!("{label}-agent")),
-                expires_at: "2099-01-01T00:00:00Z".parse().unwrap(),
+                expires_at: "2099-01-01T00:00:00Z"
+                    .parse::<chrono::DateTime<chrono::Utc>>()
+                    .unwrap()
+                    .into(),
                 additional_fields: Default::default(),
                 ip_address: None,
                 impersonated_by: None,
@@ -420,7 +423,10 @@ async fn native_user_child_reads_unconfigured_image_after_name_callback() -> Aut
                 impersonated_by: None,
                 active_organization_id: None,
                 additional_fields: Default::default(),
-                expires_at: "2099-01-01T00:00:00Z".parse().unwrap(),
+                expires_at: "2099-01-01T00:00:00Z"
+                    .parse::<chrono::DateTime<chrono::Utc>>()
+                    .unwrap()
+                    .into(),
             })
             .await?;
         let _ = store

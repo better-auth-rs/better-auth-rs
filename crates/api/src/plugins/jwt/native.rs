@@ -51,7 +51,7 @@ impl<'a, S: AuthSchema> JwtApi<'a, S> {
 
     fn endpoint<'ctx>(
         &'ctx self,
-        body: Value,
+        body: better_auth_core::FieldValue,
         context: &'ctx AuthContext<S>,
     ) -> EndpointContext<'ctx, S> {
         let mut endpoint =
@@ -154,7 +154,7 @@ impl<'a, S: AuthSchema> JwtApi<'a, S> {
                     let mut endpoint = EndpointContext::native(
                         Some(&request),
                         request.original_request(),
-                        request.input_body()?.unwrap_or_default(),
+                        request.input_field_value()?,
                         &context,
                     );
                     endpoint.transaction = self.transaction;
@@ -177,7 +177,10 @@ impl<'a, S: AuthSchema> JwtApi<'a, S> {
         self.context
             .with_native_context(self.source, |resolved| async move {
                 self.plugin
-                    .create_key_pair_in_endpoint(parameters, &self.endpoint(Value::Null, &resolved))
+                    .create_key_pair_in_endpoint(
+                        parameters,
+                        &self.endpoint(better_auth_core::FieldValue::Null, &resolved),
+                    )
                     .await
             })
             .await
@@ -206,7 +209,7 @@ impl<'a, S: AuthSchema> JwtApi<'a, S> {
                     let mut endpoint = EndpointContext::native(
                         Some(&request),
                         request.original_request(),
-                        request.input_body()?.unwrap_or_default(),
+                        request.input_field_value()?,
                         &context,
                     );
                     endpoint.transaction = self.transaction;

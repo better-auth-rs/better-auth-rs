@@ -99,7 +99,7 @@ async fn async_body_transform_finishes_before_query_headers_and_endpoint() {
                                 Some(json!({"page": "1", "ignored": "keep"}))
                             );
                             let scope = current_request_hook_context().unwrap();
-                            assert_eq!(scope.body, request.input_body()?);
+                            assert_eq!(scope.body.json()?, request.input_body()?);
                             assert_eq!(scope.query, request.query);
                             assert_eq!(scope.request.body.as_deref(), Some(RAW_BODY));
                             assert_eq!(scope.request.query, original.query);
@@ -122,10 +122,12 @@ async fn async_body_transform_finishes_before_query_headers_and_endpoint() {
                         expected
                     );
                     let scope = current_request_hook_context().unwrap();
-                    assert_eq!(scope.body, original.input_body().unwrap());
+                    assert_eq!(scope.body.json().unwrap(), original.input_body().unwrap());
                     assert_eq!(scope.query, original.query);
+                    Ok(())
                 })
-                .await;
+                .await
+                .unwrap();
                 let expected_phases = if status == 200 {
                     vec!["body:start", "body:complete", "query", "endpoint"]
                 } else {

@@ -192,7 +192,7 @@ pub(super) async fn process_oauth_sign_in(
 
     let mut endpoint = crate::plugins::endpoint_context::EndpointContext::new(
         Some(options.request),
-        options.body.clone(),
+        better_auth_core::FieldValue::from_json(options.body.clone())?,
         ctx,
     );
     endpoint.path = Some(callback_path(options.request));
@@ -602,7 +602,7 @@ pub(super) async fn process_oauth_sign_in(
             Box::pin(async move {
                 let mut endpoint = crate::plugins::endpoint_context::EndpointContext::new(
                     Some(&request),
-                    admission_body,
+                    better_auth_core::FieldValue::from_json(admission_body)?,
                     &context,
                 );
                 endpoint.path = Some(callback_path(&request));

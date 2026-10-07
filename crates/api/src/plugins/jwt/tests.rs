@@ -156,7 +156,7 @@ async fn callbacks_receive_the_complete_session_and_custom_signing_options() {
                 Ok(serde_json::to_string(&payload)?)
             })
         }));
-    let claims: Value = serde_json::from_str(&plugin.sign_session(json!({"user": {"id": "owner"}, "session": {"id": "sid", "userId": "owner", "token": "session-token"}}), &EndpointContext::native(None, None, Value::Null, &ctx)).await.unwrap()).unwrap();
+    let claims: Value = serde_json::from_str(&plugin.sign_session(json!({"user": {"id": "owner"}, "session": {"id": "sid", "userId": "owner", "token": "session-token"}}), &EndpointContext::native(None, None, better_auth_core::FieldValue::Null, &ctx)).await.unwrap()).unwrap();
     assert_eq!(claims["sub"], "owner");
     assert_eq!(claims["sessionId"], "sid");
     assert_eq!(claims["iat"], 123);
@@ -339,7 +339,12 @@ async fn expired_signing_keys_rotate_and_public_grace_does_not_reactivate_them()
     }
     let discovery: Value = serde_json::from_slice(
         &plugin
-            .jwks(&EndpointContext::native(None, None, Value::Null, &ctx))
+            .jwks(&EndpointContext::native(
+                None,
+                None,
+                better_auth_core::FieldValue::Null,
+                &ctx,
+            ))
             .await
             .unwrap()
             .body
@@ -351,7 +356,12 @@ async fn expired_signing_keys_rotate_and_public_grace_does_not_reactivate_them()
     let expired: Value = serde_json::from_slice(
         &JwtPlugin::new()
             .grace_period(Duration::zero())
-            .jwks(&EndpointContext::native(None, None, Value::Null, &ctx))
+            .jwks(&EndpointContext::native(
+                None,
+                None,
+                better_auth_core::FieldValue::Null,
+                &ctx,
+            ))
             .await
             .unwrap()
             .body

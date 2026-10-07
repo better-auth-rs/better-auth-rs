@@ -5,7 +5,7 @@ use std::{
 
 use axum::{Json, Router, routing::post};
 use better_auth::plugins::two_factor::{TwoFactorCallbacks, TwoFactorPlugin};
-use better_auth_core::{AuthError, AuthPlugin, AuthSchema, AuthUser};
+use better_auth_core::{AuthError, AuthPlugin, AuthSchema, AuthUser, FieldValue};
 use serde_json::{Value, json};
 
 #[derive(Clone, Default)]
@@ -33,11 +33,11 @@ impl TwoFactorContextFixture {
                     let endpoint = endpoint.as_endpoint();
                     let stored = endpoint.auth.database.get_user_by_id(user.id.typed().unwrap()).await?.expect("callback user exists");
                     fixture.events.lock().unwrap().push(json!({
-                        "user": { "id":user.id, "email":user.email, "secretNote":user.additional_fields.get("secretNote") },
+                        "user": { "id":user.id, "email":user.email, "secretNote":user.additional_fields.get("secretNote").map(FieldValue::json).transpose()?.flatten() },
                         "databaseUser": { "id":stored.id(), "email":stored.email() },
                         "path": endpoint.path,
                         "requestPath": endpoint.request.map(|request| request.path()),
-                        "body": endpoint.body,
+                        "body": endpoint.body.json()?,
                         "header": endpoint.request.and_then(|request| request.header("x-callback-tag")),
                         "sessionEmail": endpoint.session.as_ref().and_then(|(user, _)| user.email.as_ref()),
                         "hasResponse": endpoint.response.is_some(),

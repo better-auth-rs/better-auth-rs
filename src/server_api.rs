@@ -64,12 +64,8 @@ impl<S: AuthSchema> BetterAuth<S> {
                         .map(|body| serde_json::to_vec(&body))
                         .transpose()?;
                     request.query = input.query.clone();
-                    let mut context = better_auth_core::RequestHookContext::from_request(&request);
-                    context.body = request
-                        .body
-                        .as_ref()
-                        .map(|_| request.body_as_json())
-                        .transpose()?;
+                    let mut context = better_auth_core::RequestHookContext::from_request(&request)?;
+                    context.body = request.input_field_value()?;
                     context.meta = better_auth_core::RequestMeta::from_request_with_config(
                         &request,
                         &auth.config.advanced.ip_address,

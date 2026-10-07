@@ -765,9 +765,7 @@ impl AuthResponse {
     pub fn native(status: u16, value: crate::FieldValue) -> Self {
         let mut response = Self::new(status);
         response.body = crate::ResponseBody::Native(value);
-        let _ = response
-            .headers
-            .insert("content-type".into(), "application/json".into());
+        let _ = response.headers.insert("content-type", "application/json");
         response
     }
 

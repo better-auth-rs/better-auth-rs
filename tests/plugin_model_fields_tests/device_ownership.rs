@@ -183,7 +183,7 @@ async fn redeem<S: AuthSchema>(
     observation: Arc<Observation>,
     (field, target): (&'static str, &'static str),
 ) -> AuthResult<Value> {
-    let mut endpoint = EndpointContext::native(None, None, Value::Null, context);
+    let mut endpoint = EndpointContext::native(None, None, FieldValue::Null, context);
     endpoint.transaction = transaction;
     let store: &dyn DeviceCodeStore = match transaction {
         Some(transaction) => transaction,

@@ -87,7 +87,7 @@ impl BodyTrace {
             })
             .and_then(|value| value.get("code").cloned());
         self.0.lock().unwrap().push(json!({
-            "phase":phase, "body":super::snapshot(&context.body), "request":request.is_some(),
+            "phase":phase, "body":super::snapshot(&context.body.json().expect("The fixture body must serialize")), "request":request.is_some(),
             "requestBody":request.map(|request| std::str::from_utf8(request.body.as_deref().unwrap_or_default()).unwrap()),
             "errorCode":error,
         }));

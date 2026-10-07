@@ -65,7 +65,7 @@ impl<S: AuthSchema> Hooks<S> {
             .unwrap()
             .push(json!({"hook":hook, "baseAdapter":true,
             "transactionActive":ctx.transaction.is_some(),"path":req.path,"request":req.is_http,
-            "bodyName":req.body.as_ref().unwrap()["name"],"read":read}));
+            "bodyName":req.body.as_object().unwrap()["name"].json()?,"read":read}));
         Ok(())
     }
 }
@@ -214,7 +214,7 @@ async fn run<S: AuthSchema>(
                     if phase=="released" { state.gate.notified().await; }
                     let endpoint=endpoint.as_endpoint();let tx=endpoint.transaction.unwrap();
                     let mut captured=json!({"phase":phase,"transactionActive":true,"path":endpoint.path,
-                        "request":endpoint.request.is_some(),"bodyName":endpoint.body.get("name").unwrap(),
+                        "request":endpoint.request.is_some(),"bodyName":endpoint.body.as_object().unwrap().get("name").unwrap().json()?,
                         "responseDone":state.response_done.load(Ordering::SeqCst),
                         "currentRead":attempt(tx.get_user_by_id(&user_id).await),
                         "internalRead":attempt(tx.get_user_by_email(EMAIL).await)});

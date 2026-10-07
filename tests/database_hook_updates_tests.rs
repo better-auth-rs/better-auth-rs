@@ -210,7 +210,7 @@ async fn updates_merge_independent_patches_and_dispatch_missing_rows_to_after_ho
         .create_session(CreateSession {
             additional_fields: Default::default(),
             user_id: user.id().into_owned(),
-            expires_at: Utc::now() + chrono::Duration::hours(1),
+            expires_at: (Utc::now() + chrono::Duration::hours(1)).into(),
             ip_address: None,
             user_agent: None,
             impersonated_by: None,

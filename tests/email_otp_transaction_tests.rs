@@ -79,7 +79,11 @@ async fn create(auth: &Arc<BetterAuth<BundledSchema>>, reject: bool) -> AuthResu
     let runtime = auth.clone();
     transaction(auth.store().as_ref(), move |tx| {
         Box::pin(async move {
-            let mut endpoint = EndpointContext::new(None, serde_json::json!({}), runtime.context());
+            let mut endpoint = EndpointContext::new(
+                None,
+                better_auth_core::FieldMap::new().into(),
+                runtime.context(),
+            );
             endpoint.path = Some("/sign-up/email");
             endpoint.transaction = Some(tx);
             let api = endpoint.email_otp()?;

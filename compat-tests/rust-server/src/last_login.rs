@@ -74,9 +74,16 @@ impl<S: AuthSchema> LastLoginMethodResolver<S> for Events {
             .push(json!({"kind":"resolve","path":context.path,"http":context.request.is_some(),"header":context.headers().and_then(|headers|headers.get("x-login-context"))}));
         let mode = trace.controls["resolve"].as_str();
         if mode == Some("body") {
-            trace.events.last_mut().unwrap()["bodyName"] = context.body["name"].clone();
+            let name = context.body.as_object().and_then(|body| body.get("name"));
+            trace.events.last_mut().unwrap()["bodyName"] = name
+                .map(FieldValue::json)
+                .transpose()?
+                .flatten()
+                .unwrap_or(Value::Null);
             return Ok(Some(
-                context.body["name"].as_str().unwrap_or("missing").into(),
+                name.and_then(FieldValue::as_str)
+                    .unwrap_or("missing")
+                    .into(),
             ));
         }
         if mode == Some("error") || mode == Some("session-error") && trace.resolves == 2 {
@@ -100,7 +107,14 @@ impl<S: AuthSchema> BeforeStoreLastLoginCookie<S> for Events {
         let mut trace = self.0.lock().unwrap();
         trace.events.push(json!({"kind":"cookie","path":context.path,"http":context.request.is_some(),"value":method}));
         if trace.controls["resolve"] == "body" {
-            trace.events.last_mut().unwrap()["bodyName"] = context.body["name"].clone();
+            trace.events.last_mut().unwrap()["bodyName"] = context
+                .body
+                .as_object()
+                .and_then(|body| body.get("name"))
+                .map(FieldValue::json)
+                .transpose()?
+                .flatten()
+                .unwrap_or(Value::Null);
         }
         match trace.controls["veto"].as_str() {
             Some("error") => Err(rejected()),

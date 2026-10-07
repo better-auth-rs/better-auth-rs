@@ -178,7 +178,7 @@ better_auth_core::observability::instrumentation::with_endpoint_hook(
             if self.config.send_verification_on_sign_up && !self.config.override_default_email_verification && req.path().starts_with("/sign-up") && response.status == 200 {
                 let body: serde_json::Value = serde_json::from_slice(&response.body.bytes()?)?;
                 if let Some(email) = body.get("user").and_then(|user| user.get("email")).and_then(serde_json::Value::as_str) {
-                    let mut endpoint = crate::plugins::endpoint_context::EndpointContext::new(Some(req), req.body_as_json()?, ctx);
+                    let mut endpoint = crate::plugins::endpoint_context::EndpointContext::new(Some(req), req.input_field_value()?, ctx);
                     endpoint.response = Some(response);
                     let otp = self.create_otp(&endpoint, email, EmailOtpType::EmailVerification, &EmailOtpType::EmailVerification.identifier(email)).await?;
                     self.deliver(&endpoint, email, otp, EmailOtpType::EmailVerification).await?;

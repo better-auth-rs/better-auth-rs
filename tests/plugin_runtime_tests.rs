@@ -113,7 +113,7 @@ async fn shared_ephemeral_records_keep_plugin_bindings_and_field_policies_per_au
     let session = CreateSession {
         additional_fields: Default::default(),
         user_id: one.id().into_owned(),
-        expires_at: chrono::Utc::now() + chrono::Duration::hours(1),
+        expires_at: (chrono::Utc::now() + chrono::Duration::hours(1)).into(),
         ip_address: None,
         user_agent: None,
         impersonated_by: None,

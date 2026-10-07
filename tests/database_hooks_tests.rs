@@ -339,7 +339,9 @@ async fn request_context_is_present_for_requests_and_absent_for_direct_store_cal
                     .as_ref()
                     .and_then(|request| request.path.clone())
                     .unwrap_or_else(|| "<none>".to_string()),
-                request.as_ref().and_then(|request| request.body.clone()),
+                request
+                    .as_ref()
+                    .and_then(|request| { request.body.json().expect("hook body must serialize") }),
             ))
             .collect::<Vec<_>>(),
         vec![
@@ -392,8 +394,8 @@ async fn dynamic_request_context_keeps_route_params_when_body_is_replaced() {
             .collect()
     );
     assert_eq!(
-        request.body.as_ref().expect("parsed body")["name"],
-        "Replaced Name"
+        request.body.as_object().expect("parsed body")["name"],
+        better_auth_core::FieldValue::from("Replaced Name")
     );
 }
 

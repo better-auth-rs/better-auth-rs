@@ -52,7 +52,7 @@ impl State {
         self.events.lock().unwrap().push(event.into());
     }
     fn capture<S: AuthSchema>(&self, phase: &str, data: &Value, endpoint: &EndpointContext<'_, S>) {
-        let mut body = endpoint.body.clone();
+        let mut body = endpoint.body.json().unwrap().unwrap_or(Value::Null);
         if let Some(id) = body.get_mut("organizationId") {
             *id = json!("<organization>");
         }

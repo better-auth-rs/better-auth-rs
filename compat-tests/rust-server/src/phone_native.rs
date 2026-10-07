@@ -10,8 +10,8 @@ use better_auth_core::endpoint_input::EndpointInputPatch;
 use better_auth_core::observability::{AfterEndpointHook, BeforeEndpointHook, EndpointHooks};
 use better_auth_core::store::{AuthTransaction, transaction};
 use better_auth_core::{
-    AuthContext, AuthRequest, AuthResponse, BeforeRequestAction, CreateVerification, HttpMethod,
-    NativeRequest,
+    AuthContext, AuthRequest, AuthResponse, BeforeRequestAction, CreateVerification, FieldValue,
+    HttpMethod, NativeRequest,
 };
 use chrono::{Duration, Utc};
 use serde_json::{Value, json};
@@ -242,7 +242,7 @@ async fn invoke<S: AuthSchema>(
                 .unwrap(),
         )
     });
-    let mut endpoint = EndpointContext::native(None, None, Value::Null, auth.context());
+    let mut endpoint = EndpointContext::native(None, None, FieldValue::Null, auth.context());
     endpoint.transaction = tx;
     endpoint
         .phone_number()?

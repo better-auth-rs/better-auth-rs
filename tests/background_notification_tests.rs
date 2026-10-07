@@ -46,9 +46,9 @@ impl State {
     fn capture<S: AuthSchema>(&self, phase: &str, context: &EndpointContext<'_, S>) {
         let current = better_auth_core::hooks::current_request_hook_context().unwrap();
         assert_eq!(current.path.as_deref(), context.path);
-        assert_eq!(current.body.as_ref(), Some(&context.body));
+        assert_eq!(current.body, context.body);
         self.contexts.lock().unwrap().push(json!({
-            "phase":phase,"path":context.path,"body":context.body,
+            "phase":phase,"path":context.path,"body":context.body.json().unwrap(),
             "request":context.request.is_some(),
             "requestURL":context.request.and_then(AuthRequest::url).map(ToString::to_string),
             "baseURL":context.auth.base_url(),

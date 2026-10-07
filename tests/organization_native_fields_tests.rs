@@ -36,6 +36,9 @@ struct Trace {
     before: Option<FieldMap>,
     draft: Option<(String, FieldMap)>,
     response: Option<Member>,
+    before_scope: Option<FieldValue>,
+    member_scope: Option<FieldValue>,
+    after_scope: Option<FieldValue>,
 }
 
 struct Hooks {
@@ -67,6 +70,11 @@ impl BeforeEndpointHook<StatelessSchema> for Hooks {
             let mut trace = self.trace()?;
             trace.phases.push("before");
             trace.before = Some(fields.clone());
+            trace.before_scope = Some(
+                better_auth_core::hooks::current_request_hook_context()
+                    .ok_or_else(|| AuthError::internal("Missing native before scope"))?
+                    .body,
+            );
         }
         Ok(match self.mode {
             Mode::MergeRole => Some(BeforeRequestAction::MergeContext(EndpointInputPatch {
@@ -108,6 +116,11 @@ impl OrganizationHooks for Hooks {
         let mut trace = self.trace()?;
         trace.phases.push("member");
         trace.draft = Some((data.role.typed()?.clone(), data.additional_fields.clone()));
+        trace.member_scope = Some(
+            better_auth_core::hooks::current_request_hook_context()
+                .ok_or_else(|| AuthError::internal("Missing native member scope"))?
+                .body,
+        );
         Ok(())
     }
 }
@@ -129,6 +142,11 @@ impl AfterEndpointHook<StatelessSchema> for Hooks {
             let mut trace = self.trace()?;
             trace.phases.push("after");
             trace.response = Some(member.clone());
+            trace.after_scope = Some(
+                better_auth_core::hooks::current_request_hook_context()
+                    .ok_or_else(|| AuthError::internal("Missing native after scope"))?
+                    .body,
+            );
         }
         if matches!(self.mode, Mode::ReplaceResponse) {
             member.id = "after-replacement".into();
@@ -150,6 +168,10 @@ fn native_fields(milliseconds: f64, marker: &str) -> FieldMap {
         ("ownUndefined".into(), FieldValue::Undefined),
         ("left".into(), shared.clone()),
         ("right".into(), shared),
+        (
+            "loneSurrogate".into(),
+            better_auth_core::Utf16String::from_units(vec![0xd800]).into(),
+        ),
     ])
 }
 
@@ -245,6 +267,20 @@ impl Fixture {
             &self.input.additional_fields,
         );
         assert_native_fields(
+            trace.before_scope.as_ref().unwrap().as_object().unwrap(),
+            &self.input.additional_fields,
+        );
+        if !matches!(self.hooks.mode, Mode::ReplaceBody) {
+            assert_native_fields(
+                trace.member_scope.as_ref().unwrap().as_object().unwrap(),
+                &self.input.additional_fields,
+            );
+            assert_native_fields(
+                trace.after_scope.as_ref().unwrap().as_object().unwrap(),
+                &self.input.additional_fields,
+            );
+        }
+        assert_native_fields(
             &trace.response.as_ref().unwrap().additional_fields,
             &self.output,
         );
@@ -262,6 +298,9 @@ fn assert_native_fields(actual: &FieldMap, expected: &FieldMap) {
         actual.get("ownUndefined"),
         Some(FieldValue::Undefined)
     ));
+    assert!(
+        matches!(actual.get("loneSurrogate"), Some(FieldValue::Utf16String(value)) if value.as_utf16() == [0xd800])
+    );
     for (name, value) in expected {
         assert!(
             actual

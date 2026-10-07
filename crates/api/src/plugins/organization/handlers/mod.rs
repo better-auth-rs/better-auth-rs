@@ -56,7 +56,7 @@ fn request_present<S: better_auth_core::AuthSchema>(
 ) -> bool {
     let endpoint = crate::plugins::endpoint_context::EndpointContext::new(
         Some(req),
-        serde_json::Value::Null,
+        better_auth_core::FieldValue::Null,
         ctx,
     );
     endpoint.request.is_some() || endpoint.headers().is_some()

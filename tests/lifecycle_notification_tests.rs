@@ -66,7 +66,7 @@ impl State {
         };
         let url: url::Url = message.url.parse().unwrap();
         self.contexts.lock().unwrap().push(json!({
-            "phase":phase,"path":endpoint.path,"body":endpoint.body,
+            "phase":phase,"path":endpoint.path,"body":endpoint.body.json().unwrap(),
             "request":endpoint.request.is_some(),"requestPath":endpoint.request.and_then(AuthRequest::url).map(url::Url::path),
             "email":message.user.email,"verified":message.user.email_verified,"newEmail":new_email,
             "token":token,"urlPath":url.path(),"callbackURL":url.query_pairs().find(|(key,_)| key == "callbackURL").map(|(_,value)|value.into_owned()),

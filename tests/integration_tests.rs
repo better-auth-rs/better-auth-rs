@@ -120,7 +120,7 @@ async fn test_revoke_session_integration() {
     let create_session = CreateSession {
         additional_fields: Default::default(),
         user_id: user_id.clone().into(),
-        expires_at: Utc::now() + Duration::hours(24),
+        expires_at: (Utc::now() + Duration::hours(24)).into(),
         ip_address: Some("192.168.1.1".to_string()),
         user_agent: Some("test-agent-2".to_string()),
         impersonated_by: None,
@@ -475,7 +475,7 @@ async fn test_set_password_public_route_absent_for_social_user() {
     let create_session = CreateSession {
         additional_fields: Default::default(),
         user_id: user.id.clone(),
-        expires_at: Utc::now() + Duration::hours(24),
+        expires_at: (Utc::now() + Duration::hours(24)).into(),
         ip_address: None,
         user_agent: None,
         impersonated_by: None,
@@ -583,7 +583,7 @@ async fn test_revoke_other_sessions_integration() {
     let create_session = CreateSession {
         additional_fields: Default::default(),
         user_id: user_id.clone().into(),
-        expires_at: Utc::now() + Duration::hours(24),
+        expires_at: (Utc::now() + Duration::hours(24)).into(),
         ip_address: Some("192.168.1.1".to_string()),
         user_agent: Some("other-agent".to_string()),
         impersonated_by: None,
@@ -1127,7 +1127,7 @@ async fn test_unlink_last_account_fails() {
     let create_session = CreateSession {
         additional_fields: Default::default(),
         user_id: user.id.clone(),
-        expires_at: Utc::now() + Duration::hours(24),
+        expires_at: (Utc::now() + Duration::hours(24)).into(),
         ip_address: None,
         user_agent: None,
         impersonated_by: None,

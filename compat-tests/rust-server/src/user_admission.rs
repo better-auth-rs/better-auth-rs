@@ -11,7 +11,7 @@ use better_auth::plugins::{
     user_admission::{UserValidationData, UserValidationRejection, ValidateUserInfo},
 };
 use better_auth::{AuthBuilder, AuthError, AuthResult, BetterAuth};
-use better_auth_core::{AuthUser, CreateUser, PasswordHasher, UpdateUser};
+use better_auth_core::{AuthUser, CreateUser, FieldValue, PasswordHasher, UpdateUser};
 use serde_json::{Value, json};
 use std::sync::{Arc, Mutex};
 #[derive(Default)]
@@ -41,7 +41,7 @@ impl ValidateUserInfo<TestSchema> for UserAdmissionFixture {
         data: &UserValidationData,
         endpoint: &EndpointContext<'_, TestSchema>,
     ) -> AuthResult<Option<UserValidationRejection>> {
-        let exists = if let Some(email) = data.user.get("email").and_then(Value::as_str) {
+        let exists = if let Some(email) = data.user.get("email").and_then(FieldValue::as_str) {
             match endpoint.transaction {
                 Some(tx) => tx.get_user_by_email(email).await?.is_some(),
                 None => endpoint
@@ -55,14 +55,16 @@ impl ValidateUserInfo<TestSchema> for UserAdmissionFixture {
             false
         };
         let mode = {
+            let user = data.user.json()?;
+            let body = endpoint.body.json()?.unwrap_or(Value::Null);
             let mut state = self.state.lock().unwrap();
             state.events.push(json!({
-            "source":data.source,"email":data.user.get("email"),"name":data.user.get("name"),
-            "emailVerified":data.user.get("emailVerified"),"hasId":data.user.contains_key("id"),"hasCreatedAt":data.user.contains_key("createdAt"),
-            "hasUpdatedAt":data.user.contains_key("updatedAt"),"role":data.user.get("role"),
+            "source":data.source,"email":user.get("email"),"name":user.get("name"),
+            "emailVerified":user.get("emailVerified"),"hasId":data.user.contains_key("id"),"hasCreatedAt":data.user.contains_key("createdAt"),
+            "hasUpdatedAt":data.user.contains_key("updatedAt"),"role":user.get("role"),
             "existing":exists,"path":endpoint.path,"tag":endpoint.request.and_then(|request|request.headers.get("x-admission-tag")),
-            "customBody":endpoint.body.get("customBody"),"sessionEmail":endpoint.session.as_ref().and_then(|(user,_)|user.email.as_ref()),
-            "username":data.user.get("username"),"bodyUsername":endpoint.body.get("username"),"bodyDisplayUsername":endpoint.body.get("displayUsername"),
+            "customBody":body.get("customBody"),"sessionEmail":endpoint.session.as_ref().and_then(|(user,_)|user.email.as_ref()),
+            "username":user.get("username"),"bodyUsername":body.get("username"),"bodyDisplayUsername":body.get("displayUsername"),
         }));
             state.mode.clone()
         };

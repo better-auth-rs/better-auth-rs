@@ -144,11 +144,7 @@ fn database_endpoint<'a, S: AuthSchema>(
     auth: &'a AuthContext<S>,
 ) -> Option<EndpointContext<'a, S>> {
     let request = context.request.as_ref()?;
-    let mut endpoint = EndpointContext::new(
-        Some(&request.request),
-        request.body.clone().unwrap_or(serde_json::Value::Null),
-        auth,
-    );
+    let mut endpoint = EndpointContext::new(Some(&request.request), request.body.clone(), auth);
     endpoint.path = request.path.as_deref();
     endpoint.params.clone_from(&request.params);
     endpoint.transaction = context.transaction;
@@ -288,9 +284,8 @@ impl<S: AuthSchema> AuthPlugin<S> for LastLoginMethodPlugin<S> {
             async {
                 let hook_context = better_auth_core::hooks::current_request_hook_context();
                 let body = match &hook_context {
-                    Some(context) => context.body.clone().unwrap_or(serde_json::Value::Null),
-                    None if request.body.is_some() => request.body_as_json()?,
-                    None => serde_json::Value::Null,
+                    Some(context) => context.body.clone(),
+                    None => request.input_field_value()?,
                 };
                 let mut endpoint = EndpointContext::new(Some(request), body, auth);
                 endpoint.path = Some(hook_context.as_ref().map_or(request.path(), |context| {

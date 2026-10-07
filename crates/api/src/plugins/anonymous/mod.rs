@@ -144,7 +144,11 @@ impl AnonymousPlugin {
             .transpose()
             .map_err(AuthError::from)?
             .unwrap_or(serde_json::Value::Null);
-        let mut endpoint = super::endpoint_context::EndpointContext::new(Some(req), body, ctx);
+        let mut endpoint = super::endpoint_context::EndpointContext::new(
+            Some(req),
+            better_auth_core::FieldValue::from_json(body)?,
+            ctx,
+        );
         endpoint.session = previous.map(|data| (data.user, data.session));
         let name = if let Some(generate) = ctx
             .extensions
@@ -381,7 +385,11 @@ impl AnonymousPlugin {
                 .transpose()
                 .map_err(AuthError::from)?
                 .unwrap_or(serde_json::Value::Null);
-            let mut endpoint = super::endpoint_context::EndpointContext::new(Some(req), body, ctx);
+            let mut endpoint = super::endpoint_context::EndpointContext::new(
+                Some(req),
+                better_auth_core::FieldValue::from_json(body)?,
+                ctx,
+            );
             endpoint.session = Some((previous.user.clone(), previous.session));
             endpoint.response = Some(response);
             callback(&link, &endpoint).await?;

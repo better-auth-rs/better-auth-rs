@@ -42,7 +42,7 @@ impl State {
     fn capture(&self, phase: &str, context: &DatabaseHookContext<'_, BundledSchema>) {
         if let Some(request) = &context.request {
             let ambient = better_auth_core::hooks::current_request_hook_context().unwrap();
-            self.contexts.lock().unwrap().push(json!({"phase":phase, "supplied":{"path":request.path, "body":request.body, "request":request.is_http}, "ambient":{"path":ambient.path, "body":ambient.body, "request":ambient.is_http}}));
+            self.contexts.lock().unwrap().push(json!({"phase":phase, "supplied":{"path":request.path, "body":request.body.json().unwrap(), "request":request.is_http}, "ambient":{"path":ambient.path, "body":ambient.body.json().unwrap(), "request":ambient.is_http}}));
         }
     }
 }
@@ -192,7 +192,7 @@ async fn run(reuse: bool, outcome: &'static str) -> Value {
                                     .get_verification_including_expired(IDENTIFIER)
                                     .await?;
                                 state.observations.lock().unwrap().push(
-                                    json!({"path":endpoint.path, "body":endpoint.body,
+                                    json!({"path":endpoint.path, "body":endpoint.body.json()?,
                             "hasRequest":endpoint.request.is_some(), "userFound":user.is_some(),
                             "value":verification.map(|row| row.value), "otp":message.otp}),
                                 );

@@ -302,7 +302,8 @@ impl JwtPlugin {
         ctx: &AuthContext<S>,
     ) -> AuthResult<better_auth_core::Jwk> {
         ctx.with_native_context(Default::default(), |resolved| async move {
-            let mut endpoint = EndpointContext::new(None, Value::Null, &resolved);
+            let mut endpoint =
+                EndpointContext::new(None, better_auth_core::FieldValue::Null, &resolved);
             endpoint.path = Some("virtual:");
             self.create_key_pair_in_endpoint(parameters, &endpoint)
                 .await
@@ -400,17 +401,11 @@ impl JwtPlugin {
     }
 }
 
-fn request_body(request: &AuthRequest) -> AuthResult<Value> {
+fn request_body(request: &AuthRequest) -> AuthResult<better_auth_core::FieldValue> {
     if let Some(context) = better_auth_core::hooks::current_request_hook_context() {
-        return Ok(context.body.unwrap_or(Value::Null));
+        return Ok(context.body);
     }
-    request
-        .body
-        .as_ref()
-        .map(|_| request.body_as_json())
-        .transpose()
-        .map(|body| body.unwrap_or(Value::Null))
-        .map_err(Into::into)
+    request.input_field_value()
 }
 
 fn jose_error(error: josekit::JoseError) -> AuthError {

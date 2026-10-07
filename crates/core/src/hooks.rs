@@ -18,14 +18,14 @@ pub struct RequestHookContext {
     pub headers: std::collections::HashMap<String, String>,
     pub query: Option<serde_json::Value>,
     /// Parsed endpoint input. An absent request body remains absent.
-    pub body: Option<serde_json::Value>,
+    pub body: crate::FieldValue,
     pub meta: RequestMeta,
 }
 
 impl RequestHookContext {
     /// Build a request hook context from an incoming auth request.
-    pub fn from_request(request: &AuthRequest) -> Self {
-        Self {
+    pub fn from_request(request: &AuthRequest) -> crate::AuthResult<Self> {
+        Ok(Self {
             request: request.clone(),
             is_http: false,
             method: request.method().clone(),
@@ -34,9 +34,9 @@ impl RequestHookContext {
             params: Default::default(),
             headers: request.headers.clone(),
             query: request.query.clone(),
-            body: request.parsed_http_body().cloned(),
+            body: request.hook_field_value()?,
             meta: RequestMeta::from_request(request),
-        }
+        })
     }
 }
 
@@ -47,9 +47,9 @@ tokio::task_local! {
 /// Run a future with request context available to downstream integrations.
 pub async fn with_request_hook_context<T>(
     request: &AuthRequest,
-    future: impl std::future::Future<Output = T>,
-) -> T {
-    with_request_hook_context_value(RequestHookContext::from_request(request), future).await
+    future: impl std::future::Future<Output = crate::AuthResult<T>>,
+) -> crate::AuthResult<T> {
+    with_request_hook_context_value(RequestHookContext::from_request(request)?, future).await
 }
 
 /// Run a future with an explicit request hook context.
@@ -111,7 +111,7 @@ pub fn set_request_hook_route(path: &str, route: Option<&crate::AuthRoute>) {
 /// Refresh the active snapshot after HTTP parsing or body replacement.
 /// Preserve the matched route, trusted IP metadata, and HTTP error policy.
 pub fn update_request_hook_context(request: &AuthRequest) -> crate::AuthResult<()> {
-    let body = request.input_body()?;
+    let body = request.input_field_value()?;
     let _ = REQUEST_HOOK_CONTEXT.try_with(|context| {
         let mut context = context.borrow_mut();
         context.method = request.method.clone();

@@ -242,8 +242,11 @@ pub(crate) async fn create_user_core(
             "email" | "name" | "password" | "role" | "data"
         )
     });
-    let mut endpoint =
-        crate::plugins::endpoint_context::EndpointContext::new(req, input.into(), ctx);
+    let mut endpoint = crate::plugins::endpoint_context::EndpointContext::new(
+        req,
+        better_auth_core::FieldValue::from_json(input.into())?,
+        ctx,
+    );
     endpoint.path = Some("/admin/create-user");
     endpoint.session = session;
     let user = crate::plugins::user_admission::create_user(create_user, "admin", &endpoint).await?;

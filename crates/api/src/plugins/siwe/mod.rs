@@ -263,8 +263,11 @@ impl SiwePlugin {
                 .with_name(profile.name.unwrap_or_else(|| address.clone()));
             create.image = Some(profile.avatar.unwrap_or_default()).into();
 
-            let endpoint =
-                super::endpoint_context::EndpointContext::new(Some(req), req.body_as_json()?, ctx);
+            let endpoint = super::endpoint_context::EndpointContext::new(
+                Some(req),
+                req.input_field_value()?,
+                ctx,
+            );
             let created =
                 super::user_admission::create_user(create.clone(), "siwe", &endpoint).await;
             let created = match created {

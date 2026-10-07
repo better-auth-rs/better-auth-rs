@@ -29,8 +29,11 @@ pub(super) async fn send_verification_email_core(
     if let Some(callback_url) = &body.callback_url {
         let _ = endpoint_body.insert("callbackURL".into(), serde_json::json!(callback_url));
     }
-    let mut endpoint =
-        crate::plugins::endpoint_context::EndpointContext::new(request, endpoint_body.into(), ctx);
+    let mut endpoint = crate::plugins::endpoint_context::EndpointContext::new(
+        request,
+        better_auth_core::FieldValue::from_json(endpoint_body.into())?,
+        ctx,
+    );
     endpoint.session = current_session.cloned();
     if !super::delivery::available(Some(config), ctx) {
         return Err(AuthError::bad_request("Verification email isn't enabled"));

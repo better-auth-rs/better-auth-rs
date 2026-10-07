@@ -86,8 +86,11 @@ pub(crate) async fn request_password_reset_core(
     if let Some(redirect) = &body.redirect_to {
         let _ = parsed.insert("redirectTo".into(), serde_json::json!(redirect));
     }
-    let endpoint =
-        crate::plugins::endpoint_context::EndpointContext::new(Some(req), parsed.into(), ctx);
+    let endpoint = crate::plugins::endpoint_context::EndpointContext::new(
+        Some(req),
+        better_auth_core::FieldValue::from_json(parsed.into())?,
+        ctx,
+    );
     let task = super::callbacks::delivery(
         config,
         super::PasswordResetEmail {
