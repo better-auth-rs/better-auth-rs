@@ -9,7 +9,6 @@ pub(super) enum Effect {
     UserUpdated(Option<better_auth_core::wire::UserView>),
     UserDeleted(better_auth_core::wire::UserView),
     AccountCreated(Box<better_auth_core::wire::AccountView>),
-    SessionCreated(better_auth_core::wire::SessionView),
     Created(Box<better_auth_core::wire::VerificationView>),
     Deleted(Box<better_auth_core::wire::VerificationView>),
 }
@@ -122,9 +121,6 @@ where
                     Effect::UserDeleted(record) => better_auth_core::observability::database::with_database_hook(context.config, hook.hook_metadata(), better_auth_core::observability::database::DatabaseHook::AfterDeleteUser, hook.after_delete_user(record, &context)).await?,
                     Effect::AccountCreated(record) => {
                         better_auth_core::observability::database::with_database_hook(context.config, hook.hook_metadata(), better_auth_core::observability::database::DatabaseHook::AfterCreateAccount, hook.after_create_account(record, &context)).await?
-                    }
-                    Effect::SessionCreated(record) => {
-                        better_auth_core::observability::database::with_database_hook(context.config, hook.hook_metadata(), better_auth_core::observability::database::DatabaseHook::AfterCreateSession, hook.after_create_session(record, &context)).await?
                     }
                     Effect::Created(record) => {
                         better_auth_core::observability::database::with_database_hook(context.config, hook.hook_metadata(), better_auth_core::observability::database::DatabaseHook::AfterCreateVerification, hook.after_create_verification(record, &context)).await?

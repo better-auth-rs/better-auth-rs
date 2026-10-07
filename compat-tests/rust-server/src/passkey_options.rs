@@ -1,8 +1,8 @@
 use async_trait::async_trait;
 use axum::{Json, Router, extract::Query, routing::get};
 use better_auth::{AuthConfig, AuthError, AuthResult, AuthSchema, plugins::passkey::*};
-use better_auth_core::{CreateSession, CreateUser, store::AuthStore};
-use better_auth_seaorm::{HookControl, SeaOrmHookContext, SeaOrmHooks};
+use better_auth_core::{CreateUser, FieldMap, store::AuthStore};
+use better_auth_seaorm::{DatabaseHookUpdate, SeaOrmHookContext, SeaOrmHooks};
 use serde_json::{Map, Value, json};
 use std::{
     collections::HashMap,
@@ -303,9 +303,9 @@ impl PasskeyAuthenticationHook for PasskeyOptions {
 impl<S: AuthSchema> SeaOrmHooks<S> for PasskeyOptions {
     async fn before_create_session(
         &self,
-        _: &mut CreateSession,
+        _: &mut FieldMap,
         _: &SeaOrmHookContext<'_, S>,
-    ) -> AuthResult<HookControl> {
+    ) -> AuthResult<DatabaseHookUpdate<FieldMap>> {
         self.event(json!({"event": "session.before"}));
         if self.control().get("failSession") == Some(&Value::Bool(true)) {
             return Err(AuthError::Upstream {
@@ -314,7 +314,7 @@ impl<S: AuthSchema> SeaOrmHooks<S> for PasskeyOptions {
                 message: "Session rejected",
             });
         }
-        Ok(HookControl::Continue)
+        Ok(DatabaseHookUpdate::Continue)
     }
     async fn after_create_session(
         &self,

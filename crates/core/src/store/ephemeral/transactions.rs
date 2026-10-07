@@ -63,7 +63,7 @@ impl AuthTransaction<StatelessSchema> for EphemeralTransaction {
     }
     async fn before_create_runtime_session_optional(
         &self,
-        input: &mut crate::CreateSession,
+        input: &mut crate::store::PreparedSessionCreate,
     ) -> AuthResult<bool> {
         self.store
             .before_create_runtime_session_optional(input)
@@ -74,6 +74,14 @@ impl AuthTransaction<StatelessSchema> for EphemeralTransaction {
         input: crate::CreateSession,
     ) -> AuthResult<Option<crate::wire::SessionView>> {
         self.store.create_session_optional(input).await
+    }
+
+    async fn create_session_with_writer(
+        &self,
+        input: crate::CreateSession,
+        writer: Option<crate::store::SessionCreateWriter>,
+    ) -> AuthResult<Option<crate::wire::SessionView>> {
+        self.store.create_session_with_writer(input, writer).await
     }
 
     fn queue_after_commit(
@@ -100,7 +108,10 @@ impl AuthTransaction<StatelessSchema> for EphemeralTransaction {
     ) -> AuthResult<()> {
         self.store.before_create_runtime_verification(input).await
     }
-    async fn before_create_runtime_session(&self, input: &mut CreateSession) -> AuthResult<()> {
+    async fn before_create_runtime_session(
+        &self,
+        input: &mut crate::store::PreparedSessionCreate,
+    ) -> AuthResult<()> {
         self.store.before_create_runtime_session(input).await
     }
     async fn create_verification(&self, input: CreateVerification) -> AuthResult<VerificationView> {

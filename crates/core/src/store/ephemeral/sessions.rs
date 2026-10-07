@@ -102,7 +102,7 @@ impl EphemeralStore {
                 } else {
                     session.user_id = Self::project_id(&session.user_id)?;
                 }
-                Ok(session)
+                Ok(session.into_projected_fields())
             },
             complete,
         )
@@ -110,123 +110,9 @@ impl EphemeralStore {
     }
 }
 
-#[async_trait]
-impl SessionStore<StatelessSchema> for EphemeralStore {
-    async fn update_session_with_writer(
-        &self,
-        token: &str,
-        update: SessionUpdate,
-        secondary: Option<crate::store::SessionUpdateWriter>,
-    ) -> AuthResult<Option<SessionView>> {
-        EphemeralStore::update_session_with_writer(self, token, update, secondary).await
-    }
-
-    async fn end_session(&self, token: &str) -> AuthResult<()> {
-        self.delete_sessions_with_hooks(|row| row.token == token, true)
-            .await
-            .map(|_| ())
-    }
-
-    async fn accept_invitation_with_teams(
-        &self,
-        invitation_id: &str,
-        user_id: &str,
-        session_token: Option<&str>,
-        teams_enabled: bool,
-        maximum: crate::store::TeamMemberLimits<'_>,
-    ) -> AuthResult<(Member, Invitation, Option<SessionView>)> {
-        self.accept_invitation(
-            invitation_id,
-            user_id,
-            session_token,
-            teams_enabled,
-            maximum,
-        )
-        .await
-    }
-
-    async fn before_create_runtime_session(&self, input: &mut CreateSession) -> AuthResult<()> {
-        if self.before_create_runtime_session_optional(input).await? {
-            Ok(())
-        } else {
-            Err(AuthError::forbidden(
-                "session creation cancelled by database hook",
-            ))
-        }
-    }
-    async fn before_create_runtime_session_optional(
-        &self,
-        input: &mut CreateSession,
-    ) -> AuthResult<bool> {
-        let transaction = EphemeralTransaction {
-            store: self.clone(),
-        };
-        let context = self.hook_context(&transaction);
-        for hook in &self.hooks {
-            if crate::observability::database::with_database_hook(
-                context.config,
-                hook.hook_metadata(),
-                crate::observability::database::DatabaseHook::BeforeCreateSession,
-                hook.before_create_session(input, &context),
-            )
-            .await?
-                == DatabaseHookControl::Cancel
-            {
-                return Ok(false);
-            }
-        }
-        Ok(true)
-    }
-
-    async fn after_create_runtime_session(
-        &self,
-        session: &SessionView,
-        request: Option<crate::hooks::RequestHookContext>,
-    ) -> AuthResult<()> {
-        self.after_with_request(CommittedWrite::SessionCreated(session.clone()), request)
-            .await
-    }
-
-    async fn create_session(&self, input: CreateSession) -> AuthResult<SessionView> {
-        self.create_session_optional(input)
-            .await?
-            .ok_or_else(|| AuthError::forbidden("session creation cancelled by database hook"))
-    }
-    async fn create_session_optional(
-        &self,
-        mut create_session: CreateSession,
-    ) -> AuthResult<Option<SessionView>> {
-        let _ = create_session.additional_fields.remove("id");
-        let mut fields = self.config.session_default_fields();
-        fields.extend(std::mem::take(&mut create_session.additional_fields));
-        create_session.additional_fields = fields;
-        if !self
-            .before_create_runtime_session_optional(&mut create_session)
-            .await?
-        {
-            return Ok(None);
-        }
-        let now = crate::FieldDate::from(Utc::now());
-        let token = crate::id::random_id(None);
-        let schema = self.session_config.adapter_schema();
-        let configured_user_id = schema.fields().contains_key("userId");
-        let mut fields = create_session.additional_fields;
-        if configured_user_id {
-            let _ = fields
-                .entry("userId".into())
-                .or_insert_with(|| create_session.user_id.field_value());
-        }
-        let mut plugin_fields = FieldMap::new();
-        for name in ["impersonatedBy", "activeOrganizationId", "activeTeamId"] {
-            if let Some(value) = fields.remove(name) {
-                let _ = plugin_fields.insert(name.into(), value);
-            }
-        }
-        let mut user_id = if configured_user_id {
-            create_session.user_id
-        } else {
-            self.memory_reference_id_input(create_session.user_id.into_field_value())?
-        };
+impl EphemeralStore {
+    async fn write_session_create_fields(&self, mut fields: FieldMap) -> AuthResult<SessionView> {
+        let schema = crate::store::session_create_schema(&self.session_config, &fields);
         let mut supplied_id = fields.remove("id");
         self.model_fields.begin_id_input(
             EntityRole::Session,
@@ -265,54 +151,23 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
                 },
             )
             .await?;
-        let id = crate::SchemaValue::from_field(additional_fields.remove("id").unwrap_or_default());
-        if configured_user_id {
-            user_id = crate::SchemaValue::from_field(
-                additional_fields
-                    .remove(schema.record_storage_key("userId"))
-                    .unwrap_or_default(),
-            );
-        }
-        let mut session = SessionView {
-            visible_fields: Some(
-                [
-                    ("impersonatedBy", create_session.impersonated_by.is_some()),
-                    (
-                        "activeOrganizationId",
-                        create_session.active_organization_id.is_some(),
-                    ),
-                ]
-                .into_iter()
-                .filter(|(_, present)| *present)
-                .map(|(name, _)| name.to_owned())
-                .collect(),
-            ),
-            id,
-            expires_at: create_session.expires_at,
-            token: token.clone(),
-            created_at: now.clone(),
-            updated_at: now,
-            ip_address: create_session.ip_address.or_else(|| Some(String::new())),
-            user_agent: create_session.user_agent.or_else(|| Some(String::new())),
-            user_id,
-            impersonated_by: create_session.impersonated_by,
-            active_organization_id: create_session.active_organization_id,
-            active_team_id: None,
-            active: true,
-            additional_fields,
-        };
-        for (field, target) in [
-            ("impersonatedBy", &mut session.impersonated_by),
-            ("activeOrganizationId", &mut session.active_organization_id),
-            ("activeTeamId", &mut session.active_team_id),
-        ] {
-            if let Some(value) = plugin_fields.remove(field) {
-                *target = value.decode()?;
-                if let Some(visible) = &mut session.visible_fields {
-                    let _ = visible.insert(field.into());
+        let mut native = crate::store::session_create_native_fields(&schema, &additional_fields);
+        let id = additional_fields.remove("id").unwrap_or_default();
+        let _ = native.insert("id".into(), id);
+        let mut session = crate::store::session_from_create_fields(native.clone())?;
+        // Physical aliases must remain independent of the typed logical members used by store queries.
+        for (name, canonical) in native {
+            match additional_fields.get(&name) {
+                Some(value) if value.strict_equals(&canonical) => {
+                    let _ = additional_fields.remove(&name);
                 }
+                None if name != "id" => {
+                    let _ = additional_fields.insert(name, crate::FieldValue::Undefined);
+                }
+                _ => {}
             }
         }
+        session.additional_fields = additional_fields;
         let source = self
             .raw("session", "create", |state| {
                 if let Some(id) = self.next_serial_id(state.sessions.len()) {
@@ -321,9 +176,146 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
                 Ok(SessionSource::Live(state.sessions.push_ref(session)))
             })
             .await?;
-        let session = self.output_session(source).await?;
-        self.after_create_runtime_session(&session, crate::hooks::current_request_hook_context())
+        self.output_session(source).await
+    }
+}
+
+#[async_trait]
+impl SessionStore<StatelessSchema> for EphemeralStore {
+    async fn update_session_with_writer(
+        &self,
+        token: &str,
+        update: SessionUpdate,
+        secondary: Option<crate::store::SessionUpdateWriter>,
+    ) -> AuthResult<Option<SessionView>> {
+        EphemeralStore::update_session_with_writer(self, token, update, secondary).await
+    }
+
+    async fn end_session(&self, token: &str) -> AuthResult<()> {
+        self.delete_sessions_with_hooks(|row| row.token == token, true)
+            .await
+            .map(|_| ())
+    }
+
+    async fn accept_invitation_with_teams(
+        &self,
+        invitation_id: &str,
+        user_id: &str,
+        session_token: Option<&str>,
+        teams_enabled: bool,
+        maximum: crate::store::TeamMemberLimits<'_>,
+    ) -> AuthResult<(Member, Invitation, Option<SessionView>)> {
+        self.accept_invitation(
+            invitation_id,
+            user_id,
+            session_token,
+            teams_enabled,
+            maximum,
+        )
+        .await
+    }
+
+    async fn before_create_runtime_session(
+        &self,
+        input: &mut crate::store::PreparedSessionCreate,
+    ) -> AuthResult<()> {
+        if self.before_create_runtime_session_optional(input).await? {
+            Ok(())
+        } else {
+            Err(AuthError::forbidden(
+                "session creation cancelled by database hook",
+            ))
+        }
+    }
+    async fn before_create_runtime_session_optional(
+        &self,
+        input: &mut crate::store::PreparedSessionCreate,
+    ) -> AuthResult<bool> {
+        let transaction = EphemeralTransaction {
+            store: self.clone(),
+        };
+        let context = self.hook_context(&transaction);
+        for hook in &self.hooks {
+            let outcome = crate::observability::database::with_database_hook(
+                context.config,
+                hook.hook_metadata(),
+                crate::observability::database::DatabaseHook::BeforeCreateSession,
+                hook.before_create_session(input.fields_mut(), &context),
+            )
             .await?;
+            if !input.apply(outcome) {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+
+    async fn after_create_runtime_session(
+        &self,
+        session: &SessionView,
+        request: Option<crate::hooks::RequestHookContext>,
+    ) -> AuthResult<()> {
+        self.after_with_request(CommittedWrite::SessionCreated(session.clone()), request)
+            .await
+    }
+
+    async fn create_session(&self, input: CreateSession) -> AuthResult<SessionView> {
+        self.create_session_optional(input)
+            .await?
+            .ok_or_else(|| AuthError::forbidden("session creation cancelled by database hook"))
+    }
+    async fn create_session_optional(
+        &self,
+        input: CreateSession,
+    ) -> AuthResult<Option<SessionView>> {
+        self.create_session_with_writer(input, None).await
+    }
+
+    async fn create_session_with_writer(
+        &self,
+        input: CreateSession,
+        writer: Option<crate::store::SessionCreateWriter>,
+    ) -> AuthResult<Option<SessionView>> {
+        let request = crate::hooks::current_request_hook_context();
+        let write_database = writer.as_ref().is_none_or(|writer| writer.write_database);
+        let mut prepared =
+            crate::store::PreparedSessionCreate::new(input, &self.config, !write_database)?;
+        if !self
+            .before_create_runtime_session_optional(&mut prepared)
+            .await?
+        {
+            return Ok(None);
+        }
+        let (original, fields) = prepared.into_parts();
+        let session = if write_database {
+            crate::store::database_hooks::await_adapter_lookup().await;
+            self.write_session_create_fields(fields).await?
+        } else {
+            crate::store::session_from_create_fields(fields)?
+        };
+        let deferred = match writer {
+            Some(writer) => {
+                let write = (writer.write)(original, session.clone());
+                if writer.deferred {
+                    Some(write)
+                } else {
+                    write.await?;
+                    None
+                }
+            }
+            None => None,
+        };
+        self.after_create_runtime_session(&session, request).await?;
+        if let Some(write) = deferred {
+            if self.pending_hooks.is_some() {
+                EphemeralTransaction {
+                    store: self.clone(),
+                }
+                .queue_after_commit(write)?;
+            } else {
+                write.await?;
+            }
+        }
         Ok(Some(session))
     }
 

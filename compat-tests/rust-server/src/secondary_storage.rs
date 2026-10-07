@@ -3,8 +3,9 @@ use axum::{Json, Router, routing::post};
 use better_auth::__private_core::store::{SecondaryStorage, transaction};
 use better_auth::__private_core::types::{CreateSession, CreateVerification};
 use better_auth::{AuthConfig, AuthError, AuthResult, AuthSchema, BetterAuth};
+use better_auth_core::FieldMap;
 use better_auth_seaorm::sea_orm::{ConnectionTrait, DatabaseConnection, Statement};
-use better_auth_seaorm::{HookControl, SeaOrmHookContext, SeaOrmHooks};
+use better_auth_seaorm::{DatabaseHookUpdate, HookControl, SeaOrmHookContext, SeaOrmHooks};
 use chrono::{DateTime, Utc};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
@@ -89,11 +90,11 @@ impl Events {
 impl<S: AuthSchema> SeaOrmHooks<S> for Events {
     async fn before_create_session(
         &self,
-        _: &mut CreateSession,
+        _: &mut FieldMap,
         _: &SeaOrmHookContext<'_, S>,
-    ) -> AuthResult<HookControl> {
+    ) -> AuthResult<DatabaseHookUpdate<FieldMap>> {
         self.push("session.create.before");
-        Ok(HookControl::Continue)
+        Ok(DatabaseHookUpdate::Continue)
     }
     async fn after_create_session(
         &self,

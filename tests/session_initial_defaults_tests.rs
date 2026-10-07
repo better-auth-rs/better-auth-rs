@@ -6,7 +6,7 @@ use better_auth_core::{
     id::{IdGeneration, IdGenerator},
     store::{
         EphemeralStore, MemoryCacheAdapter, RuntimeStore, SecondaryStorage, StatelessSchema,
-        database_hooks::{DatabaseHookContext, DatabaseHookControl, DatabaseHooks},
+        database_hooks::{DatabaseHookContext, DatabaseHooks},
         secondary::SecondaryStore,
         transaction,
     },
@@ -31,6 +31,22 @@ type TestResult<T = ()> = Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
 #[path = "session_initial_defaults_tests/plugin_precedence.rs"]
 mod plugin_precedence;
+
+fn additional_creation_fields(input: &FieldMap) -> FieldMap {
+    let mut fields = input.clone();
+    for name in [
+        "token",
+        "userId",
+        "expiresAt",
+        "createdAt",
+        "updatedAt",
+        "ipAddress",
+        "userAgent",
+    ] {
+        let _ = fields.remove(name);
+    }
+    fields
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Case {
@@ -91,23 +107,29 @@ struct Hooks {
 impl<S: AuthSchema> DatabaseHooks<S> for Hooks {
     async fn before_create_session(
         &self,
-        input: &mut CreateSession,
+        input: &mut better_auth_core::FieldMap,
         _: &DatabaseHookContext<'_, S>,
-    ) -> AuthResult<DatabaseHookControl> {
-        // CreateSession exposes application fields separately from the native hook payload.
-        emit(&self.events, Event::Before(input.additional_fields.clone()))?;
+    ) -> AuthResult<
+        better_auth_core::store::database_hooks::DatabaseHookUpdate<better_auth_core::FieldMap>,
+    > {
+        emit(
+            &self.events,
+            Event::Before(additional_creation_fields(input)),
+        )?;
         let patch = match self.case {
             Case::Undefined => Some(FieldValue::Undefined),
             Case::RequiredNull | Case::OptionalNull => Some(FieldValue::Null),
             Case::Patched => Some("P".into()),
-            Case::Cancel => return Ok(DatabaseHookControl::Cancel),
+            Case::Cancel => {
+                return Ok(better_auth_core::store::database_hooks::DatabaseHookUpdate::Cancel);
+            }
             Case::Failure => return Err(AuthError::bad_request("session hook failure")),
             _ => None,
         };
         if let Some(value) = patch {
-            let _ = input.additional_fields.insert("label".into(), value);
+            let _ = input.insert("label".into(), value);
         }
-        Ok(DatabaseHookControl::Continue)
+        Ok(better_auth_core::store::database_hooks::DatabaseHookUpdate::Continue)
     }
 
     async fn after_create_session(
@@ -277,6 +299,7 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, run: Run) -> TestRe
         raw.clone()
     };
     let create_input = input(run.case)?;
+    let started = chrono::Utc::now().timestamp_millis() as f64;
     let result = match run.call {
         Call::Ordinary => store.create_session_optional(create_input).await,
         Call::Transaction => {
@@ -296,6 +319,7 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, run: Run) -> TestRe
             .await
         }
     };
+    let ended = chrono::Utc::now().timestamp_millis() as f64;
     let expected = expected_events(run.case, run.pure);
     assert_eq!(
         run.events.try_iter().collect::<Vec<_>>(),
@@ -331,7 +355,8 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, run: Run) -> TestRe
         assert_eq!(created.expires_at, input(run.case)?.expires_at);
         assert_eq!(created.ip_address.as_deref(), Some(""));
         assert_eq!(created.user_agent.as_deref(), Some(""));
-        assert_eq!(created.created_at, created.updated_at);
+        assert!((started..=ended).contains(&created.created_at.milliseconds()));
+        assert!((started..=ended).contains(&created.updated_at.milliseconds()));
         if run.pure {
             let cached = cache
                 .get(&created.token)

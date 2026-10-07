@@ -9,6 +9,11 @@ use std::pin::Pin;
 pub mod cache;
 mod capabilities;
 mod runtime;
+mod session_create;
+pub use session_create::{
+    PreparedSessionCreate, SessionCreateWriter, session_create_native_fields,
+    session_create_schema, session_from_create_fields,
+};
 pub mod schema;
 pub use runtime::RuntimeStore;
 pub mod database_hooks;
@@ -157,10 +162,23 @@ pub trait AuthTransaction<S: AuthSchema>:
             "The store must support nullable transactional session creation",
         ))
     }
+    /// Run one Session creation lifecycle with an optional secondary write.
+    async fn create_session_with_writer(
+        &self,
+        input: CreateSession,
+        writer: Option<SessionCreateWriter>,
+    ) -> AuthResult<Option<crate::wire::SessionView>> {
+        if writer.is_some() {
+            return Err(AuthError::config(
+                "The store must support ordered secondary session creation",
+            ));
+        }
+        self.create_session_optional(input).await
+    }
     /// Run session before hooks without converting cancellation into an API error.
     async fn before_create_runtime_session_optional(
         &self,
-        input: &mut CreateSession,
+        input: &mut PreparedSessionCreate,
     ) -> AuthResult<bool> {
         self.before_create_runtime_session(input).await?;
         Ok(true)
@@ -235,7 +253,10 @@ pub trait AuthTransaction<S: AuthSchema>:
     /// Delete expired verification records inside the active transaction.
     async fn delete_expired_verifications(&self) -> AuthResult<usize>;
     /// Run session creation hooks before creating a session outside the database.
-    async fn before_create_runtime_session(&self, _session: &mut CreateSession) -> AuthResult<()> {
+    async fn before_create_runtime_session(
+        &self,
+        _session: &mut PreparedSessionCreate,
+    ) -> AuthResult<()> {
         Ok(())
     }
     async fn get_user_by_id(&self, id: &str) -> AuthResult<Option<crate::wire::UserView>>;
@@ -466,10 +487,23 @@ pub trait SessionStore<S: AuthSchema>: Send + Sync {
             "The store must support nullable session creation",
         ))
     }
+    /// Run one Session creation lifecycle with an optional secondary write.
+    async fn create_session_with_writer(
+        &self,
+        input: CreateSession,
+        writer: Option<SessionCreateWriter>,
+    ) -> AuthResult<Option<crate::wire::SessionView>> {
+        if writer.is_some() {
+            return Err(AuthError::config(
+                "The store must support ordered secondary session creation",
+            ));
+        }
+        self.create_session_optional(input).await
+    }
     /// Run session before hooks and retain their cancellation result for cache-only creation.
     async fn before_create_runtime_session_optional(
         &self,
-        input: &mut CreateSession,
+        input: &mut PreparedSessionCreate,
     ) -> AuthResult<bool> {
         self.before_create_runtime_session(input).await?;
         Ok(true)
@@ -499,7 +533,10 @@ pub trait SessionStore<S: AuthSchema>: Send + Sync {
     }
 
     /// Run session creation hooks when secondary storage owns the session.
-    async fn before_create_runtime_session(&self, _session: &mut CreateSession) -> AuthResult<()> {
+    async fn before_create_runtime_session(
+        &self,
+        _session: &mut PreparedSessionCreate,
+    ) -> AuthResult<()> {
         Ok(())
     }
     /// Run creation hooks with the captured explicit request after the session write.

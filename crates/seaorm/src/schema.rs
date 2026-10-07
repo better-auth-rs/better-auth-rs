@@ -108,7 +108,8 @@ pub trait SeaOrmSessionModel:
         )))
     }
 
-    /// Initialize native and application columns. The store binds `expires_at` after this method returns.
+    /// Initialize native and application columns from the complete creation-hook result.
+    /// The store replaces native columns with prepared values and applies configured fields after this method returns.
     /// Leave `expires_at` unset so runtime Date values reach the SQL driver without typed decoding.
     fn new_active(
         id: Option<Self::Id>,

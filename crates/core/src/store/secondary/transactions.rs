@@ -16,62 +16,14 @@ struct Transaction<S: AuthSchema> {
 impl<S: AuthSchema> Transaction<S> {
     async fn create_session_with_storage(
         &self,
-        mut input: CreateSession,
+        input: CreateSession,
         deferred: bool,
     ) -> AuthResult<Option<crate::wire::SessionView>> {
-        let request = crate::hooks::current_request_hook_context();
-        let session = if self.runtime.database_sessions() {
-            let Some(session) = self.inner.create_session_optional(input).await? else {
-                return Ok(None);
-            };
-            session
-        } else {
-            self.runtime.prepare_session(&mut input)?;
-            if !self
-                .inner
-                .before_create_runtime_session_optional(&mut input)
-                .await?
-            {
-                return Ok(None);
-            }
-            self.runtime.new_session(input)?
-        };
-        if !deferred {
+        let transaction = (!deferred).then(|| self.inner.clone());
+        let writer =
             self.runtime
-                .mirror_session_in_transaction(&session, Some(self.inner.as_ref()))
-                .await?;
-        }
-        if !self.runtime.database_sessions() {
-            let runtime = self.runtime.clone();
-            let created = session.clone();
-            self.inner.queue_after_commit(Box::pin(async move {
-                runtime
-                    .inner
-                    .after_create_runtime_session(&created, request)
-                    .await
-            }))?;
-        }
-        if deferred {
-            let runtime = self.runtime.clone();
-            let created = session.clone();
-            self.inner.queue_after_commit(Box::pin(async move {
-                if let Err(error) = runtime.mirror_session(&created).await {
-                    // Upstream tolerates a committed mirror failure only with database fallback.
-                    if runtime.database_sessions()
-                        && !runtime.config.session.preserve_session_in_database()
-                    {
-                        crate::observability::logger::current().error(
-                            "Failed to mirror committed session to secondary storage",
-                            &[crate::observability::LogArgument::Error(&error)],
-                        );
-                    } else {
-                        return Err(error);
-                    }
-                }
-                Ok(())
-            }))?;
-        }
-        Ok(Some(session))
+                .session_create_writer(input.user_id.clone(), deferred, transaction);
+        self.inner.create_session_with_writer(input, writer).await
     }
 }
 
@@ -132,9 +84,17 @@ impl<S: AuthSchema> AuthTransaction<S> for Transaction<S> {
     ) -> AuthResult<Option<crate::wire::UserView>> {
         self.inner.create_user_optional(input).await
     }
+    async fn create_session_with_writer(
+        &self,
+        input: CreateSession,
+        writer: Option<crate::store::SessionCreateWriter>,
+    ) -> AuthResult<Option<crate::wire::SessionView>> {
+        self.inner.create_session_with_writer(input, writer).await
+    }
+
     async fn before_create_runtime_session_optional(
         &self,
-        input: &mut crate::CreateSession,
+        input: &mut crate::store::PreparedSessionCreate,
     ) -> AuthResult<bool> {
         self.inner
             .before_create_runtime_session_optional(input)

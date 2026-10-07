@@ -75,19 +75,19 @@ struct Plugin {
 impl<S: AuthSchema> DatabaseHooks<S> for Plugin {
     async fn before_create_session(
         &self,
-        input: &mut CreateSession,
+        input: &mut better_auth_core::FieldMap,
         _: &DatabaseHookContext<'_, S>,
-    ) -> AuthResult<DatabaseHookControl> {
+    ) -> AuthResult<
+        better_auth_core::store::database_hooks::DatabaseHookUpdate<better_auth_core::FieldMap>,
+    > {
         record(
             &self.events,
-            FieldEvent::Before(input.additional_fields.clone()),
+            FieldEvent::Before(additional_creation_fields(input)),
         )?;
         if matches!(self.scenario, Scenario::HookUndefined) {
-            let _ = input
-                .additional_fields
-                .insert("label".into(), FieldValue::Undefined);
+            let _ = input.insert("label".into(), FieldValue::Undefined);
         }
-        Ok(DatabaseHookControl::Continue)
+        Ok(better_auth_core::store::database_hooks::DatabaseHookUpdate::Continue)
     }
 
     async fn after_create_session(

@@ -42,19 +42,21 @@ struct Hooks {
 impl SeaOrmHooks<BundledSchema> for Hooks {
     async fn before_create_session(
         &self,
-        input: &mut CreateSession,
+        input: &mut better_auth_core::FieldMap,
         ctx: &SeaOrmHookContext<'_, BundledSchema>,
-    ) -> AuthResult<HookControl> {
+    ) -> AuthResult<
+        better_auth_core::store::database_hooks::DatabaseHookUpdate<better_auth_core::FieldMap>,
+    > {
         self.events.lock().unwrap().push(if ctx.tx.is_some() {
             "before-session-tx"
         } else {
             "before-session"
         });
-        input.user_agent = Some("hook-agent".into());
+        let _ = input.insert("userAgent".into(), "hook-agent".into());
         Ok(if self.cancel.load(Ordering::SeqCst) {
-            HookControl::Cancel
+            better_auth_core::store::database_hooks::DatabaseHookUpdate::Cancel
         } else {
-            HookControl::Continue
+            better_auth_core::store::database_hooks::DatabaseHookUpdate::Continue
         })
     }
     async fn after_create_session(

@@ -1,6 +1,6 @@
 use super::*;
 use better_auth_core::{AuthResult, CreateSession, id::IdGenerator};
-use better_auth_seaorm::{HookControl, SeaOrmHookContext, SeaOrmHooks};
+use better_auth_seaorm::{SeaOrmHookContext, SeaOrmHooks};
 
 type Events = Arc<Mutex<Vec<String>>>;
 
@@ -39,18 +39,17 @@ struct ForcedId {
 impl SeaOrmHooks<BundledSchema> for ForcedId {
     async fn before_create_session(
         &self,
-        input: &mut CreateSession,
+        input: &mut better_auth_core::FieldMap,
         _: &SeaOrmHookContext<'_, BundledSchema>,
-    ) -> AuthResult<HookControl> {
-        event(
-            &self.events,
-            format!("hook:{}", input.additional_fields.contains_key("id")),
-        )?;
-        let _ = input.additional_fields.insert("id".into(), self.id.clone());
+    ) -> AuthResult<
+        better_auth_core::store::database_hooks::DatabaseHookUpdate<better_auth_core::FieldMap>,
+    > {
+        event(&self.events, format!("hook:{}", input.contains_key("id")))?;
+        let _ = input.insert("id".into(), self.id.clone());
         if self.fail {
             return Err(AuthError::bad_request("nested hook failure"));
         }
-        Ok(HookControl::Continue)
+        Ok(better_auth_core::store::database_hooks::DatabaseHookUpdate::Continue)
     }
 }
 

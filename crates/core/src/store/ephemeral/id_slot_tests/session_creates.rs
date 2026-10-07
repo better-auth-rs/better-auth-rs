@@ -1,5 +1,5 @@
 use super::*;
-use crate::store::database_hooks::{DatabaseHookContext, DatabaseHookControl, SessionUpdate};
+use crate::store::database_hooks::{DatabaseHookContext, SessionUpdate};
 
 fn input(label: Option<&str>) -> AuthResult<CreateSession> {
     Ok(CreateSession {
@@ -25,20 +25,15 @@ struct ForcedId {
 impl DatabaseHooks<StatelessSchema> for ForcedId {
     async fn before_create_session(
         &self,
-        input: &mut CreateSession,
+        input: &mut crate::FieldMap,
         _: &DatabaseHookContext<'_, StatelessSchema>,
-    ) -> AuthResult<DatabaseHookControl> {
-        record(
-            &self.trace,
-            json!(["hook", input.additional_fields.contains_key("id")]),
-        )?;
-        let _ = input
-            .additional_fields
-            .insert("id".into(), self.value.clone());
+    ) -> AuthResult<crate::store::database_hooks::DatabaseHookUpdate<crate::FieldMap>> {
+        record(&self.trace, json!(["hook", input.contains_key("id")]))?;
+        let _ = input.insert("id".into(), self.value.clone());
         if self.fail {
             return Err(AuthError::bad_request("nested hook failure"));
         }
-        Ok(DatabaseHookControl::Continue)
+        Ok(crate::store::database_hooks::DatabaseHookUpdate::Continue)
     }
 }
 
@@ -152,7 +147,7 @@ async fn memory_session_create_aliases_share_the_physical_id_slot() -> AuthResul
             let created = store.create_session(create).await?;
             let ended = Utc::now().timestamp_millis() as f64;
             assert!((started..=ended).contains(&created.created_at.milliseconds()));
-            assert_eq!(created.updated_at, created.created_at);
+            assert!((started..=ended).contains(&created.updated_at.milliseconds()));
             assert_eq!(created.token.len(), 32);
             assert!(
                 created

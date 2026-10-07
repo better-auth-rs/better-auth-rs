@@ -11,14 +11,11 @@ use better_auth::plugins::{
 use better_auth::server_api::EndpointInput;
 use better_auth::{AuthBuilder, AuthConfig, AuthError, AuthResult, AuthSchema, BetterAuth};
 use better_auth_core::background::{BackgroundTask, BackgroundTasks};
-use better_auth_core::store::database_hooks::{
-    DatabaseHookContext, DatabaseHookControl, DatabaseHooks,
-};
+use better_auth_core::store::database_hooks::{DatabaseHookContext, DatabaseHooks};
 use better_auth_core::store::{AuthStore, EphemeralStore, StatelessSchema};
 use better_auth_core::wire::{SessionView, UserView};
 use better_auth_core::{
-    AuthInitContext, AuthPlugin, AuthRequest, AuthRoute, CreateSession, HttpMethod, PasswordHasher,
-    UpdateUser,
+    AuthInitContext, AuthPlugin, AuthRequest, AuthRoute, HttpMethod, PasswordHasher, UpdateUser,
 };
 use better_auth_seaorm::store::__private_test_support::{bundled_schema::BundledSchema, migrator};
 use better_auth_seaorm::{
@@ -73,15 +70,17 @@ impl<S: AuthSchema> Hooks<S> {
 impl<S: AuthSchema> DatabaseHooks<S> for Hooks<S> {
     async fn before_create_session(
         &self,
-        _: &mut CreateSession,
+        _: &mut better_auth_core::FieldMap,
         _: &DatabaseHookContext<'_, S>,
-    ) -> AuthResult<DatabaseHookControl> {
+    ) -> AuthResult<
+        better_auth_core::store::database_hooks::DatabaseHookUpdate<better_auth_core::FieldMap>,
+    > {
         self.state.finish_signup.notified().await;
         self.state.event("session:create.before");
         if self.outcome == "rollback" {
             return Err(AuthError::internal("rollback-before-session"));
         }
-        Ok(DatabaseHookControl::Continue)
+        Ok(better_auth_core::store::database_hooks::DatabaseHookUpdate::Continue)
     }
     async fn after_create_user(
         &self,

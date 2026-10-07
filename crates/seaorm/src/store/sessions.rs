@@ -113,13 +113,6 @@ where
         .await
     }
 
-    fn normalize_session_client_field(value: Option<String>) -> Option<String> {
-        match value {
-            Some(value) => Some(value),
-            None => Some(String::new()),
-        }
-    }
-
     pub(super) async fn apply_session_field_updates(
         &self,
         active: <S::Session as SeaOrmSessionModel>::ActiveModel,
@@ -155,7 +148,7 @@ where
 
     pub(crate) async fn before_runtime_session_in_tx(
         &self,
-        session: &mut CreateSession,
+        session: &mut better_auth_core::store::PreparedSessionCreate,
         tx: Option<super::HookTransaction<'_, S>>,
     ) -> AuthResult<()> {
         if self
@@ -169,20 +162,19 @@ where
     }
     pub(crate) async fn before_runtime_session_optional_in_tx(
         &self,
-        session: &mut CreateSession,
+        session: &mut better_auth_core::store::PreparedSessionCreate,
         tx: Option<super::HookTransaction<'_, S>>,
     ) -> AuthResult<bool> {
         let context = self.hook_context(tx);
         for hook in self.hooks() {
-            if better_auth_core::observability::database::with_database_hook(
+            let outcome = better_auth_core::observability::database::with_database_hook(
                 context.config,
                 hook.hook_metadata(),
                 better_auth_core::observability::database::DatabaseHook::BeforeCreateSession,
-                hook.before_create_session(session, &context),
+                hook.before_create_session(session.fields_mut(), &context),
             )
-            .await?
-            .is_cancelled()
-            {
+            .await?;
+            if !session.apply(outcome) {
                 return Ok(false);
             }
         }
@@ -212,44 +204,68 @@ where
         &self,
         db: &C,
         tx: Option<super::HookTransaction<'_, S>>,
-        mut create_session: CreateSession,
+        input: CreateSession,
+        writer: Option<better_auth_core::store::SessionCreateWriter>,
     ) -> AuthResult<Option<better_auth_core::wire::SessionView>>
     where
         C: ConnectionTrait,
     {
-        let _ = create_session.additional_fields.remove("id");
-        let mut fields = self.config().session_default_fields();
-        fields.extend(std::mem::take(&mut create_session.additional_fields));
-        create_session.additional_fields = fields;
+        let request = crate::hooks::current_request_hook_context();
+        let write_database = writer.as_ref().is_none_or(|writer| writer.write_database);
+        let mut prepared = better_auth_core::store::PreparedSessionCreate::new(
+            input,
+            self.config(),
+            !write_database,
+        )?;
         if !self
-            .before_runtime_session_optional_in_tx(&mut create_session, tx)
+            .before_runtime_session_optional_in_tx(&mut prepared, tx)
             .await?
         {
             return Ok(None);
         }
-        if let Some(id) = create_session.user_id.as_str() {
-            let id = self
-                .config()
-                .advanced
-                .database
-                .generate_id()
-                .coerce_id(id)?
-                .into_owned();
-            let _ = S::Session::parse_user_id(&id)?;
-            create_session.user_id = id.into();
-        }
-        let now = Utc::now();
-        create_session.ip_address = Self::normalize_session_client_field(create_session.ip_address);
-        create_session.user_agent = Self::normalize_session_client_field(create_session.user_agent);
-        let mut fields = std::mem::take(&mut create_session.additional_fields);
-        let mut plugin_fields = better_auth_core::FieldMap::new();
-        for name in ["impersonatedBy", "activeOrganizationId", "activeTeamId"] {
-            if let Some(value) = fields.remove(name) {
-                let _ = plugin_fields.insert(name.into(), value);
+        let (original, fields) = prepared.into_parts();
+        let session = if write_database {
+            better_auth_core::store::database_hooks::await_adapter_lookup().await;
+            self.write_session_create_fields(db, fields).await?
+        } else {
+            better_auth_core::store::session_from_create_fields(fields)?
+        };
+        let deferred = match writer {
+            Some(writer) => {
+                let write = (writer.write)(original, session.clone());
+                if writer.deferred {
+                    Some(write)
+                } else {
+                    write.await?;
+                    None
+                }
             }
+            None => None,
+        };
+        let store = self.clone();
+        let created = session.clone();
+        super::transaction_hooks::after_write(
+            tx,
+            Box::pin(async move { store.after_runtime_session(&created, request).await }),
+        )
+        .await?;
+        if let Some(write) = deferred {
+            super::transaction_hooks::after_write(tx, write).await?;
         }
+        Ok(Some(session))
+    }
+
+    async fn write_session_create_fields<C>(
+        &self,
+        db: &C,
+        mut fields: better_auth_core::FieldMap,
+    ) -> AuthResult<better_auth_core::wire::SessionView>
+    where
+        C: ConnectionTrait,
+    {
         self.validate_session_fields()?;
-        let schema = self.config().session.adapter_schema();
+        let schema =
+            better_auth_core::store::session_create_schema(&self.config().session, &fields);
         let mut supplied_id = fields.remove("id");
         self.model_fields.begin_id_input(
             EntityRole::Session,
@@ -287,33 +303,34 @@ where
                 },
             )
             .await?;
-        let expires_at = create_session.expires_at.clone();
-        let mut active = S::Session::new_active(
-            None,
-            better_auth_core::id::random_id(None),
-            create_session,
-            now,
-        )?;
+        let native = better_auth_core::store::session_create_native_fields(&schema, &fields);
+        let prepared = better_auth_core::store::session_from_create_fields(native)?;
+        let created_at = prepared.created_at.to_datetime()?.ok_or_else(|| {
+            AuthError::config("The Session constructor requires a valid createdAt Date")
+        })?;
+        if let Some(user_id) = prepared.user_id.as_str() {
+            let _ = S::Session::parse_user_id(user_id)?;
+        }
+        let input = CreateSession {
+            user_id: prepared.user_id,
+            expires_at: prepared.expires_at,
+            ip_address: prepared.ip_address,
+            user_agent: prepared.user_agent,
+            impersonated_by: prepared.impersonated_by,
+            active_organization_id: prepared.active_organization_id,
+            additional_fields: Default::default(),
+        };
+        let mut active = S::Session::new_active(None, prepared.token, input, created_at)?;
         active.not_set(S::Session::id_column());
-        let mut active = super::record_write::RecordWrite::from_active(active);
-        active.native_field(
-            S::Session::expires_at_column(),
-            better_auth_core::FieldValue::Date(expires_at),
-        );
-        active.apply_fields(fields, S::Session::field_column)?;
-        active.apply_fields(plugin_fields, S::Session::field_column)?;
+        let mut record = super::record_write::RecordWrite::from_active(active);
+        record.apply_fields(fields, S::Session::field_column)?;
         let session = database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
             self.config(),
             "create",
-            async { active.insert(db).await },
+            async { record.insert(db).await },
         )
         .await?;
-        let session = self.output_session(&session, db).await?;
-        if tx.is_none() {
-            self.after_runtime_session(&session, crate::hooks::current_request_hook_context())
-                .await?;
-        }
-        Ok(Some(session))
+        self.output_session(&session, db).await
     }
 
     pub(crate) async fn create_session_in_tx(
@@ -321,7 +338,7 @@ where
         tx: super::HookTransaction<'_, S>,
         create_session: CreateSession,
     ) -> AuthResult<better_auth_core::wire::SessionView> {
-        self.create_session_with_connection(tx.0, Some(tx), create_session)
+        self.create_session_with_connection(tx.0, Some(tx), create_session, None)
             .await?
             .ok_or_else(|| cancelled_by_hook("session creation"))
     }
@@ -523,17 +540,29 @@ where
         &self,
         input: CreateSession,
     ) -> AuthResult<Option<better_auth_core::wire::SessionView>> {
-        self.create_session_with_connection(self.connection(), None, input)
+        self.create_session_with_connection(self.connection(), None, input, None)
             .await
     }
+    async fn create_session_with_writer(
+        &self,
+        input: CreateSession,
+        writer: Option<better_auth_core::store::SessionCreateWriter>,
+    ) -> AuthResult<Option<better_auth_core::wire::SessionView>> {
+        self.create_session_with_connection(self.connection(), None, input, writer)
+            .await
+    }
+
     async fn before_create_runtime_session_optional(
         &self,
-        input: &mut CreateSession,
+        input: &mut better_auth_core::store::PreparedSessionCreate,
     ) -> AuthResult<bool> {
         self.before_runtime_session_optional_in_tx(input, None)
             .await
     }
-    async fn before_create_runtime_session(&self, session: &mut CreateSession) -> AuthResult<()> {
+    async fn before_create_runtime_session(
+        &self,
+        session: &mut better_auth_core::store::PreparedSessionCreate,
+    ) -> AuthResult<()> {
         self.before_runtime_session_in_tx(session, None).await
     }
 

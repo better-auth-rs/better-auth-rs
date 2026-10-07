@@ -45,7 +45,11 @@ impl<T: AuthSession> SessionProjection<'_, T> {
             return Ok(());
         }
         let value = if let Some(fields) = self.session.projected_fields() {
-            fields.get(name).cloned().unwrap_or_default()
+            fields
+                .get(name)
+                .or_else(|| self.core.get(name))
+                .cloned()
+                .unwrap_or_default()
         } else {
             let value = self
                 .model

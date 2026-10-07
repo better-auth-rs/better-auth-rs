@@ -12,9 +12,8 @@ SeaORM hooks let you run custom logic before and after auth writes. Use them for
 These examples assume you've already defined `AppAuthSchema` and a `database: DatabaseConnection`. If you want a complete setup from entity definitions through Axum mounting, start with the [Axum integration guide](/docs/integrations/axum).
 
 ```rust
-use std::sync::Arc;
-use better_auth::{AuthSchema, database_hooks};
-use better_auth::seaorm::{HookControl, SeaOrmHookContext, SeaOrmHooks, SeaOrmStore};
+use better_auth::{BetterAuth, database_hooks};
+use better_auth::seaorm::{SeaOrmHookContext, SeaOrmHooks, SeaOrmStore};
 
 struct AuditHook;
 
@@ -22,10 +21,10 @@ struct AuditHook;
 impl SeaOrmHooks<AppAuthSchema> for AuditHook {
     async fn after_create_user(
         &self,
-        user: &<AppAuthSchema as AuthSchema>::User,
+        user: &better_auth::wire::UserView,
         _ctx: &SeaOrmHookContext<'_, AppAuthSchema>,
     ) -> better_auth::AuthResult<()> {
-        println!("User created: {:?}", user.email());
+        println!("User created: {:?}", user.email);
         Ok(())
     }
 }
@@ -89,9 +88,9 @@ pub trait SeaOrmHooks<S: AuthSchema>: Send + Sync {
 
     async fn before_create_session(
         &self,
-        session: &mut CreateSession,
+        session: &mut FieldMap,
         ctx: &SeaOrmHookContext<'_, S>,
-    ) -> AuthResult<HookControl>;
+    ) -> AuthResult<DatabaseHookUpdate<FieldMap>>;
 
     async fn after_create_session(
         &self,
@@ -103,7 +102,7 @@ pub trait SeaOrmHooks<S: AuthSchema>: Send + Sync {
 
 ## Rejecting Operations
 
-Return `HookControl::Cancel` from a create or delete hook to cancel the write. Update hooks return `DatabaseHookUpdate::Cancel`. An error stops the operation and propagates to the caller.
+Return `HookControl::Cancel` from user, account, verification create hooks and delete hooks to cancel the write. Session creation and update hooks return `DatabaseHookUpdate::Cancel`. An error stops the operation and propagates to the caller.
 
 Bulk deletion snapshots the matching records, runs every before hook, performs one batch write, then runs after hooks in snapshot order. A before-hook cancellation preserves the complete batch. An after-hook error occurs after the complete write and stops later hooks and queued effects. User deletion applies this sequence to session children, then account children, before the user's own hooks. SQLite foreign-key cascades can remove children whose hooks cancelled their explicit deletion.
 
@@ -135,6 +134,8 @@ impl SeaOrmHooks<AppAuthSchema> for BlockDisposableEmails {
 
 Create hooks receive mutable references. Each update hook receives the original patch and returns `DatabaseHookUpdate::Continue`, `Cancel`, or `Patch(data)`. Returned patches merge in registration order. A later hook can overwrite fields returned by an earlier hook, but cannot observe the earlier patch through its input. `SessionUpdate` and `VerificationUpdate` provide the corresponding session and verification fields. Nullable fields use `Option<Option<T>>` to distinguish omission from clearing a value.
 
+Session creation hooks receive one complete `FieldMap`, including `token`, `userId`, `expiresAt`, `createdAt`, `updatedAt`, client fields, and configured defaults. Each hook sees prior in-place edits and returned `DatabaseHookUpdate::Patch` values. The first returned patch, including an empty map, detaches later property replacements from the original creation object. Secondary cache keys and TTL use that original object; the cached Session contains the final adapter result. The active-session owner and user lookup retain the original caller user ID. `FieldDate` values are immutable, so JavaScript `Date.setTime` alias mutations are not supported. `CreateSession` remains the caller input type. Native output values that fit the Rust field type update the typed Session member. Other output shapes remain in the `FieldMap` overlay and serialize unchanged; typed accessors retain the stored value. This typed-accessor limitation applies to values such as a numeric token or a null creation date.
+
 After-update hooks receive `None` when the database matches no row. The store still returns `UserNotFound` for a missing user. If a transaction caller catches that error and commits, the nullable after hook runs in its original queue position. Rollback discards the hook. A cancelled update does not run after-update hooks.
 
 ```rust
@@ -160,9 +161,8 @@ Use `after_create_user` to provision records after the authentication transactio
 Database hooks and deferred secondary-storage effects share one ordered commit queue. A user's cache refresh follows that update's after hooks and precedes hooks from later writes. `AuthTransaction::queue_after_commit` adds application effects to the same queue. The queue runs under the committing caller's ambient request scope. Database hooks separately receive the request snapshot captured by the write in `ctx.request`. For a synthetic Email OTP endpoint inside signup, the verification after hook receives the OTP request while `current_request_hook_context()` returns signup. Custom effects must capture any explicit request argument they need. Session creation writes its cache entry immediately by default. `create_session_with_deferred_secondary` runs session after hooks before publishing the cache entry; rollback discards that deferred write.
 
 ```rust
-use better_auth::{AuthResult, AuthSchema, database_hooks};
+use better_auth::{AuthResult, database_hooks};
 use better_auth::error::DatabaseError;
-use better_auth::prelude::AuthUser;
 use better_auth::seaorm::sea_orm::ConnectionTrait;
 use better_auth::seaorm::sea_orm::sea_query::{Alias, Query};
 use better_auth::seaorm::{SeaOrmHookContext, SeaOrmHooks, SeaOrmStore};
@@ -173,13 +173,13 @@ struct ProvisionWorkspaceHook;
 impl SeaOrmHooks<AppAuthSchema> for ProvisionWorkspaceHook {
     async fn after_create_user(
         &self,
-        user: &<AppAuthSchema as AuthSchema>::User,
+        user: &better_auth::wire::UserView,
         ctx: &SeaOrmHookContext<'_, AppAuthSchema>,
     ) -> AuthResult<()> {
         let statement = Query::insert()
             .into_table(Alias::new("app_workspaces"))
             .columns([Alias::new("user_id"), Alias::new("name")])
-            .values_panic([user.id().into_owned().into(), "Default Workspace".into()])
+            .values_panic([user.id.typed()?.clone().into(), "Default Workspace".into()])
             .to_owned();
         let result = ctx.db.execute(&statement).await;
         result.map_err(|error| DatabaseError::Query(error.to_string()))?;
@@ -207,7 +207,7 @@ let auth = BetterAuth::<AppAuthSchema>::new(config)
     .await?;
 ```
 
-If any `before_*` hook returns `HookControl::Cancel` or an error, subsequent hooks and the write itself are skipped.
+If any `before_*` hook returns its cancellation variant or an error, subsequent hooks and the write itself are skipped.
 
 ## Plugin hooks and runtime isolation
 

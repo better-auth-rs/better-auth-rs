@@ -1,6 +1,6 @@
 use better_auth_core::hooks::{RequestHookContext, current_request_hook_context};
 use better_auth_core::store::database_hooks::{
-    DatabaseHookContext, DatabaseHookControl, DatabaseHooks,
+    DatabaseHookContext, DatabaseHookControl, DatabaseHookUpdate, DatabaseHooks,
 };
 use better_auth_core::{
     AuthContext, AuthInitContext, AuthPlugin, AuthRequest, AuthResponse, AuthResult, AuthRoute,
@@ -203,11 +203,11 @@ impl<S: AuthSchema> DatabaseHooks<S> for BodyTrace {
 
     async fn before_create_session(
         &self,
-        _: &mut better_auth_core::CreateSession,
+        _: &mut better_auth_core::FieldMap,
         context: &DatabaseHookContext<'_, S>,
-    ) -> AuthResult<DatabaseHookControl> {
+    ) -> AuthResult<DatabaseHookUpdate<better_auth_core::FieldMap>> {
         self.record("session.before", context.request.as_ref(), None);
-        Ok(DatabaseHookControl::Continue)
+        Ok(DatabaseHookUpdate::Continue)
     }
     async fn after_create_session(
         &self,

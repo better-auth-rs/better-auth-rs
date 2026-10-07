@@ -2,9 +2,7 @@
 
 use crate::hooks::RequestHookContext;
 use crate::store::AuthTransaction;
-use crate::types::{
-    CreateAccount, CreateSession, CreateUser, CreateVerification, UpdateAccount, UpdateUser,
-};
+use crate::types::{CreateAccount, CreateUser, CreateVerification, UpdateAccount, UpdateUser};
 use crate::{AuthConfig, AuthResult, AuthSchema};
 use async_trait::async_trait;
 
@@ -118,7 +116,7 @@ pub enum DatabaseHookControl {
     Cancel,
 }
 
-/// Outcome of a before-update hook. A patch contains only the fields to overwrite.
+/// Outcome of a before-create or before-update hook. A patch contains only the fields to overwrite.
 pub enum DatabaseHookUpdate<T> {
     /// Keep the accumulated update unchanged.
     Continue,
@@ -242,13 +240,14 @@ pub trait DatabaseHooks<S: AuthSchema>: Send + Sync {
         Ok(())
     }
 
-    /// Edit a session before creation or cancel the write.
+    /// Edit complete public Session fields, including token and dates, before adapter conversion.
+    /// A returned patch shallow-copies the record, separating later property edits from its original cache keys.
     async fn before_create_session(
         &self,
-        _data: &mut CreateSession,
+        _data: &mut crate::FieldMap,
         _ctx: &DatabaseHookContext<'_, S>,
-    ) -> AuthResult<DatabaseHookControl> {
-        Ok(DatabaseHookControl::Continue)
+    ) -> AuthResult<DatabaseHookUpdate<crate::FieldMap>> {
+        Ok(DatabaseHookUpdate::Continue)
     }
     /// Observe a committed session creation.
     async fn after_create_session(

@@ -11,7 +11,7 @@ pub use better_auth_core::store::database_hooks::{
     DatabaseHookUpdate, SessionUpdate, VerificationUpdate,
 };
 use better_auth_core::types::{
-    CreateAccount, CreateSession, CreateUser, CreateVerification, UpdateAccount, UpdateUser,
+    CreateAccount, CreateUser, CreateVerification, UpdateAccount, UpdateUser,
 };
 
 /// Control flow returned by SeaORM `before_*` hooks.
@@ -98,13 +98,15 @@ pub trait SeaOrmHooks<S: AuthSchema>: Send + Sync {
         Ok(())
     }
 
+    /// Edit complete public Session fields before adapter conversion.
+    /// A returned patch detaches later property replacements from the original cache keys.
     async fn before_create_session(
         &self,
-        session: &mut CreateSession,
+        session: &mut better_auth_core::FieldMap,
         ctx: &SeaOrmHookContext<'_, S>,
-    ) -> AuthResult<HookControl> {
+    ) -> AuthResult<DatabaseHookUpdate<better_auth_core::FieldMap>> {
         let _ = (session, ctx);
-        Ok(HookControl::Continue)
+        Ok(DatabaseHookUpdate::Continue)
     }
 
     async fn after_create_session(

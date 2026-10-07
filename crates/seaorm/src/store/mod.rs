@@ -385,18 +385,23 @@ where
         &self,
         input: better_auth_core::CreateSession,
     ) -> AuthResult<Option<better_auth_core::wire::SessionView>> {
-        let record = self
-            .store
-            .create_session_with_connection(&self.tx, Some((&self.tx, self)), input)
-            .await?;
-        if let Some(record) = &record {
-            self.queue(transaction_hooks::Effect::SessionCreated(record.clone()))?;
-        }
-        Ok(record)
+        self.store
+            .create_session_with_connection(&self.tx, Some((&self.tx, self)), input, None)
+            .await
     }
+    async fn create_session_with_writer(
+        &self,
+        input: better_auth_core::CreateSession,
+        writer: Option<better_auth_core::store::SessionCreateWriter>,
+    ) -> AuthResult<Option<better_auth_core::wire::SessionView>> {
+        self.store
+            .create_session_with_connection(&self.tx, Some((&self.tx, self)), input, writer)
+            .await
+    }
+
     async fn before_create_runtime_session_optional(
         &self,
-        input: &mut better_auth_core::CreateSession,
+        input: &mut better_auth_core::store::PreparedSessionCreate,
     ) -> AuthResult<bool> {
         self.store
             .before_runtime_session_optional_in_tx(input, Some((&self.tx, self)))
@@ -599,7 +604,7 @@ where
     }
     async fn before_create_runtime_session(
         &self,
-        session: &mut better_auth_core::CreateSession,
+        session: &mut better_auth_core::store::PreparedSessionCreate,
     ) -> AuthResult<()> {
         self.store
             .before_runtime_session_in_tx(session, Some((&self.tx, self)))
@@ -639,7 +644,6 @@ where
             .store
             .create_session_in_tx((&self.tx, self), create_session)
             .await?;
-        self.queue(transaction_hooks::Effect::SessionCreated(record.clone()))?;
         Ok(record)
     }
 }

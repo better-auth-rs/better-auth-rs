@@ -1171,6 +1171,39 @@ async fn legacy_numeric_schema_store_verifications_use_public_string_ids() {
 }
 
 #[tokio::test]
+async fn legacy_numeric_session_rejects_invalid_user_id_before_constructor() {
+    use better_auth_core::store::SessionStore;
+
+    let mut config = test_config();
+    config.advanced.database.generate_id = Some(better_auth::config::IdGeneration::Random);
+    let database = test_database().await;
+    let store = SeaOrmStore::<LegacySchema>::new(config, database.clone());
+    let error = store
+        .create_session(CreateSession {
+            user_id: "invalid-numeric-user-id".into(),
+            expires_at: (Utc::now() + chrono::Duration::minutes(30)).into(),
+            ip_address: None,
+            user_agent: None,
+            impersonated_by: None,
+            active_organization_id: None,
+            additional_fields: Default::default(),
+        })
+        .await
+        .expect_err("invalid user IDs must return an error before the constructor runs");
+    assert_eq!(
+        error.to_string(),
+        AuthError::bad_request("Invalid session user id").to_string()
+    );
+    assert!(
+        session::Entity::find()
+            .all(&database)
+            .await
+            .expect("session lookup should succeed")
+            .is_empty()
+    );
+}
+
+#[tokio::test]
 async fn handwritten_initializers_preserve_runtime_fields_until_sql_binding() {
     use better_auth_core::store::{AccountStore, UserStore, VerificationStore};
     use better_auth_core::user_fields::{FieldTransforms, UserFieldConfig, UserFieldTransform};

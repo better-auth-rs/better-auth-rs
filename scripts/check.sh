@@ -121,13 +121,20 @@ run_stage() {
         ./compat-tests/reference-server/contracts/adapter-id-slot.test.ts \
         ./compat-tests/reference-server/contracts/adapter-id-coercion.test.ts \
         ./compat-tests/reference-server/contracts/session-defaults.test.ts \
+        ./compat-tests/reference-server/contracts/session-create-payload.test.ts \
         ./compat-tests/reference-server/contracts/memory-transaction-values.test.ts \
         ./compat-tests/reference-server/contracts/async-field-transforms.test.ts \
         ./compat-tests/reference-server/contracts/sql-user-extra-output.test.ts \
         ./compat-tests/reference-server/contracts/user-sort-field.test.ts
       cargo clippy --locked --keep-going -p better-auth-core -p better-auth-seaorm -- -D warnings
-      cargo clippy --locked --keep-going --features axum,seaorm2,redis-cache --test user_id_generation_order_tests --test plugin_id_slot_tests --test session_id_policy_tests --test session_initial_defaults_tests --test legacy_schema_integration_tests -- -D warnings
-      cargo test --locked --no-fail-fast -p better-auth-core -p better-auth-seaorm --lib -- user_fields:: reference_id::tests:: schema_history field_value:: id_slot store::ephemeral::user_serial_tests:: store::ephemeral::serial_primary_tests:: store::ephemeral::rows::tests::
+      cargo check --locked --manifest-path compat-tests/rust-server/Cargo.toml
+      cargo clippy --locked --keep-going --features axum,seaorm2,redis-cache \
+        --test user_id_generation_order_tests --test plugin_id_slot_tests --test session_id_policy_tests \
+        --test session_initial_defaults_tests --test session_create_payload_tests --test legacy_schema_integration_tests \
+        --test background_transaction_tests --test email_otp_override_transaction_tests \
+        --test email_otp_scheduled_override_tests --test secondary_storage_hooks_tests \
+        --test test_utils_tests -- -D warnings
+      cargo test --locked --no-fail-fast -p better-auth-core -p better-auth-seaorm --lib -- user_fields:: reference_id::tests:: schema_history field_value:: id_slot store::ephemeral::user_serial_tests:: store::ephemeral::serial_primary_tests:: store::ephemeral::rows::tests:: store::ephemeral::sessions::live_output_tests:: session::view::tests::
       cargo test --locked --no-fail-fast --features axum,seaorm2,redis-cache \
         --test user_id_generation_order_tests --test user_record_values_tests \
         --test async_field_transform_tests --test sql_user_extra_output_tests \
@@ -135,9 +142,12 @@ run_stage() {
         --test memory_serial_reference_tests --test organization_serial_reference_tests \
         --test fallback_join_tests --test native_core_join_tests --test plugin_id_slot_tests \
         --test native_memory_join_tests --test account_owner_batch_tests --test session_id_policy_tests \
-        --test session_initial_defaults_tests
+        --test session_initial_defaults_tests --test session_create_payload_tests \
+        --test background_transaction_tests --test email_otp_override_transaction_tests \
+        --test email_otp_scheduled_override_tests --test secondary_storage_hooks_tests --test test_utils_tests
       cargo test --locked --features axum,seaorm2,redis-cache --test session_id_policy_tests -- --ignored
-      cargo test --locked --features axum,seaorm2,redis-cache --test legacy_schema_integration_tests -- serial_session_update_ids_reach_the_numeric_column_after_conversion
+      cargo test --locked --features axum,seaorm2,redis-cache --test legacy_schema_integration_tests -- serial_session_update_ids_reach_the_numeric_column_after_conversion legacy_numeric_session_rejects_invalid_user_id_before_constructor
+      ./scripts/consumer-check.sh --test user_session_fields
       ;;
     schema-joins)
       cargo fmt --all -- --check

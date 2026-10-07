@@ -17,7 +17,7 @@ use better_auth::{
 };
 use better_auth_core::{
     AuthContext, AuthPlugin, AuthRequest, AuthResponse, AuthRoute, AuthUser, BeforeRequestAction,
-    CreateSession, CreateUser, FieldValue, UpdateUser,
+    CreateUser, FieldMap, FieldValue, UpdateUser,
     config::{CookieCacheConfig, UserFieldConfig},
     hooks::RequestHookContext,
     middleware::RateLimitConfig,
@@ -171,10 +171,10 @@ macro_rules! hooks {
                 Ok(DatabaseHookUpdate::Continue)
             }
             async fn after_update_user(&self, _: Option<&better_auth_core::wire::UserView>, context: &$context<'_,S>) -> AuthResult<()> { self.record("user.updated", context.request.as_ref(), None); Ok(()) }
-            async fn before_create_session(&self, _: &mut CreateSession, context: &$context<'_,S>) -> AuthResult<$control> {
+            async fn before_create_session(&self, _: &mut FieldMap, context: &$context<'_,S>) -> AuthResult<DatabaseHookUpdate<FieldMap>> {
                 self.record("session.before", context.request.as_ref(), None);
                 if self.fails("session") { return Err(rejected()); }
-                Ok($control::Continue)
+                Ok(DatabaseHookUpdate::Continue)
             }
             async fn after_create_session(&self, _: &better_auth_core::wire::SessionView, context: &$context<'_,S>) -> AuthResult<()> { self.record("session.after", context.request.as_ref(), None); Ok(()) }
         }

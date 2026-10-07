@@ -4,7 +4,7 @@ use crate::store::database_hooks::SessionUpdate;
 use crate::store::{SessionStore, SessionUpdateWriter, TeamMemberLimits};
 use crate::types::{CreateSession, Invitation, Member};
 use crate::wire::{SessionView, UserView};
-use crate::{AuthError, AuthResult, AuthSchema, FieldMap, FieldValue, FromFieldMap, SchemaField};
+use crate::{AuthError, AuthResult, AuthSchema, FieldMap, FieldValue, FromFieldMap};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -85,52 +85,109 @@ impl<S: AuthSchema> SecondaryStore<S> {
         Ok(fields)
     }
 
-    pub(super) fn prepare_session(&self, input: &mut CreateSession) -> AuthResult<()> {
-        let _ = input.additional_fields.remove("id");
-        let id = self
-            .config
-            .advanced
-            .generate_id("session", None)?
-            .unwrap_or_else(|| crate::id::random_id(None));
-        let mut fields = FieldMap::new();
-        if !id.is_empty() {
-            let _ = fields.insert("id".into(), id.into());
-        }
-        fields.extend(self.config.session_default_fields());
-        fields.extend(std::mem::take(&mut input.additional_fields));
-        input.additional_fields = fields;
-        Ok(())
+    pub(super) fn session_create_writer(
+        &self,
+        owner: crate::SchemaValue<String>,
+        deferred: bool,
+        transaction: Option<std::sync::Arc<dyn crate::store::AuthTransaction<S>>>,
+    ) -> Option<crate::store::SessionCreateWriter> {
+        self.storage.as_ref()?;
+        let runtime = self.clone();
+        Some(crate::store::SessionCreateWriter {
+            write_database: self.database_sessions(),
+            deferred,
+            write: Box::new(move |original, session| {
+                Box::pin(async move {
+                    let result = runtime
+                        .mirror_created_session(&owner, original, &session, transaction.as_deref())
+                        .await;
+                    if deferred
+                        && runtime.database_sessions()
+                        && !runtime.config.session.preserve_session_in_database()
+                    {
+                        if let Err(error) = result {
+                            crate::observability::logger::current().error(
+                                "Failed to mirror committed session to secondary storage",
+                                &[crate::observability::LogArgument::Error(&error)],
+                            );
+                        }
+                        Ok(())
+                    } else {
+                        result
+                    }
+                })
+            }),
+        })
     }
 
-    pub(super) fn new_session(&self, input: CreateSession) -> AuthResult<crate::wire::SessionView> {
-        let now = Utc::now();
-        let user_id_missing = input.user_id.is_undefined();
-        let mut fields = FieldMap::from_iter([
-            ("token".into(), crate::id::random_id(None).into()),
-            ("userId".into(), input.user_id.into_field_value()),
-            ("expiresAt".into(), input.expires_at.into()),
-            ("createdAt".into(), now.into()),
-            ("updatedAt".into(), now.into()),
-            (
-                "ipAddress".into(),
-                input.ip_address.unwrap_or_default().into(),
-            ),
-            (
-                "userAgent".into(),
-                input.user_agent.unwrap_or_default().into(),
-            ),
-            ("impersonatedBy".into(), input.impersonated_by.into_field()),
-            (
-                "activeOrganizationId".into(),
-                input.active_organization_id.into_field(),
-            ),
-            ("activeTeamId".into(), FieldValue::Null),
-        ]);
-        if user_id_missing {
-            let _ = fields.remove("userId");
+    async fn mirror_created_session(
+        &self,
+        owner: &crate::SchemaValue<String>,
+        original: FieldMap,
+        session: &SessionView,
+        transaction: Option<&dyn crate::store::AuthTransaction<S>>,
+    ) -> AuthResult<()> {
+        let user_id = owner.display_string()?;
+        let token: String = original
+            .get("token")
+            .cloned()
+            .unwrap_or_default()
+            .decode()?;
+        let expires_at: crate::FieldDate = original
+            .get("expiresAt")
+            .cloned()
+            .unwrap_or_default()
+            .decode()?;
+        let expires_at = expires_at.milliseconds() as i64;
+        let mut references = self.references(&user_id).await?;
+        let now = Utc::now().timestamp_millis();
+        references.retain(|reference| reference.expires_at > now && reference.token != token);
+        references.push(SessionReference {
+            token: token.clone(),
+            expires_at,
+        });
+        references.sort_by_key(|reference| reference.expires_at);
+        let seconds = u64::try_from(
+            (references
+                .last()
+                .map_or(expires_at, |reference| reference.expires_at)
+                - now)
+                .div_euclid(1000),
+        )
+        .unwrap_or(0);
+        if seconds > 0 {
+            self.secondary()?
+                .set(
+                    &format!("active-sessions-{user_id}"),
+                    &serde_json::to_string(&references)?,
+                    Some(seconds),
+                )
+                .await?;
         }
-        fields.extend(input.additional_fields);
-        self.hydrate_session(fields)
+        let user = match transaction {
+            Some(transaction) => transaction.get_user_by_id_field(owner).await?,
+            None => self.inner.get_user_by_id_field(owner).await?,
+        };
+        let user = match user {
+            Some(user) => Some(
+                UserView::with_internal_fields_for_adapter(
+                    &user,
+                    &self.config.user,
+                    &self.metadata,
+                    self.inner.supports_native_json(),
+                )
+                .await?,
+            ),
+            None => None,
+        };
+        let seconds = u64::try_from((expires_at - now).div_euclid(1000)).unwrap_or(0);
+        if seconds > 0 {
+            let value = json!({ "session": FieldMap::from(session.clone()).json()?, "user": user });
+            self.secondary()?
+                .set(&token, &serde_json::to_string(&value)?, Some(seconds))
+                .await?;
+        }
+        Ok(())
     }
 
     pub(super) async fn references(&self, user_id: &str) -> AuthResult<Vec<SessionReference>> {
@@ -362,32 +419,18 @@ impl<S: AuthSchema> SessionStore<S> for SecondaryStore<S> {
     }
     async fn create_session_optional(
         &self,
-        mut input: CreateSession,
+        input: CreateSession,
     ) -> AuthResult<Option<crate::wire::SessionView>> {
-        let request = crate::hooks::current_request_hook_context();
-        let session = if self.database_sessions() {
-            let Some(session) = self.inner.create_session_optional(input).await? else {
-                return Ok(None);
-            };
-            session
-        } else {
-            self.prepare_session(&mut input)?;
-            if !self
-                .inner
-                .before_create_runtime_session_optional(&mut input)
-                .await?
-            {
-                return Ok(None);
-            }
-            self.new_session(input)?
-        };
-        self.mirror_session(&session).await?;
-        if !self.database_sessions() {
-            self.inner
-                .after_create_runtime_session(&session, request)
-                .await?;
-        }
-        Ok(Some(session))
+        let writer = self.session_create_writer(input.user_id.clone(), false, None);
+        self.inner.create_session_with_writer(input, writer).await
+    }
+
+    async fn create_session_with_writer(
+        &self,
+        input: CreateSession,
+        writer: Option<crate::store::SessionCreateWriter>,
+    ) -> AuthResult<Option<crate::wire::SessionView>> {
+        self.inner.create_session_with_writer(input, writer).await
     }
 
     async fn get_session(&self, token: &str) -> AuthResult<Option<crate::wire::SessionView>> {

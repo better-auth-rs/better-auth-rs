@@ -17,7 +17,7 @@ use better_auth_core::store::database_hooks::{
 };
 use better_auth_core::wire::{SessionView, UserView, VerificationView};
 use better_auth_core::{
-    AuthContext, AuthInitContext, AuthPlugin, AuthRequest, AuthResponse, AuthRoute, CreateSession,
+    AuthContext, AuthInitContext, AuthPlugin, AuthRequest, AuthResponse, AuthRoute,
     CreateVerification, HttpMethod, PasswordHasher,
 };
 use better_auth_seaorm::store::__private_test_support::{bundled_schema::BundledSchema, migrator};
@@ -102,15 +102,17 @@ impl DatabaseHooks<BundledSchema> for Hooks {
     }
     async fn before_create_session(
         &self,
-        _: &mut CreateSession,
+        _: &mut better_auth_core::FieldMap,
         context: &DatabaseHookContext<'_, BundledSchema>,
-    ) -> AuthResult<DatabaseHookControl> {
+    ) -> AuthResult<
+        better_auth_core::store::database_hooks::DatabaseHookUpdate<better_auth_core::FieldMap>,
+    > {
         self.state.event("session:create.before");
         self.state.capture("session:create.before", context);
         if self.outcome == "rollback" {
             return Err(AuthError::internal("session-rejected"));
         }
-        Ok(DatabaseHookControl::Continue)
+        Ok(better_auth_core::store::database_hooks::DatabaseHookUpdate::Continue)
     }
     async fn after_create_session(
         &self,

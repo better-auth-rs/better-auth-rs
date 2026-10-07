@@ -15,6 +15,7 @@ const ROWS: [(&str, &str, &str); 2] = [
 struct GeneratedSession {
     token: String,
     created_at: crate::FieldDate,
+    updated_at: crate::FieldDate,
 }
 
 #[derive(Default)]
@@ -66,7 +67,7 @@ fn observe_session(row: &SessionView, trace: &Trace) -> AuthResult<JsonValue> {
         // Rust creates the token and dates internally. Normalize only the same generated values across every observation.
         assert_eq!(row.token, generated.token);
         assert_eq!(row.created_at, generated.created_at);
-        if row.updated_at == generated.created_at {
+        if row.updated_at == generated.updated_at {
             row.updated_at = date(CREATED_AT)?;
         }
         row.token = "live-session-desk".into();
@@ -137,6 +138,7 @@ fn session_input(label: &str) -> AuthResult<CreateSession> {
 }
 
 fn reader(writer: &EphemeralStore, path: &str, trace: &Trace) -> EphemeralStore {
+    let started = Utc::now().timestamp_millis() as f64;
     let mut reader = writer.clone();
     let mut config = writer.config.as_ref().clone();
     config.advanced.database.joins = Some(path == "get-native-join");
@@ -173,10 +175,19 @@ fn reader(writer: &EphemeralStore, path: &str, trace: &Trace) -> EphemeralStore 
                                 )?;
                                 if create {
                                     assert!(!stored.token.is_empty());
-                                    assert_eq!(stored.created_at, stored.updated_at);
+                                    let ended = Utc::now().timestamp_millis() as f64;
+                                    assert!(
+                                        (started..=ended)
+                                            .contains(&stored.created_at.milliseconds())
+                                    );
+                                    assert!(
+                                        (started..=ended)
+                                            .contains(&stored.updated_at.milliseconds())
+                                    );
                                     trace_lock(&trace)?.generated = Some(GeneratedSession {
                                         token: stored.token.clone(),
                                         created_at: stored.created_at.clone(),
+                                        updated_at: stored.updated_at.clone(),
                                     });
                                 }
                                 trace_lock(&trace)?.events.push(json!(["label", label]));

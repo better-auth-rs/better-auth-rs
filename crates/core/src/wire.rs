@@ -260,7 +260,7 @@ impl SessionView {
             &mut rows,
             schema.fields(),
             |row, name, field| Box::pin(row.project(name, field, supports_native_json)),
-            |index, row| complete(index, row.view.clone()),
+            |index, row| complete(index, row.view.clone().into_projected_fields()),
         )
         .await
     }
@@ -281,7 +281,7 @@ impl SessionView {
             &mut rows,
             schema.fields(),
             |row, name, field| Box::pin(row.project(name, field, supports_native_json)),
-            |_, row| Ok(row.view.clone()),
+            |_, row| Ok(row.view.clone().into_projected_fields()),
             complete,
         )
         .await

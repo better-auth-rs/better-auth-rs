@@ -13,13 +13,11 @@ use better_auth::plugins::{
 use better_auth::server_api::EndpointInput;
 use better_auth::{AuthBuilder, AuthConfig, AuthError, AuthResult};
 use better_auth_core::background::{BackgroundTask, BackgroundTasks};
-use better_auth_core::store::database_hooks::{
-    DatabaseHookContext, DatabaseHookControl, DatabaseHooks,
-};
+use better_auth_core::store::database_hooks::{DatabaseHookContext, DatabaseHooks};
 use better_auth_core::wire::VerificationView;
 use better_auth_core::{
-    AuthContext, AuthInitContext, AuthPlugin, AuthRequest, AuthResponse, AuthRoute, CreateSession,
-    HttpMethod, PasswordHasher,
+    AuthContext, AuthInitContext, AuthPlugin, AuthRequest, AuthResponse, AuthRoute, HttpMethod,
+    PasswordHasher,
 };
 use better_auth_seaorm::store::__private_test_support::{bundled_schema::BundledSchema, migrator};
 use better_auth_seaorm::{
@@ -51,15 +49,17 @@ struct Hooks {
 impl DatabaseHooks<BundledSchema> for Hooks {
     async fn before_create_session(
         &self,
-        _: &mut CreateSession,
+        _: &mut better_auth_core::FieldMap,
         _: &DatabaseHookContext<'_, BundledSchema>,
-    ) -> AuthResult<DatabaseHookControl> {
+    ) -> AuthResult<
+        better_auth_core::store::database_hooks::DatabaseHookUpdate<better_auth_core::FieldMap>,
+    > {
         self.state.entered.notified().await;
         self.state.event("session:before");
         if self.rollback {
             return Err(AuthError::internal("rollback"));
         }
-        Ok(DatabaseHookControl::Continue)
+        Ok(better_auth_core::store::database_hooks::DatabaseHookUpdate::Continue)
     }
     async fn after_create_verification(
         &self,

@@ -145,3 +145,80 @@ impl<'de> serde::Deserialize<'de> for SessionView {
         Self::from_field_values(fields).map_err(serde::de::Error::custom)
     }
 }
+
+impl SessionView {
+    /// Synchronize representable output values; retain other runtime shapes in the wire overlay.
+    pub(crate) fn into_projected_fields(mut self) -> Self {
+        for name in [
+            "id",
+            "userId",
+            "token",
+            "expiresAt",
+            "createdAt",
+            "updatedAt",
+            "ipAddress",
+            "userAgent",
+            "impersonatedBy",
+            "activeOrganizationId",
+            "activeTeamId",
+        ] {
+            let Some(value) = self.additional_fields.get(name) else {
+                continue;
+            };
+            let applied = match (name, value) {
+                ("id", value) => {
+                    self.id = SchemaValue::from_field(value.clone());
+                    true
+                }
+                ("userId", value) => {
+                    self.user_id = SchemaValue::from_field(value.clone());
+                    true
+                }
+                ("token", FieldValue::String(value)) => {
+                    self.token = value.clone();
+                    true
+                }
+                ("expiresAt", FieldValue::Date(value)) => {
+                    self.expires_at = value.clone();
+                    true
+                }
+                ("createdAt", FieldValue::Date(value)) => {
+                    self.created_at = value.clone();
+                    true
+                }
+                ("updatedAt", FieldValue::Date(value)) => {
+                    self.updated_at = value.clone();
+                    true
+                }
+                (name, FieldValue::String(_) | FieldValue::Null) => {
+                    let target = match name {
+                        "ipAddress" => Some(&mut self.ip_address),
+                        "userAgent" => Some(&mut self.user_agent),
+                        "impersonatedBy" => Some(&mut self.impersonated_by),
+                        "activeOrganizationId" => Some(&mut self.active_organization_id),
+                        "activeTeamId" => Some(&mut self.active_team_id),
+                        _ => None,
+                    };
+                    if let Some(target) = target {
+                        *target = value.as_str().map(str::to_owned);
+                        if matches!(
+                            name,
+                            "impersonatedBy" | "activeOrganizationId" | "activeTeamId"
+                        ) && let Some(visible) = &mut self.visible_fields
+                        {
+                            let _ = visible.insert(name.into());
+                        }
+                        true
+                    } else {
+                        false
+                    }
+                }
+                _ => false,
+            };
+            if applied {
+                let _ = self.additional_fields.remove(name);
+            }
+        }
+        self
+    }
+}

@@ -316,16 +316,16 @@ impl<S: AuthSchema> DatabaseHooks<S> for CancellingHooks {
     }
     async fn before_create_session(
         &self,
-        input: &mut better_auth_core::CreateSession,
+        input: &mut better_auth_core::FieldMap,
         _: &DatabaseHookContext<'_, S>,
-    ) -> AuthResult<DatabaseHookControl> {
-        Ok(
-            if input.additional_fields.get("label") == Some(&FieldValue::from("cancel")) {
-                DatabaseHookControl::Cancel
-            } else {
-                DatabaseHookControl::Continue
-            },
-        )
+    ) -> AuthResult<
+        better_auth_core::store::database_hooks::DatabaseHookUpdate<better_auth_core::FieldMap>,
+    > {
+        Ok(if input.get("label") == Some(&FieldValue::from("cancel")) {
+            better_auth_core::store::database_hooks::DatabaseHookUpdate::Cancel
+        } else {
+            better_auth_core::store::database_hooks::DatabaseHookUpdate::Continue
+        })
     }
     async fn after_create_session(
         &self,
