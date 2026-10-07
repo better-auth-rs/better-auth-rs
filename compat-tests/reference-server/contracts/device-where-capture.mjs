@@ -15,7 +15,7 @@ const expiry = "2032-01-02T03:04:05.000Z";
 const fieldTypes = { label: "string", quantity: "number", flag: "boolean", moment: "date", labels: "string[]", payload: "json", ownerRef: "string" };
 
 // Tagged observations retain Date, undefined, and non-finite values before JSON serialization.
-const observeValue = value => {
+export const observeValue = value => {
   if (value === undefined) return { type: "undefined" };
   if (value instanceof Date) return { type: "date", value: Number.isNaN(value.getTime()) ? "Invalid Date" : value.toISOString() };
   if (typeof value === "number" && !Number.isFinite(value)) return { type: "number", value: String(value) };

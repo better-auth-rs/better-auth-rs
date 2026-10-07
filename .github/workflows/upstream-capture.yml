@@ -10,6 +10,7 @@ on:
       - compat-tests/reference-server/contracts/device-where-capture.mjs
       - compat-tests/reference-server/contracts/device-where-scenarios.mjs
       - compat-tests/reference-server/contracts/device-where-transactions-capture.mjs
+      - compat-tests/reference-server/contracts/memory-transaction-values-capture.mjs
 
 permissions:
   contents: read
@@ -20,18 +21,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - contract: device-where-transactions
-            regression: device-where
-            backend: memory
-          - contract: device-where-transactions
-            regression: device-where
-            backend: sqlite
-          - contract: device-where-transactions
-            regression: device-where
-            backend: postgres
-          - contract: device-where-transactions
-            regression: device-where
-            backend: mysql
+          - contract: memory-transaction-values
+            regression: device-where-transactions
+            backend: ''
     runs-on: ubuntu-latest
     timeout-minutes: 10
     services:
