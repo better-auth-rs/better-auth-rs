@@ -332,7 +332,7 @@ run_stage() {
       cargo clippy --locked --test totp_period_nan_tests -- -D warnings
       cargo test --locked -p better-auth-api --lib plugins::two_factor::
       cargo test --locked --test totp_period_nan_tests
-      bun --no-install test ./compat-tests/reference-server/contracts/totp-period.test.ts ./compat-tests/reference-server/contracts/totp-period-nan.test.ts
+      bun --no-install test ./compat-tests/reference-server/contracts/totp-period.test.ts ./compat-tests/reference-server/contracts/totp-period-nan.test.ts ./compat-tests/reference-server/contracts/totp-counter.test.ts
       ;;
     two-factor)
       cargo fmt --all -- --check

@@ -19,28 +19,28 @@ impl Totp {
         self
     }
 
-    fn counter(&self, time_millis: i64) -> AuthResult<u64> {
-        let milliseconds = self.period * 1000.0;
-        if !milliseconds.is_finite() || milliseconds <= 0.0 {
-            return Err(AuthError::config(
-                "TOTP period must resolve to positive finite milliseconds",
-            ));
+    fn counter(&self, time_millis: i64) -> f64 {
+        (time_millis as f64 / (self.period * 1000.0)).floor()
+    }
+
+    fn hotp_counter(counter: f64) -> AuthResult<u64> {
+        if !counter.is_finite() {
+            return Err(AuthError::config("Not an integer"));
         }
-        let counter = (time_millis as f64 / milliseconds).floor();
-        if !(0.0..u64::MAX as f64).contains(&counter) {
-            return Err(AuthError::config("TOTP counter is out of range"));
-        }
-        let counter = counter as u64;
-        let skew = u64::from(self.inner.skew);
-        // totp-rs subtracts skew before checking. Both window ends must fit its counter type.
-        if counter.checked_sub(skew).is_none() || counter.checked_add(skew).is_none() {
-            return Err(AuthError::config("TOTP counter window is out of range"));
-        }
-        Ok(counter)
+        // Upstream converts the integral Number to BigInt, then stores it modulo 2^64.
+        let remainder = counter % 18_446_744_073_709_551_616.0;
+        Ok(if remainder < 0.0 {
+            // Adding 2^64 as a float would round small negative remainders incorrectly.
+            0_u64.wrapping_sub((-remainder) as u64)
+        } else {
+            remainder as u64
+        })
     }
 
     pub(super) fn generate_at(&self, time_millis: i64) -> AuthResult<String> {
-        Ok(self.inner.generate(self.counter(time_millis)?))
+        Ok(self
+            .inner
+            .generate(Self::hotp_counter(self.counter(time_millis))?))
     }
 
     pub(super) fn generate_current(&self) -> AuthResult<String> {
@@ -52,7 +52,17 @@ impl Totp {
     }
 
     fn check_at(&self, token: &str, time_millis: i64) -> AuthResult<bool> {
-        Ok(self.inner.check(token, self.counter(time_millis)?))
+        let counter = self.counter(time_millis);
+        let skew = i16::from(self.inner.skew);
+        let mut verifier = self.inner.clone();
+        verifier.skew = 0;
+        let mut matched = false;
+        for offset in -skew..=skew {
+            // Upstream adds each window offset as a Number before converting to BigInt.
+            let candidate = Self::hotp_counter(counter + f64::from(offset))?;
+            matched |= verifier.check(token, candidate);
+        }
+        Ok(matched)
     }
 
     pub(super) fn get_url(&self) -> AuthResult<String> {

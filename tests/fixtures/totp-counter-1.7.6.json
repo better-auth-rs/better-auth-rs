@@ -1,0 +1,1663 @@
+{
+  "version": "1.7.6",
+  "utilsVersion": "0.4.2",
+  "secret": "ordinary-totp-period-fixture",
+  "issuer": "Ordinary TOTP",
+  "account": "ordinary@totp-period.test",
+  "scope": {
+    "counter": "Record Number division, floor, addition, and negative zero before the upstream HOTP conversion",
+    "generation": "Capture the complete native generateTOTP and helper totp outcomes",
+    "verification": "Capture each HOTP token at offsets -2 through 2 and the malformed token with the default verification window",
+    "bigintNeighbors": "Capture exact integer tokens that Number addition cannot produce at the 2^53 and 2^64 boundaries",
+    "unavailableToken": "Record verification as not-run when HOTP generation throws; still execute malformed-token verification"
+  },
+  "cases": [
+    {
+      "name": "epoch",
+      "timestampMillis": 0,
+      "options": {
+        "period": 30,
+        "digits": 6
+      },
+      "milliseconds": 30000,
+      "counter": {
+        "rawNumber": 0,
+        "negativeZero": false
+      },
+      "server": {
+        "kind": "returned",
+        "value": {
+          "code": "147269"
+        }
+      },
+      "helper": {
+        "generation": {
+          "kind": "returned",
+          "value": "147269"
+        },
+        "uri": {
+          "kind": "returned",
+          "value": "otpauth://totp/Ordinary%20TOTP:ordinary%40totp-period.test?secret=N5ZGI2LOMFZHSLLUN52HALLQMVZGS33EFVTGS6DUOVZGK&issuer=Ordinary+TOTP&digits=6&period=30"
+        },
+        "neighbors": [
+          {
+            "offset": -2,
+            "counter": {
+              "rawNumber": -2,
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "returned",
+              "value": "849628"
+            },
+            "token": "849628",
+            "verification": {
+              "kind": "returned",
+              "value": false
+            }
+          },
+          {
+            "offset": -1,
+            "counter": {
+              "rawNumber": -1,
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "returned",
+              "value": "054993"
+            },
+            "token": "054993",
+            "verification": {
+              "kind": "returned",
+              "value": true
+            }
+          },
+          {
+            "offset": 0,
+            "counter": {
+              "rawNumber": 0,
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "returned",
+              "value": "147269"
+            },
+            "token": "147269",
+            "verification": {
+              "kind": "returned",
+              "value": true
+            }
+          },
+          {
+            "offset": 1,
+            "counter": {
+              "rawNumber": 1,
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "returned",
+              "value": "448012"
+            },
+            "token": "448012",
+            "verification": {
+              "kind": "returned",
+              "value": true
+            }
+          },
+          {
+            "offset": 2,
+            "counter": {
+              "rawNumber": 2,
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "returned",
+              "value": "435786"
+            },
+            "token": "435786",
+            "verification": {
+              "kind": "returned",
+              "value": false
+            }
+          }
+        ],
+        "bigintNeighbors": [],
+        "malformed": {
+          "token": "not-a-totp",
+          "verification": {
+            "kind": "returned",
+            "value": false
+          }
+        }
+      }
+    },
+    {
+      "name": "before-epoch",
+      "timestampMillis": -1,
+      "options": {
+        "period": 30,
+        "digits": 6
+      },
+      "milliseconds": 30000,
+      "counter": {
+        "rawNumber": -1,
+        "negativeZero": false
+      },
+      "server": {
+        "kind": "returned",
+        "value": {
+          "code": "054993"
+        }
+      },
+      "helper": {
+        "generation": {
+          "kind": "returned",
+          "value": "054993"
+        },
+        "uri": {
+          "kind": "returned",
+          "value": "otpauth://totp/Ordinary%20TOTP:ordinary%40totp-period.test?secret=N5ZGI2LOMFZHSLLUN52HALLQMVZGS33EFVTGS6DUOVZGK&issuer=Ordinary+TOTP&digits=6&period=30"
+        },
+        "neighbors": [
+          {
+            "offset": -2,
+            "counter": {
+              "rawNumber": -3,
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "returned",
+              "value": "734618"
+            },
+            "token": "734618",
+            "verification": {
+              "kind": "returned",
+              "value": false
+            }
+          },
+          {
+            "offset": -1,
+            "counter": {
+              "rawNumber": -2,
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "returned",
+              "value": "849628"
+            },
+            "token": "849628",
+            "verification": {
+              "kind": "returned",
+              "value": true
+            }
+          },
+          {
+            "offset": 0,
+            "counter": {
+              "rawNumber": -1,
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "returned",
+              "value": "054993"
+            },
+            "token": "054993",
+            "verification": {
+              "kind": "returned",
+              "value": true
+            }
+          },
+          {
+            "offset": 1,
+            "counter": {
+              "rawNumber": 0,
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "returned",
+              "value": "147269"
+            },
+            "token": "147269",
+            "verification": {
+              "kind": "returned",
+              "value": true
+            }
+          },
+          {
+            "offset": 2,
+            "counter": {
+              "rawNumber": 1,
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "returned",
+              "value": "448012"
+            },
+            "token": "448012",
+            "verification": {
+              "kind": "returned",
+              "value": false
+            }
+          }
+        ],
+        "bigintNeighbors": [],
+        "malformed": {
+          "token": "not-a-totp",
+          "verification": {
+            "kind": "returned",
+            "value": false
+          }
+        }
+      }
+    },
+    {
+      "name": "ordinary",
+      "timestampMillis": 1700000025125,
+      "options": {
+        "period": 30,
+        "digits": 6
+      },
+      "milliseconds": 30000,
+      "counter": {
+        "rawNumber": 56666667,
+        "negativeZero": false
+      },
+      "server": {
+        "kind": "returned",
+        "value": {
+          "code": "991428"
+        }
+      },
+      "helper": {
+        "generation": {
+          "kind": "returned",
+          "value": "991428"
+        },
+        "uri": {
+          "kind": "returned",
+          "value": "otpauth://totp/Ordinary%20TOTP:ordinary%40totp-period.test?secret=N5ZGI2LOMFZHSLLUN52HALLQMVZGS33EFVTGS6DUOVZGK&issuer=Ordinary+TOTP&digits=6&period=30"
+        },
+        "neighbors": [
+          {
+            "offset": -2,
+            "counter": {
+              "rawNumber": 56666665,
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "returned",
+              "value": "478305"
+            },
+            "token": "478305",
+            "verification": {
+              "kind": "returned",
+              "value": false
+            }
+          },
+          {
+            "offset": -1,
+            "counter": {
+              "rawNumber": 56666666,
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "returned",
+              "value": "341652"
+            },
+            "token": "341652",
+            "verification": {
+              "kind": "returned",
+              "value": true
+            }
+          },
+          {
+            "offset": 0,
+            "counter": {
+              "rawNumber": 56666667,
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "returned",
+              "value": "991428"
+            },
+            "token": "991428",
+            "verification": {
+              "kind": "returned",
+              "value": true
+            }
+          },
+          {
+            "offset": 1,
+            "counter": {
+              "rawNumber": 56666668,
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "returned",
+              "value": "722059"
+            },
+            "token": "722059",
+            "verification": {
+              "kind": "returned",
+              "value": true
+            }
+          },
+          {
+            "offset": 2,
+            "counter": {
+              "rawNumber": 56666669,
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "returned",
+              "value": "374440"
+            },
+            "token": "374440",
+            "verification": {
+              "kind": "returned",
+              "value": false
+            }
+          }
+        ],
+        "bigintNeighbors": [],
+        "malformed": {
+          "token": "not-a-totp",
+          "verification": {
+            "kind": "returned",
+            "value": false
+          }
+        }
+      }
+    },
+    {
+      "name": "positive-infinite-period",
+      "timestampMillis": 1700000025125,
+      "options": {
+        "period": {
+          "type": "number",
+          "value": "Infinity"
+        },
+        "digits": 6
+      },
+      "milliseconds": {
+        "type": "number",
+        "value": "Infinity"
+      },
+      "counter": {
+        "rawNumber": 0,
+        "negativeZero": false
+      },
+      "server": {
+        "kind": "returned",
+        "value": {
+          "code": "147269"
+        }
+      },
+      "helper": {
+        "generation": {
+          "kind": "returned",
+          "value": "147269"
+        },
+        "uri": {
+          "kind": "returned",
+          "value": "otpauth://totp/Ordinary%20TOTP:ordinary%40totp-period.test?secret=N5ZGI2LOMFZHSLLUN52HALLQMVZGS33EFVTGS6DUOVZGK&issuer=Ordinary+TOTP&digits=6&period=Infinity"
+        },
+        "neighbors": [
+          {
+            "offset": -2,
+            "counter": {
+              "rawNumber": -2,
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "returned",
+              "value": "849628"
+            },
+            "token": "849628",
+            "verification": {
+              "kind": "returned",
+              "value": false
+            }
+          },
+          {
+            "offset": -1,
+            "counter": {
+              "rawNumber": -1,
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "returned",
+              "value": "054993"
+            },
+            "token": "054993",
+            "verification": {
+              "kind": "returned",
+              "value": true
+            }
+          },
+          {
+            "offset": 0,
+            "counter": {
+              "rawNumber": 0,
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "returned",
+              "value": "147269"
+            },
+            "token": "147269",
+            "verification": {
+              "kind": "returned",
+              "value": true
+            }
+          },
+          {
+            "offset": 1,
+            "counter": {
+              "rawNumber": 1,
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "returned",
+              "value": "448012"
+            },
+            "token": "448012",
+            "verification": {
+              "kind": "returned",
+              "value": true
+            }
+          },
+          {
+            "offset": 2,
+            "counter": {
+              "rawNumber": 2,
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "returned",
+              "value": "435786"
+            },
+            "token": "435786",
+            "verification": {
+              "kind": "returned",
+              "value": false
+            }
+          }
+        ],
+        "bigintNeighbors": [],
+        "malformed": {
+          "token": "not-a-totp",
+          "verification": {
+            "kind": "returned",
+            "value": false
+          }
+        }
+      }
+    },
+    {
+      "name": "negative-infinite-period",
+      "timestampMillis": 1700000025125,
+      "options": {
+        "period": {
+          "type": "number",
+          "value": "-Infinity"
+        },
+        "digits": 6
+      },
+      "milliseconds": {
+        "type": "number",
+        "value": "-Infinity"
+      },
+      "counter": {
+        "rawNumber": 0,
+        "negativeZero": true
+      },
+      "server": {
+        "kind": "returned",
+        "value": {
+          "code": "147269"
+        }
+      },
+      "helper": {
+        "generation": {
+          "kind": "returned",
+          "value": "147269"
+        },
+        "uri": {
+          "kind": "returned",
+          "value": "otpauth://totp/Ordinary%20TOTP:ordinary%40totp-period.test?secret=N5ZGI2LOMFZHSLLUN52HALLQMVZGS33EFVTGS6DUOVZGK&issuer=Ordinary+TOTP&digits=6&period=-Infinity"
+        },
+        "neighbors": [
+          {
+            "offset": -2,
+            "counter": {
+              "rawNumber": -2,
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "returned",
+              "value": "849628"
+            },
+            "token": "849628",
+            "verification": {
+              "kind": "returned",
+              "value": false
+            }
+          },
+          {
+            "offset": -1,
+            "counter": {
+              "rawNumber": -1,
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "returned",
+              "value": "054993"
+            },
+            "token": "054993",
+            "verification": {
+              "kind": "returned",
+              "value": true
+            }
+          },
+          {
+            "offset": 0,
+            "counter": {
+              "rawNumber": 0,
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "returned",
+              "value": "147269"
+            },
+            "token": "147269",
+            "verification": {
+              "kind": "returned",
+              "value": true
+            }
+          },
+          {
+            "offset": 1,
+            "counter": {
+              "rawNumber": 1,
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "returned",
+              "value": "448012"
+            },
+            "token": "448012",
+            "verification": {
+              "kind": "returned",
+              "value": true
+            }
+          },
+          {
+            "offset": 2,
+            "counter": {
+              "rawNumber": 2,
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "returned",
+              "value": "435786"
+            },
+            "token": "435786",
+            "verification": {
+              "kind": "returned",
+              "value": false
+            }
+          }
+        ],
+        "bigintNeighbors": [],
+        "malformed": {
+          "token": "not-a-totp",
+          "verification": {
+            "kind": "returned",
+            "value": false
+          }
+        }
+      }
+    },
+    {
+      "name": "negative-period",
+      "timestampMillis": 1700000025125,
+      "options": {
+        "period": -30,
+        "digits": 6
+      },
+      "milliseconds": -30000,
+      "counter": {
+        "rawNumber": -56666668,
+        "negativeZero": false
+      },
+      "server": {
+        "kind": "returned",
+        "value": {
+          "code": "747592"
+        }
+      },
+      "helper": {
+        "generation": {
+          "kind": "returned",
+          "value": "747592"
+        },
+        "uri": {
+          "kind": "returned",
+          "value": "otpauth://totp/Ordinary%20TOTP:ordinary%40totp-period.test?secret=N5ZGI2LOMFZHSLLUN52HALLQMVZGS33EFVTGS6DUOVZGK&issuer=Ordinary+TOTP&digits=6&period=-30"
+        },
+        "neighbors": [
+          {
+            "offset": -2,
+            "counter": {
+              "rawNumber": -56666670,
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "returned",
+              "value": "797622"
+            },
+            "token": "797622",
+            "verification": {
+              "kind": "returned",
+              "value": false
+            }
+          },
+          {
+            "offset": -1,
+            "counter": {
+              "rawNumber": -56666669,
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "returned",
+              "value": "856893"
+            },
+            "token": "856893",
+            "verification": {
+              "kind": "returned",
+              "value": true
+            }
+          },
+          {
+            "offset": 0,
+            "counter": {
+              "rawNumber": -56666668,
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "returned",
+              "value": "747592"
+            },
+            "token": "747592",
+            "verification": {
+              "kind": "returned",
+              "value": true
+            }
+          },
+          {
+            "offset": 1,
+            "counter": {
+              "rawNumber": -56666667,
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "returned",
+              "value": "401538"
+            },
+            "token": "401538",
+            "verification": {
+              "kind": "returned",
+              "value": true
+            }
+          },
+          {
+            "offset": 2,
+            "counter": {
+              "rawNumber": -56666666,
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "returned",
+              "value": "170717"
+            },
+            "token": "170717",
+            "verification": {
+              "kind": "returned",
+              "value": false
+            }
+          }
+        ],
+        "bigintNeighbors": [],
+        "malformed": {
+          "token": "not-a-totp",
+          "verification": {
+            "kind": "returned",
+            "value": false
+          }
+        }
+      }
+    },
+    {
+      "name": "overflowed-milliseconds",
+      "timestampMillis": 1700000025125,
+      "options": {
+        "period": 1.7976931348623157e+308,
+        "digits": 6
+      },
+      "milliseconds": {
+        "type": "number",
+        "value": "Infinity"
+      },
+      "counter": {
+        "rawNumber": 0,
+        "negativeZero": false
+      },
+      "server": {
+        "kind": "returned",
+        "value": {
+          "code": "147269"
+        }
+      },
+      "helper": {
+        "generation": {
+          "kind": "returned",
+          "value": "147269"
+        },
+        "uri": {
+          "kind": "returned",
+          "value": "otpauth://totp/Ordinary%20TOTP:ordinary%40totp-period.test?secret=N5ZGI2LOMFZHSLLUN52HALLQMVZGS33EFVTGS6DUOVZGK&issuer=Ordinary+TOTP&digits=6&period=1.7976931348623157e%2B308"
+        },
+        "neighbors": [
+          {
+            "offset": -2,
+            "counter": {
+              "rawNumber": -2,
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "returned",
+              "value": "849628"
+            },
+            "token": "849628",
+            "verification": {
+              "kind": "returned",
+              "value": false
+            }
+          },
+          {
+            "offset": -1,
+            "counter": {
+              "rawNumber": -1,
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "returned",
+              "value": "054993"
+            },
+            "token": "054993",
+            "verification": {
+              "kind": "returned",
+              "value": true
+            }
+          },
+          {
+            "offset": 0,
+            "counter": {
+              "rawNumber": 0,
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "returned",
+              "value": "147269"
+            },
+            "token": "147269",
+            "verification": {
+              "kind": "returned",
+              "value": true
+            }
+          },
+          {
+            "offset": 1,
+            "counter": {
+              "rawNumber": 1,
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "returned",
+              "value": "448012"
+            },
+            "token": "448012",
+            "verification": {
+              "kind": "returned",
+              "value": true
+            }
+          },
+          {
+            "offset": 2,
+            "counter": {
+              "rawNumber": 2,
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "returned",
+              "value": "435786"
+            },
+            "token": "435786",
+            "verification": {
+              "kind": "returned",
+              "value": false
+            }
+          }
+        ],
+        "bigintNeighbors": [],
+        "malformed": {
+          "token": "not-a-totp",
+          "verification": {
+            "kind": "returned",
+            "value": false
+          }
+        }
+      }
+    },
+    {
+      "name": "counter-two-to-53",
+      "timestampMillis": 4503599627370496,
+      "options": {
+        "period": 0.0005,
+        "digits": 6
+      },
+      "milliseconds": 0.5,
+      "counter": {
+        "rawNumber": 9007199254740992,
+        "negativeZero": false
+      },
+      "server": {
+        "kind": "returned",
+        "value": {
+          "code": "878488"
+        }
+      },
+      "helper": {
+        "generation": {
+          "kind": "returned",
+          "value": "878488"
+        },
+        "uri": {
+          "kind": "returned",
+          "value": "otpauth://totp/Ordinary%20TOTP:ordinary%40totp-period.test?secret=N5ZGI2LOMFZHSLLUN52HALLQMVZGS33EFVTGS6DUOVZGK&issuer=Ordinary+TOTP&digits=6&period=0.0005"
+        },
+        "neighbors": [
+          {
+            "offset": -2,
+            "counter": {
+              "rawNumber": 9007199254740990,
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "returned",
+              "value": "680481"
+            },
+            "token": "680481",
+            "verification": {
+              "kind": "returned",
+              "value": false
+            }
+          },
+          {
+            "offset": -1,
+            "counter": {
+              "rawNumber": 9007199254740991,
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "returned",
+              "value": "464468"
+            },
+            "token": "464468",
+            "verification": {
+              "kind": "returned",
+              "value": true
+            }
+          },
+          {
+            "offset": 0,
+            "counter": {
+              "rawNumber": 9007199254740992,
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "returned",
+              "value": "878488"
+            },
+            "token": "878488",
+            "verification": {
+              "kind": "returned",
+              "value": true
+            }
+          },
+          {
+            "offset": 1,
+            "counter": {
+              "rawNumber": 9007199254740992,
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "returned",
+              "value": "878488"
+            },
+            "token": "878488",
+            "verification": {
+              "kind": "returned",
+              "value": true
+            }
+          },
+          {
+            "offset": 2,
+            "counter": {
+              "rawNumber": 9007199254740994,
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "returned",
+              "value": "061954"
+            },
+            "token": "061954",
+            "verification": {
+              "kind": "returned",
+              "value": false
+            }
+          }
+        ],
+        "bigintNeighbors": [
+          {
+            "decimalCounter": "9007199254740993",
+            "hotp": {
+              "kind": "returned",
+              "value": "063068"
+            },
+            "token": "063068",
+            "verification": {
+              "kind": "returned",
+              "value": false
+            }
+          }
+        ],
+        "malformed": {
+          "token": "not-a-totp",
+          "verification": {
+            "kind": "returned",
+            "value": false
+          }
+        }
+      }
+    },
+    {
+      "name": "counter-before-two-to-64",
+      "timestampMillis": 4503599627370495,
+      "options": {
+        "period": 2.44140625e-7,
+        "digits": 6
+      },
+      "milliseconds": 0.000244140625,
+      "counter": {
+        "rawNumber": 18446744073709548000,
+        "negativeZero": false
+      },
+      "server": {
+        "kind": "returned",
+        "value": {
+          "code": "095547"
+        }
+      },
+      "helper": {
+        "generation": {
+          "kind": "returned",
+          "value": "095547"
+        },
+        "uri": {
+          "kind": "returned",
+          "value": "otpauth://totp/Ordinary%20TOTP:ordinary%40totp-period.test?secret=N5ZGI2LOMFZHSLLUN52HALLQMVZGS33EFVTGS6DUOVZGK&issuer=Ordinary+TOTP&digits=6&period=2.44140625e-7"
+        },
+        "neighbors": [
+          {
+            "offset": -2,
+            "counter": {
+              "rawNumber": 18446744073709548000,
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "returned",
+              "value": "095547"
+            },
+            "token": "095547",
+            "verification": {
+              "kind": "returned",
+              "value": true
+            }
+          },
+          {
+            "offset": -1,
+            "counter": {
+              "rawNumber": 18446744073709548000,
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "returned",
+              "value": "095547"
+            },
+            "token": "095547",
+            "verification": {
+              "kind": "returned",
+              "value": true
+            }
+          },
+          {
+            "offset": 0,
+            "counter": {
+              "rawNumber": 18446744073709548000,
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "returned",
+              "value": "095547"
+            },
+            "token": "095547",
+            "verification": {
+              "kind": "returned",
+              "value": true
+            }
+          },
+          {
+            "offset": 1,
+            "counter": {
+              "rawNumber": 18446744073709548000,
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "returned",
+              "value": "095547"
+            },
+            "token": "095547",
+            "verification": {
+              "kind": "returned",
+              "value": true
+            }
+          },
+          {
+            "offset": 2,
+            "counter": {
+              "rawNumber": 18446744073709548000,
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "returned",
+              "value": "095547"
+            },
+            "token": "095547",
+            "verification": {
+              "kind": "returned",
+              "value": true
+            }
+          }
+        ],
+        "bigintNeighbors": [],
+        "malformed": {
+          "token": "not-a-totp",
+          "verification": {
+            "kind": "returned",
+            "value": false
+          }
+        }
+      }
+    },
+    {
+      "name": "counter-two-to-64",
+      "timestampMillis": 4503599627370496,
+      "options": {
+        "period": 2.44140625e-7,
+        "digits": 6
+      },
+      "milliseconds": 0.000244140625,
+      "counter": {
+        "rawNumber": 18446744073709552000,
+        "negativeZero": false
+      },
+      "server": {
+        "kind": "returned",
+        "value": {
+          "code": "147269"
+        }
+      },
+      "helper": {
+        "generation": {
+          "kind": "returned",
+          "value": "147269"
+        },
+        "uri": {
+          "kind": "returned",
+          "value": "otpauth://totp/Ordinary%20TOTP:ordinary%40totp-period.test?secret=N5ZGI2LOMFZHSLLUN52HALLQMVZGS33EFVTGS6DUOVZGK&issuer=Ordinary+TOTP&digits=6&period=2.44140625e-7"
+        },
+        "neighbors": [
+          {
+            "offset": -2,
+            "counter": {
+              "rawNumber": 18446744073709552000,
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "returned",
+              "value": "147269"
+            },
+            "token": "147269",
+            "verification": {
+              "kind": "returned",
+              "value": true
+            }
+          },
+          {
+            "offset": -1,
+            "counter": {
+              "rawNumber": 18446744073709552000,
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "returned",
+              "value": "147269"
+            },
+            "token": "147269",
+            "verification": {
+              "kind": "returned",
+              "value": true
+            }
+          },
+          {
+            "offset": 0,
+            "counter": {
+              "rawNumber": 18446744073709552000,
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "returned",
+              "value": "147269"
+            },
+            "token": "147269",
+            "verification": {
+              "kind": "returned",
+              "value": true
+            }
+          },
+          {
+            "offset": 1,
+            "counter": {
+              "rawNumber": 18446744073709552000,
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "returned",
+              "value": "147269"
+            },
+            "token": "147269",
+            "verification": {
+              "kind": "returned",
+              "value": true
+            }
+          },
+          {
+            "offset": 2,
+            "counter": {
+              "rawNumber": 18446744073709552000,
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "returned",
+              "value": "147269"
+            },
+            "token": "147269",
+            "verification": {
+              "kind": "returned",
+              "value": true
+            }
+          }
+        ],
+        "bigintNeighbors": [
+          {
+            "decimalCounter": "18446744073709551615",
+            "hotp": {
+              "kind": "returned",
+              "value": "054993"
+            },
+            "token": "054993",
+            "verification": {
+              "kind": "returned",
+              "value": false
+            }
+          }
+        ],
+        "malformed": {
+          "token": "not-a-totp",
+          "verification": {
+            "kind": "returned",
+            "value": false
+          }
+        }
+      }
+    },
+    {
+      "name": "counter-after-two-to-64",
+      "timestampMillis": 4503599627370497,
+      "options": {
+        "period": 2.44140625e-7,
+        "digits": 6
+      },
+      "milliseconds": 0.000244140625,
+      "counter": {
+        "rawNumber": 18446744073709556000,
+        "negativeZero": false
+      },
+      "server": {
+        "kind": "returned",
+        "value": {
+          "code": "947829"
+        }
+      },
+      "helper": {
+        "generation": {
+          "kind": "returned",
+          "value": "947829"
+        },
+        "uri": {
+          "kind": "returned",
+          "value": "otpauth://totp/Ordinary%20TOTP:ordinary%40totp-period.test?secret=N5ZGI2LOMFZHSLLUN52HALLQMVZGS33EFVTGS6DUOVZGK&issuer=Ordinary+TOTP&digits=6&period=2.44140625e-7"
+        },
+        "neighbors": [
+          {
+            "offset": -2,
+            "counter": {
+              "rawNumber": 18446744073709556000,
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "returned",
+              "value": "947829"
+            },
+            "token": "947829",
+            "verification": {
+              "kind": "returned",
+              "value": true
+            }
+          },
+          {
+            "offset": -1,
+            "counter": {
+              "rawNumber": 18446744073709556000,
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "returned",
+              "value": "947829"
+            },
+            "token": "947829",
+            "verification": {
+              "kind": "returned",
+              "value": true
+            }
+          },
+          {
+            "offset": 0,
+            "counter": {
+              "rawNumber": 18446744073709556000,
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "returned",
+              "value": "947829"
+            },
+            "token": "947829",
+            "verification": {
+              "kind": "returned",
+              "value": true
+            }
+          },
+          {
+            "offset": 1,
+            "counter": {
+              "rawNumber": 18446744073709556000,
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "returned",
+              "value": "947829"
+            },
+            "token": "947829",
+            "verification": {
+              "kind": "returned",
+              "value": true
+            }
+          },
+          {
+            "offset": 2,
+            "counter": {
+              "rawNumber": 18446744073709556000,
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "returned",
+              "value": "947829"
+            },
+            "token": "947829",
+            "verification": {
+              "kind": "returned",
+              "value": true
+            }
+          }
+        ],
+        "bigintNeighbors": [],
+        "malformed": {
+          "token": "not-a-totp",
+          "verification": {
+            "kind": "returned",
+            "value": false
+          }
+        }
+      }
+    },
+    {
+      "name": "tiny-period",
+      "timestampMillis": 1700000025125,
+      "options": {
+        "period": 5e-324,
+        "digits": 6
+      },
+      "milliseconds": 4.94e-321,
+      "counter": {
+        "rawNumber": {
+          "type": "number",
+          "value": "Infinity"
+        },
+        "negativeZero": false
+      },
+      "server": {
+        "kind": "thrown",
+        "error": {
+          "name": "RangeError",
+          "message": "Not an integer",
+          "keys": [
+            "message",
+            "originalLine",
+            "originalColumn",
+            "line",
+            "column",
+            "sourceURL"
+          ],
+          "properties": {
+            "message": "Not an integer",
+            "originalLine": 23,
+            "originalColumn": 46,
+            "line": 26,
+            "column": 40,
+            "sourceURL": "/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/node_modules/@better-auth/utils/dist/otp.mjs"
+          }
+        }
+      },
+      "helper": {
+        "generation": {
+          "kind": "thrown",
+          "error": {
+            "name": "RangeError",
+            "message": "Not an integer",
+            "keys": [
+              "message",
+              "originalLine",
+              "originalColumn",
+              "line",
+              "column",
+              "sourceURL"
+            ],
+            "properties": {
+              "message": "Not an integer",
+              "originalLine": 23,
+              "originalColumn": 46,
+              "line": 26,
+              "column": 40,
+              "sourceURL": "/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/node_modules/@better-auth/utils/dist/otp.mjs"
+            }
+          }
+        },
+        "uri": {
+          "kind": "returned",
+          "value": "otpauth://totp/Ordinary%20TOTP:ordinary%40totp-period.test?secret=N5ZGI2LOMFZHSLLUN52HALLQMVZGS33EFVTGS6DUOVZGK&issuer=Ordinary+TOTP&digits=6&period=5e-324"
+        },
+        "neighbors": [
+          {
+            "offset": -2,
+            "counter": {
+              "rawNumber": {
+                "type": "number",
+                "value": "Infinity"
+              },
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "thrown",
+              "error": {
+                "name": "RangeError",
+                "message": "Not an integer",
+                "keys": [
+                  "message",
+                  "originalLine",
+                  "originalColumn",
+                  "line",
+                  "column",
+                  "sourceURL"
+                ],
+                "properties": {
+                  "message": "Not an integer",
+                  "originalLine": 23,
+                  "originalColumn": 46,
+                  "line": 26,
+                  "column": 40,
+                  "sourceURL": "/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/node_modules/@better-auth/utils/dist/otp.mjs"
+                }
+              }
+            },
+            "token": {
+              "type": "undefined"
+            },
+            "verification": {
+              "kind": "not-run",
+              "reason": "HOTP generation threw before producing a token"
+            }
+          },
+          {
+            "offset": -1,
+            "counter": {
+              "rawNumber": {
+                "type": "number",
+                "value": "Infinity"
+              },
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "thrown",
+              "error": {
+                "name": "RangeError",
+                "message": "Not an integer",
+                "keys": [
+                  "message",
+                  "originalLine",
+                  "originalColumn",
+                  "line",
+                  "column",
+                  "sourceURL"
+                ],
+                "properties": {
+                  "message": "Not an integer",
+                  "originalLine": 23,
+                  "originalColumn": 46,
+                  "line": 26,
+                  "column": 40,
+                  "sourceURL": "/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/node_modules/@better-auth/utils/dist/otp.mjs"
+                }
+              }
+            },
+            "token": {
+              "type": "undefined"
+            },
+            "verification": {
+              "kind": "not-run",
+              "reason": "HOTP generation threw before producing a token"
+            }
+          },
+          {
+            "offset": 0,
+            "counter": {
+              "rawNumber": {
+                "type": "number",
+                "value": "Infinity"
+              },
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "thrown",
+              "error": {
+                "name": "RangeError",
+                "message": "Not an integer",
+                "keys": [
+                  "message",
+                  "originalLine",
+                  "originalColumn",
+                  "line",
+                  "column",
+                  "sourceURL"
+                ],
+                "properties": {
+                  "message": "Not an integer",
+                  "originalLine": 23,
+                  "originalColumn": 46,
+                  "line": 26,
+                  "column": 40,
+                  "sourceURL": "/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/node_modules/@better-auth/utils/dist/otp.mjs"
+                }
+              }
+            },
+            "token": {
+              "type": "undefined"
+            },
+            "verification": {
+              "kind": "not-run",
+              "reason": "HOTP generation threw before producing a token"
+            }
+          },
+          {
+            "offset": 1,
+            "counter": {
+              "rawNumber": {
+                "type": "number",
+                "value": "Infinity"
+              },
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "thrown",
+              "error": {
+                "name": "RangeError",
+                "message": "Not an integer",
+                "keys": [
+                  "message",
+                  "originalLine",
+                  "originalColumn",
+                  "line",
+                  "column",
+                  "sourceURL"
+                ],
+                "properties": {
+                  "message": "Not an integer",
+                  "originalLine": 23,
+                  "originalColumn": 46,
+                  "line": 26,
+                  "column": 40,
+                  "sourceURL": "/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/node_modules/@better-auth/utils/dist/otp.mjs"
+                }
+              }
+            },
+            "token": {
+              "type": "undefined"
+            },
+            "verification": {
+              "kind": "not-run",
+              "reason": "HOTP generation threw before producing a token"
+            }
+          },
+          {
+            "offset": 2,
+            "counter": {
+              "rawNumber": {
+                "type": "number",
+                "value": "Infinity"
+              },
+              "negativeZero": false
+            },
+            "hotp": {
+              "kind": "thrown",
+              "error": {
+                "name": "RangeError",
+                "message": "Not an integer",
+                "keys": [
+                  "message",
+                  "originalLine",
+                  "originalColumn",
+                  "line",
+                  "column",
+                  "sourceURL"
+                ],
+                "properties": {
+                  "message": "Not an integer",
+                  "originalLine": 23,
+                  "originalColumn": 46,
+                  "line": 26,
+                  "column": 40,
+                  "sourceURL": "/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/node_modules/@better-auth/utils/dist/otp.mjs"
+                }
+              }
+            },
+            "token": {
+              "type": "undefined"
+            },
+            "verification": {
+              "kind": "not-run",
+              "reason": "HOTP generation threw before producing a token"
+            }
+          }
+        ],
+        "bigintNeighbors": [],
+        "malformed": {
+          "token": "not-a-totp",
+          "verification": {
+            "kind": "thrown",
+            "error": {
+              "name": "RangeError",
+              "message": "Not an integer",
+              "keys": [
+                "message",
+                "originalLine",
+                "originalColumn",
+                "line",
+                "column",
+                "sourceURL"
+              ],
+              "properties": {
+                "message": "Not an integer",
+                "originalLine": 23,
+                "originalColumn": 46,
+                "line": 26,
+                "column": 40,
+                "sourceURL": "/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/node_modules/@better-auth/utils/dist/otp.mjs"
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}
