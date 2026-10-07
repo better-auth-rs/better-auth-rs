@@ -191,6 +191,10 @@ fn proxy_environment<'a>(command: &'a mut Command, profile: &str) -> &'a mut Com
     command
 }
 
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "Only completed suite failures are collected; Bun process I/O failures must abort the harness"
+)]
 fn run_bun_phase_suite(
     paths: &[&str],
     ts_port: u16,
@@ -272,6 +276,10 @@ async fn collect_client_compat_profile(
 
 #[tokio::test]
 #[ignore = "starts isolated profiles with intentional Bun failures to verify failure aggregation"]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "The Result propagates fixture I/O errors; assertions verify failure aggregation"
+)]
 async fn configuration_failure_aggregation() -> Result<(), Box<dyn std::error::Error>> {
     let directory = std::env::temp_dir().join(format!(
         "better-auth-compat-aggregation-{}-{}",
