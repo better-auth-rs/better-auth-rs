@@ -7,8 +7,8 @@ import { memoryAdapter } from "better-auth/adapters/memory";
 import { getMigrations } from "better-auth/db/migration";
 
 type Backend = "memory" | "sqlite";
-type Display = string | number | null | undefined;
-type DisplayDeclaration = "string" | string[];
+type Display = string | number | null | undefined | Record<string, unknown> | unknown[];
+type DisplayDeclaration = "string" | "json" | string[];
 const declarations: {label: string; type: DisplayDeclaration}[] = [
   {label: "string", type: "string"},
   {label: "enum", type: ["Reserved"]},
@@ -218,3 +218,81 @@ test("pure secondary API Key creation without a name keeps null and bypasses fie
     expect(f.memory.apikey).toStrictEqual([]);
   } finally { f.close(); }
 });
+
+const jsonDisplays: {name: string; output: Display; expected: Display}[] = [
+  {name: "object", output: {label: "Desk", rank: 2}, expected: {label: "Desk", rank: 2}},
+  {name: "array", output: ["Desk", {rank: 2}, null], expected: ["Desk", {rank: 2}, null]},
+  {name: "null", output: null, expected: null},
+  {name: "undefined", output: undefined, expected: undefined},
+  {name: "object-text", output: '{"label":"Desk","rank":2}', expected: {label: "Desk", rank: 2}},
+  {name: "invalid-text", output: "not-json", expected: null},
+];
+
+function expectJsonDisplay(row: Record<string, unknown>, expected: Display) {
+  expect(row.name).toStrictEqual(expected);
+  const serialized = JSON.parse(JSON.stringify(row));
+  expect(Object.hasOwn(serialized, "name")).toBe(expected !== undefined);
+  if (expected !== undefined) expect(serialized.name).toStrictEqual(expected);
+}
+
+for (const backend of ["memory", "sqlite"] as const) for (const mode of ["database", "fallback"] as const) {
+  for (const display of jsonDisplays) {
+    test(`API Key JSON ${display.name} output survives ${mode} reads, updates and cache refill (${backend})`, async () => {
+      const trace: string[] = [];
+      const {cache, customStorage} = storage();
+      const f = await fixture(backend, [apiKey({
+        storage: mode === "database" ? "database" : "secondary-storage",
+        fallbackToDatabase: mode === "fallback", customStorage, deferUpdates: false,
+      }), keyFields(trace, display.output, "json")]);
+      try {
+        const created = await f.auth.api.createApiKey({headers: f.headers, body: {name: "Desk"}});
+        expectJsonDisplay(created, display.expected);
+        expect(trace.splice(0)).toStrictEqual(['input:name:"Desk"', 'output:name:"Desk"']);
+        const byId = `api-key:by-id:${created.id}`;
+        const reference = `api-key:by-ref:${f.owner}`;
+        const read = async (events: string[]) => {
+          expectJsonDisplay(await f.auth.api.getApiKey({headers: f.headers, query: {id: created.id}}), display.expected);
+          expect(trace.splice(0)).toStrictEqual(events);
+        };
+        const list = async (events: string[]) => {
+          const result = await f.auth.api.listApiKeys({headers: f.headers});
+          expect(result.total).toBe(1); expect(result.apiKeys.length).toBe(1);
+          expectJsonDisplay(result.apiKeys[0], display.expected);
+          expect(trace.splice(0)).toStrictEqual(events);
+        };
+        await read(mode === "database" ? ['output:name:"Desk"'] : []);
+        if (mode === "fallback") {
+          expectJsonDisplay(JSON.parse(cache.get(byId)!), display.expected);
+          cache.clear();
+          await read(['output:name:"Desk"']);
+          expectJsonDisplay(JSON.parse(cache.get(byId)!), display.expected);
+          await read([]);
+          cache.clear();
+          await list(['output:name:"Desk"']);
+          expectJsonDisplay(JSON.parse(cache.get(byId)!), display.expected);
+          expect(JSON.parse(cache.get(reference)!)).toStrictEqual([created.id]);
+          await list([]);
+        } else {
+          await list(['output:name:"Desk"']);
+          expect(cache.size).toBe(0);
+        }
+        const updated = await f.auth.api.updateApiKey({headers: f.headers, body: {keyId: created.id, name: "Mobile"}});
+        expectJsonDisplay(updated, display.expected);
+        expect(trace.splice(0)).toStrictEqual([
+          ...(mode === "database" ? ['output:name:"Desk"'] : []), 'input:name:"Mobile"', 'output:name:"Mobile"',
+        ]);
+        if (mode === "fallback") {
+          expectJsonDisplay(JSON.parse(cache.get(byId)!), display.expected);
+          cache.clear();
+          await read(['output:name:"Mobile"']);
+          expectJsonDisplay(JSON.parse(cache.get(byId)!), display.expected);
+          await read([]);
+        }
+        const raw = f.database
+          ? f.database.query<any, [string]>('SELECT name FROM apikey WHERE id=?').get(created.id)
+          : f.memory.apikey.find(row => row.id === created.id);
+        expect(raw.name).toBe("Mobile");
+      } finally { f.close(); }
+    });
+  }
+}

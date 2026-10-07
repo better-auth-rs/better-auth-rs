@@ -17,6 +17,7 @@ on:
       - compat-tests/reference-server/contracts/session-jwk-wallet-rate-limit-serial-capture.mjs
       - compat-tests/reference-server/contracts/session-live-output-capture.mjs
       - compat-tests/reference-server/contracts/adapter-id-slot-capture.mjs
+      - compat-tests/reference-server/contracts/plugin-display-json-capture.mjs
 
 permissions:
   contents: read
@@ -27,12 +28,18 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - contract: adapter-id-slot
-            regression: account-verification-serial-primary
-            backend: ''
-          - contract: session-jwk-wallet-rate-limit-serial
-            regression: account-verification-serial-primary
-            backend: ''
+          - contract: plugin-display-json
+            regression: plugin-display-presence
+            backend: memory
+          - contract: plugin-display-json
+            regression: plugin-display-presence
+            backend: sqlite
+          - contract: plugin-display-json
+            regression: plugin-display-presence
+            backend: postgres
+          - contract: plugin-display-json
+            regression: plugin-display-presence
+            backend: mysql
     runs-on: ubuntu-latest
     timeout-minutes: 10
     services:
