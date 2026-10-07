@@ -27,6 +27,7 @@ on:
       - compat-tests/reference-server/contracts/account-user-selected-relations.test.ts
       - compat-tests/reference-server/contracts/account-user-auth-boundary-capture.mjs
       - compat-tests/reference-server/contracts/account-user-auth-boundary-override.mjs
+      - compat-tests/reference-server/contracts/account-user-auth-email-capture.mjs
       - compat-tests/reference-server/contracts/account-user-auth-boundary.test.ts
 
 permissions:
@@ -38,8 +39,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - contract: secondary-user-refresh-values
-            regression: secondary-user-refresh
+          - contract: account-user-auth-email
+            regression: account-user-auth-boundary
             backend: ''
     runs-on: ubuntu-latest
     timeout-minutes: 10

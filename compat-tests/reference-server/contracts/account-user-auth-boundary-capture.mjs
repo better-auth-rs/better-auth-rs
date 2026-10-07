@@ -273,7 +273,7 @@ function verifyResult(backend, scenario, joins, before, after, response, body, e
   return { dynamic, replacements, cookie: { raw: cookies[0], normalized: `better-auth.session_token=<verified-signed-session-token>${cookies[0].slice(separator)}` } };
 }
 
-async function captureCase(backend, scenario, joins, recorder) {
+async function captureCase(backend, scenario, joins, recorder, extension) {
   const state = { enabled: false, events: [] };
   const sqlite = backend === "sqlite" ? new Database(":memory:") : undefined;
   const memory = Object.fromEntries(tables.map(model => [model, []]));
@@ -282,6 +282,9 @@ async function captureCase(backend, scenario, joins, recorder) {
   const stored = () => structuredClone(Object.fromEntries(tables.map(model => [model, sqlite
     ? sqlite.query(`SELECT * FROM "${model}" ORDER BY "id"`).all() : memory[model]])));
   try {
+    if (extension) extension.configure(scenario, options, event => {
+      if (state.enabled) state.events.push(native(event));
+    });
     if (sqlite) await (await getMigrations(options)).runMigrations();
     const auth = betterAuth(options);
     const seedAdapter = (await auth.$context).adapter;
@@ -307,7 +310,8 @@ async function captureCase(backend, scenario, joins, recorder) {
     const body = await response.text();
     const after = stored();
     let verified;
-    try { verified = callback
+    try { verified = extension ? extension.verify({ backend, scenario, joins, before, after, response, body,
+      events: state.events, requestWindow, requestHeaders, idToken, nonce, milliseconds }) : callback
       ? verifyCallbackOverride({ backend, joins, before, after, response, body, events: state.events, requestWindow, callback,
         requestHeaders, idToken, secret, expiresIn, milliseconds })
       : verifyResult(backend, scenario, joins, before, after, response, body, state.events, requestWindow); }
@@ -338,7 +342,7 @@ async function captureCase(backend, scenario, joins, recorder) {
         ? { ...event, data: normalizeRecord(event.model, event.data, dynamic, replacements) } : normalize(event, replacements, Boolean(callback))),
       response: { status: response.status, statusText: response.statusText, headers, cookies, body: normalizedBody },
       after: Object.fromEntries(tables.map(model => [model, after[model].map(row => normalizeRecord(model, row, dynamic, replacements))])),
-      checked: { noNetwork: true, completeStorage: true, admissionMatchesSessionInput: !scenario.accountsOne && (!callback || Boolean(dynamic.session)),
+      checked: verified.checked ?? { noNetwork: true, completeStorage: true, admissionMatchesSessionInput: !scenario.accountsOne && (!callback || Boolean(dynamic.session)),
         preservedCanonicalAccountOwner: !scenario.accountsOne, sessionDatesWithinRequest: Boolean(dynamic.session),
         sessionCookieMatchesStoredToken: cookie !== null,
         ...(callback ? { userProfileOverrideReached: true, oauthStateAndCodeVerifierVerified: true } : {}) },
@@ -346,7 +350,7 @@ async function captureCase(backend, scenario, joins, recorder) {
   } finally { state.enabled = false; recorder.events = null; recorder.exchange = null; sqlite?.close(); }
 }
 
-export async function captureAccountUserAuthBoundary() {
+export async function captureAccountUserAuthCases(selectedScenarios, extension) {
   const recorder = { events: null, exchange: null };
   const originalFetch = globalThis.fetch;
   const originalConsoleError = console.error;
@@ -380,13 +384,19 @@ export async function captureAccountUserAuthBoundary() {
     }
     assert.equal(warmup, true, "The query recorder must be active before sampling");
     const cases = [];
-    for (const scenario of scenarios) for (const backend of ["memory", "sqlite"]) for (const joins of [false, true]) {
-      cases.push(await captureCase(backend, scenario, joins, recorder));
+    for (const scenario of selectedScenarios) for (const backend of ["memory", "sqlite"]) for (const joins of [false, true]) {
+      cases.push(await captureCase(backend, scenario, joins, recorder, extension));
       assert.deepEqual(networkCalls, []);
     }
-    assert.equal(cases.length, 24);
-    return { version, scenarios, cases };
+    assert.equal(cases.length, selectedScenarios.length * 4);
+    return { version, scenarios: selectedScenarios, cases };
   } finally { globalThis.fetch = originalFetch; console.error = originalConsoleError; trace.disable(); }
+}
+
+export async function captureAccountUserAuthBoundary() {
+  const result = await captureAccountUserAuthCases(scenarios);
+  assert.equal(result.cases.length, 24);
+  return result;
 }
 
 if (import.meta.main) {
