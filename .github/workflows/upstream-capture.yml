@@ -11,6 +11,7 @@ on:
       - compat-tests/reference-server/contracts/device-where-scenarios.mjs
       - compat-tests/reference-server/contracts/device-where-transactions-capture.mjs
       - compat-tests/reference-server/contracts/memory-transaction-values-capture.mjs
+      - compat-tests/reference-server/contracts/user-serial-create-order-capture.mjs
 
 permissions:
   contents: read
@@ -21,8 +22,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - contract: memory-transaction-values
-            regression: device-where-transactions
+          - contract: user-serial-create-order
+            regression: memory-transaction-values
             backend: ''
     runs-on: ubuntu-latest
     timeout-minutes: 10
