@@ -9,6 +9,7 @@ import { memoryAdapter } from "better-auth/adapters/memory";
 import { getMigrations } from "better-auth/db/migration";
 import { observeValue } from "./device-where-capture.mjs";
 import { selectedRelationScenarios } from "./account-user-selected-relations-capture.mjs";
+import { overrideScenarios, prepareCallbackOverride, verifyCallbackOverride } from "./account-user-auth-boundary-override.mjs";
 
 const require = createRequire(new URL("../package.json", import.meta.url));
 const { trace } = require("@opentelemetry/api");
@@ -34,6 +35,7 @@ const scenarios = [
   { name: "social-owner-many", route: "social", relation: "reverse-user-reference-many", many: true },
   { name: "social-accounts-one", route: "social", relation: "unique-account-reference", accountsOne: true },
   { name: "email-accounts-one", route: "email", relation: "unique-account-reference", accountsOne: true },
+  ...overrideScenarios,
 ];
 
 function native(value) {
@@ -90,7 +92,7 @@ function optionsFor(scenario, joins, state) {
         record({ kind: "admission", data, request: { url: context.request.url, method: context.request.method, headers: [...context.request.headers] } });
       },
     },
-    account: { additionalFields: field("account", {
+    account: { ...(scenario.callback ? { storeStateStrategy: "cookie" } : {}), additionalFields: field("account", {
       accessToken: {}, accountId: {}, userId: { references: { model: "user", field: "id" } },
     }, relation.accountFields) },
     emailAndPassword: {
@@ -102,6 +104,7 @@ function optionsFor(scenario, joins, state) {
     },
     socialProviders: { google: {
       clientId: "fixture-client", clientSecret: "fixture-client-secret",
+      ...(scenario.overrideUserInfo ? { overrideUserInfoOnSignIn: true } : {}),
       verifyIdToken(token, receivedNonce) {
         record({ kind: "provider.verify", token, nonce: receivedNonce });
         return Promise.resolve(token === idToken && receivedNonce === nonce);
@@ -142,12 +145,13 @@ function normalizeRecord(model, row, dynamic, replacements) {
   }));
 }
 
-function normalize(value, replacements) {
+function normalize(value, replacements, embedded = false) {
+  if (embedded && typeof value === "string") return [...replacements].reduce((text, [from, to]) => text.replaceAll(from, to), value);
   if (typeof value === "string" && replacements.has(value)) return replacements.get(value);
   if (value instanceof Date || value === undefined) return observeValue(value);
-  if (Array.isArray(value)) return value.map(child => normalize(child, replacements));
+  if (Array.isArray(value)) return value.map(child => normalize(child, replacements, embedded));
   if (value !== null && typeof value === "object") return Object.fromEntries(Object.entries(value)
-    .map(([key, child]) => [key, normalize(child, replacements)]));
+    .map(([key, child]) => [key, normalize(child, replacements, embedded)]));
   return value;
 }
 
@@ -287,9 +291,11 @@ async function captureCase(backend, scenario, joins, recorder) {
       await seedAdapter.create({ model, forceAllowId: true, data });
     }
     const before = stored();
+    const callback = scenario.callback ? await prepareCallbackOverride(auth, recorder, { origin, requestHeaders, idToken }) : null;
+    if (callback) assert.deepEqual(stored(), before, "Cookie state setup must not change database rows");
     const input = scenario.route === "social" ? { provider: "google", idToken: { token: idToken, nonce } }
       : { email: "a@account-user-auth-boundary.test", password };
-    const request = new Request(`${origin}/api/auth/sign-in/${scenario.route}`, {
+    const request = callback?.request ?? new Request(`${origin}/api/auth/sign-in/${scenario.route}`, {
       method: "POST", headers: requestHeaders, body: JSON.stringify(input),
     });
     state.enabled = true;
@@ -301,7 +307,10 @@ async function captureCase(backend, scenario, joins, recorder) {
     const body = await response.text();
     const after = stored();
     let verified;
-    try { verified = verifyResult(backend, scenario, joins, before, after, response, body, state.events, requestWindow); }
+    try { verified = callback
+      ? verifyCallbackOverride({ backend, joins, before, after, response, body, events: state.events, requestWindow, callback,
+        requestHeaders, idToken, secret, expiresIn, milliseconds })
+      : verifyResult(backend, scenario, joins, before, after, response, body, state.events, requestWindow); }
     catch (error) {
       const evidence = `${JSON.stringify(observeValue({ backend, scenario, joins, requestWindow, before, after, events: state.events,
         response: { status: response.status, statusText: response.statusText, headers: [...response.headers], cookies: response.headers.getSetCookie(), body }, error: native(error) }), null, 2)}\n`;
@@ -312,27 +321,33 @@ async function captureCase(backend, scenario, joins, recorder) {
     const { dynamic, replacements, cookie } = verified;
     const headers = [...response.headers].map(([name, value]) => {
       if (name !== "set-cookie" || !cookie) return [name, value];
+      if (callback) return [name, value.replaceAll(cookie.raw, cookie.normalized)];
       assert.equal(value, cookie.raw);
       return [name, cookie.normalized];
     });
     const cookies = response.headers.getSetCookie().map(value => cookie && value === cookie.raw ? cookie.normalized : value);
     const normalizedBody = [...replacements].reduce((text, [from, to]) => text.replaceAll(from, to), body);
     return {
-      backend, scenario: scenario.name, joins, request: { url: request.url, method: request.method, headers: [...request.headers], body: input },
+      backend, scenario: scenario.name, joins,
+      ...(callback ? { setup: normalize(callback.setup, replacements, true) } : {}),
+      request: callback
+        ? normalize({ url: request.url, method: request.method, headers: [...request.headers], body: null }, replacements, true)
+        : { url: request.url, method: request.method, headers: [...request.headers], body: input },
       before: observeValue(before),
       events: state.events.map(event => event.kind === "hook"
-        ? { ...event, data: normalizeRecord(event.model, event.data, dynamic, replacements) } : normalize(event, replacements)),
+        ? { ...event, data: normalizeRecord(event.model, event.data, dynamic, replacements) } : normalize(event, replacements, Boolean(callback))),
       response: { status: response.status, statusText: response.statusText, headers, cookies, body: normalizedBody },
       after: Object.fromEntries(tables.map(model => [model, after[model].map(row => normalizeRecord(model, row, dynamic, replacements))])),
-      checked: { noNetwork: true, completeStorage: true, admissionMatchesSessionInput: !scenario.accountsOne,
+      checked: { noNetwork: true, completeStorage: true, admissionMatchesSessionInput: !scenario.accountsOne && (!callback || Boolean(dynamic.session)),
         preservedCanonicalAccountOwner: !scenario.accountsOne, sessionDatesWithinRequest: Boolean(dynamic.session),
-        sessionCookieMatchesStoredToken: cookie !== null },
+        sessionCookieMatchesStoredToken: cookie !== null,
+        ...(callback ? { userProfileOverrideReached: true, oauthStateAndCodeVerifierVerified: true } : {}) },
     };
-  } finally { state.enabled = false; recorder.events = null; sqlite?.close(); }
+  } finally { state.enabled = false; recorder.events = null; recorder.exchange = null; sqlite?.close(); }
 }
 
 export async function captureAccountUserAuthBoundary() {
-  const recorder = { events: null };
+  const recorder = { events: null, exchange: null };
   const originalFetch = globalThis.fetch;
   const originalConsoleError = console.error;
   const networkCalls = [];
@@ -349,6 +364,7 @@ export async function captureAccountUserAuthBoundary() {
   }; } }), true);
   globalThis.fetch = async (input, init) => {
     const request = new Request(input, init);
+    if (recorder.exchange) return recorder.exchange(request);
     networkCalls.push({ url: request.url, method: request.method });
     throw new Error("The account relation auth capture must not use network requests");
   };
@@ -368,7 +384,7 @@ export async function captureAccountUserAuthBoundary() {
       cases.push(await captureCase(backend, scenario, joins, recorder));
       assert.deepEqual(networkCalls, []);
     }
-    assert.equal(cases.length, 16);
+    assert.equal(cases.length, 24);
     return { version, scenarios, cases };
   } finally { globalThis.fetch = originalFetch; console.error = originalConsoleError; trace.disable(); }
 }

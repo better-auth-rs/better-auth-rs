@@ -23,6 +23,7 @@ on:
       - compat-tests/reference-server/contracts/account-user-selected-relations-capture.mjs
       - compat-tests/reference-server/contracts/account-user-selected-relations.test.ts
       - compat-tests/reference-server/contracts/account-user-auth-boundary-capture.mjs
+      - compat-tests/reference-server/contracts/account-user-auth-boundary-override.mjs
       - compat-tests/reference-server/contracts/account-user-auth-boundary.test.ts
 
 permissions:
