@@ -923,7 +923,97 @@ async fn test_verify_email_invalid_token() {
     let req =
         test_helpers::create_auth_request(HttpMethod::Get, "/verify-email", None, None, query);
     let err = plugin.handle_verify_email(&req, &ctx).await.unwrap_err();
-    assert_eq!(err.status_code(), 400);
+    assert_eq!(
+        err.error_payload(),
+        (401, Some("INVALID_TOKEN".into()), "Invalid token".into())
+    );
+}
+
+// Upstream reference: email-verification.ts :: redirectOnError handles all JWT and user rejections.
+#[tokio::test]
+async fn test_verify_email_errors_preserve_status_codes_redirect_queries_and_fragments() {
+    let plugin = EmailVerificationPlugin::new();
+    let ctx = test_helpers::create_test_context().await;
+    let _ = test_helpers::create_user(
+        &ctx,
+        CreateUser::new()
+            .with_email("owner@verify-errors.test")
+            .with_name("Owner"),
+    )
+    .await;
+    let (_, other_session) = test_helpers::create_user_and_session(
+        &ctx,
+        CreateUser::new()
+            .with_email("other@verify-errors.test")
+            .with_name("Other"),
+        Duration::hours(1),
+    )
+    .await;
+    let expired = create_email_verification_token(
+        ctx.config.signing_secret(),
+        "owner@verify-errors.test",
+        None,
+        Duration::zero(),
+        None,
+    )
+    .unwrap();
+    let missing_user = jwt_token(&ctx, "missing@verify-errors.test", None, None);
+    let changed_email = jwt_token(
+        &ctx,
+        "owner@verify-errors.test",
+        Some("updated@verify-errors.test"),
+        Some("change-email-verification"),
+    );
+    for (token, session, code, message) in [
+        (expired.as_str(), None, "TOKEN_EXPIRED", "Token expired"),
+        ("bogus-token", None, "INVALID_TOKEN", "Invalid token"),
+        ("!.!.!", None, "INVALID_TOKEN", "Invalid token"),
+        (
+            missing_user.as_str(),
+            None,
+            "USER_NOT_FOUND",
+            "User not found",
+        ),
+        (
+            changed_email.as_str(),
+            Some(other_session.token.as_str()),
+            "INVALID_USER",
+            "Invalid user",
+        ),
+    ] {
+        for callback in [None, Some(""), Some("/verified?source=mail#done")] {
+            let mut query = HashMap::from([("token".to_owned(), token.to_owned())]);
+            if let Some(callback) = callback {
+                query.insert("callbackURL".to_owned(), callback.to_owned());
+            }
+            let request = test_helpers::create_auth_request(
+                HttpMethod::Get,
+                "/verify-email",
+                session,
+                None,
+                query,
+            );
+            let response = match plugin.handle_verify_email(&request, &ctx).await {
+                Ok(response) => response,
+                Err(error) => error.to_auth_response(),
+            };
+            assert!(response.headers.get_all("set-cookie").next().is_none());
+            if callback == Some("/verified?source=mail#done") {
+                assert_eq!(response.status, 302);
+                assert_eq!(
+                    response.headers.get("location"),
+                    Some(&format!("/verified?source=mail&error={code}#done"))
+                );
+            } else {
+                assert_eq!(response.status, 401);
+                assert_eq!(
+                    serde_json::from_slice::<serde_json::Value>(&response.body.bytes().unwrap())
+                        .unwrap(),
+                    serde_json::json!({"code": code, "message": message})
+                );
+            }
+        }
+    }
 }
 
 // Upstream reference: packages/better-auth/src/api/routes/email-verification.test.ts :: describe("Email Verification") and packages/better-auth/src/api/routes/email-verification.ts; adapted to the Rust email verification plugin.

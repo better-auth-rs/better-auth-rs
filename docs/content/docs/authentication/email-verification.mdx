@@ -42,6 +42,8 @@ Configure a `SendVerificationEmail` callback for `/send-verification-email`. Set
 
 Direct `EmailVerificationConfig.verification_token_expiry` assignments use `Some(duration)`. Omission resolves to one hour through `verification_token_expiry()`. The plugin builder still accepts a `Duration`.
 
+Fractional durations retain fractional JWT `exp` values. Verification compares `exp` against the current whole second without an expiration grace period. A zero duration expires immediately; a 1.5-second lifetime expires when the clock reaches the second whole second after issuance.
+
 ### Plugin Options
 
 | Option | Type | Default | Description |
@@ -100,7 +102,10 @@ GET /verify-email?token=<verification_token>
 
 | Status | Condition |
 |--------|-----------|
-| 400 | Token missing, expired, or invalid |
+| 400 | Token missing |
+| 401 | Token expired or invalid, user missing, or change-email user mismatch |
+
+Verification failures use `TOKEN_EXPIRED`, `INVALID_TOKEN`, `USER_NOT_FOUND`, or `INVALID_USER`. A nonempty trusted `callbackURL` receives a redirect with the same uppercase code in its `error` parameter; the existing query and fragment are preserved.
 
 ## Sending After Sign-Up
 

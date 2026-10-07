@@ -170,7 +170,10 @@ impl EmailVerificationPlugin {
         let token = req
             .query_string("token")?
             .ok_or_else(|| AuthError::bad_request("Verification token is required"))?;
-        let callback_url = req.query_string("callbackURL")?.map(str::to_owned);
+        let callback_url = req
+            .query_string("callbackURL")?
+            .filter(|url| !url.is_empty())
+            .map(str::to_owned);
 
         // Validate callbackURL against trusted origins, matching the TS
         // `originCheck` middleware applied to the verify-email endpoint.

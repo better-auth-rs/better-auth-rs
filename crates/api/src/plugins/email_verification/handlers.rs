@@ -105,12 +105,25 @@ pub(super) async fn send_verification_email_core(
     Ok(StatusResponse { status: true })
 }
 
-fn redirect_url(callback_url: &str, error: Option<&str>) -> String {
-    match error {
-        Some(error) if callback_url.contains('?') => format!("{callback_url}&error={error}"),
-        Some(error) => format!("{callback_url}?error={error}"),
-        None => callback_url.to_string(),
+fn verification_error(
+    query: &VerifyEmailQuery,
+    code: &'static str,
+    message: &'static str,
+) -> AuthResult<VerifyEmailResult> {
+    if let Some(callback_url) = query.callback_url.as_deref().filter(|url| !url.is_empty()) {
+        return Ok(VerifyEmailResult::Redirect {
+            url: better_auth_core::utils::url::append_query_params(
+                callback_url,
+                &format!("error={code}"),
+            )?,
+            session_data: None,
+        });
     }
+    Err(AuthError::Upstream {
+        status: 401,
+        code,
+        message,
+    })
 }
 
 pub(super) async fn verify_email_core<U, S>(
@@ -141,50 +154,23 @@ where
     let claims = match decode_email_verification_token(ctx.config.signing_secret(), &query.token) {
         Ok(claims) => claims,
         Err(AuthError::Jwt(error)) => {
-            if matches!(
-                error.kind(),
-                ErrorKind::InvalidToken
-                    | ErrorKind::InvalidSignature
-                    | ErrorKind::InvalidAlgorithm
-                    | ErrorKind::MissingRequiredClaim(_)
-                    | ErrorKind::ExpiredSignature
-            ) {
-                if let Some(callback_url) = query.callback_url.as_deref() {
-                    let error_code = if matches!(error.kind(), ErrorKind::ExpiredSignature) {
-                        "token_expired"
-                    } else {
-                        "invalid_token"
-                    };
-                    return Ok(VerifyEmailResult::Redirect {
-                        url: redirect_url(callback_url, Some(error_code)),
-                        session_data: None,
-                    });
-                }
-
-                let error_code = if matches!(error.kind(), ErrorKind::ExpiredSignature) {
-                    "token_expired"
-                } else {
-                    "invalid_token"
-                };
-                return Err(AuthError::bad_request(error_code));
+            if matches!(error.kind(), ErrorKind::ExpiredSignature) {
+                return verification_error(query, "TOKEN_EXPIRED", "Token expired");
             }
-
-            return Err(AuthError::Jwt(error));
+            return verification_error(query, "INVALID_TOKEN", "Invalid token");
         }
         Err(error) => return Err(error),
     };
 
-    let user = ctx
-        .database
-        .get_user_by_email(&claims.email)
-        .await?
-        .ok_or_else(|| AuthError::not_found("User not found"))?;
+    let Some(user) = ctx.database.get_user_by_email(&claims.email).await? else {
+        return verification_error(query, "USER_NOT_FOUND", "User not found");
+    };
 
     if let Some(update_to) = claims.update_to.as_deref() {
         if let Some((ref session_user, _)) = current_session
             && session_user.email().unwrap_or_default() != claims.email
         {
-            return Err(AuthError::bad_request("unauthorized"));
+            return verification_error(query, "INVALID_USER", "Invalid user");
         }
 
         match claims.request_type.as_deref() {
@@ -220,7 +206,7 @@ where
 
                 if let Some(callback_url) = query.callback_url.as_deref() {
                     return Ok(VerifyEmailResult::Redirect {
-                        url: redirect_url(callback_url, None),
+                        url: callback_url.to_owned(),
                         session_data: None,
                     });
                 }
@@ -273,7 +259,7 @@ where
 
                 if let Some(callback_url) = query.callback_url.as_deref() {
                     return Ok(VerifyEmailResult::Redirect {
-                        url: redirect_url(callback_url, None),
+                        url: callback_url.to_owned(),
                         session_data: Some(data),
                     });
                 }
@@ -348,7 +334,7 @@ where
 
                 if let Some(callback_url) = query.callback_url.as_deref() {
                     return Ok(VerifyEmailResult::Redirect {
-                        url: redirect_url(callback_url, None),
+                        url: callback_url.to_owned(),
                         session_data: Some(data),
                     });
                 }
@@ -367,7 +353,7 @@ where
     if user.email_verified() {
         if let Some(callback_url) = query.callback_url.as_deref() {
             return Ok(VerifyEmailResult::Redirect {
-                url: redirect_url(callback_url, None),
+                url: callback_url.to_owned(),
                 session_data: None,
             });
         }
@@ -423,7 +409,7 @@ where
 
     if let Some(callback_url) = query.callback_url.as_deref() {
         return Ok(VerifyEmailResult::Redirect {
-            url: redirect_url(callback_url, None),
+            url: callback_url.to_owned(),
             session_data,
         });
     }

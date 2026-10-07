@@ -192,6 +192,14 @@ run_stage() {
       cargo test --locked -p better-auth-core --lib store::secondary::users::tests::
       cargo test --locked --features axum,seaorm2,redis-cache --test nullable_user_update_tests --test secondary_storage_hooks_tests --test background_transaction_tests
       ;;
+    email-verification)
+      cargo fmt --all -- --check
+      cargo clippy --locked -p better-auth-api --lib -- -D warnings
+      cargo clippy --locked --features seaorm2 --test email_verification_duration_tests -- -D warnings
+      cargo test --locked -p better-auth-api --lib -- plugins::email_verification plugins::user_management::tests::test_change_email
+      cargo test --locked --features seaorm2 --test email_verification_duration_tests
+      bun --no-install test ./compat-tests/reference-server/contracts/email-verification-duration.test.ts
+      ;;
     telemetry)
       cargo fmt --all -- --check
       cargo clippy --locked --test telemetry_options_tests -- -D warnings
