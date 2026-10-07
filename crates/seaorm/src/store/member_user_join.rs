@@ -9,7 +9,7 @@ use better_auth_core::{
     AuthRecordFields, AuthResult, FieldValue,
     store::{MemberUser, MemberUserJoin, schema::EntityRole},
 };
-use sea_orm::{ConnectionTrait, EntityTrait, QueryFilter, QuerySelect, Select};
+use sea_orm::{EntityTrait, QueryFilter, QuerySelect, Select};
 
 impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPluginSchema> SeaOrmStore<S, O, P>
 where
