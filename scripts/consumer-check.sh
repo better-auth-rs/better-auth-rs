@@ -339,7 +339,8 @@ if [[ $# -eq 0 ]]; then
   bun --no-install test ./compat-tests/reference-server/consumer-contracts/two-factor-catalog.test.ts --test-name-pattern sqlite
 fi
 server_catalog_tests=(
-  ./compat-tests/reference-server/consumer-contracts/device-where.test.ts
+  ./compat-tests/reference-server/consumer-contracts/device-where.test.ts \
+  ./compat-tests/reference-server/consumer-contracts/device-where-transactions.test.ts
   ./compat-tests/reference-server/consumer-contracts/device-code-catalog.test.ts
   ./compat-tests/reference-server/consumer-contracts/wallet-address-catalog.test.ts
   ./compat-tests/reference-server/consumer-contracts/passkey-catalog.test.ts
