@@ -172,6 +172,7 @@ where
         session: &mut CreateSession,
         tx: Option<super::HookTransaction<'_, S>>,
     ) -> AuthResult<bool> {
+        let _ = session.additional_fields.remove("id");
         let context = self.hook_context(tx);
         for hook in self.hooks() {
             if better_auth_core::observability::database::with_database_hook(
@@ -247,25 +248,29 @@ where
         }
         self.validate_session_fields()?;
         let schema = self.config().session.adapter_schema();
+        let mut supplied_id = fields.remove("id");
         self.model_fields.begin_id_input(
             EntityRole::Session,
             AdapterIdInput {
-                force_allow_id: false,
+                force_allow_id: supplied_id.is_some(),
                 supports_native_uuid: db.get_database_backend() == sea_orm::DbBackend::Postgres,
             },
         )?;
-        let (fields, id) = schema
-            .create_adapter_storage_fields(
+        let fields = schema
+            .storage_fields_with_bound_id(
                 fields,
+                true,
                 || {
+                    let supplied = supplied_id.take();
                     let Some(policy) = self.model_fields.id_input_policy(EntityRole::Session)?
                     else {
-                        return Ok(None);
+                        return Ok(supplied.filter(|value| !value.is_undefined()));
                     };
-                    self.generated_id_with_policy("session", None, policy)?
-                        .as_deref()
-                        .map(S::Session::parse_id)
-                        .transpose()
+                    self.config()
+                        .advanced
+                        .database
+                        .generate_id()
+                        .adapter_create_id_input("session", supplied, policy)
                 },
                 |name, field, value| {
                     crate::reference_id::input_binding(
@@ -280,17 +285,14 @@ where
                 },
             )
             .await?;
-        let database_generated_id = id.is_none();
         let expires_at = create_session.expires_at.clone();
         let mut active = S::Session::new_active(
-            id,
+            None,
             better_auth_core::id::random_id(None),
             create_session,
             now,
         )?;
-        if database_generated_id {
-            active.not_set(S::Session::id_column());
-        }
+        active.not_set(S::Session::id_column());
         let mut active = super::record_write::RecordWrite::from_active(active);
         active.native_field(
             S::Session::expires_at_column(),
@@ -427,22 +429,11 @@ where
                     else {
                         return Ok(Some(value));
                     };
-                    if !value.is_truthy() {
-                        return Ok(None);
-                    }
-                    match self.config().advanced.database.generate_id() {
-                        better_auth_core::id::IdGeneration::Serial => {
-                            let number = better_auth_core::query::field_number(&value)?;
-                            Ok((!number.is_nan())
-                                .then_some(better_auth_core::FieldValue::Number(number)))
-                        }
-                        better_auth_core::id::IdGeneration::Uuid
-                            if policy.supports_native_uuid && !policy.force_allow_id =>
-                        {
-                            Ok(None)
-                        }
-                        _ => Ok(Some(value)),
-                    }
+                    self.config()
+                        .advanced
+                        .database
+                        .generate_id()
+                        .adapter_id_input(value, policy)
                 },
                 |name, field, value| {
                     crate::reference_id::input_binding(

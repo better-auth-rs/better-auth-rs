@@ -328,7 +328,7 @@ impl UserView {
                     }
                     {
                         let mut value = value;
-                        if !field.references_id() {
+                        if !field.uses_id_output() {
                             field.normalize_date(&mut value)?;
                         }
                         if !public || field.returned() {

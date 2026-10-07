@@ -102,35 +102,74 @@ impl IdGeneration {
         supplied: Option<String>,
         policy: AdapterIdInput,
     ) -> AuthResult<Option<String>> {
-        if let Some(id) = supplied {
-            if id.is_empty() {
-                return Ok(None);
-            }
-            if matches!(self, Self::Uuid) && !policy.force_allow_id {
-                return Ok((!policy.supports_native_uuid).then_some(id));
-            }
-            if matches!(self, Self::Uuid)
-                && !(id.len() == 36
-                    && uuid::Uuid::parse_str(&id).is_ok_and(|id| {
-                        (1..=5).contains(&id.get_version_num())
-                            && id.get_variant() == uuid::Variant::RFC4122
-                    }))
-            {
-                tracing::warn!("Invalid forced UUID; the adapter omits the ID");
-                return Ok(None);
-            }
-            if matches!(self, Self::Serial) {
-                let number = crate::query::number(&serde_json::Value::String(id))?;
-                return Ok((!number.is_nan()).then(|| crate::schema_value::number_string(number)));
-            }
-            return Ok(Some(id));
-        }
-        if matches!(self, Self::Uuid) && policy.supports_native_uuid {
+        self.adapter_create_id_input(model, supplied.map(crate::FieldValue::String), policy)?
+            .map(|value| crate::SchemaValue::<String>::from_field(value).display_string())
+            .transpose()
+    }
+
+    /// Apply ID creation defaults before the current adapter input policy.
+    #[doc(hidden)]
+    pub fn adapter_create_id_input(
+        &self,
+        model: &str,
+        supplied: Option<crate::FieldValue>,
+        policy: AdapterIdInput,
+    ) -> AuthResult<Option<crate::FieldValue>> {
+        let required = match self {
+            Self::Serial => policy.force_allow_id,
+            Self::Uuid => !policy.supports_native_uuid,
+            _ => true,
+        };
+        let supplied =
+            supplied.filter(|value| !value.is_undefined() && !(required && value.is_null()));
+        let value = match supplied {
+            Some(value) => value,
+            None if matches!(self, Self::Uuid) && policy.supports_native_uuid => return Ok(None),
+            None => match self.generate(IdGenerationRequest { model, size: None })? {
+                Some(value) => crate::FieldValue::String(value),
+                None => return Ok(None),
+            },
+        };
+        self.adapter_id_input(value, policy)
+    }
+
+    /// Apply the current adapter ID input policy without converting runtime values to strings.
+    #[doc(hidden)]
+    pub fn adapter_id_input(
+        &self,
+        value: crate::FieldValue,
+        policy: AdapterIdInput,
+    ) -> AuthResult<Option<crate::FieldValue>> {
+        if !value.is_truthy() {
             return Ok(None);
         }
-        Ok(self
-            .generate(IdGenerationRequest { model, size: None })?
-            .filter(|id| !id.is_empty()))
+        match self {
+            Self::Serial => {
+                let number = crate::query::field_number(&value)?;
+                Ok((!number.is_nan()).then_some(crate::FieldValue::Number(number)))
+            }
+            Self::Uuid if !policy.force_allow_id => {
+                Ok((!policy.supports_native_uuid).then_some(value))
+            }
+            Self::Uuid if value.is_string() => {
+                let valid = value.display_utf16()?.to_utf8().is_ok_and(|text| {
+                    text.len() == 36
+                        && uuid::Uuid::parse_str(&text).is_ok_and(|id| {
+                            (1..=5).contains(&id.get_version_num())
+                                && id.get_variant() == uuid::Variant::RFC4122
+                        })
+                });
+                if !valid {
+                    tracing::warn!("Invalid forced UUID; the adapter omits the ID");
+                }
+                Ok(valid.then_some(value))
+            }
+            Self::Uuid if policy.supports_native_uuid => Ok(None),
+            Self::Uuid => Ok(Some(crate::FieldValue::String(
+                uuid::Uuid::new_v4().to_string(),
+            ))),
+            _ => Ok(Some(value)),
+        }
     }
 }
 

@@ -77,6 +77,7 @@ impl EphemeralStore {
                         );
                     }
                 }
+                let _ = input.insert("id".into(), user.id.field_value());
                 Ok(input)
             })
             .collect::<AuthResult<Vec<_>>>()?;
@@ -351,21 +352,40 @@ impl UserStore<StatelessSchema> for EphemeralStore {
                 supports_native_uuid: false,
             },
         )?;
-        let (mut fields, id) = self
+        let mut fields = self
             .config
             .user
-            .create_user_storage_fields(
+            .user_adapter_fields()
+            .storage_fields_with_bound_id(
                 fields,
+                true,
                 || {
                     let Some(policy) = self.model_fields.id_input_policy(EntityRole::User)? else {
-                        return Ok(create_user.id.take());
+                        return Ok(create_user.id.take().map(Value::from));
                     };
                     let row_count = self.lock()?.users.len();
-                    self.generated_id_with_policy("user", create_user.id.take(), row_count, policy)
+                    let id = self.generated_id_with_policy(
+                        "user",
+                        create_user.id.take(),
+                        row_count,
+                        policy,
+                    )?;
+                    Ok(self
+                        .next_serial_id(row_count)
+                        .or_else(|| id.map(Value::from)))
                 },
-                |_, field, value| self.memory_plugin_field_input(field, value),
+                |name, field, value| {
+                    let value = self.memory_plugin_field_input(field, value)?;
+                    if name == "id"
+                        && let Some(id) = self.next_serial_id(self.lock()?.users.len())
+                    {
+                        return Ok(id);
+                    }
+                    Ok(value)
+                },
             )
             .await?;
+        let id = crate::SchemaValue::from_field(fields.get("id").cloned().unwrap_or_default());
         for (name, target) in [
             ("name", &mut create_user.name),
             ("image", &mut create_user.image),
@@ -391,7 +411,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             .or(create_user.display_username.take())
             .flatten();
         let now = crate::FieldDate::from(Utc::now());
-        let id = id.map(crate::SchemaValue::Typed).unwrap_or_default();
+        let _ = fields.remove("id");
         let mut user = UserView {
             additional_fields: fields,
             visible_fields: Some(

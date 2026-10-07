@@ -19,6 +19,9 @@ use std::sync::{Arc, Mutex, OnceLock, Weak};
 type TestResult<T = ()> = Result<T, Box<dyn std::error::Error + Send + Sync>>;
 type Store = SeaOrmStore<BundledSchema>;
 
+#[path = "session_id_policy_tests/create.rs"]
+mod create;
+
 #[derive(Clone, Copy)]
 enum Read {
     None,
@@ -293,7 +296,8 @@ async fn contract(database: DatabaseConnection) -> TestResult {
         Read::Missing,
     )
     .await?;
-    check_aliases(&database).await
+    check_aliases(&database).await?;
+    create::contract(&database).await
 }
 
 #[tokio::test]

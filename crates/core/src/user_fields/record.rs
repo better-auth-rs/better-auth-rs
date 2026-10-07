@@ -719,7 +719,7 @@ fn project_output_value(
     supports_native_dates: bool,
 ) -> Value {
     if !supports_native_dates
-        && !field.references_id()
+        && !field.uses_id_output()
         && matches!(field.field_type, UserFieldType::Date)
     {
         match value {

@@ -51,10 +51,12 @@ impl EphemeralStore {
                     if let Some(value) = &value {
                         let _ = native.insert(name.to_owned(), value.clone());
                     }
-                    Ok(if matches!(name, "name" | "image") {
+                    let key = resolve_field_name(field.field_name.as_deref(), name);
+                    Ok(if key == "id" {
+                        Some(user.id.field_value())
+                    } else if matches!(name, "name" | "image") {
                         value
                     } else {
-                        let key = resolve_field_name(field.field_name.as_deref(), name);
                         user.additional_fields
                             .get(key)
                             .cloned()

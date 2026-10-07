@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
 import { createAdapterFactory } from "@better-auth/core/db/adapter";
-import type { BetterAuthOptions } from "better-auth";
+import { betterAuth, type BetterAuthOptions } from "better-auth";
+
+type IdGeneration = NonNullable<NonNullable<BetterAuthOptions["advanced"]>["database"]>["generateId"];
 
 type ObservationOptions = Pick<BetterAuthOptions, "account" | "session" | "user"> & {
   supportsUUIDs?: boolean;
@@ -8,7 +10,7 @@ type ObservationOptions = Pick<BetterAuthOptions, "account" | "session" | "user"
   found?: Record<string, unknown>;
 };
 
-function observe(generateId: "serial" | "uuid" | false, options: ObservationOptions = {}) {
+function observe(generateId: IdGeneration, options: ObservationOptions = {}) {
   const { supportsUUIDs = true, supportsJSON = true, found, ...schema } = options;
   const calls: { method: string; data?: Record<string, unknown>; where?: { value: unknown }[] }[] = [];
   const adapter = createAdapterFactory({
@@ -25,6 +27,21 @@ function observe(generateId: "serial" | "uuid" | false, options: ObservationOpti
     }),
   })({ advanced: { database: { generateId } }, ...schema, logger: { disabled: true } });
   return { adapter, calls };
+}
+
+async function observeSession(generateId: IdGeneration, options: ObservationOptions & Pick<BetterAuthOptions, "databaseHooks"> = {}) {
+  const { databaseHooks, ...adapterOptions } = options;
+  const { adapter, calls } = observe(generateId, adapterOptions);
+  const context = await betterAuth({
+    database: () => adapter,
+    baseURL: "http://session-id-contract.test",
+    secret: "session-id-contract-secret-at-least-thirty-two-characters",
+    logger: { disabled: true }, telemetry: { enabled: false },
+    advanced: { database: { generateId } },
+    session: options.session,
+    databaseHooks,
+  }).$context;
+  return { internalAdapter: context.internalAdapter, calls };
 }
 
 test("forced UUIDs require canonical hyphenated v1-v5 syntax before database insertion", async () => {
@@ -163,6 +180,158 @@ test("UUID create retains forceAllowId through empty unfiltered reads but loses 
         expect(calls.map(({ method }) => method)).toEqual([read === "missing" ? "findOne" : "findMany", "create"]);
         expect(row.id).toBe(preserved ? supplied : "database-default");
         expect(events).toEqual(["input", `read:${read}`]);
+      }
+    }
+  }
+});
+
+const sessionInput = {
+  token: "session-id-token",
+  expiresAt: new Date("2100-01-02T03:04:05Z"),
+  createdAt: new Date("2030-01-02T03:04:05Z"),
+  updatedAt: new Date("2030-01-02T03:04:05Z"),
+};
+const sessionData = { ...sessionInput, userId: "owner", ipAddress: "", userAgent: "" };
+
+test("internal session creation removes override IDs before hooks and accepts hook IDs without generation", async () => {
+  for (const overrideAll of [false, true]) {
+    const generations: string[] = [];
+    const before: Record<string, unknown>[] = [];
+    const after: Record<string, unknown>[] = [];
+    const { internalAdapter, calls } = await observeSession(({ model }) => {
+      generations.push(model);
+      return "generated-session";
+    }, { databaseHooks: { session: { create: {
+      before(data) {
+        before.push({ ...data });
+        return { data: { id: "hook-session" } };
+      },
+      after(data) { after.push({ ...data }); },
+    } } } });
+    const result = await internalAdapter.createSession("owner", false, { ...sessionInput, id: "request-session" }, overrideAll);
+    expect(before).toStrictEqual([overrideAll ? sessionData : {
+      token: expect.any(String), userId: "owner", ipAddress: "", userAgent: "",
+      expiresAt: expect.any(Date), createdAt: expect.any(Date), updatedAt: expect.any(Date),
+    }]);
+    expect(Object.hasOwn(before[0]!, "id")).toBe(false);
+    const expected = { ...before[0], id: "hook-session" };
+    expect(calls).toStrictEqual([{ method: "create", model: "session", modelKey: "session", data: expected }]);
+    expect(result).toStrictEqual(expected);
+    expect(after).toStrictEqual([expected]);
+    expect(generations).toStrictEqual([]);
+  }
+});
+
+test("internal session hook IDs apply defaults before truthiness checks", async () => {
+  const cases: { patch: Record<string, unknown>; generated: boolean; id?: unknown }[] = [
+    { patch: {}, generated: true },
+    { patch: { id: undefined }, generated: true },
+    { patch: { id: null }, generated: true },
+    { patch: { id: false }, generated: false },
+    { patch: { id: 0 }, generated: false },
+    { patch: { id: NaN }, generated: false },
+    { patch: { id: "" }, generated: false },
+    { patch: { id: 42 }, generated: false, id: 42 },
+  ];
+  for (const { patch, generated, id } of cases) {
+    const generations: string[] = [];
+    const before: Record<string, unknown>[] = [];
+    const { internalAdapter, calls } = await observeSession(({ model }) => {
+      generations.push(model);
+      return "generated-session";
+    }, { databaseHooks: { session: { create: { before(data) {
+      before.push({ ...data });
+      return { data: patch };
+    } } } } });
+    const result = await internalAdapter.createSession("owner", false, sessionInput, true);
+    const writtenId = generated ? "generated-session" : id;
+    const expected = { ...sessionData, ...(writtenId === undefined ? {} : { id: writtenId }) };
+    expect(before).toStrictEqual([sessionData]);
+    expect(calls).toStrictEqual([{ method: "create", model: "session", modelKey: "session", data: expected }]);
+    expect(result).toStrictEqual({ ...sessionData, id: String(writtenId ?? "database-default") });
+    expect(generations).toStrictEqual(generated ? ["session"] : []);
+  }
+});
+
+test("internal session hook IDs and physical ID aliases follow schema order", async () => {
+  for (const idFirst of [false, true]) {
+    const generations: string[] = [];
+    const before: Record<string, unknown>[] = [];
+    const id = { type: "string" as const };
+    const aliasId = { type: "string" as const, fieldName: "id" };
+    const { internalAdapter, calls } = await observeSession(({ model }) => {
+      generations.push(model);
+      return "generated-session";
+    }, {
+      session: { additionalFields: idFirst ? { id, aliasId } : { aliasId, id } },
+      databaseHooks: { session: { create: { before(data) {
+        before.push({ ...data });
+        return { data: { id: "hook-session", aliasId: "alias-session" } };
+      } } } },
+    });
+    const result = await internalAdapter.createSession("owner", false, { ...sessionInput, id: "request-session" }, true);
+    const expectedId = idFirst ? "alias-session" : "hook-session";
+    expect(before).toStrictEqual([sessionData]);
+    expect(calls).toStrictEqual([{
+      method: "create", model: "session", modelKey: "session", data: { ...sessionData, id: expectedId },
+    }]);
+    expect(result).toStrictEqual({ ...sessionData, id: expectedId, aliasId: expectedId });
+    expect(generations).toStrictEqual([]);
+  }
+});
+
+test("session update observes forced ID policy left by a caught nested create failure", async () => {
+  const validId = "63747488-4175-41a0-a68e-153881808aec";
+  const timestamp = sessionInput.updatedAt;
+  for (const supportsUUIDs of [false, true]) {
+    for (const idFirst of [false, true]) {
+      for (const supplied of [validId, "invalid-uuid"]) {
+        for (const source of ["value", "undefined", "missing"] as const) {
+          for (const failure of ["hook", "field"] as const) {
+            const events: unknown[] = [];
+            const nestedError = `nested-${failure}-failure`;
+            const id = { type: "string" as const };
+            const label = { type: "string" as const, transform: { async input(value: unknown) {
+              events.push(["input", value]);
+              if (value === "inner") throw new Error("nested-field-failure");
+              await expect(internalAdapter.createSession("owner", false, {
+                ...sessionInput, id: "request-session", label: "inner",
+              }, true)).rejects.toThrow(nestedError);
+              events.push(["caught", nestedError]);
+              return value;
+            } } };
+            const { internalAdapter, calls } = await observeSession("uuid", {
+              supportsUUIDs,
+              session: { additionalFields: idFirst ? { id, label } : { label, id } },
+              databaseHooks: { session: { create: {
+                before(data) {
+                  events.push(["create-before", { ...data }]);
+                  if (failure === "hook") throw new Error(nestedError);
+                  const patch: Record<string, unknown> = source === "missing" ? {} : { id: source === "value" ? validId : undefined };
+                  return { data: patch };
+                },
+                after(data) { events.push(["create-after", { ...data }]); },
+              } } },
+            });
+            const result = await internalAdapter.updateSession("session-token", { id: supplied, updatedAt: timestamp, label: "outer" });
+            const forced = !idFirst && failure === "field" && source !== "missing";
+            const retained = forced ? supplied === validId : !supportsUUIDs;
+            const expected = { updatedAt: timestamp, label: "outer", ...(retained ? { id: supplied } : {}) };
+            expect(calls).toStrictEqual([{
+              method: "update", model: "session", modelKey: "session", data: expected, update: expected,
+              where: [{ field: "token", value: "session-token", operator: "eq", connector: "AND", mode: "sensitive" }],
+            }]);
+            expect(result).toStrictEqual({
+              expiresAt: undefined, token: undefined, createdAt: undefined, updatedAt: timestamp,
+              ipAddress: undefined, userAgent: undefined, userId: undefined,
+              id: retained ? supplied : "1", label: "outer",
+            });
+            expect(events).toStrictEqual([
+              ["input", "outer"], ["create-before", { ...sessionData, label: "inner" }],
+              ...(failure === "field" ? [["input", "inner"]] : []), ["caught", nestedError],
+            ]);
+          }
+        }
       }
     }
   }

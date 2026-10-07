@@ -158,6 +158,7 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
         &self,
         input: &mut CreateSession,
     ) -> AuthResult<bool> {
+        let _ = input.additional_fields.remove("id");
         let transaction = EphemeralTransaction {
             store: self.clone(),
         };
@@ -224,23 +225,45 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
         } else {
             self.memory_reference_id_input(create_session.user_id.into_field_value())?
         };
-        self.model_fields
-            .begin_id_input(EntityRole::Session, crate::id::AdapterIdInput::default())?;
-        let (mut additional_fields, id) = schema
-            .create_adapter_storage_fields(
+        let mut supplied_id = fields.remove("id");
+        self.model_fields.begin_id_input(
+            EntityRole::Session,
+            crate::id::AdapterIdInput {
+                force_allow_id: supplied_id.is_some(),
+                supports_native_uuid: false,
+            },
+        )?;
+        let mut additional_fields = schema
+            .storage_fields_with_bound_id(
                 fields,
+                true,
                 || {
+                    let supplied = supplied_id.take();
                     let Some(policy) = self.model_fields.id_input_policy(EntityRole::Session)?
                     else {
-                        return Ok(None);
+                        return Ok(supplied.filter(|value| !value.is_undefined()));
                     };
                     let row_count = self.lock()?.sessions.len();
-                    self.generated_id_with_policy("session", None, row_count, policy)
+                    let value = self
+                        .config
+                        .advanced
+                        .database
+                        .generate_id()
+                        .adapter_create_id_input("session", supplied, policy)?;
+                    Ok(self.next_serial_id(row_count).or(value))
                 },
-                |_, field, value| self.memory_plugin_field_input(field, value),
+                |name, field, value| {
+                    let value = self.memory_plugin_field_input(field, value)?;
+                    Ok(if name == "id" {
+                        self.next_serial_id(self.lock()?.sessions.len())
+                            .unwrap_or(value)
+                    } else {
+                        value
+                    })
+                },
             )
             .await?;
-        let id = id.map(crate::SchemaValue::Typed).unwrap_or_default();
+        let id = crate::SchemaValue::from_field(additional_fields.remove("id").unwrap_or_default());
         if configured_user_id {
             user_id = crate::SchemaValue::from_field(
                 additional_fields

@@ -3,7 +3,7 @@ use crate::store::database_hooks::{DatabaseHookContext, DatabaseHookUpdate, Sess
 use crate::store::{MemoryCacheAdapter, SecondaryStorage, secondary::SecondaryStore};
 use crate::user_fields::UserFieldType;
 
-fn seed() -> AuthResult<SessionView> {
+pub(super) fn seed() -> AuthResult<SessionView> {
     Ok(SessionView {
         visible_fields: Some(Default::default()),
         id: crate::SchemaValue::from_field(Value::Number(1.0)),

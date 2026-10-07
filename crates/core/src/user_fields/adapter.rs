@@ -87,7 +87,9 @@ impl UserConfig {
             .await
     }
 
-    async fn storage_fields_with_bound_id(
+    /// Bind ID and application fields to the same storage keys in schema order.
+    #[doc(hidden)]
+    pub async fn storage_fields_with_bound_id(
         &self,
         input: FieldMap,
         create: bool,
@@ -208,6 +210,10 @@ impl UserFieldConfig {
             .is_some_and(|reference| reference.field == "id")
     }
 
+    pub(crate) fn uses_id_output(&self) -> bool {
+        self.references_id() || self.field_name.as_deref() == Some("id")
+    }
+
     /// Await the output policy before decoding adapter storage values.
     pub async fn adapter_output(
         &self,
@@ -242,7 +248,10 @@ impl UserFieldConfig {
     }
 
     fn prepare_output(&self, value: Value, supports_native_json: bool) -> AuthResult<Value> {
-        if !supports_native_json && matches!(self.field_type, UserFieldType::Json) {
+        if !supports_native_json
+            && self.field_name.as_deref() != Some("id")
+            && matches!(self.field_type, UserFieldType::Json)
+        {
             match value {
                 Value::Object(_) | Value::Array(_) | Value::Date(_) => json_text(value),
                 value => Ok(value),
@@ -257,7 +266,7 @@ impl UserFieldConfig {
         value: Value,
         capabilities: FieldOutputCapabilities,
     ) -> AuthResult<Value> {
-        if self.references_id() {
+        if self.uses_id_output() {
             return if value.is_null() || value.is_undefined() {
                 Ok(value)
             } else {

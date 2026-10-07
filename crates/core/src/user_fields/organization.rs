@@ -436,7 +436,7 @@ pub(crate) fn assign_output(
     field: &UserFieldConfig,
     mut value: Value,
 ) -> AuthResult<()> {
-    if !field.references_id() {
+    if !field.uses_id_output() {
         field.normalize_date(&mut value)?;
     }
     let _ = output.insert(name.to_owned(), value);

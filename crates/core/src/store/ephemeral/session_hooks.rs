@@ -135,21 +135,15 @@ impl EphemeralStore {
                     let Some(value) = supplied_id.take() else {
                         return Ok(None);
                     };
-                    if !self.model_fields.id_input_active(EntityRole::Session)? {
+                    let Some(policy) = self.model_fields.id_input_policy(EntityRole::Session)?
+                    else {
                         return Ok(Some(value));
-                    }
-                    if !value.is_truthy() {
-                        return Ok(None);
-                    }
-                    if matches!(
-                        self.config.advanced.database.generate_id(),
-                        crate::id::IdGeneration::Serial
-                    ) {
-                        let number = crate::query::field_number(&value)?;
-                        Ok((!number.is_nan()).then_some(Value::Number(number)))
-                    } else {
-                        Ok(Some(value))
-                    }
+                    };
+                    self.config
+                        .advanced
+                        .database
+                        .generate_id()
+                        .adapter_id_input(value, policy)
                 },
                 |_, field, value| self.memory_plugin_field_input(field, value),
             )

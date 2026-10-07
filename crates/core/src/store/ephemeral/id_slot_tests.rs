@@ -5,8 +5,10 @@ use serde_json::{Value as JsonValue, json};
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+mod session_creates;
 mod session_updates;
 mod sessions;
+mod user_create_alias;
 
 const CREATED_AT: &str = "2030-01-02T03:04:05.000Z";
 const EXPIRES_AT: &str = "2100-01-02T03:04:05.000Z";
