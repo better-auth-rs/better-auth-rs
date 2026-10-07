@@ -8,6 +8,22 @@ use crate::types::{
 use crate::{AuthConfig, AuthResult, AuthSchema};
 use async_trait::async_trait;
 
+/// Preserve the awaited adapter lookup between hooks and adapter field conversion.
+#[doc(hidden)]
+pub async fn await_adapter_lookup() {
+    let mut queued = false;
+    std::future::poll_fn(|context| {
+        if queued {
+            return std::task::Poll::Ready(());
+        }
+        queued = true;
+        // Wake the callback queue directly; Tokio's deferred yields reverse ready peers.
+        context.waker().wake_by_ref();
+        std::task::Poll::Pending
+    })
+    .await;
+}
+
 /// Partial session values supplied to update hooks.
 #[derive(Clone, Default)]
 pub struct SessionUpdate {
@@ -326,9 +342,12 @@ pub trait DatabaseHooks<S: AuthSchema>: Send + Sync {
 }
 
 impl SessionUpdate {
-    /// Serialize supplied fields using public names, preserving explicit null values.
+    /// Serialize supplied fields using public names and adapter ID precedence, preserving explicit null values.
     pub fn into_public_fields(self) -> AuthResult<crate::FieldMap> {
         let mut fields = self.additional_fields;
+        if let Some(id) = self.id {
+            let _ = fields.entry("id".into()).or_insert(id.into());
+        }
         macro_rules! supplied {
             ($($field:ident => $name:literal),* $(,)?) => {$(
                 if let Some(value) = self.$field {
@@ -337,7 +356,7 @@ impl SessionUpdate {
             )*};
         }
         supplied!(
-            id => "id", token => "token", user_id => "userId",
+            token => "token", user_id => "userId",
             expires_at => "expiresAt", created_at => "createdAt", updated_at => "updatedAt",
             ip_address => "ipAddress", user_agent => "userAgent",
             impersonated_by => "impersonatedBy", active_organization_id => "activeOrganizationId",

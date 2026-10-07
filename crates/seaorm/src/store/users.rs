@@ -1,5 +1,6 @@
 use super::instrumentation::database_operation;
 use async_trait::async_trait;
+use better_auth_core::id::AdapterIdInput;
 use better_auth_core::store::schema::{EntityRole, resolve_field_name};
 use chrono::Utc;
 use sea_orm::{
@@ -75,7 +76,7 @@ where
     }
 
     async fn user_record_by_email(&self, email: &str) -> AuthResult<Option<S::User>> {
-        self.model_fields.begin_id_input(EntityRole::User)?;
+        self.model_fields.begin_id_query(EntityRole::User)?;
         let email = normalize_user_email(email);
         database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
             self.config(),
@@ -148,7 +149,7 @@ where
         let Some(column) = S::User::username_column() else {
             return Ok(None);
         };
-        self.model_fields.begin_id_input(EntityRole::User)?;
+        self.model_fields.begin_id_query(EntityRole::User)?;
         match database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
             self.config(),
             "findOne",
@@ -194,7 +195,13 @@ where
             }
             create_user.prepare_user_fields(&self.config().user)?;
         }
-        self.model_fields.begin_id_input(EntityRole::User)?;
+        self.model_fields.begin_id_input(
+            EntityRole::User,
+            AdapterIdInput {
+                force_allow_id: create_user.id.is_some(),
+                supports_native_uuid: db.get_database_backend() == sea_orm::DbBackend::Postgres,
+            },
+        )?;
         let now = Utc::now();
         let input = create_user.take_user_field_input(&self.config().user)?;
         let (mut fields, user_id) = self
@@ -203,8 +210,10 @@ where
             .create_user_storage_fields(
                 input,
                 || {
-                    let id = if self.model_fields.id_input_active(EntityRole::User)? {
-                        self.generated_id("user", create_user.id.take())?
+                    let id = if let Some(policy) =
+                        self.model_fields.id_input_policy(EntityRole::User)?
+                    {
+                        self.generated_id_with_policy("user", create_user.id.take(), policy)?
                     } else {
                         create_user.id.take()
                     };
@@ -371,7 +380,13 @@ where
         user_id: <S::User as SeaOrmUserModel>::Id,
         mut update: UpdateUser,
     ) -> AuthResult<Option<S::User>> {
-        self.model_fields.begin_id_input(EntityRole::User)?;
+        self.model_fields.begin_id_input(
+            EntityRole::User,
+            AdapterIdInput {
+                force_allow_id: false,
+                supports_native_uuid: db.get_database_backend() == sea_orm::DbBackend::Postgres,
+            },
+        )?;
         let mut fields = self
             .config()
             .user
@@ -512,7 +527,7 @@ where
         &self,
         id: &str,
     ) -> AuthResult<Option<better_auth_core::wire::UserView>> {
-        self.model_fields.begin_id_input(EntityRole::User)?;
+        self.model_fields.begin_id_query(EntityRole::User)?;
         let user_id = self.parse_id(id, S::User::parse_id)?;
         match database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
             self.config(),
@@ -537,7 +552,7 @@ where
         &self,
         id: &better_auth_core::FieldValue,
     ) -> AuthResult<Option<better_auth_core::wire::UserView>> {
-        self.model_fields.begin_id_input(EntityRole::User)?;
+        self.model_fields.begin_id_query(EntityRole::User)?;
         if let Some(id) = id.as_str() {
             return self.get_user_by_id(id).await;
         }
@@ -569,7 +584,7 @@ where
         ids: &[String],
         limit: f64,
     ) -> AuthResult<Vec<better_auth_core::wire::UserView>> {
-        self.model_fields.begin_id_input(EntityRole::User)?;
+        self.model_fields.begin_id_query(EntityRole::User)?;
         let user_ids = ids
             .iter()
             .map(|id| self.parse_id(id, S::User::parse_id))
@@ -693,7 +708,7 @@ where
     ) -> AuthResult<Option<better_auth_core::wire::UserView>> {
         let column = S::User::phone_number_column()
             .ok_or_else(|| AuthError::config("The user entity requires phone_number"))?;
-        self.model_fields.begin_id_input(EntityRole::User)?;
+        self.model_fields.begin_id_query(EntityRole::User)?;
         match database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
             self.config(),
             "findOne",

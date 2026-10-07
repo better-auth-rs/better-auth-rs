@@ -201,11 +201,24 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
     }
 
     fn generated_id(&self, model: &str, supplied: Option<String>) -> AuthResult<Option<String>> {
-        self.config.advanced.database.generate_id().adapter_id(
-            model,
-            supplied,
-            self.db.get_database_backend() == sea_orm::DbBackend::Postgres,
-        )
+        let policy = better_auth_core::id::AdapterIdInput {
+            force_allow_id: supplied.is_some(),
+            supports_native_uuid: self.db.get_database_backend() == sea_orm::DbBackend::Postgres,
+        };
+        self.generated_id_with_policy(model, supplied, policy)
+    }
+
+    fn generated_id_with_policy(
+        &self,
+        model: &str,
+        supplied: Option<String>,
+        policy: better_auth_core::id::AdapterIdInput,
+    ) -> AuthResult<Option<String>> {
+        self.config
+            .advanced
+            .database
+            .generate_id()
+            .adapter_id_with_policy(model, supplied, policy)
     }
 
     fn create_fields(
@@ -480,7 +493,7 @@ where
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
         self.store
             .model_fields
-            .begin_id_input(better_auth_core::store::schema::EntityRole::User)?;
+            .begin_id_query(better_auth_core::store::schema::EntityRole::User)?;
         let id = self.store.parse_id(id, S::User::parse_id)?;
         match <S::User as SeaOrmUserModel>::Entity::find()
             .filter(<S::User as SeaOrmUserModel>::id_column().eq(id))
@@ -500,7 +513,7 @@ where
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
         self.store
             .model_fields
-            .begin_id_input(better_auth_core::store::schema::EntityRole::User)?;
+            .begin_id_query(better_auth_core::store::schema::EntityRole::User)?;
         match <S::User as SeaOrmUserModel>::Entity::find()
             .filter(
                 <S::User as SeaOrmUserModel>::email_column()

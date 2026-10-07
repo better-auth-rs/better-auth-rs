@@ -263,7 +263,7 @@ impl EphemeralStore {
         token: &str,
     ) -> AuthResult<Option<SessionSnapshot>> {
         self.model_fields
-            .begin_id_input(crate::store::schema::EntityRole::Session)?;
+            .begin_id_query(crate::store::schema::EntityRole::Session)?;
         let rows = self
             .raw("session", "findOne", |state| {
                 match state.sessions.find(|row| row.token == token)? {
@@ -292,7 +292,7 @@ impl EphemeralStore {
         only_active: bool,
     ) -> AuthResult<Vec<SessionSnapshot>> {
         self.model_fields
-            .begin_id_input(crate::store::schema::EntityRole::Session)?;
+            .begin_id_query(crate::store::schema::EntityRole::Session)?;
         let now = Utc::now();
         let rows = self
             .raw("session", "findMany", |state| {

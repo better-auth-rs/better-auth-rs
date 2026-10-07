@@ -111,6 +111,20 @@ impl EphemeralStore {
         supplied: Option<String>,
         row_count: usize,
     ) -> AuthResult<Option<String>> {
+        let policy = crate::id::AdapterIdInput {
+            force_allow_id: supplied.is_some(),
+            supports_native_uuid: false,
+        };
+        self.generated_id_with_policy(model, supplied, row_count, policy)
+    }
+
+    fn generated_id_with_policy(
+        &self,
+        model: &str,
+        supplied: Option<String>,
+        row_count: usize,
+        policy: crate::id::AdapterIdInput,
+    ) -> AuthResult<Option<String>> {
         if matches!(
             self.config.advanced.database.generate_id(),
             crate::id::IdGeneration::Serial
@@ -121,7 +135,7 @@ impl EphemeralStore {
             .advanced
             .database
             .generate_id()
-            .adapter_id(model, supplied, false)
+            .adapter_id_with_policy(model, supplied, policy)
     }
 
     fn next_serial_id(&self, row_count: usize) -> Option<Value> {

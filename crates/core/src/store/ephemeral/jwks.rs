@@ -69,7 +69,7 @@ impl EphemeralStore {
 #[async_trait]
 impl crate::store::JwksStore for EphemeralStore {
     async fn get_jwk(&self, id: &str) -> AuthResult<Option<crate::Jwk>> {
-        self.model_fields.begin_id_input(EntityRole::Jwk)?;
+        self.model_fields.begin_id_query(EntityRole::Jwk)?;
         let id = self.memory_primary_id_query(&Value::from(id))?;
         let selected = self
             .raw("jwks", "findOne", |state| {
@@ -109,21 +109,22 @@ impl crate::store::JwksStore for EphemeralStore {
     }
 
     async fn create_jwk(&self, input: crate::CreateJwk) -> AuthResult<crate::Jwk> {
-        self.model_fields.begin_id_input(EntityRole::Jwk)?;
+        self.model_fields
+            .begin_id_input(EntityRole::Jwk, crate::id::AdapterIdInput::default())?;
         let (additional_fields, id) = self
             .model_fields
             .fields(EntityRole::Jwk)
             .create_adapter_storage_fields(
                 input.additional_fields,
                 || {
-                    if !self.model_fields.id_input_active(EntityRole::Jwk)? {
+                    let Some(policy) = self.model_fields.id_input_policy(EntityRole::Jwk)? else {
                         return Ok(None);
-                    }
+                    };
                     self.config
                         .advanced
                         .database
                         .generate_id()
-                        .adapter_id("jwks", None, false)
+                        .adapter_id_with_policy("jwks", None, policy)
                 },
                 |_, field, value| self.memory_plugin_field_input(field, value),
             )

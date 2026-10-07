@@ -49,6 +49,16 @@ pub enum IdGeneration {
     Custom(IdGenerator),
 }
 
+/// Parameters retained by the adapter's current ID input field.
+#[doc(hidden)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct AdapterIdInput {
+    /// Accept an explicitly supplied ID through the force-allowed create operation.
+    pub force_allow_id: bool,
+    /// Let the database generate UUIDs instead of installing a UUID default callback.
+    pub supports_native_uuid: bool,
+}
+
 impl IdGeneration {
     /// Apply the serial adapter's Number conversion before a model parses an ID or reference.
     /// Other generation modes retain the caller's identifier exactly.
@@ -77,9 +87,27 @@ impl IdGeneration {
         supplied: Option<String>,
         supports_native_uuid: bool,
     ) -> AuthResult<Option<String>> {
+        let policy = AdapterIdInput {
+            force_allow_id: supplied.is_some(),
+            supports_native_uuid,
+        };
+        self.adapter_id_with_policy(model, supplied, policy)
+    }
+
+    /// Resolve an ID with the policy active after preceding schema callbacks.
+    #[doc(hidden)]
+    pub fn adapter_id_with_policy(
+        &self,
+        model: &str,
+        supplied: Option<String>,
+        policy: AdapterIdInput,
+    ) -> AuthResult<Option<String>> {
         if let Some(id) = supplied {
             if id.is_empty() {
                 return Ok(None);
+            }
+            if matches!(self, Self::Uuid) && !policy.force_allow_id {
+                return Ok((!policy.supports_native_uuid).then_some(id));
             }
             if matches!(self, Self::Uuid)
                 && !(id.len() == 36
@@ -97,7 +125,7 @@ impl IdGeneration {
             }
             return Ok(Some(id));
         }
-        if matches!(self, Self::Uuid) && supports_native_uuid {
+        if matches!(self, Self::Uuid) && policy.supports_native_uuid {
             return Ok(None);
         }
         Ok(self

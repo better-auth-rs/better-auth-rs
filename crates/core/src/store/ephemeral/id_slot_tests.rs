@@ -5,6 +5,7 @@ use serde_json::{Value as JsonValue, json};
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+mod session_updates;
 mod sessions;
 
 const CREATED_AT: &str = "2030-01-02T03:04:05.000Z";

@@ -115,7 +115,7 @@ where
             .delete_user_accounts_with_connection(db, tx, id)
             .await?;
         self.model_fields
-            .begin_id_input(better_auth_core::store::schema::EntityRole::User)?;
+            .begin_id_query(better_auth_core::store::schema::EntityRole::User)?;
         let user_id = self.parse_id(id, S::User::parse_id)?;
         let snapshot = database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
             self.config(),
@@ -167,7 +167,7 @@ where
         )
         .await?;
         self.model_fields
-            .begin_id_input(better_auth_core::store::schema::EntityRole::User)?;
+            .begin_id_query(better_auth_core::store::schema::EntityRole::User)?;
         let _ = database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
             self.config(),
             "delete",

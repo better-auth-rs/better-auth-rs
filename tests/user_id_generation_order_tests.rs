@@ -387,3 +387,93 @@ async fn reentrant_serial_user() -> AuthResult<()> {
 async fn memory_user_serial_id_is_assigned_after_reentrant_field_input() -> AuthResult<()> {
     reentrant_serial_user().await
 }
+
+#[tokio::test]
+async fn memory_uuid_create_resolves_force_allow_id_after_same_runtime_reads() -> AuthResult<()> {
+    for id_first in [false, true] {
+        for missing in [false, true] {
+            let target = Arc::new(OnceLock::<Weak<EphemeralStore>>::new());
+            let callback_target = target.clone();
+            let events = Trace::default();
+            let callback_events = events.clone();
+            let mut config = AuthConfig::default();
+            config.advanced.database.generate_id = Some(IdGeneration::Uuid);
+            let label = UserFieldConfig {
+                transform: Some(FieldTransforms {
+                    input: Some(UserFieldTransform::new_async(move |value| {
+                        let target = callback_target.clone();
+                        let events = callback_events.clone();
+                        async move {
+                            record(&events, json!(["input", value.json()?]))?;
+                            let store = target.get().and_then(Weak::upgrade).ok_or_else(|| {
+                                AuthError::internal("UUID callback store is unavailable")
+                            })?;
+                            if missing {
+                                assert!(store.get_user_by_id("missing-user").await?.is_none());
+                            } else {
+                                assert_eq!(
+                                    store.list_users(ListUsersParams::default()).await?,
+                                    (Vec::new(), 0)
+                                );
+                            }
+                            record(
+                                &events,
+                                json!(["read", if missing { "missing" } else { "empty" }]),
+                            )?;
+                            Ok(value)
+                        }
+                    })),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            };
+            let id = UserFieldConfig {
+                transform: Some(FieldTransforms {
+                    input: Some(UserFieldTransform::new(|_| {
+                        Err(AuthError::internal("Application ID input must be replaced"))
+                    })),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            };
+            config.user.additional_fields = Some(
+                if id_first {
+                    [("id".into(), id), ("label".into(), label)]
+                } else {
+                    [("label".into(), label), ("id".into(), id)]
+                }
+                .into(),
+            );
+            let store = Arc::new(EphemeralStore::new(Arc::new(config)));
+            target
+                .set(Arc::downgrade(&store))
+                .map_err(|_| AuthError::internal("UUID callback store was already assigned"))?;
+            let input = CreateUser {
+                id: Some("not-a-uuid".into()),
+                ..serial_user("owner")
+            };
+            let row = store.create_user(input).await?;
+            assert_eq!(
+                row.id.field_value(),
+                if !id_first && missing {
+                    "not-a-uuid".into()
+                } else {
+                    FieldValue::Undefined
+                }
+            );
+            assert_eq!(row.additional_fields.get("label"), Some(&"owner".into()));
+            assert_eq!(
+                take_events(&events)?,
+                [
+                    json!(["input", "owner"]),
+                    json!(["read", if missing { "missing" } else { "empty" }])
+                ]
+            );
+            assert_eq!(
+                store.list_users(ListUsersParams::default()).await?,
+                (vec![row], 1)
+            );
+        }
+    }
+    Ok(())
+}

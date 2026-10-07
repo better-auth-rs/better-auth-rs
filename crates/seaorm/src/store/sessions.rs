@@ -6,6 +6,7 @@ use sea_orm::{
     QueryFilter, QuerySelect, sea_query::ExprTrait,
 };
 
+use better_auth_core::id::AdapterIdInput;
 use better_auth_core::store::schema::EntityRole;
 use better_auth_core::store::{SessionStore, SessionUpdateWriter};
 
@@ -126,7 +127,14 @@ where
     {
         self.validate_session_fields()?;
         let schema = self.config().session.adapter_schema();
-        self.model_fields.begin_id_input(EntityRole::Session)?;
+        self.model_fields.begin_id_input(
+            EntityRole::Session,
+            AdapterIdInput {
+                force_allow_id: false,
+                supports_native_uuid: self.connection().get_database_backend()
+                    == sea_orm::DbBackend::Postgres,
+            },
+        )?;
         let fields = schema
             .storage_fields_with_binding(Default::default(), false, |name, field, value| {
                 crate::reference_id::input_binding(
@@ -239,15 +247,22 @@ where
         }
         self.validate_session_fields()?;
         let schema = self.config().session.adapter_schema();
-        self.model_fields.begin_id_input(EntityRole::Session)?;
+        self.model_fields.begin_id_input(
+            EntityRole::Session,
+            AdapterIdInput {
+                force_allow_id: false,
+                supports_native_uuid: db.get_database_backend() == sea_orm::DbBackend::Postgres,
+            },
+        )?;
         let (fields, id) = schema
             .create_adapter_storage_fields(
                 fields,
                 || {
-                    if !self.model_fields.id_input_active(EntityRole::Session)? {
+                    let Some(policy) = self.model_fields.id_input_policy(EntityRole::Session)?
+                    else {
                         return Ok(None);
-                    }
-                    self.generated_id("session", None)?
+                    };
+                    self.generated_id_with_policy("session", None, policy)?
                         .as_deref()
                         .map(S::Session::parse_id)
                         .transpose()
@@ -350,8 +365,7 @@ where
             None => (true, None),
         };
         let session = if write_database {
-            // Upstream awaits adapter lookup after hooks and before field conversion.
-            tokio::task::yield_now().await;
+            better_auth_core::store::database_hooks::await_adapter_lookup().await;
             self.write_session_update(db, token, update).await?
         } else {
             cached
@@ -389,7 +403,13 @@ where
         let backend = db.get_database_backend();
         let mut active = <S::Session as SeaOrmSessionModel>::ActiveModel::default();
         self.validate_session_fields()?;
-        self.model_fields.begin_id_input(EntityRole::Session)?;
+        self.model_fields.begin_id_input(
+            EntityRole::Session,
+            AdapterIdInput {
+                force_allow_id: false,
+                supports_native_uuid: backend == sea_orm::DbBackend::Postgres,
+            },
+        )?;
         let mut input = std::mem::take(&mut update.additional_fields);
         let typed_id = update.id.take().map(better_auth_core::FieldValue::from);
         let mut supplied_id = input.remove("id").or(typed_id);
@@ -403,9 +423,10 @@ where
                     let Some(value) = supplied_id.take() else {
                         return Ok(None);
                     };
-                    if !self.model_fields.id_input_active(EntityRole::Session)? {
+                    let Some(policy) = self.model_fields.id_input_policy(EntityRole::Session)?
+                    else {
                         return Ok(Some(value));
-                    }
+                    };
                     if !value.is_truthy() {
                         return Ok(None);
                     }
@@ -416,7 +437,7 @@ where
                                 .then_some(better_auth_core::FieldValue::Number(number)))
                         }
                         better_auth_core::id::IdGeneration::Uuid
-                            if backend == sea_orm::DbBackend::Postgres =>
+                            if policy.supports_native_uuid && !policy.force_allow_id =>
                         {
                             Ok(None)
                         }
@@ -551,7 +572,7 @@ where
         &self,
         token: &str,
     ) -> AuthResult<Option<better_auth_core::wire::SessionView>> {
-        self.model_fields.begin_id_input(EntityRole::Session)?;
+        self.model_fields.begin_id_query(EntityRole::Session)?;
         match database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
             self.config(),
             "findOne",
@@ -590,7 +611,7 @@ where
                 .await?
                 .map(|session| (session, None)));
         }
-        self.model_fields.begin_id_input(EntityRole::Session)?;
+        self.model_fields.begin_id_query(EntityRole::Session)?;
         self.model_fields
             .canonicalize_id(better_auth_core::store::schema::EntityRole::User)?;
         let query = super::joins::joined_query::<
@@ -640,7 +661,7 @@ where
             Option<better_auth_core::session::SessionData>,
         )>,
     > {
-        self.model_fields.begin_id_input(EntityRole::Session)?;
+        self.model_fields.begin_id_query(EntityRole::Session)?;
         let mut condition = Condition::all()
             .add(S::Session::token_column().is_in(tokens.iter().cloned()))
             .add_option(S::Session::active_column().map(|column| column.eq(true)));
@@ -708,7 +729,7 @@ where
                             .into_value();
                         let user = match owner_id {
                             Some(owner_id) => {
-                                self.model_fields.begin_id_input(
+                                self.model_fields.begin_id_query(
                                     better_auth_core::store::schema::EntityRole::User,
                                 )?;
                                 database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
@@ -750,7 +771,7 @@ where
         &self,
         user_id: &str,
     ) -> AuthResult<Vec<better_auth_core::wire::SessionView>> {
-        self.model_fields.begin_id_input(EntityRole::Session)?;
+        self.model_fields.begin_id_query(EntityRole::Session)?;
         let user_id = self.parse_id(user_id, <S::Session as SeaOrmSessionModel>::parse_user_id)?;
         match database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
             self.config(),
@@ -815,7 +836,7 @@ where
     }
 
     async fn delete_session(&self, token: &str) -> AuthResult<()> {
-        self.model_fields.begin_id_input(EntityRole::Session)?;
+        self.model_fields.begin_id_query(EntityRole::Session)?;
         let snapshot = database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
             self.config(),
             "findOne",
@@ -850,7 +871,7 @@ where
                 return Ok(());
             }
         }
-        self.model_fields.begin_id_input(EntityRole::Session)?;
+        self.model_fields.begin_id_query(EntityRole::Session)?;
         let _ = database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
             self.config(),
             "delete",

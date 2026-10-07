@@ -2,6 +2,7 @@ use super::instrumentation::database_operation;
 use super::plugin_models::Entity;
 use crate::SeaOrmPluginModel;
 use async_trait::async_trait;
+use better_auth_core::id::AdapterIdInput;
 use better_auth_core::store::WalletStore;
 use better_auth_core::store::schema::EntityRole;
 use better_auth_core::types::{CreateWalletAddress, WalletAddress};
@@ -61,7 +62,7 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         chain_id: Option<i64>,
     ) -> AuthResult<Option<WalletAddress>> {
         self.model_fields
-            .begin_id_input(EntityRole::WalletAddress)?;
+            .begin_id_query(EntityRole::WalletAddress)?;
         let query = Entity::<P::WalletAddress>::find()
             .filter(P::WalletAddress::column("address")?.eq(address));
         let query = match chain_id {
@@ -83,8 +84,13 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         connection: &impl ConnectionTrait,
         value: CreateWalletAddress,
     ) -> AuthResult<WalletAddress> {
-        self.model_fields
-            .begin_id_input(EntityRole::WalletAddress)?;
+        self.model_fields.begin_id_input(
+            EntityRole::WalletAddress,
+            AdapterIdInput {
+                force_allow_id: false,
+                supports_native_uuid: connection.get_database_backend() == DbBackend::Postgres,
+            },
+        )?;
         let mut native = FieldMap::from_iter([
             ("user_id".to_owned(), (value.user_id).into_field()),
             ("address".to_owned(), (value.address).into_field()),
@@ -98,11 +104,11 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
             self.config().advanced.database.generate_id(),
             connection.get_database_backend(),
             || {
-                if self
+                if let Some(policy) = self
                     .model_fields
-                    .id_input_active(EntityRole::WalletAddress)?
+                    .id_input_policy(EntityRole::WalletAddress)?
                 {
-                    self.generated_id("walletAddress", None)
+                    self.generated_id_with_policy("walletAddress", None, policy)
                 } else {
                     Ok(None)
                 }

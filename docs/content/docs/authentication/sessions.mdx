@@ -206,7 +206,9 @@ Session creation evaluates configured defaults before persistence. A public upda
 
 Memory session fields use the [Memory JSON and array representation](/docs/concepts/users-accounts#memory-json-and-arrays). JSON output callbacks receive stored text before decoding; declared string and number arrays remain native arrays. This conversion applies to database-backed Memory rows, not secondary-only session caches.
 
-Memory and SQL session updates yield after before-hooks and any secondary write, before adapter field conversion and persistence. This preserves the upstream adapter-lookup boundary for concurrent field callbacks. Cancelled updates and secondary-only writes retain their existing control flow. This boundary does not establish complete JavaScript Promise scheduling equivalence.
+Direct Memory store updates resolve supplied IDs at the configured ID position. A supplied `SessionUpdate.additional_fields["id"]` takes precedence over `SessionUpdate.id`, including explicit `Undefined`. Secondary writes use the same ID input precedence. Fields mapped to `id` share the final primary-key value according to schema order. An omitted value does not erase an earlier alias write. Aliased ID outputs run their configured callback, preserve `Null` and `Undefined`, and convert other values to strings.
+
+Memory and SQL session updates suspend once after before-hooks and any secondary write, before adapter field conversion and persistence. The continuation wakes the callback queue directly, preserving the upstream adapter-lookup boundary without Tokio's reverse deferred wake order. Cancelled updates and secondary-only writes retain their existing control flow. This boundary does not establish complete JavaScript Promise scheduling equivalence.
 
 ## Two-Factor Interaction
 

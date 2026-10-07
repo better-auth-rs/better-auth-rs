@@ -130,6 +130,7 @@ run_stage() {
         ./compat-tests/reference-server/contracts/user-serial-create-order.test.ts \
         ./compat-tests/reference-server/contracts/account-verification-serial-primary.test.ts \
         ./compat-tests/reference-server/contracts/adapter-id-slot.test.ts \
+        ./compat-tests/reference-server/contracts/adapter-id-coercion.test.ts \
         ./compat-tests/reference-server/contracts/memory-transaction-values.test.ts \
         ./compat-tests/reference-server/contracts/async-field-transforms.test.ts \
         ./compat-tests/reference-server/contracts/sql-user-extra-output.test.ts \

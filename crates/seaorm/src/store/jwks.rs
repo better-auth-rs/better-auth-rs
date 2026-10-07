@@ -3,6 +3,7 @@ use super::instrumentation::database_operation;
 use super::plugin_models::Entity;
 use crate::SeaOrmPluginModel;
 use async_trait::async_trait;
+use better_auth_core::id::AdapterIdInput;
 use better_auth_core::store::schema::EntityRole;
 use better_auth_core::{AuthResult, CreateJwk, Jwk, store::JwksStore};
 use better_auth_core::{FieldMap, SchemaField};
@@ -50,7 +51,7 @@ impl<
 > JwksStore for SeaOrmStore<S, O, P>
 {
     async fn get_jwk(&self, id: &str) -> AuthResult<Option<Jwk>> {
-        self.model_fields.begin_id_input(EntityRole::Jwk)?;
+        self.model_fields.begin_id_query(EntityRole::Jwk)?;
         let model = get::<P>(self.config(), self.connection(), id).await?;
         Ok(self
             .project_jwk_models(model.into_iter().collect())
@@ -75,7 +76,7 @@ impl<
 > JwksStore for super::SeaOrmTransaction<S, O, P>
 {
     async fn get_jwk(&self, id: &str) -> AuthResult<Option<Jwk>> {
-        self.store.model_fields.begin_id_input(EntityRole::Jwk)?;
+        self.store.model_fields.begin_id_query(EntityRole::Jwk)?;
         let model = get::<P>(self.store.config(), &self.tx, id).await?;
         Ok(self
             .store
@@ -177,7 +178,13 @@ impl<
         connection: &impl ConnectionTrait,
         input: CreateJwk,
     ) -> AuthResult<Jwk> {
-        self.model_fields.begin_id_input(EntityRole::Jwk)?;
+        self.model_fields.begin_id_input(
+            EntityRole::Jwk,
+            AdapterIdInput {
+                force_allow_id: false,
+                supports_native_uuid: connection.get_database_backend() == DbBackend::Postgres,
+            },
+        )?;
         let mut native = FieldMap::from_iter([
             ("public_key".to_owned(), (input.public_key).into_field()),
             ("private_key".to_owned(), (input.private_key).into_field()),
@@ -194,8 +201,8 @@ impl<
             self.config().advanced.database.generate_id(),
             backend,
             || {
-                if self.model_fields.id_input_active(EntityRole::Jwk)? {
-                    self.generated_id("jwks", None)
+                if let Some(policy) = self.model_fields.id_input_policy(EntityRole::Jwk)? {
+                    self.generated_id_with_policy("jwks", None, policy)
                 } else {
                     Ok(None)
                 }

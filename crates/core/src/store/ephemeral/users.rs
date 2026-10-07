@@ -1,6 +1,7 @@
 use super::hooks::CommittedWrite;
 use super::rows::RowRef;
 use super::*;
+use crate::id::AdapterIdInput;
 use crate::store::database_hooks::{DatabaseHookControl, DatabaseHookUpdate};
 use crate::store::schema::EntityRole;
 use crate::store::schema::resolve_field_name;
@@ -15,7 +16,7 @@ impl EphemeralStore {
         &self,
         predicate: impl Fn(&UserView) -> bool + Send,
     ) -> AuthResult<Option<RowRef<UserView>>> {
-        self.model_fields.begin_id_input(EntityRole::User)?;
+        self.model_fields.begin_id_query(EntityRole::User)?;
         self.raw("user", "findOne", move |state| {
             state.users.first_ref(predicate)
         })
@@ -153,7 +154,8 @@ impl EphemeralStore {
             }
         }
         let fields = update.take_user_field_input(&self.config.user)?;
-        self.model_fields.begin_id_input(EntityRole::User)?;
+        self.model_fields
+            .begin_id_input(EntityRole::User, AdapterIdInput::default())?;
         update.additional_fields = self
             .config
             .user
@@ -342,18 +344,24 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             create_user.prepare_user_fields(&self.config.user)?;
         }
         let fields = create_user.take_user_field_input(&self.config.user)?;
-        self.model_fields.begin_id_input(EntityRole::User)?;
+        self.model_fields.begin_id_input(
+            EntityRole::User,
+            AdapterIdInput {
+                force_allow_id: create_user.id.is_some(),
+                supports_native_uuid: false,
+            },
+        )?;
         let (mut fields, id) = self
             .config
             .user
             .create_user_storage_fields(
                 fields,
                 || {
-                    if !self.model_fields.id_input_active(EntityRole::User)? {
+                    let Some(policy) = self.model_fields.id_input_policy(EntityRole::User)? else {
                         return Ok(create_user.id.take());
-                    }
+                    };
                     let row_count = self.lock()?.users.len();
-                    self.generated_id("user", create_user.id.take(), row_count)
+                    self.generated_id_with_policy("user", create_user.id.take(), row_count, policy)
                 },
                 |_, field, value| self.memory_plugin_field_input(field, value),
             )
@@ -469,7 +477,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
     }
 
     async fn list_users_by_ids(&self, ids: &[String], limit: f64) -> AuthResult<Vec<UserView>> {
-        self.model_fields.begin_id_input(EntityRole::User)?;
+        self.model_fields.begin_id_query(EntityRole::User)?;
         let ids = ids
             .iter()
             .map(|id| self.memory_primary_id_query(&Value::from(id.clone())))
@@ -562,7 +570,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             self.delete_user_sessions(id).await?;
         }
         self.delete_user_accounts_with_hooks(id).await?;
-        self.model_fields.begin_id_input(EntityRole::User)?;
+        self.model_fields.begin_id_query(EntityRole::User)?;
         let stored_id = crate::SchemaValue::<String>::from_field(
             self.memory_primary_id_query(&Value::from(id))?,
         );
@@ -593,7 +601,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
                 return Ok(None);
             }
         }
-        self.model_fields.begin_id_input(EntityRole::User)?;
+        self.model_fields.begin_id_query(EntityRole::User)?;
         self.raw("user", "delete", |state| {
             let _ = state.users.remove(&stored_id)?;
             Ok(())

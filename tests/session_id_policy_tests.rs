@@ -256,7 +256,9 @@ async fn contract(database: DatabaseConnection) -> TestResult {
     };
     for (id_first, read, expected) in [
         (true, Read::None, uuid_input),
+        (false, Read::Missing, uuid),
         (false, Read::Existing, uuid),
+        (true, Read::Missing, uuid_input),
     ] {
         check_update(
             &database,

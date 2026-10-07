@@ -50,7 +50,7 @@ impl crate::store::WalletStore for EphemeralStore {
         chain_id: Option<i64>,
     ) -> AuthResult<Option<crate::types::WalletAddress>> {
         self.model_fields
-            .begin_id_input(EntityRole::WalletAddress)?;
+            .begin_id_query(EntityRole::WalletAddress)?;
         let selected = self
             .raw("walletAddress", "findOne", |state| {
                 state
@@ -75,25 +75,27 @@ impl crate::store::WalletStore for EphemeralStore {
         &self,
         value: crate::types::CreateWalletAddress,
     ) -> AuthResult<crate::types::WalletAddress> {
-        self.model_fields
-            .begin_id_input(EntityRole::WalletAddress)?;
+        self.model_fields.begin_id_input(
+            EntityRole::WalletAddress,
+            crate::id::AdapterIdInput::default(),
+        )?;
         let (additional_fields, id) = self
             .model_fields
             .fields(EntityRole::WalletAddress)
             .create_adapter_storage_fields(
                 value.additional_fields,
                 || {
-                    if !self
+                    let Some(policy) = self
                         .model_fields
-                        .id_input_active(EntityRole::WalletAddress)?
-                    {
+                        .id_input_policy(EntityRole::WalletAddress)?
+                    else {
                         return Ok(None);
-                    }
-                    self.config.advanced.database.generate_id().adapter_id(
-                        "walletAddress",
-                        None,
-                        false,
-                    )
+                    };
+                    self.config
+                        .advanced
+                        .database
+                        .generate_id()
+                        .adapter_id_with_policy("walletAddress", None, policy)
                 },
                 |_, field, value| self.memory_plugin_field_input(field, value),
             )

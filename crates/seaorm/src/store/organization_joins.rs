@@ -84,7 +84,7 @@ where
             Some(user) => user,
             None => {
                 self.model_fields
-                    .begin_id_input(better_auth_core::store::schema::EntityRole::User)?;
+                    .begin_id_query(better_auth_core::store::schema::EntityRole::User)?;
                 <S::User as SeaOrmUserModel>::Entity::find()
                     .filter(S::User::id_column().eq(owner_id))
                     .one(self.connection())
@@ -303,7 +303,7 @@ where
             Vec::new()
         } else {
             self.model_fields
-                .begin_id_input(better_auth_core::store::schema::EntityRole::User)?;
+                .begin_id_query(better_auth_core::store::schema::EntityRole::User)?;
             let (limit, _) = super::pagination::sql_pagination(
                 self.connection().get_database_backend(),
                 Some(input.users_limit),

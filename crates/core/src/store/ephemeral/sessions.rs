@@ -77,7 +77,15 @@ impl EphemeralStore {
                         session.id = Self::project_id(&crate::SchemaValue::from_field(value))?;
                         return Ok(());
                     }
-                    let value = field.adapter_output(value, field.references_id()).await?;
+                    let value = if resolve_field_name(field.field_name.as_deref(), name) == "id" {
+                        let value = match field.output_transform() {
+                            Some(transform) => transform.call(value).await?,
+                            None => value,
+                        };
+                        Self::project_id(&crate::SchemaValue::from_field(value))?.into_field_value()
+                    } else {
+                        field.adapter_output(value, field.references_id()).await?
+                    };
                     let _ = session.additional_fields.insert(name.to_owned(), value);
                     Ok(())
                 })
@@ -216,16 +224,18 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
         } else {
             self.memory_reference_id_input(create_session.user_id.into_field_value())?
         };
-        self.model_fields.begin_id_input(EntityRole::Session)?;
+        self.model_fields
+            .begin_id_input(EntityRole::Session, crate::id::AdapterIdInput::default())?;
         let (mut additional_fields, id) = schema
             .create_adapter_storage_fields(
                 fields,
                 || {
-                    if !self.model_fields.id_input_active(EntityRole::Session)? {
+                    let Some(policy) = self.model_fields.id_input_policy(EntityRole::Session)?
+                    else {
                         return Ok(None);
-                    }
+                    };
                     let row_count = self.lock()?.sessions.len();
-                    self.generated_id("session", None, row_count)
+                    self.generated_id_with_policy("session", None, row_count, policy)
                 },
                 |_, field, value| self.memory_plugin_field_input(field, value),
             )
@@ -293,7 +303,7 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
     }
 
     async fn get_session(&self, token: &str) -> AuthResult<Option<SessionView>> {
-        self.model_fields.begin_id_input(EntityRole::Session)?;
+        self.model_fields.begin_id_query(EntityRole::Session)?;
         let session = self
             .raw("session", "findOne", |state| {
                 Ok(state
@@ -331,7 +341,7 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
             return self.joined_session_snapshots(tokens, only_active).await;
         }
         let now = Utc::now();
-        self.model_fields.begin_id_input(EntityRole::Session)?;
+        self.model_fields.begin_id_query(EntityRole::Session)?;
         let sessions = self
             .raw("session", "findMany", |state| {
                 Ok(crate::query::paginate_memory(
@@ -404,7 +414,7 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
     }
 
     async fn get_user_sessions(&self, user_id: &str) -> AuthResult<Vec<SessionView>> {
-        self.model_fields.begin_id_input(EntityRole::Session)?;
+        self.model_fields.begin_id_query(EntityRole::Session)?;
         let user_id = self.memory_session_user_id_query(Value::from(user_id))?;
         let sessions: Vec<_> = self
             .raw("session", "findMany", |state| {
@@ -442,7 +452,7 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
     }
 
     async fn delete_session(&self, token: &str) -> AuthResult<()> {
-        self.model_fields.begin_id_input(EntityRole::Session)?;
+        self.model_fields.begin_id_query(EntityRole::Session)?;
         let session = self
             .raw("session", "findOne", |state| {
                 Ok(state
@@ -475,7 +485,7 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
                 return Ok(());
             }
         }
-        self.model_fields.begin_id_input(EntityRole::Session)?;
+        self.model_fields.begin_id_query(EntityRole::Session)?;
         self.raw("session", "delete", |state| {
             let _ = state.sessions.remove_first(|row| row.token == token)?;
             Ok(())

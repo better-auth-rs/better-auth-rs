@@ -448,7 +448,7 @@ impl<'a> PreparedUserQuery<'a> {
         runtime: &crate::plugin_runtime::ModelFields,
     ) -> AuthResult<Self> {
         Self::prepare(params, fields, || {
-            runtime.begin_id_input(crate::store::schema::EntityRole::User)
+            runtime.begin_id_query(crate::store::schema::EntityRole::User)
         })
     }
 
@@ -465,7 +465,7 @@ impl<'a> PreparedUserQuery<'a> {
                 .as_deref()
                 .is_some_and(|value| !value.is_empty())
         {
-            runtime.begin_id_input(crate::store::schema::EntityRole::User)?;
+            runtime.begin_id_query(crate::store::schema::EntityRole::User)?;
         }
         Ok(())
     }

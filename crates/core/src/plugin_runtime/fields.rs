@@ -5,6 +5,7 @@ mod passkey;
 mod two_factor;
 mod wallet;
 
+use crate::id::AdapterIdInput;
 use crate::store::schema::{EntityRole, resolve_field_name};
 use crate::user_fields::{AdapterRecord, UserConfig, UserFieldType};
 use crate::{AuthConfig, AuthError, AuthResult, FieldMap, FieldValue as Value, SchemaValue};
@@ -25,7 +26,7 @@ pub struct ModelFields {
 #[derive(Default)]
 struct IdHistory {
     canonical: IndexSet<EntityRole>,
-    input: IndexSet<EntityRole>,
+    input: IndexMap<EntityRole, AdapterIdInput>,
 }
 
 fn optional_string(fields: &mut FieldMap, name: &str) -> Option<SchemaValue<Option<String>>> {
@@ -54,16 +55,22 @@ impl ModelFields {
         Ok(())
     }
 
-    /// Install the ID input policy before input conversion or field-attribute lookup.
+    /// Install the ID input policy before create or update field conversion.
     #[doc(hidden)]
-    pub fn begin_id_input(&self, role: EntityRole) -> AuthResult<()> {
+    pub fn begin_id_input(&self, role: EntityRole, policy: AdapterIdInput) -> AuthResult<()> {
         let mut history = self
             .id_history
             .lock()
             .map_err(|_| AuthError::internal("Adapter schema history lock poisoned"))?;
         let _ = history.canonical.insert(role);
-        let _ = history.input.insert(role);
+        let _ = history.input.insert(role, policy);
         Ok(())
+    }
+
+    /// Field-attribute lookup installs an unforced ID policy without native UUID support.
+    #[doc(hidden)]
+    pub fn begin_id_query(&self, role: EntityRole) -> AuthResult<()> {
+        self.begin_id_input(role, AdapterIdInput::default())
     }
 
     /// Replace the ID input policy when a nonempty output conversion starts.
@@ -81,12 +88,19 @@ impl ModelFields {
     /// Read the current ID policy after preceding field callbacks have completed.
     #[doc(hidden)]
     pub fn id_input_active(&self, role: EntityRole) -> AuthResult<bool> {
+        Ok(self.id_input_policy(role)?.is_some())
+    }
+
+    /// Read the complete input policy after preceding field callbacks have completed.
+    #[doc(hidden)]
+    pub fn id_input_policy(&self, role: EntityRole) -> AuthResult<Option<AdapterIdInput>> {
         Ok(self
             .id_history
             .lock()
             .map_err(|_| AuthError::internal("Adapter schema history lock poisoned"))?
             .input
-            .contains(&role))
+            .get(&role)
+            .copied())
     }
 
     pub(crate) fn runtime_fields(
