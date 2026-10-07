@@ -124,7 +124,7 @@ impl<S: AuthSchema> SecondaryStore<S> {
         &self,
         owner: &crate::SchemaValue<String>,
         original: FieldMap,
-        session: &SessionView,
+        session: &FieldMap,
         transaction: Option<&dyn crate::store::AuthTransaction<S>>,
     ) -> AuthResult<()> {
         let user_id = owner.display_string()?;
@@ -182,7 +182,7 @@ impl<S: AuthSchema> SecondaryStore<S> {
         };
         let seconds = u64::try_from((expires_at - now).div_euclid(1000)).unwrap_or(0);
         if seconds > 0 {
-            let value = json!({ "session": FieldMap::from(session.clone()).json()?, "user": user });
+            let value = json!({ "session": session.json()?, "user": user });
             self.secondary()?
                 .set(&token, &serde_json::to_string(&value)?, Some(seconds))
                 .await?;

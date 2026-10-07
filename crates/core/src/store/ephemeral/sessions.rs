@@ -287,6 +287,7 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
             return Ok(None);
         }
         let (original, fields) = prepared.into_parts();
+        let secondary_fields = (!write_database).then(|| fields.clone());
         let session = if write_database {
             crate::store::database_hooks::await_adapter_lookup().await;
             self.write_session_create_fields(fields).await?
@@ -295,7 +296,10 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
         };
         let deferred = match writer {
             Some(writer) => {
-                let write = (writer.write)(original, session.clone());
+                let write = (writer.write)(
+                    original,
+                    secondary_fields.unwrap_or_else(|| session.clone().into()),
+                );
                 if writer.deferred {
                     Some(write)
                 } else {

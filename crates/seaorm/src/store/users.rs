@@ -106,6 +106,48 @@ where
             .remove(0))
     }
 
+    pub(super) async fn get_user_by_id_with_connection(
+        &self,
+        db: &impl ConnectionTrait,
+        id: &FieldValue,
+        trace_query: bool,
+    ) -> AuthResult<Option<better_auth_core::wire::UserView>> {
+        self.model_fields.begin_id_query(EntityRole::User)?;
+        let parsed_id = id
+            .as_str()
+            .map(|id| self.parse_id(id, S::User::parse_id))
+            .transpose()?;
+        let query = async {
+            let filter = match parsed_id {
+                Some(id) => S::User::id_column().eq(id),
+                None => super::value_filter::equals(
+                    S::User::id_column(),
+                    id,
+                    db.get_database_backend(),
+                )?,
+            };
+            <S::User as SeaOrmUserModel>::Entity::find()
+                .filter(filter)
+                .one(db)
+                .await
+                .map_err(map_db_err)
+        };
+        let row = if trace_query {
+            database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
+                self.config(),
+                "findOne",
+                query,
+            )
+            .await?
+        } else {
+            query.await?
+        };
+        match row.as_ref() {
+            Some(row) => self.output_user(row, db).await.map(Some),
+            None => Ok(None),
+        }
+    }
+
     pub(super) async fn output_joined_users(
         &self,
         rows: &[Option<S::User>],
@@ -659,56 +701,24 @@ where
         &self,
         id: &str,
     ) -> AuthResult<Option<better_auth_core::wire::UserView>> {
-        self.model_fields.begin_id_query(EntityRole::User)?;
-        let user_id = self.parse_id(id, S::User::parse_id)?;
-        match database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
-            self.config(),
-            "findOne",
-            async {
-                <S::User as SeaOrmUserModel>::Entity::find()
-                    .filter(<S::User as SeaOrmUserModel>::id_column().eq(user_id))
-                    .one(self.connection())
-                    .await
-                    .map_err(map_db_err)
-            },
-        )
-        .await?
-        .as_ref()
-        {
-            Some(row) => self.output_user(row, self.connection()).await.map(Some),
-            None => Ok(None),
-        }
+        self.get_user_by_id_with_connection(self.connection(), &id.into(), true)
+            .await
+    }
+
+    async fn get_user_by_id_field(
+        &self,
+        id: &better_auth_core::SchemaValue<String>,
+    ) -> AuthResult<Option<better_auth_core::wire::UserView>> {
+        self.get_user_by_id_with_connection(self.connection(), &id.field_value(), true)
+            .await
     }
 
     async fn get_user_by_id_value(
         &self,
         id: &better_auth_core::FieldValue,
     ) -> AuthResult<Option<better_auth_core::wire::UserView>> {
-        self.model_fields.begin_id_query(EntityRole::User)?;
-        if let Some(id) = id.as_str() {
-            return self.get_user_by_id(id).await;
-        }
-        match database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
-            self.config(),
-            "findOne",
-            async {
-                <S::User as SeaOrmUserModel>::Entity::find()
-                    .filter(super::value_filter::equals(
-                        <S::User as SeaOrmUserModel>::id_column(),
-                        id,
-                        self.connection().get_database_backend(),
-                    )?)
-                    .one(self.connection())
-                    .await
-                    .map_err(map_db_err)
-            },
-        )
-        .await?
-        .as_ref()
-        {
-            Some(row) => self.output_user(row, self.connection()).await.map(Some),
-            None => Ok(None),
-        }
+        self.get_user_by_id_with_connection(self.connection(), id, true)
+            .await
     }
 
     async fn list_users_by_ids(

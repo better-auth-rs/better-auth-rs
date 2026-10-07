@@ -497,21 +497,17 @@ where
         &self,
         id: &str,
     ) -> AuthResult<Option<better_auth_core::wire::UserView>> {
-        use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
         self.store
-            .model_fields
-            .begin_id_query(better_auth_core::store::schema::EntityRole::User)?;
-        let id = self.store.parse_id(id, S::User::parse_id)?;
-        match <S::User as SeaOrmUserModel>::Entity::find()
-            .filter(<S::User as SeaOrmUserModel>::id_column().eq(id))
-            .one(&self.tx)
+            .get_user_by_id_with_connection(&self.tx, &id.into(), false)
             .await
-            .map_err(map_db_err)?
-            .as_ref()
-        {
-            Some(row) => self.store.output_user(row, &self.tx).await.map(Some),
-            None => Ok(None),
-        }
+    }
+    async fn get_user_by_id_field(
+        &self,
+        id: &better_auth_core::SchemaValue<String>,
+    ) -> AuthResult<Option<better_auth_core::wire::UserView>> {
+        self.store
+            .get_user_by_id_with_connection(&self.tx, &id.field_value(), false)
+            .await
     }
     async fn get_user_by_email(
         &self,

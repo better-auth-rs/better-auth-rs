@@ -19,7 +19,7 @@ impl SendVerificationEmail for Sender {
     }
 }
 
-struct Logger(Events);
+pub(super) struct Logger(pub(super) Events);
 
 fn argument(value: &LogArgument<'_>) -> Value {
     match value {

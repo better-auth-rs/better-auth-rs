@@ -224,6 +224,7 @@ where
             return Ok(None);
         }
         let (original, fields) = prepared.into_parts();
+        let secondary_fields = (!write_database).then(|| fields.clone());
         let session = if write_database {
             better_auth_core::store::database_hooks::await_adapter_lookup().await;
             self.write_session_create_fields(db, fields).await?
@@ -232,7 +233,10 @@ where
         };
         let deferred = match writer {
             Some(writer) => {
-                let write = (writer.write)(original, session.clone());
+                let write = (writer.write)(
+                    original,
+                    secondary_fields.unwrap_or_else(|| session.clone().into()),
+                );
                 if writer.deferred {
                     Some(write)
                 } else {

@@ -22,6 +22,16 @@ pub(super) async fn auth<S: AuthSchema>(
     scenario: &Scenario,
     events: &Events,
 ) -> TestResult<Harness<S>> {
+    auth_with_secondary(store, config, scenario, events, None).await
+}
+
+pub(super) async fn auth_with_secondary<S: AuthSchema>(
+    store: Arc<dyn AuthStore<S>>,
+    config: AuthConfig,
+    scenario: &Scenario,
+    events: &Events,
+    secondary: Option<Arc<dyn better_auth_core::store::SecondaryStorage>>,
+) -> TestResult<Harness<S>> {
     let callbacks = Arc::new(callbacks::Callbacks {
         events: events.clone(),
         accounts_one: scenario.accounts_one,
@@ -69,6 +79,9 @@ pub(super) async fn auth<S: AuthSchema>(
         });
     if let Some(config) = verification {
         builder = builder.plugin(EmailVerificationPlugin::with_config(config));
+    }
+    if let Some(secondary) = secondary {
+        builder = builder.secondary_storage(secondary);
     }
     let auth = Arc::new(builder.build().await?);
     Ok(Harness { auth, flow })

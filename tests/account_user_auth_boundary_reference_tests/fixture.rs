@@ -62,6 +62,7 @@ pub(super) struct Case {
     pub(super) response: Response,
     pub(super) after: Value,
     pub(super) checked: Value,
+    pub(super) observations: Option<Value>,
 }
 
 #[derive(Deserialize)]
@@ -73,6 +74,34 @@ pub(super) struct Fixture {
 }
 
 impl Fixture {
+    pub(super) fn read_secondary() -> AuthResult<Self> {
+        let fixture: Self = serde_json::from_str(include_str!(
+            "../fixtures/account-user-auth-secondary-1.7.6.json"
+        ))?;
+        assert_eq!(fixture.version, "1.7.6");
+        assert_eq!(fixture.scenarios.len(), 1);
+        assert_eq!(fixture.cases.len(), 4);
+        let scenario = fixture.scenario("social-owner-many-pure-secondary")?;
+        assert_eq!(scenario.route, "social");
+        assert_eq!(scenario.relation, "reverse-user-reference-many");
+        assert!(scenario.many);
+        for backend in ["memory", "sqlite"] {
+            for joins in [false, true] {
+                let cases: Vec<_> = fixture
+                    .cases
+                    .iter()
+                    .filter(|case| case.backend == backend && case.joins == joins)
+                    .collect();
+                assert_eq!(cases.len(), 1);
+                assert_eq!(cases[0].scenario, scenario.name);
+                assert_eq!(cases[0].response.status, 200);
+                assert!(cases[0].setup.is_none());
+                assert!(cases[0].observations.is_some());
+            }
+        }
+        Ok(fixture)
+    }
+
     pub(super) fn read_email() -> AuthResult<Self> {
         let fixture: Self = serde_json::from_str(include_str!(
             "../fixtures/account-user-auth-email-1.7.6.json"

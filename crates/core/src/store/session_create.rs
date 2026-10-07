@@ -7,8 +7,8 @@ pub struct SessionCreateWriter {
     pub write_database: bool,
     /// Queue the writer after creation-after hooks instead of writing immediately.
     pub deferred: bool,
-    /// Receive the original creation object and the final session returned by the adapter.
-    pub write: Box<dyn FnOnce(FieldMap, SessionView) -> TypedTransactionFuture<'static, ()> + Send>,
+    /// Receive the original creation object and final session fields in adapter output order.
+    pub write: Box<dyn FnOnce(FieldMap, FieldMap) -> TypedTransactionFuture<'static, ()> + Send>,
 }
 
 /// Prepared public fields shared by database and secondary Session creation.

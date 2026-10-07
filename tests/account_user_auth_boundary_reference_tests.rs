@@ -37,13 +37,11 @@ mod oauth_flow;
 mod observe;
 #[path = "account_user_auth_boundary_reference_tests/recorder.rs"]
 mod recorder;
+#[path = "account_user_auth_boundary_reference_tests/secondary.rs"]
+mod secondary;
 #[path = "account_user_auth_boundary_reference_tests/storage.rs"]
 mod storage;
 #[path = "support/device_where_values.rs"]
-#[expect(
-    dead_code,
-    reason = "The shared observation module also provides fixture revival, which this HTTP contract does not use."
-)]
 mod values;
 
 use fixture::{Case, Fixture, Scenario};

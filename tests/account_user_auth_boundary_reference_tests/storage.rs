@@ -208,6 +208,10 @@ async fn sqlite_snapshot(database: &DatabaseConnection) -> TestResult<Value> {
             .iter()
             .map(|row| row.try_get::<String>("", "name"))
             .collect::<Result<Vec<_>, _>>()?;
+        if names.is_empty() {
+            let _ = tables.insert(table.into(), Value::Null);
+            continue;
+        }
         let fields = names
             .iter()
             .map(|name| {

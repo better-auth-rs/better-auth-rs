@@ -6,10 +6,10 @@ pub(super) struct Anchors {
     pub(super) token: Option<String>,
     pub(super) session_id: Option<String>,
     account_updated_at: Option<i64>,
-    session_dates: BTreeMap<&'static str, i64>,
+    pub(super) session_dates: BTreeMap<&'static str, i64>,
 }
 
-fn hook<'a>(events: &'a [Value], model: &str, phase: &str) -> Option<&'a Value> {
+pub(super) fn hook<'a>(events: &'a [Value], model: &str, phase: &str) -> Option<&'a Value> {
     events
         .iter()
         .find(|event| event["kind"] == "hook" && event["model"] == model && event["phase"] == phase)
@@ -102,6 +102,24 @@ pub(super) fn verify_dynamic(
     assert!((created..=end).contains(&modified));
     assert!(updated <= created);
     assert!((start..=created).contains(&(anchors.session_dates["expiresAt"] - 3_600_000)));
+
+    if case.observations.is_some() {
+        assert_eq!(
+            after["session"],
+            if case.backend == "sqlite" {
+                Value::Null
+            } else {
+                json!([])
+            }
+        );
+        assert_eq!(selected_id, &json!({"type": "undefined"}));
+        let completed = hook(events, "session", "after").ok_or("Missing Session after hook")?;
+        assert_eq!(completed, issued);
+        let id = text(issued, "id")?;
+        assert!(!id.is_empty());
+        anchors.session_id = Some(id.into());
+        return Ok(anchors);
+    }
 
     let sessions = rows(after, "session")?;
     if case.response.status == 500 {
@@ -207,6 +225,9 @@ pub(super) fn normalize(events: &mut [Value], after: &mut Value, anchors: &Ancho
         }
     }
     for model in ["account", "session"] {
+        if model == "session" && after[model].is_null() {
+            continue;
+        }
         for row in after[model].as_array_mut().ok_or("Missing stored rows")? {
             normalize_record(model, row, anchors)?;
         }
