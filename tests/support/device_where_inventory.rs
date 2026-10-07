@@ -1,7 +1,7 @@
 use super::contract::{Case, Fixture};
 use std::collections::{BTreeMap, BTreeSet};
 
-fn inventory(backend: &str) -> BTreeMap<String, Option<&'static str>> {
+fn inventory() -> BTreeMap<String, Option<&'static str>> {
     let mut cases = BTreeMap::new();
     let mut add = |name: String, reason| {
         assert!(cases.insert(name, reason).is_none());
@@ -23,10 +23,7 @@ fn inventory(backend: &str) -> BTreeMap<String, Option<&'static str>> {
         add(format!("null-{operator}"), None);
         add(format!("missing-{operator}"), None);
         for source in ["same-object", "new-object"] {
-            add(
-                format!("date-{operator}-{source}"),
-                (backend != "memory").then_some("Native Date operands await database pairing"),
-            );
+            add(format!("date-{operator}-{source}"), None);
         }
     }
     for name in [
@@ -58,22 +55,13 @@ fn inventory(backend: &str) -> BTreeMap<String, Option<&'static str>> {
         add(name.into(), None);
     }
     for name in ["number-nan", "number-infinity"] {
-        add(
-            name.into(),
-            (backend != "memory").then_some("Non-finite operands await database pairing"),
-        );
+        add(name.into(), None);
     }
     for name in ["date-range", "date-iso-string", "date-invalid-query"] {
-        add(
-            name.into(),
-            (backend != "memory").then_some("Native Date operands await database pairing"),
-        );
+        add(name.into(), None);
     }
     for name in ["array-eq-same-object", "array-eq-new-object"] {
-        add(
-            name.into(),
-            (backend != "memory").then_some("Native array operands await database pairing"),
-        );
+        add(name.into(), None);
     }
     for name in [
         "serial-reference-string",
@@ -96,7 +84,7 @@ pub(crate) fn paired<'a>(fixture: &'a Fixture, backend: &str) -> Vec<(bool, Vec<
             .collect::<Vec<_>>(),
         [false, true]
     );
-    let inventory = inventory(backend);
+    let inventory = inventory();
     let captured = fixture
         .groups
         .iter()
@@ -114,7 +102,7 @@ pub(crate) fn paired<'a>(fixture: &'a Fixture, backend: &str) -> Vec<(bool, Vec<
         .iter()
         .filter_map(|(name, reason)| reason.map(|reason| (name, reason)))
         .collect::<Vec<_>>();
-    assert_eq!(unpaired.len(), if backend == "memory" { 0 } else { 15 });
+    assert_eq!(unpaired.len(), 0);
     eprintln!("Device Where cases that remain unpaired: {unpaired:?}");
     eprintln!(
         "JavaScript Error.name and Rust AuthError identity remain unpaired. Database wrappers retain their Rust diagnostics."
@@ -135,18 +123,14 @@ pub(crate) fn paired<'a>(fixture: &'a Fixture, backend: &str) -> Vec<(bool, Vec<
         .collect::<Vec<_>>();
     assert_eq!(
         paired.iter().map(|(_, cases)| cases.len()).sum::<usize>(),
-        if backend == "memory" { 90 } else { 75 }
+        90
     );
     assert_eq!(
         paired
             .iter()
             .map(|(_, cases)| cases.len())
             .collect::<Vec<_>>(),
-        if backend == "memory" {
-            [87, 3]
-        } else {
-            [72, 3]
-        }
+        [87, 3]
     );
     paired
 }
@@ -162,7 +146,7 @@ pub(crate) fn paired_transactions<'a>(fixture: &'a Fixture, backend: &str) -> Ve
             .collect::<Vec<_>>(),
         [false]
     );
-    let mut inventory = inventory(backend)
+    let mut inventory = inventory()
         .into_iter()
         .filter(|(name, _)| {
             name.starts_with("date-")
@@ -173,26 +157,11 @@ pub(crate) fn paired_transactions<'a>(fixture: &'a Fixture, backend: &str) -> Ve
         .map(|(name, reason)| (format!("transaction-existing-{name}"), reason))
         .collect::<BTreeMap<_, _>>();
     for (name, reason) in [
-        (
-            "date-eq-same-object",
-            (backend != "memory").then_some("Native Date operands await database pairing"),
-        ),
-        (
-            "date-ne-same-object",
-            (backend != "memory").then_some("Native Date operands await database pairing"),
-        ),
-        (
-            "date-in-same-object",
-            (backend != "memory").then_some("Native Date operands await database pairing"),
-        ),
-        (
-            "date-not_in-same-object",
-            (backend != "memory").then_some("Native Date operands await database pairing"),
-        ),
-        (
-            "array-eq-same-object",
-            (backend != "memory").then_some("Native array operands await database pairing"),
-        ),
+        ("date-eq-same-object", None),
+        ("date-ne-same-object", None),
+        ("date-in-same-object", None),
+        ("date-not_in-same-object", None),
+        ("array-eq-same-object", None),
         ("json-eq-same-object", None),
     ] {
         assert!(
@@ -218,12 +187,12 @@ pub(crate) fn paired_transactions<'a>(fixture: &'a Fixture, backend: &str) -> Ve
         .iter()
         .filter_map(|(name, reason)| reason.map(|reason| (name, reason)))
         .collect::<Vec<_>>();
-    assert_eq!(unpaired.len(), if backend == "memory" { 0 } else { 20 });
+    assert_eq!(unpaired.len(), 0);
     eprintln!("Device transaction Where cases that remain unpaired: {unpaired:?}");
     let paired = captured
         .into_iter()
         .filter(|case| inventory.get(&case.name) == Some(&None))
         .collect::<Vec<_>>();
-    assert_eq!(paired.len(), if backend == "memory" { 23 } else { 3 });
+    assert_eq!(paired.len(), 23);
     paired
 }

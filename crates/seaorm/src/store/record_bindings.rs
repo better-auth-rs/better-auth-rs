@@ -110,14 +110,11 @@ pub(super) fn parameter(value: FieldValue, backend: DbBackend) -> AuthResult<Sim
                     .to_string()
             }))
         }
-        FieldValue::Date(_) => {
+        FieldValue::Date(_) | FieldValue::Array(_) | FieldValue::Object(_)
+            if backend == DbBackend::Sqlite =>
+        {
             return Err(AuthError::internal(
-                "SQLite parameter binding does not accept Date objects",
-            ));
-        }
-        FieldValue::Array(_) | FieldValue::Object(_) if backend == DbBackend::Sqlite => {
-            return Err(AuthError::internal(
-                "SQLite parameter binding does not accept arrays or objects",
+                "Binding expected string, TypedArray, boolean, number, bigint or null",
             ));
         }
         value => Value::String(Some(utf16_string(&value.display_utf16()?, backend))),
@@ -185,7 +182,7 @@ pub(super) fn utf16_string(value: &better_auth_core::Utf16String, backend: DbBac
 pub(crate) fn sqlite_date(date: FieldDate) -> AuthResult<FieldValue> {
     let value = date
         .to_datetime()?
-        .ok_or_else(|| AuthError::internal("Cannot convert an invalid Date to an ISO timestamp"))?;
+        .ok_or_else(|| AuthError::internal("Invalid Date"))?;
     Ok(FieldValue::String(
         value.to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
     ))

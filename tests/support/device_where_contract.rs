@@ -460,6 +460,27 @@ pub(crate) async fn run<S: AuthSchema>(
                 );
                 None
             }
+            (Some(expected), Err(AuthError::Internal(message))) if backend == "sqlite" => {
+                let name = match message.as_str() {
+                    "Binding expected string, TypedArray, boolean, number, bigint or null" => {
+                        "TypeError"
+                    }
+                    "Invalid Date" => "RangeError",
+                    _ => {
+                        return Err(AuthError::internal(format!(
+                            "{backend}/{} unexpected binding error: {message}",
+                            case.name
+                        )));
+                    }
+                };
+                assert_eq!(expected.name, name);
+                assert_eq!(
+                    message, expected.message,
+                    "{backend}/{} diagnostic",
+                    case.name
+                );
+                None
+            }
             (Some(expected), Err(AuthError::Database(DatabaseError::Query(message))))
                 if backend == "postgres" =>
             {
@@ -469,6 +490,48 @@ pub(crate) async fn run<S: AuthSchema>(
                     message,
                     format!(
                         "Query Error: error returned from database: {}",
+                        expected.message
+                    ),
+                    "{backend}/{} diagnostic",
+                    case.name
+                );
+                None
+            }
+            (Some(expected), Err(AuthError::Database(DatabaseError::Query(message))))
+                if backend == "sqlite" =>
+            {
+                assert_eq!(expected.name, "SQLiteError");
+                assert_eq!(expected.message, "row value misused");
+                assert_eq!(
+                    message,
+                    format!(
+                        "Query Error: error returned from database: (code: 1) {}",
+                        expected.message
+                    ),
+                    "{backend}/{} diagnostic",
+                    case.name
+                );
+                None
+            }
+            (Some(expected), Err(AuthError::Database(DatabaseError::Query(message))))
+                if backend == "mysql" =>
+            {
+                assert_eq!(expected.name, "Error");
+                let code = match expected.message.as_str() {
+                    "Unknown column 'NaN' in 'where clause'"
+                    | "Unknown column 'Infinity' in 'where clause'" => "1054 (42S22)",
+                    "Operand should contain 1 column(s)" => "1241 (21000)",
+                    other => {
+                        return Err(AuthError::internal(format!(
+                            "{backend}/{} unexpected fixture diagnostic: {other}",
+                            case.name
+                        )));
+                    }
+                };
+                assert_eq!(
+                    message,
+                    format!(
+                        "Query Error: error returned from database: {code}: {}",
                         expected.message
                     ),
                     "{backend}/{} diagnostic",

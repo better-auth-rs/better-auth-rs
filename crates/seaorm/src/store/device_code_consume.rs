@@ -128,13 +128,7 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
             && matches!(field.field_type, UserFieldType::Date)
             && let FieldValue::Date(date) = &query.value
         {
-            let date = date.to_datetime()?.ok_or_else(|| {
-                better_auth_core::AuthError::internal(
-                    "Cannot serialize an invalid Date as an ISO timestamp",
-                )
-            })?;
-            query.value =
-                FieldValue::String(date.to_rfc3339_opts(chrono::SecondsFormat::Millis, true));
+            query.value = super::record_bindings::sqlite_date(date.clone())?;
         }
         if backend != DbBackend::Postgres
             && matches!(field.field_type, UserFieldType::Json)

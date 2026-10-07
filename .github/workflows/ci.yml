@@ -28,6 +28,7 @@ on:
           - alignment
           - client-configuration
           - device-validation
+          - device-storage
           - provider-options
           - passkey
           - two-factor
@@ -163,6 +164,9 @@ jobs:
       - name: Check Device request validation
         if: env.CHECK_STAGE == 'device-validation'
         run: devenv shell -- ./scripts/check.sh device-validation
+      - name: Check Device storage and native SQL fields
+        if: env.CHECK_STAGE == 'device-storage'
+        run: devenv shell -- ./scripts/check.sh device-storage
       - name: Check captured provider options
         if: env.CHECK_STAGE == 'provider-options'
         run: devenv shell -- ./scripts/check.sh provider-options

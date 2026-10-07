@@ -23,6 +23,7 @@ pub(crate) fn input_binding<C: sea_orm::ColumnTrait>(
         return serial_reference(value, text_column);
     }
     use better_auth_core::user_fields::UserFieldType;
+    // RecordWrite serializes native JSON columns. Only text columns need an encoded array here.
     if backend != sea_orm::DbBackend::Postgres
         && matches!(field.field_type, UserFieldType::Json)
         && (!native_json_field(name) || field.references_id())
@@ -34,6 +35,7 @@ pub(crate) fn input_binding<C: sea_orm::ColumnTrait>(
             field.field_type,
             UserFieldType::StringArray | UserFieldType::NumberArray
         ) && value.is_array()
+            && !native_json_field(name)
     {
         return value.stringify()?.map(FieldValue::String).ok_or_else(|| {
             better_auth_core::AuthError::internal("SQL JSON encoding returned undefined")

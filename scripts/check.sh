@@ -127,6 +127,14 @@ run_stage() {
       COMPAT_TEST_PROFILE=native-two-factor cargo test --locked --test client_compat_tests -- \
         --ignored --nocapture --exact --test-threads=1 phase11_client_compat phase12_client_compat configuration_client_compat
       ;;
+    device-storage)
+      cargo clippy --locked --features axum,seaorm2,redis-cache \
+        --test device_where_tests --test sql_user_extra_output_tests \
+        --test plugin_output_capabilities_tests -- -D warnings
+      cargo test --locked --features axum,seaorm2,redis-cache --test device_where_tests -- --include-ignored
+      cargo test --locked --features axum,seaorm2,redis-cache \
+        --test sql_user_extra_output_tests --test plugin_output_capabilities_tests
+      ;;
     device-validation)
       cargo fmt --all -- --check
       cargo clippy --locked -p better-auth-core -p better-auth-api -p better-auth-seaorm -p better-auth-cli -- -D warnings
