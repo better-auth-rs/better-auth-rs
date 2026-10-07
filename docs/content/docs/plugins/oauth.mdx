@@ -249,6 +249,8 @@ Custom user-info and refresh handlers retain precedence. HTTP failures and null 
 
 ## Generic OAuth / OIDC
 
+Token lifetimes retain fractional seconds until the shared parser adds the duration to the current millisecond timestamp. The parser then truncates the resulting timestamp, matching JavaScript Date arithmetic. For example, `expires_in: -0.0005` expires one millisecond before the integer clock value. `GenericOAuthConfig.access_token_expires_in` supplies a missing access-token expiry only when the configured value is truthy; zero and `NaN` do not supply an expiry. Refresh hooks retain an explicit undefined access-token expiry before the adapter omits that field from the stored update.
+
 Use `GenericOAuthConfig` for providers with explicit OAuth endpoints or OIDC discovery. Register the callback URL `{base_url}{base_path}/callback/{id}` with the identity provider. The `id` is the provider identifier. For example, a provider named `oidc` uses `/auth/callback/oidc` when the auth base path is `/auth`.
 
 ```rust

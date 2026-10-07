@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use better_auth_core::{AuthError, AuthRequest, AuthResult, NativeRequest};
-use chrono::{Duration, Utc};
+use better_auth_core::{AuthError, AuthRequest, AuthResult, FieldDate, FieldValue, NativeRequest};
+use chrono::{DateTime, Utc};
 use reqwest::header::{HeaderMap, HeaderValue};
 use serde_json::Value;
 
@@ -218,20 +218,27 @@ fn authentication(
     }
 }
 
-fn expiry(seconds: f64) -> AuthResult<Option<better_auth_core::FieldDate>> {
+fn expiry(
+    seconds: f64,
+    clock: impl FnOnce() -> DateTime<Utc>,
+) -> AuthResult<Option<better_auth_core::FieldDate>> {
     if seconds == 0.0 {
         return Ok(None);
     }
-    expiry_at(seconds).map(Some)
+    expiry_from(clock(), seconds).map(Some)
 }
 
-pub(super) fn expiry_at(seconds: f64) -> AuthResult<better_auth_core::FieldDate> {
+pub(super) fn expiry_at(seconds: f64) -> AuthResult<FieldDate> {
+    expiry_from(Utc::now(), seconds)
+}
+
+fn expiry_from(now: DateTime<Utc>, seconds: f64) -> AuthResult<FieldDate> {
     let millis = seconds * 1000.0;
     if !millis.is_finite() || millis.abs() > i64::MAX as f64 {
         return Err(AuthError::internal("Invalid OAuth token lifetime"));
     }
-    Utc::now()
-        .checked_add_signed(Duration::milliseconds(millis as i64))
+    // Date clips the sum; truncating the duration first loses negative submillisecond offsets.
+    better_auth_core::utils::date::from_milliseconds(now.timestamp_millis() as f64 + millis)
         .map(Into::into)
         .ok_or_else(|| AuthError::internal("OAuth token lifetime is out of range"))
 }
@@ -245,19 +252,27 @@ fn apply_default_expiry(
             .generic
             .as_ref()
             .and_then(|generic| generic.config.access_token_expires_in)
+            .filter(|seconds| FieldValue::Number(*seconds).is_truthy())
     {
-        tokens.access_token_expires_at = expiry(seconds)?;
+        tokens.access_token_expires_at = expiry(seconds, Utc::now)?;
     }
     Ok(tokens)
 }
 
 pub(super) fn parse_token_response(value: Value) -> AuthResult<OAuthTokenSet> {
+    parse_token_response_with_clock(value, Utc::now)
+}
+
+fn parse_token_response_with_clock(
+    value: Value,
+    clock: impl Fn() -> DateTime<Utc>,
+) -> AuthResult<OAuthTokenSet> {
     let string = |key| value.get(key).and_then(Value::as_str).map(str::to_owned);
     let date = |key| -> AuthResult<Option<better_auth_core::FieldDate>> {
         value
             .get(key)
             .and_then(|value| value.as_f64().or_else(|| value.as_str()?.parse().ok()))
-            .map(expiry)
+            .map(|seconds| expiry(seconds, &clock))
             .transpose()
             .map(Option::flatten)
     };
@@ -289,6 +304,10 @@ pub(super) fn parse_token_response(value: Value) -> AuthResult<OAuthTokenSet> {
 }
 
 #[cfg(test)]
+#[path = "token_duration_tests.rs"]
+mod duration_tests;
+
+#[cfg(test)]
 mod tests {
     use super::super::generic::{GenericOAuthConfig, OAuthTokenHandler};
     use super::super::providers::OAuthProvider;
@@ -297,6 +316,7 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use better_auth_core::HttpMethod;
+    use chrono::Duration;
     use serde_json::json;
     use std::sync::Arc;
 

@@ -226,7 +226,7 @@ async fn persist_tokens(
             .filter(|token| !token.is_empty()),
         None,
     )?;
-    let update = UpdateAccount {
+    let mut update = UpdateAccount {
         access_token: encrypted
             .access_token
             .map(|value| SchemaValue::Typed(Some(value)))
@@ -253,6 +253,13 @@ async fn persist_tokens(
             .unwrap_or_else(|| account.refresh_token_expires_at.clone()),
         ..Default::default()
     };
+    if tokens.access_token_expires_at.is_none() {
+        // The refresh input owns this undefined key before the adapter removes absent writes.
+        let _ = update.additional_fields.insert(
+            "accessTokenExpiresAt".into(),
+            better_auth_core::FieldValue::Undefined,
+        );
+    }
     let updated = if account.id.is_truthy()? {
         ctx.database
             .update_account_optional(account.id.typed()?, update.clone())
