@@ -28,8 +28,18 @@ pub(crate) use reference_sets::load_reference_sets;
 #[path = "device_where_reference_values.rs"]
 mod reference_values;
 pub(crate) use reference_values::load_reference_values;
+#[path = "device_where_reference_defaults.rs"]
+mod reference_defaults;
+pub(crate) use reference_defaults::load_reference_defaults;
 
 type Trace = Arc<Mutex<Vec<Value>>>;
+
+pub(crate) struct RunConfig<'a> {
+    pub(crate) auth: AuthConfig,
+    pub(crate) owner_ref_type: UserFieldType,
+    pub(crate) owner_id: Option<&'a str>,
+}
+
 const FIELDS: [(&str, UserFieldType); 7] = [
     ("label", UserFieldType::String),
     ("quantity", UserFieldType::Number),
@@ -392,9 +402,13 @@ pub(crate) async fn run<S: AuthSchema>(
     raw: Arc<dyn AuthStore<S>>,
     backend: &str,
     cases: &[&Case],
-    config: AuthConfig,
-    owner_ref_type: UserFieldType,
+    options: RunConfig<'_>,
 ) -> AuthResult<()> {
+    let RunConfig {
+        auth: config,
+        owner_ref_type,
+        owner_id,
+    } = options;
     let serial = matches!(config.advanced.database.generate_id(), IdGeneration::Serial);
     let trace = Trace::default();
     let storage_trace = Trace::default();
@@ -413,8 +427,15 @@ pub(crate) async fn run<S: AuthSchema>(
     let mut owner_input = CreateUser::new()
         .with_name("Where owner")
         .with_email("owner@device-where.test");
-    owner_input.id = (!serial).then(|| "ordinary-owner".into());
+    owner_input.id = owner_id.map(str::to_owned);
     let owner = auth.store().create_user(owner_input).await?;
+    if let Some(owner_id) = owner_id {
+        assert_eq!(
+            owner.id.typed()?,
+            owner_id,
+            "Fixtures retain the supplied owner ID"
+        );
+    }
     if serial {
         assert_eq!(owner.id.typed()?, "1", "Serial fixtures start with owner 1");
     }
@@ -513,6 +534,17 @@ pub(crate) async fn run<S: AuthSchema>(
             (None, result) => result?,
             (Some(expected), Err(AuthError::Internal(message))) if case.rollback.is_some() => {
                 assert_eq!(expected.name, "Error");
+                assert_eq!(message, expected.message);
+                None
+            }
+            (Some(expected), Err(AuthError::Internal(message)))
+                if case.condition.get(1).is_some_and(|query| {
+                    query.get("operator").and_then(Value::as_str) == Some("in")
+                        && query.get("value").is_some_and(|value| !value.is_array())
+                }) =>
+            {
+                assert_eq!(expected.name, "BetterAuthError");
+                assert_eq!(message, "Value must be an array");
                 assert_eq!(message, expected.message);
                 None
             }

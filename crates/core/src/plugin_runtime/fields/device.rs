@@ -79,6 +79,9 @@ impl ModelFields {
                 )
             }
             DeviceCodeOwnership::Where(query) => {
+                if query.operator == WhereOperator::In && !matches!(query.value, Value::Array(_)) {
+                    return Err(AuthError::internal("Value must be an array"));
+                }
                 let (logical, field) = self.declared_device_code_ownership_field(&query.field)?;
                 if field.references.is_some()
                     && !(field.references_id()

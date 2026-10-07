@@ -7,7 +7,10 @@ mod fixture;
 #[path = "support/device_where_inventory.rs"]
 mod inventory;
 
-use better_auth_core::{store::EphemeralStore, user_fields::UserFieldType};
+use better_auth_core::{
+    store::{EphemeralStore, UserStore},
+    user_fields::UserFieldType,
+};
 use better_auth_seaorm::sea_orm::{ConnectOptions, ConnectionTrait, Database, DatabaseConnection};
 use std::sync::Arc;
 
@@ -37,8 +40,11 @@ async fn memory_device_where_matches_upstream_rows_callbacks_and_consumption() -
             Arc::new(EphemeralStore::new(Arc::new(config.clone()))),
             "memory",
             &cases,
-            config,
-            UserFieldType::String,
+            contract::RunConfig {
+                auth: config,
+                owner_ref_type: UserFieldType::String,
+                owner_id: (!serial).then_some("ordinary-owner"),
+            },
         )
         .await?;
     }
@@ -48,8 +54,25 @@ async fn memory_device_where_matches_upstream_rows_callbacks_and_consumption() -
             Arc::new(EphemeralStore::new(Arc::new(config.clone()))),
             "memory",
             &group.cases.iter().collect::<Vec<_>>(),
-            config,
-            group.owner_ref_type.field_type(),
+            contract::RunConfig {
+                auth: config,
+                owner_ref_type: group.owner_ref_type.field_type(),
+                owner_id: (!group.serial).then_some("ordinary-owner"),
+            },
+        )
+        .await?;
+    }
+    for group in contract::load_reference_defaults("memory")? {
+        let config = contract::config(false);
+        contract::run(
+            Arc::new(EphemeralStore::new(Arc::new(config.clone()))),
+            "memory",
+            &group.cases.iter().collect::<Vec<_>>(),
+            contract::RunConfig {
+                auth: config,
+                owner_ref_type: group.owner_ref_type.field_type(),
+                owner_id: Some(&group.owner_id),
+            },
         )
         .await?;
     }
@@ -81,21 +104,43 @@ async fn sql_contract(database: DatabaseConnection, backend: &str) -> TestResult
                 Arc::new(store),
                 backend,
                 &cases,
-                config,
-                UserFieldType::String,
+                contract::RunConfig {
+                    auth: config,
+                    owner_ref_type: UserFieldType::String,
+                    owner_id: None,
+                },
             )
             .await?;
             fixture::drop_serial(&database).await?;
         } else {
-            let store = fixture::setup(config.clone(), database.clone()).await?;
+            let owner_id = "ordinary-owner";
+            let store = Arc::new(fixture::setup(config.clone(), database.clone()).await?);
             contract::run(
-                Arc::new(store),
+                store.clone(),
                 backend,
                 &cases,
-                config,
-                UserFieldType::String,
+                contract::RunConfig {
+                    auth: config.clone(),
+                    owner_ref_type: UserFieldType::String,
+                    owner_id: Some(owner_id),
+                },
             )
             .await?;
+            store.delete_user(owner_id).await?;
+            for group in contract::load_reference_defaults(backend)? {
+                contract::run(
+                    store.clone(),
+                    backend,
+                    &group.cases.iter().collect::<Vec<_>>(),
+                    contract::RunConfig {
+                        auth: config.clone(),
+                        owner_ref_type: group.owner_ref_type.field_type(),
+                        owner_id: Some(&group.owner_id),
+                    },
+                )
+                .await?;
+                store.delete_user(&group.owner_id).await?;
+            }
         }
     }
     for group in contract::load_reference_values(backend)? {
@@ -105,8 +150,11 @@ async fn sql_contract(database: DatabaseConnection, backend: &str) -> TestResult
             Arc::new(store),
             backend,
             &group.cases.iter().collect::<Vec<_>>(),
-            config,
-            group.owner_ref_type.field_type(),
+            contract::RunConfig {
+                auth: config,
+                owner_ref_type: group.owner_ref_type.field_type(),
+                owner_id: None,
+            },
         )
         .await?;
         fixture::drop_serial(&database).await?;

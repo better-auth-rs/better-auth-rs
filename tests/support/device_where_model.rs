@@ -13,7 +13,7 @@ use better_auth_seaorm::store::{
 )]
 pub mod model {
     use better_auth::seaorm::{
-        AuthEntity, SqlNumber,
+        AuthEntity, ReferenceId, SqlNumber,
         sea_orm::{self, entity::prelude::*},
     };
 
@@ -51,9 +51,13 @@ pub mod model {
         #[sea_orm(column_name = "stored_payload", column_type = "JsonBinary", nullable)]
         #[serde(rename = "stored_payload")]
         pub payload: Option<Json>,
-        #[sea_orm(column_name = "stored_ownerRef")]
+        #[sea_orm(
+            column_name = "stored_ownerRef",
+            column_type = "String(sea_orm::sea_query::StringLen::None)",
+            nullable
+        )]
         #[serde(rename = "stored_ownerRef")]
-        pub owner_ref: Option<String>,
+        pub owner_ref: Option<ReferenceId>,
     }
 
     #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
