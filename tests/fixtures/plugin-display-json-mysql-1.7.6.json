@@ -251,6 +251,39 @@
           "default": null
         }
       ],
+      "constraints": {
+        "indexes": [
+          {
+            "table": "display_json_apikey_name",
+            "name": "display_json_apikey_name_configId_idx",
+            "unique": "NO",
+            "position": "1",
+            "column": "configId"
+          },
+          {
+            "table": "display_json_apikey_name",
+            "name": "display_json_apikey_name_key_idx",
+            "unique": "NO",
+            "position": "1",
+            "column": "key"
+          },
+          {
+            "table": "display_json_apikey_name",
+            "name": "display_json_apikey_name_referenceId_idx",
+            "unique": "NO",
+            "position": "1",
+            "column": "referenceId"
+          },
+          {
+            "table": "display_json_apikey_name",
+            "name": "PRIMARY",
+            "unique": "YES",
+            "position": "1",
+            "column": "id"
+          }
+        ],
+        "foreignKeys": []
+      },
       "cases": [
         {
           "name": "omitted",
@@ -11360,6 +11393,32 @@
           "default": null
         }
       ],
+      "constraints": {
+        "indexes": [
+          {
+            "table": "display_json_passkey_name",
+            "name": "display_json_passkey_name_credentialID_idx",
+            "unique": "NO",
+            "position": "1",
+            "column": "credentialID"
+          },
+          {
+            "table": "display_json_passkey_name",
+            "name": "display_json_passkey_name_userId_idx",
+            "unique": "NO",
+            "position": "1",
+            "column": "userId"
+          },
+          {
+            "table": "display_json_passkey_name",
+            "name": "PRIMARY",
+            "unique": "YES",
+            "position": "1",
+            "column": "id"
+          }
+        ],
+        "foreignKeys": []
+      },
       "cases": [
         {
           "name": "omitted",
@@ -18594,6 +18653,32 @@
           "default": null
         }
       ],
+      "constraints": {
+        "indexes": [
+          {
+            "table": "display_json_passkey_aaguid",
+            "name": "display_json_passkey_aaguid_credentialID_idx",
+            "unique": "NO",
+            "position": "1",
+            "column": "credentialID"
+          },
+          {
+            "table": "display_json_passkey_aaguid",
+            "name": "display_json_passkey_aaguid_userId_idx",
+            "unique": "NO",
+            "position": "1",
+            "column": "userId"
+          },
+          {
+            "table": "display_json_passkey_aaguid",
+            "name": "PRIMARY",
+            "unique": "YES",
+            "position": "1",
+            "column": "id"
+          }
+        ],
+        "foreignKeys": []
+      },
       "cases": [
         {
           "name": "omitted",
@@ -25700,5 +25785,430 @@
         }
       ]
     }
-  ]
+  ],
+  "apiKeyCatalog": {
+    "columns": [
+      {
+        "table": "apikey",
+        "position": "1",
+        "name": "id",
+        "type": "varchar",
+        "nativeType": "varchar(36)",
+        "maxLength": "36",
+        "datetimePrecision": null,
+        "nullable": "NO",
+        "default": null
+      },
+      {
+        "table": "apikey",
+        "position": "2",
+        "name": "configId",
+        "type": "varchar",
+        "nativeType": "varchar(255)",
+        "maxLength": "255",
+        "datetimePrecision": null,
+        "nullable": "NO",
+        "default": null
+      },
+      {
+        "table": "apikey",
+        "position": "3",
+        "name": "name",
+        "type": "text",
+        "nativeType": "text",
+        "maxLength": "65535",
+        "datetimePrecision": null,
+        "nullable": "YES",
+        "default": null
+      },
+      {
+        "table": "apikey",
+        "position": "4",
+        "name": "start",
+        "type": "text",
+        "nativeType": "text",
+        "maxLength": "65535",
+        "datetimePrecision": null,
+        "nullable": "YES",
+        "default": null
+      },
+      {
+        "table": "apikey",
+        "position": "5",
+        "name": "referenceId",
+        "type": "varchar",
+        "nativeType": "varchar(255)",
+        "maxLength": "255",
+        "datetimePrecision": null,
+        "nullable": "NO",
+        "default": null
+      },
+      {
+        "table": "apikey",
+        "position": "6",
+        "name": "prefix",
+        "type": "text",
+        "nativeType": "text",
+        "maxLength": "65535",
+        "datetimePrecision": null,
+        "nullable": "YES",
+        "default": null
+      },
+      {
+        "table": "apikey",
+        "position": "7",
+        "name": "key",
+        "type": "varchar",
+        "nativeType": "varchar(255)",
+        "maxLength": "255",
+        "datetimePrecision": null,
+        "nullable": "NO",
+        "default": null
+      },
+      {
+        "table": "apikey",
+        "position": "8",
+        "name": "refillInterval",
+        "type": "int",
+        "nativeType": "int",
+        "maxLength": null,
+        "datetimePrecision": null,
+        "nullable": "YES",
+        "default": null
+      },
+      {
+        "table": "apikey",
+        "position": "9",
+        "name": "refillAmount",
+        "type": "int",
+        "nativeType": "int",
+        "maxLength": null,
+        "datetimePrecision": null,
+        "nullable": "YES",
+        "default": null
+      },
+      {
+        "table": "apikey",
+        "position": "10",
+        "name": "lastRefillAt",
+        "type": "timestamp",
+        "nativeType": "timestamp(3)",
+        "maxLength": null,
+        "datetimePrecision": "3",
+        "nullable": "YES",
+        "default": null
+      },
+      {
+        "table": "apikey",
+        "position": "11",
+        "name": "enabled",
+        "type": "tinyint",
+        "nativeType": "tinyint(1)",
+        "maxLength": null,
+        "datetimePrecision": null,
+        "nullable": "YES",
+        "default": null
+      },
+      {
+        "table": "apikey",
+        "position": "12",
+        "name": "rateLimitEnabled",
+        "type": "tinyint",
+        "nativeType": "tinyint(1)",
+        "maxLength": null,
+        "datetimePrecision": null,
+        "nullable": "YES",
+        "default": null
+      },
+      {
+        "table": "apikey",
+        "position": "13",
+        "name": "rateLimitTimeWindow",
+        "type": "int",
+        "nativeType": "int",
+        "maxLength": null,
+        "datetimePrecision": null,
+        "nullable": "YES",
+        "default": null
+      },
+      {
+        "table": "apikey",
+        "position": "14",
+        "name": "rateLimitMax",
+        "type": "int",
+        "nativeType": "int",
+        "maxLength": null,
+        "datetimePrecision": null,
+        "nullable": "YES",
+        "default": null
+      },
+      {
+        "table": "apikey",
+        "position": "15",
+        "name": "requestCount",
+        "type": "int",
+        "nativeType": "int",
+        "maxLength": null,
+        "datetimePrecision": null,
+        "nullable": "YES",
+        "default": null
+      },
+      {
+        "table": "apikey",
+        "position": "16",
+        "name": "remaining",
+        "type": "int",
+        "nativeType": "int",
+        "maxLength": null,
+        "datetimePrecision": null,
+        "nullable": "YES",
+        "default": null
+      },
+      {
+        "table": "apikey",
+        "position": "17",
+        "name": "lastRequest",
+        "type": "timestamp",
+        "nativeType": "timestamp(3)",
+        "maxLength": null,
+        "datetimePrecision": "3",
+        "nullable": "YES",
+        "default": null
+      },
+      {
+        "table": "apikey",
+        "position": "18",
+        "name": "expiresAt",
+        "type": "timestamp",
+        "nativeType": "timestamp(3)",
+        "maxLength": null,
+        "datetimePrecision": "3",
+        "nullable": "YES",
+        "default": null
+      },
+      {
+        "table": "apikey",
+        "position": "19",
+        "name": "createdAt",
+        "type": "timestamp",
+        "nativeType": "timestamp(3)",
+        "maxLength": null,
+        "datetimePrecision": "3",
+        "nullable": "NO",
+        "default": null
+      },
+      {
+        "table": "apikey",
+        "position": "20",
+        "name": "updatedAt",
+        "type": "timestamp",
+        "nativeType": "timestamp(3)",
+        "maxLength": null,
+        "datetimePrecision": "3",
+        "nullable": "NO",
+        "default": null
+      },
+      {
+        "table": "apikey",
+        "position": "21",
+        "name": "permissions",
+        "type": "text",
+        "nativeType": "text",
+        "maxLength": "65535",
+        "datetimePrecision": null,
+        "nullable": "YES",
+        "default": null
+      },
+      {
+        "table": "apikey",
+        "position": "22",
+        "name": "metadata",
+        "type": "text",
+        "nativeType": "text",
+        "maxLength": "65535",
+        "datetimePrecision": null,
+        "nullable": "YES",
+        "default": null
+      }
+    ],
+    "constraints": {
+      "indexes": [
+        {
+          "table": "apikey",
+          "name": "apikey_configId_idx",
+          "unique": "NO",
+          "position": "1",
+          "column": "configId"
+        },
+        {
+          "table": "apikey",
+          "name": "apikey_key_idx",
+          "unique": "NO",
+          "position": "1",
+          "column": "key"
+        },
+        {
+          "table": "apikey",
+          "name": "apikey_referenceId_idx",
+          "unique": "NO",
+          "position": "1",
+          "column": "referenceId"
+        },
+        {
+          "table": "apikey",
+          "name": "PRIMARY",
+          "unique": "YES",
+          "position": "1",
+          "column": "id"
+        }
+      ],
+      "foreignKeys": []
+    },
+    "storage": {
+      "nullFlags": {
+        "id": "native-null-flags",
+        "key": "shared-native-key",
+        "referenceId": "owner-without-user-row",
+        "configId": "default",
+        "enabled": null,
+        "rateLimitEnabled": null,
+        "refillInterval": null,
+        "refillAmount": null,
+        "rateLimitTimeWindow": null,
+        "rateLimitMax": null,
+        "requestCount": null,
+        "remaining": null,
+        "name": null,
+        "start": null,
+        "prefix": null,
+        "permissions": null,
+        "metadata": null
+      },
+      "longText": {
+        "id": "native-long-text",
+        "key": "shared-native-key",
+        "referenceId": "owner-without-user-row",
+        "configId": "default",
+        "enabled": true,
+        "rateLimitEnabled": true,
+        "refillInterval": null,
+        "refillAmount": null,
+        "rateLimitTimeWindow": null,
+        "rateLimitMax": null,
+        "requestCount": 0,
+        "remaining": null,
+        "name": "name:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "start": "start:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "prefix": "prefix:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "permissions": "permissions:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "metadata": "metadata:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      },
+      "numeric": [
+        {
+          "name": "integer",
+          "input": 7,
+          "accepted": true,
+          "error": null,
+          "row": {
+            "id": "native-number-integer",
+            "key": "shared-native-key",
+            "referenceId": "owner-without-user-row",
+            "configId": "default",
+            "enabled": true,
+            "rateLimitEnabled": true,
+            "refillInterval": 7,
+            "refillAmount": 7,
+            "rateLimitTimeWindow": 7,
+            "rateLimitMax": 7,
+            "requestCount": 7,
+            "remaining": 7,
+            "name": null,
+            "start": null,
+            "prefix": null,
+            "permissions": null,
+            "metadata": null
+          }
+        },
+        {
+          "name": "fraction",
+          "input": 1.5,
+          "accepted": true,
+          "error": null,
+          "row": {
+            "id": "native-number-fraction",
+            "key": "shared-native-key",
+            "referenceId": "owner-without-user-row",
+            "configId": "default",
+            "enabled": true,
+            "rateLimitEnabled": true,
+            "refillInterval": 2,
+            "refillAmount": 2,
+            "rateLimitTimeWindow": 2,
+            "rateLimitMax": 2,
+            "requestCount": 2,
+            "remaining": 2,
+            "name": null,
+            "start": null,
+            "prefix": null,
+            "permissions": null,
+            "metadata": null
+          }
+        },
+        {
+          "name": "negative-fraction",
+          "input": -1.5,
+          "accepted": true,
+          "error": null,
+          "row": {
+            "id": "native-number-negative-fraction",
+            "key": "shared-native-key",
+            "referenceId": "owner-without-user-row",
+            "configId": "default",
+            "enabled": true,
+            "rateLimitEnabled": true,
+            "refillInterval": -2,
+            "refillAmount": -2,
+            "rateLimitTimeWindow": -2,
+            "rateLimitMax": -2,
+            "requestCount": -2,
+            "remaining": -2,
+            "name": null,
+            "start": null,
+            "prefix": null,
+            "permissions": null,
+            "metadata": null
+          }
+        },
+        {
+          "name": "outside-int32",
+          "input": 2147483648,
+          "accepted": false,
+          "error": {
+            "name": "Error",
+            "message": "Out of range value for column 'refillInterval' at row 1",
+            "code": "ER_WARN_DATA_OUT_OF_RANGE"
+          },
+          "row": {
+            "id": "native-number-outside-int32",
+            "key": "shared-native-key",
+            "referenceId": "owner-without-user-row",
+            "configId": "default",
+            "enabled": true,
+            "rateLimitEnabled": true,
+            "refillInterval": null,
+            "refillAmount": null,
+            "rateLimitTimeWindow": null,
+            "rateLimitMax": null,
+            "requestCount": 0,
+            "remaining": null,
+            "name": null,
+            "start": null,
+            "prefix": null,
+            "permissions": null,
+            "metadata": null
+          }
+        }
+      ]
+    }
+  }
 }

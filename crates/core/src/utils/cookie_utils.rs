@@ -224,12 +224,16 @@ pub fn render_cookie(value: &str, resolved: &ResolvedCookie) -> AuthResult<Strin
         rendered.push_str(path);
     }
     if let Some(expires) = cookie.expires_datetime() {
+        let format = cookie::time::format_description::parse_borrowed::<2>(
+            "; Expires=[weekday repr:short], [day] [month repr:short] [year padding:none] [hour]:[minute]:[second] GMT",
+        )
+        .map_err(|error| AuthError::internal(format!("Parsing cookie expiration format: {error}")))?;
         let expires = expires
             .to_offset(cookie::time::UtcOffset::UTC)
-            .format(cookie::time::macros::format_description!(
-                "; Expires=[weekday repr:short], [day] [month repr:short] [year padding:none] [hour]:[minute]:[second] GMT"
-            ))
-            .map_err(|error| AuthError::internal(format!("Formatting cookie expiration: {error}")))?;
+            .format(&format)
+            .map_err(|error| {
+                AuthError::internal(format!("Formatting cookie expiration: {error}"))
+            })?;
         rendered.push_str(&expires);
     }
     if cookie.http_only() == Some(true) {

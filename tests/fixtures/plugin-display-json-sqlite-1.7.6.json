@@ -185,6 +185,147 @@
           "pk": 0
         }
       ],
+      "constraints": {
+        "indexes": [
+          {
+            "definition": {
+              "seq": 0,
+              "name": "display_json_apikey_name_key_idx",
+              "unique": 0,
+              "origin": "c",
+              "partial": 0
+            },
+            "columns": [
+              {
+                "seqno": 0,
+                "cid": 6,
+                "name": "key"
+              }
+            ],
+            "extendedColumns": [
+              {
+                "seqno": 0,
+                "cid": 6,
+                "name": "key",
+                "desc": 0,
+                "coll": "BINARY",
+                "key": 1
+              },
+              {
+                "seqno": 1,
+                "cid": -1,
+                "name": null,
+                "desc": 0,
+                "coll": "BINARY",
+                "key": 0
+              }
+            ]
+          },
+          {
+            "definition": {
+              "seq": 1,
+              "name": "display_json_apikey_name_referenceId_idx",
+              "unique": 0,
+              "origin": "c",
+              "partial": 0
+            },
+            "columns": [
+              {
+                "seqno": 0,
+                "cid": 4,
+                "name": "referenceId"
+              }
+            ],
+            "extendedColumns": [
+              {
+                "seqno": 0,
+                "cid": 4,
+                "name": "referenceId",
+                "desc": 0,
+                "coll": "BINARY",
+                "key": 1
+              },
+              {
+                "seqno": 1,
+                "cid": -1,
+                "name": null,
+                "desc": 0,
+                "coll": "BINARY",
+                "key": 0
+              }
+            ]
+          },
+          {
+            "definition": {
+              "seq": 2,
+              "name": "display_json_apikey_name_configId_idx",
+              "unique": 0,
+              "origin": "c",
+              "partial": 0
+            },
+            "columns": [
+              {
+                "seqno": 0,
+                "cid": 1,
+                "name": "configId"
+              }
+            ],
+            "extendedColumns": [
+              {
+                "seqno": 0,
+                "cid": 1,
+                "name": "configId",
+                "desc": 0,
+                "coll": "BINARY",
+                "key": 1
+              },
+              {
+                "seqno": 1,
+                "cid": -1,
+                "name": null,
+                "desc": 0,
+                "coll": "BINARY",
+                "key": 0
+              }
+            ]
+          },
+          {
+            "definition": {
+              "seq": 3,
+              "name": "sqlite_autoindex_display_json_apikey_name_1",
+              "unique": 1,
+              "origin": "pk",
+              "partial": 0
+            },
+            "columns": [
+              {
+                "seqno": 0,
+                "cid": 0,
+                "name": "id"
+              }
+            ],
+            "extendedColumns": [
+              {
+                "seqno": 0,
+                "cid": 0,
+                "name": "id",
+                "desc": 0,
+                "coll": "BINARY",
+                "key": 1
+              },
+              {
+                "seqno": 1,
+                "cid": -1,
+                "name": null,
+                "desc": 0,
+                "coll": "BINARY",
+                "key": 0
+              }
+            ]
+          }
+        ],
+        "foreignKeys": []
+      },
       "cases": [
         {
           "name": "omitted",
@@ -10905,6 +11046,124 @@
           "pk": 0
         }
       ],
+      "constraints": {
+        "indexes": [
+          {
+            "definition": {
+              "seq": 0,
+              "name": "display_json_passkey_name_credentialID_idx",
+              "unique": 0,
+              "origin": "c",
+              "partial": 0
+            },
+            "columns": [
+              {
+                "seqno": 0,
+                "cid": 4,
+                "name": "credentialID"
+              }
+            ],
+            "extendedColumns": [
+              {
+                "seqno": 0,
+                "cid": 4,
+                "name": "credentialID",
+                "desc": 0,
+                "coll": "BINARY",
+                "key": 1
+              },
+              {
+                "seqno": 1,
+                "cid": -1,
+                "name": null,
+                "desc": 0,
+                "coll": "BINARY",
+                "key": 0
+              }
+            ]
+          },
+          {
+            "definition": {
+              "seq": 1,
+              "name": "display_json_passkey_name_userId_idx",
+              "unique": 0,
+              "origin": "c",
+              "partial": 0
+            },
+            "columns": [
+              {
+                "seqno": 0,
+                "cid": 3,
+                "name": "userId"
+              }
+            ],
+            "extendedColumns": [
+              {
+                "seqno": 0,
+                "cid": 3,
+                "name": "userId",
+                "desc": 0,
+                "coll": "BINARY",
+                "key": 1
+              },
+              {
+                "seqno": 1,
+                "cid": -1,
+                "name": null,
+                "desc": 0,
+                "coll": "BINARY",
+                "key": 0
+              }
+            ]
+          },
+          {
+            "definition": {
+              "seq": 2,
+              "name": "sqlite_autoindex_display_json_passkey_name_1",
+              "unique": 1,
+              "origin": "pk",
+              "partial": 0
+            },
+            "columns": [
+              {
+                "seqno": 0,
+                "cid": 0,
+                "name": "id"
+              }
+            ],
+            "extendedColumns": [
+              {
+                "seqno": 0,
+                "cid": 0,
+                "name": "id",
+                "desc": 0,
+                "coll": "BINARY",
+                "key": 1
+              },
+              {
+                "seqno": 1,
+                "cid": -1,
+                "name": null,
+                "desc": 0,
+                "coll": "BINARY",
+                "key": 0
+              }
+            ]
+          }
+        ],
+        "foreignKeys": [
+          {
+            "id": 0,
+            "seq": 0,
+            "table": "user",
+            "from": "userId",
+            "to": "id",
+            "on_update": "NO ACTION",
+            "on_delete": "CASCADE",
+            "match": "NONE"
+          }
+        ]
+      },
       "cases": [
         {
           "name": "omitted",
@@ -17761,6 +18020,124 @@
           "pk": 0
         }
       ],
+      "constraints": {
+        "indexes": [
+          {
+            "definition": {
+              "seq": 0,
+              "name": "display_json_passkey_aaguid_credentialID_idx",
+              "unique": 0,
+              "origin": "c",
+              "partial": 0
+            },
+            "columns": [
+              {
+                "seqno": 0,
+                "cid": 4,
+                "name": "credentialID"
+              }
+            ],
+            "extendedColumns": [
+              {
+                "seqno": 0,
+                "cid": 4,
+                "name": "credentialID",
+                "desc": 0,
+                "coll": "BINARY",
+                "key": 1
+              },
+              {
+                "seqno": 1,
+                "cid": -1,
+                "name": null,
+                "desc": 0,
+                "coll": "BINARY",
+                "key": 0
+              }
+            ]
+          },
+          {
+            "definition": {
+              "seq": 1,
+              "name": "display_json_passkey_aaguid_userId_idx",
+              "unique": 0,
+              "origin": "c",
+              "partial": 0
+            },
+            "columns": [
+              {
+                "seqno": 0,
+                "cid": 3,
+                "name": "userId"
+              }
+            ],
+            "extendedColumns": [
+              {
+                "seqno": 0,
+                "cid": 3,
+                "name": "userId",
+                "desc": 0,
+                "coll": "BINARY",
+                "key": 1
+              },
+              {
+                "seqno": 1,
+                "cid": -1,
+                "name": null,
+                "desc": 0,
+                "coll": "BINARY",
+                "key": 0
+              }
+            ]
+          },
+          {
+            "definition": {
+              "seq": 2,
+              "name": "sqlite_autoindex_display_json_passkey_aaguid_1",
+              "unique": 1,
+              "origin": "pk",
+              "partial": 0
+            },
+            "columns": [
+              {
+                "seqno": 0,
+                "cid": 0,
+                "name": "id"
+              }
+            ],
+            "extendedColumns": [
+              {
+                "seqno": 0,
+                "cid": 0,
+                "name": "id",
+                "desc": 0,
+                "coll": "BINARY",
+                "key": 1
+              },
+              {
+                "seqno": 1,
+                "cid": -1,
+                "name": null,
+                "desc": 0,
+                "coll": "BINARY",
+                "key": 0
+              }
+            ]
+          }
+        ],
+        "foreignKeys": [
+          {
+            "id": 0,
+            "seq": 0,
+            "table": "user",
+            "from": "userId",
+            "to": "id",
+            "on_update": "NO ACTION",
+            "on_delete": "CASCADE",
+            "match": "NONE"
+          }
+        ]
+      },
       "cases": [
         {
           "name": "omitted",
@@ -24522,5 +24899,468 @@
         }
       ]
     }
-  ]
+  ],
+  "apiKeyCatalog": {
+    "columns": [
+      {
+        "cid": 0,
+        "name": "id",
+        "type": "TEXT",
+        "notnull": 1,
+        "dflt_value": null,
+        "pk": 1
+      },
+      {
+        "cid": 1,
+        "name": "configId",
+        "type": "TEXT",
+        "notnull": 1,
+        "dflt_value": null,
+        "pk": 0
+      },
+      {
+        "cid": 2,
+        "name": "name",
+        "type": "TEXT",
+        "notnull": 0,
+        "dflt_value": null,
+        "pk": 0
+      },
+      {
+        "cid": 3,
+        "name": "start",
+        "type": "TEXT",
+        "notnull": 0,
+        "dflt_value": null,
+        "pk": 0
+      },
+      {
+        "cid": 4,
+        "name": "referenceId",
+        "type": "TEXT",
+        "notnull": 1,
+        "dflt_value": null,
+        "pk": 0
+      },
+      {
+        "cid": 5,
+        "name": "prefix",
+        "type": "TEXT",
+        "notnull": 0,
+        "dflt_value": null,
+        "pk": 0
+      },
+      {
+        "cid": 6,
+        "name": "key",
+        "type": "TEXT",
+        "notnull": 1,
+        "dflt_value": null,
+        "pk": 0
+      },
+      {
+        "cid": 7,
+        "name": "refillInterval",
+        "type": "INTEGER",
+        "notnull": 0,
+        "dflt_value": null,
+        "pk": 0
+      },
+      {
+        "cid": 8,
+        "name": "refillAmount",
+        "type": "INTEGER",
+        "notnull": 0,
+        "dflt_value": null,
+        "pk": 0
+      },
+      {
+        "cid": 9,
+        "name": "lastRefillAt",
+        "type": "date",
+        "notnull": 0,
+        "dflt_value": null,
+        "pk": 0
+      },
+      {
+        "cid": 10,
+        "name": "enabled",
+        "type": "INTEGER",
+        "notnull": 0,
+        "dflt_value": null,
+        "pk": 0
+      },
+      {
+        "cid": 11,
+        "name": "rateLimitEnabled",
+        "type": "INTEGER",
+        "notnull": 0,
+        "dflt_value": null,
+        "pk": 0
+      },
+      {
+        "cid": 12,
+        "name": "rateLimitTimeWindow",
+        "type": "INTEGER",
+        "notnull": 0,
+        "dflt_value": null,
+        "pk": 0
+      },
+      {
+        "cid": 13,
+        "name": "rateLimitMax",
+        "type": "INTEGER",
+        "notnull": 0,
+        "dflt_value": null,
+        "pk": 0
+      },
+      {
+        "cid": 14,
+        "name": "requestCount",
+        "type": "INTEGER",
+        "notnull": 0,
+        "dflt_value": null,
+        "pk": 0
+      },
+      {
+        "cid": 15,
+        "name": "remaining",
+        "type": "INTEGER",
+        "notnull": 0,
+        "dflt_value": null,
+        "pk": 0
+      },
+      {
+        "cid": 16,
+        "name": "lastRequest",
+        "type": "date",
+        "notnull": 0,
+        "dflt_value": null,
+        "pk": 0
+      },
+      {
+        "cid": 17,
+        "name": "expiresAt",
+        "type": "date",
+        "notnull": 0,
+        "dflt_value": null,
+        "pk": 0
+      },
+      {
+        "cid": 18,
+        "name": "createdAt",
+        "type": "date",
+        "notnull": 1,
+        "dflt_value": null,
+        "pk": 0
+      },
+      {
+        "cid": 19,
+        "name": "updatedAt",
+        "type": "date",
+        "notnull": 1,
+        "dflt_value": null,
+        "pk": 0
+      },
+      {
+        "cid": 20,
+        "name": "permissions",
+        "type": "TEXT",
+        "notnull": 0,
+        "dflt_value": null,
+        "pk": 0
+      },
+      {
+        "cid": 21,
+        "name": "metadata",
+        "type": "TEXT",
+        "notnull": 0,
+        "dflt_value": null,
+        "pk": 0
+      }
+    ],
+    "constraints": {
+      "indexes": [
+        {
+          "definition": {
+            "seq": 0,
+            "name": "apikey_key_idx",
+            "unique": 0,
+            "origin": "c",
+            "partial": 0
+          },
+          "columns": [
+            {
+              "seqno": 0,
+              "cid": 6,
+              "name": "key"
+            }
+          ],
+          "extendedColumns": [
+            {
+              "seqno": 0,
+              "cid": 6,
+              "name": "key",
+              "desc": 0,
+              "coll": "BINARY",
+              "key": 1
+            },
+            {
+              "seqno": 1,
+              "cid": -1,
+              "name": null,
+              "desc": 0,
+              "coll": "BINARY",
+              "key": 0
+            }
+          ]
+        },
+        {
+          "definition": {
+            "seq": 1,
+            "name": "apikey_referenceId_idx",
+            "unique": 0,
+            "origin": "c",
+            "partial": 0
+          },
+          "columns": [
+            {
+              "seqno": 0,
+              "cid": 4,
+              "name": "referenceId"
+            }
+          ],
+          "extendedColumns": [
+            {
+              "seqno": 0,
+              "cid": 4,
+              "name": "referenceId",
+              "desc": 0,
+              "coll": "BINARY",
+              "key": 1
+            },
+            {
+              "seqno": 1,
+              "cid": -1,
+              "name": null,
+              "desc": 0,
+              "coll": "BINARY",
+              "key": 0
+            }
+          ]
+        },
+        {
+          "definition": {
+            "seq": 2,
+            "name": "apikey_configId_idx",
+            "unique": 0,
+            "origin": "c",
+            "partial": 0
+          },
+          "columns": [
+            {
+              "seqno": 0,
+              "cid": 1,
+              "name": "configId"
+            }
+          ],
+          "extendedColumns": [
+            {
+              "seqno": 0,
+              "cid": 1,
+              "name": "configId",
+              "desc": 0,
+              "coll": "BINARY",
+              "key": 1
+            },
+            {
+              "seqno": 1,
+              "cid": -1,
+              "name": null,
+              "desc": 0,
+              "coll": "BINARY",
+              "key": 0
+            }
+          ]
+        },
+        {
+          "definition": {
+            "seq": 3,
+            "name": "sqlite_autoindex_apikey_1",
+            "unique": 1,
+            "origin": "pk",
+            "partial": 0
+          },
+          "columns": [
+            {
+              "seqno": 0,
+              "cid": 0,
+              "name": "id"
+            }
+          ],
+          "extendedColumns": [
+            {
+              "seqno": 0,
+              "cid": 0,
+              "name": "id",
+              "desc": 0,
+              "coll": "BINARY",
+              "key": 1
+            },
+            {
+              "seqno": 1,
+              "cid": -1,
+              "name": null,
+              "desc": 0,
+              "coll": "BINARY",
+              "key": 0
+            }
+          ]
+        }
+      ],
+      "foreignKeys": []
+    },
+    "storage": {
+      "nullFlags": {
+        "id": "native-null-flags",
+        "key": "shared-native-key",
+        "referenceId": "owner-without-user-row",
+        "configId": "default",
+        "enabled": null,
+        "rateLimitEnabled": null,
+        "refillInterval": null,
+        "refillAmount": null,
+        "rateLimitTimeWindow": null,
+        "rateLimitMax": null,
+        "requestCount": null,
+        "remaining": null,
+        "name": null,
+        "start": null,
+        "prefix": null,
+        "permissions": null,
+        "metadata": null
+      },
+      "longText": {
+        "id": "native-long-text",
+        "key": "shared-native-key",
+        "referenceId": "owner-without-user-row",
+        "configId": "default",
+        "enabled": true,
+        "rateLimitEnabled": true,
+        "refillInterval": null,
+        "refillAmount": null,
+        "rateLimitTimeWindow": null,
+        "rateLimitMax": null,
+        "requestCount": 0,
+        "remaining": null,
+        "name": "name:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "start": "start:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "prefix": "prefix:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "permissions": "permissions:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "metadata": "metadata:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      },
+      "numeric": [
+        {
+          "name": "integer",
+          "input": 7,
+          "accepted": true,
+          "error": null,
+          "row": {
+            "id": "native-number-integer",
+            "key": "shared-native-key",
+            "referenceId": "owner-without-user-row",
+            "configId": "default",
+            "enabled": true,
+            "rateLimitEnabled": true,
+            "refillInterval": 7,
+            "refillAmount": 7,
+            "rateLimitTimeWindow": 7,
+            "rateLimitMax": 7,
+            "requestCount": 7,
+            "remaining": 7,
+            "name": null,
+            "start": null,
+            "prefix": null,
+            "permissions": null,
+            "metadata": null
+          }
+        },
+        {
+          "name": "fraction",
+          "input": 1.5,
+          "accepted": true,
+          "error": null,
+          "row": {
+            "id": "native-number-fraction",
+            "key": "shared-native-key",
+            "referenceId": "owner-without-user-row",
+            "configId": "default",
+            "enabled": true,
+            "rateLimitEnabled": true,
+            "refillInterval": 1.5,
+            "refillAmount": 1.5,
+            "rateLimitTimeWindow": 1.5,
+            "rateLimitMax": 1.5,
+            "requestCount": 1.5,
+            "remaining": 1.5,
+            "name": null,
+            "start": null,
+            "prefix": null,
+            "permissions": null,
+            "metadata": null
+          }
+        },
+        {
+          "name": "negative-fraction",
+          "input": -1.5,
+          "accepted": true,
+          "error": null,
+          "row": {
+            "id": "native-number-negative-fraction",
+            "key": "shared-native-key",
+            "referenceId": "owner-without-user-row",
+            "configId": "default",
+            "enabled": true,
+            "rateLimitEnabled": true,
+            "refillInterval": -1.5,
+            "refillAmount": -1.5,
+            "rateLimitTimeWindow": -1.5,
+            "rateLimitMax": -1.5,
+            "requestCount": -1.5,
+            "remaining": -1.5,
+            "name": null,
+            "start": null,
+            "prefix": null,
+            "permissions": null,
+            "metadata": null
+          }
+        },
+        {
+          "name": "outside-int32",
+          "input": 2147483648,
+          "accepted": true,
+          "error": null,
+          "row": {
+            "id": "native-number-outside-int32",
+            "key": "shared-native-key",
+            "referenceId": "owner-without-user-row",
+            "configId": "default",
+            "enabled": true,
+            "rateLimitEnabled": true,
+            "refillInterval": 2147483648,
+            "refillAmount": 2147483648,
+            "rateLimitTimeWindow": 2147483648,
+            "rateLimitMax": 2147483648,
+            "requestCount": 2147483648,
+            "remaining": 2147483648,
+            "name": null,
+            "start": null,
+            "prefix": null,
+            "permissions": null,
+            "metadata": null
+          }
+        }
+      ]
+    }
+  }
 }
