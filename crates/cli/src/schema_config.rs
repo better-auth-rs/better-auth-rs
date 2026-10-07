@@ -76,6 +76,7 @@ pub(crate) struct SchemaConfig(pub BTreeMap<String, ModelConfig>);
 #[derive(Clone, Copy, Default)]
 pub(crate) struct SchemaOptions {
     pub session_active_column: bool,
+    pub api_key_legacy_schema: bool,
     pub device_code_legacy_schema: bool,
     pub passkey_legacy_schema: bool,
     pub two_factor_legacy_schema: bool,
@@ -333,6 +334,7 @@ impl Entity {
             .collect::<Vec<_>>();
         let native_catalog = sqlite_native_catalog(database, definition.role)
             || session_row_presence
+            || definition.role == Some(EntityRole::ApiKey) && !options.api_key_legacy_schema
             || device_code_native_schema
             || passkey_native_schema
             || two_factor_native_schema

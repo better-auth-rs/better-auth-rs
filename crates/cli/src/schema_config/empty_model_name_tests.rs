@@ -5,7 +5,7 @@ use serde_json::{Value, json};
     clippy::expect_used,
     reason = "Fixture and generated-model structure is a test precondition; absence must fail the test."
 )]
-fn table_name(source: &str, module: &str) -> String {
+pub(super) fn table_name(source: &str, module: &str) -> String {
     let file = syn::parse_file(source).expect("generated schema parses");
     let model = file
         .items

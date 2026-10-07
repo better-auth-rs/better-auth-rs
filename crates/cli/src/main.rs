@@ -44,6 +44,10 @@ enum Command {
         #[arg(long)]
         session_active_column: bool,
 
+        /// Retain the previous API Key table and column names when regenerating models.
+        #[arg(long)]
+        api_key_legacy_schema: bool,
+
         /// Retain the previous DeviceCode names, types, references, and indexes.
         #[arg(long)]
         device_code_legacy_schema: bool,
@@ -88,6 +92,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 schema_config,
                 rate_limit_database,
                 session_active_column,
+                api_key_legacy_schema,
                 device_code_legacy_schema,
                 passkey_legacy_schema,
                 two_factor_legacy_schema,
@@ -127,6 +132,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         database,
         schema_config::SchemaOptions {
             session_active_column,
+            api_key_legacy_schema,
             device_code_legacy_schema,
             passkey_legacy_schema,
             two_factor_legacy_schema,

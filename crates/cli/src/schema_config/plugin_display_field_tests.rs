@@ -38,6 +38,52 @@ fn attribute_value(field: &syn::Field, attribute_name: &str, key: &str) -> Optio
 #[test]
 #[expect(
     clippy::expect_used,
+    reason = "Both generation modes must preserve the observed API Key column names and explicit display mapping."
+)]
+fn plugin_display_field_api_key_names_preserve_legacy_regeneration() {
+    let config: SchemaConfig = serde_json::from_value(json!({
+        "apikey": { "additionalFields": {
+            "name": { "type": "json", "required": false, "fieldName": "stored_display" }
+        } }
+    }))
+    .expect("display declaration");
+    for database in [Database::Sqlite, Database::Postgres, Database::Mysql] {
+        for legacy in [false, true] {
+            let source = crate::generate::generate_schema(
+                &["api-key".into()],
+                &config,
+                false,
+                IdGeneration::Random,
+                database,
+                SchemaOptions {
+                    api_key_legacy_schema: legacy,
+                    ..Default::default()
+                },
+            )
+            .expect("API Key schema generates");
+            assert_eq!(
+                super::empty_model_name_tests::table_name(&source, "api_key"),
+                if legacy { "api_keys" } else { "apikey" }
+            );
+            let fields = model_fields(&source, "api_key");
+            for (rust_name, native_name, legacy_name) in [
+                ("created_at", "createdAt", "created_at"),
+                ("reference_id", "referenceId", "reference_id"),
+                ("key_hash", "key", "key"),
+                ("name", "stored_display", "stored_display"),
+            ] {
+                let field = fields.get(rust_name).expect("API Key column");
+                let column = attribute_value(field, "sea_orm", "column_name")
+                    .unwrap_or_else(|| rust_name.to_owned());
+                assert_eq!(column, if legacy { legacy_name } else { native_name });
+            }
+        }
+    }
+}
+
+#[test]
+#[expect(
+    clippy::expect_used,
     reason = "Configuration and generated model fields are required observations for the storage contract."
 )]
 fn plugin_display_fields_generate_declared_storage_types_and_aliases() {

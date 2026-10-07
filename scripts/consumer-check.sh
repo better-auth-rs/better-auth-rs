@@ -28,14 +28,14 @@ print(executables[0])
 PY
 )
 
-# Existing ID/reference consumers own the legacy DeviceCode, Passkey, and TwoFactor schemas; fresh schemas have separate contracts.
-"$consumer_cli" generate --plugins all --device-code-legacy-schema --passkey-legacy-schema --two-factor-legacy-schema --output "$schema_dir/auth_schema.rs"
+# Existing ID/reference consumers own the legacy API Key, DeviceCode, Passkey, and TwoFactor schemas; fresh schemas have separate contracts.
+"$consumer_cli" generate --plugins all --api-key-legacy-schema --device-code-legacy-schema --passkey-legacy-schema --two-factor-legacy-schema --output "$schema_dir/auth_schema.rs"
 export BETTER_AUTH_GENERATED_SCHEMA="$schema_dir/auth_schema.rs"
 "$consumer_cli" generate --plugins organization --schema-config compat-tests/schema-consumer/organization-schema.json --output "$schema_dir/organization_schema.rs"
 export BETTER_AUTH_ORGANIZATION_SCHEMA="$schema_dir/organization_schema.rs"
 "$consumer_cli" generate --plugins organization --database sqlite --schema-config compat-tests/schema-consumer/sqlite-json-schema.json --output "$schema_dir/sqlite_json_schema.rs"
 export BETTER_AUTH_SQLITE_JSON_SCHEMA="$schema_dir/sqlite_json_schema.rs"
-"$consumer_cli" generate --plugins all --device-code-legacy-schema --passkey-legacy-schema --two-factor-legacy-schema --schema-config compat-tests/schema-consumer/plugin-schema.json --output "$schema_dir/plugin_schema.rs"
+"$consumer_cli" generate --plugins all --api-key-legacy-schema --device-code-legacy-schema --passkey-legacy-schema --two-factor-legacy-schema --schema-config compat-tests/schema-consumer/plugin-schema.json --output "$schema_dir/plugin_schema.rs"
 export BETTER_AUTH_PLUGIN_SCHEMA="$schema_dir/plugin_schema.rs"
 for backend in sqlite postgres mysql; do
   for display in api-key-name passkey-name passkey-aaguid; do
@@ -250,14 +250,14 @@ export BETTER_AUTH_RATE_MODEL_EMPTY_SCHEMA="$schema_dir/rate_model_empty.rs"
 export BETTER_AUTH_RATE_MODEL_DEFAULTS_SCHEMA="$schema_dir/rate_model_explicitDefaults.rs"
 export BETTER_AUTH_RATE_MODEL_RENAMED_SCHEMA="$schema_dir/rate_model_renamed.rs"
 for mode in serial uuid database; do
-  "$consumer_cli" generate --plugins all --device-code-legacy-schema --passkey-legacy-schema --two-factor-legacy-schema --generate-id "$mode" --schema-config compat-tests/schema-consumer/id-schema.json --output "$schema_dir/${mode}_schema.rs"
+  "$consumer_cli" generate --plugins all --api-key-legacy-schema --device-code-legacy-schema --passkey-legacy-schema --two-factor-legacy-schema --generate-id "$mode" --schema-config compat-tests/schema-consumer/id-schema.json --output "$schema_dir/${mode}_schema.rs"
 done
 export BETTER_AUTH_SERIAL_SCHEMA="$schema_dir/serial_schema.rs"
 export BETTER_AUTH_UUID_SCHEMA="$schema_dir/uuid_schema.rs"
 export BETTER_AUTH_DATABASE_SCHEMA="$schema_dir/database_schema.rs"
-"$consumer_cli" generate --plugins all --device-code-legacy-schema --passkey-legacy-schema --two-factor-legacy-schema --generate-id uuid --database postgres --schema-config compat-tests/schema-consumer/id-schema.json --output "$schema_dir/postgres_uuid_schema.rs"
+"$consumer_cli" generate --plugins all --api-key-legacy-schema --device-code-legacy-schema --passkey-legacy-schema --two-factor-legacy-schema --generate-id uuid --database postgres --schema-config compat-tests/schema-consumer/id-schema.json --output "$schema_dir/postgres_uuid_schema.rs"
 export BETTER_AUTH_POSTGRES_UUID_SCHEMA="$schema_dir/postgres_uuid_schema.rs"
-"$consumer_cli" generate --plugins all --device-code-legacy-schema --passkey-legacy-schema --two-factor-legacy-schema --generate-id serial --database postgres --schema-config compat-tests/schema-consumer/id-schema.json --output "$schema_dir/postgres_serial_schema.rs"
+"$consumer_cli" generate --plugins all --api-key-legacy-schema --device-code-legacy-schema --passkey-legacy-schema --two-factor-legacy-schema --generate-id serial --database postgres --schema-config compat-tests/schema-consumer/id-schema.json --output "$schema_dir/postgres_serial_schema.rs"
 export BETTER_AUTH_POSTGRES_SERIAL_SCHEMA="$schema_dir/postgres_serial_schema.rs"
 
 for backend in postgres mysql; do

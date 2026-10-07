@@ -8,8 +8,8 @@ use better_auth::{
         Database, DatabaseConnection, SeaOrmAccountModel, SeaOrmPluginModel, SeaOrmPluginSchema,
         SeaOrmSessionModel, SeaOrmStore, SeaOrmUserModel, SeaOrmVerificationModel,
         sea_orm::{
-            ActiveModelTrait, ConnectionTrait, DbBackend, EntityName, EntityTrait, Iden,
-            IntoActiveModel, Iterable, Statement,
+            ActiveModelTrait, ConnectionTrait, DbBackend, EntityName, EntityTrait, Iden, Iterable,
+            Statement,
         },
     },
 };
