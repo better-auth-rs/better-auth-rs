@@ -1,0 +1,4954 @@
+{
+  "version": "1.7.6",
+  "issuedAt": 2000000000123,
+  "scenarios": [
+    {
+      "name": "fractional-before-claim",
+      "expiresIn": 1.5,
+      "readOffset": 1499,
+      "accepted": true
+    },
+    {
+      "name": "fractional-at-claim",
+      "expiresIn": 1.5,
+      "readOffset": 1500,
+      "accepted": true
+    },
+    {
+      "name": "fractional-before-next-second",
+      "expiresIn": 1.5,
+      "readOffset": 1999,
+      "accepted": true
+    },
+    {
+      "name": "fractional-at-next-second",
+      "expiresIn": 1.5,
+      "readOffset": 2000,
+      "accepted": false
+    },
+    {
+      "name": "integer-before-claim",
+      "expiresIn": 2,
+      "readOffset": 1999,
+      "accepted": true
+    },
+    {
+      "name": "integer-at-claim",
+      "expiresIn": 2,
+      "readOffset": 2000,
+      "accepted": false
+    },
+    {
+      "name": "zero-immediate",
+      "expiresIn": 0,
+      "readOffset": 123,
+      "accepted": false
+    }
+  ],
+  "cases": [
+    {
+      "backend": "memory",
+      "scenario": {
+        "name": "fractional-before-claim",
+        "expiresIn": 1.5,
+        "readOffset": 1499,
+        "accepted": true
+      },
+      "issuedAt": 2000000000123,
+      "readAt": 2000000001499,
+      "before": {
+        "user": [
+          {
+            "name": "Email Duration",
+            "email": "owner@email-verification-duration.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "id": "owner"
+          }
+        ],
+        "session": [],
+        "account": [],
+        "verification": []
+      },
+      "send": {
+        "request": {
+          "method": "POST",
+          "url": "http://email-verification-duration.test/api/auth/send-verification-email",
+          "headers": {
+            "origin": "http://email-verification-duration.test",
+            "content-type": "application/json",
+            "user-agent": "email-duration-contract",
+            "x-forwarded-for": "203.0.113.8"
+          },
+          "body": {
+            "email": "owner@email-verification-duration.test"
+          }
+        },
+        "response": {
+          "status": 200,
+          "statusText": "",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ]
+          ],
+          "cookies": [],
+          "body": "{\"status\":true}"
+        },
+        "events": [
+          {
+            "kind": "sender",
+            "data": {
+              "user": {
+                "name": "Email Duration",
+                "email": "owner@email-verification-duration.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2033-05-18T03:33:20.123Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2033-05-18T03:33:20.123Z"
+                },
+                "id": "owner"
+              },
+              "url": "http://email-verification-duration.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDEuNX0.Q_XCI1gYGpJF6UEpMfxtKwosoJ2HVShXhg5NPIWNa2U&callbackURL=%2F",
+              "token": "eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDEuNX0.Q_XCI1gYGpJF6UEpMfxtKwosoJ2HVShXhg5NPIWNa2U"
+            },
+            "request": {
+              "method": "POST",
+              "url": "http://email-verification-duration.test/api/auth/send-verification-email",
+              "headers": [
+                [
+                  "content-type",
+                  "application/json"
+                ],
+                [
+                  "origin",
+                  "http://email-verification-duration.test"
+                ],
+                [
+                  "user-agent",
+                  "email-duration-contract"
+                ],
+                [
+                  "x-forwarded-for",
+                  "203.0.113.8"
+                ]
+              ],
+              "body": "{\"email\":\"owner@email-verification-duration.test\"}"
+            }
+          }
+        ],
+        "after": {
+          "user": [
+            {
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": false,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        }
+      },
+      "jwt": {
+        "token": "eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDEuNX0.Q_XCI1gYGpJF6UEpMfxtKwosoJ2HVShXhg5NPIWNa2U",
+        "protectedHeader": {
+          "alg": "HS256"
+        },
+        "claims": {
+          "email": "owner@email-verification-duration.test",
+          "iat": 2000000000,
+          "exp": 2000000001.5
+        },
+        "signatureVerified": true
+      },
+      "verify": {
+        "request": {
+          "method": "GET",
+          "url": "http://email-verification-duration.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDEuNX0.Q_XCI1gYGpJF6UEpMfxtKwosoJ2HVShXhg5NPIWNa2U",
+          "headers": {
+            "origin": "http://email-verification-duration.test",
+            "content-type": "application/json",
+            "user-agent": "email-duration-contract",
+            "x-forwarded-for": "203.0.113.8"
+          }
+        },
+        "response": {
+          "status": 200,
+          "statusText": "",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "set-cookie",
+              "better-auth.session_token=<verified-signed-session-token>; Max-Age=3600; Path=/; HttpOnly; SameSite=Lax"
+            ]
+          ],
+          "cookies": [
+            "better-auth.session_token=<verified-signed-session-token>; Max-Age=3600; Path=/; HttpOnly; SameSite=Lax"
+          ],
+          "body": "{\"status\":true,\"user\":null}"
+        },
+        "events": [
+          {
+            "kind": "before-verification",
+            "user": {
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": false,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "id": "owner"
+            },
+            "request": {
+              "method": "GET",
+              "url": "http://email-verification-duration.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDEuNX0.Q_XCI1gYGpJF6UEpMfxtKwosoJ2HVShXhg5NPIWNa2U",
+              "headers": [
+                [
+                  "content-type",
+                  "application/json"
+                ],
+                [
+                  "origin",
+                  "http://email-verification-duration.test"
+                ],
+                [
+                  "user-agent",
+                  "email-duration-contract"
+                ],
+                [
+                  "x-forwarded-for",
+                  "203.0.113.8"
+                ]
+              ],
+              "body": ""
+            }
+          },
+          {
+            "kind": "hook",
+            "model": "user",
+            "operation": "update",
+            "phase": "before",
+            "data": {
+              "emailVerified": true
+            }
+          },
+          {
+            "kind": "hook",
+            "model": "user",
+            "operation": "update",
+            "phase": "after",
+            "data": {
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.499Z"
+              },
+              "id": "owner"
+            }
+          },
+          {
+            "kind": "after-verification",
+            "user": {
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.499Z"
+              },
+              "id": "owner"
+            },
+            "request": {
+              "method": "GET",
+              "url": "http://email-verification-duration.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDEuNX0.Q_XCI1gYGpJF6UEpMfxtKwosoJ2HVShXhg5NPIWNa2U",
+              "headers": [
+                [
+                  "content-type",
+                  "application/json"
+                ],
+                [
+                  "origin",
+                  "http://email-verification-duration.test"
+                ],
+                [
+                  "user-agent",
+                  "email-duration-contract"
+                ],
+                [
+                  "x-forwarded-for",
+                  "203.0.113.8"
+                ]
+              ],
+              "body": ""
+            }
+          },
+          {
+            "kind": "hook",
+            "model": "session",
+            "operation": "create",
+            "phase": "before",
+            "data": {
+              "ipAddress": "203.0.113.8",
+              "userAgent": "email-duration-contract",
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T04:33:21.499Z"
+              },
+              "userId": "owner",
+              "token": "<session-token>",
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.499Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.499Z"
+              }
+            }
+          },
+          {
+            "kind": "generate-id",
+            "input": {
+              "model": "session"
+            },
+            "id": "session-1"
+          },
+          {
+            "kind": "hook",
+            "model": "session",
+            "operation": "create",
+            "phase": "after",
+            "data": {
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T04:33:21.499Z"
+              },
+              "token": "<session-token>",
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.499Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.499Z"
+              },
+              "ipAddress": "203.0.113.8",
+              "userAgent": "email-duration-contract",
+              "userId": "owner",
+              "id": "session-1"
+            }
+          }
+        ],
+        "after": {
+          "user": [
+            {
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.499Z"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [
+            {
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T04:33:21.499Z"
+              },
+              "token": "<session-token>",
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.499Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.499Z"
+              },
+              "ipAddress": "203.0.113.8",
+              "userAgent": "email-duration-contract",
+              "userId": "owner",
+              "id": "session-1"
+            }
+          ],
+          "account": [],
+          "verification": []
+        }
+      },
+      "session": {
+        "request": {
+          "method": "GET",
+          "url": "http://email-verification-duration.test/api/auth/get-session",
+          "headers": {
+            "origin": "http://email-verification-duration.test",
+            "content-type": "application/json",
+            "user-agent": "email-duration-contract",
+            "x-forwarded-for": "203.0.113.8",
+            "cookie": "better-auth.session_token=<verified-signed-session-token>"
+          }
+        },
+        "response": {
+          "status": 200,
+          "statusText": "",
+          "headers": [
+            [
+              "cache-control",
+              "no-store"
+            ],
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "pragma",
+              "no-cache"
+            ]
+          ],
+          "cookies": [],
+          "body": "{\"session\":{\"expiresAt\":\"2033-05-18T04:33:21.499Z\",\"token\":\"<session-token>\",\"createdAt\":\"2033-05-18T03:33:21.499Z\",\"updatedAt\":\"2033-05-18T03:33:21.499Z\",\"ipAddress\":\"203.0.113.8\",\"userAgent\":\"email-duration-contract\",\"userId\":\"owner\",\"id\":\"session-1\"},\"user\":{\"name\":\"Email Duration\",\"email\":\"owner@email-verification-duration.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2033-05-18T03:33:20.123Z\",\"updatedAt\":\"2033-05-18T03:33:21.499Z\",\"id\":\"owner\"}}"
+        },
+        "events": [],
+        "after": {
+          "user": [
+            {
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.499Z"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [
+            {
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T04:33:21.499Z"
+              },
+              "token": "<session-token>",
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.499Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.499Z"
+              },
+              "ipAddress": "203.0.113.8",
+              "userAgent": "email-duration-contract",
+              "userId": "owner",
+              "id": "session-1"
+            }
+          ],
+          "account": [],
+          "verification": []
+        }
+      },
+      "senderCalls": 1
+    },
+    {
+      "backend": "memory",
+      "scenario": {
+        "name": "fractional-at-claim",
+        "expiresIn": 1.5,
+        "readOffset": 1500,
+        "accepted": true
+      },
+      "issuedAt": 2000000000123,
+      "readAt": 2000000001500,
+      "before": {
+        "user": [
+          {
+            "name": "Email Duration",
+            "email": "owner@email-verification-duration.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "id": "owner"
+          }
+        ],
+        "session": [],
+        "account": [],
+        "verification": []
+      },
+      "send": {
+        "request": {
+          "method": "POST",
+          "url": "http://email-verification-duration.test/api/auth/send-verification-email",
+          "headers": {
+            "origin": "http://email-verification-duration.test",
+            "content-type": "application/json",
+            "user-agent": "email-duration-contract",
+            "x-forwarded-for": "203.0.113.8"
+          },
+          "body": {
+            "email": "owner@email-verification-duration.test"
+          }
+        },
+        "response": {
+          "status": 200,
+          "statusText": "",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ]
+          ],
+          "cookies": [],
+          "body": "{\"status\":true}"
+        },
+        "events": [
+          {
+            "kind": "sender",
+            "data": {
+              "user": {
+                "name": "Email Duration",
+                "email": "owner@email-verification-duration.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2033-05-18T03:33:20.123Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2033-05-18T03:33:20.123Z"
+                },
+                "id": "owner"
+              },
+              "url": "http://email-verification-duration.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDEuNX0.Q_XCI1gYGpJF6UEpMfxtKwosoJ2HVShXhg5NPIWNa2U&callbackURL=%2F",
+              "token": "eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDEuNX0.Q_XCI1gYGpJF6UEpMfxtKwosoJ2HVShXhg5NPIWNa2U"
+            },
+            "request": {
+              "method": "POST",
+              "url": "http://email-verification-duration.test/api/auth/send-verification-email",
+              "headers": [
+                [
+                  "content-type",
+                  "application/json"
+                ],
+                [
+                  "origin",
+                  "http://email-verification-duration.test"
+                ],
+                [
+                  "user-agent",
+                  "email-duration-contract"
+                ],
+                [
+                  "x-forwarded-for",
+                  "203.0.113.8"
+                ]
+              ],
+              "body": "{\"email\":\"owner@email-verification-duration.test\"}"
+            }
+          }
+        ],
+        "after": {
+          "user": [
+            {
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": false,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        }
+      },
+      "jwt": {
+        "token": "eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDEuNX0.Q_XCI1gYGpJF6UEpMfxtKwosoJ2HVShXhg5NPIWNa2U",
+        "protectedHeader": {
+          "alg": "HS256"
+        },
+        "claims": {
+          "email": "owner@email-verification-duration.test",
+          "iat": 2000000000,
+          "exp": 2000000001.5
+        },
+        "signatureVerified": true
+      },
+      "verify": {
+        "request": {
+          "method": "GET",
+          "url": "http://email-verification-duration.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDEuNX0.Q_XCI1gYGpJF6UEpMfxtKwosoJ2HVShXhg5NPIWNa2U",
+          "headers": {
+            "origin": "http://email-verification-duration.test",
+            "content-type": "application/json",
+            "user-agent": "email-duration-contract",
+            "x-forwarded-for": "203.0.113.8"
+          }
+        },
+        "response": {
+          "status": 200,
+          "statusText": "",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "set-cookie",
+              "better-auth.session_token=<verified-signed-session-token>; Max-Age=3600; Path=/; HttpOnly; SameSite=Lax"
+            ]
+          ],
+          "cookies": [
+            "better-auth.session_token=<verified-signed-session-token>; Max-Age=3600; Path=/; HttpOnly; SameSite=Lax"
+          ],
+          "body": "{\"status\":true,\"user\":null}"
+        },
+        "events": [
+          {
+            "kind": "before-verification",
+            "user": {
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": false,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "id": "owner"
+            },
+            "request": {
+              "method": "GET",
+              "url": "http://email-verification-duration.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDEuNX0.Q_XCI1gYGpJF6UEpMfxtKwosoJ2HVShXhg5NPIWNa2U",
+              "headers": [
+                [
+                  "content-type",
+                  "application/json"
+                ],
+                [
+                  "origin",
+                  "http://email-verification-duration.test"
+                ],
+                [
+                  "user-agent",
+                  "email-duration-contract"
+                ],
+                [
+                  "x-forwarded-for",
+                  "203.0.113.8"
+                ]
+              ],
+              "body": ""
+            }
+          },
+          {
+            "kind": "hook",
+            "model": "user",
+            "operation": "update",
+            "phase": "before",
+            "data": {
+              "emailVerified": true
+            }
+          },
+          {
+            "kind": "hook",
+            "model": "user",
+            "operation": "update",
+            "phase": "after",
+            "data": {
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.500Z"
+              },
+              "id": "owner"
+            }
+          },
+          {
+            "kind": "after-verification",
+            "user": {
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.500Z"
+              },
+              "id": "owner"
+            },
+            "request": {
+              "method": "GET",
+              "url": "http://email-verification-duration.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDEuNX0.Q_XCI1gYGpJF6UEpMfxtKwosoJ2HVShXhg5NPIWNa2U",
+              "headers": [
+                [
+                  "content-type",
+                  "application/json"
+                ],
+                [
+                  "origin",
+                  "http://email-verification-duration.test"
+                ],
+                [
+                  "user-agent",
+                  "email-duration-contract"
+                ],
+                [
+                  "x-forwarded-for",
+                  "203.0.113.8"
+                ]
+              ],
+              "body": ""
+            }
+          },
+          {
+            "kind": "hook",
+            "model": "session",
+            "operation": "create",
+            "phase": "before",
+            "data": {
+              "ipAddress": "203.0.113.8",
+              "userAgent": "email-duration-contract",
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T04:33:21.500Z"
+              },
+              "userId": "owner",
+              "token": "<session-token>",
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.500Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.500Z"
+              }
+            }
+          },
+          {
+            "kind": "generate-id",
+            "input": {
+              "model": "session"
+            },
+            "id": "session-1"
+          },
+          {
+            "kind": "hook",
+            "model": "session",
+            "operation": "create",
+            "phase": "after",
+            "data": {
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T04:33:21.500Z"
+              },
+              "token": "<session-token>",
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.500Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.500Z"
+              },
+              "ipAddress": "203.0.113.8",
+              "userAgent": "email-duration-contract",
+              "userId": "owner",
+              "id": "session-1"
+            }
+          }
+        ],
+        "after": {
+          "user": [
+            {
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.500Z"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [
+            {
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T04:33:21.500Z"
+              },
+              "token": "<session-token>",
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.500Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.500Z"
+              },
+              "ipAddress": "203.0.113.8",
+              "userAgent": "email-duration-contract",
+              "userId": "owner",
+              "id": "session-1"
+            }
+          ],
+          "account": [],
+          "verification": []
+        }
+      },
+      "session": {
+        "request": {
+          "method": "GET",
+          "url": "http://email-verification-duration.test/api/auth/get-session",
+          "headers": {
+            "origin": "http://email-verification-duration.test",
+            "content-type": "application/json",
+            "user-agent": "email-duration-contract",
+            "x-forwarded-for": "203.0.113.8",
+            "cookie": "better-auth.session_token=<verified-signed-session-token>"
+          }
+        },
+        "response": {
+          "status": 200,
+          "statusText": "",
+          "headers": [
+            [
+              "cache-control",
+              "no-store"
+            ],
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "pragma",
+              "no-cache"
+            ]
+          ],
+          "cookies": [],
+          "body": "{\"session\":{\"expiresAt\":\"2033-05-18T04:33:21.500Z\",\"token\":\"<session-token>\",\"createdAt\":\"2033-05-18T03:33:21.500Z\",\"updatedAt\":\"2033-05-18T03:33:21.500Z\",\"ipAddress\":\"203.0.113.8\",\"userAgent\":\"email-duration-contract\",\"userId\":\"owner\",\"id\":\"session-1\"},\"user\":{\"name\":\"Email Duration\",\"email\":\"owner@email-verification-duration.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2033-05-18T03:33:20.123Z\",\"updatedAt\":\"2033-05-18T03:33:21.500Z\",\"id\":\"owner\"}}"
+        },
+        "events": [],
+        "after": {
+          "user": [
+            {
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.500Z"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [
+            {
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T04:33:21.500Z"
+              },
+              "token": "<session-token>",
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.500Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.500Z"
+              },
+              "ipAddress": "203.0.113.8",
+              "userAgent": "email-duration-contract",
+              "userId": "owner",
+              "id": "session-1"
+            }
+          ],
+          "account": [],
+          "verification": []
+        }
+      },
+      "senderCalls": 1
+    },
+    {
+      "backend": "memory",
+      "scenario": {
+        "name": "fractional-before-next-second",
+        "expiresIn": 1.5,
+        "readOffset": 1999,
+        "accepted": true
+      },
+      "issuedAt": 2000000000123,
+      "readAt": 2000000001999,
+      "before": {
+        "user": [
+          {
+            "name": "Email Duration",
+            "email": "owner@email-verification-duration.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "id": "owner"
+          }
+        ],
+        "session": [],
+        "account": [],
+        "verification": []
+      },
+      "send": {
+        "request": {
+          "method": "POST",
+          "url": "http://email-verification-duration.test/api/auth/send-verification-email",
+          "headers": {
+            "origin": "http://email-verification-duration.test",
+            "content-type": "application/json",
+            "user-agent": "email-duration-contract",
+            "x-forwarded-for": "203.0.113.8"
+          },
+          "body": {
+            "email": "owner@email-verification-duration.test"
+          }
+        },
+        "response": {
+          "status": 200,
+          "statusText": "",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ]
+          ],
+          "cookies": [],
+          "body": "{\"status\":true}"
+        },
+        "events": [
+          {
+            "kind": "sender",
+            "data": {
+              "user": {
+                "name": "Email Duration",
+                "email": "owner@email-verification-duration.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2033-05-18T03:33:20.123Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2033-05-18T03:33:20.123Z"
+                },
+                "id": "owner"
+              },
+              "url": "http://email-verification-duration.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDEuNX0.Q_XCI1gYGpJF6UEpMfxtKwosoJ2HVShXhg5NPIWNa2U&callbackURL=%2F",
+              "token": "eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDEuNX0.Q_XCI1gYGpJF6UEpMfxtKwosoJ2HVShXhg5NPIWNa2U"
+            },
+            "request": {
+              "method": "POST",
+              "url": "http://email-verification-duration.test/api/auth/send-verification-email",
+              "headers": [
+                [
+                  "content-type",
+                  "application/json"
+                ],
+                [
+                  "origin",
+                  "http://email-verification-duration.test"
+                ],
+                [
+                  "user-agent",
+                  "email-duration-contract"
+                ],
+                [
+                  "x-forwarded-for",
+                  "203.0.113.8"
+                ]
+              ],
+              "body": "{\"email\":\"owner@email-verification-duration.test\"}"
+            }
+          }
+        ],
+        "after": {
+          "user": [
+            {
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": false,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        }
+      },
+      "jwt": {
+        "token": "eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDEuNX0.Q_XCI1gYGpJF6UEpMfxtKwosoJ2HVShXhg5NPIWNa2U",
+        "protectedHeader": {
+          "alg": "HS256"
+        },
+        "claims": {
+          "email": "owner@email-verification-duration.test",
+          "iat": 2000000000,
+          "exp": 2000000001.5
+        },
+        "signatureVerified": true
+      },
+      "verify": {
+        "request": {
+          "method": "GET",
+          "url": "http://email-verification-duration.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDEuNX0.Q_XCI1gYGpJF6UEpMfxtKwosoJ2HVShXhg5NPIWNa2U",
+          "headers": {
+            "origin": "http://email-verification-duration.test",
+            "content-type": "application/json",
+            "user-agent": "email-duration-contract",
+            "x-forwarded-for": "203.0.113.8"
+          }
+        },
+        "response": {
+          "status": 200,
+          "statusText": "",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "set-cookie",
+              "better-auth.session_token=<verified-signed-session-token>; Max-Age=3600; Path=/; HttpOnly; SameSite=Lax"
+            ]
+          ],
+          "cookies": [
+            "better-auth.session_token=<verified-signed-session-token>; Max-Age=3600; Path=/; HttpOnly; SameSite=Lax"
+          ],
+          "body": "{\"status\":true,\"user\":null}"
+        },
+        "events": [
+          {
+            "kind": "before-verification",
+            "user": {
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": false,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "id": "owner"
+            },
+            "request": {
+              "method": "GET",
+              "url": "http://email-verification-duration.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDEuNX0.Q_XCI1gYGpJF6UEpMfxtKwosoJ2HVShXhg5NPIWNa2U",
+              "headers": [
+                [
+                  "content-type",
+                  "application/json"
+                ],
+                [
+                  "origin",
+                  "http://email-verification-duration.test"
+                ],
+                [
+                  "user-agent",
+                  "email-duration-contract"
+                ],
+                [
+                  "x-forwarded-for",
+                  "203.0.113.8"
+                ]
+              ],
+              "body": ""
+            }
+          },
+          {
+            "kind": "hook",
+            "model": "user",
+            "operation": "update",
+            "phase": "before",
+            "data": {
+              "emailVerified": true
+            }
+          },
+          {
+            "kind": "hook",
+            "model": "user",
+            "operation": "update",
+            "phase": "after",
+            "data": {
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.999Z"
+              },
+              "id": "owner"
+            }
+          },
+          {
+            "kind": "after-verification",
+            "user": {
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.999Z"
+              },
+              "id": "owner"
+            },
+            "request": {
+              "method": "GET",
+              "url": "http://email-verification-duration.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDEuNX0.Q_XCI1gYGpJF6UEpMfxtKwosoJ2HVShXhg5NPIWNa2U",
+              "headers": [
+                [
+                  "content-type",
+                  "application/json"
+                ],
+                [
+                  "origin",
+                  "http://email-verification-duration.test"
+                ],
+                [
+                  "user-agent",
+                  "email-duration-contract"
+                ],
+                [
+                  "x-forwarded-for",
+                  "203.0.113.8"
+                ]
+              ],
+              "body": ""
+            }
+          },
+          {
+            "kind": "hook",
+            "model": "session",
+            "operation": "create",
+            "phase": "before",
+            "data": {
+              "ipAddress": "203.0.113.8",
+              "userAgent": "email-duration-contract",
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T04:33:21.999Z"
+              },
+              "userId": "owner",
+              "token": "<session-token>",
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.999Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.999Z"
+              }
+            }
+          },
+          {
+            "kind": "generate-id",
+            "input": {
+              "model": "session"
+            },
+            "id": "session-1"
+          },
+          {
+            "kind": "hook",
+            "model": "session",
+            "operation": "create",
+            "phase": "after",
+            "data": {
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T04:33:21.999Z"
+              },
+              "token": "<session-token>",
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.999Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.999Z"
+              },
+              "ipAddress": "203.0.113.8",
+              "userAgent": "email-duration-contract",
+              "userId": "owner",
+              "id": "session-1"
+            }
+          }
+        ],
+        "after": {
+          "user": [
+            {
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.999Z"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [
+            {
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T04:33:21.999Z"
+              },
+              "token": "<session-token>",
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.999Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.999Z"
+              },
+              "ipAddress": "203.0.113.8",
+              "userAgent": "email-duration-contract",
+              "userId": "owner",
+              "id": "session-1"
+            }
+          ],
+          "account": [],
+          "verification": []
+        }
+      },
+      "session": {
+        "request": {
+          "method": "GET",
+          "url": "http://email-verification-duration.test/api/auth/get-session",
+          "headers": {
+            "origin": "http://email-verification-duration.test",
+            "content-type": "application/json",
+            "user-agent": "email-duration-contract",
+            "x-forwarded-for": "203.0.113.8",
+            "cookie": "better-auth.session_token=<verified-signed-session-token>"
+          }
+        },
+        "response": {
+          "status": 200,
+          "statusText": "",
+          "headers": [
+            [
+              "cache-control",
+              "no-store"
+            ],
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "pragma",
+              "no-cache"
+            ]
+          ],
+          "cookies": [],
+          "body": "{\"session\":{\"expiresAt\":\"2033-05-18T04:33:21.999Z\",\"token\":\"<session-token>\",\"createdAt\":\"2033-05-18T03:33:21.999Z\",\"updatedAt\":\"2033-05-18T03:33:21.999Z\",\"ipAddress\":\"203.0.113.8\",\"userAgent\":\"email-duration-contract\",\"userId\":\"owner\",\"id\":\"session-1\"},\"user\":{\"name\":\"Email Duration\",\"email\":\"owner@email-verification-duration.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2033-05-18T03:33:20.123Z\",\"updatedAt\":\"2033-05-18T03:33:21.999Z\",\"id\":\"owner\"}}"
+        },
+        "events": [],
+        "after": {
+          "user": [
+            {
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.999Z"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [
+            {
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T04:33:21.999Z"
+              },
+              "token": "<session-token>",
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.999Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.999Z"
+              },
+              "ipAddress": "203.0.113.8",
+              "userAgent": "email-duration-contract",
+              "userId": "owner",
+              "id": "session-1"
+            }
+          ],
+          "account": [],
+          "verification": []
+        }
+      },
+      "senderCalls": 1
+    },
+    {
+      "backend": "memory",
+      "scenario": {
+        "name": "fractional-at-next-second",
+        "expiresIn": 1.5,
+        "readOffset": 2000,
+        "accepted": false
+      },
+      "issuedAt": 2000000000123,
+      "readAt": 2000000002000,
+      "before": {
+        "user": [
+          {
+            "name": "Email Duration",
+            "email": "owner@email-verification-duration.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "id": "owner"
+          }
+        ],
+        "session": [],
+        "account": [],
+        "verification": []
+      },
+      "send": {
+        "request": {
+          "method": "POST",
+          "url": "http://email-verification-duration.test/api/auth/send-verification-email",
+          "headers": {
+            "origin": "http://email-verification-duration.test",
+            "content-type": "application/json",
+            "user-agent": "email-duration-contract",
+            "x-forwarded-for": "203.0.113.8"
+          },
+          "body": {
+            "email": "owner@email-verification-duration.test"
+          }
+        },
+        "response": {
+          "status": 200,
+          "statusText": "",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ]
+          ],
+          "cookies": [],
+          "body": "{\"status\":true}"
+        },
+        "events": [
+          {
+            "kind": "sender",
+            "data": {
+              "user": {
+                "name": "Email Duration",
+                "email": "owner@email-verification-duration.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2033-05-18T03:33:20.123Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2033-05-18T03:33:20.123Z"
+                },
+                "id": "owner"
+              },
+              "url": "http://email-verification-duration.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDEuNX0.Q_XCI1gYGpJF6UEpMfxtKwosoJ2HVShXhg5NPIWNa2U&callbackURL=%2F",
+              "token": "eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDEuNX0.Q_XCI1gYGpJF6UEpMfxtKwosoJ2HVShXhg5NPIWNa2U"
+            },
+            "request": {
+              "method": "POST",
+              "url": "http://email-verification-duration.test/api/auth/send-verification-email",
+              "headers": [
+                [
+                  "content-type",
+                  "application/json"
+                ],
+                [
+                  "origin",
+                  "http://email-verification-duration.test"
+                ],
+                [
+                  "user-agent",
+                  "email-duration-contract"
+                ],
+                [
+                  "x-forwarded-for",
+                  "203.0.113.8"
+                ]
+              ],
+              "body": "{\"email\":\"owner@email-verification-duration.test\"}"
+            }
+          }
+        ],
+        "after": {
+          "user": [
+            {
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": false,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        }
+      },
+      "jwt": {
+        "token": "eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDEuNX0.Q_XCI1gYGpJF6UEpMfxtKwosoJ2HVShXhg5NPIWNa2U",
+        "protectedHeader": {
+          "alg": "HS256"
+        },
+        "claims": {
+          "email": "owner@email-verification-duration.test",
+          "iat": 2000000000,
+          "exp": 2000000001.5
+        },
+        "signatureVerified": true
+      },
+      "verify": {
+        "request": {
+          "method": "GET",
+          "url": "http://email-verification-duration.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDEuNX0.Q_XCI1gYGpJF6UEpMfxtKwosoJ2HVShXhg5NPIWNa2U",
+          "headers": {
+            "origin": "http://email-verification-duration.test",
+            "content-type": "application/json",
+            "user-agent": "email-duration-contract",
+            "x-forwarded-for": "203.0.113.8"
+          }
+        },
+        "response": {
+          "status": 401,
+          "statusText": "UNAUTHORIZED",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ]
+          ],
+          "cookies": [],
+          "body": "{\"message\":\"Token expired\",\"code\":\"TOKEN_EXPIRED\"}"
+        },
+        "events": [],
+        "after": {
+          "user": [
+            {
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": false,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        }
+      },
+      "session": {
+        "request": {
+          "method": "GET",
+          "url": "http://email-verification-duration.test/api/auth/get-session",
+          "headers": {
+            "origin": "http://email-verification-duration.test",
+            "content-type": "application/json",
+            "user-agent": "email-duration-contract",
+            "x-forwarded-for": "203.0.113.8"
+          }
+        },
+        "response": {
+          "status": 200,
+          "statusText": "",
+          "headers": [
+            [
+              "cache-control",
+              "no-store"
+            ],
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "pragma",
+              "no-cache"
+            ]
+          ],
+          "cookies": [],
+          "body": "null"
+        },
+        "events": [],
+        "after": {
+          "user": [
+            {
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": false,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        }
+      },
+      "senderCalls": 1
+    },
+    {
+      "backend": "memory",
+      "scenario": {
+        "name": "integer-before-claim",
+        "expiresIn": 2,
+        "readOffset": 1999,
+        "accepted": true
+      },
+      "issuedAt": 2000000000123,
+      "readAt": 2000000001999,
+      "before": {
+        "user": [
+          {
+            "name": "Email Duration",
+            "email": "owner@email-verification-duration.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "id": "owner"
+          }
+        ],
+        "session": [],
+        "account": [],
+        "verification": []
+      },
+      "send": {
+        "request": {
+          "method": "POST",
+          "url": "http://email-verification-duration.test/api/auth/send-verification-email",
+          "headers": {
+            "origin": "http://email-verification-duration.test",
+            "content-type": "application/json",
+            "user-agent": "email-duration-contract",
+            "x-forwarded-for": "203.0.113.8"
+          },
+          "body": {
+            "email": "owner@email-verification-duration.test"
+          }
+        },
+        "response": {
+          "status": 200,
+          "statusText": "",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ]
+          ],
+          "cookies": [],
+          "body": "{\"status\":true}"
+        },
+        "events": [
+          {
+            "kind": "sender",
+            "data": {
+              "user": {
+                "name": "Email Duration",
+                "email": "owner@email-verification-duration.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2033-05-18T03:33:20.123Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2033-05-18T03:33:20.123Z"
+                },
+                "id": "owner"
+              },
+              "url": "http://email-verification-duration.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDJ9.2E44M60J-GHEktKzFpQkA2RWJmzDZouLDQY5vYKG27k&callbackURL=%2F",
+              "token": "eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDJ9.2E44M60J-GHEktKzFpQkA2RWJmzDZouLDQY5vYKG27k"
+            },
+            "request": {
+              "method": "POST",
+              "url": "http://email-verification-duration.test/api/auth/send-verification-email",
+              "headers": [
+                [
+                  "content-type",
+                  "application/json"
+                ],
+                [
+                  "origin",
+                  "http://email-verification-duration.test"
+                ],
+                [
+                  "user-agent",
+                  "email-duration-contract"
+                ],
+                [
+                  "x-forwarded-for",
+                  "203.0.113.8"
+                ]
+              ],
+              "body": "{\"email\":\"owner@email-verification-duration.test\"}"
+            }
+          }
+        ],
+        "after": {
+          "user": [
+            {
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": false,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        }
+      },
+      "jwt": {
+        "token": "eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDJ9.2E44M60J-GHEktKzFpQkA2RWJmzDZouLDQY5vYKG27k",
+        "protectedHeader": {
+          "alg": "HS256"
+        },
+        "claims": {
+          "email": "owner@email-verification-duration.test",
+          "iat": 2000000000,
+          "exp": 2000000002
+        },
+        "signatureVerified": true
+      },
+      "verify": {
+        "request": {
+          "method": "GET",
+          "url": "http://email-verification-duration.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDJ9.2E44M60J-GHEktKzFpQkA2RWJmzDZouLDQY5vYKG27k",
+          "headers": {
+            "origin": "http://email-verification-duration.test",
+            "content-type": "application/json",
+            "user-agent": "email-duration-contract",
+            "x-forwarded-for": "203.0.113.8"
+          }
+        },
+        "response": {
+          "status": 200,
+          "statusText": "",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "set-cookie",
+              "better-auth.session_token=<verified-signed-session-token>; Max-Age=3600; Path=/; HttpOnly; SameSite=Lax"
+            ]
+          ],
+          "cookies": [
+            "better-auth.session_token=<verified-signed-session-token>; Max-Age=3600; Path=/; HttpOnly; SameSite=Lax"
+          ],
+          "body": "{\"status\":true,\"user\":null}"
+        },
+        "events": [
+          {
+            "kind": "before-verification",
+            "user": {
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": false,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "id": "owner"
+            },
+            "request": {
+              "method": "GET",
+              "url": "http://email-verification-duration.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDJ9.2E44M60J-GHEktKzFpQkA2RWJmzDZouLDQY5vYKG27k",
+              "headers": [
+                [
+                  "content-type",
+                  "application/json"
+                ],
+                [
+                  "origin",
+                  "http://email-verification-duration.test"
+                ],
+                [
+                  "user-agent",
+                  "email-duration-contract"
+                ],
+                [
+                  "x-forwarded-for",
+                  "203.0.113.8"
+                ]
+              ],
+              "body": ""
+            }
+          },
+          {
+            "kind": "hook",
+            "model": "user",
+            "operation": "update",
+            "phase": "before",
+            "data": {
+              "emailVerified": true
+            }
+          },
+          {
+            "kind": "hook",
+            "model": "user",
+            "operation": "update",
+            "phase": "after",
+            "data": {
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.999Z"
+              },
+              "id": "owner"
+            }
+          },
+          {
+            "kind": "after-verification",
+            "user": {
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.999Z"
+              },
+              "id": "owner"
+            },
+            "request": {
+              "method": "GET",
+              "url": "http://email-verification-duration.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDJ9.2E44M60J-GHEktKzFpQkA2RWJmzDZouLDQY5vYKG27k",
+              "headers": [
+                [
+                  "content-type",
+                  "application/json"
+                ],
+                [
+                  "origin",
+                  "http://email-verification-duration.test"
+                ],
+                [
+                  "user-agent",
+                  "email-duration-contract"
+                ],
+                [
+                  "x-forwarded-for",
+                  "203.0.113.8"
+                ]
+              ],
+              "body": ""
+            }
+          },
+          {
+            "kind": "hook",
+            "model": "session",
+            "operation": "create",
+            "phase": "before",
+            "data": {
+              "ipAddress": "203.0.113.8",
+              "userAgent": "email-duration-contract",
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T04:33:21.999Z"
+              },
+              "userId": "owner",
+              "token": "<session-token>",
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.999Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.999Z"
+              }
+            }
+          },
+          {
+            "kind": "generate-id",
+            "input": {
+              "model": "session"
+            },
+            "id": "session-1"
+          },
+          {
+            "kind": "hook",
+            "model": "session",
+            "operation": "create",
+            "phase": "after",
+            "data": {
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T04:33:21.999Z"
+              },
+              "token": "<session-token>",
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.999Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.999Z"
+              },
+              "ipAddress": "203.0.113.8",
+              "userAgent": "email-duration-contract",
+              "userId": "owner",
+              "id": "session-1"
+            }
+          }
+        ],
+        "after": {
+          "user": [
+            {
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.999Z"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [
+            {
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T04:33:21.999Z"
+              },
+              "token": "<session-token>",
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.999Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.999Z"
+              },
+              "ipAddress": "203.0.113.8",
+              "userAgent": "email-duration-contract",
+              "userId": "owner",
+              "id": "session-1"
+            }
+          ],
+          "account": [],
+          "verification": []
+        }
+      },
+      "session": {
+        "request": {
+          "method": "GET",
+          "url": "http://email-verification-duration.test/api/auth/get-session",
+          "headers": {
+            "origin": "http://email-verification-duration.test",
+            "content-type": "application/json",
+            "user-agent": "email-duration-contract",
+            "x-forwarded-for": "203.0.113.8",
+            "cookie": "better-auth.session_token=<verified-signed-session-token>"
+          }
+        },
+        "response": {
+          "status": 200,
+          "statusText": "",
+          "headers": [
+            [
+              "cache-control",
+              "no-store"
+            ],
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "pragma",
+              "no-cache"
+            ]
+          ],
+          "cookies": [],
+          "body": "{\"session\":{\"expiresAt\":\"2033-05-18T04:33:21.999Z\",\"token\":\"<session-token>\",\"createdAt\":\"2033-05-18T03:33:21.999Z\",\"updatedAt\":\"2033-05-18T03:33:21.999Z\",\"ipAddress\":\"203.0.113.8\",\"userAgent\":\"email-duration-contract\",\"userId\":\"owner\",\"id\":\"session-1\"},\"user\":{\"name\":\"Email Duration\",\"email\":\"owner@email-verification-duration.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2033-05-18T03:33:20.123Z\",\"updatedAt\":\"2033-05-18T03:33:21.999Z\",\"id\":\"owner\"}}"
+        },
+        "events": [],
+        "after": {
+          "user": [
+            {
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.999Z"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [
+            {
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T04:33:21.999Z"
+              },
+              "token": "<session-token>",
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.999Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.999Z"
+              },
+              "ipAddress": "203.0.113.8",
+              "userAgent": "email-duration-contract",
+              "userId": "owner",
+              "id": "session-1"
+            }
+          ],
+          "account": [],
+          "verification": []
+        }
+      },
+      "senderCalls": 1
+    },
+    {
+      "backend": "memory",
+      "scenario": {
+        "name": "integer-at-claim",
+        "expiresIn": 2,
+        "readOffset": 2000,
+        "accepted": false
+      },
+      "issuedAt": 2000000000123,
+      "readAt": 2000000002000,
+      "before": {
+        "user": [
+          {
+            "name": "Email Duration",
+            "email": "owner@email-verification-duration.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "id": "owner"
+          }
+        ],
+        "session": [],
+        "account": [],
+        "verification": []
+      },
+      "send": {
+        "request": {
+          "method": "POST",
+          "url": "http://email-verification-duration.test/api/auth/send-verification-email",
+          "headers": {
+            "origin": "http://email-verification-duration.test",
+            "content-type": "application/json",
+            "user-agent": "email-duration-contract",
+            "x-forwarded-for": "203.0.113.8"
+          },
+          "body": {
+            "email": "owner@email-verification-duration.test"
+          }
+        },
+        "response": {
+          "status": 200,
+          "statusText": "",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ]
+          ],
+          "cookies": [],
+          "body": "{\"status\":true}"
+        },
+        "events": [
+          {
+            "kind": "sender",
+            "data": {
+              "user": {
+                "name": "Email Duration",
+                "email": "owner@email-verification-duration.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2033-05-18T03:33:20.123Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2033-05-18T03:33:20.123Z"
+                },
+                "id": "owner"
+              },
+              "url": "http://email-verification-duration.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDJ9.2E44M60J-GHEktKzFpQkA2RWJmzDZouLDQY5vYKG27k&callbackURL=%2F",
+              "token": "eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDJ9.2E44M60J-GHEktKzFpQkA2RWJmzDZouLDQY5vYKG27k"
+            },
+            "request": {
+              "method": "POST",
+              "url": "http://email-verification-duration.test/api/auth/send-verification-email",
+              "headers": [
+                [
+                  "content-type",
+                  "application/json"
+                ],
+                [
+                  "origin",
+                  "http://email-verification-duration.test"
+                ],
+                [
+                  "user-agent",
+                  "email-duration-contract"
+                ],
+                [
+                  "x-forwarded-for",
+                  "203.0.113.8"
+                ]
+              ],
+              "body": "{\"email\":\"owner@email-verification-duration.test\"}"
+            }
+          }
+        ],
+        "after": {
+          "user": [
+            {
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": false,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        }
+      },
+      "jwt": {
+        "token": "eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDJ9.2E44M60J-GHEktKzFpQkA2RWJmzDZouLDQY5vYKG27k",
+        "protectedHeader": {
+          "alg": "HS256"
+        },
+        "claims": {
+          "email": "owner@email-verification-duration.test",
+          "iat": 2000000000,
+          "exp": 2000000002
+        },
+        "signatureVerified": true
+      },
+      "verify": {
+        "request": {
+          "method": "GET",
+          "url": "http://email-verification-duration.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDJ9.2E44M60J-GHEktKzFpQkA2RWJmzDZouLDQY5vYKG27k",
+          "headers": {
+            "origin": "http://email-verification-duration.test",
+            "content-type": "application/json",
+            "user-agent": "email-duration-contract",
+            "x-forwarded-for": "203.0.113.8"
+          }
+        },
+        "response": {
+          "status": 401,
+          "statusText": "UNAUTHORIZED",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ]
+          ],
+          "cookies": [],
+          "body": "{\"message\":\"Token expired\",\"code\":\"TOKEN_EXPIRED\"}"
+        },
+        "events": [],
+        "after": {
+          "user": [
+            {
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": false,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        }
+      },
+      "session": {
+        "request": {
+          "method": "GET",
+          "url": "http://email-verification-duration.test/api/auth/get-session",
+          "headers": {
+            "origin": "http://email-verification-duration.test",
+            "content-type": "application/json",
+            "user-agent": "email-duration-contract",
+            "x-forwarded-for": "203.0.113.8"
+          }
+        },
+        "response": {
+          "status": 200,
+          "statusText": "",
+          "headers": [
+            [
+              "cache-control",
+              "no-store"
+            ],
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "pragma",
+              "no-cache"
+            ]
+          ],
+          "cookies": [],
+          "body": "null"
+        },
+        "events": [],
+        "after": {
+          "user": [
+            {
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": false,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        }
+      },
+      "senderCalls": 1
+    },
+    {
+      "backend": "memory",
+      "scenario": {
+        "name": "zero-immediate",
+        "expiresIn": 0,
+        "readOffset": 123,
+        "accepted": false
+      },
+      "issuedAt": 2000000000123,
+      "readAt": 2000000000123,
+      "before": {
+        "user": [
+          {
+            "name": "Email Duration",
+            "email": "owner@email-verification-duration.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "id": "owner"
+          }
+        ],
+        "session": [],
+        "account": [],
+        "verification": []
+      },
+      "send": {
+        "request": {
+          "method": "POST",
+          "url": "http://email-verification-duration.test/api/auth/send-verification-email",
+          "headers": {
+            "origin": "http://email-verification-duration.test",
+            "content-type": "application/json",
+            "user-agent": "email-duration-contract",
+            "x-forwarded-for": "203.0.113.8"
+          },
+          "body": {
+            "email": "owner@email-verification-duration.test"
+          }
+        },
+        "response": {
+          "status": 200,
+          "statusText": "",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ]
+          ],
+          "cookies": [],
+          "body": "{\"status\":true}"
+        },
+        "events": [
+          {
+            "kind": "sender",
+            "data": {
+              "user": {
+                "name": "Email Duration",
+                "email": "owner@email-verification-duration.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2033-05-18T03:33:20.123Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2033-05-18T03:33:20.123Z"
+                },
+                "id": "owner"
+              },
+              "url": "http://email-verification-duration.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDB9.IITlqXzVStDogZcydVrtuvFTkqI1uOlqoEbEStMYdck&callbackURL=%2F",
+              "token": "eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDB9.IITlqXzVStDogZcydVrtuvFTkqI1uOlqoEbEStMYdck"
+            },
+            "request": {
+              "method": "POST",
+              "url": "http://email-verification-duration.test/api/auth/send-verification-email",
+              "headers": [
+                [
+                  "content-type",
+                  "application/json"
+                ],
+                [
+                  "origin",
+                  "http://email-verification-duration.test"
+                ],
+                [
+                  "user-agent",
+                  "email-duration-contract"
+                ],
+                [
+                  "x-forwarded-for",
+                  "203.0.113.8"
+                ]
+              ],
+              "body": "{\"email\":\"owner@email-verification-duration.test\"}"
+            }
+          }
+        ],
+        "after": {
+          "user": [
+            {
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": false,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        }
+      },
+      "jwt": {
+        "token": "eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDB9.IITlqXzVStDogZcydVrtuvFTkqI1uOlqoEbEStMYdck",
+        "protectedHeader": {
+          "alg": "HS256"
+        },
+        "claims": {
+          "email": "owner@email-verification-duration.test",
+          "iat": 2000000000,
+          "exp": 2000000000
+        },
+        "signatureVerified": true
+      },
+      "verify": {
+        "request": {
+          "method": "GET",
+          "url": "http://email-verification-duration.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDB9.IITlqXzVStDogZcydVrtuvFTkqI1uOlqoEbEStMYdck",
+          "headers": {
+            "origin": "http://email-verification-duration.test",
+            "content-type": "application/json",
+            "user-agent": "email-duration-contract",
+            "x-forwarded-for": "203.0.113.8"
+          }
+        },
+        "response": {
+          "status": 401,
+          "statusText": "UNAUTHORIZED",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ]
+          ],
+          "cookies": [],
+          "body": "{\"message\":\"Token expired\",\"code\":\"TOKEN_EXPIRED\"}"
+        },
+        "events": [],
+        "after": {
+          "user": [
+            {
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": false,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        }
+      },
+      "session": {
+        "request": {
+          "method": "GET",
+          "url": "http://email-verification-duration.test/api/auth/get-session",
+          "headers": {
+            "origin": "http://email-verification-duration.test",
+            "content-type": "application/json",
+            "user-agent": "email-duration-contract",
+            "x-forwarded-for": "203.0.113.8"
+          }
+        },
+        "response": {
+          "status": 200,
+          "statusText": "",
+          "headers": [
+            [
+              "cache-control",
+              "no-store"
+            ],
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "pragma",
+              "no-cache"
+            ]
+          ],
+          "cookies": [],
+          "body": "null"
+        },
+        "events": [],
+        "after": {
+          "user": [
+            {
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": false,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "id": "owner"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        }
+      },
+      "senderCalls": 1
+    },
+    {
+      "backend": "sqlite",
+      "scenario": {
+        "name": "fractional-before-claim",
+        "expiresIn": 1.5,
+        "readOffset": 1499,
+        "accepted": true
+      },
+      "issuedAt": 2000000000123,
+      "readAt": 2000000001499,
+      "before": {
+        "user": [
+          {
+            "id": "owner",
+            "name": "Email Duration",
+            "email": "owner@email-verification-duration.test",
+            "emailVerified": 0,
+            "image": null,
+            "createdAt": "2033-05-18T03:33:20.123Z",
+            "updatedAt": "2033-05-18T03:33:20.123Z"
+          }
+        ],
+        "session": [],
+        "account": [],
+        "verification": []
+      },
+      "send": {
+        "request": {
+          "method": "POST",
+          "url": "http://email-verification-duration.test/api/auth/send-verification-email",
+          "headers": {
+            "origin": "http://email-verification-duration.test",
+            "content-type": "application/json",
+            "user-agent": "email-duration-contract",
+            "x-forwarded-for": "203.0.113.8"
+          },
+          "body": {
+            "email": "owner@email-verification-duration.test"
+          }
+        },
+        "response": {
+          "status": 200,
+          "statusText": "",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ]
+          ],
+          "cookies": [],
+          "body": "{\"status\":true}"
+        },
+        "events": [
+          {
+            "kind": "sender",
+            "data": {
+              "user": {
+                "name": "Email Duration",
+                "email": "owner@email-verification-duration.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2033-05-18T03:33:20.123Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2033-05-18T03:33:20.123Z"
+                },
+                "id": "owner"
+              },
+              "url": "http://email-verification-duration.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDEuNX0.Q_XCI1gYGpJF6UEpMfxtKwosoJ2HVShXhg5NPIWNa2U&callbackURL=%2F",
+              "token": "eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDEuNX0.Q_XCI1gYGpJF6UEpMfxtKwosoJ2HVShXhg5NPIWNa2U"
+            },
+            "request": {
+              "method": "POST",
+              "url": "http://email-verification-duration.test/api/auth/send-verification-email",
+              "headers": [
+                [
+                  "content-type",
+                  "application/json"
+                ],
+                [
+                  "origin",
+                  "http://email-verification-duration.test"
+                ],
+                [
+                  "user-agent",
+                  "email-duration-contract"
+                ],
+                [
+                  "x-forwarded-for",
+                  "203.0.113.8"
+                ]
+              ],
+              "body": "{\"email\":\"owner@email-verification-duration.test\"}"
+            }
+          }
+        ],
+        "after": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": 0,
+              "image": null,
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:20.123Z"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        }
+      },
+      "jwt": {
+        "token": "eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDEuNX0.Q_XCI1gYGpJF6UEpMfxtKwosoJ2HVShXhg5NPIWNa2U",
+        "protectedHeader": {
+          "alg": "HS256"
+        },
+        "claims": {
+          "email": "owner@email-verification-duration.test",
+          "iat": 2000000000,
+          "exp": 2000000001.5
+        },
+        "signatureVerified": true
+      },
+      "verify": {
+        "request": {
+          "method": "GET",
+          "url": "http://email-verification-duration.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDEuNX0.Q_XCI1gYGpJF6UEpMfxtKwosoJ2HVShXhg5NPIWNa2U",
+          "headers": {
+            "origin": "http://email-verification-duration.test",
+            "content-type": "application/json",
+            "user-agent": "email-duration-contract",
+            "x-forwarded-for": "203.0.113.8"
+          }
+        },
+        "response": {
+          "status": 200,
+          "statusText": "",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "set-cookie",
+              "better-auth.session_token=<verified-signed-session-token>; Max-Age=3600; Path=/; HttpOnly; SameSite=Lax"
+            ]
+          ],
+          "cookies": [
+            "better-auth.session_token=<verified-signed-session-token>; Max-Age=3600; Path=/; HttpOnly; SameSite=Lax"
+          ],
+          "body": "{\"status\":true,\"user\":null}"
+        },
+        "events": [
+          {
+            "kind": "before-verification",
+            "user": {
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": false,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "id": "owner"
+            },
+            "request": {
+              "method": "GET",
+              "url": "http://email-verification-duration.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDEuNX0.Q_XCI1gYGpJF6UEpMfxtKwosoJ2HVShXhg5NPIWNa2U",
+              "headers": [
+                [
+                  "content-type",
+                  "application/json"
+                ],
+                [
+                  "origin",
+                  "http://email-verification-duration.test"
+                ],
+                [
+                  "user-agent",
+                  "email-duration-contract"
+                ],
+                [
+                  "x-forwarded-for",
+                  "203.0.113.8"
+                ]
+              ],
+              "body": ""
+            }
+          },
+          {
+            "kind": "hook",
+            "model": "user",
+            "operation": "update",
+            "phase": "before",
+            "data": {
+              "emailVerified": true
+            }
+          },
+          {
+            "kind": "hook",
+            "model": "user",
+            "operation": "update",
+            "phase": "after",
+            "data": {
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.499Z"
+              },
+              "id": "owner"
+            }
+          },
+          {
+            "kind": "after-verification",
+            "user": {
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.499Z"
+              },
+              "id": "owner"
+            },
+            "request": {
+              "method": "GET",
+              "url": "http://email-verification-duration.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDEuNX0.Q_XCI1gYGpJF6UEpMfxtKwosoJ2HVShXhg5NPIWNa2U",
+              "headers": [
+                [
+                  "content-type",
+                  "application/json"
+                ],
+                [
+                  "origin",
+                  "http://email-verification-duration.test"
+                ],
+                [
+                  "user-agent",
+                  "email-duration-contract"
+                ],
+                [
+                  "x-forwarded-for",
+                  "203.0.113.8"
+                ]
+              ],
+              "body": ""
+            }
+          },
+          {
+            "kind": "hook",
+            "model": "session",
+            "operation": "create",
+            "phase": "before",
+            "data": {
+              "ipAddress": "203.0.113.8",
+              "userAgent": "email-duration-contract",
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T04:33:21.499Z"
+              },
+              "userId": "owner",
+              "token": "<session-token>",
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.499Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.499Z"
+              }
+            }
+          },
+          {
+            "kind": "generate-id",
+            "input": {
+              "model": "session"
+            },
+            "id": "session-1"
+          },
+          {
+            "kind": "hook",
+            "model": "session",
+            "operation": "create",
+            "phase": "after",
+            "data": {
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T04:33:21.499Z"
+              },
+              "token": "<session-token>",
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.499Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.499Z"
+              },
+              "ipAddress": "203.0.113.8",
+              "userAgent": "email-duration-contract",
+              "userId": "owner",
+              "id": "session-1"
+            }
+          }
+        ],
+        "after": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": 1,
+              "image": null,
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:21.499Z"
+            }
+          ],
+          "session": [
+            {
+              "id": "session-1",
+              "expiresAt": "2033-05-18T04:33:21.499Z",
+              "token": "<session-token>",
+              "createdAt": "2033-05-18T03:33:21.499Z",
+              "updatedAt": "2033-05-18T03:33:21.499Z",
+              "ipAddress": "203.0.113.8",
+              "userAgent": "email-duration-contract",
+              "userId": "owner"
+            }
+          ],
+          "account": [],
+          "verification": []
+        }
+      },
+      "session": {
+        "request": {
+          "method": "GET",
+          "url": "http://email-verification-duration.test/api/auth/get-session",
+          "headers": {
+            "origin": "http://email-verification-duration.test",
+            "content-type": "application/json",
+            "user-agent": "email-duration-contract",
+            "x-forwarded-for": "203.0.113.8",
+            "cookie": "better-auth.session_token=<verified-signed-session-token>"
+          }
+        },
+        "response": {
+          "status": 200,
+          "statusText": "",
+          "headers": [
+            [
+              "cache-control",
+              "no-store"
+            ],
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "pragma",
+              "no-cache"
+            ]
+          ],
+          "cookies": [],
+          "body": "{\"session\":{\"expiresAt\":\"2033-05-18T04:33:21.499Z\",\"token\":\"<session-token>\",\"createdAt\":\"2033-05-18T03:33:21.499Z\",\"updatedAt\":\"2033-05-18T03:33:21.499Z\",\"ipAddress\":\"203.0.113.8\",\"userAgent\":\"email-duration-contract\",\"userId\":\"owner\",\"id\":\"session-1\"},\"user\":{\"name\":\"Email Duration\",\"email\":\"owner@email-verification-duration.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2033-05-18T03:33:20.123Z\",\"updatedAt\":\"2033-05-18T03:33:21.499Z\",\"id\":\"owner\"}}"
+        },
+        "events": [],
+        "after": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": 1,
+              "image": null,
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:21.499Z"
+            }
+          ],
+          "session": [
+            {
+              "id": "session-1",
+              "expiresAt": "2033-05-18T04:33:21.499Z",
+              "token": "<session-token>",
+              "createdAt": "2033-05-18T03:33:21.499Z",
+              "updatedAt": "2033-05-18T03:33:21.499Z",
+              "ipAddress": "203.0.113.8",
+              "userAgent": "email-duration-contract",
+              "userId": "owner"
+            }
+          ],
+          "account": [],
+          "verification": []
+        }
+      },
+      "senderCalls": 1
+    },
+    {
+      "backend": "sqlite",
+      "scenario": {
+        "name": "fractional-at-claim",
+        "expiresIn": 1.5,
+        "readOffset": 1500,
+        "accepted": true
+      },
+      "issuedAt": 2000000000123,
+      "readAt": 2000000001500,
+      "before": {
+        "user": [
+          {
+            "id": "owner",
+            "name": "Email Duration",
+            "email": "owner@email-verification-duration.test",
+            "emailVerified": 0,
+            "image": null,
+            "createdAt": "2033-05-18T03:33:20.123Z",
+            "updatedAt": "2033-05-18T03:33:20.123Z"
+          }
+        ],
+        "session": [],
+        "account": [],
+        "verification": []
+      },
+      "send": {
+        "request": {
+          "method": "POST",
+          "url": "http://email-verification-duration.test/api/auth/send-verification-email",
+          "headers": {
+            "origin": "http://email-verification-duration.test",
+            "content-type": "application/json",
+            "user-agent": "email-duration-contract",
+            "x-forwarded-for": "203.0.113.8"
+          },
+          "body": {
+            "email": "owner@email-verification-duration.test"
+          }
+        },
+        "response": {
+          "status": 200,
+          "statusText": "",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ]
+          ],
+          "cookies": [],
+          "body": "{\"status\":true}"
+        },
+        "events": [
+          {
+            "kind": "sender",
+            "data": {
+              "user": {
+                "name": "Email Duration",
+                "email": "owner@email-verification-duration.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2033-05-18T03:33:20.123Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2033-05-18T03:33:20.123Z"
+                },
+                "id": "owner"
+              },
+              "url": "http://email-verification-duration.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDEuNX0.Q_XCI1gYGpJF6UEpMfxtKwosoJ2HVShXhg5NPIWNa2U&callbackURL=%2F",
+              "token": "eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDEuNX0.Q_XCI1gYGpJF6UEpMfxtKwosoJ2HVShXhg5NPIWNa2U"
+            },
+            "request": {
+              "method": "POST",
+              "url": "http://email-verification-duration.test/api/auth/send-verification-email",
+              "headers": [
+                [
+                  "content-type",
+                  "application/json"
+                ],
+                [
+                  "origin",
+                  "http://email-verification-duration.test"
+                ],
+                [
+                  "user-agent",
+                  "email-duration-contract"
+                ],
+                [
+                  "x-forwarded-for",
+                  "203.0.113.8"
+                ]
+              ],
+              "body": "{\"email\":\"owner@email-verification-duration.test\"}"
+            }
+          }
+        ],
+        "after": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": 0,
+              "image": null,
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:20.123Z"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        }
+      },
+      "jwt": {
+        "token": "eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDEuNX0.Q_XCI1gYGpJF6UEpMfxtKwosoJ2HVShXhg5NPIWNa2U",
+        "protectedHeader": {
+          "alg": "HS256"
+        },
+        "claims": {
+          "email": "owner@email-verification-duration.test",
+          "iat": 2000000000,
+          "exp": 2000000001.5
+        },
+        "signatureVerified": true
+      },
+      "verify": {
+        "request": {
+          "method": "GET",
+          "url": "http://email-verification-duration.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDEuNX0.Q_XCI1gYGpJF6UEpMfxtKwosoJ2HVShXhg5NPIWNa2U",
+          "headers": {
+            "origin": "http://email-verification-duration.test",
+            "content-type": "application/json",
+            "user-agent": "email-duration-contract",
+            "x-forwarded-for": "203.0.113.8"
+          }
+        },
+        "response": {
+          "status": 200,
+          "statusText": "",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "set-cookie",
+              "better-auth.session_token=<verified-signed-session-token>; Max-Age=3600; Path=/; HttpOnly; SameSite=Lax"
+            ]
+          ],
+          "cookies": [
+            "better-auth.session_token=<verified-signed-session-token>; Max-Age=3600; Path=/; HttpOnly; SameSite=Lax"
+          ],
+          "body": "{\"status\":true,\"user\":null}"
+        },
+        "events": [
+          {
+            "kind": "before-verification",
+            "user": {
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": false,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "id": "owner"
+            },
+            "request": {
+              "method": "GET",
+              "url": "http://email-verification-duration.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDEuNX0.Q_XCI1gYGpJF6UEpMfxtKwosoJ2HVShXhg5NPIWNa2U",
+              "headers": [
+                [
+                  "content-type",
+                  "application/json"
+                ],
+                [
+                  "origin",
+                  "http://email-verification-duration.test"
+                ],
+                [
+                  "user-agent",
+                  "email-duration-contract"
+                ],
+                [
+                  "x-forwarded-for",
+                  "203.0.113.8"
+                ]
+              ],
+              "body": ""
+            }
+          },
+          {
+            "kind": "hook",
+            "model": "user",
+            "operation": "update",
+            "phase": "before",
+            "data": {
+              "emailVerified": true
+            }
+          },
+          {
+            "kind": "hook",
+            "model": "user",
+            "operation": "update",
+            "phase": "after",
+            "data": {
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.500Z"
+              },
+              "id": "owner"
+            }
+          },
+          {
+            "kind": "after-verification",
+            "user": {
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.500Z"
+              },
+              "id": "owner"
+            },
+            "request": {
+              "method": "GET",
+              "url": "http://email-verification-duration.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDEuNX0.Q_XCI1gYGpJF6UEpMfxtKwosoJ2HVShXhg5NPIWNa2U",
+              "headers": [
+                [
+                  "content-type",
+                  "application/json"
+                ],
+                [
+                  "origin",
+                  "http://email-verification-duration.test"
+                ],
+                [
+                  "user-agent",
+                  "email-duration-contract"
+                ],
+                [
+                  "x-forwarded-for",
+                  "203.0.113.8"
+                ]
+              ],
+              "body": ""
+            }
+          },
+          {
+            "kind": "hook",
+            "model": "session",
+            "operation": "create",
+            "phase": "before",
+            "data": {
+              "ipAddress": "203.0.113.8",
+              "userAgent": "email-duration-contract",
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T04:33:21.500Z"
+              },
+              "userId": "owner",
+              "token": "<session-token>",
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.500Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.500Z"
+              }
+            }
+          },
+          {
+            "kind": "generate-id",
+            "input": {
+              "model": "session"
+            },
+            "id": "session-1"
+          },
+          {
+            "kind": "hook",
+            "model": "session",
+            "operation": "create",
+            "phase": "after",
+            "data": {
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T04:33:21.500Z"
+              },
+              "token": "<session-token>",
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.500Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.500Z"
+              },
+              "ipAddress": "203.0.113.8",
+              "userAgent": "email-duration-contract",
+              "userId": "owner",
+              "id": "session-1"
+            }
+          }
+        ],
+        "after": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": 1,
+              "image": null,
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:21.500Z"
+            }
+          ],
+          "session": [
+            {
+              "id": "session-1",
+              "expiresAt": "2033-05-18T04:33:21.500Z",
+              "token": "<session-token>",
+              "createdAt": "2033-05-18T03:33:21.500Z",
+              "updatedAt": "2033-05-18T03:33:21.500Z",
+              "ipAddress": "203.0.113.8",
+              "userAgent": "email-duration-contract",
+              "userId": "owner"
+            }
+          ],
+          "account": [],
+          "verification": []
+        }
+      },
+      "session": {
+        "request": {
+          "method": "GET",
+          "url": "http://email-verification-duration.test/api/auth/get-session",
+          "headers": {
+            "origin": "http://email-verification-duration.test",
+            "content-type": "application/json",
+            "user-agent": "email-duration-contract",
+            "x-forwarded-for": "203.0.113.8",
+            "cookie": "better-auth.session_token=<verified-signed-session-token>"
+          }
+        },
+        "response": {
+          "status": 200,
+          "statusText": "",
+          "headers": [
+            [
+              "cache-control",
+              "no-store"
+            ],
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "pragma",
+              "no-cache"
+            ]
+          ],
+          "cookies": [],
+          "body": "{\"session\":{\"expiresAt\":\"2033-05-18T04:33:21.500Z\",\"token\":\"<session-token>\",\"createdAt\":\"2033-05-18T03:33:21.500Z\",\"updatedAt\":\"2033-05-18T03:33:21.500Z\",\"ipAddress\":\"203.0.113.8\",\"userAgent\":\"email-duration-contract\",\"userId\":\"owner\",\"id\":\"session-1\"},\"user\":{\"name\":\"Email Duration\",\"email\":\"owner@email-verification-duration.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2033-05-18T03:33:20.123Z\",\"updatedAt\":\"2033-05-18T03:33:21.500Z\",\"id\":\"owner\"}}"
+        },
+        "events": [],
+        "after": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": 1,
+              "image": null,
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:21.500Z"
+            }
+          ],
+          "session": [
+            {
+              "id": "session-1",
+              "expiresAt": "2033-05-18T04:33:21.500Z",
+              "token": "<session-token>",
+              "createdAt": "2033-05-18T03:33:21.500Z",
+              "updatedAt": "2033-05-18T03:33:21.500Z",
+              "ipAddress": "203.0.113.8",
+              "userAgent": "email-duration-contract",
+              "userId": "owner"
+            }
+          ],
+          "account": [],
+          "verification": []
+        }
+      },
+      "senderCalls": 1
+    },
+    {
+      "backend": "sqlite",
+      "scenario": {
+        "name": "fractional-before-next-second",
+        "expiresIn": 1.5,
+        "readOffset": 1999,
+        "accepted": true
+      },
+      "issuedAt": 2000000000123,
+      "readAt": 2000000001999,
+      "before": {
+        "user": [
+          {
+            "id": "owner",
+            "name": "Email Duration",
+            "email": "owner@email-verification-duration.test",
+            "emailVerified": 0,
+            "image": null,
+            "createdAt": "2033-05-18T03:33:20.123Z",
+            "updatedAt": "2033-05-18T03:33:20.123Z"
+          }
+        ],
+        "session": [],
+        "account": [],
+        "verification": []
+      },
+      "send": {
+        "request": {
+          "method": "POST",
+          "url": "http://email-verification-duration.test/api/auth/send-verification-email",
+          "headers": {
+            "origin": "http://email-verification-duration.test",
+            "content-type": "application/json",
+            "user-agent": "email-duration-contract",
+            "x-forwarded-for": "203.0.113.8"
+          },
+          "body": {
+            "email": "owner@email-verification-duration.test"
+          }
+        },
+        "response": {
+          "status": 200,
+          "statusText": "",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ]
+          ],
+          "cookies": [],
+          "body": "{\"status\":true}"
+        },
+        "events": [
+          {
+            "kind": "sender",
+            "data": {
+              "user": {
+                "name": "Email Duration",
+                "email": "owner@email-verification-duration.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2033-05-18T03:33:20.123Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2033-05-18T03:33:20.123Z"
+                },
+                "id": "owner"
+              },
+              "url": "http://email-verification-duration.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDEuNX0.Q_XCI1gYGpJF6UEpMfxtKwosoJ2HVShXhg5NPIWNa2U&callbackURL=%2F",
+              "token": "eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDEuNX0.Q_XCI1gYGpJF6UEpMfxtKwosoJ2HVShXhg5NPIWNa2U"
+            },
+            "request": {
+              "method": "POST",
+              "url": "http://email-verification-duration.test/api/auth/send-verification-email",
+              "headers": [
+                [
+                  "content-type",
+                  "application/json"
+                ],
+                [
+                  "origin",
+                  "http://email-verification-duration.test"
+                ],
+                [
+                  "user-agent",
+                  "email-duration-contract"
+                ],
+                [
+                  "x-forwarded-for",
+                  "203.0.113.8"
+                ]
+              ],
+              "body": "{\"email\":\"owner@email-verification-duration.test\"}"
+            }
+          }
+        ],
+        "after": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": 0,
+              "image": null,
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:20.123Z"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        }
+      },
+      "jwt": {
+        "token": "eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDEuNX0.Q_XCI1gYGpJF6UEpMfxtKwosoJ2HVShXhg5NPIWNa2U",
+        "protectedHeader": {
+          "alg": "HS256"
+        },
+        "claims": {
+          "email": "owner@email-verification-duration.test",
+          "iat": 2000000000,
+          "exp": 2000000001.5
+        },
+        "signatureVerified": true
+      },
+      "verify": {
+        "request": {
+          "method": "GET",
+          "url": "http://email-verification-duration.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDEuNX0.Q_XCI1gYGpJF6UEpMfxtKwosoJ2HVShXhg5NPIWNa2U",
+          "headers": {
+            "origin": "http://email-verification-duration.test",
+            "content-type": "application/json",
+            "user-agent": "email-duration-contract",
+            "x-forwarded-for": "203.0.113.8"
+          }
+        },
+        "response": {
+          "status": 200,
+          "statusText": "",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "set-cookie",
+              "better-auth.session_token=<verified-signed-session-token>; Max-Age=3600; Path=/; HttpOnly; SameSite=Lax"
+            ]
+          ],
+          "cookies": [
+            "better-auth.session_token=<verified-signed-session-token>; Max-Age=3600; Path=/; HttpOnly; SameSite=Lax"
+          ],
+          "body": "{\"status\":true,\"user\":null}"
+        },
+        "events": [
+          {
+            "kind": "before-verification",
+            "user": {
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": false,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "id": "owner"
+            },
+            "request": {
+              "method": "GET",
+              "url": "http://email-verification-duration.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDEuNX0.Q_XCI1gYGpJF6UEpMfxtKwosoJ2HVShXhg5NPIWNa2U",
+              "headers": [
+                [
+                  "content-type",
+                  "application/json"
+                ],
+                [
+                  "origin",
+                  "http://email-verification-duration.test"
+                ],
+                [
+                  "user-agent",
+                  "email-duration-contract"
+                ],
+                [
+                  "x-forwarded-for",
+                  "203.0.113.8"
+                ]
+              ],
+              "body": ""
+            }
+          },
+          {
+            "kind": "hook",
+            "model": "user",
+            "operation": "update",
+            "phase": "before",
+            "data": {
+              "emailVerified": true
+            }
+          },
+          {
+            "kind": "hook",
+            "model": "user",
+            "operation": "update",
+            "phase": "after",
+            "data": {
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.999Z"
+              },
+              "id": "owner"
+            }
+          },
+          {
+            "kind": "after-verification",
+            "user": {
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.999Z"
+              },
+              "id": "owner"
+            },
+            "request": {
+              "method": "GET",
+              "url": "http://email-verification-duration.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDEuNX0.Q_XCI1gYGpJF6UEpMfxtKwosoJ2HVShXhg5NPIWNa2U",
+              "headers": [
+                [
+                  "content-type",
+                  "application/json"
+                ],
+                [
+                  "origin",
+                  "http://email-verification-duration.test"
+                ],
+                [
+                  "user-agent",
+                  "email-duration-contract"
+                ],
+                [
+                  "x-forwarded-for",
+                  "203.0.113.8"
+                ]
+              ],
+              "body": ""
+            }
+          },
+          {
+            "kind": "hook",
+            "model": "session",
+            "operation": "create",
+            "phase": "before",
+            "data": {
+              "ipAddress": "203.0.113.8",
+              "userAgent": "email-duration-contract",
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T04:33:21.999Z"
+              },
+              "userId": "owner",
+              "token": "<session-token>",
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.999Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.999Z"
+              }
+            }
+          },
+          {
+            "kind": "generate-id",
+            "input": {
+              "model": "session"
+            },
+            "id": "session-1"
+          },
+          {
+            "kind": "hook",
+            "model": "session",
+            "operation": "create",
+            "phase": "after",
+            "data": {
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T04:33:21.999Z"
+              },
+              "token": "<session-token>",
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.999Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.999Z"
+              },
+              "ipAddress": "203.0.113.8",
+              "userAgent": "email-duration-contract",
+              "userId": "owner",
+              "id": "session-1"
+            }
+          }
+        ],
+        "after": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": 1,
+              "image": null,
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:21.999Z"
+            }
+          ],
+          "session": [
+            {
+              "id": "session-1",
+              "expiresAt": "2033-05-18T04:33:21.999Z",
+              "token": "<session-token>",
+              "createdAt": "2033-05-18T03:33:21.999Z",
+              "updatedAt": "2033-05-18T03:33:21.999Z",
+              "ipAddress": "203.0.113.8",
+              "userAgent": "email-duration-contract",
+              "userId": "owner"
+            }
+          ],
+          "account": [],
+          "verification": []
+        }
+      },
+      "session": {
+        "request": {
+          "method": "GET",
+          "url": "http://email-verification-duration.test/api/auth/get-session",
+          "headers": {
+            "origin": "http://email-verification-duration.test",
+            "content-type": "application/json",
+            "user-agent": "email-duration-contract",
+            "x-forwarded-for": "203.0.113.8",
+            "cookie": "better-auth.session_token=<verified-signed-session-token>"
+          }
+        },
+        "response": {
+          "status": 200,
+          "statusText": "",
+          "headers": [
+            [
+              "cache-control",
+              "no-store"
+            ],
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "pragma",
+              "no-cache"
+            ]
+          ],
+          "cookies": [],
+          "body": "{\"session\":{\"expiresAt\":\"2033-05-18T04:33:21.999Z\",\"token\":\"<session-token>\",\"createdAt\":\"2033-05-18T03:33:21.999Z\",\"updatedAt\":\"2033-05-18T03:33:21.999Z\",\"ipAddress\":\"203.0.113.8\",\"userAgent\":\"email-duration-contract\",\"userId\":\"owner\",\"id\":\"session-1\"},\"user\":{\"name\":\"Email Duration\",\"email\":\"owner@email-verification-duration.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2033-05-18T03:33:20.123Z\",\"updatedAt\":\"2033-05-18T03:33:21.999Z\",\"id\":\"owner\"}}"
+        },
+        "events": [],
+        "after": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": 1,
+              "image": null,
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:21.999Z"
+            }
+          ],
+          "session": [
+            {
+              "id": "session-1",
+              "expiresAt": "2033-05-18T04:33:21.999Z",
+              "token": "<session-token>",
+              "createdAt": "2033-05-18T03:33:21.999Z",
+              "updatedAt": "2033-05-18T03:33:21.999Z",
+              "ipAddress": "203.0.113.8",
+              "userAgent": "email-duration-contract",
+              "userId": "owner"
+            }
+          ],
+          "account": [],
+          "verification": []
+        }
+      },
+      "senderCalls": 1
+    },
+    {
+      "backend": "sqlite",
+      "scenario": {
+        "name": "fractional-at-next-second",
+        "expiresIn": 1.5,
+        "readOffset": 2000,
+        "accepted": false
+      },
+      "issuedAt": 2000000000123,
+      "readAt": 2000000002000,
+      "before": {
+        "user": [
+          {
+            "id": "owner",
+            "name": "Email Duration",
+            "email": "owner@email-verification-duration.test",
+            "emailVerified": 0,
+            "image": null,
+            "createdAt": "2033-05-18T03:33:20.123Z",
+            "updatedAt": "2033-05-18T03:33:20.123Z"
+          }
+        ],
+        "session": [],
+        "account": [],
+        "verification": []
+      },
+      "send": {
+        "request": {
+          "method": "POST",
+          "url": "http://email-verification-duration.test/api/auth/send-verification-email",
+          "headers": {
+            "origin": "http://email-verification-duration.test",
+            "content-type": "application/json",
+            "user-agent": "email-duration-contract",
+            "x-forwarded-for": "203.0.113.8"
+          },
+          "body": {
+            "email": "owner@email-verification-duration.test"
+          }
+        },
+        "response": {
+          "status": 200,
+          "statusText": "",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ]
+          ],
+          "cookies": [],
+          "body": "{\"status\":true}"
+        },
+        "events": [
+          {
+            "kind": "sender",
+            "data": {
+              "user": {
+                "name": "Email Duration",
+                "email": "owner@email-verification-duration.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2033-05-18T03:33:20.123Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2033-05-18T03:33:20.123Z"
+                },
+                "id": "owner"
+              },
+              "url": "http://email-verification-duration.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDEuNX0.Q_XCI1gYGpJF6UEpMfxtKwosoJ2HVShXhg5NPIWNa2U&callbackURL=%2F",
+              "token": "eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDEuNX0.Q_XCI1gYGpJF6UEpMfxtKwosoJ2HVShXhg5NPIWNa2U"
+            },
+            "request": {
+              "method": "POST",
+              "url": "http://email-verification-duration.test/api/auth/send-verification-email",
+              "headers": [
+                [
+                  "content-type",
+                  "application/json"
+                ],
+                [
+                  "origin",
+                  "http://email-verification-duration.test"
+                ],
+                [
+                  "user-agent",
+                  "email-duration-contract"
+                ],
+                [
+                  "x-forwarded-for",
+                  "203.0.113.8"
+                ]
+              ],
+              "body": "{\"email\":\"owner@email-verification-duration.test\"}"
+            }
+          }
+        ],
+        "after": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": 0,
+              "image": null,
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:20.123Z"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        }
+      },
+      "jwt": {
+        "token": "eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDEuNX0.Q_XCI1gYGpJF6UEpMfxtKwosoJ2HVShXhg5NPIWNa2U",
+        "protectedHeader": {
+          "alg": "HS256"
+        },
+        "claims": {
+          "email": "owner@email-verification-duration.test",
+          "iat": 2000000000,
+          "exp": 2000000001.5
+        },
+        "signatureVerified": true
+      },
+      "verify": {
+        "request": {
+          "method": "GET",
+          "url": "http://email-verification-duration.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDEuNX0.Q_XCI1gYGpJF6UEpMfxtKwosoJ2HVShXhg5NPIWNa2U",
+          "headers": {
+            "origin": "http://email-verification-duration.test",
+            "content-type": "application/json",
+            "user-agent": "email-duration-contract",
+            "x-forwarded-for": "203.0.113.8"
+          }
+        },
+        "response": {
+          "status": 401,
+          "statusText": "UNAUTHORIZED",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ]
+          ],
+          "cookies": [],
+          "body": "{\"message\":\"Token expired\",\"code\":\"TOKEN_EXPIRED\"}"
+        },
+        "events": [],
+        "after": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": 0,
+              "image": null,
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:20.123Z"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        }
+      },
+      "session": {
+        "request": {
+          "method": "GET",
+          "url": "http://email-verification-duration.test/api/auth/get-session",
+          "headers": {
+            "origin": "http://email-verification-duration.test",
+            "content-type": "application/json",
+            "user-agent": "email-duration-contract",
+            "x-forwarded-for": "203.0.113.8"
+          }
+        },
+        "response": {
+          "status": 200,
+          "statusText": "",
+          "headers": [
+            [
+              "cache-control",
+              "no-store"
+            ],
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "pragma",
+              "no-cache"
+            ]
+          ],
+          "cookies": [],
+          "body": "null"
+        },
+        "events": [],
+        "after": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": 0,
+              "image": null,
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:20.123Z"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        }
+      },
+      "senderCalls": 1
+    },
+    {
+      "backend": "sqlite",
+      "scenario": {
+        "name": "integer-before-claim",
+        "expiresIn": 2,
+        "readOffset": 1999,
+        "accepted": true
+      },
+      "issuedAt": 2000000000123,
+      "readAt": 2000000001999,
+      "before": {
+        "user": [
+          {
+            "id": "owner",
+            "name": "Email Duration",
+            "email": "owner@email-verification-duration.test",
+            "emailVerified": 0,
+            "image": null,
+            "createdAt": "2033-05-18T03:33:20.123Z",
+            "updatedAt": "2033-05-18T03:33:20.123Z"
+          }
+        ],
+        "session": [],
+        "account": [],
+        "verification": []
+      },
+      "send": {
+        "request": {
+          "method": "POST",
+          "url": "http://email-verification-duration.test/api/auth/send-verification-email",
+          "headers": {
+            "origin": "http://email-verification-duration.test",
+            "content-type": "application/json",
+            "user-agent": "email-duration-contract",
+            "x-forwarded-for": "203.0.113.8"
+          },
+          "body": {
+            "email": "owner@email-verification-duration.test"
+          }
+        },
+        "response": {
+          "status": 200,
+          "statusText": "",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ]
+          ],
+          "cookies": [],
+          "body": "{\"status\":true}"
+        },
+        "events": [
+          {
+            "kind": "sender",
+            "data": {
+              "user": {
+                "name": "Email Duration",
+                "email": "owner@email-verification-duration.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2033-05-18T03:33:20.123Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2033-05-18T03:33:20.123Z"
+                },
+                "id": "owner"
+              },
+              "url": "http://email-verification-duration.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDJ9.2E44M60J-GHEktKzFpQkA2RWJmzDZouLDQY5vYKG27k&callbackURL=%2F",
+              "token": "eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDJ9.2E44M60J-GHEktKzFpQkA2RWJmzDZouLDQY5vYKG27k"
+            },
+            "request": {
+              "method": "POST",
+              "url": "http://email-verification-duration.test/api/auth/send-verification-email",
+              "headers": [
+                [
+                  "content-type",
+                  "application/json"
+                ],
+                [
+                  "origin",
+                  "http://email-verification-duration.test"
+                ],
+                [
+                  "user-agent",
+                  "email-duration-contract"
+                ],
+                [
+                  "x-forwarded-for",
+                  "203.0.113.8"
+                ]
+              ],
+              "body": "{\"email\":\"owner@email-verification-duration.test\"}"
+            }
+          }
+        ],
+        "after": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": 0,
+              "image": null,
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:20.123Z"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        }
+      },
+      "jwt": {
+        "token": "eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDJ9.2E44M60J-GHEktKzFpQkA2RWJmzDZouLDQY5vYKG27k",
+        "protectedHeader": {
+          "alg": "HS256"
+        },
+        "claims": {
+          "email": "owner@email-verification-duration.test",
+          "iat": 2000000000,
+          "exp": 2000000002
+        },
+        "signatureVerified": true
+      },
+      "verify": {
+        "request": {
+          "method": "GET",
+          "url": "http://email-verification-duration.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDJ9.2E44M60J-GHEktKzFpQkA2RWJmzDZouLDQY5vYKG27k",
+          "headers": {
+            "origin": "http://email-verification-duration.test",
+            "content-type": "application/json",
+            "user-agent": "email-duration-contract",
+            "x-forwarded-for": "203.0.113.8"
+          }
+        },
+        "response": {
+          "status": 200,
+          "statusText": "",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "set-cookie",
+              "better-auth.session_token=<verified-signed-session-token>; Max-Age=3600; Path=/; HttpOnly; SameSite=Lax"
+            ]
+          ],
+          "cookies": [
+            "better-auth.session_token=<verified-signed-session-token>; Max-Age=3600; Path=/; HttpOnly; SameSite=Lax"
+          ],
+          "body": "{\"status\":true,\"user\":null}"
+        },
+        "events": [
+          {
+            "kind": "before-verification",
+            "user": {
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": false,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "id": "owner"
+            },
+            "request": {
+              "method": "GET",
+              "url": "http://email-verification-duration.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDJ9.2E44M60J-GHEktKzFpQkA2RWJmzDZouLDQY5vYKG27k",
+              "headers": [
+                [
+                  "content-type",
+                  "application/json"
+                ],
+                [
+                  "origin",
+                  "http://email-verification-duration.test"
+                ],
+                [
+                  "user-agent",
+                  "email-duration-contract"
+                ],
+                [
+                  "x-forwarded-for",
+                  "203.0.113.8"
+                ]
+              ],
+              "body": ""
+            }
+          },
+          {
+            "kind": "hook",
+            "model": "user",
+            "operation": "update",
+            "phase": "before",
+            "data": {
+              "emailVerified": true
+            }
+          },
+          {
+            "kind": "hook",
+            "model": "user",
+            "operation": "update",
+            "phase": "after",
+            "data": {
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.999Z"
+              },
+              "id": "owner"
+            }
+          },
+          {
+            "kind": "after-verification",
+            "user": {
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": true,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:20.123Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.999Z"
+              },
+              "id": "owner"
+            },
+            "request": {
+              "method": "GET",
+              "url": "http://email-verification-duration.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDJ9.2E44M60J-GHEktKzFpQkA2RWJmzDZouLDQY5vYKG27k",
+              "headers": [
+                [
+                  "content-type",
+                  "application/json"
+                ],
+                [
+                  "origin",
+                  "http://email-verification-duration.test"
+                ],
+                [
+                  "user-agent",
+                  "email-duration-contract"
+                ],
+                [
+                  "x-forwarded-for",
+                  "203.0.113.8"
+                ]
+              ],
+              "body": ""
+            }
+          },
+          {
+            "kind": "hook",
+            "model": "session",
+            "operation": "create",
+            "phase": "before",
+            "data": {
+              "ipAddress": "203.0.113.8",
+              "userAgent": "email-duration-contract",
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T04:33:21.999Z"
+              },
+              "userId": "owner",
+              "token": "<session-token>",
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.999Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.999Z"
+              }
+            }
+          },
+          {
+            "kind": "generate-id",
+            "input": {
+              "model": "session"
+            },
+            "id": "session-1"
+          },
+          {
+            "kind": "hook",
+            "model": "session",
+            "operation": "create",
+            "phase": "after",
+            "data": {
+              "expiresAt": {
+                "type": "date",
+                "value": "2033-05-18T04:33:21.999Z"
+              },
+              "token": "<session-token>",
+              "createdAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.999Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2033-05-18T03:33:21.999Z"
+              },
+              "ipAddress": "203.0.113.8",
+              "userAgent": "email-duration-contract",
+              "userId": "owner",
+              "id": "session-1"
+            }
+          }
+        ],
+        "after": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": 1,
+              "image": null,
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:21.999Z"
+            }
+          ],
+          "session": [
+            {
+              "id": "session-1",
+              "expiresAt": "2033-05-18T04:33:21.999Z",
+              "token": "<session-token>",
+              "createdAt": "2033-05-18T03:33:21.999Z",
+              "updatedAt": "2033-05-18T03:33:21.999Z",
+              "ipAddress": "203.0.113.8",
+              "userAgent": "email-duration-contract",
+              "userId": "owner"
+            }
+          ],
+          "account": [],
+          "verification": []
+        }
+      },
+      "session": {
+        "request": {
+          "method": "GET",
+          "url": "http://email-verification-duration.test/api/auth/get-session",
+          "headers": {
+            "origin": "http://email-verification-duration.test",
+            "content-type": "application/json",
+            "user-agent": "email-duration-contract",
+            "x-forwarded-for": "203.0.113.8",
+            "cookie": "better-auth.session_token=<verified-signed-session-token>"
+          }
+        },
+        "response": {
+          "status": 200,
+          "statusText": "",
+          "headers": [
+            [
+              "cache-control",
+              "no-store"
+            ],
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "pragma",
+              "no-cache"
+            ]
+          ],
+          "cookies": [],
+          "body": "{\"session\":{\"expiresAt\":\"2033-05-18T04:33:21.999Z\",\"token\":\"<session-token>\",\"createdAt\":\"2033-05-18T03:33:21.999Z\",\"updatedAt\":\"2033-05-18T03:33:21.999Z\",\"ipAddress\":\"203.0.113.8\",\"userAgent\":\"email-duration-contract\",\"userId\":\"owner\",\"id\":\"session-1\"},\"user\":{\"name\":\"Email Duration\",\"email\":\"owner@email-verification-duration.test\",\"emailVerified\":true,\"image\":null,\"createdAt\":\"2033-05-18T03:33:20.123Z\",\"updatedAt\":\"2033-05-18T03:33:21.999Z\",\"id\":\"owner\"}}"
+        },
+        "events": [],
+        "after": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": 1,
+              "image": null,
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:21.999Z"
+            }
+          ],
+          "session": [
+            {
+              "id": "session-1",
+              "expiresAt": "2033-05-18T04:33:21.999Z",
+              "token": "<session-token>",
+              "createdAt": "2033-05-18T03:33:21.999Z",
+              "updatedAt": "2033-05-18T03:33:21.999Z",
+              "ipAddress": "203.0.113.8",
+              "userAgent": "email-duration-contract",
+              "userId": "owner"
+            }
+          ],
+          "account": [],
+          "verification": []
+        }
+      },
+      "senderCalls": 1
+    },
+    {
+      "backend": "sqlite",
+      "scenario": {
+        "name": "integer-at-claim",
+        "expiresIn": 2,
+        "readOffset": 2000,
+        "accepted": false
+      },
+      "issuedAt": 2000000000123,
+      "readAt": 2000000002000,
+      "before": {
+        "user": [
+          {
+            "id": "owner",
+            "name": "Email Duration",
+            "email": "owner@email-verification-duration.test",
+            "emailVerified": 0,
+            "image": null,
+            "createdAt": "2033-05-18T03:33:20.123Z",
+            "updatedAt": "2033-05-18T03:33:20.123Z"
+          }
+        ],
+        "session": [],
+        "account": [],
+        "verification": []
+      },
+      "send": {
+        "request": {
+          "method": "POST",
+          "url": "http://email-verification-duration.test/api/auth/send-verification-email",
+          "headers": {
+            "origin": "http://email-verification-duration.test",
+            "content-type": "application/json",
+            "user-agent": "email-duration-contract",
+            "x-forwarded-for": "203.0.113.8"
+          },
+          "body": {
+            "email": "owner@email-verification-duration.test"
+          }
+        },
+        "response": {
+          "status": 200,
+          "statusText": "",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ]
+          ],
+          "cookies": [],
+          "body": "{\"status\":true}"
+        },
+        "events": [
+          {
+            "kind": "sender",
+            "data": {
+              "user": {
+                "name": "Email Duration",
+                "email": "owner@email-verification-duration.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2033-05-18T03:33:20.123Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2033-05-18T03:33:20.123Z"
+                },
+                "id": "owner"
+              },
+              "url": "http://email-verification-duration.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDJ9.2E44M60J-GHEktKzFpQkA2RWJmzDZouLDQY5vYKG27k&callbackURL=%2F",
+              "token": "eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDJ9.2E44M60J-GHEktKzFpQkA2RWJmzDZouLDQY5vYKG27k"
+            },
+            "request": {
+              "method": "POST",
+              "url": "http://email-verification-duration.test/api/auth/send-verification-email",
+              "headers": [
+                [
+                  "content-type",
+                  "application/json"
+                ],
+                [
+                  "origin",
+                  "http://email-verification-duration.test"
+                ],
+                [
+                  "user-agent",
+                  "email-duration-contract"
+                ],
+                [
+                  "x-forwarded-for",
+                  "203.0.113.8"
+                ]
+              ],
+              "body": "{\"email\":\"owner@email-verification-duration.test\"}"
+            }
+          }
+        ],
+        "after": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": 0,
+              "image": null,
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:20.123Z"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        }
+      },
+      "jwt": {
+        "token": "eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDJ9.2E44M60J-GHEktKzFpQkA2RWJmzDZouLDQY5vYKG27k",
+        "protectedHeader": {
+          "alg": "HS256"
+        },
+        "claims": {
+          "email": "owner@email-verification-duration.test",
+          "iat": 2000000000,
+          "exp": 2000000002
+        },
+        "signatureVerified": true
+      },
+      "verify": {
+        "request": {
+          "method": "GET",
+          "url": "http://email-verification-duration.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDJ9.2E44M60J-GHEktKzFpQkA2RWJmzDZouLDQY5vYKG27k",
+          "headers": {
+            "origin": "http://email-verification-duration.test",
+            "content-type": "application/json",
+            "user-agent": "email-duration-contract",
+            "x-forwarded-for": "203.0.113.8"
+          }
+        },
+        "response": {
+          "status": 401,
+          "statusText": "UNAUTHORIZED",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ]
+          ],
+          "cookies": [],
+          "body": "{\"message\":\"Token expired\",\"code\":\"TOKEN_EXPIRED\"}"
+        },
+        "events": [],
+        "after": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": 0,
+              "image": null,
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:20.123Z"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        }
+      },
+      "session": {
+        "request": {
+          "method": "GET",
+          "url": "http://email-verification-duration.test/api/auth/get-session",
+          "headers": {
+            "origin": "http://email-verification-duration.test",
+            "content-type": "application/json",
+            "user-agent": "email-duration-contract",
+            "x-forwarded-for": "203.0.113.8"
+          }
+        },
+        "response": {
+          "status": 200,
+          "statusText": "",
+          "headers": [
+            [
+              "cache-control",
+              "no-store"
+            ],
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "pragma",
+              "no-cache"
+            ]
+          ],
+          "cookies": [],
+          "body": "null"
+        },
+        "events": [],
+        "after": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": 0,
+              "image": null,
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:20.123Z"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        }
+      },
+      "senderCalls": 1
+    },
+    {
+      "backend": "sqlite",
+      "scenario": {
+        "name": "zero-immediate",
+        "expiresIn": 0,
+        "readOffset": 123,
+        "accepted": false
+      },
+      "issuedAt": 2000000000123,
+      "readAt": 2000000000123,
+      "before": {
+        "user": [
+          {
+            "id": "owner",
+            "name": "Email Duration",
+            "email": "owner@email-verification-duration.test",
+            "emailVerified": 0,
+            "image": null,
+            "createdAt": "2033-05-18T03:33:20.123Z",
+            "updatedAt": "2033-05-18T03:33:20.123Z"
+          }
+        ],
+        "session": [],
+        "account": [],
+        "verification": []
+      },
+      "send": {
+        "request": {
+          "method": "POST",
+          "url": "http://email-verification-duration.test/api/auth/send-verification-email",
+          "headers": {
+            "origin": "http://email-verification-duration.test",
+            "content-type": "application/json",
+            "user-agent": "email-duration-contract",
+            "x-forwarded-for": "203.0.113.8"
+          },
+          "body": {
+            "email": "owner@email-verification-duration.test"
+          }
+        },
+        "response": {
+          "status": 200,
+          "statusText": "",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ]
+          ],
+          "cookies": [],
+          "body": "{\"status\":true}"
+        },
+        "events": [
+          {
+            "kind": "sender",
+            "data": {
+              "user": {
+                "name": "Email Duration",
+                "email": "owner@email-verification-duration.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2033-05-18T03:33:20.123Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2033-05-18T03:33:20.123Z"
+                },
+                "id": "owner"
+              },
+              "url": "http://email-verification-duration.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDB9.IITlqXzVStDogZcydVrtuvFTkqI1uOlqoEbEStMYdck&callbackURL=%2F",
+              "token": "eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDB9.IITlqXzVStDogZcydVrtuvFTkqI1uOlqoEbEStMYdck"
+            },
+            "request": {
+              "method": "POST",
+              "url": "http://email-verification-duration.test/api/auth/send-verification-email",
+              "headers": [
+                [
+                  "content-type",
+                  "application/json"
+                ],
+                [
+                  "origin",
+                  "http://email-verification-duration.test"
+                ],
+                [
+                  "user-agent",
+                  "email-duration-contract"
+                ],
+                [
+                  "x-forwarded-for",
+                  "203.0.113.8"
+                ]
+              ],
+              "body": "{\"email\":\"owner@email-verification-duration.test\"}"
+            }
+          }
+        ],
+        "after": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": 0,
+              "image": null,
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:20.123Z"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        }
+      },
+      "jwt": {
+        "token": "eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDB9.IITlqXzVStDogZcydVrtuvFTkqI1uOlqoEbEStMYdck",
+        "protectedHeader": {
+          "alg": "HS256"
+        },
+        "claims": {
+          "email": "owner@email-verification-duration.test",
+          "iat": 2000000000,
+          "exp": 2000000000
+        },
+        "signatureVerified": true
+      },
+      "verify": {
+        "request": {
+          "method": "GET",
+          "url": "http://email-verification-duration.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQGVtYWlsLXZlcmlmaWNhdGlvbi1kdXJhdGlvbi50ZXN0IiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDB9.IITlqXzVStDogZcydVrtuvFTkqI1uOlqoEbEStMYdck",
+          "headers": {
+            "origin": "http://email-verification-duration.test",
+            "content-type": "application/json",
+            "user-agent": "email-duration-contract",
+            "x-forwarded-for": "203.0.113.8"
+          }
+        },
+        "response": {
+          "status": 401,
+          "statusText": "UNAUTHORIZED",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ]
+          ],
+          "cookies": [],
+          "body": "{\"message\":\"Token expired\",\"code\":\"TOKEN_EXPIRED\"}"
+        },
+        "events": [],
+        "after": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": 0,
+              "image": null,
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:20.123Z"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        }
+      },
+      "session": {
+        "request": {
+          "method": "GET",
+          "url": "http://email-verification-duration.test/api/auth/get-session",
+          "headers": {
+            "origin": "http://email-verification-duration.test",
+            "content-type": "application/json",
+            "user-agent": "email-duration-contract",
+            "x-forwarded-for": "203.0.113.8"
+          }
+        },
+        "response": {
+          "status": 200,
+          "statusText": "",
+          "headers": [
+            [
+              "cache-control",
+              "no-store"
+            ],
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "pragma",
+              "no-cache"
+            ]
+          ],
+          "cookies": [],
+          "body": "null"
+        },
+        "events": [],
+        "after": {
+          "user": [
+            {
+              "id": "owner",
+              "name": "Email Duration",
+              "email": "owner@email-verification-duration.test",
+              "emailVerified": 0,
+              "image": null,
+              "createdAt": "2033-05-18T03:33:20.123Z",
+              "updatedAt": "2033-05-18T03:33:20.123Z"
+            }
+          ],
+          "session": [],
+          "account": [],
+          "verification": []
+        }
+      },
+      "senderCalls": 1
+    }
+  ]
+}

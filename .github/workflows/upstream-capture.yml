@@ -30,6 +30,7 @@ on:
       - compat-tests/reference-server/contracts/account-user-auth-email-capture.mjs
       - compat-tests/reference-server/contracts/account-user-auth-secondary-capture.mjs
       - compat-tests/reference-server/contracts/api-key-number-name-capture.mjs
+      - compat-tests/reference-server/contracts/api-key-number-name-order-capture.mjs
       - compat-tests/reference-server/contracts/telemetry-fields-unique-capture.mjs
       - compat-tests/reference-server/contracts/email-verification-duration-capture.mjs
       - compat-tests/reference-server/contracts/passkey-shared-display-capture.mjs
@@ -44,8 +45,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - contract: email-verification-duration
-            regressions: [duration-options]
+          - contract: api-key-number-name-order
+            regressions: [api-key-number-name, passkey-shared-display]
             backend: ''
     runs-on: ubuntu-latest
     timeout-minutes: 10

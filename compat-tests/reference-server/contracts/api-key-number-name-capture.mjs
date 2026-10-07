@@ -27,7 +27,7 @@ function observeError(error) {
   return observeValue(error);
 }
 
-async function captureCase(backend, required) {
+async function captureCase(backend, required, plan) {
   const memory = { user: [], session: [], account: [], verification: [], apikey: [] };
   const sqlite = backend === "sqlite" ? new Database(":memory:") : undefined;
   const events = [];
@@ -56,7 +56,7 @@ async function captureCase(backend, required) {
     }), { id: "ordinary-api-key-number-name", schema: { apikey: { fields: { name: {
       type: "number", required, defaultValue: 7,
       transform: {
-        input(value) { record({ kind: "input", field: "name", value }); return value; },
+        input(value) { record({ kind: "input", field: "name", value }); return plan ? plan.input(value) : value; },
         output(value) { record({ kind: "output", field: "name", value }); return value; },
       },
     } } } } }],
@@ -139,55 +139,59 @@ async function captureCase(backend, required) {
     }
 
     const operations = [];
-    const expected = required ? 7 : null;
-    const createdIds = [];
-    for (const name of ["create-first", "create-second"]) {
-      const result = await call(name, "POST", "/api-key/create", {});
-      operations.push(result.observation);
-      assert.equal(result.observation.response?.status, 200);
-      assert.equal(result.json.name, expected);
-      assert.equal(result.json.referenceId, owner.id);
-      const row = result.raw.find(row => row.id === result.json.id);
-      assert.ok(row);
-      assert.equal(row.name, expected);
-      assert.deepEqual(result.observation.events.filter(event => event.field === "name"), [
-        { kind: "input", field: "name", value: expected },
-        { kind: "output", field: "name", value: expected },
-      ]);
-      createdIds.push(result.json.id);
-    }
-    for (const [name, path, query] of [
-      ["get", "/api-key/get", { id: createdIds[0] }],
-      ["list", "/api-key/list", undefined],
-      ["list-name-ascending", "/api-key/list", { sortBy: "name", sortDirection: "asc" }],
-    ]) {
-      const result = await call(name, "GET", path, undefined, query);
-      operations.push(result.observation);
-      if (name === "get") {
+    if (plan) {
+      await plan.run({ call, operations, required, ownerId: owner.id });
+    } else {
+      const expected = required ? 7 : null;
+      const createdIds = [];
+      for (const name of ["create-first", "create-second"]) {
+        const result = await call(name, "POST", "/api-key/create", {});
+        operations.push(result.observation);
         assert.equal(result.observation.response?.status, 200);
-        assert.equal(result.json.id, createdIds[0]);
         assert.equal(result.json.name, expected);
-      } else if (name === "list") {
-        assert.equal(result.observation.response?.status, 200);
-        assert.equal(result.json.total, 2);
-        assert.equal(result.json.apiKeys.length, 2);
-        assert.deepEqual(result.json.apiKeys.map(row => row.id).sort(), [...createdIds].sort());
-        for (const row of result.json.apiKeys) assert.equal(row.name, expected);
+        assert.equal(result.json.referenceId, owner.id);
+        const row = result.raw.find(row => row.id === result.json.id);
+        assert.ok(row);
+        assert.equal(row.name, expected);
+        assert.deepEqual(result.observation.events.filter(event => event.field === "name"), [
+          { kind: "input", field: "name", value: expected },
+          { kind: "output", field: "name", value: expected },
+        ]);
+        createdIds.push(result.json.id);
       }
+      for (const [name, path, query] of [
+        ["get", "/api-key/get", { id: createdIds[0] }],
+        ["list", "/api-key/list", undefined],
+        ["list-name-ascending", "/api-key/list", { sortBy: "name", sortDirection: "asc" }],
+      ]) {
+        const result = await call(name, "GET", path, undefined, query);
+        operations.push(result.observation);
+        if (name === "get") {
+          assert.equal(result.observation.response?.status, 200);
+          assert.equal(result.json.id, createdIds[0]);
+          assert.equal(result.json.name, expected);
+        } else if (name === "list") {
+          assert.equal(result.observation.response?.status, 200);
+          assert.equal(result.json.total, 2);
+          assert.equal(result.json.apiKeys.length, 2);
+          assert.deepEqual(result.json.apiKeys.map(row => row.id).sort(), [...createdIds].sort());
+          for (const row of result.json.apiKeys) assert.equal(row.name, expected);
+        }
+      }
+      const rejected = await call("reject-number-input", "POST", "/api-key/create", { name: 7 });
+      assert.equal(rejected.observation.response?.status, 400);
+      assert.deepEqual(rejected.observation.events.filter(event => event.field === "name"), []);
+      operations.push(rejected.observation);
     }
-    const rejected = await call("reject-number-input", "POST", "/api-key/create", { name: 7 });
-    assert.equal(rejected.observation.response?.status, 400);
-    assert.deepEqual(rejected.observation.events.filter(event => event.field === "name"), []);
-    operations.push(rejected.observation);
     return { backend, required, declaration: { type: "number", required, defaultValue: 7 },
       ownerId: owner.id, catalog, operations };
   } finally { sqlite?.close(); }
 }
 
-export async function captureApiKeyNumberName() {
+export async function captureApiKeyNumberName(plan) {
   const cases = [];
   for (const backend of ["memory", "sqlite"]) {
-    for (const required of [true, false]) cases.push(await captureCase(backend, required));
+    for (const required of [true, false]) cases.push(await captureCase(backend, required, plan));
   }
   return { version, cases };
 }

@@ -39,6 +39,21 @@ run_stage() {
       cargo test --locked --test client_compat_tests -- \
         --ignored --nocapture --exact --test-threads=1 configuration_client_compat
       ;;
+    plugin-display-values)
+      cargo fmt --all -- --check
+      bun --no-install test \
+        ./compat-tests/reference-server/contracts/api-key-number-name.test.ts \
+        ./compat-tests/reference-server/contracts/passkey-shared-display.test.ts
+      cargo clippy --locked -p better-auth-core -p better-auth-api -p better-auth-cli -p better-auth-seaorm -p better-auth-seaorm-macros -- -D warnings
+      cargo clippy --locked --features axum,seaorm2,redis-cache \
+        --test api_key_number_name_tests --test passkey_additional_fields_tests \
+        --test plugin_display_json_tests --test plugin_model_fields_tests -- -D warnings
+      cargo test --locked -p better-auth-cli -p better-auth-seaorm-macros
+      cargo test --locked --no-fail-fast --features axum,seaorm2,redis-cache \
+        --test api_key_number_name_tests --test passkey_additional_fields_tests \
+        --test plugin_display_json_tests --test plugin_model_fields_tests
+      ./scripts/consumer-check.sh --test api_key_number_name --test passkey_shared_display
+      ;;
     plugin-display-json)
       cargo fmt --all -- --check
       bun --no-install test \
@@ -188,15 +203,20 @@ run_stage() {
       cargo clippy --locked --features axum,seaorm2,redis-cache \
         --test account_user_auth_boundary_reference_tests --test compat_consistency_tests \
         --test wire_compat_smoke_tests --test two_factor_cookie_duration_tests \
-        --test plugin_model_fields_tests -- -D warnings
+        --test plugin_model_fields_tests --test session_create_payload_tests \
+        --test secondary_storage_hooks_tests --test background_transaction_tests \
+        --test missing_user_transaction_tests -- -D warnings
       cargo test --locked --no-fail-fast --features axum,seaorm2,redis-cache \
         --test account_user_auth_boundary_reference_tests --test compat_consistency_tests \
         --test wire_compat_smoke_tests --test two_factor_cookie_duration_tests \
-        --test plugin_model_fields_tests
+        --test plugin_model_fields_tests --test session_create_payload_tests \
+        --test secondary_storage_hooks_tests --test background_transaction_tests \
+        --test missing_user_transaction_tests
       cargo test --locked -p better-auth-api --lib plugins::two_factor::
       bun --no-install test \
         ./compat-tests/reference-server/contracts/account-user-auth-boundary.test.ts \
-        ./compat-tests/reference-server/contracts/account-user-auth-email.test.ts
+        ./compat-tests/reference-server/contracts/account-user-auth-email.test.ts \
+        ./compat-tests/reference-server/contracts/account-user-auth-secondary.test.ts
       ;;
     schema-joins)
       cargo fmt --all -- --check
