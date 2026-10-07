@@ -11,7 +11,7 @@ Generic OAuth/OIDC providers use the same resolved provider configuration and to
 
 `GET /callback/{id}/oauth-proxy` completes the transfer. The `id` is the provider identifier. `GET /oauth-proxy-callback` retains the upstream deprecated entry point. Both require `callbackURL`; the profile is carried in the encrypted `profile` parameter. The implementation validates the callback origin, provider identity, profile age, and OAuth state before creating a session. The default maximum profile age is sixty seconds; use `.max_age(...)` with `f64` seconds to change it, including fractions.
 
-Plugin initialization rejects non-finite `max_age` values. This Rust boundary preserves the finite-value guarantee of the previous integer configuration; Better Auth 1.7.6 has no equivalent option validation. Zero and negative finite values remain explicit values. The profile age calculation and freshness checks retain their existing behavior.
+Plugin initialization accepts non-finite `max_age` values, matching Better Auth 1.7.6. `NaN` and positive infinity disable the maximum-age rejection. Negative infinity rejects every finite profile age. All configurations still reject profiles more than ten seconds in the future. Zero and negative finite values remain explicit values.
 
 Set `x-skip-oauth-proxy` to bypass proxying for a request. Requests on the configured production origin also use the normal OAuth callback. Without an explicit current URL, only a trusted request host can become the profile receiver; other hosts fall back to the hosting environment or configured base URL.
 

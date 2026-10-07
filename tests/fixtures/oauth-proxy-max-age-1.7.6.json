@@ -1,0 +1,4635 @@
+{
+  "version": "1.7.6",
+  "now": 2000000000123,
+  "backend": "memory",
+  "stateStrategy": "database",
+  "scope": {
+    "route": "GET /callback/:id/oauth-proxy uses the actual HTTP handler with a valid encrypted profile and database state",
+    "boundaries": "Compare 60 seconds and one millisecond beyond; compare ten seconds in the future and one millisecond beyond",
+    "state": "Expired payloads preserve every table and emit no lifecycle callback; successful payloads consume state and create a signed session",
+    "normalization": "Replace profile ciphertext after complete decryption checks; replace session randomness after full row, callback, and cookie HMAC checks",
+    "observation": "Retain complete Request and Response fields, every core lifecycle callback, and all four Memory tables before and after"
+  },
+  "cases": [
+    {
+      "scenario": "sixty",
+      "maxAge": 60,
+      "ageMillis": 60000,
+      "ageSeconds": 60,
+      "accepted": true,
+      "initialization": {
+        "kind": "returned",
+        "value": {
+          "type": "undefined"
+        }
+      },
+      "stateData": {
+        "callbackURL": "http://oauth-proxy-max-age.test/return",
+        "codeVerifier": "proxy-max-age-verifier",
+        "errorURL": "http://oauth-proxy-max-age.test/failure",
+        "expiresAt": 2000000600123,
+        "oauthState": "proxy-max-age-state"
+      },
+      "payload": {
+        "userInfo": {
+          "id": "proxy-subject",
+          "name": "Proxy Owner",
+          "email": "owner@oauth-proxy-max-age.test",
+          "emailVerified": true,
+          "image": null
+        },
+        "account": {
+          "accountId": "proxy-subject",
+          "providerId": "fixture",
+          "accessToken": "proxy-new-access",
+          "refreshToken": "proxy-new-refresh",
+          "idToken": "proxy-new-id",
+          "scope": "openid email"
+        },
+        "state": "proxy-max-age-state",
+        "callbackURL": "http://oauth-proxy-max-age.test/return",
+        "errorURL": "http://oauth-proxy-max-age.test/failure",
+        "disableSignUp": true,
+        "timestamp": 1999999940123
+      },
+      "input": {
+        "url": "http://oauth-proxy-max-age.test/api/auth/callback/fixture/oauth-proxy?callbackURL=http%3A%2F%2Foauth-proxy-max-age.test%2Freturn&profile=<encrypted-profile>",
+        "method": "GET",
+        "headers": [
+          [
+            "cookie",
+            "better-auth.state=proxy-max-age-state.CuHfhi6f0KKMej8wd7ub9fvQSH%2Fu54gb96Lt09tY4zI%3D"
+          ],
+          [
+            "origin",
+            "http://oauth-proxy-max-age.test"
+          ],
+          [
+            "user-agent",
+            "oauth-proxy-max-age"
+          ],
+          [
+            "x-forwarded-for",
+            "203.0.113.8"
+          ]
+        ],
+        "body": ""
+      },
+      "before": {
+        "user": [
+          {
+            "name": "Proxy Owner",
+            "email": "owner@oauth-proxy-max-age.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-owner"
+          }
+        ],
+        "session": [],
+        "account": [
+          {
+            "accountId": "proxy-subject",
+            "providerId": "fixture",
+            "userId": "proxy-owner",
+            "accessToken": "proxy-old-access",
+            "refreshToken": "proxy-old-refresh",
+            "idToken": "proxy-old-id",
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": "openid email",
+            "password": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-account"
+          }
+        ],
+        "verification": [
+          {
+            "identifier": "proxy-max-age-state",
+            "value": "{\"callbackURL\":\"http://oauth-proxy-max-age.test/return\",\"codeVerifier\":\"proxy-max-age-verifier\",\"errorURL\":\"http://oauth-proxy-max-age.test/failure\",\"expiresAt\":2000000600123,\"oauthState\":\"proxy-max-age-state\"}",
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T03:43:20.123Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-verification"
+          }
+        ]
+      },
+      "completion": {
+        "kind": "returned",
+        "value": {
+          "status": 302,
+          "statusText": "FOUND",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "location",
+              "http://oauth-proxy-max-age.test/return"
+            ],
+            [
+              "set-cookie",
+              "better-auth.state=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax"
+            ],
+            [
+              "set-cookie",
+              "better-auth.session_token=<session-token>.<session-hmac>; Max-Age=3600; Path=/; HttpOnly; SameSite=Lax"
+            ]
+          ],
+          "cookies": [
+            "better-auth.state=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax",
+            "better-auth.session_token=<session-token>.<session-hmac>; Max-Age=3600; Path=/; HttpOnly; SameSite=Lax"
+          ],
+          "body": ""
+        }
+      },
+      "events": [
+        {
+          "kind": "hook",
+          "model": "verification",
+          "operation": "delete",
+          "phase": "before",
+          "data": {
+            "identifier": "proxy-max-age-state",
+            "value": "{\"callbackURL\":\"http://oauth-proxy-max-age.test/return\",\"codeVerifier\":\"proxy-max-age-verifier\",\"errorURL\":\"http://oauth-proxy-max-age.test/failure\",\"expiresAt\":2000000600123,\"oauthState\":\"proxy-max-age-state\"}",
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T03:43:20.123Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-verification"
+          }
+        },
+        {
+          "kind": "hook",
+          "model": "verification",
+          "operation": "delete",
+          "phase": "after",
+          "data": {
+            "identifier": "proxy-max-age-state",
+            "value": "{\"callbackURL\":\"http://oauth-proxy-max-age.test/return\",\"codeVerifier\":\"proxy-max-age-verifier\",\"errorURL\":\"http://oauth-proxy-max-age.test/failure\",\"expiresAt\":2000000600123,\"oauthState\":\"proxy-max-age-state\"}",
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T03:43:20.123Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-verification"
+          }
+        },
+        {
+          "kind": "hook",
+          "model": "account",
+          "operation": "update",
+          "phase": "before",
+          "data": {
+            "providerId": "fixture",
+            "idToken": "proxy-new-id",
+            "accessToken": "proxy-new-access",
+            "refreshToken": "proxy-new-refresh"
+          }
+        },
+        {
+          "kind": "hook",
+          "model": "account",
+          "operation": "update",
+          "phase": "after",
+          "data": {
+            "accountId": "proxy-subject",
+            "providerId": "fixture",
+            "userId": "proxy-owner",
+            "accessToken": "proxy-new-access",
+            "refreshToken": "proxy-new-refresh",
+            "idToken": "proxy-new-id",
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": "openid email",
+            "password": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "id": "proxy-account"
+          }
+        },
+        {
+          "kind": "hook",
+          "model": "session",
+          "operation": "create",
+          "phase": "before",
+          "data": {
+            "ipAddress": "203.0.113.8",
+            "userAgent": "oauth-proxy-max-age",
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T04:33:20.123Z"
+            },
+            "userId": "proxy-owner",
+            "token": "<session-token>",
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            }
+          }
+        },
+        {
+          "kind": "generate-id",
+          "input": {
+            "model": "session"
+          },
+          "id": "proxy-session-1"
+        },
+        {
+          "kind": "hook",
+          "model": "session",
+          "operation": "create",
+          "phase": "after",
+          "data": {
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T04:33:20.123Z"
+            },
+            "token": "<session-token>",
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "ipAddress": "203.0.113.8",
+            "userAgent": "oauth-proxy-max-age",
+            "userId": "proxy-owner",
+            "id": "proxy-session-1"
+          }
+        }
+      ],
+      "after": {
+        "user": [
+          {
+            "name": "Proxy Owner",
+            "email": "owner@oauth-proxy-max-age.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-owner"
+          }
+        ],
+        "session": [
+          {
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T04:33:20.123Z"
+            },
+            "token": "<session-token>",
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "ipAddress": "203.0.113.8",
+            "userAgent": "oauth-proxy-max-age",
+            "userId": "proxy-owner",
+            "id": "proxy-session-1"
+          }
+        ],
+        "account": [
+          {
+            "accountId": "proxy-subject",
+            "providerId": "fixture",
+            "userId": "proxy-owner",
+            "accessToken": "proxy-new-access",
+            "refreshToken": "proxy-new-refresh",
+            "idToken": "proxy-new-id",
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": "openid email",
+            "password": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "id": "proxy-account"
+          }
+        ],
+        "verification": []
+      }
+    },
+    {
+      "scenario": "sixty",
+      "maxAge": 60,
+      "ageMillis": 60001,
+      "ageSeconds": 60.001,
+      "accepted": false,
+      "initialization": {
+        "kind": "returned",
+        "value": {
+          "type": "undefined"
+        }
+      },
+      "stateData": {
+        "callbackURL": "http://oauth-proxy-max-age.test/return",
+        "codeVerifier": "proxy-max-age-verifier",
+        "errorURL": "http://oauth-proxy-max-age.test/failure",
+        "expiresAt": 2000000600123,
+        "oauthState": "proxy-max-age-state"
+      },
+      "payload": {
+        "userInfo": {
+          "id": "proxy-subject",
+          "name": "Proxy Owner",
+          "email": "owner@oauth-proxy-max-age.test",
+          "emailVerified": true,
+          "image": null
+        },
+        "account": {
+          "accountId": "proxy-subject",
+          "providerId": "fixture",
+          "accessToken": "proxy-new-access",
+          "refreshToken": "proxy-new-refresh",
+          "idToken": "proxy-new-id",
+          "scope": "openid email"
+        },
+        "state": "proxy-max-age-state",
+        "callbackURL": "http://oauth-proxy-max-age.test/return",
+        "errorURL": "http://oauth-proxy-max-age.test/failure",
+        "disableSignUp": true,
+        "timestamp": 1999999940122
+      },
+      "input": {
+        "url": "http://oauth-proxy-max-age.test/api/auth/callback/fixture/oauth-proxy?callbackURL=http%3A%2F%2Foauth-proxy-max-age.test%2Freturn&profile=<encrypted-profile>",
+        "method": "GET",
+        "headers": [
+          [
+            "cookie",
+            "better-auth.state=proxy-max-age-state.CuHfhi6f0KKMej8wd7ub9fvQSH%2Fu54gb96Lt09tY4zI%3D"
+          ],
+          [
+            "origin",
+            "http://oauth-proxy-max-age.test"
+          ],
+          [
+            "user-agent",
+            "oauth-proxy-max-age"
+          ],
+          [
+            "x-forwarded-for",
+            "203.0.113.8"
+          ]
+        ],
+        "body": ""
+      },
+      "before": {
+        "user": [
+          {
+            "name": "Proxy Owner",
+            "email": "owner@oauth-proxy-max-age.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-owner"
+          }
+        ],
+        "session": [],
+        "account": [
+          {
+            "accountId": "proxy-subject",
+            "providerId": "fixture",
+            "userId": "proxy-owner",
+            "accessToken": "proxy-old-access",
+            "refreshToken": "proxy-old-refresh",
+            "idToken": "proxy-old-id",
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": "openid email",
+            "password": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-account"
+          }
+        ],
+        "verification": [
+          {
+            "identifier": "proxy-max-age-state",
+            "value": "{\"callbackURL\":\"http://oauth-proxy-max-age.test/return\",\"codeVerifier\":\"proxy-max-age-verifier\",\"errorURL\":\"http://oauth-proxy-max-age.test/failure\",\"expiresAt\":2000000600123,\"oauthState\":\"proxy-max-age-state\"}",
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T03:43:20.123Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-verification"
+          }
+        ]
+      },
+      "completion": {
+        "kind": "returned",
+        "value": {
+          "status": 302,
+          "statusText": "FOUND",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "location",
+              "http://oauth-proxy-max-age.test/failure?error=payload_expired"
+            ]
+          ],
+          "cookies": [],
+          "body": ""
+        }
+      },
+      "events": [],
+      "after": {
+        "user": [
+          {
+            "name": "Proxy Owner",
+            "email": "owner@oauth-proxy-max-age.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-owner"
+          }
+        ],
+        "session": [],
+        "account": [
+          {
+            "accountId": "proxy-subject",
+            "providerId": "fixture",
+            "userId": "proxy-owner",
+            "accessToken": "proxy-old-access",
+            "refreshToken": "proxy-old-refresh",
+            "idToken": "proxy-old-id",
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": "openid email",
+            "password": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-account"
+          }
+        ],
+        "verification": [
+          {
+            "identifier": "proxy-max-age-state",
+            "value": "{\"callbackURL\":\"http://oauth-proxy-max-age.test/return\",\"codeVerifier\":\"proxy-max-age-verifier\",\"errorURL\":\"http://oauth-proxy-max-age.test/failure\",\"expiresAt\":2000000600123,\"oauthState\":\"proxy-max-age-state\"}",
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T03:43:20.123Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-verification"
+          }
+        ]
+      }
+    },
+    {
+      "scenario": "sixty",
+      "maxAge": 60,
+      "ageMillis": -10000,
+      "ageSeconds": -10,
+      "accepted": true,
+      "initialization": {
+        "kind": "returned",
+        "value": {
+          "type": "undefined"
+        }
+      },
+      "stateData": {
+        "callbackURL": "http://oauth-proxy-max-age.test/return",
+        "codeVerifier": "proxy-max-age-verifier",
+        "errorURL": "http://oauth-proxy-max-age.test/failure",
+        "expiresAt": 2000000600123,
+        "oauthState": "proxy-max-age-state"
+      },
+      "payload": {
+        "userInfo": {
+          "id": "proxy-subject",
+          "name": "Proxy Owner",
+          "email": "owner@oauth-proxy-max-age.test",
+          "emailVerified": true,
+          "image": null
+        },
+        "account": {
+          "accountId": "proxy-subject",
+          "providerId": "fixture",
+          "accessToken": "proxy-new-access",
+          "refreshToken": "proxy-new-refresh",
+          "idToken": "proxy-new-id",
+          "scope": "openid email"
+        },
+        "state": "proxy-max-age-state",
+        "callbackURL": "http://oauth-proxy-max-age.test/return",
+        "errorURL": "http://oauth-proxy-max-age.test/failure",
+        "disableSignUp": true,
+        "timestamp": 2000000010123
+      },
+      "input": {
+        "url": "http://oauth-proxy-max-age.test/api/auth/callback/fixture/oauth-proxy?callbackURL=http%3A%2F%2Foauth-proxy-max-age.test%2Freturn&profile=<encrypted-profile>",
+        "method": "GET",
+        "headers": [
+          [
+            "cookie",
+            "better-auth.state=proxy-max-age-state.CuHfhi6f0KKMej8wd7ub9fvQSH%2Fu54gb96Lt09tY4zI%3D"
+          ],
+          [
+            "origin",
+            "http://oauth-proxy-max-age.test"
+          ],
+          [
+            "user-agent",
+            "oauth-proxy-max-age"
+          ],
+          [
+            "x-forwarded-for",
+            "203.0.113.8"
+          ]
+        ],
+        "body": ""
+      },
+      "before": {
+        "user": [
+          {
+            "name": "Proxy Owner",
+            "email": "owner@oauth-proxy-max-age.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-owner"
+          }
+        ],
+        "session": [],
+        "account": [
+          {
+            "accountId": "proxy-subject",
+            "providerId": "fixture",
+            "userId": "proxy-owner",
+            "accessToken": "proxy-old-access",
+            "refreshToken": "proxy-old-refresh",
+            "idToken": "proxy-old-id",
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": "openid email",
+            "password": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-account"
+          }
+        ],
+        "verification": [
+          {
+            "identifier": "proxy-max-age-state",
+            "value": "{\"callbackURL\":\"http://oauth-proxy-max-age.test/return\",\"codeVerifier\":\"proxy-max-age-verifier\",\"errorURL\":\"http://oauth-proxy-max-age.test/failure\",\"expiresAt\":2000000600123,\"oauthState\":\"proxy-max-age-state\"}",
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T03:43:20.123Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-verification"
+          }
+        ]
+      },
+      "completion": {
+        "kind": "returned",
+        "value": {
+          "status": 302,
+          "statusText": "FOUND",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "location",
+              "http://oauth-proxy-max-age.test/return"
+            ],
+            [
+              "set-cookie",
+              "better-auth.state=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax"
+            ],
+            [
+              "set-cookie",
+              "better-auth.session_token=<session-token>.<session-hmac>; Max-Age=3600; Path=/; HttpOnly; SameSite=Lax"
+            ]
+          ],
+          "cookies": [
+            "better-auth.state=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax",
+            "better-auth.session_token=<session-token>.<session-hmac>; Max-Age=3600; Path=/; HttpOnly; SameSite=Lax"
+          ],
+          "body": ""
+        }
+      },
+      "events": [
+        {
+          "kind": "hook",
+          "model": "verification",
+          "operation": "delete",
+          "phase": "before",
+          "data": {
+            "identifier": "proxy-max-age-state",
+            "value": "{\"callbackURL\":\"http://oauth-proxy-max-age.test/return\",\"codeVerifier\":\"proxy-max-age-verifier\",\"errorURL\":\"http://oauth-proxy-max-age.test/failure\",\"expiresAt\":2000000600123,\"oauthState\":\"proxy-max-age-state\"}",
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T03:43:20.123Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-verification"
+          }
+        },
+        {
+          "kind": "hook",
+          "model": "verification",
+          "operation": "delete",
+          "phase": "after",
+          "data": {
+            "identifier": "proxy-max-age-state",
+            "value": "{\"callbackURL\":\"http://oauth-proxy-max-age.test/return\",\"codeVerifier\":\"proxy-max-age-verifier\",\"errorURL\":\"http://oauth-proxy-max-age.test/failure\",\"expiresAt\":2000000600123,\"oauthState\":\"proxy-max-age-state\"}",
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T03:43:20.123Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-verification"
+          }
+        },
+        {
+          "kind": "hook",
+          "model": "account",
+          "operation": "update",
+          "phase": "before",
+          "data": {
+            "providerId": "fixture",
+            "idToken": "proxy-new-id",
+            "accessToken": "proxy-new-access",
+            "refreshToken": "proxy-new-refresh"
+          }
+        },
+        {
+          "kind": "hook",
+          "model": "account",
+          "operation": "update",
+          "phase": "after",
+          "data": {
+            "accountId": "proxy-subject",
+            "providerId": "fixture",
+            "userId": "proxy-owner",
+            "accessToken": "proxy-new-access",
+            "refreshToken": "proxy-new-refresh",
+            "idToken": "proxy-new-id",
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": "openid email",
+            "password": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "id": "proxy-account"
+          }
+        },
+        {
+          "kind": "hook",
+          "model": "session",
+          "operation": "create",
+          "phase": "before",
+          "data": {
+            "ipAddress": "203.0.113.8",
+            "userAgent": "oauth-proxy-max-age",
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T04:33:20.123Z"
+            },
+            "userId": "proxy-owner",
+            "token": "<session-token>",
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            }
+          }
+        },
+        {
+          "kind": "generate-id",
+          "input": {
+            "model": "session"
+          },
+          "id": "proxy-session-1"
+        },
+        {
+          "kind": "hook",
+          "model": "session",
+          "operation": "create",
+          "phase": "after",
+          "data": {
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T04:33:20.123Z"
+            },
+            "token": "<session-token>",
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "ipAddress": "203.0.113.8",
+            "userAgent": "oauth-proxy-max-age",
+            "userId": "proxy-owner",
+            "id": "proxy-session-1"
+          }
+        }
+      ],
+      "after": {
+        "user": [
+          {
+            "name": "Proxy Owner",
+            "email": "owner@oauth-proxy-max-age.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-owner"
+          }
+        ],
+        "session": [
+          {
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T04:33:20.123Z"
+            },
+            "token": "<session-token>",
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "ipAddress": "203.0.113.8",
+            "userAgent": "oauth-proxy-max-age",
+            "userId": "proxy-owner",
+            "id": "proxy-session-1"
+          }
+        ],
+        "account": [
+          {
+            "accountId": "proxy-subject",
+            "providerId": "fixture",
+            "userId": "proxy-owner",
+            "accessToken": "proxy-new-access",
+            "refreshToken": "proxy-new-refresh",
+            "idToken": "proxy-new-id",
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": "openid email",
+            "password": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "id": "proxy-account"
+          }
+        ],
+        "verification": []
+      }
+    },
+    {
+      "scenario": "sixty",
+      "maxAge": 60,
+      "ageMillis": -10001,
+      "ageSeconds": -10.001,
+      "accepted": false,
+      "initialization": {
+        "kind": "returned",
+        "value": {
+          "type": "undefined"
+        }
+      },
+      "stateData": {
+        "callbackURL": "http://oauth-proxy-max-age.test/return",
+        "codeVerifier": "proxy-max-age-verifier",
+        "errorURL": "http://oauth-proxy-max-age.test/failure",
+        "expiresAt": 2000000600123,
+        "oauthState": "proxy-max-age-state"
+      },
+      "payload": {
+        "userInfo": {
+          "id": "proxy-subject",
+          "name": "Proxy Owner",
+          "email": "owner@oauth-proxy-max-age.test",
+          "emailVerified": true,
+          "image": null
+        },
+        "account": {
+          "accountId": "proxy-subject",
+          "providerId": "fixture",
+          "accessToken": "proxy-new-access",
+          "refreshToken": "proxy-new-refresh",
+          "idToken": "proxy-new-id",
+          "scope": "openid email"
+        },
+        "state": "proxy-max-age-state",
+        "callbackURL": "http://oauth-proxy-max-age.test/return",
+        "errorURL": "http://oauth-proxy-max-age.test/failure",
+        "disableSignUp": true,
+        "timestamp": 2000000010124
+      },
+      "input": {
+        "url": "http://oauth-proxy-max-age.test/api/auth/callback/fixture/oauth-proxy?callbackURL=http%3A%2F%2Foauth-proxy-max-age.test%2Freturn&profile=<encrypted-profile>",
+        "method": "GET",
+        "headers": [
+          [
+            "cookie",
+            "better-auth.state=proxy-max-age-state.CuHfhi6f0KKMej8wd7ub9fvQSH%2Fu54gb96Lt09tY4zI%3D"
+          ],
+          [
+            "origin",
+            "http://oauth-proxy-max-age.test"
+          ],
+          [
+            "user-agent",
+            "oauth-proxy-max-age"
+          ],
+          [
+            "x-forwarded-for",
+            "203.0.113.8"
+          ]
+        ],
+        "body": ""
+      },
+      "before": {
+        "user": [
+          {
+            "name": "Proxy Owner",
+            "email": "owner@oauth-proxy-max-age.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-owner"
+          }
+        ],
+        "session": [],
+        "account": [
+          {
+            "accountId": "proxy-subject",
+            "providerId": "fixture",
+            "userId": "proxy-owner",
+            "accessToken": "proxy-old-access",
+            "refreshToken": "proxy-old-refresh",
+            "idToken": "proxy-old-id",
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": "openid email",
+            "password": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-account"
+          }
+        ],
+        "verification": [
+          {
+            "identifier": "proxy-max-age-state",
+            "value": "{\"callbackURL\":\"http://oauth-proxy-max-age.test/return\",\"codeVerifier\":\"proxy-max-age-verifier\",\"errorURL\":\"http://oauth-proxy-max-age.test/failure\",\"expiresAt\":2000000600123,\"oauthState\":\"proxy-max-age-state\"}",
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T03:43:20.123Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-verification"
+          }
+        ]
+      },
+      "completion": {
+        "kind": "returned",
+        "value": {
+          "status": 302,
+          "statusText": "FOUND",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "location",
+              "http://oauth-proxy-max-age.test/failure?error=payload_expired"
+            ]
+          ],
+          "cookies": [],
+          "body": ""
+        }
+      },
+      "events": [],
+      "after": {
+        "user": [
+          {
+            "name": "Proxy Owner",
+            "email": "owner@oauth-proxy-max-age.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-owner"
+          }
+        ],
+        "session": [],
+        "account": [
+          {
+            "accountId": "proxy-subject",
+            "providerId": "fixture",
+            "userId": "proxy-owner",
+            "accessToken": "proxy-old-access",
+            "refreshToken": "proxy-old-refresh",
+            "idToken": "proxy-old-id",
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": "openid email",
+            "password": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-account"
+          }
+        ],
+        "verification": [
+          {
+            "identifier": "proxy-max-age-state",
+            "value": "{\"callbackURL\":\"http://oauth-proxy-max-age.test/return\",\"codeVerifier\":\"proxy-max-age-verifier\",\"errorURL\":\"http://oauth-proxy-max-age.test/failure\",\"expiresAt\":2000000600123,\"oauthState\":\"proxy-max-age-state\"}",
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T03:43:20.123Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-verification"
+          }
+        ]
+      }
+    },
+    {
+      "scenario": "nan",
+      "maxAge": {
+        "type": "number",
+        "value": "NaN"
+      },
+      "ageMillis": 60000,
+      "ageSeconds": 60,
+      "accepted": true,
+      "initialization": {
+        "kind": "returned",
+        "value": {
+          "type": "undefined"
+        }
+      },
+      "stateData": {
+        "callbackURL": "http://oauth-proxy-max-age.test/return",
+        "codeVerifier": "proxy-max-age-verifier",
+        "errorURL": "http://oauth-proxy-max-age.test/failure",
+        "expiresAt": 2000000600123,
+        "oauthState": "proxy-max-age-state"
+      },
+      "payload": {
+        "userInfo": {
+          "id": "proxy-subject",
+          "name": "Proxy Owner",
+          "email": "owner@oauth-proxy-max-age.test",
+          "emailVerified": true,
+          "image": null
+        },
+        "account": {
+          "accountId": "proxy-subject",
+          "providerId": "fixture",
+          "accessToken": "proxy-new-access",
+          "refreshToken": "proxy-new-refresh",
+          "idToken": "proxy-new-id",
+          "scope": "openid email"
+        },
+        "state": "proxy-max-age-state",
+        "callbackURL": "http://oauth-proxy-max-age.test/return",
+        "errorURL": "http://oauth-proxy-max-age.test/failure",
+        "disableSignUp": true,
+        "timestamp": 1999999940123
+      },
+      "input": {
+        "url": "http://oauth-proxy-max-age.test/api/auth/callback/fixture/oauth-proxy?callbackURL=http%3A%2F%2Foauth-proxy-max-age.test%2Freturn&profile=<encrypted-profile>",
+        "method": "GET",
+        "headers": [
+          [
+            "cookie",
+            "better-auth.state=proxy-max-age-state.CuHfhi6f0KKMej8wd7ub9fvQSH%2Fu54gb96Lt09tY4zI%3D"
+          ],
+          [
+            "origin",
+            "http://oauth-proxy-max-age.test"
+          ],
+          [
+            "user-agent",
+            "oauth-proxy-max-age"
+          ],
+          [
+            "x-forwarded-for",
+            "203.0.113.8"
+          ]
+        ],
+        "body": ""
+      },
+      "before": {
+        "user": [
+          {
+            "name": "Proxy Owner",
+            "email": "owner@oauth-proxy-max-age.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-owner"
+          }
+        ],
+        "session": [],
+        "account": [
+          {
+            "accountId": "proxy-subject",
+            "providerId": "fixture",
+            "userId": "proxy-owner",
+            "accessToken": "proxy-old-access",
+            "refreshToken": "proxy-old-refresh",
+            "idToken": "proxy-old-id",
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": "openid email",
+            "password": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-account"
+          }
+        ],
+        "verification": [
+          {
+            "identifier": "proxy-max-age-state",
+            "value": "{\"callbackURL\":\"http://oauth-proxy-max-age.test/return\",\"codeVerifier\":\"proxy-max-age-verifier\",\"errorURL\":\"http://oauth-proxy-max-age.test/failure\",\"expiresAt\":2000000600123,\"oauthState\":\"proxy-max-age-state\"}",
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T03:43:20.123Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-verification"
+          }
+        ]
+      },
+      "completion": {
+        "kind": "returned",
+        "value": {
+          "status": 302,
+          "statusText": "FOUND",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "location",
+              "http://oauth-proxy-max-age.test/return"
+            ],
+            [
+              "set-cookie",
+              "better-auth.state=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax"
+            ],
+            [
+              "set-cookie",
+              "better-auth.session_token=<session-token>.<session-hmac>; Max-Age=3600; Path=/; HttpOnly; SameSite=Lax"
+            ]
+          ],
+          "cookies": [
+            "better-auth.state=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax",
+            "better-auth.session_token=<session-token>.<session-hmac>; Max-Age=3600; Path=/; HttpOnly; SameSite=Lax"
+          ],
+          "body": ""
+        }
+      },
+      "events": [
+        {
+          "kind": "hook",
+          "model": "verification",
+          "operation": "delete",
+          "phase": "before",
+          "data": {
+            "identifier": "proxy-max-age-state",
+            "value": "{\"callbackURL\":\"http://oauth-proxy-max-age.test/return\",\"codeVerifier\":\"proxy-max-age-verifier\",\"errorURL\":\"http://oauth-proxy-max-age.test/failure\",\"expiresAt\":2000000600123,\"oauthState\":\"proxy-max-age-state\"}",
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T03:43:20.123Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-verification"
+          }
+        },
+        {
+          "kind": "hook",
+          "model": "verification",
+          "operation": "delete",
+          "phase": "after",
+          "data": {
+            "identifier": "proxy-max-age-state",
+            "value": "{\"callbackURL\":\"http://oauth-proxy-max-age.test/return\",\"codeVerifier\":\"proxy-max-age-verifier\",\"errorURL\":\"http://oauth-proxy-max-age.test/failure\",\"expiresAt\":2000000600123,\"oauthState\":\"proxy-max-age-state\"}",
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T03:43:20.123Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-verification"
+          }
+        },
+        {
+          "kind": "hook",
+          "model": "account",
+          "operation": "update",
+          "phase": "before",
+          "data": {
+            "providerId": "fixture",
+            "idToken": "proxy-new-id",
+            "accessToken": "proxy-new-access",
+            "refreshToken": "proxy-new-refresh"
+          }
+        },
+        {
+          "kind": "hook",
+          "model": "account",
+          "operation": "update",
+          "phase": "after",
+          "data": {
+            "accountId": "proxy-subject",
+            "providerId": "fixture",
+            "userId": "proxy-owner",
+            "accessToken": "proxy-new-access",
+            "refreshToken": "proxy-new-refresh",
+            "idToken": "proxy-new-id",
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": "openid email",
+            "password": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "id": "proxy-account"
+          }
+        },
+        {
+          "kind": "hook",
+          "model": "session",
+          "operation": "create",
+          "phase": "before",
+          "data": {
+            "ipAddress": "203.0.113.8",
+            "userAgent": "oauth-proxy-max-age",
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T04:33:20.123Z"
+            },
+            "userId": "proxy-owner",
+            "token": "<session-token>",
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            }
+          }
+        },
+        {
+          "kind": "generate-id",
+          "input": {
+            "model": "session"
+          },
+          "id": "proxy-session-1"
+        },
+        {
+          "kind": "hook",
+          "model": "session",
+          "operation": "create",
+          "phase": "after",
+          "data": {
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T04:33:20.123Z"
+            },
+            "token": "<session-token>",
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "ipAddress": "203.0.113.8",
+            "userAgent": "oauth-proxy-max-age",
+            "userId": "proxy-owner",
+            "id": "proxy-session-1"
+          }
+        }
+      ],
+      "after": {
+        "user": [
+          {
+            "name": "Proxy Owner",
+            "email": "owner@oauth-proxy-max-age.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-owner"
+          }
+        ],
+        "session": [
+          {
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T04:33:20.123Z"
+            },
+            "token": "<session-token>",
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "ipAddress": "203.0.113.8",
+            "userAgent": "oauth-proxy-max-age",
+            "userId": "proxy-owner",
+            "id": "proxy-session-1"
+          }
+        ],
+        "account": [
+          {
+            "accountId": "proxy-subject",
+            "providerId": "fixture",
+            "userId": "proxy-owner",
+            "accessToken": "proxy-new-access",
+            "refreshToken": "proxy-new-refresh",
+            "idToken": "proxy-new-id",
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": "openid email",
+            "password": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "id": "proxy-account"
+          }
+        ],
+        "verification": []
+      }
+    },
+    {
+      "scenario": "nan",
+      "maxAge": {
+        "type": "number",
+        "value": "NaN"
+      },
+      "ageMillis": 60001,
+      "ageSeconds": 60.001,
+      "accepted": true,
+      "initialization": {
+        "kind": "returned",
+        "value": {
+          "type": "undefined"
+        }
+      },
+      "stateData": {
+        "callbackURL": "http://oauth-proxy-max-age.test/return",
+        "codeVerifier": "proxy-max-age-verifier",
+        "errorURL": "http://oauth-proxy-max-age.test/failure",
+        "expiresAt": 2000000600123,
+        "oauthState": "proxy-max-age-state"
+      },
+      "payload": {
+        "userInfo": {
+          "id": "proxy-subject",
+          "name": "Proxy Owner",
+          "email": "owner@oauth-proxy-max-age.test",
+          "emailVerified": true,
+          "image": null
+        },
+        "account": {
+          "accountId": "proxy-subject",
+          "providerId": "fixture",
+          "accessToken": "proxy-new-access",
+          "refreshToken": "proxy-new-refresh",
+          "idToken": "proxy-new-id",
+          "scope": "openid email"
+        },
+        "state": "proxy-max-age-state",
+        "callbackURL": "http://oauth-proxy-max-age.test/return",
+        "errorURL": "http://oauth-proxy-max-age.test/failure",
+        "disableSignUp": true,
+        "timestamp": 1999999940122
+      },
+      "input": {
+        "url": "http://oauth-proxy-max-age.test/api/auth/callback/fixture/oauth-proxy?callbackURL=http%3A%2F%2Foauth-proxy-max-age.test%2Freturn&profile=<encrypted-profile>",
+        "method": "GET",
+        "headers": [
+          [
+            "cookie",
+            "better-auth.state=proxy-max-age-state.CuHfhi6f0KKMej8wd7ub9fvQSH%2Fu54gb96Lt09tY4zI%3D"
+          ],
+          [
+            "origin",
+            "http://oauth-proxy-max-age.test"
+          ],
+          [
+            "user-agent",
+            "oauth-proxy-max-age"
+          ],
+          [
+            "x-forwarded-for",
+            "203.0.113.8"
+          ]
+        ],
+        "body": ""
+      },
+      "before": {
+        "user": [
+          {
+            "name": "Proxy Owner",
+            "email": "owner@oauth-proxy-max-age.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-owner"
+          }
+        ],
+        "session": [],
+        "account": [
+          {
+            "accountId": "proxy-subject",
+            "providerId": "fixture",
+            "userId": "proxy-owner",
+            "accessToken": "proxy-old-access",
+            "refreshToken": "proxy-old-refresh",
+            "idToken": "proxy-old-id",
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": "openid email",
+            "password": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-account"
+          }
+        ],
+        "verification": [
+          {
+            "identifier": "proxy-max-age-state",
+            "value": "{\"callbackURL\":\"http://oauth-proxy-max-age.test/return\",\"codeVerifier\":\"proxy-max-age-verifier\",\"errorURL\":\"http://oauth-proxy-max-age.test/failure\",\"expiresAt\":2000000600123,\"oauthState\":\"proxy-max-age-state\"}",
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T03:43:20.123Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-verification"
+          }
+        ]
+      },
+      "completion": {
+        "kind": "returned",
+        "value": {
+          "status": 302,
+          "statusText": "FOUND",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "location",
+              "http://oauth-proxy-max-age.test/return"
+            ],
+            [
+              "set-cookie",
+              "better-auth.state=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax"
+            ],
+            [
+              "set-cookie",
+              "better-auth.session_token=<session-token>.<session-hmac>; Max-Age=3600; Path=/; HttpOnly; SameSite=Lax"
+            ]
+          ],
+          "cookies": [
+            "better-auth.state=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax",
+            "better-auth.session_token=<session-token>.<session-hmac>; Max-Age=3600; Path=/; HttpOnly; SameSite=Lax"
+          ],
+          "body": ""
+        }
+      },
+      "events": [
+        {
+          "kind": "hook",
+          "model": "verification",
+          "operation": "delete",
+          "phase": "before",
+          "data": {
+            "identifier": "proxy-max-age-state",
+            "value": "{\"callbackURL\":\"http://oauth-proxy-max-age.test/return\",\"codeVerifier\":\"proxy-max-age-verifier\",\"errorURL\":\"http://oauth-proxy-max-age.test/failure\",\"expiresAt\":2000000600123,\"oauthState\":\"proxy-max-age-state\"}",
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T03:43:20.123Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-verification"
+          }
+        },
+        {
+          "kind": "hook",
+          "model": "verification",
+          "operation": "delete",
+          "phase": "after",
+          "data": {
+            "identifier": "proxy-max-age-state",
+            "value": "{\"callbackURL\":\"http://oauth-proxy-max-age.test/return\",\"codeVerifier\":\"proxy-max-age-verifier\",\"errorURL\":\"http://oauth-proxy-max-age.test/failure\",\"expiresAt\":2000000600123,\"oauthState\":\"proxy-max-age-state\"}",
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T03:43:20.123Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-verification"
+          }
+        },
+        {
+          "kind": "hook",
+          "model": "account",
+          "operation": "update",
+          "phase": "before",
+          "data": {
+            "providerId": "fixture",
+            "idToken": "proxy-new-id",
+            "accessToken": "proxy-new-access",
+            "refreshToken": "proxy-new-refresh"
+          }
+        },
+        {
+          "kind": "hook",
+          "model": "account",
+          "operation": "update",
+          "phase": "after",
+          "data": {
+            "accountId": "proxy-subject",
+            "providerId": "fixture",
+            "userId": "proxy-owner",
+            "accessToken": "proxy-new-access",
+            "refreshToken": "proxy-new-refresh",
+            "idToken": "proxy-new-id",
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": "openid email",
+            "password": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "id": "proxy-account"
+          }
+        },
+        {
+          "kind": "hook",
+          "model": "session",
+          "operation": "create",
+          "phase": "before",
+          "data": {
+            "ipAddress": "203.0.113.8",
+            "userAgent": "oauth-proxy-max-age",
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T04:33:20.123Z"
+            },
+            "userId": "proxy-owner",
+            "token": "<session-token>",
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            }
+          }
+        },
+        {
+          "kind": "generate-id",
+          "input": {
+            "model": "session"
+          },
+          "id": "proxy-session-1"
+        },
+        {
+          "kind": "hook",
+          "model": "session",
+          "operation": "create",
+          "phase": "after",
+          "data": {
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T04:33:20.123Z"
+            },
+            "token": "<session-token>",
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "ipAddress": "203.0.113.8",
+            "userAgent": "oauth-proxy-max-age",
+            "userId": "proxy-owner",
+            "id": "proxy-session-1"
+          }
+        }
+      ],
+      "after": {
+        "user": [
+          {
+            "name": "Proxy Owner",
+            "email": "owner@oauth-proxy-max-age.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-owner"
+          }
+        ],
+        "session": [
+          {
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T04:33:20.123Z"
+            },
+            "token": "<session-token>",
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "ipAddress": "203.0.113.8",
+            "userAgent": "oauth-proxy-max-age",
+            "userId": "proxy-owner",
+            "id": "proxy-session-1"
+          }
+        ],
+        "account": [
+          {
+            "accountId": "proxy-subject",
+            "providerId": "fixture",
+            "userId": "proxy-owner",
+            "accessToken": "proxy-new-access",
+            "refreshToken": "proxy-new-refresh",
+            "idToken": "proxy-new-id",
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": "openid email",
+            "password": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "id": "proxy-account"
+          }
+        ],
+        "verification": []
+      }
+    },
+    {
+      "scenario": "nan",
+      "maxAge": {
+        "type": "number",
+        "value": "NaN"
+      },
+      "ageMillis": -10000,
+      "ageSeconds": -10,
+      "accepted": true,
+      "initialization": {
+        "kind": "returned",
+        "value": {
+          "type": "undefined"
+        }
+      },
+      "stateData": {
+        "callbackURL": "http://oauth-proxy-max-age.test/return",
+        "codeVerifier": "proxy-max-age-verifier",
+        "errorURL": "http://oauth-proxy-max-age.test/failure",
+        "expiresAt": 2000000600123,
+        "oauthState": "proxy-max-age-state"
+      },
+      "payload": {
+        "userInfo": {
+          "id": "proxy-subject",
+          "name": "Proxy Owner",
+          "email": "owner@oauth-proxy-max-age.test",
+          "emailVerified": true,
+          "image": null
+        },
+        "account": {
+          "accountId": "proxy-subject",
+          "providerId": "fixture",
+          "accessToken": "proxy-new-access",
+          "refreshToken": "proxy-new-refresh",
+          "idToken": "proxy-new-id",
+          "scope": "openid email"
+        },
+        "state": "proxy-max-age-state",
+        "callbackURL": "http://oauth-proxy-max-age.test/return",
+        "errorURL": "http://oauth-proxy-max-age.test/failure",
+        "disableSignUp": true,
+        "timestamp": 2000000010123
+      },
+      "input": {
+        "url": "http://oauth-proxy-max-age.test/api/auth/callback/fixture/oauth-proxy?callbackURL=http%3A%2F%2Foauth-proxy-max-age.test%2Freturn&profile=<encrypted-profile>",
+        "method": "GET",
+        "headers": [
+          [
+            "cookie",
+            "better-auth.state=proxy-max-age-state.CuHfhi6f0KKMej8wd7ub9fvQSH%2Fu54gb96Lt09tY4zI%3D"
+          ],
+          [
+            "origin",
+            "http://oauth-proxy-max-age.test"
+          ],
+          [
+            "user-agent",
+            "oauth-proxy-max-age"
+          ],
+          [
+            "x-forwarded-for",
+            "203.0.113.8"
+          ]
+        ],
+        "body": ""
+      },
+      "before": {
+        "user": [
+          {
+            "name": "Proxy Owner",
+            "email": "owner@oauth-proxy-max-age.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-owner"
+          }
+        ],
+        "session": [],
+        "account": [
+          {
+            "accountId": "proxy-subject",
+            "providerId": "fixture",
+            "userId": "proxy-owner",
+            "accessToken": "proxy-old-access",
+            "refreshToken": "proxy-old-refresh",
+            "idToken": "proxy-old-id",
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": "openid email",
+            "password": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-account"
+          }
+        ],
+        "verification": [
+          {
+            "identifier": "proxy-max-age-state",
+            "value": "{\"callbackURL\":\"http://oauth-proxy-max-age.test/return\",\"codeVerifier\":\"proxy-max-age-verifier\",\"errorURL\":\"http://oauth-proxy-max-age.test/failure\",\"expiresAt\":2000000600123,\"oauthState\":\"proxy-max-age-state\"}",
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T03:43:20.123Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-verification"
+          }
+        ]
+      },
+      "completion": {
+        "kind": "returned",
+        "value": {
+          "status": 302,
+          "statusText": "FOUND",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "location",
+              "http://oauth-proxy-max-age.test/return"
+            ],
+            [
+              "set-cookie",
+              "better-auth.state=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax"
+            ],
+            [
+              "set-cookie",
+              "better-auth.session_token=<session-token>.<session-hmac>; Max-Age=3600; Path=/; HttpOnly; SameSite=Lax"
+            ]
+          ],
+          "cookies": [
+            "better-auth.state=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax",
+            "better-auth.session_token=<session-token>.<session-hmac>; Max-Age=3600; Path=/; HttpOnly; SameSite=Lax"
+          ],
+          "body": ""
+        }
+      },
+      "events": [
+        {
+          "kind": "hook",
+          "model": "verification",
+          "operation": "delete",
+          "phase": "before",
+          "data": {
+            "identifier": "proxy-max-age-state",
+            "value": "{\"callbackURL\":\"http://oauth-proxy-max-age.test/return\",\"codeVerifier\":\"proxy-max-age-verifier\",\"errorURL\":\"http://oauth-proxy-max-age.test/failure\",\"expiresAt\":2000000600123,\"oauthState\":\"proxy-max-age-state\"}",
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T03:43:20.123Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-verification"
+          }
+        },
+        {
+          "kind": "hook",
+          "model": "verification",
+          "operation": "delete",
+          "phase": "after",
+          "data": {
+            "identifier": "proxy-max-age-state",
+            "value": "{\"callbackURL\":\"http://oauth-proxy-max-age.test/return\",\"codeVerifier\":\"proxy-max-age-verifier\",\"errorURL\":\"http://oauth-proxy-max-age.test/failure\",\"expiresAt\":2000000600123,\"oauthState\":\"proxy-max-age-state\"}",
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T03:43:20.123Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-verification"
+          }
+        },
+        {
+          "kind": "hook",
+          "model": "account",
+          "operation": "update",
+          "phase": "before",
+          "data": {
+            "providerId": "fixture",
+            "idToken": "proxy-new-id",
+            "accessToken": "proxy-new-access",
+            "refreshToken": "proxy-new-refresh"
+          }
+        },
+        {
+          "kind": "hook",
+          "model": "account",
+          "operation": "update",
+          "phase": "after",
+          "data": {
+            "accountId": "proxy-subject",
+            "providerId": "fixture",
+            "userId": "proxy-owner",
+            "accessToken": "proxy-new-access",
+            "refreshToken": "proxy-new-refresh",
+            "idToken": "proxy-new-id",
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": "openid email",
+            "password": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "id": "proxy-account"
+          }
+        },
+        {
+          "kind": "hook",
+          "model": "session",
+          "operation": "create",
+          "phase": "before",
+          "data": {
+            "ipAddress": "203.0.113.8",
+            "userAgent": "oauth-proxy-max-age",
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T04:33:20.123Z"
+            },
+            "userId": "proxy-owner",
+            "token": "<session-token>",
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            }
+          }
+        },
+        {
+          "kind": "generate-id",
+          "input": {
+            "model": "session"
+          },
+          "id": "proxy-session-1"
+        },
+        {
+          "kind": "hook",
+          "model": "session",
+          "operation": "create",
+          "phase": "after",
+          "data": {
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T04:33:20.123Z"
+            },
+            "token": "<session-token>",
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "ipAddress": "203.0.113.8",
+            "userAgent": "oauth-proxy-max-age",
+            "userId": "proxy-owner",
+            "id": "proxy-session-1"
+          }
+        }
+      ],
+      "after": {
+        "user": [
+          {
+            "name": "Proxy Owner",
+            "email": "owner@oauth-proxy-max-age.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-owner"
+          }
+        ],
+        "session": [
+          {
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T04:33:20.123Z"
+            },
+            "token": "<session-token>",
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "ipAddress": "203.0.113.8",
+            "userAgent": "oauth-proxy-max-age",
+            "userId": "proxy-owner",
+            "id": "proxy-session-1"
+          }
+        ],
+        "account": [
+          {
+            "accountId": "proxy-subject",
+            "providerId": "fixture",
+            "userId": "proxy-owner",
+            "accessToken": "proxy-new-access",
+            "refreshToken": "proxy-new-refresh",
+            "idToken": "proxy-new-id",
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": "openid email",
+            "password": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "id": "proxy-account"
+          }
+        ],
+        "verification": []
+      }
+    },
+    {
+      "scenario": "nan",
+      "maxAge": {
+        "type": "number",
+        "value": "NaN"
+      },
+      "ageMillis": -10001,
+      "ageSeconds": -10.001,
+      "accepted": false,
+      "initialization": {
+        "kind": "returned",
+        "value": {
+          "type": "undefined"
+        }
+      },
+      "stateData": {
+        "callbackURL": "http://oauth-proxy-max-age.test/return",
+        "codeVerifier": "proxy-max-age-verifier",
+        "errorURL": "http://oauth-proxy-max-age.test/failure",
+        "expiresAt": 2000000600123,
+        "oauthState": "proxy-max-age-state"
+      },
+      "payload": {
+        "userInfo": {
+          "id": "proxy-subject",
+          "name": "Proxy Owner",
+          "email": "owner@oauth-proxy-max-age.test",
+          "emailVerified": true,
+          "image": null
+        },
+        "account": {
+          "accountId": "proxy-subject",
+          "providerId": "fixture",
+          "accessToken": "proxy-new-access",
+          "refreshToken": "proxy-new-refresh",
+          "idToken": "proxy-new-id",
+          "scope": "openid email"
+        },
+        "state": "proxy-max-age-state",
+        "callbackURL": "http://oauth-proxy-max-age.test/return",
+        "errorURL": "http://oauth-proxy-max-age.test/failure",
+        "disableSignUp": true,
+        "timestamp": 2000000010124
+      },
+      "input": {
+        "url": "http://oauth-proxy-max-age.test/api/auth/callback/fixture/oauth-proxy?callbackURL=http%3A%2F%2Foauth-proxy-max-age.test%2Freturn&profile=<encrypted-profile>",
+        "method": "GET",
+        "headers": [
+          [
+            "cookie",
+            "better-auth.state=proxy-max-age-state.CuHfhi6f0KKMej8wd7ub9fvQSH%2Fu54gb96Lt09tY4zI%3D"
+          ],
+          [
+            "origin",
+            "http://oauth-proxy-max-age.test"
+          ],
+          [
+            "user-agent",
+            "oauth-proxy-max-age"
+          ],
+          [
+            "x-forwarded-for",
+            "203.0.113.8"
+          ]
+        ],
+        "body": ""
+      },
+      "before": {
+        "user": [
+          {
+            "name": "Proxy Owner",
+            "email": "owner@oauth-proxy-max-age.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-owner"
+          }
+        ],
+        "session": [],
+        "account": [
+          {
+            "accountId": "proxy-subject",
+            "providerId": "fixture",
+            "userId": "proxy-owner",
+            "accessToken": "proxy-old-access",
+            "refreshToken": "proxy-old-refresh",
+            "idToken": "proxy-old-id",
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": "openid email",
+            "password": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-account"
+          }
+        ],
+        "verification": [
+          {
+            "identifier": "proxy-max-age-state",
+            "value": "{\"callbackURL\":\"http://oauth-proxy-max-age.test/return\",\"codeVerifier\":\"proxy-max-age-verifier\",\"errorURL\":\"http://oauth-proxy-max-age.test/failure\",\"expiresAt\":2000000600123,\"oauthState\":\"proxy-max-age-state\"}",
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T03:43:20.123Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-verification"
+          }
+        ]
+      },
+      "completion": {
+        "kind": "returned",
+        "value": {
+          "status": 302,
+          "statusText": "FOUND",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "location",
+              "http://oauth-proxy-max-age.test/failure?error=payload_expired"
+            ]
+          ],
+          "cookies": [],
+          "body": ""
+        }
+      },
+      "events": [],
+      "after": {
+        "user": [
+          {
+            "name": "Proxy Owner",
+            "email": "owner@oauth-proxy-max-age.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-owner"
+          }
+        ],
+        "session": [],
+        "account": [
+          {
+            "accountId": "proxy-subject",
+            "providerId": "fixture",
+            "userId": "proxy-owner",
+            "accessToken": "proxy-old-access",
+            "refreshToken": "proxy-old-refresh",
+            "idToken": "proxy-old-id",
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": "openid email",
+            "password": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-account"
+          }
+        ],
+        "verification": [
+          {
+            "identifier": "proxy-max-age-state",
+            "value": "{\"callbackURL\":\"http://oauth-proxy-max-age.test/return\",\"codeVerifier\":\"proxy-max-age-verifier\",\"errorURL\":\"http://oauth-proxy-max-age.test/failure\",\"expiresAt\":2000000600123,\"oauthState\":\"proxy-max-age-state\"}",
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T03:43:20.123Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-verification"
+          }
+        ]
+      }
+    },
+    {
+      "scenario": "positive-infinity",
+      "maxAge": {
+        "type": "number",
+        "value": "Infinity"
+      },
+      "ageMillis": 60000,
+      "ageSeconds": 60,
+      "accepted": true,
+      "initialization": {
+        "kind": "returned",
+        "value": {
+          "type": "undefined"
+        }
+      },
+      "stateData": {
+        "callbackURL": "http://oauth-proxy-max-age.test/return",
+        "codeVerifier": "proxy-max-age-verifier",
+        "errorURL": "http://oauth-proxy-max-age.test/failure",
+        "expiresAt": 2000000600123,
+        "oauthState": "proxy-max-age-state"
+      },
+      "payload": {
+        "userInfo": {
+          "id": "proxy-subject",
+          "name": "Proxy Owner",
+          "email": "owner@oauth-proxy-max-age.test",
+          "emailVerified": true,
+          "image": null
+        },
+        "account": {
+          "accountId": "proxy-subject",
+          "providerId": "fixture",
+          "accessToken": "proxy-new-access",
+          "refreshToken": "proxy-new-refresh",
+          "idToken": "proxy-new-id",
+          "scope": "openid email"
+        },
+        "state": "proxy-max-age-state",
+        "callbackURL": "http://oauth-proxy-max-age.test/return",
+        "errorURL": "http://oauth-proxy-max-age.test/failure",
+        "disableSignUp": true,
+        "timestamp": 1999999940123
+      },
+      "input": {
+        "url": "http://oauth-proxy-max-age.test/api/auth/callback/fixture/oauth-proxy?callbackURL=http%3A%2F%2Foauth-proxy-max-age.test%2Freturn&profile=<encrypted-profile>",
+        "method": "GET",
+        "headers": [
+          [
+            "cookie",
+            "better-auth.state=proxy-max-age-state.CuHfhi6f0KKMej8wd7ub9fvQSH%2Fu54gb96Lt09tY4zI%3D"
+          ],
+          [
+            "origin",
+            "http://oauth-proxy-max-age.test"
+          ],
+          [
+            "user-agent",
+            "oauth-proxy-max-age"
+          ],
+          [
+            "x-forwarded-for",
+            "203.0.113.8"
+          ]
+        ],
+        "body": ""
+      },
+      "before": {
+        "user": [
+          {
+            "name": "Proxy Owner",
+            "email": "owner@oauth-proxy-max-age.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-owner"
+          }
+        ],
+        "session": [],
+        "account": [
+          {
+            "accountId": "proxy-subject",
+            "providerId": "fixture",
+            "userId": "proxy-owner",
+            "accessToken": "proxy-old-access",
+            "refreshToken": "proxy-old-refresh",
+            "idToken": "proxy-old-id",
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": "openid email",
+            "password": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-account"
+          }
+        ],
+        "verification": [
+          {
+            "identifier": "proxy-max-age-state",
+            "value": "{\"callbackURL\":\"http://oauth-proxy-max-age.test/return\",\"codeVerifier\":\"proxy-max-age-verifier\",\"errorURL\":\"http://oauth-proxy-max-age.test/failure\",\"expiresAt\":2000000600123,\"oauthState\":\"proxy-max-age-state\"}",
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T03:43:20.123Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-verification"
+          }
+        ]
+      },
+      "completion": {
+        "kind": "returned",
+        "value": {
+          "status": 302,
+          "statusText": "FOUND",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "location",
+              "http://oauth-proxy-max-age.test/return"
+            ],
+            [
+              "set-cookie",
+              "better-auth.state=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax"
+            ],
+            [
+              "set-cookie",
+              "better-auth.session_token=<session-token>.<session-hmac>; Max-Age=3600; Path=/; HttpOnly; SameSite=Lax"
+            ]
+          ],
+          "cookies": [
+            "better-auth.state=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax",
+            "better-auth.session_token=<session-token>.<session-hmac>; Max-Age=3600; Path=/; HttpOnly; SameSite=Lax"
+          ],
+          "body": ""
+        }
+      },
+      "events": [
+        {
+          "kind": "hook",
+          "model": "verification",
+          "operation": "delete",
+          "phase": "before",
+          "data": {
+            "identifier": "proxy-max-age-state",
+            "value": "{\"callbackURL\":\"http://oauth-proxy-max-age.test/return\",\"codeVerifier\":\"proxy-max-age-verifier\",\"errorURL\":\"http://oauth-proxy-max-age.test/failure\",\"expiresAt\":2000000600123,\"oauthState\":\"proxy-max-age-state\"}",
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T03:43:20.123Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-verification"
+          }
+        },
+        {
+          "kind": "hook",
+          "model": "verification",
+          "operation": "delete",
+          "phase": "after",
+          "data": {
+            "identifier": "proxy-max-age-state",
+            "value": "{\"callbackURL\":\"http://oauth-proxy-max-age.test/return\",\"codeVerifier\":\"proxy-max-age-verifier\",\"errorURL\":\"http://oauth-proxy-max-age.test/failure\",\"expiresAt\":2000000600123,\"oauthState\":\"proxy-max-age-state\"}",
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T03:43:20.123Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-verification"
+          }
+        },
+        {
+          "kind": "hook",
+          "model": "account",
+          "operation": "update",
+          "phase": "before",
+          "data": {
+            "providerId": "fixture",
+            "idToken": "proxy-new-id",
+            "accessToken": "proxy-new-access",
+            "refreshToken": "proxy-new-refresh"
+          }
+        },
+        {
+          "kind": "hook",
+          "model": "account",
+          "operation": "update",
+          "phase": "after",
+          "data": {
+            "accountId": "proxy-subject",
+            "providerId": "fixture",
+            "userId": "proxy-owner",
+            "accessToken": "proxy-new-access",
+            "refreshToken": "proxy-new-refresh",
+            "idToken": "proxy-new-id",
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": "openid email",
+            "password": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "id": "proxy-account"
+          }
+        },
+        {
+          "kind": "hook",
+          "model": "session",
+          "operation": "create",
+          "phase": "before",
+          "data": {
+            "ipAddress": "203.0.113.8",
+            "userAgent": "oauth-proxy-max-age",
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T04:33:20.123Z"
+            },
+            "userId": "proxy-owner",
+            "token": "<session-token>",
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            }
+          }
+        },
+        {
+          "kind": "generate-id",
+          "input": {
+            "model": "session"
+          },
+          "id": "proxy-session-1"
+        },
+        {
+          "kind": "hook",
+          "model": "session",
+          "operation": "create",
+          "phase": "after",
+          "data": {
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T04:33:20.123Z"
+            },
+            "token": "<session-token>",
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "ipAddress": "203.0.113.8",
+            "userAgent": "oauth-proxy-max-age",
+            "userId": "proxy-owner",
+            "id": "proxy-session-1"
+          }
+        }
+      ],
+      "after": {
+        "user": [
+          {
+            "name": "Proxy Owner",
+            "email": "owner@oauth-proxy-max-age.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-owner"
+          }
+        ],
+        "session": [
+          {
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T04:33:20.123Z"
+            },
+            "token": "<session-token>",
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "ipAddress": "203.0.113.8",
+            "userAgent": "oauth-proxy-max-age",
+            "userId": "proxy-owner",
+            "id": "proxy-session-1"
+          }
+        ],
+        "account": [
+          {
+            "accountId": "proxy-subject",
+            "providerId": "fixture",
+            "userId": "proxy-owner",
+            "accessToken": "proxy-new-access",
+            "refreshToken": "proxy-new-refresh",
+            "idToken": "proxy-new-id",
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": "openid email",
+            "password": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "id": "proxy-account"
+          }
+        ],
+        "verification": []
+      }
+    },
+    {
+      "scenario": "positive-infinity",
+      "maxAge": {
+        "type": "number",
+        "value": "Infinity"
+      },
+      "ageMillis": 60001,
+      "ageSeconds": 60.001,
+      "accepted": true,
+      "initialization": {
+        "kind": "returned",
+        "value": {
+          "type": "undefined"
+        }
+      },
+      "stateData": {
+        "callbackURL": "http://oauth-proxy-max-age.test/return",
+        "codeVerifier": "proxy-max-age-verifier",
+        "errorURL": "http://oauth-proxy-max-age.test/failure",
+        "expiresAt": 2000000600123,
+        "oauthState": "proxy-max-age-state"
+      },
+      "payload": {
+        "userInfo": {
+          "id": "proxy-subject",
+          "name": "Proxy Owner",
+          "email": "owner@oauth-proxy-max-age.test",
+          "emailVerified": true,
+          "image": null
+        },
+        "account": {
+          "accountId": "proxy-subject",
+          "providerId": "fixture",
+          "accessToken": "proxy-new-access",
+          "refreshToken": "proxy-new-refresh",
+          "idToken": "proxy-new-id",
+          "scope": "openid email"
+        },
+        "state": "proxy-max-age-state",
+        "callbackURL": "http://oauth-proxy-max-age.test/return",
+        "errorURL": "http://oauth-proxy-max-age.test/failure",
+        "disableSignUp": true,
+        "timestamp": 1999999940122
+      },
+      "input": {
+        "url": "http://oauth-proxy-max-age.test/api/auth/callback/fixture/oauth-proxy?callbackURL=http%3A%2F%2Foauth-proxy-max-age.test%2Freturn&profile=<encrypted-profile>",
+        "method": "GET",
+        "headers": [
+          [
+            "cookie",
+            "better-auth.state=proxy-max-age-state.CuHfhi6f0KKMej8wd7ub9fvQSH%2Fu54gb96Lt09tY4zI%3D"
+          ],
+          [
+            "origin",
+            "http://oauth-proxy-max-age.test"
+          ],
+          [
+            "user-agent",
+            "oauth-proxy-max-age"
+          ],
+          [
+            "x-forwarded-for",
+            "203.0.113.8"
+          ]
+        ],
+        "body": ""
+      },
+      "before": {
+        "user": [
+          {
+            "name": "Proxy Owner",
+            "email": "owner@oauth-proxy-max-age.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-owner"
+          }
+        ],
+        "session": [],
+        "account": [
+          {
+            "accountId": "proxy-subject",
+            "providerId": "fixture",
+            "userId": "proxy-owner",
+            "accessToken": "proxy-old-access",
+            "refreshToken": "proxy-old-refresh",
+            "idToken": "proxy-old-id",
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": "openid email",
+            "password": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-account"
+          }
+        ],
+        "verification": [
+          {
+            "identifier": "proxy-max-age-state",
+            "value": "{\"callbackURL\":\"http://oauth-proxy-max-age.test/return\",\"codeVerifier\":\"proxy-max-age-verifier\",\"errorURL\":\"http://oauth-proxy-max-age.test/failure\",\"expiresAt\":2000000600123,\"oauthState\":\"proxy-max-age-state\"}",
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T03:43:20.123Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-verification"
+          }
+        ]
+      },
+      "completion": {
+        "kind": "returned",
+        "value": {
+          "status": 302,
+          "statusText": "FOUND",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "location",
+              "http://oauth-proxy-max-age.test/return"
+            ],
+            [
+              "set-cookie",
+              "better-auth.state=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax"
+            ],
+            [
+              "set-cookie",
+              "better-auth.session_token=<session-token>.<session-hmac>; Max-Age=3600; Path=/; HttpOnly; SameSite=Lax"
+            ]
+          ],
+          "cookies": [
+            "better-auth.state=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax",
+            "better-auth.session_token=<session-token>.<session-hmac>; Max-Age=3600; Path=/; HttpOnly; SameSite=Lax"
+          ],
+          "body": ""
+        }
+      },
+      "events": [
+        {
+          "kind": "hook",
+          "model": "verification",
+          "operation": "delete",
+          "phase": "before",
+          "data": {
+            "identifier": "proxy-max-age-state",
+            "value": "{\"callbackURL\":\"http://oauth-proxy-max-age.test/return\",\"codeVerifier\":\"proxy-max-age-verifier\",\"errorURL\":\"http://oauth-proxy-max-age.test/failure\",\"expiresAt\":2000000600123,\"oauthState\":\"proxy-max-age-state\"}",
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T03:43:20.123Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-verification"
+          }
+        },
+        {
+          "kind": "hook",
+          "model": "verification",
+          "operation": "delete",
+          "phase": "after",
+          "data": {
+            "identifier": "proxy-max-age-state",
+            "value": "{\"callbackURL\":\"http://oauth-proxy-max-age.test/return\",\"codeVerifier\":\"proxy-max-age-verifier\",\"errorURL\":\"http://oauth-proxy-max-age.test/failure\",\"expiresAt\":2000000600123,\"oauthState\":\"proxy-max-age-state\"}",
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T03:43:20.123Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-verification"
+          }
+        },
+        {
+          "kind": "hook",
+          "model": "account",
+          "operation": "update",
+          "phase": "before",
+          "data": {
+            "providerId": "fixture",
+            "idToken": "proxy-new-id",
+            "accessToken": "proxy-new-access",
+            "refreshToken": "proxy-new-refresh"
+          }
+        },
+        {
+          "kind": "hook",
+          "model": "account",
+          "operation": "update",
+          "phase": "after",
+          "data": {
+            "accountId": "proxy-subject",
+            "providerId": "fixture",
+            "userId": "proxy-owner",
+            "accessToken": "proxy-new-access",
+            "refreshToken": "proxy-new-refresh",
+            "idToken": "proxy-new-id",
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": "openid email",
+            "password": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "id": "proxy-account"
+          }
+        },
+        {
+          "kind": "hook",
+          "model": "session",
+          "operation": "create",
+          "phase": "before",
+          "data": {
+            "ipAddress": "203.0.113.8",
+            "userAgent": "oauth-proxy-max-age",
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T04:33:20.123Z"
+            },
+            "userId": "proxy-owner",
+            "token": "<session-token>",
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            }
+          }
+        },
+        {
+          "kind": "generate-id",
+          "input": {
+            "model": "session"
+          },
+          "id": "proxy-session-1"
+        },
+        {
+          "kind": "hook",
+          "model": "session",
+          "operation": "create",
+          "phase": "after",
+          "data": {
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T04:33:20.123Z"
+            },
+            "token": "<session-token>",
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "ipAddress": "203.0.113.8",
+            "userAgent": "oauth-proxy-max-age",
+            "userId": "proxy-owner",
+            "id": "proxy-session-1"
+          }
+        }
+      ],
+      "after": {
+        "user": [
+          {
+            "name": "Proxy Owner",
+            "email": "owner@oauth-proxy-max-age.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-owner"
+          }
+        ],
+        "session": [
+          {
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T04:33:20.123Z"
+            },
+            "token": "<session-token>",
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "ipAddress": "203.0.113.8",
+            "userAgent": "oauth-proxy-max-age",
+            "userId": "proxy-owner",
+            "id": "proxy-session-1"
+          }
+        ],
+        "account": [
+          {
+            "accountId": "proxy-subject",
+            "providerId": "fixture",
+            "userId": "proxy-owner",
+            "accessToken": "proxy-new-access",
+            "refreshToken": "proxy-new-refresh",
+            "idToken": "proxy-new-id",
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": "openid email",
+            "password": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "id": "proxy-account"
+          }
+        ],
+        "verification": []
+      }
+    },
+    {
+      "scenario": "positive-infinity",
+      "maxAge": {
+        "type": "number",
+        "value": "Infinity"
+      },
+      "ageMillis": -10000,
+      "ageSeconds": -10,
+      "accepted": true,
+      "initialization": {
+        "kind": "returned",
+        "value": {
+          "type": "undefined"
+        }
+      },
+      "stateData": {
+        "callbackURL": "http://oauth-proxy-max-age.test/return",
+        "codeVerifier": "proxy-max-age-verifier",
+        "errorURL": "http://oauth-proxy-max-age.test/failure",
+        "expiresAt": 2000000600123,
+        "oauthState": "proxy-max-age-state"
+      },
+      "payload": {
+        "userInfo": {
+          "id": "proxy-subject",
+          "name": "Proxy Owner",
+          "email": "owner@oauth-proxy-max-age.test",
+          "emailVerified": true,
+          "image": null
+        },
+        "account": {
+          "accountId": "proxy-subject",
+          "providerId": "fixture",
+          "accessToken": "proxy-new-access",
+          "refreshToken": "proxy-new-refresh",
+          "idToken": "proxy-new-id",
+          "scope": "openid email"
+        },
+        "state": "proxy-max-age-state",
+        "callbackURL": "http://oauth-proxy-max-age.test/return",
+        "errorURL": "http://oauth-proxy-max-age.test/failure",
+        "disableSignUp": true,
+        "timestamp": 2000000010123
+      },
+      "input": {
+        "url": "http://oauth-proxy-max-age.test/api/auth/callback/fixture/oauth-proxy?callbackURL=http%3A%2F%2Foauth-proxy-max-age.test%2Freturn&profile=<encrypted-profile>",
+        "method": "GET",
+        "headers": [
+          [
+            "cookie",
+            "better-auth.state=proxy-max-age-state.CuHfhi6f0KKMej8wd7ub9fvQSH%2Fu54gb96Lt09tY4zI%3D"
+          ],
+          [
+            "origin",
+            "http://oauth-proxy-max-age.test"
+          ],
+          [
+            "user-agent",
+            "oauth-proxy-max-age"
+          ],
+          [
+            "x-forwarded-for",
+            "203.0.113.8"
+          ]
+        ],
+        "body": ""
+      },
+      "before": {
+        "user": [
+          {
+            "name": "Proxy Owner",
+            "email": "owner@oauth-proxy-max-age.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-owner"
+          }
+        ],
+        "session": [],
+        "account": [
+          {
+            "accountId": "proxy-subject",
+            "providerId": "fixture",
+            "userId": "proxy-owner",
+            "accessToken": "proxy-old-access",
+            "refreshToken": "proxy-old-refresh",
+            "idToken": "proxy-old-id",
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": "openid email",
+            "password": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-account"
+          }
+        ],
+        "verification": [
+          {
+            "identifier": "proxy-max-age-state",
+            "value": "{\"callbackURL\":\"http://oauth-proxy-max-age.test/return\",\"codeVerifier\":\"proxy-max-age-verifier\",\"errorURL\":\"http://oauth-proxy-max-age.test/failure\",\"expiresAt\":2000000600123,\"oauthState\":\"proxy-max-age-state\"}",
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T03:43:20.123Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-verification"
+          }
+        ]
+      },
+      "completion": {
+        "kind": "returned",
+        "value": {
+          "status": 302,
+          "statusText": "FOUND",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "location",
+              "http://oauth-proxy-max-age.test/return"
+            ],
+            [
+              "set-cookie",
+              "better-auth.state=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax"
+            ],
+            [
+              "set-cookie",
+              "better-auth.session_token=<session-token>.<session-hmac>; Max-Age=3600; Path=/; HttpOnly; SameSite=Lax"
+            ]
+          ],
+          "cookies": [
+            "better-auth.state=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax",
+            "better-auth.session_token=<session-token>.<session-hmac>; Max-Age=3600; Path=/; HttpOnly; SameSite=Lax"
+          ],
+          "body": ""
+        }
+      },
+      "events": [
+        {
+          "kind": "hook",
+          "model": "verification",
+          "operation": "delete",
+          "phase": "before",
+          "data": {
+            "identifier": "proxy-max-age-state",
+            "value": "{\"callbackURL\":\"http://oauth-proxy-max-age.test/return\",\"codeVerifier\":\"proxy-max-age-verifier\",\"errorURL\":\"http://oauth-proxy-max-age.test/failure\",\"expiresAt\":2000000600123,\"oauthState\":\"proxy-max-age-state\"}",
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T03:43:20.123Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-verification"
+          }
+        },
+        {
+          "kind": "hook",
+          "model": "verification",
+          "operation": "delete",
+          "phase": "after",
+          "data": {
+            "identifier": "proxy-max-age-state",
+            "value": "{\"callbackURL\":\"http://oauth-proxy-max-age.test/return\",\"codeVerifier\":\"proxy-max-age-verifier\",\"errorURL\":\"http://oauth-proxy-max-age.test/failure\",\"expiresAt\":2000000600123,\"oauthState\":\"proxy-max-age-state\"}",
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T03:43:20.123Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-verification"
+          }
+        },
+        {
+          "kind": "hook",
+          "model": "account",
+          "operation": "update",
+          "phase": "before",
+          "data": {
+            "providerId": "fixture",
+            "idToken": "proxy-new-id",
+            "accessToken": "proxy-new-access",
+            "refreshToken": "proxy-new-refresh"
+          }
+        },
+        {
+          "kind": "hook",
+          "model": "account",
+          "operation": "update",
+          "phase": "after",
+          "data": {
+            "accountId": "proxy-subject",
+            "providerId": "fixture",
+            "userId": "proxy-owner",
+            "accessToken": "proxy-new-access",
+            "refreshToken": "proxy-new-refresh",
+            "idToken": "proxy-new-id",
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": "openid email",
+            "password": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "id": "proxy-account"
+          }
+        },
+        {
+          "kind": "hook",
+          "model": "session",
+          "operation": "create",
+          "phase": "before",
+          "data": {
+            "ipAddress": "203.0.113.8",
+            "userAgent": "oauth-proxy-max-age",
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T04:33:20.123Z"
+            },
+            "userId": "proxy-owner",
+            "token": "<session-token>",
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            }
+          }
+        },
+        {
+          "kind": "generate-id",
+          "input": {
+            "model": "session"
+          },
+          "id": "proxy-session-1"
+        },
+        {
+          "kind": "hook",
+          "model": "session",
+          "operation": "create",
+          "phase": "after",
+          "data": {
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T04:33:20.123Z"
+            },
+            "token": "<session-token>",
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "ipAddress": "203.0.113.8",
+            "userAgent": "oauth-proxy-max-age",
+            "userId": "proxy-owner",
+            "id": "proxy-session-1"
+          }
+        }
+      ],
+      "after": {
+        "user": [
+          {
+            "name": "Proxy Owner",
+            "email": "owner@oauth-proxy-max-age.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-owner"
+          }
+        ],
+        "session": [
+          {
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T04:33:20.123Z"
+            },
+            "token": "<session-token>",
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "ipAddress": "203.0.113.8",
+            "userAgent": "oauth-proxy-max-age",
+            "userId": "proxy-owner",
+            "id": "proxy-session-1"
+          }
+        ],
+        "account": [
+          {
+            "accountId": "proxy-subject",
+            "providerId": "fixture",
+            "userId": "proxy-owner",
+            "accessToken": "proxy-new-access",
+            "refreshToken": "proxy-new-refresh",
+            "idToken": "proxy-new-id",
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": "openid email",
+            "password": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:33:20.123Z"
+            },
+            "id": "proxy-account"
+          }
+        ],
+        "verification": []
+      }
+    },
+    {
+      "scenario": "positive-infinity",
+      "maxAge": {
+        "type": "number",
+        "value": "Infinity"
+      },
+      "ageMillis": -10001,
+      "ageSeconds": -10.001,
+      "accepted": false,
+      "initialization": {
+        "kind": "returned",
+        "value": {
+          "type": "undefined"
+        }
+      },
+      "stateData": {
+        "callbackURL": "http://oauth-proxy-max-age.test/return",
+        "codeVerifier": "proxy-max-age-verifier",
+        "errorURL": "http://oauth-proxy-max-age.test/failure",
+        "expiresAt": 2000000600123,
+        "oauthState": "proxy-max-age-state"
+      },
+      "payload": {
+        "userInfo": {
+          "id": "proxy-subject",
+          "name": "Proxy Owner",
+          "email": "owner@oauth-proxy-max-age.test",
+          "emailVerified": true,
+          "image": null
+        },
+        "account": {
+          "accountId": "proxy-subject",
+          "providerId": "fixture",
+          "accessToken": "proxy-new-access",
+          "refreshToken": "proxy-new-refresh",
+          "idToken": "proxy-new-id",
+          "scope": "openid email"
+        },
+        "state": "proxy-max-age-state",
+        "callbackURL": "http://oauth-proxy-max-age.test/return",
+        "errorURL": "http://oauth-proxy-max-age.test/failure",
+        "disableSignUp": true,
+        "timestamp": 2000000010124
+      },
+      "input": {
+        "url": "http://oauth-proxy-max-age.test/api/auth/callback/fixture/oauth-proxy?callbackURL=http%3A%2F%2Foauth-proxy-max-age.test%2Freturn&profile=<encrypted-profile>",
+        "method": "GET",
+        "headers": [
+          [
+            "cookie",
+            "better-auth.state=proxy-max-age-state.CuHfhi6f0KKMej8wd7ub9fvQSH%2Fu54gb96Lt09tY4zI%3D"
+          ],
+          [
+            "origin",
+            "http://oauth-proxy-max-age.test"
+          ],
+          [
+            "user-agent",
+            "oauth-proxy-max-age"
+          ],
+          [
+            "x-forwarded-for",
+            "203.0.113.8"
+          ]
+        ],
+        "body": ""
+      },
+      "before": {
+        "user": [
+          {
+            "name": "Proxy Owner",
+            "email": "owner@oauth-proxy-max-age.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-owner"
+          }
+        ],
+        "session": [],
+        "account": [
+          {
+            "accountId": "proxy-subject",
+            "providerId": "fixture",
+            "userId": "proxy-owner",
+            "accessToken": "proxy-old-access",
+            "refreshToken": "proxy-old-refresh",
+            "idToken": "proxy-old-id",
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": "openid email",
+            "password": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-account"
+          }
+        ],
+        "verification": [
+          {
+            "identifier": "proxy-max-age-state",
+            "value": "{\"callbackURL\":\"http://oauth-proxy-max-age.test/return\",\"codeVerifier\":\"proxy-max-age-verifier\",\"errorURL\":\"http://oauth-proxy-max-age.test/failure\",\"expiresAt\":2000000600123,\"oauthState\":\"proxy-max-age-state\"}",
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T03:43:20.123Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-verification"
+          }
+        ]
+      },
+      "completion": {
+        "kind": "returned",
+        "value": {
+          "status": 302,
+          "statusText": "FOUND",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "location",
+              "http://oauth-proxy-max-age.test/failure?error=payload_expired"
+            ]
+          ],
+          "cookies": [],
+          "body": ""
+        }
+      },
+      "events": [],
+      "after": {
+        "user": [
+          {
+            "name": "Proxy Owner",
+            "email": "owner@oauth-proxy-max-age.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-owner"
+          }
+        ],
+        "session": [],
+        "account": [
+          {
+            "accountId": "proxy-subject",
+            "providerId": "fixture",
+            "userId": "proxy-owner",
+            "accessToken": "proxy-old-access",
+            "refreshToken": "proxy-old-refresh",
+            "idToken": "proxy-old-id",
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": "openid email",
+            "password": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-account"
+          }
+        ],
+        "verification": [
+          {
+            "identifier": "proxy-max-age-state",
+            "value": "{\"callbackURL\":\"http://oauth-proxy-max-age.test/return\",\"codeVerifier\":\"proxy-max-age-verifier\",\"errorURL\":\"http://oauth-proxy-max-age.test/failure\",\"expiresAt\":2000000600123,\"oauthState\":\"proxy-max-age-state\"}",
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T03:43:20.123Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-verification"
+          }
+        ]
+      }
+    },
+    {
+      "scenario": "negative-infinity",
+      "maxAge": {
+        "type": "number",
+        "value": "-Infinity"
+      },
+      "ageMillis": 60000,
+      "ageSeconds": 60,
+      "accepted": false,
+      "initialization": {
+        "kind": "returned",
+        "value": {
+          "type": "undefined"
+        }
+      },
+      "stateData": {
+        "callbackURL": "http://oauth-proxy-max-age.test/return",
+        "codeVerifier": "proxy-max-age-verifier",
+        "errorURL": "http://oauth-proxy-max-age.test/failure",
+        "expiresAt": 2000000600123,
+        "oauthState": "proxy-max-age-state"
+      },
+      "payload": {
+        "userInfo": {
+          "id": "proxy-subject",
+          "name": "Proxy Owner",
+          "email": "owner@oauth-proxy-max-age.test",
+          "emailVerified": true,
+          "image": null
+        },
+        "account": {
+          "accountId": "proxy-subject",
+          "providerId": "fixture",
+          "accessToken": "proxy-new-access",
+          "refreshToken": "proxy-new-refresh",
+          "idToken": "proxy-new-id",
+          "scope": "openid email"
+        },
+        "state": "proxy-max-age-state",
+        "callbackURL": "http://oauth-proxy-max-age.test/return",
+        "errorURL": "http://oauth-proxy-max-age.test/failure",
+        "disableSignUp": true,
+        "timestamp": 1999999940123
+      },
+      "input": {
+        "url": "http://oauth-proxy-max-age.test/api/auth/callback/fixture/oauth-proxy?callbackURL=http%3A%2F%2Foauth-proxy-max-age.test%2Freturn&profile=<encrypted-profile>",
+        "method": "GET",
+        "headers": [
+          [
+            "cookie",
+            "better-auth.state=proxy-max-age-state.CuHfhi6f0KKMej8wd7ub9fvQSH%2Fu54gb96Lt09tY4zI%3D"
+          ],
+          [
+            "origin",
+            "http://oauth-proxy-max-age.test"
+          ],
+          [
+            "user-agent",
+            "oauth-proxy-max-age"
+          ],
+          [
+            "x-forwarded-for",
+            "203.0.113.8"
+          ]
+        ],
+        "body": ""
+      },
+      "before": {
+        "user": [
+          {
+            "name": "Proxy Owner",
+            "email": "owner@oauth-proxy-max-age.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-owner"
+          }
+        ],
+        "session": [],
+        "account": [
+          {
+            "accountId": "proxy-subject",
+            "providerId": "fixture",
+            "userId": "proxy-owner",
+            "accessToken": "proxy-old-access",
+            "refreshToken": "proxy-old-refresh",
+            "idToken": "proxy-old-id",
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": "openid email",
+            "password": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-account"
+          }
+        ],
+        "verification": [
+          {
+            "identifier": "proxy-max-age-state",
+            "value": "{\"callbackURL\":\"http://oauth-proxy-max-age.test/return\",\"codeVerifier\":\"proxy-max-age-verifier\",\"errorURL\":\"http://oauth-proxy-max-age.test/failure\",\"expiresAt\":2000000600123,\"oauthState\":\"proxy-max-age-state\"}",
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T03:43:20.123Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-verification"
+          }
+        ]
+      },
+      "completion": {
+        "kind": "returned",
+        "value": {
+          "status": 302,
+          "statusText": "FOUND",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "location",
+              "http://oauth-proxy-max-age.test/failure?error=payload_expired"
+            ]
+          ],
+          "cookies": [],
+          "body": ""
+        }
+      },
+      "events": [],
+      "after": {
+        "user": [
+          {
+            "name": "Proxy Owner",
+            "email": "owner@oauth-proxy-max-age.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-owner"
+          }
+        ],
+        "session": [],
+        "account": [
+          {
+            "accountId": "proxy-subject",
+            "providerId": "fixture",
+            "userId": "proxy-owner",
+            "accessToken": "proxy-old-access",
+            "refreshToken": "proxy-old-refresh",
+            "idToken": "proxy-old-id",
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": "openid email",
+            "password": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-account"
+          }
+        ],
+        "verification": [
+          {
+            "identifier": "proxy-max-age-state",
+            "value": "{\"callbackURL\":\"http://oauth-proxy-max-age.test/return\",\"codeVerifier\":\"proxy-max-age-verifier\",\"errorURL\":\"http://oauth-proxy-max-age.test/failure\",\"expiresAt\":2000000600123,\"oauthState\":\"proxy-max-age-state\"}",
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T03:43:20.123Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-verification"
+          }
+        ]
+      }
+    },
+    {
+      "scenario": "negative-infinity",
+      "maxAge": {
+        "type": "number",
+        "value": "-Infinity"
+      },
+      "ageMillis": 60001,
+      "ageSeconds": 60.001,
+      "accepted": false,
+      "initialization": {
+        "kind": "returned",
+        "value": {
+          "type": "undefined"
+        }
+      },
+      "stateData": {
+        "callbackURL": "http://oauth-proxy-max-age.test/return",
+        "codeVerifier": "proxy-max-age-verifier",
+        "errorURL": "http://oauth-proxy-max-age.test/failure",
+        "expiresAt": 2000000600123,
+        "oauthState": "proxy-max-age-state"
+      },
+      "payload": {
+        "userInfo": {
+          "id": "proxy-subject",
+          "name": "Proxy Owner",
+          "email": "owner@oauth-proxy-max-age.test",
+          "emailVerified": true,
+          "image": null
+        },
+        "account": {
+          "accountId": "proxy-subject",
+          "providerId": "fixture",
+          "accessToken": "proxy-new-access",
+          "refreshToken": "proxy-new-refresh",
+          "idToken": "proxy-new-id",
+          "scope": "openid email"
+        },
+        "state": "proxy-max-age-state",
+        "callbackURL": "http://oauth-proxy-max-age.test/return",
+        "errorURL": "http://oauth-proxy-max-age.test/failure",
+        "disableSignUp": true,
+        "timestamp": 1999999940122
+      },
+      "input": {
+        "url": "http://oauth-proxy-max-age.test/api/auth/callback/fixture/oauth-proxy?callbackURL=http%3A%2F%2Foauth-proxy-max-age.test%2Freturn&profile=<encrypted-profile>",
+        "method": "GET",
+        "headers": [
+          [
+            "cookie",
+            "better-auth.state=proxy-max-age-state.CuHfhi6f0KKMej8wd7ub9fvQSH%2Fu54gb96Lt09tY4zI%3D"
+          ],
+          [
+            "origin",
+            "http://oauth-proxy-max-age.test"
+          ],
+          [
+            "user-agent",
+            "oauth-proxy-max-age"
+          ],
+          [
+            "x-forwarded-for",
+            "203.0.113.8"
+          ]
+        ],
+        "body": ""
+      },
+      "before": {
+        "user": [
+          {
+            "name": "Proxy Owner",
+            "email": "owner@oauth-proxy-max-age.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-owner"
+          }
+        ],
+        "session": [],
+        "account": [
+          {
+            "accountId": "proxy-subject",
+            "providerId": "fixture",
+            "userId": "proxy-owner",
+            "accessToken": "proxy-old-access",
+            "refreshToken": "proxy-old-refresh",
+            "idToken": "proxy-old-id",
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": "openid email",
+            "password": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-account"
+          }
+        ],
+        "verification": [
+          {
+            "identifier": "proxy-max-age-state",
+            "value": "{\"callbackURL\":\"http://oauth-proxy-max-age.test/return\",\"codeVerifier\":\"proxy-max-age-verifier\",\"errorURL\":\"http://oauth-proxy-max-age.test/failure\",\"expiresAt\":2000000600123,\"oauthState\":\"proxy-max-age-state\"}",
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T03:43:20.123Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-verification"
+          }
+        ]
+      },
+      "completion": {
+        "kind": "returned",
+        "value": {
+          "status": 302,
+          "statusText": "FOUND",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "location",
+              "http://oauth-proxy-max-age.test/failure?error=payload_expired"
+            ]
+          ],
+          "cookies": [],
+          "body": ""
+        }
+      },
+      "events": [],
+      "after": {
+        "user": [
+          {
+            "name": "Proxy Owner",
+            "email": "owner@oauth-proxy-max-age.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-owner"
+          }
+        ],
+        "session": [],
+        "account": [
+          {
+            "accountId": "proxy-subject",
+            "providerId": "fixture",
+            "userId": "proxy-owner",
+            "accessToken": "proxy-old-access",
+            "refreshToken": "proxy-old-refresh",
+            "idToken": "proxy-old-id",
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": "openid email",
+            "password": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-account"
+          }
+        ],
+        "verification": [
+          {
+            "identifier": "proxy-max-age-state",
+            "value": "{\"callbackURL\":\"http://oauth-proxy-max-age.test/return\",\"codeVerifier\":\"proxy-max-age-verifier\",\"errorURL\":\"http://oauth-proxy-max-age.test/failure\",\"expiresAt\":2000000600123,\"oauthState\":\"proxy-max-age-state\"}",
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T03:43:20.123Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-verification"
+          }
+        ]
+      }
+    },
+    {
+      "scenario": "negative-infinity",
+      "maxAge": {
+        "type": "number",
+        "value": "-Infinity"
+      },
+      "ageMillis": -10000,
+      "ageSeconds": -10,
+      "accepted": false,
+      "initialization": {
+        "kind": "returned",
+        "value": {
+          "type": "undefined"
+        }
+      },
+      "stateData": {
+        "callbackURL": "http://oauth-proxy-max-age.test/return",
+        "codeVerifier": "proxy-max-age-verifier",
+        "errorURL": "http://oauth-proxy-max-age.test/failure",
+        "expiresAt": 2000000600123,
+        "oauthState": "proxy-max-age-state"
+      },
+      "payload": {
+        "userInfo": {
+          "id": "proxy-subject",
+          "name": "Proxy Owner",
+          "email": "owner@oauth-proxy-max-age.test",
+          "emailVerified": true,
+          "image": null
+        },
+        "account": {
+          "accountId": "proxy-subject",
+          "providerId": "fixture",
+          "accessToken": "proxy-new-access",
+          "refreshToken": "proxy-new-refresh",
+          "idToken": "proxy-new-id",
+          "scope": "openid email"
+        },
+        "state": "proxy-max-age-state",
+        "callbackURL": "http://oauth-proxy-max-age.test/return",
+        "errorURL": "http://oauth-proxy-max-age.test/failure",
+        "disableSignUp": true,
+        "timestamp": 2000000010123
+      },
+      "input": {
+        "url": "http://oauth-proxy-max-age.test/api/auth/callback/fixture/oauth-proxy?callbackURL=http%3A%2F%2Foauth-proxy-max-age.test%2Freturn&profile=<encrypted-profile>",
+        "method": "GET",
+        "headers": [
+          [
+            "cookie",
+            "better-auth.state=proxy-max-age-state.CuHfhi6f0KKMej8wd7ub9fvQSH%2Fu54gb96Lt09tY4zI%3D"
+          ],
+          [
+            "origin",
+            "http://oauth-proxy-max-age.test"
+          ],
+          [
+            "user-agent",
+            "oauth-proxy-max-age"
+          ],
+          [
+            "x-forwarded-for",
+            "203.0.113.8"
+          ]
+        ],
+        "body": ""
+      },
+      "before": {
+        "user": [
+          {
+            "name": "Proxy Owner",
+            "email": "owner@oauth-proxy-max-age.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-owner"
+          }
+        ],
+        "session": [],
+        "account": [
+          {
+            "accountId": "proxy-subject",
+            "providerId": "fixture",
+            "userId": "proxy-owner",
+            "accessToken": "proxy-old-access",
+            "refreshToken": "proxy-old-refresh",
+            "idToken": "proxy-old-id",
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": "openid email",
+            "password": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-account"
+          }
+        ],
+        "verification": [
+          {
+            "identifier": "proxy-max-age-state",
+            "value": "{\"callbackURL\":\"http://oauth-proxy-max-age.test/return\",\"codeVerifier\":\"proxy-max-age-verifier\",\"errorURL\":\"http://oauth-proxy-max-age.test/failure\",\"expiresAt\":2000000600123,\"oauthState\":\"proxy-max-age-state\"}",
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T03:43:20.123Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-verification"
+          }
+        ]
+      },
+      "completion": {
+        "kind": "returned",
+        "value": {
+          "status": 302,
+          "statusText": "FOUND",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "location",
+              "http://oauth-proxy-max-age.test/failure?error=payload_expired"
+            ]
+          ],
+          "cookies": [],
+          "body": ""
+        }
+      },
+      "events": [],
+      "after": {
+        "user": [
+          {
+            "name": "Proxy Owner",
+            "email": "owner@oauth-proxy-max-age.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-owner"
+          }
+        ],
+        "session": [],
+        "account": [
+          {
+            "accountId": "proxy-subject",
+            "providerId": "fixture",
+            "userId": "proxy-owner",
+            "accessToken": "proxy-old-access",
+            "refreshToken": "proxy-old-refresh",
+            "idToken": "proxy-old-id",
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": "openid email",
+            "password": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-account"
+          }
+        ],
+        "verification": [
+          {
+            "identifier": "proxy-max-age-state",
+            "value": "{\"callbackURL\":\"http://oauth-proxy-max-age.test/return\",\"codeVerifier\":\"proxy-max-age-verifier\",\"errorURL\":\"http://oauth-proxy-max-age.test/failure\",\"expiresAt\":2000000600123,\"oauthState\":\"proxy-max-age-state\"}",
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T03:43:20.123Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-verification"
+          }
+        ]
+      }
+    },
+    {
+      "scenario": "negative-infinity",
+      "maxAge": {
+        "type": "number",
+        "value": "-Infinity"
+      },
+      "ageMillis": -10001,
+      "ageSeconds": -10.001,
+      "accepted": false,
+      "initialization": {
+        "kind": "returned",
+        "value": {
+          "type": "undefined"
+        }
+      },
+      "stateData": {
+        "callbackURL": "http://oauth-proxy-max-age.test/return",
+        "codeVerifier": "proxy-max-age-verifier",
+        "errorURL": "http://oauth-proxy-max-age.test/failure",
+        "expiresAt": 2000000600123,
+        "oauthState": "proxy-max-age-state"
+      },
+      "payload": {
+        "userInfo": {
+          "id": "proxy-subject",
+          "name": "Proxy Owner",
+          "email": "owner@oauth-proxy-max-age.test",
+          "emailVerified": true,
+          "image": null
+        },
+        "account": {
+          "accountId": "proxy-subject",
+          "providerId": "fixture",
+          "accessToken": "proxy-new-access",
+          "refreshToken": "proxy-new-refresh",
+          "idToken": "proxy-new-id",
+          "scope": "openid email"
+        },
+        "state": "proxy-max-age-state",
+        "callbackURL": "http://oauth-proxy-max-age.test/return",
+        "errorURL": "http://oauth-proxy-max-age.test/failure",
+        "disableSignUp": true,
+        "timestamp": 2000000010124
+      },
+      "input": {
+        "url": "http://oauth-proxy-max-age.test/api/auth/callback/fixture/oauth-proxy?callbackURL=http%3A%2F%2Foauth-proxy-max-age.test%2Freturn&profile=<encrypted-profile>",
+        "method": "GET",
+        "headers": [
+          [
+            "cookie",
+            "better-auth.state=proxy-max-age-state.CuHfhi6f0KKMej8wd7ub9fvQSH%2Fu54gb96Lt09tY4zI%3D"
+          ],
+          [
+            "origin",
+            "http://oauth-proxy-max-age.test"
+          ],
+          [
+            "user-agent",
+            "oauth-proxy-max-age"
+          ],
+          [
+            "x-forwarded-for",
+            "203.0.113.8"
+          ]
+        ],
+        "body": ""
+      },
+      "before": {
+        "user": [
+          {
+            "name": "Proxy Owner",
+            "email": "owner@oauth-proxy-max-age.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-owner"
+          }
+        ],
+        "session": [],
+        "account": [
+          {
+            "accountId": "proxy-subject",
+            "providerId": "fixture",
+            "userId": "proxy-owner",
+            "accessToken": "proxy-old-access",
+            "refreshToken": "proxy-old-refresh",
+            "idToken": "proxy-old-id",
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": "openid email",
+            "password": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-account"
+          }
+        ],
+        "verification": [
+          {
+            "identifier": "proxy-max-age-state",
+            "value": "{\"callbackURL\":\"http://oauth-proxy-max-age.test/return\",\"codeVerifier\":\"proxy-max-age-verifier\",\"errorURL\":\"http://oauth-proxy-max-age.test/failure\",\"expiresAt\":2000000600123,\"oauthState\":\"proxy-max-age-state\"}",
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T03:43:20.123Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-verification"
+          }
+        ]
+      },
+      "completion": {
+        "kind": "returned",
+        "value": {
+          "status": 302,
+          "statusText": "FOUND",
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "location",
+              "http://oauth-proxy-max-age.test/failure?error=payload_expired"
+            ]
+          ],
+          "cookies": [],
+          "body": ""
+        }
+      },
+      "events": [],
+      "after": {
+        "user": [
+          {
+            "name": "Proxy Owner",
+            "email": "owner@oauth-proxy-max-age.test",
+            "emailVerified": true,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-owner"
+          }
+        ],
+        "session": [],
+        "account": [
+          {
+            "accountId": "proxy-subject",
+            "providerId": "fixture",
+            "userId": "proxy-owner",
+            "accessToken": "proxy-old-access",
+            "refreshToken": "proxy-old-refresh",
+            "idToken": "proxy-old-id",
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": "openid email",
+            "password": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-account"
+          }
+        ],
+        "verification": [
+          {
+            "identifier": "proxy-max-age-state",
+            "value": "{\"callbackURL\":\"http://oauth-proxy-max-age.test/return\",\"codeVerifier\":\"proxy-max-age-verifier\",\"errorURL\":\"http://oauth-proxy-max-age.test/failure\",\"expiresAt\":2000000600123,\"oauthState\":\"proxy-max-age-state\"}",
+            "expiresAt": {
+              "type": "date",
+              "value": "2033-05-18T03:43:20.123Z"
+            },
+            "createdAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2033-05-18T03:31:20.123Z"
+            },
+            "id": "proxy-verification"
+          }
+        ]
+      }
+    }
+  ]
+}

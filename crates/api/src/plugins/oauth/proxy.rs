@@ -33,7 +33,7 @@ pub struct OAuthProxyConfig {
     /// Shared encryption secret; defaults to the authentication secret.
     #[config(default = None)]
     pub secret: Option<String>,
-    /// Maximum profile age in finite seconds, including fractions.
+    /// Maximum profile age in seconds, including fractions and non-finite values.
     #[config(default = 60.0)]
     pub max_age: f64,
 }
@@ -145,12 +145,6 @@ struct Profile {
 impl<S: AuthSchema> AuthPlugin<S> for OAuthProxyPlugin {
     fn name(&self) -> &'static str {
         "oauth-proxy"
-    }
-    async fn on_init(&self, _ctx: &mut better_auth_core::AuthInitContext<S>) -> AuthResult<()> {
-        if !self.config.max_age.is_finite() {
-            return Err(AuthError::config("OAuth proxy max_age must be finite"));
-        }
-        Ok(())
     }
     fn routes(&self) -> Vec<AuthRoute> {
         vec![
@@ -283,6 +277,11 @@ impl<S: AuthSchema> AuthPlugin<S> for OAuthProxyPlugin {
 }
 
 impl OAuthProxyPlugin {
+    fn profile_expired(&self, timestamp: f64, now: i64) -> bool {
+        let age = (now as f64 - timestamp) / 1000.0;
+        age > self.config.max_age || age < -10.0
+    }
+
     fn encryption_key<'a, S: AuthSchema>(
         &'a self,
         ctx: &'a AuthContext<S>,
@@ -652,8 +651,7 @@ impl OAuthProxyPlugin {
         if provider.is_some_and(|provider| provider != profile.account.provider_id) {
             return redirect_error(error_url, "provider_mismatch", None);
         }
-        let age = (Utc::now().timestamp_millis() as f64 - profile.timestamp) / 1000.0;
-        if age > self.config.max_age || age < -10.0 {
+        if self.profile_expired(profile.timestamp, Utc::now().timestamp_millis()) {
             return redirect_error(error_url, "payload_expired", None);
         }
         let state = match ctx.config.account.store_state_strategy() {
