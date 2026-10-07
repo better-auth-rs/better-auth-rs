@@ -287,9 +287,9 @@ async fn verify_serial_coercion(database: DatabaseConnection) -> TestResult {
                     observed
                         .lock()
                         .expect("reference observations")
-                        .push(value.clone());
-                    Ok(if value.as_ref() == Some(&json!("alias")) {
-                        Some(json!("0x10"))
+                        .push(value.json()?);
+                    Ok(if value.as_str() == Some("alias") {
+                        "0x10".into()
                     } else {
                         value
                     })

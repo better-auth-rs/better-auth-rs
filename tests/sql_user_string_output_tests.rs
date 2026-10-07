@@ -1,7 +1,8 @@
 #![cfg(feature = "seaorm2")]
 
 use better_auth_core::{
-    AuthConfig, AuthError, AuthResult, AuthSchema, CreateUser, ListUsersParams, UserView,
+    AuthConfig, AuthError, AuthResult, AuthSchema, CreateUser, FieldMap, FieldValue,
+    ListUsersParams, UserView,
     id::{IdGeneration, IdGenerator},
     store::UserStore,
     user_fields::{FieldTransforms, UserFieldConfig, UserFieldTransform, UserFieldType},
@@ -19,21 +20,26 @@ use std::sync::{
 
 type Trace = Arc<Mutex<Vec<Value>>>;
 
-fn observed(value: Option<&Value>) -> Value {
-    match value {
+fn observed(value: Option<&FieldValue>) -> AuthResult<Value> {
+    Ok(match value.map(FieldValue::json).transpose()?.flatten() {
         None => json!({"defined":false}),
         Some(value) => json!({"defined":true,"value":value}),
-    }
+    })
 }
 
-fn display(user: UserView) -> Value {
-    Value::Object(Map::from_iter(["marker", "label", "note"].map(|name| {
-        let value = user.additional_fields.get(name);
-        (
-            name.into(),
-            json!({"own":value.is_some(),"value":observed(value)}),
-        )
-    })))
+fn display(user: UserView) -> AuthResult<Value> {
+    Ok(Value::Object(
+        ["marker", "label", "note"]
+            .into_iter()
+            .map(|name| {
+                let value = user.additional_fields.get(name);
+                Ok((
+                    name.into(),
+                    json!({"own":value.is_some(),"value":observed(value)?}),
+                ))
+            })
+            .collect::<AuthResult<Map<_, _>>>()?,
+    ))
 }
 
 fn take_events(trace: &Trace) -> AuthResult<Vec<Value>> {
@@ -69,7 +75,7 @@ fn config(trace: Option<&Trace>) -> AuthConfig {
                             .map_err(|_| {
                                 AuthError::internal("SQL String output trace lock poisoned")
                             })?
-                            .push(json!(["output", name, observed(value.as_ref())]));
+                            .push(json!(["output", name, observed(Some(&value))?]));
                         Ok(value)
                     })),
                 }
@@ -144,13 +150,13 @@ async fn contract() -> Result<(), Box<dyn std::error::Error>> {
                 name: Some(name.into()).into(),
                 email: Some(format!("{marker}@sql-user-string-output.test")),
                 email_verified: Some(false),
-                created_at: Some(timestamp),
-                updated_at: Some(timestamp),
-                additional_fields: Map::from_iter([
+                created_at: Some(timestamp.into()),
+                updated_at: Some(timestamp.into()),
+                additional_fields: FieldMap::from_json(Map::from_iter([
                     ("marker".into(), json!(marker)),
                     ("label".into(), label),
                     ("note".into(), json!(note)),
-                ]),
+                ]))?,
                 ..Default::default()
             })
             .await?;
@@ -166,7 +172,7 @@ async fn contract() -> Result<(), Box<dyn std::error::Error>> {
         .get_user_by_id(&first_id)
         .await?
         .ok_or_else(|| AuthError::internal("The reader finds the first stored row"))?;
-    let point = json!({"events":take_events(&trace)?,"result":display(point)});
+    let point = json!({"events":take_events(&trace)?,"result":display(point)?});
     let (rows, total) = reader
         .list_users(ListUsersParams {
             limit: Some(10.0),
@@ -183,7 +189,7 @@ async fn contract() -> Result<(), Box<dyn std::error::Error>> {
             "point":point,
             "batch":{
                 "events":take_events(&trace)?,
-                "result":{"users":rows.into_iter().map(display).collect::<Vec<_>>(),"total":total},
+                "result":{"users":rows.into_iter().map(display).collect::<AuthResult<Vec<_>>>()?,"total":total},
             },
         }),
         expected,

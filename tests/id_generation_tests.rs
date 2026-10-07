@@ -301,7 +301,7 @@ async fn plugin_ids_use_logical_models_and_preserve_forced_organization_ids() {
             device_code: "credential".into(),
             user_code: "ABCD2345".into(),
             user_id: None,
-            expires_at: Utc::now() + Duration::minutes(5),
+            expires_at: (Utc::now() + Duration::minutes(5)).into(),
             status: "pending".into(),
             last_polled_at: None,
             polling_interval: Some(5.0),
@@ -326,7 +326,7 @@ async fn plugin_ids_use_logical_models_and_preserve_forced_organization_ids() {
     let key = store
         .create_jwk(CreateJwk {
             additional_fields: Default::default(),
-            created_at: Utc::now(),
+            created_at: Utc::now().into(),
             public_key: "{}".into(),
             private_key: "{}".into(),
             expires_at: None,
@@ -343,7 +343,7 @@ async fn plugin_ids_use_logical_models_and_preserve_forced_organization_ids() {
             address: "0x1234".into(),
             chain_id: 1,
             is_primary: true,
-            created_at: Utc::now(),
+            created_at: Utc::now().into(),
         })
         .await
         .unwrap();

@@ -5,7 +5,10 @@
 )]
 
 use better_auth::{
-    __private_core::user_fields::{UserConfig, UserFieldConfig},
+    __private_core::{
+        AuthResult, FieldMap,
+        user_fields::{UserConfig, UserFieldConfig},
+    },
     seaorm::{
         AuthEntity, SeaOrmPluginModel,
         sea_orm::{self, IntoActiveModel, TryIntoModel, entity::prelude::*},
@@ -52,7 +55,7 @@ async fn contract() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     .into_active_model();
     mapped::Model::apply_fields(
         &mut active,
-        [("stored_key".into(), json!("after"))]
+        [("stored_key".into(), "after".into())]
             .into_iter()
             .collect(),
     )?;
@@ -69,7 +72,7 @@ async fn contract() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         ));
         mapped::Model::apply_fields(
             &mut active,
-            [(alias.into(), json!(42))].into_iter().collect(),
+            [(alias.into(), 42.0.into())].into_iter().collect(),
         )?;
         assert_eq!(active.last_request, Set(42));
     }
@@ -93,7 +96,15 @@ async fn contract() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let output = fields
         .project_adapter_records(vec![model.record_fields(&fields)?], false, true)
         .await?;
-    assert_eq!(serde_json::to_value(output)?, json!([{"key":"after"}]));
+    assert_eq!(
+        serde_json::to_value(
+            output
+                .iter()
+                .map(FieldMap::json)
+                .collect::<AuthResult<Vec<_>>>()?
+        )?,
+        json!([{"key":"after"}]),
+    );
     Ok(())
 }
 

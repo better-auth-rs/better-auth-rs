@@ -8,6 +8,7 @@ use std::sync::{
 use better_auth::config::{FieldTransforms, UserFieldTransform};
 use better_auth_core::{
     AuthConfig, AuthError, AuthResult, AuthSchema, AuthStore, CreateAccount, CreateUser,
+    FieldValue,
     store::{EphemeralStore, secondary::SecondaryStore},
     user_fields::UserFieldConfig,
 };
@@ -16,7 +17,6 @@ use better_auth_seaorm::{
     sea_orm::Database,
     store::__private_test_support::{bundled_schema::BundledSchema, migrator},
 };
-use serde_json::Value;
 
 const OWNER: &str = "ordinary-owner";
 const PASSWORD: &str = "ordinary-fixture-password-hash";
@@ -38,9 +38,7 @@ fn config(limit: u8, calls: &Arc<AtomicUsize>, reject: &Arc<AtomicBool>) -> Auth
                         return Err(AuthError::Conflict(PROJECTION_ERROR.into()));
                     }
                     Ok(match value {
-                        Some(Value::String(value)) => {
-                            Some(Value::String(format!("{value}:output")))
-                        }
+                        FieldValue::String(value) => FieldValue::String(format!("{value}:output")),
                         other => other,
                     })
                 })),

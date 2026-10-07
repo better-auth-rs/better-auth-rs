@@ -59,7 +59,7 @@ async fn raw_username_projection_resolves_empty_aliases_and_preserves_serialized
                                 callback_events
                                     .lock()
                                     .expect("projection trace lock")
-                                    .push(value.clone());
+                                    .push(value.json()?);
                                 Ok(value)
                             })),
                             ..Default::default()
@@ -85,9 +85,14 @@ async fn raw_username_projection_resolves_empty_aliases_and_preserves_serialized
                     } else {
                         observed.clone()
                     };
+                    let expected_field = expected
+                        .clone()
+                        .map(FieldValue::from_json)
+                        .transpose()
+                        .expect("expected projection field imports");
                     assert_eq!(
                         projected.additional_fields.get(name).cloned(),
-                        expected,
+                        expected_field,
                         "stored projection: {name}, alias={alias:?}, public={public}, returned={returned}",
                     );
                     let serialized = serde_json::to_value(projected)

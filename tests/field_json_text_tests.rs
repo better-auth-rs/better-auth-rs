@@ -7,7 +7,7 @@ use better_auth::__private_core::__private_async_trait::async_trait;
 use better_auth::{
     __private_core::{
         AuthContext, AuthInitContext, AuthPlugin, AuthRequest, AuthResponse, AuthResult, AuthRoute,
-        AuthSchema, AuthStore, CreateJwk,
+        AuthSchema, AuthStore, CreateJwk, FieldValue,
         store::{EphemeralStore, schema::EntityRole},
         user_fields::{
             FieldTransforms, UserConfig, UserFieldConfig, UserFieldTransform, UserFieldType,
@@ -74,8 +74,7 @@ fn field(events: Option<Trace>) -> UserFieldConfig {
             })),
             output: Some(UserFieldTransform::new(move |value| {
                 let text = value
-                    .as_ref()
-                    .and_then(Value::as_str)
+                    .as_str()
                     .expect("JSON output callback receives stored text");
                 events
                     .lock()
@@ -98,18 +97,21 @@ fn fields(field: UserFieldConfig) -> UserConfig {
     clippy::expect_used,
     reason = "The fixed inert fixture timestamp must parse"
 )]
-fn input(settings: Value) -> CreateJwk {
-    CreateJwk {
+fn input(settings: Value) -> AuthResult<CreateJwk> {
+    Ok(CreateJwk {
         public_key: "public".into(),
         private_key: "private".into(),
         created_at: "2030-01-01T00:00:00Z"
-            .parse()
-            .expect("fixed inert fixture date parses"),
+            .parse::<chrono::DateTime<chrono::Utc>>()
+            .expect("fixed inert fixture date parses")
+            .into(),
         expires_at: None,
         alg: "EdDSA".into(),
         crv: None,
-        additional_fields: [("settings".into(), settings)].into_iter().collect(),
-    }
+        additional_fields: [("settings".into(), FieldValue::from_json(settings)?)]
+            .into_iter()
+            .collect(),
+    })
 }
 
 #[expect(
@@ -137,7 +139,7 @@ async fn observe<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, backend: &str) -> Au
         .push(json!(["operation", "create"]));
     let created = auth
         .store()
-        .create_jwk(input(serde_json::from_str(ORACLE)?))
+        .create_jwk(input(serde_json::from_str(ORACLE)?)?)
         .await?;
     let created_text = events
         .lock()
@@ -147,8 +149,13 @@ async fn observe<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, backend: &str) -> Au
         .and_then(Value::as_str)
         .expect("create output callback recorded text")
         .to_owned();
-    let created_matches_text = created.additional_fields.get("settings")
-        == Some(&serde_json::from_str::<Value>(&created_text)?);
+    let created_matches_text = created
+        .additional_fields
+        .get("settings")
+        .map(FieldValue::json)
+        .transpose()?
+        .flatten()
+        == Some(serde_json::from_str::<Value>(&created_text)?);
     assert!(created_matches_text);
 
     events
@@ -168,8 +175,13 @@ async fn observe<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, backend: &str) -> Au
         .and_then(Value::as_str)
         .expect("read output callback recorded text")
         .to_owned();
-    let read_matches_text =
-        read.additional_fields.get("settings") == Some(&serde_json::from_str::<Value>(&read_text)?);
+    let read_matches_text = read
+        .additional_fields
+        .get("settings")
+        .map(FieldValue::json)
+        .transpose()?
+        .flatten()
+        == Some(serde_json::from_str::<Value>(&read_text)?);
     assert!(read_matches_text);
     let stored = reader
         .store()
@@ -179,7 +191,7 @@ async fn observe<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, backend: &str) -> Au
     let stored_text = stored
         .additional_fields
         .get("settings")
-        .and_then(Value::as_str)
+        .and_then(FieldValue::as_str)
         .expect("plain-string reader preserves stored JSON text");
     Ok(json!({
         "backend": backend,
@@ -217,13 +229,16 @@ async fn contract() -> Result<(), Box<dyn std::error::Error>> {
         .expect("pinned SQLite storage text exists");
     let events = Trace::default();
     let result = field(Some(events.clone()))
-        .adapter_output(Some(serde_json::from_str(ORACLE)?), false)
+        .adapter_output(FieldValue::from_json(serde_json::from_str(ORACLE)?)?, false)
         .await?;
     assert_eq!(
         *events.lock().expect("JSON field trace lock"),
         [json!(["output", "settings", sqlite_text])],
     );
-    assert_eq!(result, Some(serde_json::from_str::<Value>(sqlite_text)?));
+    assert_eq!(
+        result.json()?,
+        Some(serde_json::from_str::<Value>(sqlite_text)?)
+    );
     Ok(())
 }
 
