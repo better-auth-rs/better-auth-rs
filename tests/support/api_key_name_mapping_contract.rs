@@ -1,6 +1,6 @@
 use super::contract::{Fixture, Scenario, Trace, policies};
 use better_auth::__private_core::{
-    AuthResult, AuthSchema, AuthStore,
+    AuthResult, AuthSchema, AuthStore, FieldValue,
     user_fields::{FieldTransforms, UserConfig, UserFieldConfig, UserFieldTransform},
 };
 use serde_json::{Value, json};
@@ -61,7 +61,7 @@ fn name_mapping_policies(
                 .lock()
                 .expect("mapped name trace lock")
                 .push(json!(["onUpdate", "name"]));
-            json!(" Renewed ")
+            " Renewed ".into()
         }));
         let inputs = events.clone();
         let input_failure = failure.clone();
@@ -70,33 +70,33 @@ fn name_mapping_policies(
                 inputs.lock().expect("mapped name trace lock").push(json!([
                     "input",
                     "name",
-                    value.clone().unwrap_or(json!({"type":"undefined"})),
+                    value.json()?.unwrap_or(json!({"type":"undefined"})),
                 ]));
                 if input_failure.load(Ordering::SeqCst) == 1 {
                     return Err(better_auth::__private_core::AuthError::internal(
                         "ordinary API Key input error",
                     ));
                 }
-                Ok(value.map(|value| match value {
-                    Value::String(value) => json!(value.trim()),
+                Ok(match value {
+                    FieldValue::String(value) => value.trim().into(),
                     value => value,
-                }))
+                })
             })),
             output: Some(UserFieldTransform::new(move |value| {
                 events.lock().expect("mapped name trace lock").push(json!([
                     "output",
                     "name",
-                    value.clone().unwrap_or(json!({"type":"undefined"})),
+                    value.json()?.unwrap_or(json!({"type":"undefined"})),
                 ]));
                 if failure.load(Ordering::SeqCst) == 2 {
                     return Err(better_auth::__private_core::AuthError::internal(
                         "ordinary API Key output error",
                     ));
                 }
-                Ok(value.map(|value| match value {
-                    Value::String(value) => json!(format!("{value}:out")),
+                Ok(match value {
+                    FieldValue::String(value) => format!("{value}:out").into(),
                     value => value,
-                }))
+                })
             })),
         });
     }

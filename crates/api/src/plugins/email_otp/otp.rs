@@ -206,7 +206,7 @@ impl EmailOtpPlugin {
             }
         {
             let (stored, attempts) = split(existing.value.typed()?);
-            if existing.expires_at.is_after_or_equal(Utc::now())
+            if existing.expires_at.is_after_or_equal(Utc::now())?
                 && attempts < self.attempts()
                 && let Some(otp) = self
                     .recover(stored, ctx.config.encryption_secret())
@@ -243,9 +243,8 @@ impl EmailOtpPlugin {
             .database
             .get_verification_including_expired(identifier)
             .await?;
-        if existing
-            .as_ref()
-            .is_some_and(|row| row.expires_at.is_before(Utc::now()))
+        if let Some(row) = &existing
+            && row.expires_at.is_before(Utc::now())?
         {
             ctx.database
                 .delete_verification_by_identifier(identifier)

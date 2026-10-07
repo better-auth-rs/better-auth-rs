@@ -7,6 +7,7 @@
 #[path = "../compat-tests/rust-server/src/organization_fields.rs"]
 mod fixture;
 
+use better_auth::__private_core::FieldValue;
 use better_auth::__private_core::{
     AuthSession, InvitationStatus,
     store::{InvitationStore, MemberStore, OrganizationStore, SessionStore, TeamStore, UserStore},
@@ -18,7 +19,6 @@ use better_auth::{AuthConfig, AuthError, plugins::organization::OrganizationConf
 use better_auth_seaorm::store::__private_test_support::{
     bundled_schema::BundledSchema, migrator::run_migrations,
 };
-use serde_json::json;
 use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},
@@ -87,7 +87,7 @@ async fn invitation(
         "recipient@example.com",
         "member",
         "owner",
-        expires_at,
+        expires_at.into(),
     );
     input.team_id = Some(team_id.into());
     store
@@ -113,7 +113,7 @@ async fn team_deletion_updates_only_live_invitations_in_its_organization() {
     assert_eq!(live.team_id, None);
     assert_eq!(
         live.additional_fields.get("marker"),
-        Some(&json!("updated"))
+        Some(&FieldValue::from("updated"))
     );
     for id in [expired, other_org] {
         let invitation = store.get_invitation_by_id(&id).await.unwrap().unwrap();
@@ -123,7 +123,7 @@ async fn team_deletion_updates_only_live_invitations_in_its_organization() {
         );
         assert_eq!(
             invitation.additional_fields.get("marker"),
-            Some(&json!("created"))
+            Some(&FieldValue::from("created"))
         );
     }
     fixture::reset(store.connection()).await.unwrap();
@@ -142,7 +142,7 @@ async fn failed_acceptance_compensates_invitation_updates_without_committing_mem
             .get_mut("marker")
             .unwrap()
             .on_update = Some(Arc::new(move || {
-            json!(format!(
+            FieldValue::from(format!(
                 "updated-{}",
                 count.fetch_add(1, Ordering::SeqCst) + 1
             ))
@@ -173,7 +173,7 @@ async fn failed_acceptance_compensates_invitation_updates_without_committing_mem
             .create_session(CreateSession {
                 additional_fields: Default::default(),
                 user_id: "recipient".into(),
-                expires_at: chrono::Utc::now() + chrono::Duration::days(1),
+                expires_at: (chrono::Utc::now() + chrono::Duration::days(1)).into(),
                 ip_address: None,
                 user_agent: None,
                 impersonated_by: None,
@@ -200,7 +200,7 @@ async fn failed_acceptance_compensates_invitation_updates_without_committing_mem
         assert_eq!(invitation.status, InvitationStatus::Pending);
         assert_eq!(
             invitation.additional_fields.get("marker"),
-            Some(&json!("updated-2"))
+            Some(&FieldValue::from("updated-2"))
         );
         assert_eq!(updates.load(Ordering::SeqCst), 2);
         assert!(
@@ -236,7 +236,7 @@ async fn claim_output_and_compensation_errors_preserve_the_upstream_failure_stag
             .get_mut("marker")
             .unwrap();
         marker.on_update = Some(Arc::new(move || {
-            json!(format!(
+            FieldValue::from(format!(
                 "updated-{}",
                 count.fetch_add(1, Ordering::SeqCst) + 1
             ))
@@ -244,7 +244,7 @@ async fn claim_output_and_compensation_errors_preserve_the_upstream_failure_stag
         if claim_output_failure {
             marker.transform.get_or_insert_default().output =
                 Some(UserFieldTransform::new(|value| {
-                    if value == Some(json!("updated-1")) {
+                    if value == FieldValue::from("updated-1") {
                         Err(AuthError::bad_request("claim output failed"))
                     } else {
                         Ok(value)
@@ -253,7 +253,7 @@ async fn claim_output_and_compensation_errors_preserve_the_upstream_failure_stag
         } else {
             marker.transform.get_or_insert_default().input =
                 Some(UserFieldTransform::new(|value| {
-                    if value == Some(json!("updated-2")) {
+                    if value == FieldValue::from("updated-2") {
                         Err(AuthError::bad_request("compensation failed"))
                     } else {
                         Ok(value)
@@ -273,7 +273,7 @@ async fn claim_output_and_compensation_errors_preserve_the_upstream_failure_stag
             .create_session(CreateSession {
                 additional_fields: Default::default(),
                 user_id: "recipient".into(),
-                expires_at: chrono::Utc::now() + chrono::Duration::days(1),
+                expires_at: (chrono::Utc::now() + chrono::Duration::days(1)).into(),
                 ip_address: None,
                 user_agent: None,
                 impersonated_by: None,
@@ -310,7 +310,7 @@ async fn claim_output_and_compensation_errors_preserve_the_upstream_failure_stag
         assert_eq!(invitation.status, InvitationStatus::Accepted);
         assert_eq!(
             invitation.additional_fields.get("marker"),
-            Some(&json!("updated-1"))
+            Some(&FieldValue::from("updated-1"))
         );
         assert_eq!(
             updates.load(Ordering::SeqCst),
@@ -342,15 +342,20 @@ async fn team_deletion_rolls_back_read_and_update_output_errors() {
             live.push(invitation(&store, &team_id, "org-a", expires).await);
         }
         if failure_stage != "updated" {
-            let mut input =
-                CreateInvitation::new("org-a", "other@example.com", "member", "owner", expires);
+            let mut input = CreateInvitation::new(
+                "org-a",
+                "other@example.com",
+                "member",
+                "owner",
+                expires.into(),
+            );
             if failure_stage == "expired" {
                 input.team_id = Some(team_id.clone());
-                input.expires_at = chrono::Utc::now() - chrono::Duration::days(1);
+                input.expires_at = (chrono::Utc::now() - chrono::Duration::days(1)).into();
             }
             let _ = input
                 .additional_fields
-                .insert("marker".into(), json!("read-fail"));
+                .insert("marker".into(), FieldValue::from("read-fail"));
             let _ = store.create_invitation(input).await.unwrap();
         }
         let updates = Arc::new(AtomicUsize::new(0));
@@ -363,13 +368,13 @@ async fn team_deletion_rolls_back_read_and_update_output_errors() {
             .get_mut("marker")
             .unwrap();
         marker.on_update = Some(Arc::new(move || {
-            json!(format!(
+            FieldValue::from(format!(
                 "updated-{}",
                 count.fetch_add(1, Ordering::SeqCst) + 1
             ))
         }));
         marker.transform.get_or_insert_default().output = Some(UserFieldTransform::new(|value| {
-            if value == Some(json!("read-fail")) || value == Some(json!("updated-2")) {
+            if value == FieldValue::from("read-fail") || value == FieldValue::from("updated-2") {
                 Err(AuthError::bad_request("invitation output failed"))
             } else {
                 Ok(value)
@@ -393,7 +398,10 @@ async fn team_deletion_rolls_back_read_and_update_output_errors() {
                 row.team_id.typed().unwrap().as_deref(),
                 Some(team_id.as_str())
             );
-            assert_eq!(row.additional_fields.get("marker"), Some(&json!("created")));
+            assert_eq!(
+                row.additional_fields.get("marker"),
+                Some(&FieldValue::from("created"))
+            );
         }
     }
 }

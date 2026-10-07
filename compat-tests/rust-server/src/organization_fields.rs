@@ -1,21 +1,18 @@
+use better_auth::__private_core::{FieldMap, FieldValue as Value};
 use better_auth::config::{FieldTransforms, UserFieldTransform};
 use better_auth::config::{UserConfig, UserFieldConfig, UserFieldType};
 use better_auth::plugins::organization::OrganizationConfig;
 use better_auth_seaorm::sea_orm::{
     ConnectionTrait, DatabaseConnection, DbErr, EntityTrait, Schema,
 };
-use serde_json::{Value, json};
 use std::sync::Arc;
 #[path = "organization_fields/models.rs"]
 pub mod models;
 
-fn suffix(value: Option<Value>, suffix: &str) -> better_auth::AuthResult<Option<Value>> {
-    let value = match value {
-        None => "undefined".to_owned(),
-        Some(Value::String(value)) => value,
-        Some(value) => value.to_string(),
-    };
-    Ok(Some(json!(format!("{value}:{suffix}"))))
+fn suffix(value: Value, suffix: &str) -> better_auth::AuthResult<Value> {
+    let mut text = value.display_utf16()?.as_utf16().to_vec();
+    text.extend(format!(":{suffix}").encode_utf16());
+    Ok(better_auth::__private_core::Utf16String::from_units(text).into())
 }
 
 fn fields() -> UserConfig {
@@ -27,7 +24,7 @@ fn fields() -> UserConfig {
                     UserFieldConfig {
                         required: Some(false),
                         field_name: Some("storedLabel".into()),
-                        default_value: Some(json!("guest")),
+                        default_value: Some(Value::from("guest")),
                         transform: Some(FieldTransforms {
                             input: Some(UserFieldTransform::new(|value| suffix(value, "in"))),
                             output: Some(UserFieldTransform::new(|value| suffix(value, "out"))),
@@ -40,7 +37,7 @@ fn fields() -> UserConfig {
                     UserFieldConfig {
                         required: Some(false),
                         returned: Some(false),
-                        default_value: Some(json!("hidden")),
+                        default_value: Some(Value::from("hidden")),
                         ..Default::default()
                     },
                 ),
@@ -49,7 +46,7 @@ fn fields() -> UserConfig {
                     UserFieldConfig {
                         required: Some(false),
                         input: Some(false),
-                        default_value: Some(json!("server")),
+                        default_value: Some(Value::from("server")),
                         ..Default::default()
                     },
                 ),
@@ -57,8 +54,8 @@ fn fields() -> UserConfig {
                     "marker".into(),
                     UserFieldConfig {
                         required: Some(false),
-                        default_value: Some(json!("created")),
-                        on_update: Some(Arc::new(|| json!("updated"))),
+                        default_value: Some(Value::from("created")),
+                        on_update: Some(Arc::new(|| Value::from("updated"))),
                         ..Default::default()
                     },
                 ),
@@ -67,7 +64,7 @@ fn fields() -> UserConfig {
                     UserFieldConfig {
                         field_type: UserFieldType::Number,
                         required: Some(false),
-                        default_value: Some(json!(1)),
+                        default_value: Some(Value::from(1)),
                         validator: Some(Arc::new(|value| {
                             if value.as_f64().is_some_and(|value| value >= 0.0) {
                                 Ok(value)
@@ -85,7 +82,7 @@ fn fields() -> UserConfig {
                     UserFieldConfig {
                         field_type: UserFieldType::StringArray,
                         required: Some(false),
-                        default_value: Some(json!(["starter"])),
+                        default_value: Some(Value::from(vec![Value::from("starter")])),
                         ..Default::default()
                     },
                 ),
@@ -94,7 +91,10 @@ fn fields() -> UserConfig {
                     UserFieldConfig {
                         field_type: UserFieldType::Json,
                         required: Some(false),
-                        default_value: Some(json!({"theme":"system"})),
+                        default_value: Some(Value::from(FieldMap::from([(
+                            "theme".into(),
+                            Value::from("system"),
+                        )]))),
                         ..Default::default()
                     },
                 ),
@@ -123,7 +123,7 @@ pub fn configure(config: &mut OrganizationConfig) {
             "requiredTag".into(),
             UserFieldConfig {
                 required: Some(true),
-                default_value: Some(json!("fallback")),
+                default_value: Some(Value::from("fallback")),
                 ..Default::default()
             },
         ),
@@ -133,7 +133,7 @@ pub fn configure(config: &mut OrganizationConfig) {
             UserFieldConfig {
                 field_type: UserFieldType::Enum(vec!["basic".into(), "pro".into()]),
                 required: Some(false),
-                default_value: Some(json!("basic")),
+                default_value: Some(Value::from("basic")),
                 ..Default::default()
             },
         ),
@@ -142,7 +142,7 @@ pub fn configure(config: &mut OrganizationConfig) {
             UserFieldConfig {
                 field_type: UserFieldType::Date,
                 required: Some(false),
-                default_value: Some(json!("2020-01-02T03:04:05.000Z")),
+                default_value: Some(Value::from("2020-01-02T03:04:05.000Z")),
                 ..Default::default()
             },
         ),
@@ -151,7 +151,7 @@ pub fn configure(config: &mut OrganizationConfig) {
         "roleRequired".into(),
         UserFieldConfig {
             required: Some(true),
-            default_value: Some(json!("role-default")),
+            default_value: Some(Value::from("role-default")),
             ..Default::default()
         },
     );

@@ -123,7 +123,7 @@ impl Invitation {
 
     /// Check if the invitation has expired
     pub fn is_expired(&self) -> crate::AuthResult<bool> {
-        Ok(self.expires_at.is_before(Utc::now()))
+        self.expires_at.is_before(Utc::now())
     }
 }
 

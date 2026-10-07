@@ -125,11 +125,11 @@ impl<S: AuthSchema> DatabaseHooks<S> for UsernameHooks<S> {
                     .flatten();
                 let current_id = session_id
                     .as_ref()
-                    .and_then(serde_json::Value::as_str)
+                    .and_then(better_auth_core::FieldValue::as_str)
                     .or_else(|| {
                         user.additional_fields
                             .get("id")
-                            .and_then(serde_json::Value::as_str)
+                            .and_then(better_auth_core::FieldValue::as_str)
                     });
                 self.validate(username, display, current_id, context)
                     .await?;

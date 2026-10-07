@@ -44,7 +44,7 @@ impl<S: AuthSchema> SecondaryStore<S> {
                 continue;
             };
             let mut record = serde_json::from_value::<VerificationView>(value)?;
-            record.expires_at = record.expires_at.converted_date();
+            record.expires_at = record.expires_at.converted_date()?;
             if record.expires_at.date_milliseconds()?.is_nan() {
                 continue;
             }
@@ -366,7 +366,7 @@ impl<S: AuthSchema> VerificationStore<S> for SecondaryStore<S> {
     ) -> AuthResult<Option<VerificationView>> {
         let record = self.get_verification_including_expired(identifier).await?;
         match record {
-            Some(record) if record.expires_at.is_after(Utc::now()) => Ok(Some(record)),
+            Some(record) if record.expires_at.is_after(Utc::now())? => Ok(Some(record)),
             _ => Ok(None),
         }
     }
@@ -441,7 +441,7 @@ impl<S: AuthSchema> VerificationStore<S> for SecondaryStore<S> {
             .consume_verification_including_expired(identifier)
             .await?;
         match record {
-            Some(record) if !record.expires_at.is_before(Utc::now()) => Ok(Some(record)),
+            Some(record) if !record.expires_at.is_before(Utc::now())? => Ok(Some(record)),
             _ => Ok(None),
         }
     }

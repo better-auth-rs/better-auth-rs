@@ -14,7 +14,8 @@ use better_auth::{AuthConfig, AuthError, AuthResult, AuthSchema, BetterAuth};
 use better_auth_core::store::EphemeralStore;
 use better_auth_core::user_fields::{FieldTransforms, UserFieldConfig, UserFieldTransform};
 use better_auth_core::{
-    AuthRequest, CreateMember, CreateOrganization, CreateSession, CreateUser, HttpMethod,
+    AuthRequest, CreateMember, CreateOrganization, CreateSession, CreateUser, FieldValue,
+    HttpMethod,
 };
 use better_auth_seaorm::store::__private_test_support::{bundled_schema::BundledSchema, migrator};
 use better_auth_seaorm::{
@@ -86,13 +87,11 @@ fn options(mode: &str, state: &Arc<State>) -> OrganizationConfig {
                 required: Some(false),
                 transform: (mode == "display").then(|| FieldTransforms {
                     output: Some(UserFieldTransform::new(|value| {
-                        Ok(value.map(|value| {
-                            if value.is_null() {
-                                json!("team-display")
-                            } else {
-                                value
-                            }
-                        }))
+                        Ok(if value.is_null() {
+                            FieldValue::from("team-display")
+                        } else {
+                            value
+                        })
                     })),
                     ..Default::default()
                 }),
@@ -163,7 +162,10 @@ async fn scenario<S: AuthSchema>(
         let session = store
             .create_session(CreateSession {
                 user_id: id.into(),
-                expires_at: "2099-01-01T00:00:00Z".parse().unwrap(),
+                expires_at: "2099-01-01T00:00:00Z"
+                    .parse::<chrono::DateTime<chrono::Utc>>()
+                    .unwrap()
+                    .into(),
                 active_organization_id: Some("org".into()),
                 ip_address: None,
                 user_agent: None,

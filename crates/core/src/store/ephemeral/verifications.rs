@@ -98,7 +98,7 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
             .verification
             .field_schema()
             .record_storage_fields_with_binding(
-                input.with_timestamps(Utc::now()).fields()?,
+                input.with_timestamps(Utc::now().into()).fields()?,
                 true,
                 |_, field, value| self.memory_plugin_field_input(field, value),
             )
@@ -137,7 +137,7 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
         input: CreateVerification,
         writer: Option<VerificationCreateWriter>,
     ) -> AuthResult<VerificationView> {
-        let mut input = input.with_timestamps(Utc::now());
+        let mut input = input.with_timestamps(Utc::now().into());
         self.before_create_runtime_verification(&mut input).await?;
         let mut record = self
             .config
@@ -328,9 +328,10 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
         let _ = self
             .delete_verifications_with_hooks(
                 |row| {
-                    self.verification_field(row, "identifier")
+                    Ok(self
+                        .verification_field(row, "identifier")
                         .unwrap_or(&Value::Undefined)
-                        .strict_equals(&bound_identifier)
+                        .strict_equals(&bound_identifier))
                 },
                 false,
             )
@@ -340,7 +341,7 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
     async fn delete_verification(&self, id: &str) -> AuthResult<()> {
         let _ = self
             .delete_verifications_with_hooks(
-                |row| row.get("id").and_then(Value::as_str) == Some(id),
+                |row| Ok(row.get("id").and_then(Value::as_str) == Some(id)),
                 false,
             )
             .await?;
@@ -370,7 +371,7 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
             .consume_verification_with_hooks(identifier, Some(value))
             .await?;
         match record {
-            Some(record) if !record.expires_at.is_before(Utc::now()) => Ok(Some(record)),
+            Some(record) if !record.expires_at.is_before(Utc::now())? => Ok(Some(record)),
             _ => Ok(None),
         }
     }
@@ -382,7 +383,7 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
             .consume_verification_including_expired(identifier)
             .await?;
         match record {
-            Some(record) if !record.expires_at.is_before(Utc::now()) => Ok(Some(record)),
+            Some(record) if !record.expires_at.is_before(Utc::now())? => Ok(Some(record)),
             _ => Ok(None),
         }
     }

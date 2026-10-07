@@ -165,13 +165,13 @@ impl OpenApiRegistry {
             let _ = models
                 .entry("user".into())
                 .or_default()
-                .insert(key.clone(), project_field(key, field, true));
+                .insert(key.clone(), project_field(key, field, true)?);
         }
         for (key, field) in adapter_config.session.fields() {
             let _ = models
                 .entry("session".into())
                 .or_default()
-                .insert(key.clone(), project_field(key, field, false));
+                .insert(key.clone(), project_field(key, field, false)?);
         }
         for (model, fields) in [
             ("account", &adapter_config.account.additional_fields),
@@ -182,11 +182,9 @@ impl OpenApiRegistry {
         ] {
             // Preserve the omitted verification component for secondary-only storage.
             if let Some(model) = models.get_mut(model) {
-                model.extend(
-                    fields
-                        .iter()
-                        .map(|(key, field)| (key.clone(), project_field(key, field, false))),
-                );
+                for (key, field) in fields {
+                    let _ = model.insert(key.clone(), project_field(key, field, false)?);
+                }
             }
         }
         if database_rate_limit {

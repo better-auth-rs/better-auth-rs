@@ -115,7 +115,7 @@ async fn invitation_creation_and_resend_preserve_pinned_fractional_lifetimes() {
         let session = store
             .create_session(CreateSession {
                 user_id: "owner".into(),
-                expires_at: valid_until,
+                expires_at: valid_until.into(),
                 additional_fields: Default::default(),
                 ip_address: None,
                 user_agent: None,
@@ -130,10 +130,10 @@ async fn invitation_creation_and_resend_preserve_pinned_fractional_lifetimes() {
                 "invitee@organization-duration.test",
                 "member",
                 "owner",
-                valid_until,
+                valid_until.into(),
             );
             invitation.id = Some("existing-invitation".into());
-            invitation.created_at = Some(created_at);
+            invitation.created_at = Some(created_at.into());
             let _ = store.create_invitation(invitation).await.unwrap();
         }
         let cookie = format!(

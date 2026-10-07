@@ -7,6 +7,7 @@
 #[path = "../compat-tests/rust-server/src/organization_fields.rs"]
 mod fixture;
 
+use better_auth::__private_core::FieldValue;
 use better_auth::__private_core::{
     store::OrganizationStore,
     types::{CreateOrganization, UpdateOrganization},
@@ -16,7 +17,6 @@ use better_auth::seaorm::{Database, SeaOrmStore, sea_orm::EntityTrait};
 use better_auth_seaorm::store::__private_test_support::{
     bundled_schema::BundledSchema, migrator::run_migrations,
 };
-use serde_json::json;
 
 #[tokio::test]
 async fn field_names_accept_rust_and_serde_aliases_without_losing_or_repeating_transforms() {
@@ -43,27 +43,38 @@ async fn field_names_accept_rust_and_serde_aliases_without_losing_or_repeating_t
         let mut create = CreateOrganization::new("Alias organization", "alias");
         let _ = create
             .additional_fields
-            .insert("label".into(), json!("original"));
+            .insert("label".into(), FieldValue::from("original"));
         let organization = store.create_organization(create).await.unwrap();
-        assert_eq!(organization.additional_fields["label"], "original:in:out");
+        assert_eq!(
+            organization.additional_fields["label"],
+            FieldValue::from("original:in:out")
+        );
         let restored = store
             .get_organization_by_id(organization.id.typed().unwrap())
             .await
             .unwrap()
             .unwrap();
-        assert_eq!(restored.additional_fields["label"], "original:in:out");
+        assert_eq!(
+            restored.additional_fields["label"],
+            FieldValue::from("original:in:out")
+        );
 
         let updated = store
             .update_organization(
                 organization.id.typed().unwrap(),
                 UpdateOrganization {
-                    additional_fields: [("label".into(), json!("changed"))].into_iter().collect(),
+                    additional_fields: [("label".into(), FieldValue::from("changed"))]
+                        .into_iter()
+                        .collect(),
                     ..Default::default()
                 },
             )
             .await
             .unwrap();
-        assert_eq!(updated.additional_fields["label"], "changed:in:out");
+        assert_eq!(
+            updated.additional_fields["label"],
+            FieldValue::from("changed:in:out")
+        );
         let raw =
             fixture::models::organization::Entity::find_by_id(organization.id.typed().unwrap())
                 .one(&db)

@@ -66,7 +66,7 @@ async fn add_member_validates_fields_before_queries_and_limit_callbacks() {
         organization_id: organization.id.into(),
         role: RoleInput::One("member".into()).into(),
         team_id: Default::default(),
-        additional_fields: json!({"label":"valid"}).as_object().unwrap().clone(),
+        additional_fields: [("label".into(), "valid".into())].into_iter().collect(),
     };
     for (input, message) in [
         (

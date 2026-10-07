@@ -438,8 +438,8 @@ better_auth_core::impl_auth_plugin!(AnonymousPlugin, "anonymous";
                         .resolve(req, better_auth_core::session::SessionRead::Authoritative)
                         .await?.data;
                     if let Some(session) = session.filter(|session| session.user.is_anonymous == Some(true))
-                        && let Some(id) = session.user.id.json()? {
-                        req.set_server_context("anonymousUserId", id)?;
+                        && !session.user.id.is_undefined() {
+                        req.set_server_context("anonymousUserId", session.user.id.field_value())?;
                     }
                     Ok(None)
                 },

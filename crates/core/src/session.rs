@@ -384,7 +384,7 @@ impl<S: AuthSchema> SessionManager<S> {
         };
         let disable_cache = (matches!(read, SessionRead::Authoritative)
             && self.capabilities.server_sessions())
-            || query_flag(req, "disableCookieCache");
+            || query_flag(req, "disableCookieCache")?;
         if !disable_cache && let (Some(cache), Some(value)) = (cache, cache_value.as_deref()) {
             let decoded = if let Some(signer) = &self.signer {
                 signer
@@ -484,7 +484,7 @@ impl<S: AuthSchema> SessionManager<S> {
             return Ok(none());
         }
         let dont_remember = self.dont_remember(req);
-        if dont_remember || query_flag(req, "disableRefresh") {
+        if dont_remember || query_flag(req, "disableRefresh")? {
             return Ok(SessionResolution {
                 data: Some(self.public_data(data)),
                 needs_refresh: None,
@@ -753,11 +753,13 @@ impl<S: AuthSchema> SessionManager<S> {
     }
 }
 
-fn query_flag(req: &AuthRequest, name: &str) -> bool {
+fn query_flag(req: &AuthRequest, name: &str) -> AuthResult<bool> {
     req.query
         .as_ref()
         .and_then(|query| query.get(name))
-        .is_some_and(crate::user_fields::is_truthy)
+        .map(|value| crate::FieldValue::from_json(value.clone()).map(|value| value.is_truthy()))
+        .transpose()
+        .map(|value| value.unwrap_or(false))
 }
 
 fn failed_session_update() -> AuthError {

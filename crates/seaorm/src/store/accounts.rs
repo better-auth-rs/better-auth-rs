@@ -220,11 +220,14 @@ where
                 .and_then(better_auth_core::FieldValue::as_str)
                 .map(str::to_owned),
         )?;
-        let mut active = super::record_write::RecordWrite::<
-            <S::Account as SeaOrmAccountModel>::Entity,
-        >::from_fields(input, S::Account::field_column)?;
+        let id = id.as_deref().map(S::Account::parse_id).transpose()?;
+        let mut active = super::record_write::RecordWrite::from_active(S::Account::new_active(
+            id.clone(),
+            &input,
+        )?);
+        active.apply_fields(input, S::Account::field_column)?;
         if let Some(id) = id {
-            active.set(S::Account::id_column(), S::Account::parse_id(&id)?.into());
+            active.set(S::Account::id_column(), id.into());
         } else {
             active.not_set(S::Account::id_column());
         }

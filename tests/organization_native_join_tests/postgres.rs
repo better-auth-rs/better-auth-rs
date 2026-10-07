@@ -51,24 +51,27 @@ async fn check_full_read(db: DatabaseConnection) {
     let mut input = CreateMember::new(&org_id, &owner_id, "member");
     let _ = input
         .additional_fields
-        .insert("label".into(), json!("PG Member"));
+        .insert("label".into(), "PG Member".into());
     let member = store.create_member(input).await.unwrap();
     let mut input = CreateInvitation::new(
         &org_id,
         "recipient@ordinary-native-org.test",
         "member",
         &owner_id,
-        "2099-01-01T00:00:00Z".parse().unwrap(),
+        "2099-01-01T00:00:00Z"
+            .parse::<chrono::DateTime<chrono::Utc>>()
+            .unwrap()
+            .into(),
     );
     let _ = input
         .additional_fields
-        .insert("label".into(), json!("PG Invitation"));
+        .insert("label".into(), "PG Invitation".into());
     let invitation = store.create_invitation(input).await.unwrap();
     let team = store
         .create_team(CreateTeam {
             name: "PG Team".into(),
             organization_id: org_id.clone().into(),
-            additional_fields: [("label".into(), json!("PG Team Label"))]
+            additional_fields: [("label".into(), "PG Team Label".into())]
                 .into_iter()
                 .collect(),
             ..Default::default()

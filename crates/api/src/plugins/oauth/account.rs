@@ -283,8 +283,8 @@ async fn valid_access_token(
     async {
         let expired = account.access_token_expires_at.is_truthy()?
             && date_value(&account.access_token_expires_at)?
-                .converted_date()
-                .is_before(Utc::now() + chrono::Duration::seconds(5));
+                .converted_date()?
+                .is_before(Utc::now() + chrono::Duration::seconds(5))?;
         let mut cookies = Vec::new();
         let new_tokens = if expired
             && account.refresh_token.is_truthy()?
@@ -327,7 +327,7 @@ async fn valid_access_token(
             // getValidAccessToken converts strings but preserves other replacement output types.
             if account.access_token_expires_at.field_value().is_string() {
                 date_value(&account.access_token_expires_at)?
-                    .converted_date()
+                    .converted_date()?
                     .map(Some)
             } else {
                 account.access_token_expires_at.clone()

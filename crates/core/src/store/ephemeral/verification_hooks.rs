@@ -67,7 +67,7 @@ impl EphemeralStore {
 
     pub(super) async fn delete_verifications_with_hooks(
         &self,
-        predicate: impl Fn(&FieldMap) -> bool + Send + Sync,
+        predicate: impl Fn(&FieldMap) -> AuthResult<bool> + Send + Sync,
         many: bool,
     ) -> AuthResult<usize> {
         let rows: Vec<_> = self
@@ -75,14 +75,14 @@ impl EphemeralStore {
                 "verification",
                 if many { "findMany" } else { "findOne" },
                 |state| {
+                    let mut matched = Vec::new();
+                    for row in state.verifications.snapshot()? {
+                        if predicate(&row)? {
+                            matched.push(row);
+                        }
+                    }
                     Ok(crate::query::paginate_memory(
-                        state
-                            .verifications
-                            .snapshot()?
-                            .iter()
-                            .filter(|row| predicate(row))
-                            .cloned()
-                            .collect(),
+                        matched,
                         Some(if many {
                             self.config.advanced.database.find_many_limit()
                         } else {
@@ -124,7 +124,9 @@ impl EphemeralStore {
                 |state| {
                     Ok({
                         let count = state.verifications.len();
-                        state.verifications.retain(|row| !predicate(row))?;
+                        state
+                            .verifications
+                            .try_retain(|row| predicate(row).map(|matches| !matches))?;
                         count - state.verifications.len()
                     })
                 },

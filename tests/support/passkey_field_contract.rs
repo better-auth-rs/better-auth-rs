@@ -5,7 +5,7 @@ pub(crate) use policies::{Fields, config};
 
 use better_auth::{
     __private_core::{
-        AuthError, AuthResult, AuthSchema, AuthStore, CreatePasskey, CreateUser, Passkey,
+        AuthError, AuthResult, AuthSchema, AuthStore, CreatePasskey, CreateUser, FieldMap, Passkey,
         PasskeyCredentialState, PasskeyStorage, UpdatePasskeyAuthentication, wire::PasskeyView,
     },
     BetterAuth,
@@ -123,10 +123,14 @@ impl<S: AuthSchema> Fixture<S> {
             },
             aaguid: Some("ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4".into()).into(),
             additional_fields: [
-                ("activatedAt".into(), json!("2029-01-02T03:04:05.000Z")),
+                ("activatedAt".into(), "2029-01-02T03:04:05.000Z".into()),
                 (
                     "details".into(),
-                    json!({"channel":"ordinary","enabled":true}),
+                    FieldMap::from_iter([
+                        ("channel".into(), "ordinary".into()),
+                        ("enabled".into(), true.into()),
+                    ])
+                    .into(),
                 ),
             ]
             .into_iter()

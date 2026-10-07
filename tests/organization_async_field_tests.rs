@@ -9,7 +9,8 @@ mod models;
 
 use better_auth_core::{
     AuthConfig, AuthError, AuthResult, AuthSchema, AuthStore, CreateInvitation, CreateMember,
-    CreateOrganization, CreateOrganizationRole, CreateTeam, CreateUser,
+    CreateOrganization, CreateOrganizationRole, CreateTeam, CreateUser, FieldMap,
+    FieldValue as Value,
     organization_fields::OrganizationFields,
     store::EphemeralStore,
     user_fields::{FieldTransforms, UserFieldConfig, UserFieldTransform},
@@ -19,7 +20,6 @@ use better_auth_seaorm::{
     sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbBackend, Schema, Statement},
     store::__private_test_support::{bundled_schema::BundledSchema, migrator},
 };
-use serde_json::{Map, Value, json};
 use std::{
     sync::{
         Arc,
@@ -73,8 +73,8 @@ fn fields(
 
 struct Call {
     phase: &'static str,
-    value: Option<Value>,
-    reply: oneshot::Sender<AuthResult<Option<Value>>>,
+    value: Value,
+    reply: oneshot::Sender<AuthResult<Value>>,
 }
 
 struct Gate {
@@ -166,8 +166,10 @@ async fn create<S: AuthSchema>(
     model: Model,
     org: &str,
     user: &str,
-) -> AuthResult<Map<String, Value>> {
-    let additional_fields = [("label".into(), json!("source"))].into_iter().collect();
+) -> AuthResult<FieldMap> {
+    let additional_fields = [("label".into(), Value::from("source"))]
+        .into_iter()
+        .collect();
     match model {
         Model::Organization => {
             let mut input = CreateOrganization::new("Organization", "organization");
@@ -191,7 +193,7 @@ async fn create<S: AuthSchema>(
                 "invitee@organization-async.test",
                 "member",
                 user,
-                chrono::Utc::now() + chrono::Duration::hours(1),
+                (chrono::Utc::now() + chrono::Duration::hours(1)).into(),
             );
             input.additional_fields = additional_fields;
             store
@@ -212,7 +214,10 @@ async fn create<S: AuthSchema>(
             .create_organization_role(CreateOrganizationRole {
                 organization_id: org.into(),
                 role: "reviewer".into(),
-                permission: json!({"organization": ["update"]}),
+                permission: Value::from(FieldMap::from([(
+                    "organization".into(),
+                    Value::from(vec![Value::from("update")]),
+                )])),
                 additional_fields,
             })
             .await
@@ -225,7 +230,7 @@ async fn read<S: AuthSchema>(
     model: Model,
     org: &str,
     user: &str,
-) -> Option<Map<String, Value>> {
+) -> Option<FieldMap> {
     match model {
         Model::Organization => store
             .get_organization_by_slug("organization")
@@ -274,7 +279,7 @@ async fn check_writes<S: AuthSchema>(store: &impl AuthStore<S>) {
             let input = receiver.recv().await.unwrap();
             assert_eq!(
                 (input.phase, input.value),
-                ("input", Some(json!("source"))),
+                ("input", Value::from("source")),
                 "{model:?}"
             );
             gate.enabled.store(false, Ordering::Relaxed);
@@ -283,26 +288,27 @@ async fn check_writes<S: AuthSchema>(store: &impl AuthStore<S>) {
                 "{model:?}: input must precede storage"
             );
             gate.enabled.store(true, Ordering::Relaxed);
-            input.reply.send(Ok(Some(json!("stored")))).unwrap();
+            input.reply.send(Ok(Value::from("stored"))).unwrap();
             let output = receiver.recv().await.unwrap();
             assert_eq!(
                 (output.phase, output.value),
-                ("output", Some(json!("stored"))),
+                ("output", Value::from("stored")),
                 "{model:?}"
             );
             // The pending callback retains its reply channel while reads use identity projection.
             gate.enabled.store(false, Ordering::Relaxed);
             let raw = read(store, model, &org, &user).await.unwrap();
             assert_eq!(
-                raw["label"], "stored",
+                raw["label"],
+                Value::from("stored"),
                 "{model:?}: output must follow storage"
             );
             assert!(!raw.contains_key("stored_label"));
-            output.reply.send(Ok(Some(json!("visible")))).unwrap();
+            output.reply.send(Ok(Value::from("visible"))).unwrap();
         };
         let (result, ()) = tokio::join!(create(store, model, &org, &user), controller);
         let returned = result.unwrap();
-        assert_eq!(returned["label"], "visible", "{model:?}");
+        assert_eq!(returned["label"], Value::from("visible"), "{model:?}");
         assert!(!returned.contains_key("stored_label"));
     }
 }
@@ -321,18 +327,18 @@ async fn check_failures<S: AuthSchema>(store: &impl AuthStore<S>) {
         let message = format!("{phase} application failure");
         let controller = async {
             let input = receiver.recv().await.unwrap();
-            assert_eq!((input.phase, input.value), ("input", Some(json!("source"))));
+            assert_eq!((input.phase, input.value), ("input", Value::from("source")));
             if phase == "input" {
                 input
                     .reply
                     .send(Err(AuthError::internal(&message)))
                     .unwrap();
             } else {
-                input.reply.send(Ok(Some(json!("stored")))).unwrap();
+                input.reply.send(Ok(Value::from("stored"))).unwrap();
                 let output = receiver.recv().await.unwrap();
                 assert_eq!(
                     (output.phase, output.value),
-                    ("output", Some(json!("stored")))
+                    ("output", Value::from("stored"))
                 );
                 output
                     .reply
@@ -346,7 +352,7 @@ async fn check_failures<S: AuthSchema>(store: &impl AuthStore<S>) {
         let rows = store.list_organization_teams(&org).await.unwrap();
         assert_eq!(rows.len(), usize::from(phase == "output"));
         if phase == "output" {
-            assert_eq!(rows[0].additional_fields["label"], "stored");
+            assert_eq!(rows[0].additional_fields["label"], Value::from("stored"));
         }
     }
 }
@@ -361,7 +367,7 @@ async fn check_batch<S: AuthSchema>(store: &impl AuthStore<S>) {
             .create_team(CreateTeam {
                 name: name.into(),
                 organization_id: org.clone().into(),
-                additional_fields: [("label".into(), json!(name))].into_iter().collect(),
+                additional_fields: [("label".into(), Value::from(name))].into_iter().collect(),
                 ..Default::default()
             })
             .await
@@ -403,24 +409,24 @@ async fn check_batch<S: AuthSchema>(store: &impl AuthStore<S>) {
         let second = receiver.recv().await.unwrap();
         assert_eq!(
             [first.value, second.value],
-            [Some(expected[0].clone()), Some(expected[1].clone())]
+            [expected[0].clone(), expected[1].clone()]
         );
         second
             .reply
-            .send(Ok(Some(json!(format!(
+            .send(Ok(Value::from(format!(
                 "{}:visible",
                 expected[1].as_str().unwrap()
-            )))))
+            ))))
             .unwrap();
-        assert_eq!(completions.recv().await.unwrap(), Some(expected[1].clone()));
+        assert_eq!(completions.recv().await.unwrap(), expected[1].clone());
         first
             .reply
-            .send(Ok(Some(json!(format!(
+            .send(Ok(Value::from(format!(
                 "{}:visible",
                 expected[0].as_str().unwrap()
-            )))))
+            ))))
             .unwrap();
-        assert_eq!(completions.recv().await.unwrap(), Some(expected[0].clone()));
+        assert_eq!(completions.recv().await.unwrap(), expected[0].clone());
     };
     let (result, ()) = tokio::join!(store.list_organization_teams(&org), controller);
     let rows = result.unwrap();
@@ -434,7 +440,7 @@ async fn check_batch<S: AuthSchema>(store: &impl AuthStore<S>) {
             .collect::<Vec<_>>(),
         expected
             .iter()
-            .map(|value| json!(format!("{}:visible", value.as_str().unwrap())))
+            .map(|value| Value::from(format!("{}:visible", value.as_str().unwrap())))
             .collect::<Vec<_>>()
     );
     store

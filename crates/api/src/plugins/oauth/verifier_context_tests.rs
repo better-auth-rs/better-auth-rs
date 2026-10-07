@@ -430,7 +430,7 @@ async fn exercise_endpoint_verifier(
     request = request.with_optional_headers(Some(headers));
     request.body = Some(serde_json::to_vec(&raw_body)?);
     request.query = query.clone();
-    request.set_server_context("verifier-state", json!("before"))?;
+    request.set_server_context("verifier-state", "before".into())?;
 
     let calls = Arc::new(AtomicUsize::new(0));
     let recorded_calls = calls.clone();
@@ -504,9 +504,9 @@ async fn exercise_endpoint_verifier(
                 let request = context.input_request().unwrap();
                 assert_eq!(
                     request.server_context("verifier-state")?,
-                    Some(json!("before"))
+                    Some("before".into())
                 );
-                request.set_server_context("verifier-state", json!("verified"))?;
+                request.set_server_context("verifier-state", "verified".into())?;
                 context.set_header("x-verifier-state", "verified")?;
                 assert_eq!(nonce, Some("typed-nonce"));
                 let accepted = google::verify(token, &["client".into()], nonce, &endpoint)
@@ -563,7 +563,7 @@ async fn exercise_endpoint_verifier(
     assert_eq!(legacy_calls.load(Ordering::SeqCst), 0);
     assert_eq!(
         request.server_context("verifier-state")?,
-        Some(json!(if disabled { "before" } else { "verified" }))
+        Some(if disabled { "before" } else { "verified" }.into())
     );
     assert_eq!(
         response.headers.get("x-verifier-state").map(String::as_str),

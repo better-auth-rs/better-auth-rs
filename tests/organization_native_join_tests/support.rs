@@ -44,7 +44,7 @@ async fn update_display<S: AuthSchema, T: AuthStore<S>>(
                 .update_team(
                     "team-b",
                     UpdateTeam {
-                        additional_fields: [("label".into(), json!("T-B-label-after"))]
+                        additional_fields: [("label".into(), "T-B-label-after".into())]
                             .into_iter()
                             .collect(),
                         ..Default::default()
@@ -66,7 +66,13 @@ async fn update_display<S: AuthSchema, T: AuthStore<S>>(
                 "I-A-detail-after"
             };
             let _ = store
-                .update_invitation_expiry(id, "2099-01-01T00:00:00Z".parse().unwrap())
+                .update_invitation_expiry(
+                    id,
+                    "2099-01-01T00:00:00Z"
+                        .parse::<chrono::DateTime<chrono::Utc>>()
+                        .unwrap()
+                        .into(),
+                )
                 .await?;
             json!(["display-write", "invitation", {"detail":detail}])
         }
@@ -119,7 +125,7 @@ pub fn field<S: AuthSchema, T: AuthStore<S> + 'static>(
                 if !state.enabled.load(Ordering::Relaxed) {
                     return Ok(value);
                 }
-                let text = value.as_ref().unwrap().as_str().unwrap().to_owned();
+                let text = value.as_str().unwrap().to_owned();
                 let _ = state.event(json!([name, text]));
                 let selected = if mode.starts_with("parent-") {
                     parent
@@ -139,7 +145,7 @@ pub fn field<S: AuthSchema, T: AuthStore<S> + 'static>(
                         );
                     }
                 }
-                Ok(Some(json!(format!("{text}-visible"))))
+                Ok(format!("{text}-visible").into())
             }
         })
     } else {
@@ -147,7 +153,7 @@ pub fn field<S: AuthSchema, T: AuthStore<S> + 'static>(
             if !state.enabled.load(Ordering::Relaxed) {
                 return Ok(value);
             }
-            let text = value.as_ref().unwrap().as_str().unwrap();
+            let text = value.as_str().unwrap();
             let sequence = state.event(json!([name, text]));
             if (name == "organization.logo" && text == "O-B-logo")
                 || (name == "team.label" && text == "T-B-label")
@@ -159,11 +165,12 @@ pub fn field<S: AuthSchema, T: AuthStore<S> + 'static>(
             {
                 return Err(failure());
             }
-            Ok(Some(json!(if mode == "sync" {
+            Ok((if mode == "sync" {
                 format!("{text}:{sequence}")
             } else {
                 format!("{text}-visible")
-            })))
+            })
+            .into())
         })
     };
     UserFieldConfig {
@@ -219,20 +226,20 @@ pub fn organization_fields<S: AuthSchema, T: AuthStore<S> + 'static>(
             .fields_mut()
             .get_mut("detail")
             .unwrap()
-            .on_update = Some(Arc::new(move || json!(value)));
+            .on_update = Some(Arc::new(move || value.into()));
     }
     fields
 }
 pub async fn seed<S: AuthSchema>(store: &impl AuthStore<S>) {
-    let now = "2025-01-01T00:00:00Z".parse().unwrap();
+    let now: chrono::DateTime<chrono::Utc> = "2025-01-01T00:00:00Z".parse().unwrap();
     for label in ["A", "B"] {
         let suffix = label.to_lowercase();
         let _ = store
             .create_user(CreateUser {
                 id: Some(format!("user-{suffix}")),
                 image: Some(format!("U-{label}-image")).into(),
-                created_at: Some(now),
-                updated_at: Some(now),
+                created_at: Some(now.into()),
+                updated_at: Some(now.into()),
                 email_verified: Some(true),
                 ..CreateUser::new()
                     .with_name(format!("U-{label}"))
@@ -252,8 +259,8 @@ pub async fn seed<S: AuthSchema>(store: &impl AuthStore<S>) {
                 role: "member".into(),
                 created_at: now.into(),
                 additional_fields: [
-                    ("label".into(), json!(format!("M-{label}"))),
-                    ("detail".into(), json!(format!("M-{label}-detail"))),
+                    ("label".into(), format!("M-{label}").into()),
+                    ("detail".into(), format!("M-{label}-detail").into()),
                 ]
                 .into_iter()
                 .collect(),
@@ -265,9 +272,9 @@ pub async fn seed<S: AuthSchema>(store: &impl AuthStore<S>) {
                 id: Some(format!("team-{suffix}")),
                 name: format!("T-{label}").into(),
                 organization_id: "organization-a".into(),
-                created_at: Some(now),
-                updated_at: Some(now),
-                additional_fields: [("label".into(), json!(format!("T-{label}-label")))]
+                created_at: Some(now.into()),
+                updated_at: Some(now.into()),
+                additional_fields: [("label".into(), format!("T-{label}-label").into())]
                     .into_iter()
                     .collect(),
             })
@@ -283,13 +290,16 @@ pub async fn seed<S: AuthSchema>(store: &impl AuthStore<S>) {
             "recipient@ordinary-native-org.test",
             "member",
             "user-a",
-            "2099-01-01T00:00:00Z".parse().unwrap(),
+            "2099-01-01T00:00:00Z"
+                .parse::<chrono::DateTime<chrono::Utc>>()
+                .unwrap()
+                .into(),
         );
         input.id = Some(format!("invitation-{suffix}"));
-        input.created_at = Some(now);
+        input.created_at = Some(now.into());
         input.additional_fields = [
-            ("label".into(), json!(format!("I-{label}"))),
-            ("detail".into(), json!(format!("I-{label}-detail"))),
+            ("label".into(), format!("I-{label}").into()),
+            ("detail".into(), format!("I-{label}-detail").into()),
         ]
         .into_iter()
         .collect();
@@ -303,8 +313,8 @@ pub async fn seed<S: AuthSchema>(store: &impl AuthStore<S>) {
             role: "member".into(),
             created_at: now.into(),
             additional_fields: [
-                ("label".into(), json!("M-A2")),
-                ("detail".into(), json!("M-A2-detail")),
+                ("label".into(), "M-A2".into()),
+                ("detail".into(), "M-A2-detail".into()),
             ]
             .into_iter()
             .collect(),
@@ -316,13 +326,16 @@ pub async fn seed<S: AuthSchema>(store: &impl AuthStore<S>) {
         "other@ordinary-native-org.test",
         "member",
         "user-a",
-        "2099-01-01T00:00:00Z".parse().unwrap(),
+        "2099-01-01T00:00:00Z"
+            .parse::<chrono::DateTime<chrono::Utc>>()
+            .unwrap()
+            .into(),
     );
     input.id = Some("invitation-a-other".into());
-    input.created_at = Some(now);
+    input.created_at = Some(now.into());
     input.additional_fields = [
-        ("label".into(), json!("I-A2")),
-        ("detail".into(), json!("I-A2-detail")),
+        ("label".into(), "I-A2".into()),
+        ("detail".into(), "I-A2-detail".into()),
     ]
     .into_iter()
     .collect();

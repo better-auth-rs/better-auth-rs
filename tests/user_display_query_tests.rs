@@ -1,7 +1,8 @@
 #![cfg(feature = "seaorm2")]
 
 use better_auth_core::{
-    AuthConfig, AuthError, AuthResult, AuthSchema, CreateUser, ListUsersParams,
+    AuthConfig, AuthError, AuthResult, AuthSchema, CreateUser, FieldDate, FieldMap, FieldValue,
+    ListUsersParams,
     id::{IdGeneration, IdGenerator},
     store::{EphemeralStore, StatelessSchema, UserStore},
     user_fields::{FieldTransforms, UserFieldConfig, UserFieldTransform, UserFieldType},
@@ -11,7 +12,7 @@ use better_auth_seaorm::{
     sea_orm::{self, ConnectionTrait, Database, Schema, entity::prelude::*},
     store::entities,
 };
-use serde_json::{Map, Value, json};
+use serde_json::{Value, json};
 use std::sync::{
     Arc, Mutex,
     atomic::{AtomicUsize, Ordering},
@@ -22,15 +23,14 @@ type Trace = Arc<Mutex<Vec<Value>>>;
 fn label_transform(trace: &Trace, phase: &'static str, suffix: &'static str) -> UserFieldTransform {
     let trace = trace.clone();
     UserFieldTransform::new(move |value| {
+        let label = value
+            .as_str()
+            .ok_or_else(|| AuthError::internal("Expected the supplied display label"));
         trace
             .lock()
             .map_err(|_| AuthError::internal("Display query trace lock poisoned"))?
-            .push(json!([phase, "label", value]));
-        let value = value
-            .as_ref()
-            .and_then(Value::as_str)
-            .ok_or_else(|| AuthError::internal("Expected the supplied display label"))?;
-        Ok(Some(json!(format!("{value}:{suffix}"))))
+            .push(json!([phase, "label", value.json()?]));
+        Ok(format!("{}:{suffix}", label?).into())
     })
 }
 
@@ -66,13 +66,18 @@ fn config(trace: &Trace) -> AuthConfig {
 
 fn queries() -> Vec<(&'static str, ListUsersParams)> {
     [
-        ("logical-label", "label", json!("alpha:in"), "eq"),
-        ("physical-label", "stored_label", json!("alpha:in"), "eq"),
-        ("pre-transform-label", "label", json!("alpha"), "eq"),
-        ("numeric-string", "rank", json!("12"), "eq"),
-        ("numeric-string-in", "stored_rank", json!(["3", "20"]), "in"),
-        ("boolean-string", "highlighted", json!("true"), "eq"),
-        ("paginated-total", "highlighted", json!("true"), "eq"),
+        ("logical-label", "label", "alpha:in".into(), "eq"),
+        ("physical-label", "stored_label", "alpha:in".into(), "eq"),
+        ("pre-transform-label", "label", "alpha".into(), "eq"),
+        ("numeric-string", "rank", "12".into(), "eq"),
+        (
+            "numeric-string-in",
+            "stored_rank",
+            FieldValue::from(vec!["3".into(), "20".into()]),
+            "in",
+        ),
+        ("boolean-string", "highlighted", "true".into(), "eq"),
+        ("paginated-total", "highlighted", "true".into(), "eq"),
     ]
     .into_iter()
     .map(|(name, field, value, operator)| {
@@ -108,6 +113,7 @@ async fn observe<S: AuthSchema>(
 ) -> AuthResult<Value> {
     let timestamp = "2030-01-01T00:00:00Z"
         .parse::<chrono::DateTime<chrono::Utc>>()
+        .map(FieldDate::from)
         .map_err(|error| AuthError::internal(error.to_string()))?;
     for (label, name, rank, highlighted) in [
         ("alpha", "Display Alpha", 20, true),
@@ -119,12 +125,12 @@ async fn observe<S: AuthSchema>(
                 name: Some(name.into()).into(),
                 email: Some(format!("{label}@user-display-query.test")),
                 email_verified: Some(false),
-                created_at: Some(timestamp),
-                updated_at: Some(timestamp),
-                additional_fields: Map::from_iter([
-                    ("label".into(), json!(label)),
-                    ("rank".into(), json!(rank)),
-                    ("highlighted".into(), json!(highlighted)),
+                created_at: Some(timestamp.clone()),
+                updated_at: Some(timestamp.clone()),
+                additional_fields: FieldMap::from_iter([
+                    ("label".into(), label.into()),
+                    ("rank".into(), rank.into()),
+                    ("highlighted".into(), highlighted.into()),
                 ]),
                 ..Default::default()
             })
@@ -144,8 +150,8 @@ async fn observe<S: AuthSchema>(
         );
         let users = users
             .into_iter()
-            .map(|user| user.additional_fields)
-            .collect::<Vec<_>>();
+            .map(|user| user.additional_fields.json())
+            .collect::<AuthResult<Vec<_>>>()?;
         observations.push(json!({
             "name":name,
             "events":events,

@@ -220,7 +220,10 @@ pub(super) async fn handle_callback(
     }
 
     if let Some(user_id) = payload.server_context.get("anonymousUserId") {
-        req.set_server_context("anonymousUserId", user_id.clone())?;
+        req.set_server_context(
+            "anonymousUserId",
+            better_auth_core::FieldValue::from_json(user_id.clone())?,
+        )?;
     }
 
     let Some(code) = merged.get("code").filter(|code| !code.is_empty()).cloned() else {

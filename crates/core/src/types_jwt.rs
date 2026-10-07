@@ -26,14 +26,12 @@ pub struct Jwk {
 /// Key material to persist after generation.
 pub struct CreateJwk {
     /// Generation time supplied to a custom key-persistence callback.
-    #[serde(with = "crate::field_value::serde::date")]
     pub created_at: crate::FieldDate,
     /// Serialized public JWK.
     pub public_key: String,
     /// Serialized or encrypted private JWK.
     pub private_key: String,
     /// Signing expiration time.
-    #[serde(with = "crate::field_value::serde::optional_date", default)]
     pub expires_at: Option<crate::FieldDate>,
     /// Signing algorithm.
     pub alg: String,

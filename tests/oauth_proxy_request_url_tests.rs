@@ -103,7 +103,7 @@ async fn direct_requests_preserve_url_across_normalization_without_trusting_head
         request
             .set_server_context(
                 "oauthProxyRedirectBase",
-                json!("https://attacker.example/api/auth"),
+                "https://attacker.example/api/auth".into(),
             )
             .expect("caller context");
         let response = auth.handle_request(request).await.expect("authorization");

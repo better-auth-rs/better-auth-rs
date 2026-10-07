@@ -359,7 +359,7 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
         self.update_session_with_hooks(
             token,
             SessionUpdate {
-                expires_at: Some(expires_at),
+                expires_at: Some(expires_at.into()),
                 ..Default::default()
             },
         )

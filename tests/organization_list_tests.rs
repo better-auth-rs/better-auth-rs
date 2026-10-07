@@ -13,7 +13,7 @@ use better_auth_core::store::{EphemeralStore, OrganizationRoleKey};
 use better_auth_core::user_fields::UserFieldConfig;
 use better_auth_core::{
     CreateInvitation, CreateMember, CreateOrganization, CreateOrganizationRole, CreateSession,
-    CreateTeam, CreateUser, HttpMethod, InvitationStatus,
+    CreateTeam, CreateUser, FieldDate, FieldMap, HttpMethod, InvitationStatus,
 };
 use better_auth_seaorm::store::__private_test_support::{bundled_schema::BundledSchema, migrator};
 use better_auth_seaorm::{SeaOrmStore, sea_orm::Database};
@@ -35,10 +35,7 @@ fn field(events: &Events, kind: &'static str, required: bool) -> UserFieldConfig
         required: Some(required),
         transform: Some(FieldTransforms {
             output: Some(UserFieldTransform::new(move |value| {
-                let label = value
-                    .as_ref()
-                    .and_then(Value::as_str)
-                    .unwrap_or("undefined");
+                let label = value.as_str().unwrap_or("undefined");
                 events
                     .lock()
                     .map_err(|error| AuthError::internal(error.to_string()))?
@@ -82,9 +79,10 @@ fn configuration(limit: Option<f64>, events: &Events) -> (AuthConfig, Organizati
     (config, OrganizationPlugin::with_config(plugin))
 }
 
-fn date(value: &str) -> AuthResult<chrono::DateTime<chrono::Utc>> {
+fn date(value: &str) -> AuthResult<FieldDate> {
     value
-        .parse()
+        .parse::<chrono::DateTime<chrono::Utc>>()
+        .map(FieldDate::from)
         .map_err(|error: chrono::ParseError| AuthError::internal(error.to_string()))
 }
 
@@ -161,7 +159,7 @@ async fn seed<S: AuthSchema>(auth: &BetterAuth<S>) -> AuthResult<HashMap<String,
             .create_organization_role(CreateOrganizationRole {
                 organization_id: "org-a".into(),
                 role: role.into(),
-                permission: json!({}),
+                permission: FieldMap::new().into(),
                 additional_fields: Default::default(),
             })
             .await?;

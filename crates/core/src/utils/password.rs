@@ -142,7 +142,7 @@ pub fn serialize_to_value(value: &impl Serialize) -> AuthResult<serde_json::Valu
 // ---------------------------------------------------------------------------
 
 /// Build an `UpdateUser` that only changes the `metadata` field.
-pub fn update_user_metadata(metadata: serde_json::Value) -> UpdateUser {
+pub fn update_user_metadata(metadata: crate::FieldValue) -> UpdateUser {
     UpdateUser {
         metadata: Some(metadata),
         ..Default::default()

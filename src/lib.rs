@@ -57,9 +57,9 @@ pub mod store;
 pub mod wire;
 
 pub use better_auth_core::{
-    ApiKeyStart, Argon2PasswordHasher, AuthConfig, AuthError, AuthResult, AuthSchema, FieldDate,
-    FieldMap, FieldValue, PasswordHasher, SchemaValue, ScryptPasswordHasher,
-    StructuredCloneContext, database_hooks,
+    ApiKeyStart, Argon2PasswordHasher, AuthConfig, AuthError, AuthRecordFields, AuthResult,
+    AuthSchema, FieldDate, FieldMap, FieldValue, FromFieldMap, PasswordHasher, SchemaField,
+    SchemaValue, ScryptPasswordHasher, StructuredCloneContext, Utf16String, database_hooks,
 };
 pub use core::{AuthBuilder, BetterAuth};
 

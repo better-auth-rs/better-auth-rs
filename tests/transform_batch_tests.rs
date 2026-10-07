@@ -7,8 +7,8 @@
 use better_auth::config::{FieldTransforms, UserFieldTransform};
 use better_auth_core::{
     AuthConfig, AuthError, AuthResult, AuthSchema, AuthStore, CreateAccount, CreateSession,
-    CreateUser, CreateVerification, SchemaValue, store::EphemeralStore, types::ListUsersParams,
-    user_fields::UserFieldConfig,
+    CreateUser, CreateVerification, FieldMap, FieldValue, SchemaValue, store::EphemeralStore,
+    types::ListUsersParams, user_fields::UserFieldConfig,
 };
 use better_auth_seaorm::{
     AuthEntity, SeaOrmStore,
@@ -91,15 +91,14 @@ fn field(name: &'static str, trace: &Arc<Mutex<Trace>>) -> UserFieldConfig {
                     return Ok(value);
                 }
                 let raw = value
-                    .as_ref()
-                    .and_then(Value::as_str)
+                    .as_str()
                     .ok_or_else(|| AuthError::internal("Fixture output field must be a string"))?;
                 let event = format!("{name}:{raw}");
                 trace.events.push(event.clone());
                 if trace.failures.contains(&event.as_str()) {
                     return Err(AuthError::Config(event));
                 }
-                Ok(Some(json!(format!("{raw}:{}", trace.events.len()))))
+                Ok(format!("{raw}:{}", trace.events.len()).into())
             })),
             ..Default::default()
         }),
@@ -268,14 +267,15 @@ async fn check<S: AuthSchema>(
             store
                 .create_session(CreateSession {
                     user_id: ids[0].clone().into(),
-                    expires_at: chrono::Utc::now() + chrono::Duration::hours(1),
+                    expires_at: (chrono::Utc::now() + chrono::Duration::hours(1)).into(),
                     ip_address: None,
                     user_agent: None,
                     impersonated_by: None,
                     active_organization_id: None,
-                    additional_fields: serde_json::from_value(
-                        json!({"first":name,"second":format!("{name}.png")}),
-                    )?,
+                    additional_fields: FieldMap::from([
+                        ("first".into(), name.into()),
+                        ("second".into(), format!("{name}.png").into()),
+                    ]),
                 })
                 .await?
                 .token,
@@ -287,7 +287,8 @@ async fn check<S: AuthSchema>(
                 expires_at: SchemaValue::Typed(
                     "2020-01-01T00:00:00Z"
                         .parse::<DateTimeUtc>()
-                        .map_err(|error| AuthError::internal(error.to_string()))?,
+                        .map_err(|error| AuthError::internal(error.to_string()))?
+                        .into(),
                 ),
                 ..Default::default()
             })
@@ -342,11 +343,11 @@ async fn check<S: AuthSchema>(
     for (index, (session, name)) in sessions.iter().zip(names).enumerate() {
         assert_eq!(
             session.additional_fields.get("first"),
-            Some(&json!(format!("{name}:{}", index + 1)))
+            Some(&FieldValue::from(format!("{name}:{}", index + 1)))
         );
         assert_eq!(
             session.additional_fields.get("second"),
-            Some(&json!(format!("{name}.png:{}", index + 3)))
+            Some(&FieldValue::from(format!("{name}.png:{}", index + 3)))
         );
     }
     reset(trace, &[])?;
@@ -388,11 +389,11 @@ async fn check<S: AuthSchema>(
     for (index, ((session, _), name)) in snapshots.iter().zip(names).enumerate() {
         assert_eq!(
             session.additional_fields.get("first"),
-            Some(&json!(format!("{}:{}", name, index + 1)))
+            Some(&FieldValue::from(format!("{}:{}", name, index + 1)))
         );
         assert_eq!(
             session.additional_fields.get("second"),
-            Some(&json!(format!("{}.png:{}", name, index + 3)))
+            Some(&FieldValue::from(format!("{}.png:{}", name, index + 3)))
         );
     }
     reset(trace, &[])?;

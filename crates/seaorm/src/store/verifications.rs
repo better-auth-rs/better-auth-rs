@@ -2,8 +2,8 @@ use super::instrumentation::database_operation;
 use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QueryOrder,
-    QuerySelect, SqliteTransactionMode, TransactionOptions, TransactionTrait,
+    ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect,
+    SqliteTransactionMode, TransactionOptions, TransactionTrait,
 };
 
 use better_auth_core::store::VerificationStore;
@@ -285,7 +285,7 @@ where
             .consume_latest_verification(identifier, Some(value))
             .await?;
         match record {
-            Some(record) if !record.expires_at.is_before(Utc::now()) => Ok(Some(record)),
+            Some(record) if !record.expires_at.is_before(Utc::now())? => Ok(Some(record)),
             _ => Ok(None),
         }
     }
@@ -296,7 +296,7 @@ where
     ) -> AuthResult<Option<VerificationView>> {
         let record = self.consume_latest_verification(identifier, None).await?;
         match record {
-            Some(record) if !record.expires_at.is_before(Utc::now()) => Ok(Some(record)),
+            Some(record) if !record.expires_at.is_before(Utc::now())? => Ok(Some(record)),
             _ => Ok(None),
         }
     }
@@ -465,9 +465,10 @@ where
                 )
             })
             .await?;
-        let mut active = super::record_write::RecordWrite::<
-            <S::Verification as SeaOrmVerificationModel>::Entity,
-        >::from_fields(input, S::Verification::field_column)?;
+        let mut active = super::record_write::RecordWrite::from_active(
+            S::Verification::new_active(id.clone(), &input)?,
+        );
+        active.apply_fields(input, S::Verification::field_column)?;
         if let Some(id) = id {
             active.set(S::Verification::id_column(), id.into());
         } else {

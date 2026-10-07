@@ -1,7 +1,8 @@
 #![cfg(feature = "seaorm2")]
 
 use better_auth_core::{
-    AuthConfig, AuthError, AuthResult, AuthSchema, CreateUser, ListUsersParams,
+    AuthConfig, AuthError, AuthResult, AuthSchema, CreateUser, FieldDate, FieldMap, FieldValue,
+    ListUsersParams,
     id::{IdGeneration, IdGenerator},
     store::{EphemeralStore, StatelessSchema, UserStore},
     user_fields::{FieldTransforms, UserFieldConfig, UserFieldTransform, UserFieldType},
@@ -48,14 +49,14 @@ fn config(trace: &Trace) -> AuthConfig {
                 transform: (name == "label").then(|| FieldTransforms {
                     input: None,
                     output: Some(UserFieldTransform::new(move |value| {
-                        let value = value.ok_or_else(|| {
-                            AuthError::internal("Expected the supplied display label")
-                        })?;
+                        if value.is_undefined() {
+                            return Err(AuthError::internal("Expected the supplied display label"));
+                        }
                         trace
                             .lock()
                             .map_err(|_| AuthError::internal("Sort field trace lock poisoned"))?
-                            .push(json!(["output", "label", value]));
-                        Ok(Some(value))
+                            .push(json!(["output", "label", value.json()?]));
+                        Ok(value)
                     })),
                 }),
                 ..Default::default()
@@ -89,7 +90,7 @@ fn queries() -> Vec<(&'static str, ListUsersParams)> {
                 sort_by: Some(sort.into()),
                 sort_direction: Some(direction.into()),
                 filter_field: filter.map(|_| "label".into()),
-                filter_value: filter.map(|value| json!(value)),
+                filter_value: filter.map(FieldValue::from),
                 filter_operator: filter.map(|_| "eq".into()),
                 ..Default::default()
             },
@@ -156,6 +157,7 @@ async fn observe<S: AuthSchema>(
 ) -> AuthResult<BackendObservation> {
     let timestamp = "2030-01-01T00:00:00Z"
         .parse::<chrono::DateTime<chrono::Utc>>()
+        .map(FieldDate::from)
         .map_err(|error| AuthError::internal(error.to_string()))?;
     for (label, name, rank) in [("alpha", "Sort Alpha", 20), ("beta", "Sort Beta", 3)] {
         let _ = store
@@ -163,11 +165,11 @@ async fn observe<S: AuthSchema>(
                 name: Some(name.into()).into(),
                 email: Some(format!("{label}@user-sort-field.test")),
                 email_verified: Some(false),
-                created_at: Some(timestamp),
-                updated_at: Some(timestamp),
-                additional_fields: Map::from_iter([
-                    ("label".into(), json!(label)),
-                    ("rank".into(), json!(rank)),
+                created_at: Some(timestamp.clone()),
+                updated_at: Some(timestamp.clone()),
+                additional_fields: FieldMap::from_iter([
+                    ("label".into(), label.into()),
+                    ("rank".into(), rank.into()),
                 ]),
                 ..Default::default()
             })
@@ -185,8 +187,8 @@ async fn observe<S: AuthSchema>(
                 result: QueryResult {
                     users: users
                         .into_iter()
-                        .map(|user| user.additional_fields)
-                        .collect(),
+                        .map(|user| user.additional_fields.json())
+                        .collect::<AuthResult<Vec<_>>>()?,
                     total,
                 },
             }),

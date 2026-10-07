@@ -128,14 +128,11 @@ pub(super) fn generate(
                 ))
             }
 
-            fn new_active(id: Option<Self::Id>, mut fields: #core::FieldMap) -> #core::AuthResult<ActiveModel> {
-                let _ = fields.remove("id");
-                if let Some(id) = id {
-                    let _ = fields.insert("id".into(), #core::FieldValue::String(id.to_string()));
-                }
-                let mut active = <ActiveModel as Default>::default();
-                Self::apply_fields(&mut active, fields)?;
-                Ok(active)
+            fn new_active(id: Option<Self::Id>, _fields: &#core::FieldMap) -> #core::AuthResult<ActiveModel> {
+                Ok(ActiveModel {
+                    id: id.map_or(#seaorm::sea_orm::ActiveValue::NotSet, #seaorm::sea_orm::ActiveValue::Set),
+                    ..Default::default()
+                })
             }
 
             fn apply_fields(active: &mut ActiveModel, fields: #core::FieldMap) -> #core::AuthResult<()> {

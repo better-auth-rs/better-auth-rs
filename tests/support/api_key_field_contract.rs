@@ -6,8 +6,8 @@ pub(crate) use policies::{Fields, Trace, config, policies, take};
 use better_auth::seaorm::sea_orm::entity::prelude::DateTimeUtc;
 use better_auth::{
     __private_core::{
-        ApiKey, AuthError, AuthResult, AuthSchema, AuthStore, CreateApiKey, UpdateApiKey,
-        store::ApiKeyUsageWrite, user_fields::UserConfig, wire::ApiKeyView,
+        ApiKey, AuthError, AuthResult, AuthSchema, AuthStore, CreateApiKey, FieldDate, FieldMap,
+        UpdateApiKey, store::ApiKeyUsageWrite, user_fields::UserConfig, wire::ApiKeyView,
     },
     BetterAuth,
 };
@@ -75,8 +75,8 @@ impl Scenario {
 pub(super) struct Fixture<S: AuthSchema> {
     store: Arc<dyn AuthStore<S>>,
     reader: Arc<dyn AuthStore<S>>,
-    identity: OnceLock<(String, String)>,
-    ordinary_update: OnceLock<String>,
+    identity: OnceLock<(String, FieldDate)>,
+    ordinary_update: OnceLock<FieldDate>,
     update_phase: AtomicU8,
     events: Trace,
     failure: Arc<AtomicU8>,
@@ -170,10 +170,14 @@ pub(crate) fn input() -> CreateApiKey {
         metadata: None,
         enabled: true,
         additional_fields: [
-            ("activatedAt".into(), json!("2029-01-02T03:04:05.000Z")),
+            ("activatedAt".into(), "2029-01-02T03:04:05.000Z".into()),
             (
                 "details".into(),
-                json!({"channel":"ordinary","enabled":true}),
+                FieldMap::from_iter([
+                    ("channel".into(), "ordinary".into()),
+                    ("enabled".into(), true.into()),
+                ])
+                .into(),
             ),
         ]
         .into_iter()
@@ -225,11 +229,11 @@ impl<S: AuthSchema> Fixture<S> {
         assert_eq!(row.config_id, "default");
         let created = row
             .created_at
-            .parse::<DateTimeUtc>()
+            .to_datetime()?
             .expect("stored creation timestamp");
         let updated = row
             .updated_at
-            .parse::<DateTimeUtc>()
+            .to_datetime()?
             .expect("stored update timestamp");
         let identity = self
             .identity
@@ -250,7 +254,12 @@ impl<S: AuthSchema> Fixture<S> {
                 "<ordinary-updated-at>"
             }
             2 => {
-                assert_eq!(row.updated_at, TIMES[5]);
+                assert_eq!(
+                    updated,
+                    TIMES[5]
+                        .parse::<DateTimeUtc>()
+                        .expect("fixed usage timestamp")
+                );
                 TIMES[5]
             }
             _ => return Err(AuthError::internal("Unknown API Key timestamp phase")),
@@ -322,14 +331,17 @@ impl<S: AuthSchema> Fixture<S> {
                             &seed.id,
                             UpdateApiKey {
                                 name: Some(
-                                    if self.mapped_name {
-                                        " Desk-renamed "
-                                    } else {
-                                        "Desk-renamed"
-                                    }
+                                    Some(
+                                        if self.mapped_name {
+                                            " Desk-renamed "
+                                        } else {
+                                            "Desk-renamed"
+                                        }
+                                        .to_owned(),
+                                    )
                                     .into(),
                                 ),
-                                additional_fields: [("label".into(), json!(" Revised "))]
+                                additional_fields: [("label".into(), " Revised ".into())]
                                     .into_iter()
                                     .collect(),
                                 ..Default::default()

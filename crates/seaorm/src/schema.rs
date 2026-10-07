@@ -155,10 +155,12 @@ pub trait SeaOrmAccountModel:
     fn parse_id(id: &str) -> AuthResult<Self::Id>;
     fn parse_user_id(user_id: &str) -> AuthResult<Self::UserId>;
 
-    /// Build a model from adapter-transformed fields, after before hooks complete.
+    /// Initialize application-owned columns before the store binds adapter fields.
+    /// Inspect `fields` as runtime values. Do not decode the complete field map into the typed model.
+    /// The store applies `fields` and the generated ID after this method returns.
     fn new_active(
         id: Option<Self::Id>,
-        fields: better_auth_core::FieldMap,
+        fields: &better_auth_core::FieldMap,
     ) -> AuthResult<Self::ActiveModel>;
     /// Resolve logical names and declared model aliases to the same database column.
     fn field_column(name: &str) -> AuthResult<<Self::Entity as EntityTrait>::Column>;
@@ -214,10 +216,12 @@ pub trait SeaOrmVerificationModel:
     fn created_at_column() -> Self::Column;
     fn parse_id(id: &str) -> AuthResult<Self::Id>;
 
-    /// Build a model from adapter-transformed fields, after before hooks complete.
+    /// Initialize application-owned columns before the store binds adapter fields.
+    /// Inspect `fields` as runtime values. Do not decode the complete field map into the typed model.
+    /// The store applies `fields` and the generated ID after this method returns.
     fn new_active(
         id: Option<Self::Id>,
-        fields: better_auth_core::FieldMap,
+        fields: &better_auth_core::FieldMap,
     ) -> AuthResult<Self::ActiveModel>;
     /// Resolve logical names and declared model aliases to the same database column.
     fn field_column(name: &str) -> AuthResult<<Self::Entity as EntityTrait>::Column>;

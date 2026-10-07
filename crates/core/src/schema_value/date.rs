@@ -15,26 +15,26 @@ impl SchemaValue<FieldDate> {
 
     /// Compare a projected date as the upstream relational expression does.
     /// Undefined and invalid dates produce NaN, so neither comparison reports an expired value.
-    pub fn is_before(&self, now: DateTime<Utc>) -> bool {
-        self.relational_milliseconds() < now.timestamp_millis() as f64
+    pub fn is_before(&self, now: DateTime<Utc>) -> AuthResult<bool> {
+        Ok(self.relational_milliseconds()? < now.timestamp_millis() as f64)
     }
 
     /// Compare a projected date without replacing NaN with a valid timestamp.
-    pub fn is_after(&self, now: DateTime<Utc>) -> bool {
-        self.relational_milliseconds() > now.timestamp_millis() as f64
+    pub fn is_after(&self, now: DateTime<Utc>) -> AuthResult<bool> {
+        Ok(self.relational_milliseconds()? > now.timestamp_millis() as f64)
     }
 
     /// Apply an inclusive comparison without treating NaN as an expired value.
-    pub fn is_before_or_equal(&self, now: DateTime<Utc>) -> bool {
-        self.relational_milliseconds() <= now.timestamp_millis() as f64
+    pub fn is_before_or_equal(&self, now: DateTime<Utc>) -> AuthResult<bool> {
+        Ok(self.relational_milliseconds()? <= now.timestamp_millis() as f64)
     }
 
     /// Apply an inclusive comparison without treating NaN as a valid expiration.
-    pub fn is_after_or_equal(&self, now: DateTime<Utc>) -> bool {
-        self.relational_milliseconds() >= now.timestamp_millis() as f64
+    pub fn is_after_or_equal(&self, now: DateTime<Utc>) -> AuthResult<bool> {
+        Ok(self.relational_milliseconds()? >= now.timestamp_millis() as f64)
     }
 
-    fn relational_milliseconds(&self) -> f64 {
+    fn relational_milliseconds(&self) -> AuthResult<f64> {
         crate::query::field_number(&self.field_value())
     }
 
@@ -53,11 +53,11 @@ impl SchemaValue<FieldDate> {
 
     /// Compute update-cache TTL after the endpoint's explicit Date constructor conversion.
     pub fn converted_cache_ttl(&self, now: DateTime<Utc>) -> AuthResult<u64> {
-        self.clone().converted_date().cache_ttl(now)
+        self.clone().converted_date()?.cache_ttl(now)
     }
 
     /// Apply the Date constructor used when consuming a secondary verification snapshot.
-    pub fn converted_date(self) -> Self {
+    pub fn converted_date(self) -> AuthResult<Self> {
         let value = self.into_field_value();
         let date = match value {
             FieldValue::Date(date) => date,
@@ -68,9 +68,9 @@ impl SchemaValue<FieldDate> {
             | FieldValue::Array(_)
             | FieldValue::Object(_)
             | FieldValue::Undefined => FieldDate::invalid(),
-            value => FieldDate::from_milliseconds(crate::query::field_number(&value)),
+            value => FieldDate::from_milliseconds(crate::query::field_number(&value)?),
         };
-        Self::Typed(date)
+        Ok(Self::Typed(date))
     }
 }
 

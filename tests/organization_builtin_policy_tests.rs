@@ -7,6 +7,7 @@
 #[path = "../compat-tests/rust-server/src/organization_fields.rs"]
 mod fixture;
 
+use better_auth::__private_core::{FieldDate, FieldValue as Value};
 use better_auth::__private_core::{
     store::{
         InvitationStore, MemberStore, OrganizationRoleStore, OrganizationStore, TeamStore,
@@ -27,7 +28,7 @@ use better_auth::{
 use better_auth_seaorm::store::__private_test_support::{
     bundled_schema::BundledSchema, migrator::run_migrations,
 };
-use serde_json::{Value, json};
+use serde_json::json;
 use std::sync::Arc;
 
 type Store = SeaOrmStore<BundledSchema, fixture::models::Models>;
@@ -37,10 +38,16 @@ fn text_policy() -> UserFieldConfig {
         required: Some(true),
         transform: Some(FieldTransforms {
             input: Some(UserFieldTransform::new(|value| {
-                Ok(value.map(|value| json!(format!("{}:in", value.as_str().unwrap()))))
+                Ok(match value {
+                    Value::Undefined => Value::Undefined,
+                    value => Value::from(format!("{}:in", value.as_str().unwrap())),
+                })
             })),
             output: Some(UserFieldTransform::new(|value| {
-                Ok(value.map(|value| json!(format!("{}:out", value.as_str().unwrap()))))
+                Ok(match value {
+                    Value::Undefined => Value::Undefined,
+                    value => Value::from(format!("{}:out", value.as_str().unwrap())),
+                })
             })),
         }),
         ..Default::default()
@@ -86,7 +93,7 @@ async fn builtin_policies_update_typed_fields_once_and_preserve_storage_mappings
         "logo".into(),
         UserFieldConfig {
             required: Some(false),
-            default_value: Some(json!("default-logo")),
+            default_value: Some(Value::from("default-logo")),
             ..Default::default()
         },
     );
@@ -114,7 +121,7 @@ async fn builtin_policies_update_typed_fields_once_and_preserve_storage_mappings
         field_type: UserFieldType::Date,
         required: Some(false),
         field_name: Some("updated_at".into()),
-        default_value: Some(json!("2020-01-02T03:04:05.000Z")),
+        default_value: Some(Value::from("2020-01-02T03:04:05.000Z")),
         ..Default::default()
     };
     let _ = config
@@ -131,7 +138,7 @@ async fn builtin_policies_update_typed_fields_once_and_preserve_storage_mappings
         "id".into(),
         UserFieldConfig {
             field_name: Some("ignored_id_mapping".into()),
-            default_value: Some(json!("ignored-id-default")),
+            default_value: Some(Value::from("ignored-id-default")),
             transform: Some(FieldTransforms {
                 input: Some(UserFieldTransform::new(|_| {
                     Err(better_auth::AuthError::config(
@@ -181,7 +188,7 @@ async fn builtin_policies_update_typed_fields_once_and_preserve_storage_mappings
         .unwrap();
     assert_eq!(organization.name, "Updated:in:out");
     assert_eq!(organization.logo, None);
-    assert_eq!(organization.metadata, Some(Value::Null));
+    assert_eq!(organization.metadata.field_value(), Value::from("null"));
     let member = store
         .create_member(CreateMember::new(
             organization.id.typed().unwrap(),
@@ -206,7 +213,7 @@ async fn builtin_policies_update_typed_fields_once_and_preserve_storage_mappings
             "recipient@example.com",
             "member",
             "owner",
-            chrono::Utc::now() + chrono::Duration::days(1),
+            (chrono::Utc::now() + chrono::Duration::days(1)).into(),
         ))
         .await
         .unwrap();
@@ -231,8 +238,12 @@ async fn builtin_policies_update_typed_fields_once_and_preserve_storage_mappings
         .unwrap();
     assert_eq!(team.name, "Engineering:in:out");
     assert!(!team.additional_fields.contains_key("name"));
-    let default_date: chrono::DateTime<chrono::Utc> = "2020-01-02T03:04:05Z".parse().unwrap();
-    assert_eq!(team.updated_at, Some(default_date));
+    let default_date = FieldDate::from(
+        "2020-01-02T03:04:05Z"
+            .parse::<chrono::DateTime<chrono::Utc>>()
+            .unwrap(),
+    );
+    assert_eq!(team.updated_at, Some(default_date.clone()));
     let team = store
         .update_team(
             team.id.typed().unwrap(),
@@ -244,19 +255,19 @@ async fn builtin_policies_update_typed_fields_once_and_preserve_storage_mappings
         .await
         .unwrap();
     assert_eq!(team.name, "Platform:in:out");
-    assert_eq!(team.updated_at, Some(default_date));
+    assert_eq!(team.updated_at, Some(default_date.clone()));
     let role = store
         .create_organization_role(CreateOrganizationRole {
             organization_id: organization.id.typed().unwrap().clone(),
             role: "editor".into(),
-            permission: json!({"project":["read"]}),
+            permission: Value::from_json(json!({"project":["read"]})).unwrap(),
             additional_fields: Default::default(),
         })
         .await
         .unwrap();
     assert_eq!(role.role, "editor:in:out");
     assert!(!role.additional_fields.contains_key("role"));
-    assert_eq!(role.updated_at, Some(default_date));
+    assert_eq!(role.updated_at, Some(default_date.clone()));
     let role = store
         .update_organization_role(
             role.id.typed().unwrap(),
@@ -268,7 +279,7 @@ async fn builtin_policies_update_typed_fields_once_and_preserve_storage_mappings
         .await
         .unwrap();
     assert_eq!(role.role, "writer:in:out");
-    assert_eq!(role.updated_at, Some(default_date));
+    assert_eq!(role.updated_at, Some(default_date.clone()));
     let date: chrono::DateTime<chrono::Utc> = "2022-03-04T05:06:07Z".parse().unwrap();
     config
         .schema
@@ -276,7 +287,7 @@ async fn builtin_policies_update_typed_fields_once_and_preserve_storage_mappings
         .fields_mut()
         .get_mut("updatedAt")
         .unwrap()
-        .on_update = Some(Arc::new(move || json!(date)));
+        .on_update = Some(Arc::new(move || Value::from(date)));
     store.configure_organization_fields(config.schema).unwrap();
     assert_eq!(
         store
@@ -284,7 +295,7 @@ async fn builtin_policies_update_typed_fields_once_and_preserve_storage_mappings
             .await
             .unwrap()
             .updated_at,
-        Some(date)
+        Some(FieldDate::from(date))
     );
     fixture::reset(store.connection()).await.unwrap();
 }
@@ -317,7 +328,7 @@ async fn builtin_dynamic_outputs_preserve_storage_and_core_column_remaps_fail_ex
         UserFieldConfig {
             required: Some(true),
             transform: Some(FieldTransforms {
-                output: Some(UserFieldTransform::new(|_| Ok(Some(json!(12))))),
+                output: Some(UserFieldTransform::new(|_| Ok(Value::from(12)))),
                 ..Default::default()
             }),
             ..Default::default()
@@ -347,7 +358,7 @@ async fn builtin_dynamic_outputs_preserve_storage_and_core_column_remaps_fail_ex
         UserFieldConfig {
             required: Some(false),
             transform: Some(FieldTransforms {
-                output: Some(UserFieldTransform::new(|_| Ok(None))),
+                output: Some(UserFieldTransform::new(|_| Ok(Value::Undefined))),
                 ..Default::default()
             }),
             ..Default::default()
@@ -374,7 +385,7 @@ async fn builtin_dynamic_outputs_preserve_storage_and_core_column_remaps_fail_ex
         UserFieldConfig {
             required: Some(true),
             transform: Some(FieldTransforms {
-                output: Some(UserFieldTransform::new(|_| Ok(Some(json!("unrecognized"))))),
+                output: Some(UserFieldTransform::new(|_| Ok(Value::from("unrecognized")))),
                 ..Default::default()
             }),
             ..Default::default()
@@ -419,15 +430,18 @@ async fn team_capacity_uses_the_transformed_durable_counter() {
         UserFieldConfig {
             field_type: UserFieldType::Number,
             required: Some(false),
-            default_value: Some(json!(17)),
+            default_value: Some(Value::from(17)),
             transform: Some(FieldTransforms {
                 input: Some(UserFieldTransform::new(move |value| {
                     let _ = observed.fetch_add(1, Ordering::SeqCst);
-                    assert_eq!(value, Some(json!(0)));
-                    Ok(Some(json!(2)))
+                    assert_eq!(value, Value::from(0));
+                    Ok(Value::from(2))
                 })),
                 output: Some(UserFieldTransform::new(|value| {
-                    Ok(value.map(|value| json!(value.as_i64().unwrap() + 10)))
+                    Ok(match value {
+                        Value::Undefined => Value::Undefined,
+                        value => Value::from(value.as_i64().unwrap() + 10),
+                    })
                 })),
             }),
             ..Default::default()
@@ -447,7 +461,7 @@ async fn team_capacity_uses_the_transformed_durable_counter() {
         .await
         .unwrap();
     assert_eq!(inputs.load(Ordering::SeqCst), 1);
-    assert_eq!(team.additional_fields["memberCount"], 12);
+    assert_eq!(team.additional_fields["memberCount"], Value::from(12));
     assert!(
         store
             .add_team_member(&team.id, "owner", Some(2))
@@ -474,7 +488,7 @@ async fn team_capacity_uses_the_transformed_durable_counter() {
             .unwrap()
             .unwrap()
             .additional_fields["memberCount"],
-        13
+        Value::from(13)
     );
     assert_eq!(
         store
@@ -500,7 +514,7 @@ async fn team_capacity_uses_the_transformed_durable_counter() {
             .unwrap()
             .unwrap()
             .additional_fields["memberCount"],
-        12
+        Value::from(12)
     );
     assert_eq!(inputs.load(Ordering::SeqCst), 3);
     assert_eq!(

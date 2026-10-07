@@ -1,7 +1,8 @@
 #![cfg(feature = "seaorm2")]
 
 use better_auth_core::{
-    AuthConfig, AuthError, AuthResult, AuthSchema, CreateUser, ListUsersParams, UserView,
+    AuthConfig, AuthError, AuthResult, AuthSchema, CreateUser, FieldMap, FieldValue,
+    ListUsersParams, UserView,
     id::{IdGeneration, IdGenerator},
     store::UserStore,
     user_fields::{FieldTransforms, UserFieldConfig, UserFieldTransform, UserFieldType},
@@ -22,38 +23,44 @@ use std::{
 
 type Trace = Arc<Mutex<Vec<Value>>>;
 
-fn event(field: &str, value: Option<&Value>) -> Value {
+fn event(field: &str, value: &FieldValue) -> AuthResult<Value> {
     let kind = match value {
-        None => "undefined",
-        Some(Value::Null) => "null",
-        Some(Value::Bool(_)) => "boolean",
-        Some(Value::Number(_)) => "number",
-        Some(Value::String(_)) => "string",
-        Some(Value::Array(_)) => "array",
-        Some(Value::Object(_)) => "object",
+        FieldValue::Undefined => "undefined",
+        FieldValue::Null => "null",
+        FieldValue::Bool(_) => "boolean",
+        FieldValue::Number(_) => "number",
+        FieldValue::String(_) | FieldValue::Utf16String(_) => "string",
+        FieldValue::Date(_) => "date",
+        FieldValue::Array(_) => "array",
+        FieldValue::Object(_) => "object",
     };
-    json!({"field":field,"present":value.is_some(),"kind":kind,"value":value})
+    Ok(
+        json!({"field":field,"present":!value.is_undefined(),"kind":kind,"value":value.json()?.unwrap_or(Value::Null)}),
+    )
 }
 
-fn display(user: UserView) -> Value {
-    Value::Object(Map::from_iter(
-        [
-            "marker",
-            "rank",
-            "highlighted",
-            "displayAt",
-            "settings",
-            "tags",
-            "scores",
-        ]
-        .map(|name| {
-            let value = user.additional_fields.get(name);
-            (
-                name.into(),
-                json!({"own":value.is_some(),"present":value.is_some(),"value":value}),
-            )
-        }),
-    ))
+fn display(user: UserView) -> AuthResult<Value> {
+    let mut output = Map::new();
+    for name in [
+        "marker",
+        "rank",
+        "highlighted",
+        "displayAt",
+        "settings",
+        "tags",
+        "scores",
+    ] {
+        let value = user.additional_fields.get(name);
+        let _ = output.insert(
+            name.into(),
+            json!({
+                "own":value.is_some(),
+                "present":value.is_some_and(|value| !value.is_undefined()),
+                "value":value.map(FieldValue::json).transpose()?.flatten().unwrap_or(Value::Null),
+            }),
+        );
+    }
+    Ok(Value::Object(output))
 }
 
 fn take_events(trace: &Trace) -> AuthResult<Vec<Value>> {
@@ -93,7 +100,7 @@ fn config(trace: Option<&Trace>) -> AuthConfig {
                             .map_err(|_| {
                                 AuthError::internal("SQL extra output trace lock poisoned")
                             })?
-                            .push(event(name, value.as_ref()));
+                            .push(event(name, &value)?);
                         Ok(value)
                     })),
                 }
@@ -199,41 +206,60 @@ async fn contract() -> Result<(), Box<dyn std::error::Error>> {
     let timestamp = "2030-01-01T00:00:00Z".parse::<chrono::DateTime<chrono::Utc>>()?;
     let mut ids = BTreeMap::new();
     for (marker, name, mut additional_fields) in [
-        ("a", "Extra Output A", Map::new()),
+        ("a", "Extra Output A", FieldMap::new()),
         (
             "b",
             "Extra Output B",
-            Map::from_iter([
-                ("rank".into(), json!(0.5)),
-                ("highlighted".into(), json!(false)),
-                ("displayAt".into(), json!("2030-01-02T03:04:05.006Z")),
-                ("settings".into(), json!({})),
-                ("tags".into(), json!([])),
-                ("scores".into(), json!([])),
+            FieldMap::from([
+                ("rank".into(), FieldValue::from(0.5)),
+                ("highlighted".into(), FieldValue::from(false)),
+                (
+                    "displayAt".into(),
+                    FieldValue::from(
+                        "2030-01-02T03:04:05.006Z".parse::<chrono::DateTime<chrono::Utc>>()?,
+                    ),
+                ),
+                ("settings".into(), FieldValue::from(FieldMap::new())),
+                ("tags".into(), FieldValue::from(Vec::new())),
+                ("scores".into(), FieldValue::from(Vec::new())),
             ]),
         ),
         (
             "c",
             "Extra Output C",
-            Map::from_iter([
-                ("rank".into(), json!(12.5)),
-                ("highlighted".into(), json!(true)),
-                ("displayAt".into(), json!("2031-02-03T04:05:06.007Z")),
-                ("settings".into(), json!({"theme":"blue"})),
-                ("tags".into(), json!(["blue", "green"])),
-                ("scores".into(), json!([1.25, 2.5])),
+            FieldMap::from([
+                ("rank".into(), FieldValue::from(12.5)),
+                ("highlighted".into(), FieldValue::from(true)),
+                (
+                    "displayAt".into(),
+                    FieldValue::from(
+                        "2031-02-03T04:05:06.007Z".parse::<chrono::DateTime<chrono::Utc>>()?,
+                    ),
+                ),
+                (
+                    "settings".into(),
+                    FieldValue::from(FieldMap::from([("theme".into(), FieldValue::from("blue"))])),
+                ),
+                (
+                    "tags".into(),
+                    FieldValue::from(vec![FieldValue::from("blue"), FieldValue::from("green")]),
+                ),
+                (
+                    "scores".into(),
+                    FieldValue::from(vec![FieldValue::from(1.25), FieldValue::from(2.5)]),
+                ),
             ]),
         ),
-        ("d", "Extra Output D", Map::new()),
+        ("d", "Extra Output D", FieldMap::new()),
     ] {
-        let _ = additional_fields.insert("marker".into(), json!(marker));
+        let _ = additional_fields.insert("marker".into(), FieldValue::from(marker));
         let created = writer
             .create_user(CreateUser {
                 name: Some(name.into()).into(),
                 email: Some(format!("{marker}@sql-user-extra-output.test")),
                 email_verified: Some(false),
-                created_at: Some(timestamp),
-                updated_at: Some(timestamp),
+                created_at: Some(timestamp.into()),
+                updated_at: Some(timestamp.into()),
                 additional_fields,
                 ..Default::default()
             })
@@ -265,7 +291,7 @@ async fn contract() -> Result<(), Box<dyn std::error::Error>> {
             .get_user_by_id(id)
             .await?
             .ok_or_else(|| AuthError::internal("The reader finds the selected display row"))?;
-        points.push(json!({"name":name,"events":take_events(&trace)?,"result":display(row)}));
+        points.push(json!({"name":name,"events":take_events(&trace)?,"result":display(row)?}));
     }
     let (rows, total) = reader
         .list_users(ListUsersParams {
@@ -283,7 +309,7 @@ async fn contract() -> Result<(), Box<dyn std::error::Error>> {
             "points":points,
             "batch":{
                 "events":take_events(&trace)?,
-                "result":{"users":rows.into_iter().map(display).collect::<Vec<_>>(),"total":total},
+                "result":{"users":rows.into_iter().map(display).collect::<AuthResult<Vec<_>>>()?,"total":total},
             },
         }),
         expected,

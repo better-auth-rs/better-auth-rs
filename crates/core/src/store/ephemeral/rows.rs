@@ -121,11 +121,18 @@ impl<T: Clone> Rows<T> {
         Ok(())
     }
     pub(super) fn retain(&mut self, mut predicate: impl FnMut(&T) -> bool) -> AuthResult<()> {
+        self.try_retain(|row| Ok(predicate(row)))
+    }
+
+    pub(super) fn try_retain(
+        &mut self,
+        mut predicate: impl FnMut(&T) -> AuthResult<bool>,
+    ) -> AuthResult<()> {
         let keep = self
             .snapshot()?
             .iter()
             .map(&mut predicate)
-            .collect::<Vec<_>>();
+            .collect::<AuthResult<Vec<_>>>()?;
         self.0 = std::mem::take(&mut self.0)
             .into_iter()
             .zip(keep)

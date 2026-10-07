@@ -8,7 +8,7 @@
 mod fixture;
 
 use better_auth::__private_core::{
-    AuthSession,
+    AuthSession, FieldMap, FieldValue,
     store::{InvitationStore, MemberStore, OrganizationStore, SessionStore, TeamStore, UserStore},
     types::{
         CreateInvitation, CreateMember, CreateOrganization, CreateSession, CreateTeam, CreateUser,
@@ -35,7 +35,8 @@ async fn custom_organization_tables_preserve_fields_and_atomic_invitation_defaul
     let db = Database::connect(&url).await.unwrap();
     run_migrations(&db).await.unwrap();
     fixture::create_tables(&db).await.unwrap();
-    let config = better_auth::AuthConfig::new("organization-persistence-secret-at-least-32-chars");
+    let config = better_auth::AuthConfig::new("organization-persistence-secret-at-least-32-chars")
+        .base_url("http://localhost:3000");
     let mut options = OrganizationConfig::default();
     fixture::configure(&mut options);
     let store = SeaOrmStore::<BundledSchema>::new(config.clone(), db.clone())
@@ -57,11 +58,17 @@ async fn custom_organization_tables_preserve_fields_and_atomic_invitation_defaul
     let mut create = CreateOrganization::new("Mapped organization", "mapped");
     let _ = create
         .additional_fields
-        .insert("label".into(), json!("original"));
+        .insert("label".into(), FieldValue::from("original"));
     let organization = store.create_organization(create).await.unwrap();
-    assert_eq!(organization.metadata, None);
-    assert_eq!(organization.additional_fields["label"], "original:in:out");
-    assert_eq!(organization.additional_fields["secret"], "hidden");
+    assert_eq!(organization.metadata.field_value(), FieldValue::Null);
+    assert_eq!(
+        organization.additional_fields["label"],
+        FieldValue::from("original:in:out")
+    );
+    assert_eq!(
+        organization.additional_fields["secret"],
+        FieldValue::from("hidden")
+    );
     let _ = store
         .create_member(CreateMember::new(
             organization.id.typed().unwrap(),
@@ -82,7 +89,7 @@ async fn custom_organization_tables_preserve_fields_and_atomic_invitation_defaul
         .create_session(CreateSession {
             additional_fields: Default::default(),
             user_id: "recipient".into(),
-            expires_at: chrono::Utc::now() + chrono::Duration::hours(1),
+            expires_at: (chrono::Utc::now() + chrono::Duration::hours(1)).into(),
             ip_address: None,
             user_agent: None,
             impersonated_by: None,
@@ -95,12 +102,12 @@ async fn custom_organization_tables_preserve_fields_and_atomic_invitation_defaul
         "recipient@example.com",
         "member",
         "owner",
-        chrono::Utc::now() + chrono::Duration::hours(1),
+        (chrono::Utc::now() + chrono::Duration::hours(1)).into(),
     );
     invitation.team_id = Some(team.id.typed().unwrap().clone());
     let _ = invitation
         .additional_fields
-        .insert("label".into(), json!("invite"));
+        .insert("label".into(), FieldValue::from("invite"));
     let invitation = store.create_invitation(invitation).await.unwrap();
     let (member, accepted, snapshot) = store
         .accept_invitation_with_teams(
@@ -112,9 +119,18 @@ async fn custom_organization_tables_preserve_fields_and_atomic_invitation_defaul
         )
         .await
         .unwrap();
-    assert_eq!(member.additional_fields["label"], "guest:in:out");
-    assert_eq!(accepted.additional_fields["label"], "invite:in:out");
-    assert_eq!(accepted.additional_fields["marker"], "updated");
+    assert_eq!(
+        member.additional_fields["label"],
+        FieldValue::from("guest:in:out")
+    );
+    assert_eq!(
+        accepted.additional_fields["label"],
+        FieldValue::from("invite:in:out")
+    );
+    assert_eq!(
+        accepted.additional_fields["marker"],
+        FieldValue::from("updated")
+    );
     assert_eq!(
         snapshot.unwrap().active_team_id.as_deref(),
         team.id.as_str()
@@ -145,56 +161,138 @@ async fn custom_organization_tables_preserve_fields_and_atomic_invitation_defaul
     db.close().await.unwrap();
 
     let db = Database::connect(&url).await.unwrap();
-    let store = SeaOrmStore::<BundledSchema>::new(config, db.clone())
+    let store = SeaOrmStore::<BundledSchema>::new(config.clone(), db.clone())
         .with_organization_schema::<fixture::models::Models>();
-    store.configure_organization_fields(options.schema).unwrap();
+    store
+        .configure_organization_fields(options.schema.clone())
+        .unwrap();
     let restored = store
         .get_organization_by_id(organization.id.typed().unwrap())
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(restored.additional_fields["label"], "original:in:out");
+    assert_eq!(
+        restored.additional_fields["label"],
+        FieldValue::from("original:in:out")
+    );
+    let owner_session = store
+        .create_session(CreateSession {
+            user_id: "owner".into(),
+            expires_at: (chrono::Utc::now() + chrono::Duration::hours(1)).into(),
+            ip_address: None,
+            user_agent: None,
+            impersonated_by: None,
+            active_organization_id: None,
+            additional_fields: Default::default(),
+        })
+        .await
+        .unwrap();
+    let auth = better_auth::BetterAuth::<BundledSchema>::new(config)
+        .store(store.clone())
+        .plugin(better_auth::plugins::organization::OrganizationPlugin::with_config(options))
+        .build()
+        .await
+        .unwrap();
     let updated = store
         .update_organization(
             organization.id.typed().unwrap(),
             UpdateOrganization {
-                metadata: Some(json!(null)),
-                additional_fields: [("label".into(), json!("changed"))].into_iter().collect(),
+                metadata: Some(FieldValue::Null),
+                additional_fields: [("label".into(), FieldValue::from("changed"))]
+                    .into_iter()
+                    .collect(),
                 ..Default::default()
             },
         )
         .await
         .unwrap();
     assert_eq!(updated.name, "Mapped organization");
-    assert_eq!(updated.metadata, Some(json!(null)));
-    assert_eq!(updated.additional_fields["label"], "changed:in:out");
-    assert_eq!(updated.additional_fields["marker"], "updated");
+    assert_eq!(updated.metadata.field_value(), FieldValue::from("null"));
+    assert_http_metadata(
+        &auth,
+        owner_session.token(),
+        organization.id.typed().unwrap(),
+        json!(null),
+    )
+    .await;
+    assert_eq!(
+        updated.additional_fields["label"],
+        FieldValue::from("changed:in:out")
+    );
+    assert_eq!(
+        updated.additional_fields["marker"],
+        FieldValue::from("updated")
+    );
     let updated = store
         .update_organization(
             organization.id.typed().unwrap(),
             UpdateOrganization {
-                metadata: Some(json!({})),
+                metadata: Some(FieldValue::from(FieldMap::new())),
                 ..Default::default()
             },
         )
         .await
         .unwrap();
-    assert_eq!(updated.metadata, Some(json!({})));
+    assert_eq!(updated.metadata.field_value(), FieldValue::from("{}"));
+    assert_http_metadata(
+        &auth,
+        owner_session.token(),
+        organization.id.typed().unwrap(),
+        json!({}),
+    )
+    .await;
     let pending = store
         .get_invitation_by_id(invitation.id.typed().unwrap())
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(pending.additional_fields["marker"], "updated");
+    assert_eq!(
+        pending.additional_fields["marker"],
+        FieldValue::from("updated")
+    );
     let users = store
         .list_team_members(team.id.typed().unwrap())
         .await
         .unwrap();
     assert_eq!(users.len(), 1);
     fixture::reset(&db).await.unwrap();
+    drop(auth);
     drop(store);
     db.close().await.unwrap();
     std::fs::remove_file(path).unwrap();
+}
+
+async fn assert_http_metadata(
+    auth: &better_auth::BetterAuth<BundledSchema>,
+    token: &str,
+    organization_id: &str,
+    expected: serde_json::Value,
+) {
+    let cookie = better_auth::__private_core::utils::cookie_utils::sign_cookie_value(
+        token,
+        auth.config().signing_secret(),
+    );
+    let response = auth
+        .call_endpoint(
+            better_auth::__private_core::HttpMethod::Post,
+            "/organization/update",
+            better_auth::server_api::EndpointInput {
+                headers: Some(std::collections::HashMap::from([
+                    (
+                        "cookie".into(),
+                        format!("better-auth.session_token={cookie}"),
+                    ),
+                    ("origin".into(), "http://localhost:3000".into()),
+                ])),
+                body: Some(json!({"organizationId":organization_id,"data":{"metadata":expected}})),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status, 200);
+    let body: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+    assert_eq!(body.get("metadata"), Some(&expected));
 }
 
 #[tokio::test]

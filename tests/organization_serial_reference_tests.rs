@@ -1,7 +1,7 @@
 use better_auth_core::{
     AuthConfig, AuthResult, CreateInvitation, CreateMember, CreateOrganization,
-    CreateOrganizationRole, CreateSession, CreateTeam, CreateUser, InvitationStatus, Member,
-    TeamMember, UpdateOrganization, UpdateOrganizationRole, UpdateTeam,
+    CreateOrganizationRole, CreateSession, CreateTeam, CreateUser, FieldMap, FieldValue,
+    InvitationStatus, Member, TeamMember, UpdateOrganization, UpdateOrganizationRole, UpdateTeam,
     id::IdGeneration,
     organization_fields::OrganizationFields,
     store::{
@@ -36,14 +36,17 @@ fn reference(trace: Option<Arc<Mutex<Vec<Value>>>>) -> UserFieldConfig {
             model: "user".into(),
             field: "id".into(),
         }),
-        default_value: Some(json!(" 001 ")),
-        on_update: Some(Arc::new(|| json!(" 1 "))),
+        default_value: Some(FieldValue::from(" 001 ")),
+        on_update: Some(Arc::new(|| FieldValue::from(" 1 "))),
         transform: Some(FieldTransforms {
             input: Some(UserFieldTransform::new(move |value| {
                 if let Some(trace) = &input_trace {
                     trace.lock().unwrap().push(json!(["input", value]));
                 }
-                Ok(value.map(|value| json!(value.as_str().unwrap().trim())))
+                Ok(match value {
+                    FieldValue::Undefined => FieldValue::Undefined,
+                    value => FieldValue::from(value.as_str().unwrap().trim()),
+                })
             })),
             output: Some(UserFieldTransform::new(move |value| {
                 if let Some(trace) = &trace {
@@ -162,7 +165,10 @@ async fn organization_reference_fields_match_pinned_callback_values_and_projecti
                         EMAIL,
                         "member",
                         "001",
-                        "2100-01-01T00:00:00Z".parse().unwrap(),
+                        "2100-01-01T00:00:00Z"
+                            .parse::<chrono::DateTime<chrono::Utc>>()
+                            .unwrap()
+                            .into(),
                     ))
                     .await?;
                 let updated = store
@@ -194,7 +200,7 @@ async fn organization_reference_fields_match_pinned_callback_values_and_projecti
                     .create_organization_role(CreateOrganizationRole {
                         organization_id: "001".into(),
                         role: "viewer".into(),
-                        permission: json!({}),
+                        permission: FieldValue::from(FieldMap::new()),
                         additional_fields: Default::default(),
                     })
                     .await?;
@@ -272,7 +278,7 @@ async fn explicit_native_reference_replacement_retains_ordinary_string_storage()
         .create_organization_role(CreateOrganizationRole {
             organization_id: organization.id.typed()?.clone(),
             role: "viewer".into(),
-            permission: json!({}),
+            permission: FieldValue::from(FieldMap::new()),
             additional_fields: Default::default(),
         })
         .await?;

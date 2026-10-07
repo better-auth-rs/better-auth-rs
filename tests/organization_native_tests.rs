@@ -23,7 +23,7 @@ use better_auth_core::store::{StatelessSchema, transaction};
 use better_auth_core::user_fields::UserFieldConfig;
 use better_auth_core::{
     AuthContext, AuthRequest, AuthResponse, AuthSchema, BeforeRequestAction, CreateMember,
-    CreateOrganization, CreateTeam, CreateUser,
+    CreateOrganization, CreateTeam, CreateUser, FieldValue,
 };
 use better_auth_seaorm::store::__private_test_support::{bundled_schema::BundledSchema, migrator};
 use better_auth_seaorm::{
@@ -170,7 +170,7 @@ impl OrganizationHooks for State {
     ) -> AuthResult<()> {
         let mut value = json!({"userId":member.user_id,"organizationId":member.organization_id,"role":member.role});
         let object = value.as_object_mut().unwrap();
-        object.extend(member.additional_fields.clone());
+        object.extend(member.additional_fields.json()?);
         if let Some(team) = &member.team_id {
             let _ = object.insert("teamId".into(), json!(team));
         }
@@ -181,11 +181,11 @@ impl OrganizationHooks for State {
         let label = member
             .additional_fields
             .get("label")
-            .and_then(Value::as_str)
+            .and_then(FieldValue::as_str)
             .unwrap_or("default");
         let _ = member
             .additional_fields
-            .insert("label".into(), json!(format!("{label}:hook")));
+            .insert("label".into(), FieldValue::from(format!("{label}:hook")));
         if self.mode.ends_with("reassign") {
             member.user_id = "owner".into();
         }
@@ -233,19 +233,13 @@ fn options(state: &Arc<State>) -> OrganizationConfig {
             UserFieldConfig {
                 required: Some(false),
                 field_name: Some("storedLabel".into()),
-                default_value: Some(json!("default")),
+                default_value: Some(FieldValue::from("default")),
                 transform: Some(FieldTransforms {
                     input: Some(UserFieldTransform::new(|value| {
-                        Ok(Some(json!(format!(
-                            "{}:in",
-                            value.unwrap().as_str().unwrap()
-                        ))))
+                        Ok(FieldValue::from(format!("{}:in", value.as_str().unwrap())))
                     })),
                     output: Some(UserFieldTransform::new(|value| {
-                        Ok(Some(json!(format!(
-                            "{}:out",
-                            value.unwrap().as_str().unwrap()
-                        ))))
+                        Ok(FieldValue::from(format!("{}:out", value.as_str().unwrap())))
                     })),
                 }),
                 ..Default::default()
@@ -257,7 +251,7 @@ fn options(state: &Arc<State>) -> OrganizationConfig {
                 required: Some(false),
                 input: Some(false),
                 returned: Some(false),
-                default_value: Some(json!("hidden")),
+                default_value: Some(FieldValue::from("hidden")),
                 ..Default::default()
             },
         ),
@@ -355,7 +349,7 @@ async fn scenario<S: AuthSchema>(auth: Arc<BetterAuth<S>>, state: Arc<State>) ->
                     Err(error) => return Err(error),
                 };
                 let count = i64::from(
-                    tx.get_member_value(&json!("org"), &json!("target"))
+                    tx.get_member_value(&FieldValue::from("org"), &FieldValue::from("target"))
                         .await?
                         .is_some(),
                 );

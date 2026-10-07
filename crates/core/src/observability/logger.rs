@@ -63,9 +63,11 @@ impl fmt::Display for LogArgument<'_> {
         match self {
             Self::Text(value) => formatter.write_str(value),
             Self::Value(value) => formatter.write_str(
-                &crate::SchemaValue::<String>::Dynamic((*value).clone())
-                    .display_string()
-                    .map_err(|_| fmt::Error)?,
+                &crate::SchemaValue::<String>::Dynamic(
+                    crate::FieldValue::from_json((*value).clone()).map_err(|_| fmt::Error)?,
+                )
+                .display_string()
+                .map_err(|_| fmt::Error)?,
             ),
             Self::Error(error) => fmt::Display::fmt(error, formatter),
         }

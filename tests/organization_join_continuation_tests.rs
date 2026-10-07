@@ -47,8 +47,7 @@ struct State {
 }
 
 impl State {
-    fn text(&self, value: &Value) -> String {
-        let text = value.as_str().unwrap();
+    fn text(&self, text: &str) -> String {
         if self.first_source == "A" {
             return text.into();
         }
@@ -135,7 +134,7 @@ async fn rows<S: AuthSchema>(
             .map(|row| {
                 (
                     row.id.typed().unwrap().clone(),
-                    json!({"name":row.name, "detail":row.additional_fields["label"]}),
+                    json!({"name":row.name, "detail":row.additional_fields["label"].json().unwrap()}),
                 )
             })
             .collect()),
@@ -204,14 +203,14 @@ async fn check_case<S: AuthSchema, T: AuthStore<S> + Clone + 'static>(store: T, 
         let mut input = CreateMember::new(&org_id, &owner, "member");
         input
             .additional_fields
-            .insert("label".into(), json!(format!("{name}-member")));
+            .insert("label".into(), format!("{name}-member").into());
         store.create_member(input).await.unwrap();
         let parent = first_org.get_or_insert(org_id).clone();
         let team = store
             .create_team(CreateTeam {
                 name: name.into(),
                 organization_id: parent.into(),
-                additional_fields: [("label".into(), json!(format!("{name}-detail")))]
+                additional_fields: [("label".into(), format!("{name}-detail").into())]
                     .into_iter()
                     .collect(),
                 ..Default::default()
@@ -247,9 +246,9 @@ async fn check_case<S: AuthSchema, T: AuthStore<S> + Clone + 'static>(store: T, 
             if !state.enabled.load(Ordering::Relaxed) {
                 return Ok(value);
             }
-            let text = state.text(value.as_ref().unwrap());
+            let text = state.text(value.as_str().unwrap());
             let sequence = state.event("name", &text);
-            Ok(Some(json!(format!("{text}:{sequence}"))))
+            Ok(format!("{text}:{sequence}").into())
         })
     } else {
         let (state, mode, store, ids) = (state.clone(), mode.clone(), store.clone(), ids.clone());
@@ -260,7 +259,7 @@ async fn check_case<S: AuthSchema, T: AuthStore<S> + Clone + 'static>(store: T, 
                 if !state.enabled.load(Ordering::Relaxed) {
                     return Ok(value);
                 }
-                let text = state.text(value.as_ref().unwrap());
+                let text = state.text(value.as_str().unwrap());
                 state.event("name", &text);
                 if mode == "async" {
                     state.wait(usize::from(text != "A")).await?;
@@ -272,7 +271,7 @@ async fn check_case<S: AuthSchema, T: AuthStore<S> + Clone + 'static>(store: T, 
                 if mode == "output-error" && text == "A" {
                     return Err(failure());
                 }
-                Ok(Some(json!(format!("{text}-visible"))))
+                Ok(format!("{text}-visible").into())
             }
         })
     };
@@ -282,16 +281,17 @@ async fn check_case<S: AuthSchema, T: AuthStore<S> + Clone + 'static>(store: T, 
             if !state.enabled.load(Ordering::Relaxed) {
                 return Ok(value);
             }
-            let text = state.text(value.as_ref().unwrap());
+            let text = state.text(value.as_str().unwrap());
             let sequence = state.event("detail", &text);
             if text == "B-detail" {
                 state.finished.send(()).unwrap();
             }
-            Ok(Some(json!(if mode == "sync" {
+            Ok((if mode == "sync" {
                 format!("{text}:{sequence}")
             } else {
                 format!("{text}-visible")
-            })))
+            })
+            .into())
         })
     };
     let parent = if mode == "parent-async" || mode == "parent-read" {
@@ -303,7 +303,7 @@ async fn check_case<S: AuthSchema, T: AuthStore<S> + Clone + 'static>(store: T, 
                 if !state.enabled.load(Ordering::Relaxed) {
                     return Ok(value);
                 }
-                let text = state.text(value.as_ref().unwrap());
+                let text = state.text(value.as_str().unwrap());
                 state.event("member", &text);
                 if mode == "parent-async" {
                     state.wait(usize::from(text != "A-member")).await?;
@@ -321,7 +321,7 @@ async fn check_case<S: AuthSchema, T: AuthStore<S> + Clone + 'static>(store: T, 
             if !state.enabled.load(Ordering::Relaxed) {
                 return Ok(value);
             }
-            let text = state.text(value.as_ref().unwrap());
+            let text = state.text(value.as_str().unwrap());
             state.event("member", &text);
             if mode == "parent-error" && text == "A-member" {
                 return Err(failure());
@@ -394,7 +394,7 @@ async fn check_case<S: AuthSchema, T: AuthStore<S> + Clone + 'static>(store: T, 
         .unwrap()
         .into_iter()
         .map(
-            |(_, row)| json!({"name":state.text(&row["name"]),"detail":state.text(&row["detail"])}),
+            |(_, row)| json!({"name":state.text(row["name"].as_str().unwrap()),"detail":state.text(row["detail"].as_str().unwrap())}),
         )
         .collect::<Vec<_>>();
     stored.sort_by_key(|row| row["name"].as_str().unwrap().to_owned());

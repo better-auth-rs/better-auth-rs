@@ -104,8 +104,8 @@ impl<'a, S: AuthSchema> EmailOtpApi<'a, S> {
                                 .await?
                         }
                     };
-                    let otp = if let Some(record) =
-                        record.filter(|record| !record.expires_at.is_before(chrono::Utc::now()))
+                    let otp = if let Some(record) = record
+                        && !record.expires_at.is_before(chrono::Utc::now())?
                     {
                         let (stored, _) = super::otp::split(record.value.typed()?);
                         Some(

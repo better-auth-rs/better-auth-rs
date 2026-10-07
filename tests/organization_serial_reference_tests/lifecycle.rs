@@ -44,7 +44,7 @@ pub(super) async fn observe(joins: bool) -> AuthResult<Value> {
         .create_organization_role(CreateOrganizationRole {
             organization_id: padded_organization.clone(),
             role: "viewer".into(),
-            permission: json!({}),
+            permission: FieldValue::from(FieldMap::new()),
             additional_fields: Default::default(),
         })
         .await?;
@@ -73,7 +73,10 @@ pub(super) async fn observe(joins: bool) -> AuthResult<Value> {
         EMAIL,
         "member",
         &padded_user,
-        "2100-01-01T00:00:00Z".parse().unwrap(),
+        "2100-01-01T00:00:00Z"
+            .parse::<chrono::DateTime<chrono::Utc>>()
+            .unwrap()
+            .into(),
     );
     invitation.team_id = Some(team.id.typed()?.clone());
     let invitation = store.create_invitation(invitation).await?;
@@ -81,7 +84,7 @@ pub(super) async fn observe(joins: bool) -> AuthResult<Value> {
         .query_organization_members(&ListOrganizationMembersParams {
             organization_id: padded_organization.clone(),
             filter_field: Some("reference".into()),
-            filter_value: Some(json!(padded_role)),
+            filter_value: Some(FieldValue::from(padded_role)),
             filter_operator: Some("eq".into()),
             ..Default::default()
         })
@@ -108,7 +111,7 @@ pub(super) async fn observe(joins: bool) -> AuthResult<Value> {
         .await?
         .expect("ordinary team member pair exists");
     let lookup = json!({
-        "numericMember":member(&store.get_member_value(&json!(organization_id.parse::<u64>().unwrap()), &json!(user_id.parse::<u64>().unwrap())).await?.expect("ordinary numeric member pair exists")),
+        "numericMember":member(&store.get_member_value(&FieldValue::from(organization_id.parse::<u64>().unwrap()), &FieldValue::from(user_id.parse::<u64>().unwrap())).await?.expect("ordinary numeric member pair exists")),
         "member":joined_member(&store.get_member_with_user(&padded_organization, &padded_user).await?.expect("ordinary member pair exists")),
         "memberById":joined_member(&store.get_member_by_id_with_user(created_member.id.typed()?).await?.expect("ordinary member ID exists")),
         "filtered":{"total":total,"members":filtered_members},
@@ -144,7 +147,10 @@ pub(super) async fn observe(joins: bool) -> AuthResult<Value> {
     let session = store
         .create_session(CreateSession {
             user_id: user_id.clone().into(),
-            expires_at: "2100-01-01T00:00:00Z".parse().unwrap(),
+            expires_at: "2100-01-01T00:00:00Z"
+                .parse::<chrono::DateTime<chrono::Utc>>()
+                .unwrap()
+                .into(),
             ip_address: None,
             user_agent: None,
             impersonated_by: None,

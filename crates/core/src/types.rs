@@ -619,7 +619,7 @@ impl AuthRequest {
     pub fn set_server_context(
         &self,
         key: impl Into<String>,
-        value: serde_json::Value,
+        value: crate::FieldValue,
     ) -> crate::AuthResult<()> {
         let _ = self
             .server_context
@@ -630,7 +630,7 @@ impl AuthRequest {
     }
 
     /// Read server state attached by an authenticated flow.
-    pub fn server_context(&self, key: &str) -> crate::AuthResult<Option<serde_json::Value>> {
+    pub fn server_context(&self, key: &str) -> crate::AuthResult<Option<crate::FieldValue>> {
         Ok(self
             .server_context
             .lock()
@@ -832,6 +832,7 @@ pub struct UpdateUserRequest {
     #[serde(default, skip_serializing_if = "crate::SchemaValue::is_undefined")]
     pub image: crate::SchemaValue<Option<String>>,
     pub role: Option<String>,
+    #[serde(with = "crate::field_value::serde::optional_value", default)]
     pub metadata: Option<crate::FieldValue>,
 }
 

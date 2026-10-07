@@ -348,7 +348,7 @@ pub(crate) async fn inspect_trusted_device(
     };
 
     if verification.value != user.id().into_owned()
-        || verification.expires_at.is_before_or_equal(Utc::now())
+        || verification.expires_at.is_before_or_equal(Utc::now())?
     {
         return Ok(TrustedDeviceCheck {
             trusted: false,
@@ -728,7 +728,7 @@ async fn resolve_two_factor_state<S: better_auth_core::AuthSchema>(
         .get_verification_by_identifier(&identifier)
         .await?
         .ok_or_else(|| AuthError::authentication_failed("Invalid two factor cookie"))?;
-    if verification.expires_at.is_before_or_equal(Utc::now()) {
+    if verification.expires_at.is_before_or_equal(Utc::now())? {
         ctx.database
             .delete_verification_by_identifier(&identifier)
             .await?;

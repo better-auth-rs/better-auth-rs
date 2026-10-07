@@ -6,8 +6,8 @@
 use super::{contract, display_fixture};
 use better_auth::{
     __private_core::{
-        AuthError, AuthResult, AuthSchema, AuthStore, CreatePasskey, CreateUser, Passkey,
-        PasskeyCredentialState, PasskeyStorage, UpdatePasskeyAuthentication,
+        AuthError, AuthResult, AuthSchema, AuthStore, CreatePasskey, CreateUser, FieldValue,
+        Passkey, PasskeyCredentialState, PasskeyStorage, UpdatePasskeyAuthentication,
         store::EphemeralStore,
         user_fields::{FieldTransforms, UserConfig, UserFieldConfig, UserFieldTransform},
         wire::PasskeyView,
@@ -72,7 +72,7 @@ fn policies(mapping: &str, events: Option<&Trace>, failure: &Arc<AtomicU8>) -> U
                 let events = events.clone();
                 field.on_update = Some(Arc::new(move || {
                     push(&events, json!(["onUpdate", "aaguid"]));
-                    json!(format!(" {UPDATED} "))
+                    format!(" {UPDATED} ").into()
                 }));
             }
             let input_events = events.clone();
@@ -86,19 +86,19 @@ fn policies(mapping: &str, events: Option<&Trace>, failure: &Arc<AtomicU8>) -> U
                         json!([
                             "input",
                             name,
-                            value.clone().unwrap_or_else(|| json!({"type":"undefined"}))
+                            value.json()?.unwrap_or_else(|| json!({"type":"undefined"}))
                         ]),
                     );
                     if name == "aaguid" && input_failure.load(Ordering::SeqCst) == 1 {
                         return Err(AuthError::internal("ordinary Passkey input error"));
                     }
-                    Ok(value.map(|value| match value {
-                        Value::String(text) if name == "aaguid" => {
-                            json!(text.trim().to_ascii_lowercase())
+                    Ok(match value {
+                        FieldValue::String(text) if name == "aaguid" => {
+                            text.trim().to_ascii_lowercase().into()
                         }
-                        Value::String(text) => json!(text.trim()),
+                        FieldValue::String(text) => text.trim().into(),
                         value => value,
-                    }))
+                    })
                 })),
                 output: Some(UserFieldTransform::new(move |value| {
                     push(
@@ -106,17 +106,19 @@ fn policies(mapping: &str, events: Option<&Trace>, failure: &Arc<AtomicU8>) -> U
                         json!([
                             "output",
                             name,
-                            value.clone().unwrap_or_else(|| json!({"type":"undefined"}))
+                            value.json()?.unwrap_or_else(|| json!({"type":"undefined"}))
                         ]),
                     );
                     if name == "aaguid" && output_failure.load(Ordering::SeqCst) == 2 {
                         return Err(AuthError::internal("ordinary Passkey output error"));
                     }
-                    Ok(value.map(|value| match value {
-                        Value::String(text) if name == "aaguid" => json!(text.to_ascii_uppercase()),
-                        Value::String(text) => json!(format!("{text}:out")),
+                    Ok(match value {
+                        FieldValue::String(text) if name == "aaguid" => {
+                            text.to_ascii_uppercase().into()
+                        }
+                        FieldValue::String(text) => format!("{text}:out").into(),
                         value => value,
-                    }))
+                    })
                 })),
             });
         }

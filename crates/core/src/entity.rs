@@ -255,7 +255,7 @@ pub trait AuthInvitation:
 
     /// Check if the invitation has expired.
     fn is_expired(&self) -> crate::AuthResult<bool> {
-        Ok(self.expires_at().is_before(Utc::now()))
+        self.expires_at().is_before(Utc::now())
     }
     /// Comma-separated invited team identifiers.
     fn team_id(&self) -> &SchemaValue<Option<String>>;

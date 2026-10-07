@@ -692,7 +692,10 @@ impl OAuthProxyPlugin {
             return redirect_error(error_url, "state_mismatch", None);
         }
         if let Some(anonymous_user) = state.server_context.get("anonymousUserId") {
-            req.set_server_context("anonymousUserId", anonymous_user.clone())?;
+            req.set_server_context(
+                "anonymousUserId",
+                better_auth_core::FieldValue::from_json(anonymous_user.clone())?,
+            )?;
         }
         let clear = better_auth_core::utils::cookie_utils::create_clear_cookie(
             &state::state_cookie_name(&ctx.config),

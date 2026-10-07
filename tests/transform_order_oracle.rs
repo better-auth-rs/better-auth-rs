@@ -70,14 +70,14 @@ async fn ordinary_output_transform_matches_upstream() -> AuthResult<()> {
                 UserFieldConfig {
                     transform: Some(FieldTransforms {
                         output: Some(UserFieldTransform::new(move |value| {
-                            let raw = value.as_ref().and_then(Value::as_str).ok_or_else(|| {
+                            let raw = value.as_str().ok_or_else(|| {
                                 AuthError::internal("Oracle field must be a string")
                             })?;
                             let mut trace = trace.lock().map_err(|_| {
                                 AuthError::internal("Oracle trace mutex was poisoned")
                             })?;
                             trace.push(format!("{name}:{raw}"));
-                            Ok(Some(json!(format!("{raw}:{}", trace.len()))))
+                            Ok(format!("{raw}:{}", trace.len()).into())
                         })),
                         ..Default::default()
                     }),

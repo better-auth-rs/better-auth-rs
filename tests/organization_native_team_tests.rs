@@ -20,7 +20,8 @@ use better_auth_core::user_fields::UserFieldConfig;
 use better_auth_core::wire::UserView;
 use better_auth_core::{
     AuthContext, AuthRequest, AuthResponse, BeforeRequestAction, CreateInvitation, CreateMember,
-    CreateOrganization, CreateSession, CreateTeam, CreateUser, HttpMethod, Team,
+    CreateOrganization, CreateSession, CreateTeam, CreateUser, FieldDate, FieldMap, FieldValue,
+    HttpMethod, Team,
 };
 use better_auth_seaorm::store::__private_test_support::{bundled_schema::BundledSchema, migrator};
 use better_auth_seaorm::{
@@ -61,12 +62,14 @@ impl State {
         self.record(json!({"phase":phase,"path":request.path(),"body":body}))
     }
     fn team(&self, phase: &str, event: OrganizationTeamEvent<'_>) -> AuthResult<()> {
-        self.record(json!({"phase":phase,"user":event.user.map(|user| &user.id),"team":team_value(event.team)}))
+        self.record(json!({"phase":phase,"user":event.user.map(|user| &user.id),"team":team_value(event.team)?}))
     }
 }
 
-fn team_value(team: &Team) -> Value {
-    json!({"name":team.name,"organizationId":team.organization_id,"label":team.additional_fields.get("label")})
+fn team_value(team: &Team) -> AuthResult<Value> {
+    Ok(
+        json!({"name":team.name,"organizationId":team.organization_id,"label":team.additional_fields.get("label").map(FieldValue::json).transpose()?}),
+    )
 }
 fn property<'a>(value: &'a Value, name: &str) -> AuthResult<&'a Value> {
     value
@@ -78,9 +81,10 @@ fn string<'a>(value: &'a Value, name: &str) -> AuthResult<&'a str> {
         .as_str()
         .ok_or_else(|| AuthError::internal(format!("Expected fixture string {name}")))
 }
-fn date(value: &str) -> AuthResult<chrono::DateTime<chrono::Utc>> {
+fn date(value: &str) -> AuthResult<FieldDate> {
     value
-        .parse()
+        .parse::<chrono::DateTime<chrono::Utc>>()
+        .map(FieldDate::from)
         .map_err(|error: chrono::ParseError| AuthError::internal(error.to_string()))
 }
 
@@ -125,14 +129,14 @@ impl OrganizationHooks for State {
         _: &OrganizationResponse,
         user: Option<&UserView>,
     ) -> AuthResult<()> {
-        self.record(json!({"phase":"create-before","user":user.map(|user| &user.id),"team":{"name":data.name,"organizationId":data.organization_id,"label":data.additional_fields.get("label")}}))?;
+        self.record(json!({"phase":"create-before","user":user.map(|user| &user.id),"team":{"name":data.name,"organizationId":data.organization_id,"label":data.additional_fields.get("label").map(FieldValue::json).transpose()?}}))?;
         data.name = format!("{}:hook", data.name.typed()?).into();
         let label = data
             .additional_fields
             .get("label")
-            .and_then(Value::as_str)
+            .and_then(FieldValue::as_str)
             .ok_or_else(|| AuthError::internal("Missing team label"))?;
-        let label = json!(format!("{label}:hook"));
+        let label = format!("{label}:hook").into();
         let _ = data.additional_fields.insert("label".into(), label);
         Ok(())
     }
@@ -162,15 +166,15 @@ fn options(state: &Arc<State>, sqlite: bool) -> OrganizationConfig {
             transform: Some(FieldTransforms {
                 input: Some(UserFieldTransform::new(|value| {
                     let value = value
-                        .and_then(|value| value.as_str().map(str::to_owned))
+                        .as_str()
                         .ok_or_else(|| AuthError::internal("Expected label input"))?;
-                    Ok(Some(json!(format!("{value}:in"))))
+                    Ok(format!("{value}:in").into())
                 })),
                 output: Some(UserFieldTransform::new(|value| {
                     let value = value
-                        .and_then(|value| value.as_str().map(str::to_owned))
+                        .as_str()
                         .ok_or_else(|| AuthError::internal("Expected label output"))?;
-                    Ok(Some(json!(format!("{value}:out"))))
+                    Ok(format!("{value}:out").into())
                 })),
             }),
             ..Default::default()
@@ -205,7 +209,7 @@ async fn scenario<S: AuthSchema>(
             id: Some("existing".into()),
             name: "Existing".into(),
             organization_id: "org".into(),
-            additional_fields: serde_json::Map::from_iter([("label".into(), json!("seed"))]),
+            additional_fields: FieldMap::from_iter([("label".into(), "seed".into())]),
             ..Default::default()
         })
         .await?;
@@ -311,7 +315,7 @@ async fn scenario<S: AuthSchema>(
         .map_err(|error| AuthError::internal(error.to_string()))?
         .clone();
     assert_eq!(
-        &json!({"backend":property(case,"backend")?,"mode":property(case,"mode")?,"created":created,"stored":team_value(&stored),"removed":removed,"remaining":remaining,"invitationTeam":invitation.team_id,"events":events}),
+        &json!({"backend":property(case,"backend")?,"mode":property(case,"mode")?,"created":created,"stored":team_value(&stored)?,"removed":removed,"remaining":remaining,"invitationTeam":invitation.team_id,"events":events}),
         case
     );
     Ok(())

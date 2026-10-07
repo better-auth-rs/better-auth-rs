@@ -104,7 +104,7 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
         &self,
         input: CreateAccount,
     ) -> AuthResult<Option<AccountView>> {
-        let mut input = input.with_timestamps(Utc::now());
+        let mut input = input.with_timestamps(Utc::now().into());
         let transaction = EphemeralTransaction {
             store: self.clone(),
         };

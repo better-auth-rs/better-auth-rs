@@ -1,5 +1,5 @@
 use better_auth::__private_core::{
-    AuthError,
+    AuthError, FieldValue,
     user_fields::{
         FieldTransforms, UserConfig, UserFieldConfig, UserFieldTransform, UserFieldType,
     },
@@ -41,7 +41,7 @@ pub(crate) fn policies(
                     UserFieldConfig {
                         field_name: Some("stored_label".into()),
                         required: Some(false),
-                        default_value: Some(json!(" Default ")),
+                        default_value: Some(" Default ".into()),
                         ..Default::default()
                     },
                 ),
@@ -75,7 +75,7 @@ pub(crate) fn policies(
                                 if let Some(events) = &events {
                                     push(events, json!(["default", "revision"]));
                                 }
-                                json!(1.5)
+                                1.5.into()
                             }
                         })),
                         on_update: Some(Arc::new({
@@ -84,7 +84,7 @@ pub(crate) fn policies(
                                 if let Some(events) = &events {
                                     push(events, json!(["onUpdate", "revision"]));
                                 }
-                                json!(2.5)
+                                2.5.into()
                             }
                         })),
                         ..Default::default()
@@ -109,16 +109,16 @@ pub(crate) fn policies(
                         json!([
                             "input",
                             input_name,
-                            value.clone().unwrap_or(json!({"type":"undefined"}))
+                            value.json()?.unwrap_or(json!({"type":"undefined"}))
                         ]),
                     );
                     if input_name == "revision" && input_failure.load(Ordering::SeqCst) == 1 {
                         return Err(AuthError::internal(format!("ordinary {model} input error")));
                     }
-                    Ok(value.map(|value| match value {
-                        Value::String(value) if input_name == "label" => json!(value.trim()),
+                    Ok(match value {
+                        FieldValue::String(value) if input_name == "label" => value.trim().into(),
                         value => value,
-                    }))
+                    })
                 })),
                 output: Some(UserFieldTransform::new(move |value| {
                     push(
@@ -126,7 +126,7 @@ pub(crate) fn policies(
                         json!([
                             "output",
                             output_name,
-                            value.clone().unwrap_or(json!({"type":"undefined"}))
+                            value.json()?.unwrap_or(json!({"type":"undefined"}))
                         ]),
                     );
                     if output_name == "label" && output_failure.load(Ordering::SeqCst) == 2 {
@@ -134,12 +134,12 @@ pub(crate) fn policies(
                             "ordinary {model} output error"
                         )));
                     }
-                    Ok(value.map(|value| match value {
-                        Value::String(value) if output_name == "label" => {
-                            json!(format!("{value}:out"))
+                    Ok(match value {
+                        FieldValue::String(value) if output_name == "label" => {
+                            format!("{value}:out").into()
                         }
                         value => value,
-                    }))
+                    })
                 })),
             });
         }

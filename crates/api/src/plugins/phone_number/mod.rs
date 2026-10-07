@@ -221,7 +221,7 @@ impl PhoneNumberPlugin {
             }
         }
         .ok_or_else(|| error(400, "OTP_NOT_FOUND", "OTP not found"))?;
-        if existing.expires_at.is_before(Utc::now()) {
+        if existing.expires_at.is_before(Utc::now())? {
             native::delete_verification(endpoint, identifier).await?;
             return Err(error(400, "OTP_EXPIRED", "OTP expired"));
         }

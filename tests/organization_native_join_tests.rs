@@ -40,16 +40,16 @@ fn display_user(row: &better_auth_core::wire::UserView) -> Value {
     json!({"name":row.name,"image":row.image})
 }
 fn display_member(row: &MemberUser) -> Value {
-    json!({"label":row.member.additional_fields["label"], "detail":row.member.additional_fields["detail"], "user":display_user(&row.user)})
+    json!({"label":row.member.additional_fields["label"].json().unwrap(), "detail":row.member.additional_fields["detail"].json().unwrap(), "user":display_user(&row.user)})
 }
 fn display_organization(row: &better_auth_core::Organization) -> Value {
     json!({"name":row.name,"logo":row.logo})
 }
 fn display_team(row: &better_auth_core::Team) -> Value {
-    json!({"name":row.name,"label":row.additional_fields["label"]})
+    json!({"name":row.name,"label":row.additional_fields["label"].json().unwrap()})
 }
 fn display_invitation(row: &better_auth_core::Invitation) -> Value {
-    json!({"label":row.additional_fields["label"],"detail":row.additional_fields["detail"]})
+    json!({"label":row.additional_fields["label"].json().unwrap(),"detail":row.additional_fields["detail"].json().unwrap()})
 }
 async fn query<S: AuthSchema>(store: &impl AuthStore<S>, fixture: &Value) -> AuthResult<Value> {
     Ok(match fixture["path"].as_str().unwrap() {
@@ -58,7 +58,7 @@ async fn query<S: AuthSchema>(store: &impl AuthStore<S>, fixture: &Value) -> Aut
         "organizations" => json!(store.list_user_organizations("user-a").await?.iter().map(display_organization).collect::<Vec<_>>()),
         "teams" => json!(store.list_user_teams("user-a").await?.iter().map(display_team).collect::<Vec<_>>()),
         "invitations" => json!(store.list_user_invitations("RECIPIENT@ordinary-native-org.test").await?.into_iter().map(|row| {
-            json!({"label":row.invitation.additional_fields["label"],"detail":row.invitation.additional_fields["detail"],"organizationName":row.organization.unwrap().name})
+            json!({"label":row.invitation.additional_fields["label"].json().unwrap(),"detail":row.invitation.additional_fields["detail"].json().unwrap(),"organizationName":row.organization.unwrap().name})
         }).collect::<Vec<_>>()),
         "full" => {
             let row = store.get_organization_details(OrganizationDetailsQuery {

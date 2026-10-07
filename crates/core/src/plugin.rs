@@ -719,8 +719,8 @@ impl<S: AuthSchema> AuthContext<S> {
         let resolved = self.session_manager().resolve(req, read).await?;
         req.set_session_snapshot(resolved.data.clone())?;
         let data = resolved.data.ok_or(AuthError::Unauthenticated)?;
-        if let Some(id) = data.user.id.json()? {
-            req.set_server_context("auth.current-user-id", id)?;
+        if !data.user.id.is_undefined() {
+            req.set_server_context("auth.current-user-id", data.user.id.field_value())?;
         }
         Ok((data.user, data.session))
     }

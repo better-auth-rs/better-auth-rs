@@ -222,10 +222,13 @@ pub trait AuthTransaction<S: AuthSchema>:
         &self,
         identifier: &str,
     ) -> AuthResult<Option<crate::wire::VerificationView>> {
-        Ok(self
+        match self
             .consume_verification_including_expired(identifier)
             .await?
-            .filter(|record| !record.expires_at.is_before(chrono::Utc::now())))
+        {
+            Some(record) if !record.expires_at.is_before(chrono::Utc::now())? => Ok(Some(record)),
+            _ => Ok(None),
+        }
     }
     /// Delete a verification through the active transaction and its storage policy.
     async fn delete_verification_by_identifier(&self, identifier: &str) -> AuthResult<()>;
@@ -512,7 +515,8 @@ pub trait SessionStore<S: AuthSchema>: Send + Sync {
     async fn end_session(&self, token: &str) -> AuthResult<()> {
         let now = chrono::Utc::now();
         if let Some(session) = self.get_session(token).await?
-            && crate::entity::AuthSession::expires_at(&session) > now
+            && crate::entity::AuthSession::expires_at(&session).milliseconds()
+                > now.timestamp_millis() as f64
         {
             let _ = self.update_session_expiry(token, now).await?;
         }

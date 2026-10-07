@@ -211,10 +211,11 @@ pub(crate) async fn reset_password_token_core(
         .get_verification_by_identifier(&format!("reset-password:{}", token))
         .await?;
 
-    if verification
-        .as_ref()
-        .is_none_or(|verification| verification.expires_at.is_before(Utc::now()))
-    {
+    let expired = match &verification {
+        Some(verification) => verification.expires_at.is_before(Utc::now())?,
+        None => true,
+    };
+    if expired {
         return Ok(ResetPasswordTokenResult::Redirect(build_redirect_url(
             ctx.base_url(),
             query.callback_url.as_deref(),
