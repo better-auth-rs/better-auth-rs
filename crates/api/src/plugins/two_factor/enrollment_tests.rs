@@ -80,6 +80,18 @@ impl Fixture {
         }
         let mut ctx = AuthContext::new(config, Arc::new(store));
         ctx.set_metadata(METADATA_ENABLED, json!(true));
+        let mut fields = better_auth_core::plugin_runtime::ModelFields::default();
+        fields.set_schema_configuration(&better_auth_core::store::schema::SchemaConfiguration {
+            config: ctx.config.clone(),
+            plugins: vec!["two-factor"],
+            metadata: ctx.metadata.clone(),
+            secondary_storage: false,
+            database_rate_limit: false,
+        });
+        ctx.database = ctx
+            .database
+            .with_runtime(ctx.config.clone(), Vec::new(), fields)
+            .unwrap();
         let ctx = ctx
             .initialize_request_context()
             .await
