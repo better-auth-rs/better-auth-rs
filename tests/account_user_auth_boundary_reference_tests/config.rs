@@ -31,19 +31,20 @@ pub(super) fn configured(
         })
         .ok_or_else(|| AuthError::internal("Missing selected relation declaration"))?;
     config.user = UserConfig {
-        additional_fields: Some(fields(
-            "user",
-            &["image", "name"],
-            &relation["userFields"],
-            events,
-        )?),
+        additional_fields: Some(
+            fields("user", &["image", "name"], &relation["userFields"], events)?
+                .into_iter()
+                .collect(),
+        ),
     };
     config.account.additional_fields = fields(
         "account",
         &["accessToken", "accountId", "userId"],
         &relation["accountFields"],
         events,
-    )?;
+    )?
+    .into_iter()
+    .collect();
     Ok(config)
 }
 
@@ -52,7 +53,7 @@ fn fields(
     names: &[&str],
     declarations: &Value,
     events: Option<&Events>,
-) -> AuthResult<indexmap::IndexMap<String, UserFieldConfig>> {
+) -> AuthResult<Vec<(String, UserFieldConfig)>> {
     names.iter().map(|&name| {
         let default = if model == "account" && name == "userId" {
             json!({"references": {"model": "user", "field": "id"}})

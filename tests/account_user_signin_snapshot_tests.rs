@@ -1,3 +1,8 @@
+#![expect(
+    clippy::panic_in_result_fn,
+    reason = "Contract assertions fail the test; Result propagates setup and observation errors."
+)]
+
 use better_auth::plugins::EmailPasswordPlugin;
 use better_auth::{AuthConfig, AuthError, AuthResult, BetterAuth, PasswordHasher};
 use better_auth_core::{

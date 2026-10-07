@@ -161,7 +161,25 @@ impl<S: AuthSchema> DatabaseHooks<S> for Hooks {
         data: &SessionUpdate,
         _: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<DatabaseHookUpdate<SessionUpdate>> {
-        self.unexpected("session", "update", "before", &data)?;
+        self.unexpected(
+            "session",
+            "update",
+            "before",
+            &(
+                &data.id,
+                &data.token,
+                &data.user_id,
+                &data.expires_at,
+                &data.created_at,
+                &data.updated_at,
+                &data.ip_address,
+                &data.user_agent,
+                &data.impersonated_by,
+                &data.active_organization_id,
+                &data.active_team_id,
+                &data.additional_fields,
+            ),
+        )?;
         Ok(DatabaseHookUpdate::Continue)
     }
     async fn after_update_session(

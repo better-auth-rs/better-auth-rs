@@ -159,7 +159,13 @@ async fn cache_renewal_preserves_account_binding_chunks_and_pending_cookies() {
             endpoint.append("Set-Cookie", replacement.clone());
         }
         manager
-            .write_cache_with_response(&req, &data, false, Some(&endpoint), None)
+            .write_cache_with_response(
+                &req,
+                &NativeSessionData::from(data.clone()),
+                false,
+                Some(&endpoint),
+                None,
+            )
             .await
             .unwrap();
         let headers = req.take_response_headers().unwrap();
