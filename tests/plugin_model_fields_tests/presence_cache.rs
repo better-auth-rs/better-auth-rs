@@ -22,9 +22,13 @@ async fn cache_name(
     Ok(())
 }
 
-async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
+async fn contract<S: AuthSchema>(
+    raw: Arc<dyn AuthStore<S>>,
+    field_type: UserFieldType,
+) -> AuthResult<()> {
     for mode in ["database", "fallback", "secondary"] {
         for (presence, expected) in [
+            ("string", Some(json!("Unlisted display"))),
             ("undefined", None),
             ("null", Some(Value::Null)),
             ("number", Some(json!(42))),
@@ -61,6 +65,7 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
                     fields(
                         "name",
                         UserFieldConfig {
+                            field_type: field_type.clone(),
                             required: Some(false),
                             transform: Some(FieldTransforms {
                                 input: Some(UserFieldTransform::new(move |value| {
@@ -190,10 +195,26 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
 
 #[tokio::test]
 async fn memory_api_key_display_presence_survives_cache_and_adapter_reads() -> AuthResult<()> {
-    contract(memory()).await
+    contract(memory(), UserFieldType::String).await
 }
 
 #[tokio::test]
 async fn sqlite_api_key_display_presence_survives_cache_and_adapter_reads() -> AuthResult<()> {
-    contract(sqlite().await?).await
+    contract(sqlite().await?, UserFieldType::String).await
+}
+
+#[tokio::test]
+async fn memory_api_key_enum_display_keeps_unlisted_strings_and_callback_values() -> AuthResult<()>
+{
+    contract(memory(), UserFieldType::Enum(vec!["Reserved".into()])).await
+}
+
+#[tokio::test]
+async fn sqlite_api_key_enum_display_keeps_unlisted_strings_and_callback_values() -> AuthResult<()>
+{
+    contract(
+        sqlite().await?,
+        UserFieldType::Enum(vec!["Reserved".into()]),
+    )
+    .await
 }

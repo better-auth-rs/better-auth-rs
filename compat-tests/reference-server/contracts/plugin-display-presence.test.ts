@@ -8,6 +8,11 @@ import { getMigrations } from "better-auth/db/migration";
 
 type Backend = "memory" | "sqlite";
 type Display = string | number | null | undefined;
+type DisplayDeclaration = "string" | string[];
+const declarations: {label: string; type: DisplayDeclaration}[] = [
+  {label: "string", type: "string"},
+  {label: "enum", type: ["Reserved"]},
+];
 const AAGUID = "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4";
 const baseURL = "http://display-presence.test";
 const describe = (value: Display) => value === undefined ? "undefined" : JSON.stringify(value);
@@ -44,12 +49,12 @@ test("display presence contracts use pinned Better Auth plugins 1.7.6", async ()
   }
 });
 
-for (const backend of ["memory", "sqlite"] as const) {
-  test(`Passkey display outputs and omitted/null create inputs retain presence (${backend})`, async () => {
+for (const declaration of declarations) for (const backend of ["memory", "sqlite"] as const) {
+  test(`Passkey ${declaration.label} display outputs and omitted/null create inputs retain presence (${backend})`, async () => {
     const trace: string[] = [];
     let output: "identity" | "string" | "empty" | "null" | "undefined" | "number" = "identity";
     const field = (name: "name" | "aaguid") => ({
-      type: "string" as const, required: false,
+      type: declaration.type, required: false,
       transform: {
         input(value: Display) { trace.push(`input:${name}:${describe(value)}`); return value; },
         output(value: Display) {
@@ -72,6 +77,8 @@ for (const backend of ["memory", "sqlite"] as const) {
         counter: 0, deviceType: "singleDevice", backedUp: false, createdAt: new Date(),
       }});
       const created = await create("desk", {name: "Desk", aaguid: AAGUID});
+      expectDisplay(created, "name", "Desk");
+      expectDisplay(created, "aaguid", AAGUID);
       expect(trace.splice(0)).toStrictEqual([
         'input:name:"Desk"', `input:aaguid:${JSON.stringify(AAGUID)}`,
         'output:name:"Desk"', `output:aaguid:${JSON.stringify(AAGUID)}`,
@@ -134,9 +141,9 @@ function storage() {
   return {cache, customStorage};
 }
 
-function keyFields(trace: string[], output: Display) {
+function keyFields(trace: string[], output: Display, type: DisplayDeclaration = "string") {
   return {id: "ordinary-key-display", schema: {apikey: {fields: {name: {
-    type: "string" as const, required: false,
+    type, required: false,
     transform: {
       input(value: Display) { trace.push(`input:name:${describe(value)}`); return value; },
       output(value: Display) { trace.push(`output:name:${describe(value)}`); return output; },
@@ -144,16 +151,16 @@ function keyFields(trace: string[], output: Display) {
   }}}}};
 }
 
-for (const backend of ["memory", "sqlite"] as const) for (const mode of ["database", "fallback"] as const) {
-  for (const presence of ["null", "undefined", "number"] as const) {
-    test(`API Key name ${presence} survives ${mode === "database" ? "database reads" : "fallback refill and cache hits"} (${backend})`, async () => {
-      const expected = presence === "null" ? null : presence === "number" ? 42 : undefined;
+for (const declaration of declarations) for (const backend of ["memory", "sqlite"] as const) for (const mode of ["database", "fallback"] as const) {
+  for (const presence of ["string", "null", "undefined", "number"] as const) {
+    test(`API Key ${declaration.label} name ${presence} survives ${mode === "database" ? "database reads" : "fallback refill and cache hits"} (${backend})`, async () => {
+      const expected = presence === "string" ? "Unlisted display" : presence === "null" ? null : presence === "number" ? 42 : undefined;
       const trace: string[] = [];
       const {cache, customStorage} = storage();
       const f = await fixture(backend, [apiKey({
         storage: mode === "database" ? "database" : "secondary-storage",
         fallbackToDatabase: mode === "fallback", customStorage, deferUpdates: false,
-      }), keyFields(trace, expected)]);
+      }), keyFields(trace, expected, declaration.type)]);
       try {
         const created = await f.auth.api.createApiKey({headers: f.headers, body: {name: "Desk"}});
         expectDisplay(created, "name", expected);

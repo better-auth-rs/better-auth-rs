@@ -53,7 +53,11 @@ pub(super) async fn read<S: AuthSchema>(
     Ok(serde_json::from_slice(&response.body.bytes()?)?)
 }
 
-async fn passkey_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, sql: bool) -> AuthResult<()> {
+async fn passkey_contract<S: AuthSchema>(
+    raw: Arc<dyn AuthStore<S>>,
+    sql: bool,
+    field_type: UserFieldType,
+) -> AuthResult<()> {
     let trace = Arc::new(Mutex::new(Vec::new()));
     let output = Arc::new(Mutex::new(None::<FieldValue>));
     let policy = |field: &'static str| {
@@ -61,6 +65,7 @@ async fn passkey_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, sql: bool) 
         let output_trace = trace.clone();
         let output = output.clone();
         UserFieldConfig {
+            field_type: field_type.clone(),
             required: Some(false),
             transform: Some(FieldTransforms {
                 input: Some(UserFieldTransform::new(move |value| {
@@ -101,6 +106,8 @@ async fn passkey_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, sql: bool) 
     let mut data = input(&owner, "Desk");
     data.aaguid = Some(AAGUID.into()).into();
     let created = auth.store().create_passkey(data).await?;
+    assert_eq!(created.name, Some("Desk".into()));
+    assert_eq!(created.aaguid, Some(AAGUID.into()));
     assert_eq!(
         *trace_lock(&trace)?,
         [
@@ -238,10 +245,32 @@ async fn passkey_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, sql: bool) 
 
 #[tokio::test]
 async fn memory_display_presence_reaches_passkey_callbacks_and_public_json() -> AuthResult<()> {
-    passkey_contract(memory(), false).await
+    passkey_contract(memory(), false, UserFieldType::String).await
 }
 
 #[tokio::test]
 async fn sqlite_display_presence_reaches_passkey_callbacks_and_public_json() -> AuthResult<()> {
-    passkey_contract(sqlite().await?, true).await
+    passkey_contract(sqlite().await?, true, UserFieldType::String).await
+}
+
+#[tokio::test]
+async fn memory_passkey_enum_display_keeps_unlisted_strings_and_callback_values() -> AuthResult<()>
+{
+    passkey_contract(
+        memory(),
+        false,
+        UserFieldType::Enum(vec!["Reserved".into()]),
+    )
+    .await
+}
+
+#[tokio::test]
+async fn sqlite_passkey_enum_display_keeps_unlisted_strings_and_callback_values() -> AuthResult<()>
+{
+    passkey_contract(
+        sqlite().await?,
+        true,
+        UserFieldType::Enum(vec!["Reserved".into()]),
+    )
+    .await
 }

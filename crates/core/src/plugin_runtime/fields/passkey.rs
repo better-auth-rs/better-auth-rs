@@ -32,12 +32,14 @@ pub(super) fn validate_fields(fields: &UserConfig) -> AuthResult<()> {
     for (name, field) in fields.fields() {
         let storage = resolve_field_name(field.field_name.as_deref(), name);
         if matches!(name.as_str(), "name" | "aaguid") {
-            if !matches!(field.field_type, UserFieldType::String)
-                || field.references.is_some()
+            if !matches!(
+                field.field_type,
+                UserFieldType::String | UserFieldType::Enum(_)
+            ) || field.references.is_some()
                 || (native_name(storage) && storage != name)
             {
                 return Err(AuthError::config(format!(
-                    "Passkey {name} requires a string column without a reference or a different native field"
+                    "Passkey {name} requires a string or enum declaration without a reference or a different native field"
                 )));
             }
         } else if native_name(name) || native_name(storage) {
