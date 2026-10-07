@@ -78,7 +78,7 @@ impl EphemeralStore {
                 if owner.is_null() || owner.is_undefined() {
                     None
                 } else {
-                    let owner = self.memory_user_id_query(&owner)?;
+                    let owner = self.memory_primary_id_query(&owner)?;
                     self.lock()?
                         .users
                         .first_ref(|user| user.id.field_value().strict_equals(&owner))?
@@ -285,7 +285,7 @@ impl EphemeralStore {
             self.model_fields
                 .canonicalize_id(crate::store::schema::EntityRole::User)?;
             let owners = self
-                .memory_user_id_query(&owners.into())?
+                .memory_primary_id_query(&owners.into())?
                 .decode::<Vec<Value>>()?;
             self.raw("user", "findMany", |state| {
                 Ok(crate::query::paginate_memory(

@@ -195,14 +195,8 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
             let _ = record.insert("id".into(), Value::String(id));
         }
         self.raw("verification", "create", |state| {
-            if matches!(
-                self.config.advanced.database.generate_id(),
-                crate::id::IdGeneration::Serial
-            ) {
-                let _ = record.insert(
-                    "id".into(),
-                    Value::Number((state.verifications.len() + 1) as f64),
-                );
+            if let Some(id) = self.next_serial_id(state.verifications.len()) {
+                let _ = record.insert("id".into(), id);
             }
             state.verifications.push(record.clone());
             Ok(())
@@ -358,7 +352,7 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
         Ok(())
     }
     async fn delete_verification(&self, id: &str) -> AuthResult<()> {
-        let bound_id = self.memory_user_id_query(&Value::from(id))?;
+        let bound_id = self.memory_primary_id_query(&Value::from(id))?;
         let (id, rows) = self
             .raw("verification", "findOne", |state| {
                 let records = state.verifications.snapshot()?;

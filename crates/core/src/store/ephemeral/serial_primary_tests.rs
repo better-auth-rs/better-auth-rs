@@ -1,6 +1,7 @@
 use super::*;
 
 mod fixture;
+mod session_plugins;
 
 fn serial_store() -> EphemeralStore {
     let mut config = AuthConfig::default();

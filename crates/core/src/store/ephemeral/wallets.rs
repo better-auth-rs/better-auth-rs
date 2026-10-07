@@ -27,6 +27,7 @@ impl EphemeralStore {
             let _ = output.insert(name.to_owned(), value);
         }
         snapshot.additional_fields = output;
+        snapshot.id = Self::project_id(&snapshot.id)?;
         Ok(snapshot)
     }
 }
@@ -69,7 +70,7 @@ impl crate::store::WalletStore for EphemeralStore {
                 self.memory_plugin_field_input(field, value)
             })
             .await?;
-        let value = crate::types::WalletAddress {
+        let mut value = crate::types::WalletAddress {
             additional_fields,
             id: self
                 .generated_id("walletAddress", None, self.lock()?.wallets.len())?
@@ -83,6 +84,9 @@ impl crate::store::WalletStore for EphemeralStore {
         };
         let (snapshot, source) = self
             .raw("walletAddress", "create", |state| {
+                if let Some(id) = self.next_serial_id(state.wallets.len()) {
+                    value.id = crate::SchemaValue::from_field(id);
+                }
                 let source = state.wallets.push_ref(value.clone());
                 Ok((value, source))
             })

@@ -91,7 +91,7 @@ impl EphemeralStore {
         }
     }
 
-    pub(super) fn memory_user_id_query(&self, value: &Value) -> AuthResult<Value> {
+    pub(super) fn memory_primary_id_query(&self, value: &Value) -> AuthResult<Value> {
         if matches!(
             self.config.advanced.database.generate_id(),
             crate::id::IdGeneration::Serial
@@ -123,7 +123,7 @@ impl EphemeralStore {
                 field,
                 &self.memory_field_query(&self.session_config.field_schema(), "userId", value)?,
             ),
-            None => self.memory_user_id_query(&value),
+            None => self.memory_primary_id_query(&value),
         }
     }
 

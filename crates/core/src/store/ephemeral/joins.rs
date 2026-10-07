@@ -144,7 +144,7 @@ impl EphemeralStore {
                 else {
                     return Ok(None);
                 };
-                let stored_id = Self::project_user_id(&user.id)?;
+                let stored_id = Self::project_id(&user.id)?;
                 let mut accounts = Vec::new();
                 let id = user.id.field_value();
                 let matching = state.accounts.select_refs(|row| {

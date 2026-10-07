@@ -3,7 +3,12 @@ use super::*;
 use crate::store::database_hooks::{DatabaseHookControl, DatabaseHookUpdate, SessionUpdate};
 
 impl SessionUpdate {
-    fn apply(self, session: &mut SessionView, user_id: Option<crate::SchemaValue<String>>) {
+    fn apply(
+        self,
+        session: &mut SessionView,
+        id: Option<crate::SchemaValue<String>>,
+        user_id: Option<crate::SchemaValue<String>>,
+    ) {
         if let Some(fields) = &mut session.visible_fields {
             for (name, supplied) in [
                 ("impersonatedBy", self.impersonated_by.is_some()),
@@ -21,8 +26,8 @@ impl SessionUpdate {
         macro_rules! fields {
             ($($field:ident),* $(,)?) => {$(if let Some(value) = self.$field { session.$field = value; })*};
         }
-        if let Some(id) = self.id {
-            session.id = id.into();
+        if let Some(id) = id {
+            session.id = id;
         }
         if let Some(user_id) = user_id {
             session.user_id = user_id;
@@ -99,6 +104,14 @@ impl EphemeralStore {
         mut update: SessionUpdate,
     ) -> AuthResult<Option<SessionView>> {
         let schema = self.session_config.field_schema();
+        let id = update
+            .id
+            .take()
+            .filter(|id| !id.is_empty())
+            .map(|id| self.memory_primary_id_query(&id.into()))
+            .transpose()?
+            .filter(|id| !matches!(id, Value::Number(number) if number.is_nan()))
+            .map(crate::SchemaValue::from_field);
         let configured_user_id = schema.fields().contains_key("userId");
         let mut user_id = if configured_user_id {
             if let Some(user_id) = update.user_id.take() {
@@ -130,7 +143,7 @@ impl EphemeralStore {
                 let Some(mut session) = state.sessions.find_mut(|row| row.token == token)? else {
                     return Ok(None);
                 };
-                update.apply(&mut session, user_id);
+                update.apply(&mut session, id, user_id);
                 Ok(Some(session.clone()))
             })
             .await?;

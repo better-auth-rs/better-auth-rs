@@ -39,6 +39,7 @@ impl EphemeralStore {
             },
             |_, (snapshot, _, output)| {
                 let mut row = snapshot.clone();
+                row.id = Self::project_id(&row.id)?;
                 row.additional_fields = std::mem::take(output);
                 Ok(row)
             },
@@ -50,11 +51,12 @@ impl EphemeralStore {
 #[async_trait]
 impl crate::store::JwksStore for EphemeralStore {
     async fn get_jwk(&self, id: &str) -> AuthResult<Option<crate::Jwk>> {
+        let id = self.memory_primary_id_query(&Value::from(id))?;
         let selected = self
             .raw("jwks", "findOne", |state| {
                 state
                     .jwks
-                    .first_ref(|key| key.id == id)?
+                    .first_ref(|key| key.id.field_value().strict_equals(&id))?
                     .map(|source| {
                         let snapshot = source.read(|row| Ok(row.clone()))?;
                         Ok((snapshot, source))
@@ -95,7 +97,7 @@ impl crate::store::JwksStore for EphemeralStore {
                 self.memory_plugin_field_input(field, value)
             })
             .await?;
-        let key = crate::Jwk {
+        let mut key = crate::Jwk {
             additional_fields,
             id: self
                 .generated_id("jwks", None, self.lock()?.jwks.len())?
@@ -110,6 +112,9 @@ impl crate::store::JwksStore for EphemeralStore {
         };
         let selected = self
             .raw("jwks", "create", |state| {
+                if let Some(id) = self.next_serial_id(state.jwks.len()) {
+                    key.id = crate::SchemaValue::from_field(id);
+                }
                 let source = state.jwks.push_ref(key.clone());
                 Ok((key, source))
             })

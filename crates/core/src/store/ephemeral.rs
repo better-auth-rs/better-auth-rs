@@ -131,6 +131,14 @@ impl EphemeralStore {
         }
     }
 
+    fn next_serial_id(&self, row_count: usize) -> Option<Value> {
+        matches!(
+            self.config.advanced.database.generate_id(),
+            crate::id::IdGeneration::Serial
+        )
+        .then(|| Value::Number((row_count + 1) as f64))
+    }
+
     /// Construct an empty adapter. Restarting the process discards all records.
     pub fn new(config: Arc<AuthConfig>) -> Self {
         Self {

@@ -53,6 +53,7 @@ impl EphemeralStore {
             },
             |_, (session, _)| {
                 let mut session = session.clone();
+                session.id = Self::project_id(&session.id)?;
                 if self.session_config.fields().contains_key("userId") {
                     session.user_id = crate::SchemaValue::from_field(
                         session
@@ -61,7 +62,7 @@ impl EphemeralStore {
                             .unwrap_or_default(),
                     );
                 } else {
-                    session.user_id = Self::project_user_id(&session.user_id)?;
+                    session.user_id = Self::project_id(&session.user_id)?;
                 }
                 Ok(session)
             },
@@ -242,6 +243,9 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
             }
         }
         self.raw("session", "create", |state| {
+            if let Some(id) = self.next_serial_id(state.sessions.len()) {
+                session.id = crate::SchemaValue::from_field(id);
+            }
             state.sessions.push(session.clone());
             Ok(())
         })

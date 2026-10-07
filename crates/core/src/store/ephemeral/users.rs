@@ -26,7 +26,7 @@ impl EphemeralStore {
         &self,
         id: &Value,
     ) -> AuthResult<Option<RowRef<UserView>>> {
-        let id = self.memory_user_id_query(id)?;
+        let id = self.memory_primary_id_query(id)?;
         self.user_ref(|user| user.id.field_value().strict_equals(&id))
             .await
     }
@@ -91,7 +91,7 @@ impl EphemeralStore {
         Ok(users)
     }
 
-    pub(super) fn project_user_id(
+    pub(super) fn project_id(
         id: &crate::SchemaValue<String>,
     ) -> AuthResult<crate::SchemaValue<String>> {
         let value = id.field_value();
@@ -109,7 +109,7 @@ impl EphemeralStore {
         user: &mut UserView,
         mut fields: FieldMap,
     ) -> AuthResult<()> {
-        user.id = Self::project_user_id(&user.id)?;
+        user.id = Self::project_id(&user.id)?;
         let _ = fields.remove("id");
         if self.config.user.fields().contains_key("name") {
             user.name = crate::SchemaValue::from_field(fields.remove("name").unwrap_or_default());
@@ -200,8 +200,9 @@ impl EphemeralStore {
         mut update: UpdateUser,
     ) -> AuthResult<Option<UserView>> {
         self.model_fields.canonicalize_id(EntityRole::User)?;
-        let id =
-            crate::SchemaValue::<String>::from_field(self.memory_user_id_query(&Value::from(id))?);
+        let id = crate::SchemaValue::<String>::from_field(
+            self.memory_primary_id_query(&Value::from(id))?,
+        );
         let user = self
             .raw("user", "update", |state| {
                 Ok({
@@ -435,13 +436,8 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             "create",
             async {
                 let mut state = self.lock()?;
-                if matches!(
-                    self.config.advanced.database.generate_id(),
-                    crate::id::IdGeneration::Serial
-                ) {
-                    user.id = crate::SchemaValue::from_field(Value::Number(
-                        (state.users.len() + 1) as f64,
-                    ));
+                if let Some(id) = self.next_serial_id(state.users.len()) {
+                    user.id = crate::SchemaValue::from_field(id);
                 }
                 state.users.push(user.clone());
                 Ok(())
@@ -472,7 +468,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
         self.model_fields.canonicalize_id(EntityRole::User)?;
         let ids = ids
             .iter()
-            .map(|id| self.memory_user_id_query(&Value::from(id.clone())))
+            .map(|id| self.memory_primary_id_query(&Value::from(id.clone())))
             .collect::<AuthResult<Vec<_>>>()?;
         let users: Vec<_> = self
             .raw("user", "findMany", |state| {
@@ -502,7 +498,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
         let Some(record) = self.user_ref_by_email(email).await? else {
             return Ok(None);
         };
-        let stored_user_id = record.read(|user| Self::project_user_id(&user.id))?;
+        let stored_user_id = record.read(|user| Self::project_id(&user.id))?;
         let user = self.output_user_refs(vec![record]).await?.remove(0);
         let mut accounts = Vec::new();
         if let Some(id) = stored_user_id.as_str() {
@@ -563,8 +559,9 @@ impl UserStore<StatelessSchema> for EphemeralStore {
         }
         self.delete_user_accounts_with_hooks(id).await?;
         self.model_fields.canonicalize_id(EntityRole::User)?;
-        let stored_id =
-            crate::SchemaValue::<String>::from_field(self.memory_user_id_query(&Value::from(id))?);
+        let stored_id = crate::SchemaValue::<String>::from_field(
+            self.memory_primary_id_query(&Value::from(id))?,
+        );
         let user = self
             .raw("user", "findOne", |state| state.users.get(&stored_id))
             .await?;
@@ -613,7 +610,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
         )?
         .bind_memory_filter(|name, value| {
             if matches!(name, "id" | "_id") {
-                return self.memory_user_id_query(&value);
+                return self.memory_primary_id_query(&value);
             }
             self.memory_field_query(&self.config.user, name, value)
         })?;

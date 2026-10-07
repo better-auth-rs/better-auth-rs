@@ -139,14 +139,8 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
             let _ = fields.insert("id".into(), Value::String(id));
         }
         self.raw("account", "create", |state| {
-            if matches!(
-                self.config.advanced.database.generate_id(),
-                crate::id::IdGeneration::Serial
-            ) {
-                let _ = fields.insert(
-                    "id".into(),
-                    Value::Number((state.accounts.len() + 1) as f64),
-                );
+            if let Some(id) = self.next_serial_id(state.accounts.len()) {
+                let _ = fields.insert("id".into(), id);
             }
             state.accounts.push(fields.clone());
             Ok(())
@@ -317,7 +311,7 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
                 self.memory_plugin_field_input(field, value)
             })
             .await?;
-        let id = self.memory_user_id_query(&Value::from(id))?;
+        let id = self.memory_primary_id_query(&Value::from(id))?;
         let record = self
             .raw("account", "update", |state| {
                 Ok({
@@ -346,7 +340,7 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
 
     async fn delete_account(&self, id: &str) -> AuthResult<()> {
         self.model_fields.canonicalize_id(EntityRole::Account)?;
-        let id = self.memory_user_id_query(&Value::from(id))?;
+        let id = self.memory_primary_id_query(&Value::from(id))?;
         let record = self
             .raw("account", "findOne", |state| {
                 Ok(state
