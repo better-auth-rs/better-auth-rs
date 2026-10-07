@@ -6,7 +6,7 @@ use crate::{SeaOrmPluginModel, schema::AuthSchema};
 use better_auth_core::FieldValue as Value;
 use better_auth_core::{
     AuthResult, DeviceCode, DeviceCodeOwnership, DeviceCodeWhere, FieldValue, WhereMode,
-    WhereOperator, user_fields::UserFieldType,
+    WhereOperator,
 };
 use sea_orm::{
     ColumnTrait, ConnectionTrait, DbBackend, EntityTrait, QueryFilter, QuerySelect,
@@ -124,34 +124,9 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
             .model_fields
             .device_code_ownership_query(ownership, policy)?;
         let backend = connection.get_database_backend();
-        if backend == DbBackend::Sqlite
-            && matches!(field.field_type, UserFieldType::Date)
-            && let FieldValue::Date(date) = &query.value
-        {
-            query.value = super::record_bindings::sqlite_date(date.clone())?;
-        }
-        if backend != DbBackend::Postgres
-            && matches!(field.field_type, UserFieldType::Json)
-            && matches!(
-                query.value,
-                FieldValue::Null
-                    | FieldValue::Date(_)
-                    | FieldValue::Array(_)
-                    | FieldValue::Object(_)
-            )
-        {
-            query.value = query
-                .value
-                .stringify()?
-                .map(FieldValue::String)
-                .unwrap_or_default();
-        }
-        if backend != DbBackend::Postgres
-            && matches!(field.field_type, UserFieldType::Boolean)
-            && let Value::Bool(value) = query.value
-        {
-            query.value = Value::Number(f64::from(u8::from(value)));
-        }
+        let original = query.value.clone();
+        query.value =
+            super::value_filter::adapter_query_value(query.value, &original, field, backend)?;
         let ownership = ownership_predicate(P::DeviceCode::column(&query.field)?, query, backend)?;
         let id = P::DeviceCode::column("id")?.eq_id(expected.id.typed()?, policy)?;
         let filter = Condition::all()

@@ -392,8 +392,11 @@ pub struct GetInvitationResponse<I: Serialize> {
     pub organization_name: SchemaValue<String>,
     #[serde(rename = "organizationSlug")]
     pub organization_slug: SchemaValue<String>,
-    #[serde(rename = "inviterEmail")]
-    pub inviter_email: Option<String>,
+    #[serde(
+        rename = "inviterEmail",
+        skip_serializing_if = "SchemaValue::is_undefined"
+    )]
+    pub inviter_email: SchemaValue<Option<String>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -515,10 +518,10 @@ pub struct MemberResponse {
 }
 
 impl MemberResponse {
-    /// Construct from any type implementing [`AuthMember`] and [`AuthUser`](better_auth_core::entity::AuthUser).
+    /// Construct from projected member fields and the Organization adapter's user summary.
     pub fn from_member_and_user(
         member: &impl better_auth_core::entity::AuthMember,
-        user: &better_auth_core::UserView,
+        user: &MemberUserView,
     ) -> Self {
         Self {
             additional_fields: member.projected_fields().cloned().unwrap_or_default(),
@@ -527,7 +530,7 @@ impl MemberResponse {
             user_id: member.user_id().clone(),
             role: member.role().clone(),
             created_at: member.created_at().clone(),
-            user: MemberUserView::from_user(user),
+            user: user.clone(),
         }
     }
 }

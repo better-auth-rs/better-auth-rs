@@ -1,10 +1,46 @@
-use better_auth_core::{AuthResult, FieldValue};
+use better_auth_core::{
+    AuthResult, FieldValue,
+    user_fields::{UserFieldConfig, UserFieldType},
+};
 use sea_orm::{
     ColumnTrait, DbBackend,
     sea_query::{ExprTrait, SimpleExpr},
 };
 
 use super::id_filter::IdColumn;
+
+pub(super) fn adapter_query_value(
+    mut value: FieldValue,
+    original: &FieldValue,
+    field: &UserFieldConfig,
+    backend: DbBackend,
+) -> AuthResult<FieldValue> {
+    if backend == DbBackend::Sqlite
+        && matches!(field.field_type, UserFieldType::Date)
+        && let FieldValue::Date(date) = original
+    {
+        value = super::record_bindings::sqlite_date(date.clone())?;
+    }
+    if backend != DbBackend::Postgres
+        && matches!(field.field_type, UserFieldType::Json)
+        && matches!(
+            original,
+            FieldValue::Null | FieldValue::Date(_) | FieldValue::Array(_) | FieldValue::Object(_)
+        )
+    {
+        value = original
+            .stringify()?
+            .map(FieldValue::String)
+            .unwrap_or_default();
+    }
+    if backend != DbBackend::Postgres
+        && matches!(field.field_type, UserFieldType::Boolean)
+        && let FieldValue::Bool(boolean) = value
+    {
+        value = FieldValue::Number(f64::from(u8::from(boolean)));
+    }
+    Ok(value)
+}
 
 pub(super) fn equals_id(
     column: impl ColumnTrait,

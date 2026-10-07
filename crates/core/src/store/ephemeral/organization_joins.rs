@@ -3,6 +3,8 @@ use super::*;
 use crate::store::{MemberUser, OrganizationDetails, OrganizationDetailsQuery, OrganizationKey};
 use better_auth_schema_registry::EntityRole;
 
+mod member_user;
+
 struct OrganizationChildren {
     invitations: Vec<RowRef<Invitation>>,
     members: Vec<RowRef<Member>>,
@@ -29,75 +31,6 @@ fn child_page<T: Clone + MemoryRow>(
 }
 
 impl EphemeralStore {
-    pub(super) async fn read_member_user(
-        &self,
-        predicate: impl Fn(&Member) -> AuthResult<bool> + Send,
-        require_user: bool,
-    ) -> AuthResult<Option<MemberUser>> {
-        let native = self.config.advanced.database.joins == Some(true);
-        let (member, native_member, native_user) = {
-            let state = self.lock()?;
-            let mut selected = None;
-            for row in state.members.select_refs(|_| true)? {
-                if row.read(&predicate)? {
-                    selected = Some(row);
-                    break;
-                }
-            }
-            let Some(member) = selected else {
-                return Ok(None);
-            };
-            let owner_id = member.read(|row| Ok(row.user_id.field_value()))?;
-            let native_member = native
-                .then(|| member.read(|row| Ok(row.clone())))
-                .transpose()?;
-            let native_user = if native {
-                Some(
-                    state
-                        .users
-                        .first_ref(|user| user.id.field_value().strict_equals(&owner_id))?,
-                )
-            } else {
-                None
-            };
-            (member, native_member, native_user)
-        };
-        let member = match native_member {
-            Some(member) => self.output_member(member).await?,
-            None => self
-                .output_record_refs(EntityRole::Member, vec![member])
-                .await?
-                .into_iter()
-                .next()
-                .ok_or_else(|| AuthError::internal("Member projection lost its selected row"))?,
-        };
-        let user = match native_user {
-            Some(user) => user,
-            None => {
-                let owner = member.user_id.field_value();
-                if owner.is_null() || owner.is_undefined() {
-                    None
-                } else {
-                    let owner = self.memory_primary_id_query(&owner)?;
-                    self.lock()?
-                        .users
-                        .first_ref(|user| user.id.field_value().strict_equals(&owner))?
-                }
-            }
-        };
-        let user = self
-            .output_user_refs(user.into_iter().collect())
-            .await?
-            .into_iter()
-            .next();
-        match user {
-            Some(user) => Ok(Some(MemberUser { member, user })),
-            // The by-ID adapter requires a child; the organization/user lookup permits an absent child.
-            None if require_user => Err(AuthError::internal("User not found for member")),
-            None => Ok(None),
-        }
-    }
-
     pub(super) async fn read_organization_details(
         &self,
         query: OrganizationDetailsQuery<'_>,
@@ -321,7 +254,10 @@ impl EphemeralStore {
                     .ok_or_else(|| {
                         AuthError::internal("Unexpected error: User not found for member")
                     })?;
-                Ok(MemberUser { member, user })
+                Ok(MemberUser {
+                    member,
+                    user: crate::MemberUserView::from_user(&user),
+                })
             })
             .collect::<AuthResult<Vec<_>>>()?;
         Ok(Some(OrganizationDetails {

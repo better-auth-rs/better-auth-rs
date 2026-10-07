@@ -18,6 +18,7 @@ mod instrumentation;
 mod invitations;
 mod joins;
 mod jwks;
+mod member_user_join;
 mod members;
 mod migrator;
 mod model_names;

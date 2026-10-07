@@ -89,6 +89,8 @@ pub struct UserFieldConfig {
     pub field_name: Option<String>,
     /// Foreign-key metadata. References to `id` use the adapter's ID output conversion.
     pub references: Option<UserFieldReference>,
+    /// Unique foreign keys select one related row; omission permits a related page.
+    pub unique: Option<bool>,
     /// Constant creation default.
     pub default_value: Option<Value>,
     /// Creation default factory.

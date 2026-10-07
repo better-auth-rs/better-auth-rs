@@ -36,7 +36,7 @@ use std::sync::{
 use support::State;
 use tokio::sync::{mpsc, oneshot};
 
-fn display_user(row: &better_auth_core::wire::UserView) -> Value {
+fn display_user(row: &better_auth_core::MemberUserView) -> Value {
     json!({"name":row.name,"image":row.image})
 }
 fn display_member(row: &MemberUser) -> Value {
@@ -92,13 +92,13 @@ async fn stored<S: AuthSchema>(store: &impl AuthStore<S>) -> Value {
                 .unwrap()
                 .unwrap(),
         ));
-        users.push(display_user(
+        users.push(display_user(&better_auth_core::MemberUserView::from_user(
             &store
                 .get_user_by_id(&format!("user-{suffix}"))
                 .await
                 .unwrap()
                 .unwrap(),
-        ));
+        )));
     }
     let mut invitations = Vec::new();
     for suffix in ["a", "a-other", "b"] {

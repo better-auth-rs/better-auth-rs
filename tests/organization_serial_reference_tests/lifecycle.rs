@@ -95,7 +95,10 @@ pub(super) async fn observe(joins: bool) -> AuthResult<Value> {
             .get_user_by_id(row.user_id.typed()?)
             .await?
             .expect("ordinary member has its user");
-        filtered_members.push(joined_member(&MemberUser { member: row, user }));
+        filtered_members.push(joined_member(&MemberUser {
+            member: row,
+            user: better_auth_core::MemberUserView::from_user(&user),
+        }));
     }
     let full = store
         .get_organization_details(OrganizationDetailsQuery {

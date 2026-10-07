@@ -389,7 +389,7 @@ pub(crate) async fn get_invitation_core(
         .ok_or_else(|| {
             AuthError::bad_request("Inviter is no longer a member of the organization")
         })?;
-    let inviter_email = inviter.user.email().map(str::to_owned);
+    let inviter_email = inviter.user.email;
 
     Ok(Some(GetInvitationResponse {
         invitation: InvitationView::from(&invitation),

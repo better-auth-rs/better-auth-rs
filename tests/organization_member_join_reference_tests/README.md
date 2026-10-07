@@ -1,0 +1,11 @@
+# Member/User join contract
+
+The paired tests consume `organization-member-join-reference-1.7.6.json`. The original 17 scenarios and two alias-chain scenarios run with Memory and SQLite. Three additional limit scenarios run with Memory. Each scenario runs with joins enabled and disabled, empty and populated storage, and both Organization lookup paths: 164 cases and 328 Organization calls. Each operation compares the complete returned fields, JSON serialization, summary property presence and order, ordered query and output events, error timing, and unchanged storage.
+
+The Rust Organization methods return typed Member records. The tests compare every Member property and retain explicit `Undefined` values through `AuthRecordFields`. The tests compare the User summary's own property order. The typed outer Member serialization order is not the generic adapter's object insertion order; the fixture retains that upstream observation.
+
+The generic `adapter.findOne` results and the factory's raw join arguments remain upstream evidence. Rust does not expose that generic adapter operation. The Bun contract still compares the complete generic observations, including relation cardinality, mapped join columns, limits, own properties, and errors.
+
+SQLite snapshots include all seven physical tables and every column. Memory snapshots use an independent baseline runtime without callbacks. Memory snapshots include complete User, Member, Organization, and Invitation records and the User count. The public Memory store does not expose a raw snapshot of every internal table. The fixture retains the upstream seven-table raw snapshots without claiming equivalent Rust coverage.
+
+Rust has no JavaScript Error object. Schema failures must retain the exact upstream message in `AuthError::Config`. Missing users on the by-ID path must produce `AuthError::Internal("User not found for member")` at the same query and callback boundary as the upstream TypeError. Callback failures must preserve the response status and complete body. A private response header proves that the original callback response survives propagation. The fixture retains JavaScript error names, own properties, property order, and reference-identity observations.

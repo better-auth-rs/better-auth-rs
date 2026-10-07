@@ -1,31 +1,21 @@
 use super::MemberUserView;
-use crate::{AuthRecordFields, AuthResult, FieldMap, FromFieldMap, SchemaField, SchemaValue};
+use crate::{AuthRecordFields, AuthResult, FieldMap, FromFieldMap, SchemaValue};
 
 impl AuthRecordFields for MemberUserView {
     fn field_values(&self) -> AuthResult<FieldMap> {
-        let mut fields = FieldMap::new();
-        if !self.id.is_undefined() {
-            let _ = fields.insert("id".into(), self.id.field_value());
-        }
-        for (name, value) in [
-            ("email", self.email.clone().into_field()),
-            ("name", self.name.field_value()),
-            ("image", self.image.field_value()),
-        ] {
-            if self
-                .visible_fields
-                .as_ref()
-                .is_none_or(|fields| fields.contains(name))
-            {
-                let _ = fields.insert(name.into(), value);
-            }
-        }
-        Ok(fields)
+        Ok([
+            ("id".into(), self.id.field_value()),
+            ("name".into(), self.name.field_value()),
+            ("email".into(), self.email.field_value()),
+            ("image".into(), self.image.field_value()),
+        ]
+        .into())
     }
 
     fn structured_clone(&self, context: &mut crate::StructuredCloneContext) -> AuthResult<Self> {
         let mut user = self.clone();
         user.id = context.clone_field(&self.id)?;
+        user.email = context.clone_field(&self.email)?;
         user.name = context.clone_field(&self.name)?;
         user.image = context.clone_field(&self.image)?;
         Ok(user)
@@ -35,9 +25,8 @@ impl AuthRecordFields for MemberUserView {
 impl FromFieldMap for MemberUserView {
     fn from_field_values(mut fields: FieldMap) -> AuthResult<Self> {
         Ok(Self {
-            visible_fields: Some(fields.keys().cloned().collect()),
             id: SchemaValue::from_field(fields.remove("id").unwrap_or_default()),
-            email: fields.remove("email").unwrap_or_default().decode()?,
+            email: SchemaValue::from_field(fields.remove("email").unwrap_or_default()),
             name: SchemaValue::from_field(fields.remove("name").unwrap_or_default()),
             image: SchemaValue::from_field(fields.remove("image").unwrap_or_default()),
         })

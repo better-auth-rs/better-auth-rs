@@ -109,7 +109,10 @@ pub(crate) async fn list_members_core(
         let user_info = users_by_id
             .get(&member.user_id.as_str().map(str::to_owned))
             .ok_or_else(|| AuthError::internal("Unexpected error: User not found for member"))?;
-        members.push(MemberResponse::from_member_and_user(member, user_info));
+        members.push(MemberResponse::from_member_and_user(
+            member,
+            &better_auth_core::MemberUserView::from_user(user_info),
+        ));
     }
 
     Ok(ListMembersResponse { members, total })

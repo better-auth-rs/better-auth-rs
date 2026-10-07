@@ -41,68 +41,6 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPluginSchema> SeaOrmSt
 where
     S::User: SeaOrmUserModel,
 {
-    pub(super) async fn read_member_user(
-        &self,
-        query: Select<Entity<O::Member>>,
-        require_user: bool,
-    ) -> AuthResult<Option<MemberUser>> {
-        let (member, selected_user) = if self.config().advanced.database.joins == Some(true) {
-            self.model_fields
-                .canonicalize_id(better_auth_core::store::schema::EntityRole::User)?;
-            let query = super::joins::joined_query::<
-                Entity<O::Member>,
-                <S::User as SeaOrmUserModel>::Entity,
-            >(
-                query.limit(1),
-                (O::Member::column("user_id")?, S::User::id_column()),
-                S::User::id_column(),
-            );
-            let Some((member, user)) = super::joins::joined_rows::<
-                Entity<O::Member>,
-                <S::User as SeaOrmUserModel>::Entity,
-            >(self.connection(), &query)
-            .await?
-            .into_iter()
-            .next() else {
-                return Ok(None);
-            };
-            (member, Some(user))
-        } else {
-            let Some(member) = query.one(self.connection()).await.map_err(map_db_err)? else {
-                return Ok(None);
-            };
-            (member, None)
-        };
-        let owner_id = models::join_value(&member, "user_id")?;
-        let member = member
-            .record(
-                &self.organization_fields()?.member,
-                self.connection().get_database_backend(),
-            )
-            .await?;
-        let user = match selected_user {
-            Some(user) => user,
-            None => {
-                self.model_fields
-                    .begin_id_query(better_auth_core::store::schema::EntityRole::User)?;
-                <S::User as SeaOrmUserModel>::Entity::find()
-                    .filter(S::User::id_column().eq(owner_id))
-                    .one(self.connection())
-                    .await
-                    .map_err(map_db_err)?
-            }
-        };
-        match user {
-            Some(user) => Ok(Some(MemberUser {
-                member,
-                user: self.output_user(&user, self.connection()).await?,
-            })),
-            // The by-ID adapter requires a child; the organization/user lookup permits an absent child.
-            None if require_user => Err(AuthError::internal("User not found for member")),
-            None => Ok(None),
-        }
-    }
-
     async fn organization_snapshot(
         &self,
         query: Select<Entity<O::Organization>>,
@@ -333,9 +271,11 @@ where
                 })?;
                 Ok(MemberUser {
                     member,
-                    user: users.get(index).cloned().ok_or_else(|| {
-                        AuthError::internal("Member projection lost its stored user index")
-                    })?,
+                    user: better_auth_core::MemberUserView::from_user(
+                        users.get(index).ok_or_else(|| {
+                            AuthError::internal("Member projection lost its stored user index")
+                        })?,
+                    ),
                 })
             })
             .collect::<AuthResult<Vec<_>>>()?;

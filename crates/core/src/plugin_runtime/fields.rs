@@ -126,6 +126,32 @@ impl ModelFields {
         self.schema_models = Some(config.models());
     }
 
+    pub(crate) fn organization_join_schema(&self, config: &AuthConfig) -> Self {
+        let mut schema = self.clone();
+        if schema.schema_models.is_none() {
+            // Direct OrganizationStore calls support every organization model before plugin initialization.
+            schema.set_schema_configuration(&crate::store::schema::SchemaConfiguration {
+                config: Arc::new(config.clone()),
+                plugins: vec!["organization"],
+                metadata: [
+                    (
+                        "organization.teams_enabled".into(),
+                        serde_json::Value::Bool(true),
+                    ),
+                    (
+                        "organization.dynamic_access_control".into(),
+                        serde_json::Value::Bool(true),
+                    ),
+                ]
+                .into_iter()
+                .collect(),
+                secondary_storage: false,
+                database_rate_limit: false,
+            });
+        }
+        schema
+    }
+
     pub(crate) fn resolve_model_name(
         &self,
         candidate: &str,

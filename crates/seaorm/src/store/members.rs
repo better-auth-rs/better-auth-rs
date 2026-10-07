@@ -210,6 +210,9 @@ impl<S, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> Member
 where
     S: AuthSchema + Send + Sync,
     S::User: crate::SeaOrmUserModel,
+    S::Session: crate::SeaOrmSessionModel,
+    S::Account: crate::SeaOrmAccountModel,
+    S::Verification: crate::SeaOrmVerificationModel,
 {
     async fn insert_member(&self, record: Member) -> AuthResult<Member> {
         let config = self.organization_fields()?.member;

@@ -169,19 +169,24 @@ run_stage() {
     schema-joins)
       cargo fmt --all -- --check
       cargo clippy --locked -p better-auth-core -p better-auth-seaorm -- -D warnings
-      cargo clippy --locked --features axum,seaorm2,redis-cache --test schema_join_reference_tests --test schema_join_reference_conflict_tests -- -D warnings
+      cargo clippy --locked --features axum,seaorm2,redis-cache --test schema_join_reference_tests --test schema_join_reference_conflict_tests --test organization_member_join_reference_tests --test organization_native_join_tests --test organization_serial_reference_tests -- -D warnings
       cargo test --locked -p better-auth-core -p better-auth-seaorm --lib -- store::joins:: schema_history
       cargo test --locked --features axum,seaorm2,redis-cache \
         --test schema_join_reference_tests --test join_binding_tests \
         --test schema_join_reference_conflict_tests --test schema_preflight_tests \
+        --test organization_member_join_reference_tests \
+        --test organization_native_join_tests --test organization_serial_reference_tests \
         --test fallback_join_tests --test native_core_join_tests \
         --test native_memory_join_tests --test account_owner_batch_tests
+      cargo test --locked --features axum,seaorm2,redis-cache --test organization_native_join_tests -- \
+        --ignored --exact postgres::live_postgres_full_organization_joins_decode_all_typed_children
       bun --no-install test \
         ./compat-tests/reference-server/contracts/schema-join-reference.test.ts \
         ./compat-tests/reference-server/contracts/schema-join-reference-conflict.test.ts \
         ./compat-tests/reference-server/contracts/schema-join-reference-unknown.test.ts \
         ./compat-tests/reference-server/contracts/schema-join-reference-field.test.ts \
-        ./compat-tests/reference-server/contracts/schema-join-reference-history.test.ts
+        ./compat-tests/reference-server/contracts/schema-join-reference-history.test.ts \
+        ./compat-tests/reference-server/contracts/organization-member-join-reference.test.ts
       ;;
     passkey)
       cargo fmt --all -- --check

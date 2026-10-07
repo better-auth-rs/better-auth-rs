@@ -200,7 +200,7 @@ fn record_input<T: MemoryOrganizationRecord>(role: EntityRole, value: &T) -> Aut
     Ok(core)
 }
 
-fn record_fields<T: MemoryOrganizationRecord>(
+pub(super) fn record_fields<T: MemoryOrganizationRecord>(
     role: EntityRole,
     value: &T,
     schema: &crate::user_fields::UserConfig,

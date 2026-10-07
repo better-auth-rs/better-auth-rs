@@ -107,7 +107,7 @@ fn assert_join(
     };
     let result = resolve_references(base, target, schema, |_, _| false);
     let actual = match result {
-        Ok((from, to)) => {
+        Ok(MemberUserJoin { from, to, .. }) => {
             if let Some(joins) = boundary_joins {
                 let events: Vec<_> = observation
                     .events

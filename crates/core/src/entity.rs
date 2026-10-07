@@ -355,12 +355,10 @@ pub trait AuthPasskey:
 ///
 /// This is a concrete framework type (not generic) used to project
 /// user fields into member responses.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct MemberUserView {
-    /// Optional field presence inherited from the source user.
-    pub visible_fields: Option<std::collections::BTreeSet<String>>,
     pub id: SchemaValue<String>,
-    pub email: Option<String>,
+    pub email: SchemaValue<Option<String>>,
     pub name: SchemaValue<Option<String>>,
     pub image: SchemaValue<Option<String>>,
 }
@@ -372,11 +370,10 @@ impl MemberUserView {
     /// Retain the runtime identity fields used in organization member responses.
     pub fn from_user(user: &crate::UserView) -> Self {
         Self {
-            visible_fields: user.field_presence().cloned(),
-            id: user.id().into_owned(),
-            email: user.email().map(|s| s.to_string()),
-            name: user.name.clone(),
-            image: user.image.clone(),
+            id: SchemaValue::from_field(user.native_field_value("id").unwrap_or_default()),
+            email: SchemaValue::from_field(user.native_field_value("email").unwrap_or_default()),
+            name: SchemaValue::from_field(user.native_field_value("name").unwrap_or_default()),
+            image: SchemaValue::from_field(user.native_field_value("image").unwrap_or_default()),
         }
     }
 }

@@ -658,7 +658,7 @@ pub trait SessionStore<S: AuthSchema>: Send + Sync {
 
 mod joins;
 pub use joins::{
-    AccountOwner, InvitationOrganization, MemberUser, OrganizationDetails,
+    AccountOwner, InvitationOrganization, MemberUser, MemberUserJoin, OrganizationDetails,
     OrganizationDetailsQuery, OrganizationKey, UserAccounts,
 };
 
