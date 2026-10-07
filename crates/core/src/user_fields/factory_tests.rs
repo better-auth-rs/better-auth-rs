@@ -1,5 +1,8 @@
 use super::*;
-use crate::{AuthConfig, AuthStore, CreateUser, UpdateUser, UserView, store::EphemeralStore};
+use crate::{
+    AuthConfig, CreateUser, UpdateUser, UserView,
+    store::{EphemeralStore, UserStore},
+};
 use std::sync::mpsc::{self, Sender};
 
 fn emit(events: &Sender<&'static str>, event: &'static str) -> AuthResult<()> {
@@ -69,10 +72,6 @@ fn assert_factory_error<T>(result: AuthResult<T>) {
 }
 
 #[test]
-#[expect(
-    clippy::panic_in_result_fn,
-    reason = "The test propagates setup errors and asserts the original callback error and complete event sequence."
-)]
 fn factory_errors_stop_public_input_and_synthetic_output() -> AuthResult<()> {
     for protected in [false, true] {
         let (events, receiver) = mpsc::channel();
@@ -138,10 +137,6 @@ async fn factory_errors_stop_shared_storage_boundaries_before_binding() {
 }
 
 #[tokio::test]
-#[expect(
-    clippy::panic_in_result_fn,
-    reason = "The test propagates store errors and asserts that rejected writes preserve rows and callback order."
-)]
 async fn factory_errors_preserve_stored_users_and_skip_output_callbacks() -> AuthResult<()> {
     let (events, receiver) = mpsc::channel();
     let store = EphemeralStore::new(Arc::new(AuthConfig {
