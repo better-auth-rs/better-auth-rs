@@ -12,6 +12,8 @@ JavaScript-specific values and scheduling, numeric boundaries, and system teleme
 
 ## Current focused validation
 
+Capture 37609898662 at `901a026` passed sixteen Memory adapter ID-slot cases for User, Session, JWK, and WalletAddress. The unchanged fixture has SHA-256 `cb3bd737410bd887f7f6b1bb6e7d0a30434e6368042884b6cfddc89bcfc41cac`. The complete observations include custom-generator nested creation and Serial ID writes during output. A nested creation before the outer ID slot replaces the shared ID input policy during its output; the outer row consequently has no stored ID and returns an undefined ID. This runtime schema mutation is part of the captured behavior. Rust implementation and paired acceptance remain pending.
+
 Runtime-values CI 37608901235 and user-fields CI 37608906009 at `bf58a27` both stopped at the same invalid `FieldValue::truthy` call. The call now uses the existing `is_truthy` method. The runtime-values upstream section passed 14 tests and 400 assertions, including the complete Session live-output contract. Rust behavior acceptance remains pending.
 
 TeamMember default user references now retain numeric Serial values in memory and project strings through `SchemaValue<String>`. Creation, owner queries, native and fallback joins, removal, and invitation acceptance share the existing ID boundary. Three regressions cover padded owner queries, owner-isolated removal, reuse at capacity, and concurrent membership changes before invitation publication. Existing membership and cookie assertions remain unchanged; focused acceptance remains pending.

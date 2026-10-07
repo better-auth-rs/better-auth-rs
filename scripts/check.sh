@@ -67,7 +67,8 @@ run_stage() {
       bun --no-install test \
         ./compat-tests/reference-server/contracts/plugin-display-presence.test.ts \
         ./compat-tests/reference-server/contracts/account-verification-serial-primary.test.ts \
-        ./compat-tests/reference-server/contracts/session-live-output.test.ts
+        ./compat-tests/reference-server/contracts/session-live-output.test.ts \
+        ./compat-tests/reference-server/contracts/adapter-id-slot.test.ts
       cargo clippy --locked --keep-going --features axum,seaorm2,redis-cache \
         --test custom_session_fields_tests --test organization_native_fields_tests \
         --test device_runtime_transaction_tests --test device_where_tests \

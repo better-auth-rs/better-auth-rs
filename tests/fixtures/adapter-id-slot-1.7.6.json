@@ -1,0 +1,4834 @@
+{
+  "version": "1.7.6",
+  "backend": "memory",
+  "cases": [
+    {
+      "model": "user",
+      "slot": "before-label",
+      "operation": "nested-create",
+      "idGeneration": "custom",
+      "setup": [],
+      "seedEvents": [],
+      "before": {
+        "user": [],
+        "account": [],
+        "session": [],
+        "verification": [],
+        "jwks": [],
+        "walletAddress": []
+      },
+      "input": {
+        "model": "user",
+        "data": {
+          "name": "Record outer",
+          "email": "outer@adapter-id-slot.test",
+          "emailVerified": false,
+          "image": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "label": "outer"
+        }
+      },
+      "events": [
+        [
+          "generateId",
+          {
+            "model": "user"
+          },
+          "user-generated-1",
+          {
+            "user": [],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          }
+        ],
+        [
+          "input",
+          "label",
+          "outer"
+        ],
+        [
+          "nested-create",
+          {
+            "model": "user",
+            "data": {
+              "name": "Record inner",
+              "email": "inner@adapter-id-slot.test",
+              "emailVerified": false,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "label": "inner"
+            }
+          },
+          {
+            "user": [],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          }
+        ],
+        [
+          "generateId",
+          {
+            "model": "user"
+          },
+          "user-generated-2",
+          {
+            "user": [],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          }
+        ],
+        [
+          "input",
+          "label",
+          "inner"
+        ],
+        [
+          "output",
+          "label",
+          "inner"
+        ],
+        [
+          "nested-created",
+          {
+            "name": "Record inner",
+            "email": "inner@adapter-id-slot.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "user-generated-2",
+            "label": "inner"
+          },
+          {
+            "user": [
+              {
+                "name": "Record inner",
+                "email": "inner@adapter-id-slot.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": "user-generated-2",
+                "label": "inner"
+              }
+            ],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          }
+        ],
+        [
+          "output",
+          "label",
+          "outer"
+        ]
+      ],
+      "result": {
+        "name": "Record outer",
+        "email": "outer@adapter-id-slot.test",
+        "emailVerified": false,
+        "image": null,
+        "createdAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "updatedAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "id": "user-generated-1",
+        "label": "outer"
+      },
+      "error": null,
+      "after": {
+        "user": [
+          {
+            "name": "Record inner",
+            "email": "inner@adapter-id-slot.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "user-generated-2",
+            "label": "inner"
+          },
+          {
+            "name": "Record outer",
+            "email": "outer@adapter-id-slot.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "user-generated-1",
+            "label": "outer"
+          }
+        ],
+        "account": [],
+        "session": [],
+        "verification": [],
+        "jwks": [],
+        "walletAddress": []
+      }
+    },
+    {
+      "model": "user",
+      "slot": "before-label",
+      "operation": "live-output-id-write",
+      "idGeneration": "serial",
+      "setup": [
+        {
+          "input": {
+            "model": "user",
+            "data": {
+              "name": "Record selected",
+              "email": "selected@adapter-id-slot.test",
+              "emailVerified": false,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "label": "selected"
+            }
+          },
+          "before": {
+            "user": [],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          },
+          "result": {
+            "name": "Record selected",
+            "email": "selected@adapter-id-slot.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "1",
+            "label": "selected"
+          },
+          "after": {
+            "user": [
+              {
+                "name": "Record selected",
+                "email": "selected@adapter-id-slot.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": 1,
+                "label": "selected"
+              }
+            ],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          }
+        }
+      ],
+      "seedEvents": [],
+      "before": {
+        "user": [
+          {
+            "name": "Record selected",
+            "email": "selected@adapter-id-slot.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": 1,
+            "label": "selected"
+          }
+        ],
+        "account": [],
+        "session": [],
+        "verification": [],
+        "jwks": [],
+        "walletAddress": []
+      },
+      "input": {
+        "model": "user",
+        "where": [
+          {
+            "field": "id",
+            "value": "1"
+          }
+        ]
+      },
+      "events": [
+        [
+          "output",
+          "label",
+          "selected"
+        ],
+        [
+          "writer-update",
+          {
+            "model": "user",
+            "where": [
+              {
+                "field": "id",
+                "value": "1"
+              }
+            ],
+            "update": {
+              "id": "00101"
+            }
+          },
+          {
+            "user": [
+              {
+                "name": "Record selected",
+                "email": "selected@adapter-id-slot.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": 1,
+                "label": "selected"
+              }
+            ],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          }
+        ],
+        [
+          "writer-updated",
+          {
+            "name": "Record selected",
+            "email": "selected@adapter-id-slot.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2026-10-07T10:50:44.626Z"
+            },
+            "id": "101",
+            "label": "selected"
+          },
+          {
+            "user": [
+              {
+                "name": "Record selected",
+                "email": "selected@adapter-id-slot.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2026-10-07T10:50:44.626Z"
+                },
+                "id": 101,
+                "label": "selected"
+              }
+            ],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          }
+        ]
+      ],
+      "result": {
+        "name": "Record selected",
+        "email": "selected@adapter-id-slot.test",
+        "emailVerified": false,
+        "image": null,
+        "createdAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "updatedAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "id": "1",
+        "label": "selected:out"
+      },
+      "error": null,
+      "after": {
+        "user": [
+          {
+            "name": "Record selected",
+            "email": "selected@adapter-id-slot.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2026-10-07T10:50:44.626Z"
+            },
+            "id": 101,
+            "label": "selected"
+          }
+        ],
+        "account": [],
+        "session": [],
+        "verification": [],
+        "jwks": [],
+        "walletAddress": []
+      }
+    },
+    {
+      "model": "user",
+      "slot": "after-label",
+      "operation": "nested-create",
+      "idGeneration": "custom",
+      "setup": [],
+      "seedEvents": [],
+      "before": {
+        "user": [],
+        "account": [],
+        "session": [],
+        "verification": [],
+        "jwks": [],
+        "walletAddress": []
+      },
+      "input": {
+        "model": "user",
+        "data": {
+          "name": "Record outer",
+          "email": "outer@adapter-id-slot.test",
+          "emailVerified": false,
+          "image": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "label": "outer"
+        }
+      },
+      "events": [
+        [
+          "input",
+          "label",
+          "outer"
+        ],
+        [
+          "nested-create",
+          {
+            "model": "user",
+            "data": {
+              "name": "Record inner",
+              "email": "inner@adapter-id-slot.test",
+              "emailVerified": false,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "label": "inner"
+            }
+          },
+          {
+            "user": [],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          }
+        ],
+        [
+          "input",
+          "label",
+          "inner"
+        ],
+        [
+          "generateId",
+          {
+            "model": "user"
+          },
+          "user-generated-1",
+          {
+            "user": [],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          }
+        ],
+        [
+          "output",
+          "label",
+          "inner"
+        ],
+        [
+          "nested-created",
+          {
+            "name": "Record inner",
+            "email": "inner@adapter-id-slot.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "label": "inner",
+            "id": "user-generated-1"
+          },
+          {
+            "user": [
+              {
+                "name": "Record inner",
+                "email": "inner@adapter-id-slot.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "label": "inner",
+                "id": "user-generated-1"
+              }
+            ],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          }
+        ],
+        [
+          "output",
+          "label",
+          "outer"
+        ]
+      ],
+      "result": {
+        "name": "Record outer",
+        "email": "outer@adapter-id-slot.test",
+        "emailVerified": false,
+        "image": null,
+        "createdAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "updatedAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "label": "outer",
+        "id": {
+          "type": "undefined"
+        }
+      },
+      "error": null,
+      "after": {
+        "user": [
+          {
+            "name": "Record inner",
+            "email": "inner@adapter-id-slot.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "label": "inner",
+            "id": "user-generated-1"
+          },
+          {
+            "name": "Record outer",
+            "email": "outer@adapter-id-slot.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "label": "outer"
+          }
+        ],
+        "account": [],
+        "session": [],
+        "verification": [],
+        "jwks": [],
+        "walletAddress": []
+      }
+    },
+    {
+      "model": "user",
+      "slot": "after-label",
+      "operation": "live-output-id-write",
+      "idGeneration": "serial",
+      "setup": [
+        {
+          "input": {
+            "model": "user",
+            "data": {
+              "name": "Record selected",
+              "email": "selected@adapter-id-slot.test",
+              "emailVerified": false,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "label": "selected"
+            }
+          },
+          "before": {
+            "user": [],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          },
+          "result": {
+            "name": "Record selected",
+            "email": "selected@adapter-id-slot.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "1",
+            "label": "selected"
+          },
+          "after": {
+            "user": [
+              {
+                "name": "Record selected",
+                "email": "selected@adapter-id-slot.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": 1,
+                "label": "selected"
+              }
+            ],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          }
+        }
+      ],
+      "seedEvents": [],
+      "before": {
+        "user": [
+          {
+            "name": "Record selected",
+            "email": "selected@adapter-id-slot.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": 1,
+            "label": "selected"
+          }
+        ],
+        "account": [],
+        "session": [],
+        "verification": [],
+        "jwks": [],
+        "walletAddress": []
+      },
+      "input": {
+        "model": "user",
+        "where": [
+          {
+            "field": "id",
+            "value": "1"
+          }
+        ]
+      },
+      "events": [
+        [
+          "output",
+          "label",
+          "selected"
+        ],
+        [
+          "writer-update",
+          {
+            "model": "user",
+            "where": [
+              {
+                "field": "id",
+                "value": "1"
+              }
+            ],
+            "update": {
+              "id": "00101"
+            }
+          },
+          {
+            "user": [
+              {
+                "name": "Record selected",
+                "email": "selected@adapter-id-slot.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": 1,
+                "label": "selected"
+              }
+            ],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          }
+        ],
+        [
+          "writer-updated",
+          {
+            "name": "Record selected",
+            "email": "selected@adapter-id-slot.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2026-10-07T10:50:44.629Z"
+            },
+            "id": "101",
+            "label": "selected"
+          },
+          {
+            "user": [
+              {
+                "name": "Record selected",
+                "email": "selected@adapter-id-slot.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2026-10-07T10:50:44.629Z"
+                },
+                "id": 101,
+                "label": "selected"
+              }
+            ],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          }
+        ]
+      ],
+      "result": {
+        "name": "Record selected",
+        "email": "selected@adapter-id-slot.test",
+        "emailVerified": false,
+        "image": null,
+        "createdAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "updatedAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "label": "selected:out",
+        "id": "101"
+      },
+      "error": null,
+      "after": {
+        "user": [
+          {
+            "name": "Record selected",
+            "email": "selected@adapter-id-slot.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2026-10-07T10:50:44.629Z"
+            },
+            "id": 101,
+            "label": "selected"
+          }
+        ],
+        "account": [],
+        "session": [],
+        "verification": [],
+        "jwks": [],
+        "walletAddress": []
+      }
+    },
+    {
+      "model": "session",
+      "slot": "before-label",
+      "operation": "nested-create",
+      "idGeneration": "custom",
+      "setup": [
+        {
+          "input": {
+            "model": "user",
+            "forceAllowId": true,
+            "data": {
+              "id": "ordinary-owner",
+              "name": "Record owner",
+              "email": "owner@adapter-id-slot.test",
+              "emailVerified": false,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              }
+            }
+          },
+          "before": {
+            "user": [],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          },
+          "result": {
+            "name": "Record owner",
+            "email": "owner@adapter-id-slot.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "ordinary-owner"
+          },
+          "after": {
+            "user": [
+              {
+                "name": "Record owner",
+                "email": "owner@adapter-id-slot.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": "ordinary-owner"
+              }
+            ],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          }
+        }
+      ],
+      "seedEvents": [],
+      "before": {
+        "user": [
+          {
+            "name": "Record owner",
+            "email": "owner@adapter-id-slot.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "ordinary-owner"
+          }
+        ],
+        "account": [],
+        "session": [],
+        "verification": [],
+        "jwks": [],
+        "walletAddress": []
+      },
+      "input": {
+        "model": "session",
+        "data": {
+          "token": "slot-outer",
+          "userId": "ordinary-owner",
+          "expiresAt": {
+            "type": "date",
+            "value": "2100-01-02T03:04:05.000Z"
+          },
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "ipAddress": null,
+          "userAgent": null,
+          "label": "outer"
+        }
+      },
+      "events": [
+        [
+          "generateId",
+          {
+            "model": "session"
+          },
+          "session-generated-1",
+          {
+            "user": [
+              {
+                "name": "Record owner",
+                "email": "owner@adapter-id-slot.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": "ordinary-owner"
+              }
+            ],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          }
+        ],
+        [
+          "input",
+          "label",
+          "outer"
+        ],
+        [
+          "nested-create",
+          {
+            "model": "session",
+            "data": {
+              "token": "slot-inner",
+              "userId": "ordinary-owner",
+              "expiresAt": {
+                "type": "date",
+                "value": "2100-01-02T03:04:05.000Z"
+              },
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "ipAddress": null,
+              "userAgent": null,
+              "label": "inner"
+            }
+          },
+          {
+            "user": [
+              {
+                "name": "Record owner",
+                "email": "owner@adapter-id-slot.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": "ordinary-owner"
+              }
+            ],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          }
+        ],
+        [
+          "generateId",
+          {
+            "model": "session"
+          },
+          "session-generated-2",
+          {
+            "user": [
+              {
+                "name": "Record owner",
+                "email": "owner@adapter-id-slot.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": "ordinary-owner"
+              }
+            ],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          }
+        ],
+        [
+          "input",
+          "label",
+          "inner"
+        ],
+        [
+          "output",
+          "label",
+          "inner"
+        ],
+        [
+          "nested-created",
+          {
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "token": "slot-inner",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "ipAddress": null,
+            "userAgent": null,
+            "userId": "ordinary-owner",
+            "id": "session-generated-2",
+            "label": "inner"
+          },
+          {
+            "user": [
+              {
+                "name": "Record owner",
+                "email": "owner@adapter-id-slot.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": "ordinary-owner"
+              }
+            ],
+            "account": [],
+            "session": [
+              {
+                "expiresAt": {
+                  "type": "date",
+                  "value": "2100-01-02T03:04:05.000Z"
+                },
+                "token": "slot-inner",
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "ipAddress": null,
+                "userAgent": null,
+                "userId": "ordinary-owner",
+                "id": "session-generated-2",
+                "label": "inner"
+              }
+            ],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          }
+        ],
+        [
+          "output",
+          "label",
+          "outer"
+        ]
+      ],
+      "result": {
+        "expiresAt": {
+          "type": "date",
+          "value": "2100-01-02T03:04:05.000Z"
+        },
+        "token": "slot-outer",
+        "createdAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "updatedAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "ipAddress": null,
+        "userAgent": null,
+        "userId": "ordinary-owner",
+        "id": "session-generated-1",
+        "label": "outer"
+      },
+      "error": null,
+      "after": {
+        "user": [
+          {
+            "name": "Record owner",
+            "email": "owner@adapter-id-slot.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "ordinary-owner"
+          }
+        ],
+        "account": [],
+        "session": [
+          {
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "token": "slot-inner",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "ipAddress": null,
+            "userAgent": null,
+            "userId": "ordinary-owner",
+            "id": "session-generated-2",
+            "label": "inner"
+          },
+          {
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "token": "slot-outer",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "ipAddress": null,
+            "userAgent": null,
+            "userId": "ordinary-owner",
+            "id": "session-generated-1",
+            "label": "outer"
+          }
+        ],
+        "verification": [],
+        "jwks": [],
+        "walletAddress": []
+      }
+    },
+    {
+      "model": "session",
+      "slot": "before-label",
+      "operation": "live-output-id-write",
+      "idGeneration": "serial",
+      "setup": [
+        {
+          "input": {
+            "model": "user",
+            "forceAllowId": true,
+            "data": {
+              "id": "001",
+              "name": "Record owner",
+              "email": "owner@adapter-id-slot.test",
+              "emailVerified": false,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              }
+            }
+          },
+          "before": {
+            "user": [],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          },
+          "result": {
+            "name": "Record owner",
+            "email": "owner@adapter-id-slot.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "1"
+          },
+          "after": {
+            "user": [
+              {
+                "name": "Record owner",
+                "email": "owner@adapter-id-slot.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": 1
+              }
+            ],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          }
+        },
+        {
+          "input": {
+            "model": "session",
+            "data": {
+              "token": "slot-selected",
+              "userId": "1",
+              "expiresAt": {
+                "type": "date",
+                "value": "2100-01-02T03:04:05.000Z"
+              },
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "ipAddress": null,
+              "userAgent": null,
+              "label": "selected"
+            }
+          },
+          "before": {
+            "user": [
+              {
+                "name": "Record owner",
+                "email": "owner@adapter-id-slot.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": 1
+              }
+            ],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          },
+          "result": {
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "token": "slot-selected",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "ipAddress": null,
+            "userAgent": null,
+            "userId": "1",
+            "id": "1",
+            "label": "selected"
+          },
+          "after": {
+            "user": [
+              {
+                "name": "Record owner",
+                "email": "owner@adapter-id-slot.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": 1
+              }
+            ],
+            "account": [],
+            "session": [
+              {
+                "expiresAt": {
+                  "type": "date",
+                  "value": "2100-01-02T03:04:05.000Z"
+                },
+                "token": "slot-selected",
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "ipAddress": null,
+                "userAgent": null,
+                "userId": 1,
+                "id": 1,
+                "label": "selected"
+              }
+            ],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          }
+        }
+      ],
+      "seedEvents": [],
+      "before": {
+        "user": [
+          {
+            "name": "Record owner",
+            "email": "owner@adapter-id-slot.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": 1
+          }
+        ],
+        "account": [],
+        "session": [
+          {
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "token": "slot-selected",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "ipAddress": null,
+            "userAgent": null,
+            "userId": 1,
+            "id": 1,
+            "label": "selected"
+          }
+        ],
+        "verification": [],
+        "jwks": [],
+        "walletAddress": []
+      },
+      "input": {
+        "model": "session",
+        "where": [
+          {
+            "field": "id",
+            "value": "1"
+          }
+        ]
+      },
+      "events": [
+        [
+          "output",
+          "label",
+          "selected"
+        ],
+        [
+          "writer-update",
+          {
+            "model": "session",
+            "where": [
+              {
+                "field": "id",
+                "value": "1"
+              }
+            ],
+            "update": {
+              "id": "00101"
+            }
+          },
+          {
+            "user": [
+              {
+                "name": "Record owner",
+                "email": "owner@adapter-id-slot.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": 1
+              }
+            ],
+            "account": [],
+            "session": [
+              {
+                "expiresAt": {
+                  "type": "date",
+                  "value": "2100-01-02T03:04:05.000Z"
+                },
+                "token": "slot-selected",
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "ipAddress": null,
+                "userAgent": null,
+                "userId": 1,
+                "id": 1,
+                "label": "selected"
+              }
+            ],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          }
+        ],
+        [
+          "writer-updated",
+          {
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "token": "slot-selected",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2026-10-07T10:50:44.632Z"
+            },
+            "ipAddress": null,
+            "userAgent": null,
+            "userId": "1",
+            "id": "101",
+            "label": "selected"
+          },
+          {
+            "user": [
+              {
+                "name": "Record owner",
+                "email": "owner@adapter-id-slot.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": 1
+              }
+            ],
+            "account": [],
+            "session": [
+              {
+                "expiresAt": {
+                  "type": "date",
+                  "value": "2100-01-02T03:04:05.000Z"
+                },
+                "token": "slot-selected",
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2026-10-07T10:50:44.632Z"
+                },
+                "ipAddress": null,
+                "userAgent": null,
+                "userId": 1,
+                "id": 101,
+                "label": "selected"
+              }
+            ],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          }
+        ]
+      ],
+      "result": {
+        "expiresAt": {
+          "type": "date",
+          "value": "2100-01-02T03:04:05.000Z"
+        },
+        "token": "slot-selected",
+        "createdAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "updatedAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "ipAddress": null,
+        "userAgent": null,
+        "userId": "1",
+        "id": "1",
+        "label": "selected:out"
+      },
+      "error": null,
+      "after": {
+        "user": [
+          {
+            "name": "Record owner",
+            "email": "owner@adapter-id-slot.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": 1
+          }
+        ],
+        "account": [],
+        "session": [
+          {
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "token": "slot-selected",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2026-10-07T10:50:44.632Z"
+            },
+            "ipAddress": null,
+            "userAgent": null,
+            "userId": 1,
+            "id": 101,
+            "label": "selected"
+          }
+        ],
+        "verification": [],
+        "jwks": [],
+        "walletAddress": []
+      }
+    },
+    {
+      "model": "session",
+      "slot": "after-label",
+      "operation": "nested-create",
+      "idGeneration": "custom",
+      "setup": [
+        {
+          "input": {
+            "model": "user",
+            "forceAllowId": true,
+            "data": {
+              "id": "ordinary-owner",
+              "name": "Record owner",
+              "email": "owner@adapter-id-slot.test",
+              "emailVerified": false,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              }
+            }
+          },
+          "before": {
+            "user": [],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          },
+          "result": {
+            "name": "Record owner",
+            "email": "owner@adapter-id-slot.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "ordinary-owner"
+          },
+          "after": {
+            "user": [
+              {
+                "name": "Record owner",
+                "email": "owner@adapter-id-slot.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": "ordinary-owner"
+              }
+            ],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          }
+        }
+      ],
+      "seedEvents": [],
+      "before": {
+        "user": [
+          {
+            "name": "Record owner",
+            "email": "owner@adapter-id-slot.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "ordinary-owner"
+          }
+        ],
+        "account": [],
+        "session": [],
+        "verification": [],
+        "jwks": [],
+        "walletAddress": []
+      },
+      "input": {
+        "model": "session",
+        "data": {
+          "token": "slot-outer",
+          "userId": "ordinary-owner",
+          "expiresAt": {
+            "type": "date",
+            "value": "2100-01-02T03:04:05.000Z"
+          },
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "ipAddress": null,
+          "userAgent": null,
+          "label": "outer"
+        }
+      },
+      "events": [
+        [
+          "input",
+          "label",
+          "outer"
+        ],
+        [
+          "nested-create",
+          {
+            "model": "session",
+            "data": {
+              "token": "slot-inner",
+              "userId": "ordinary-owner",
+              "expiresAt": {
+                "type": "date",
+                "value": "2100-01-02T03:04:05.000Z"
+              },
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "ipAddress": null,
+              "userAgent": null,
+              "label": "inner"
+            }
+          },
+          {
+            "user": [
+              {
+                "name": "Record owner",
+                "email": "owner@adapter-id-slot.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": "ordinary-owner"
+              }
+            ],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          }
+        ],
+        [
+          "input",
+          "label",
+          "inner"
+        ],
+        [
+          "generateId",
+          {
+            "model": "session"
+          },
+          "session-generated-1",
+          {
+            "user": [
+              {
+                "name": "Record owner",
+                "email": "owner@adapter-id-slot.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": "ordinary-owner"
+              }
+            ],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          }
+        ],
+        [
+          "output",
+          "label",
+          "inner"
+        ],
+        [
+          "nested-created",
+          {
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "token": "slot-inner",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "ipAddress": null,
+            "userAgent": null,
+            "userId": "ordinary-owner",
+            "label": "inner",
+            "id": "session-generated-1"
+          },
+          {
+            "user": [
+              {
+                "name": "Record owner",
+                "email": "owner@adapter-id-slot.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": "ordinary-owner"
+              }
+            ],
+            "account": [],
+            "session": [
+              {
+                "expiresAt": {
+                  "type": "date",
+                  "value": "2100-01-02T03:04:05.000Z"
+                },
+                "token": "slot-inner",
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "ipAddress": null,
+                "userAgent": null,
+                "userId": "ordinary-owner",
+                "label": "inner",
+                "id": "session-generated-1"
+              }
+            ],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          }
+        ],
+        [
+          "output",
+          "label",
+          "outer"
+        ]
+      ],
+      "result": {
+        "expiresAt": {
+          "type": "date",
+          "value": "2100-01-02T03:04:05.000Z"
+        },
+        "token": "slot-outer",
+        "createdAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "updatedAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "ipAddress": null,
+        "userAgent": null,
+        "userId": "ordinary-owner",
+        "label": "outer",
+        "id": {
+          "type": "undefined"
+        }
+      },
+      "error": null,
+      "after": {
+        "user": [
+          {
+            "name": "Record owner",
+            "email": "owner@adapter-id-slot.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "ordinary-owner"
+          }
+        ],
+        "account": [],
+        "session": [
+          {
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "token": "slot-inner",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "ipAddress": null,
+            "userAgent": null,
+            "userId": "ordinary-owner",
+            "label": "inner",
+            "id": "session-generated-1"
+          },
+          {
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "token": "slot-outer",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "ipAddress": null,
+            "userAgent": null,
+            "userId": "ordinary-owner",
+            "label": "outer"
+          }
+        ],
+        "verification": [],
+        "jwks": [],
+        "walletAddress": []
+      }
+    },
+    {
+      "model": "session",
+      "slot": "after-label",
+      "operation": "live-output-id-write",
+      "idGeneration": "serial",
+      "setup": [
+        {
+          "input": {
+            "model": "user",
+            "forceAllowId": true,
+            "data": {
+              "id": "001",
+              "name": "Record owner",
+              "email": "owner@adapter-id-slot.test",
+              "emailVerified": false,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              }
+            }
+          },
+          "before": {
+            "user": [],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          },
+          "result": {
+            "name": "Record owner",
+            "email": "owner@adapter-id-slot.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "1"
+          },
+          "after": {
+            "user": [
+              {
+                "name": "Record owner",
+                "email": "owner@adapter-id-slot.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": 1
+              }
+            ],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          }
+        },
+        {
+          "input": {
+            "model": "session",
+            "data": {
+              "token": "slot-selected",
+              "userId": "1",
+              "expiresAt": {
+                "type": "date",
+                "value": "2100-01-02T03:04:05.000Z"
+              },
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "ipAddress": null,
+              "userAgent": null,
+              "label": "selected"
+            }
+          },
+          "before": {
+            "user": [
+              {
+                "name": "Record owner",
+                "email": "owner@adapter-id-slot.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": 1
+              }
+            ],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          },
+          "result": {
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "token": "slot-selected",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "ipAddress": null,
+            "userAgent": null,
+            "userId": "1",
+            "id": "1",
+            "label": "selected"
+          },
+          "after": {
+            "user": [
+              {
+                "name": "Record owner",
+                "email": "owner@adapter-id-slot.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": 1
+              }
+            ],
+            "account": [],
+            "session": [
+              {
+                "expiresAt": {
+                  "type": "date",
+                  "value": "2100-01-02T03:04:05.000Z"
+                },
+                "token": "slot-selected",
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "ipAddress": null,
+                "userAgent": null,
+                "userId": 1,
+                "id": 1,
+                "label": "selected"
+              }
+            ],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          }
+        }
+      ],
+      "seedEvents": [],
+      "before": {
+        "user": [
+          {
+            "name": "Record owner",
+            "email": "owner@adapter-id-slot.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": 1
+          }
+        ],
+        "account": [],
+        "session": [
+          {
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "token": "slot-selected",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "ipAddress": null,
+            "userAgent": null,
+            "userId": 1,
+            "id": 1,
+            "label": "selected"
+          }
+        ],
+        "verification": [],
+        "jwks": [],
+        "walletAddress": []
+      },
+      "input": {
+        "model": "session",
+        "where": [
+          {
+            "field": "id",
+            "value": "1"
+          }
+        ]
+      },
+      "events": [
+        [
+          "output",
+          "label",
+          "selected"
+        ],
+        [
+          "writer-update",
+          {
+            "model": "session",
+            "where": [
+              {
+                "field": "id",
+                "value": "1"
+              }
+            ],
+            "update": {
+              "id": "00101"
+            }
+          },
+          {
+            "user": [
+              {
+                "name": "Record owner",
+                "email": "owner@adapter-id-slot.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": 1
+              }
+            ],
+            "account": [],
+            "session": [
+              {
+                "expiresAt": {
+                  "type": "date",
+                  "value": "2100-01-02T03:04:05.000Z"
+                },
+                "token": "slot-selected",
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "ipAddress": null,
+                "userAgent": null,
+                "userId": 1,
+                "id": 1,
+                "label": "selected"
+              }
+            ],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          }
+        ],
+        [
+          "writer-updated",
+          {
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "token": "slot-selected",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2026-10-07T10:50:44.634Z"
+            },
+            "ipAddress": null,
+            "userAgent": null,
+            "userId": "1",
+            "id": "101",
+            "label": "selected"
+          },
+          {
+            "user": [
+              {
+                "name": "Record owner",
+                "email": "owner@adapter-id-slot.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": 1
+              }
+            ],
+            "account": [],
+            "session": [
+              {
+                "expiresAt": {
+                  "type": "date",
+                  "value": "2100-01-02T03:04:05.000Z"
+                },
+                "token": "slot-selected",
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2026-10-07T10:50:44.634Z"
+                },
+                "ipAddress": null,
+                "userAgent": null,
+                "userId": 1,
+                "id": 101,
+                "label": "selected"
+              }
+            ],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          }
+        ]
+      ],
+      "result": {
+        "expiresAt": {
+          "type": "date",
+          "value": "2100-01-02T03:04:05.000Z"
+        },
+        "token": "slot-selected",
+        "createdAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "updatedAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "ipAddress": null,
+        "userAgent": null,
+        "userId": "1",
+        "label": "selected:out",
+        "id": "101"
+      },
+      "error": null,
+      "after": {
+        "user": [
+          {
+            "name": "Record owner",
+            "email": "owner@adapter-id-slot.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": 1
+          }
+        ],
+        "account": [],
+        "session": [
+          {
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "token": "slot-selected",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2026-10-07T10:50:44.634Z"
+            },
+            "ipAddress": null,
+            "userAgent": null,
+            "userId": 1,
+            "id": 101,
+            "label": "selected"
+          }
+        ],
+        "verification": [],
+        "jwks": [],
+        "walletAddress": []
+      }
+    },
+    {
+      "model": "jwks",
+      "slot": "before-label",
+      "operation": "nested-create",
+      "idGeneration": "custom",
+      "setup": [],
+      "seedEvents": [],
+      "before": {
+        "user": [],
+        "account": [],
+        "session": [],
+        "verification": [],
+        "jwks": [],
+        "walletAddress": []
+      },
+      "input": {
+        "model": "jwks",
+        "data": {
+          "publicKey": "public-outer",
+          "privateKey": "private-outer",
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "expiresAt": null,
+          "alg": "EdDSA",
+          "crv": null,
+          "label": "outer"
+        }
+      },
+      "events": [
+        [
+          "generateId",
+          {
+            "model": "jwks"
+          },
+          "jwks-generated-1",
+          {
+            "user": [],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          }
+        ],
+        [
+          "input",
+          "label",
+          "outer"
+        ],
+        [
+          "nested-create",
+          {
+            "model": "jwks",
+            "data": {
+              "publicKey": "public-inner",
+              "privateKey": "private-inner",
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "expiresAt": null,
+              "alg": "EdDSA",
+              "crv": null,
+              "label": "inner"
+            }
+          },
+          {
+            "user": [],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          }
+        ],
+        [
+          "generateId",
+          {
+            "model": "jwks"
+          },
+          "jwks-generated-2",
+          {
+            "user": [],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          }
+        ],
+        [
+          "input",
+          "label",
+          "inner"
+        ],
+        [
+          "output",
+          "label",
+          "inner"
+        ],
+        [
+          "nested-created",
+          {
+            "publicKey": "public-inner",
+            "privateKey": "private-inner",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "expiresAt": null,
+            "alg": "EdDSA",
+            "crv": null,
+            "id": "jwks-generated-2",
+            "label": "inner"
+          },
+          {
+            "user": [],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [
+              {
+                "publicKey": "public-inner",
+                "privateKey": "private-inner",
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "expiresAt": null,
+                "alg": "EdDSA",
+                "crv": null,
+                "id": "jwks-generated-2",
+                "label": "inner"
+              }
+            ],
+            "walletAddress": []
+          }
+        ],
+        [
+          "output",
+          "label",
+          "outer"
+        ]
+      ],
+      "result": {
+        "publicKey": "public-outer",
+        "privateKey": "private-outer",
+        "createdAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "expiresAt": null,
+        "alg": "EdDSA",
+        "crv": null,
+        "id": "jwks-generated-1",
+        "label": "outer"
+      },
+      "error": null,
+      "after": {
+        "user": [],
+        "account": [],
+        "session": [],
+        "verification": [],
+        "jwks": [
+          {
+            "publicKey": "public-inner",
+            "privateKey": "private-inner",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "expiresAt": null,
+            "alg": "EdDSA",
+            "crv": null,
+            "id": "jwks-generated-2",
+            "label": "inner"
+          },
+          {
+            "publicKey": "public-outer",
+            "privateKey": "private-outer",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "expiresAt": null,
+            "alg": "EdDSA",
+            "crv": null,
+            "id": "jwks-generated-1",
+            "label": "outer"
+          }
+        ],
+        "walletAddress": []
+      }
+    },
+    {
+      "model": "jwks",
+      "slot": "before-label",
+      "operation": "live-output-id-write",
+      "idGeneration": "serial",
+      "setup": [
+        {
+          "input": {
+            "model": "jwks",
+            "data": {
+              "publicKey": "public-selected",
+              "privateKey": "private-selected",
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "expiresAt": null,
+              "alg": "EdDSA",
+              "crv": null,
+              "label": "selected"
+            }
+          },
+          "before": {
+            "user": [],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          },
+          "result": {
+            "publicKey": "public-selected",
+            "privateKey": "private-selected",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "expiresAt": null,
+            "alg": "EdDSA",
+            "crv": null,
+            "id": "1",
+            "label": "selected"
+          },
+          "after": {
+            "user": [],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [
+              {
+                "publicKey": "public-selected",
+                "privateKey": "private-selected",
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "expiresAt": null,
+                "alg": "EdDSA",
+                "crv": null,
+                "id": 1,
+                "label": "selected"
+              }
+            ],
+            "walletAddress": []
+          }
+        }
+      ],
+      "seedEvents": [],
+      "before": {
+        "user": [],
+        "account": [],
+        "session": [],
+        "verification": [],
+        "jwks": [
+          {
+            "publicKey": "public-selected",
+            "privateKey": "private-selected",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "expiresAt": null,
+            "alg": "EdDSA",
+            "crv": null,
+            "id": 1,
+            "label": "selected"
+          }
+        ],
+        "walletAddress": []
+      },
+      "input": {
+        "model": "jwks",
+        "where": [
+          {
+            "field": "id",
+            "value": "1"
+          }
+        ]
+      },
+      "events": [
+        [
+          "output",
+          "label",
+          "selected"
+        ],
+        [
+          "writer-update",
+          {
+            "model": "jwks",
+            "where": [
+              {
+                "field": "id",
+                "value": "1"
+              }
+            ],
+            "update": {
+              "id": "00101"
+            }
+          },
+          {
+            "user": [],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [
+              {
+                "publicKey": "public-selected",
+                "privateKey": "private-selected",
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "expiresAt": null,
+                "alg": "EdDSA",
+                "crv": null,
+                "id": 1,
+                "label": "selected"
+              }
+            ],
+            "walletAddress": []
+          }
+        ],
+        [
+          "writer-updated",
+          {
+            "publicKey": "public-selected",
+            "privateKey": "private-selected",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "expiresAt": null,
+            "alg": "EdDSA",
+            "crv": null,
+            "id": "101",
+            "label": "selected"
+          },
+          {
+            "user": [],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [
+              {
+                "publicKey": "public-selected",
+                "privateKey": "private-selected",
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "expiresAt": null,
+                "alg": "EdDSA",
+                "crv": null,
+                "id": 101,
+                "label": "selected"
+              }
+            ],
+            "walletAddress": []
+          }
+        ]
+      ],
+      "result": {
+        "publicKey": "public-selected",
+        "privateKey": "private-selected",
+        "createdAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "expiresAt": null,
+        "alg": "EdDSA",
+        "crv": null,
+        "id": "1",
+        "label": "selected:out"
+      },
+      "error": null,
+      "after": {
+        "user": [],
+        "account": [],
+        "session": [],
+        "verification": [],
+        "jwks": [
+          {
+            "publicKey": "public-selected",
+            "privateKey": "private-selected",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "expiresAt": null,
+            "alg": "EdDSA",
+            "crv": null,
+            "id": 101,
+            "label": "selected"
+          }
+        ],
+        "walletAddress": []
+      }
+    },
+    {
+      "model": "jwks",
+      "slot": "after-label",
+      "operation": "nested-create",
+      "idGeneration": "custom",
+      "setup": [],
+      "seedEvents": [],
+      "before": {
+        "user": [],
+        "account": [],
+        "session": [],
+        "verification": [],
+        "jwks": [],
+        "walletAddress": []
+      },
+      "input": {
+        "model": "jwks",
+        "data": {
+          "publicKey": "public-outer",
+          "privateKey": "private-outer",
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "expiresAt": null,
+          "alg": "EdDSA",
+          "crv": null,
+          "label": "outer"
+        }
+      },
+      "events": [
+        [
+          "input",
+          "label",
+          "outer"
+        ],
+        [
+          "nested-create",
+          {
+            "model": "jwks",
+            "data": {
+              "publicKey": "public-inner",
+              "privateKey": "private-inner",
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "expiresAt": null,
+              "alg": "EdDSA",
+              "crv": null,
+              "label": "inner"
+            }
+          },
+          {
+            "user": [],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          }
+        ],
+        [
+          "input",
+          "label",
+          "inner"
+        ],
+        [
+          "generateId",
+          {
+            "model": "jwks"
+          },
+          "jwks-generated-1",
+          {
+            "user": [],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          }
+        ],
+        [
+          "output",
+          "label",
+          "inner"
+        ],
+        [
+          "nested-created",
+          {
+            "publicKey": "public-inner",
+            "privateKey": "private-inner",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "expiresAt": null,
+            "alg": "EdDSA",
+            "crv": null,
+            "label": "inner",
+            "id": "jwks-generated-1"
+          },
+          {
+            "user": [],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [
+              {
+                "publicKey": "public-inner",
+                "privateKey": "private-inner",
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "expiresAt": null,
+                "alg": "EdDSA",
+                "crv": null,
+                "label": "inner",
+                "id": "jwks-generated-1"
+              }
+            ],
+            "walletAddress": []
+          }
+        ],
+        [
+          "output",
+          "label",
+          "outer"
+        ]
+      ],
+      "result": {
+        "publicKey": "public-outer",
+        "privateKey": "private-outer",
+        "createdAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "expiresAt": null,
+        "alg": "EdDSA",
+        "crv": null,
+        "label": "outer",
+        "id": {
+          "type": "undefined"
+        }
+      },
+      "error": null,
+      "after": {
+        "user": [],
+        "account": [],
+        "session": [],
+        "verification": [],
+        "jwks": [
+          {
+            "publicKey": "public-inner",
+            "privateKey": "private-inner",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "expiresAt": null,
+            "alg": "EdDSA",
+            "crv": null,
+            "label": "inner",
+            "id": "jwks-generated-1"
+          },
+          {
+            "publicKey": "public-outer",
+            "privateKey": "private-outer",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "expiresAt": null,
+            "alg": "EdDSA",
+            "crv": null,
+            "label": "outer"
+          }
+        ],
+        "walletAddress": []
+      }
+    },
+    {
+      "model": "jwks",
+      "slot": "after-label",
+      "operation": "live-output-id-write",
+      "idGeneration": "serial",
+      "setup": [
+        {
+          "input": {
+            "model": "jwks",
+            "data": {
+              "publicKey": "public-selected",
+              "privateKey": "private-selected",
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "expiresAt": null,
+              "alg": "EdDSA",
+              "crv": null,
+              "label": "selected"
+            }
+          },
+          "before": {
+            "user": [],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          },
+          "result": {
+            "publicKey": "public-selected",
+            "privateKey": "private-selected",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "expiresAt": null,
+            "alg": "EdDSA",
+            "crv": null,
+            "id": "1",
+            "label": "selected"
+          },
+          "after": {
+            "user": [],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [
+              {
+                "publicKey": "public-selected",
+                "privateKey": "private-selected",
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "expiresAt": null,
+                "alg": "EdDSA",
+                "crv": null,
+                "id": 1,
+                "label": "selected"
+              }
+            ],
+            "walletAddress": []
+          }
+        }
+      ],
+      "seedEvents": [],
+      "before": {
+        "user": [],
+        "account": [],
+        "session": [],
+        "verification": [],
+        "jwks": [
+          {
+            "publicKey": "public-selected",
+            "privateKey": "private-selected",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "expiresAt": null,
+            "alg": "EdDSA",
+            "crv": null,
+            "id": 1,
+            "label": "selected"
+          }
+        ],
+        "walletAddress": []
+      },
+      "input": {
+        "model": "jwks",
+        "where": [
+          {
+            "field": "id",
+            "value": "1"
+          }
+        ]
+      },
+      "events": [
+        [
+          "output",
+          "label",
+          "selected"
+        ],
+        [
+          "writer-update",
+          {
+            "model": "jwks",
+            "where": [
+              {
+                "field": "id",
+                "value": "1"
+              }
+            ],
+            "update": {
+              "id": "00101"
+            }
+          },
+          {
+            "user": [],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [
+              {
+                "publicKey": "public-selected",
+                "privateKey": "private-selected",
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "expiresAt": null,
+                "alg": "EdDSA",
+                "crv": null,
+                "id": 1,
+                "label": "selected"
+              }
+            ],
+            "walletAddress": []
+          }
+        ],
+        [
+          "writer-updated",
+          {
+            "publicKey": "public-selected",
+            "privateKey": "private-selected",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "expiresAt": null,
+            "alg": "EdDSA",
+            "crv": null,
+            "id": "101",
+            "label": "selected"
+          },
+          {
+            "user": [],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [
+              {
+                "publicKey": "public-selected",
+                "privateKey": "private-selected",
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "expiresAt": null,
+                "alg": "EdDSA",
+                "crv": null,
+                "id": 101,
+                "label": "selected"
+              }
+            ],
+            "walletAddress": []
+          }
+        ]
+      ],
+      "result": {
+        "publicKey": "public-selected",
+        "privateKey": "private-selected",
+        "createdAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "expiresAt": null,
+        "alg": "EdDSA",
+        "crv": null,
+        "label": "selected:out",
+        "id": "101"
+      },
+      "error": null,
+      "after": {
+        "user": [],
+        "account": [],
+        "session": [],
+        "verification": [],
+        "jwks": [
+          {
+            "publicKey": "public-selected",
+            "privateKey": "private-selected",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "expiresAt": null,
+            "alg": "EdDSA",
+            "crv": null,
+            "id": 101,
+            "label": "selected"
+          }
+        ],
+        "walletAddress": []
+      }
+    },
+    {
+      "model": "walletAddress",
+      "slot": "before-label",
+      "operation": "nested-create",
+      "idGeneration": "custom",
+      "setup": [
+        {
+          "input": {
+            "model": "user",
+            "forceAllowId": true,
+            "data": {
+              "id": "ordinary-owner",
+              "name": "Record owner",
+              "email": "owner@adapter-id-slot.test",
+              "emailVerified": false,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              }
+            }
+          },
+          "before": {
+            "user": [],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          },
+          "result": {
+            "name": "Record owner",
+            "email": "owner@adapter-id-slot.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "ordinary-owner"
+          },
+          "after": {
+            "user": [
+              {
+                "name": "Record owner",
+                "email": "owner@adapter-id-slot.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": "ordinary-owner"
+              }
+            ],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          }
+        }
+      ],
+      "seedEvents": [],
+      "before": {
+        "user": [
+          {
+            "name": "Record owner",
+            "email": "owner@adapter-id-slot.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "ordinary-owner"
+          }
+        ],
+        "account": [],
+        "session": [],
+        "verification": [],
+        "jwks": [],
+        "walletAddress": []
+      },
+      "input": {
+        "model": "walletAddress",
+        "data": {
+          "userId": "ordinary-owner",
+          "address": "slot-outer",
+          "chainId": 1,
+          "isPrimary": false,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "label": "outer"
+        }
+      },
+      "events": [
+        [
+          "generateId",
+          {
+            "model": "walletAddress"
+          },
+          "walletAddress-generated-1",
+          {
+            "user": [
+              {
+                "name": "Record owner",
+                "email": "owner@adapter-id-slot.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": "ordinary-owner"
+              }
+            ],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          }
+        ],
+        [
+          "input",
+          "label",
+          "outer"
+        ],
+        [
+          "nested-create",
+          {
+            "model": "walletAddress",
+            "data": {
+              "userId": "ordinary-owner",
+              "address": "slot-inner",
+              "chainId": 1,
+              "isPrimary": false,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "label": "inner"
+            }
+          },
+          {
+            "user": [
+              {
+                "name": "Record owner",
+                "email": "owner@adapter-id-slot.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": "ordinary-owner"
+              }
+            ],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          }
+        ],
+        [
+          "generateId",
+          {
+            "model": "walletAddress"
+          },
+          "walletAddress-generated-2",
+          {
+            "user": [
+              {
+                "name": "Record owner",
+                "email": "owner@adapter-id-slot.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": "ordinary-owner"
+              }
+            ],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          }
+        ],
+        [
+          "input",
+          "label",
+          "inner"
+        ],
+        [
+          "output",
+          "label",
+          "inner"
+        ],
+        [
+          "nested-created",
+          {
+            "userId": "ordinary-owner",
+            "address": "slot-inner",
+            "chainId": 1,
+            "isPrimary": false,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "walletAddress-generated-2",
+            "label": "inner"
+          },
+          {
+            "user": [
+              {
+                "name": "Record owner",
+                "email": "owner@adapter-id-slot.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": "ordinary-owner"
+              }
+            ],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": [
+              {
+                "userId": "ordinary-owner",
+                "address": "slot-inner",
+                "chainId": 1,
+                "isPrimary": false,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": "walletAddress-generated-2",
+                "label": "inner"
+              }
+            ]
+          }
+        ],
+        [
+          "output",
+          "label",
+          "outer"
+        ]
+      ],
+      "result": {
+        "userId": "ordinary-owner",
+        "address": "slot-outer",
+        "chainId": 1,
+        "isPrimary": false,
+        "createdAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "id": "walletAddress-generated-1",
+        "label": "outer"
+      },
+      "error": null,
+      "after": {
+        "user": [
+          {
+            "name": "Record owner",
+            "email": "owner@adapter-id-slot.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "ordinary-owner"
+          }
+        ],
+        "account": [],
+        "session": [],
+        "verification": [],
+        "jwks": [],
+        "walletAddress": [
+          {
+            "userId": "ordinary-owner",
+            "address": "slot-inner",
+            "chainId": 1,
+            "isPrimary": false,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "walletAddress-generated-2",
+            "label": "inner"
+          },
+          {
+            "userId": "ordinary-owner",
+            "address": "slot-outer",
+            "chainId": 1,
+            "isPrimary": false,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "walletAddress-generated-1",
+            "label": "outer"
+          }
+        ]
+      }
+    },
+    {
+      "model": "walletAddress",
+      "slot": "before-label",
+      "operation": "live-output-id-write",
+      "idGeneration": "serial",
+      "setup": [
+        {
+          "input": {
+            "model": "user",
+            "forceAllowId": true,
+            "data": {
+              "id": "001",
+              "name": "Record owner",
+              "email": "owner@adapter-id-slot.test",
+              "emailVerified": false,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              }
+            }
+          },
+          "before": {
+            "user": [],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          },
+          "result": {
+            "name": "Record owner",
+            "email": "owner@adapter-id-slot.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "1"
+          },
+          "after": {
+            "user": [
+              {
+                "name": "Record owner",
+                "email": "owner@adapter-id-slot.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": 1
+              }
+            ],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          }
+        },
+        {
+          "input": {
+            "model": "walletAddress",
+            "data": {
+              "userId": "1",
+              "address": "slot-selected",
+              "chainId": 1,
+              "isPrimary": false,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "label": "selected"
+            }
+          },
+          "before": {
+            "user": [
+              {
+                "name": "Record owner",
+                "email": "owner@adapter-id-slot.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": 1
+              }
+            ],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          },
+          "result": {
+            "userId": "1",
+            "address": "slot-selected",
+            "chainId": 1,
+            "isPrimary": false,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "1",
+            "label": "selected"
+          },
+          "after": {
+            "user": [
+              {
+                "name": "Record owner",
+                "email": "owner@adapter-id-slot.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": 1
+              }
+            ],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": [
+              {
+                "userId": 1,
+                "address": "slot-selected",
+                "chainId": 1,
+                "isPrimary": false,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": 1,
+                "label": "selected"
+              }
+            ]
+          }
+        }
+      ],
+      "seedEvents": [],
+      "before": {
+        "user": [
+          {
+            "name": "Record owner",
+            "email": "owner@adapter-id-slot.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": 1
+          }
+        ],
+        "account": [],
+        "session": [],
+        "verification": [],
+        "jwks": [],
+        "walletAddress": [
+          {
+            "userId": 1,
+            "address": "slot-selected",
+            "chainId": 1,
+            "isPrimary": false,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": 1,
+            "label": "selected"
+          }
+        ]
+      },
+      "input": {
+        "model": "walletAddress",
+        "where": [
+          {
+            "field": "id",
+            "value": "1"
+          }
+        ]
+      },
+      "events": [
+        [
+          "output",
+          "label",
+          "selected"
+        ],
+        [
+          "writer-update",
+          {
+            "model": "walletAddress",
+            "where": [
+              {
+                "field": "id",
+                "value": "1"
+              }
+            ],
+            "update": {
+              "id": "00101"
+            }
+          },
+          {
+            "user": [
+              {
+                "name": "Record owner",
+                "email": "owner@adapter-id-slot.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": 1
+              }
+            ],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": [
+              {
+                "userId": 1,
+                "address": "slot-selected",
+                "chainId": 1,
+                "isPrimary": false,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": 1,
+                "label": "selected"
+              }
+            ]
+          }
+        ],
+        [
+          "writer-updated",
+          {
+            "userId": "1",
+            "address": "slot-selected",
+            "chainId": 1,
+            "isPrimary": false,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "101",
+            "label": "selected"
+          },
+          {
+            "user": [
+              {
+                "name": "Record owner",
+                "email": "owner@adapter-id-slot.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": 1
+              }
+            ],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": [
+              {
+                "userId": 1,
+                "address": "slot-selected",
+                "chainId": 1,
+                "isPrimary": false,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": 101,
+                "label": "selected"
+              }
+            ]
+          }
+        ]
+      ],
+      "result": {
+        "userId": "1",
+        "address": "slot-selected",
+        "chainId": 1,
+        "isPrimary": false,
+        "createdAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "id": "1",
+        "label": "selected:out"
+      },
+      "error": null,
+      "after": {
+        "user": [
+          {
+            "name": "Record owner",
+            "email": "owner@adapter-id-slot.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": 1
+          }
+        ],
+        "account": [],
+        "session": [],
+        "verification": [],
+        "jwks": [],
+        "walletAddress": [
+          {
+            "userId": 1,
+            "address": "slot-selected",
+            "chainId": 1,
+            "isPrimary": false,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": 101,
+            "label": "selected"
+          }
+        ]
+      }
+    },
+    {
+      "model": "walletAddress",
+      "slot": "after-label",
+      "operation": "nested-create",
+      "idGeneration": "custom",
+      "setup": [
+        {
+          "input": {
+            "model": "user",
+            "forceAllowId": true,
+            "data": {
+              "id": "ordinary-owner",
+              "name": "Record owner",
+              "email": "owner@adapter-id-slot.test",
+              "emailVerified": false,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              }
+            }
+          },
+          "before": {
+            "user": [],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          },
+          "result": {
+            "name": "Record owner",
+            "email": "owner@adapter-id-slot.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "ordinary-owner"
+          },
+          "after": {
+            "user": [
+              {
+                "name": "Record owner",
+                "email": "owner@adapter-id-slot.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": "ordinary-owner"
+              }
+            ],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          }
+        }
+      ],
+      "seedEvents": [],
+      "before": {
+        "user": [
+          {
+            "name": "Record owner",
+            "email": "owner@adapter-id-slot.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "ordinary-owner"
+          }
+        ],
+        "account": [],
+        "session": [],
+        "verification": [],
+        "jwks": [],
+        "walletAddress": []
+      },
+      "input": {
+        "model": "walletAddress",
+        "data": {
+          "userId": "ordinary-owner",
+          "address": "slot-outer",
+          "chainId": 1,
+          "isPrimary": false,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "label": "outer"
+        }
+      },
+      "events": [
+        [
+          "input",
+          "label",
+          "outer"
+        ],
+        [
+          "nested-create",
+          {
+            "model": "walletAddress",
+            "data": {
+              "userId": "ordinary-owner",
+              "address": "slot-inner",
+              "chainId": 1,
+              "isPrimary": false,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "label": "inner"
+            }
+          },
+          {
+            "user": [
+              {
+                "name": "Record owner",
+                "email": "owner@adapter-id-slot.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": "ordinary-owner"
+              }
+            ],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          }
+        ],
+        [
+          "input",
+          "label",
+          "inner"
+        ],
+        [
+          "generateId",
+          {
+            "model": "walletAddress"
+          },
+          "walletAddress-generated-1",
+          {
+            "user": [
+              {
+                "name": "Record owner",
+                "email": "owner@adapter-id-slot.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": "ordinary-owner"
+              }
+            ],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          }
+        ],
+        [
+          "output",
+          "label",
+          "inner"
+        ],
+        [
+          "nested-created",
+          {
+            "userId": "ordinary-owner",
+            "address": "slot-inner",
+            "chainId": 1,
+            "isPrimary": false,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "label": "inner",
+            "id": "walletAddress-generated-1"
+          },
+          {
+            "user": [
+              {
+                "name": "Record owner",
+                "email": "owner@adapter-id-slot.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": "ordinary-owner"
+              }
+            ],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": [
+              {
+                "userId": "ordinary-owner",
+                "address": "slot-inner",
+                "chainId": 1,
+                "isPrimary": false,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "label": "inner",
+                "id": "walletAddress-generated-1"
+              }
+            ]
+          }
+        ],
+        [
+          "output",
+          "label",
+          "outer"
+        ]
+      ],
+      "result": {
+        "userId": "ordinary-owner",
+        "address": "slot-outer",
+        "chainId": 1,
+        "isPrimary": false,
+        "createdAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "label": "outer",
+        "id": {
+          "type": "undefined"
+        }
+      },
+      "error": null,
+      "after": {
+        "user": [
+          {
+            "name": "Record owner",
+            "email": "owner@adapter-id-slot.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "ordinary-owner"
+          }
+        ],
+        "account": [],
+        "session": [],
+        "verification": [],
+        "jwks": [],
+        "walletAddress": [
+          {
+            "userId": "ordinary-owner",
+            "address": "slot-inner",
+            "chainId": 1,
+            "isPrimary": false,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "label": "inner",
+            "id": "walletAddress-generated-1"
+          },
+          {
+            "userId": "ordinary-owner",
+            "address": "slot-outer",
+            "chainId": 1,
+            "isPrimary": false,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "label": "outer"
+          }
+        ]
+      }
+    },
+    {
+      "model": "walletAddress",
+      "slot": "after-label",
+      "operation": "live-output-id-write",
+      "idGeneration": "serial",
+      "setup": [
+        {
+          "input": {
+            "model": "user",
+            "forceAllowId": true,
+            "data": {
+              "id": "001",
+              "name": "Record owner",
+              "email": "owner@adapter-id-slot.test",
+              "emailVerified": false,
+              "image": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              }
+            }
+          },
+          "before": {
+            "user": [],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          },
+          "result": {
+            "name": "Record owner",
+            "email": "owner@adapter-id-slot.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "1"
+          },
+          "after": {
+            "user": [
+              {
+                "name": "Record owner",
+                "email": "owner@adapter-id-slot.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": 1
+              }
+            ],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          }
+        },
+        {
+          "input": {
+            "model": "walletAddress",
+            "data": {
+              "userId": "1",
+              "address": "slot-selected",
+              "chainId": 1,
+              "isPrimary": false,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "label": "selected"
+            }
+          },
+          "before": {
+            "user": [
+              {
+                "name": "Record owner",
+                "email": "owner@adapter-id-slot.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": 1
+              }
+            ],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": []
+          },
+          "result": {
+            "userId": "1",
+            "address": "slot-selected",
+            "chainId": 1,
+            "isPrimary": false,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "1",
+            "label": "selected"
+          },
+          "after": {
+            "user": [
+              {
+                "name": "Record owner",
+                "email": "owner@adapter-id-slot.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": 1
+              }
+            ],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": [
+              {
+                "userId": 1,
+                "address": "slot-selected",
+                "chainId": 1,
+                "isPrimary": false,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": 1,
+                "label": "selected"
+              }
+            ]
+          }
+        }
+      ],
+      "seedEvents": [],
+      "before": {
+        "user": [
+          {
+            "name": "Record owner",
+            "email": "owner@adapter-id-slot.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": 1
+          }
+        ],
+        "account": [],
+        "session": [],
+        "verification": [],
+        "jwks": [],
+        "walletAddress": [
+          {
+            "userId": 1,
+            "address": "slot-selected",
+            "chainId": 1,
+            "isPrimary": false,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": 1,
+            "label": "selected"
+          }
+        ]
+      },
+      "input": {
+        "model": "walletAddress",
+        "where": [
+          {
+            "field": "id",
+            "value": "1"
+          }
+        ]
+      },
+      "events": [
+        [
+          "output",
+          "label",
+          "selected"
+        ],
+        [
+          "writer-update",
+          {
+            "model": "walletAddress",
+            "where": [
+              {
+                "field": "id",
+                "value": "1"
+              }
+            ],
+            "update": {
+              "id": "00101"
+            }
+          },
+          {
+            "user": [
+              {
+                "name": "Record owner",
+                "email": "owner@adapter-id-slot.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": 1
+              }
+            ],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": [
+              {
+                "userId": 1,
+                "address": "slot-selected",
+                "chainId": 1,
+                "isPrimary": false,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": 1,
+                "label": "selected"
+              }
+            ]
+          }
+        ],
+        [
+          "writer-updated",
+          {
+            "userId": "1",
+            "address": "slot-selected",
+            "chainId": 1,
+            "isPrimary": false,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "101",
+            "label": "selected"
+          },
+          {
+            "user": [
+              {
+                "name": "Record owner",
+                "email": "owner@adapter-id-slot.test",
+                "emailVerified": false,
+                "image": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "updatedAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": 1
+              }
+            ],
+            "account": [],
+            "session": [],
+            "verification": [],
+            "jwks": [],
+            "walletAddress": [
+              {
+                "userId": 1,
+                "address": "slot-selected",
+                "chainId": 1,
+                "isPrimary": false,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.000Z"
+                },
+                "id": 101,
+                "label": "selected"
+              }
+            ]
+          }
+        ]
+      ],
+      "result": {
+        "userId": "1",
+        "address": "slot-selected",
+        "chainId": 1,
+        "isPrimary": false,
+        "createdAt": {
+          "type": "date",
+          "value": "2030-01-02T03:04:05.000Z"
+        },
+        "label": "selected:out",
+        "id": "101"
+      },
+      "error": null,
+      "after": {
+        "user": [
+          {
+            "name": "Record owner",
+            "email": "owner@adapter-id-slot.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": 1
+          }
+        ],
+        "account": [],
+        "session": [],
+        "verification": [],
+        "jwks": [],
+        "walletAddress": [
+          {
+            "userId": 1,
+            "address": "slot-selected",
+            "chainId": 1,
+            "isPrimary": false,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": 101,
+            "label": "selected"
+          }
+        ]
+      }
+    }
+  ]
+}
