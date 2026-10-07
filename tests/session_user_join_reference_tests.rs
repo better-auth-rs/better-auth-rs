@@ -117,10 +117,21 @@ async fn operation<S: AuthSchema>(
             None => Ok(FieldValue::Null),
         };
     }
-    let token = input["token"]
-        .as_str()
-        .or_else(|| input["input"]["where"][0]["value"].as_str())
-        .ok_or_else(|| AuthError::internal("Missing Session token"))?;
+    let token = input
+        .get("token")
+        .and_then(Value::as_str)
+        .or_else(|| {
+            input
+                .get("input")?
+                .get("where")?
+                .as_array()?
+                .first()?
+                .get("value")?
+                .as_str()
+        })
+        .ok_or_else(|| {
+            AuthError::internal("Missing Session token at token or input.where[0].value")
+        })?;
     if input["surface"] == "internal" {
         let mut request = AuthRequest::new(HttpMethod::Get, "/get-session");
         let _ = request.headers.insert(
@@ -179,16 +190,33 @@ fn assert_outcome(result: AuthResult<FieldValue>, expected: &Value) -> TestResul
         Err(error) => {
             assert_eq!(expected["returned"], false, "{expected}: {error:?}");
             assert!(matches!(error, AuthError::Config(_)), "{error:?}");
+            let expected_error = expected.get("error").ok_or("Missing captured error")?;
             assert_eq!(
                 error.instrumentation_message(),
-                expected["error"]["message"]
+                expected_error
+                    .get("message")
+                    .and_then(Value::as_str)
+                    .ok_or("Missing captured error message")?
             );
-            assert_eq!(expected["error"]["name"], "BetterAuthError");
             assert_eq!(
-                expected["error"]["properties"],
-                json!({"name":"BetterAuthError"})
+                expected_error
+                    .get("name")
+                    .and_then(Value::as_str)
+                    .ok_or("Missing captured error name")?,
+                "BetterAuthError"
             );
-            assert_eq!(expected["error"]["keys"], json!(["name"]));
+            assert_eq!(
+                expected_error
+                    .get("properties")
+                    .ok_or("Missing captured error properties")?,
+                &json!({"name":"BetterAuthError"})
+            );
+            assert_eq!(
+                expected_error
+                    .get("keys")
+                    .ok_or("Missing captured error keys")?,
+                &json!(["name"])
+            );
         }
     }
     Ok(())
@@ -235,9 +263,22 @@ async fn session_user_join_references_match_upstream_before_queries() -> TestRes
     let fixture: Value = serde_json::from_str(include_str!(
         "fixtures/session-user-join-reference-1.7.6.json"
     ))?;
-    assert_eq!(fixture["version"], "1.7.6");
-    assert_eq!(fixture["scenarios"].as_array().map(Vec::len), Some(3));
-    let cases = fixture["cases"].as_array().ok_or("Missing cases")?;
+    assert_eq!(
+        fixture
+            .get("version")
+            .and_then(Value::as_str)
+            .ok_or("Missing fixture version")?,
+        "1.7.6"
+    );
+    let scenarios = fixture
+        .get("scenarios")
+        .and_then(Value::as_array)
+        .ok_or("Missing scenarios")?;
+    assert_eq!(scenarios.len(), 3);
+    let cases = fixture
+        .get("cases")
+        .and_then(Value::as_array)
+        .ok_or("Missing cases")?;
     assert_eq!(cases.len(), 12);
     for case in cases {
         let baseline = config("default", false, None);

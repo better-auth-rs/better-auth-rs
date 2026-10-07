@@ -179,10 +179,6 @@ fn expected_bindings(case: &Case, seeded: &DeviceCode) -> AuthResult<DeviceCode>
     Ok(expected)
 }
 
-#[expect(
-    clippy::panic_in_result_fn,
-    reason = "Rollback must preserve the consumed record, absent transaction row, and original error allocation"
-)]
 pub(super) async fn consume<S: AuthSchema>(
     store: &dyn AuthStore<S>,
     case: &Case,

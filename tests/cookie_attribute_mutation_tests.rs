@@ -308,6 +308,10 @@ fn callback_events(events: Vec<Value>) -> AuthResult<Vec<Value>> {
 }
 
 #[tokio::test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "The contract asserts complete Cookie responses, callback order, and retained attributes"
+)]
 async fn last_login_uses_original_session_attributes_and_preserves_prior_headers() -> AuthResult<()>
 {
     let cases = capture()?.last_login;
