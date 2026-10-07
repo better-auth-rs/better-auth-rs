@@ -66,6 +66,7 @@ run_stage() {
       bun --no-install test \
         ./compat-tests/reference-server/contracts/api-key-number-name.test.ts \
         ./compat-tests/reference-server/contracts/api-key-number-name-order.test.ts \
+        ./compat-tests/reference-server/contracts/memory-name-coercion.test.ts \
         ./compat-tests/reference-server/contracts/passkey-shared-display.test.ts
       cargo clippy --locked -p better-auth-core -p better-auth-api -p better-auth-cli -p better-auth-seaorm -p better-auth-seaorm-macros -- -D warnings
       cargo clippy --locked --features axum,seaorm2,redis-cache \
@@ -220,10 +221,14 @@ run_stage() {
     email-verification)
       cargo fmt --all -- --check
       cargo clippy --locked -p better-auth-api --lib -- -D warnings
-      cargo clippy --locked --features seaorm2 --test email_verification_duration_tests -- -D warnings
+      cargo clippy --locked --features seaorm2 \
+        --test email_verification_duration_tests --test email_verification_payload_tests -- -D warnings
       cargo test --locked -p better-auth-api --lib -- plugins::email_verification plugins::user_management::tests::test_change_email
-      cargo test --locked --features seaorm2 --test email_verification_duration_tests
-      bun --no-install test ./compat-tests/reference-server/contracts/email-verification-duration.test.ts
+      cargo test --locked --features seaorm2 \
+        --test email_verification_duration_tests --test email_verification_payload_tests
+      bun --no-install test \
+        ./compat-tests/reference-server/contracts/email-verification-duration.test.ts \
+        ./compat-tests/reference-server/contracts/email-verification-payload.test.ts
       ;;
     telemetry)
       cargo fmt --all -- --check
@@ -237,22 +242,24 @@ run_stage() {
         --test account_user_auth_boundary_reference_tests --test compat_consistency_tests \
         --test wire_compat_smoke_tests --test two_factor_cookie_duration_tests \
         --test plugin_model_fields_tests --test session_create_payload_tests \
-        --test session_user_join_reference_tests \
+        --test session_user_join_reference_tests --test custom_model_join_reference_tests \
         --test secondary_storage_hooks_tests --test background_transaction_tests \
         --test missing_user_transaction_tests -- -D warnings
       cargo test --locked --no-fail-fast --features axum,seaorm2,redis-cache \
         --test account_user_auth_boundary_reference_tests --test compat_consistency_tests \
         --test wire_compat_smoke_tests --test two_factor_cookie_duration_tests \
         --test plugin_model_fields_tests --test session_create_payload_tests \
-        --test session_user_join_reference_tests \
+        --test session_user_join_reference_tests --test custom_model_join_reference_tests \
         --test secondary_storage_hooks_tests --test background_transaction_tests \
         --test missing_user_transaction_tests
       cargo test --locked -p better-auth-api --lib plugins::two_factor::
+      cargo test --locked -p better-auth-core --lib plugin_runtime::fields::models::tests::
       bun --no-install test \
         ./compat-tests/reference-server/contracts/account-user-auth-boundary.test.ts \
         ./compat-tests/reference-server/contracts/account-user-auth-email.test.ts \
         ./compat-tests/reference-server/contracts/account-user-auth-secondary.test.ts \
-        ./compat-tests/reference-server/contracts/session-user-join-reference.test.ts
+        ./compat-tests/reference-server/contracts/session-user-join-reference.test.ts \
+        ./compat-tests/reference-server/contracts/custom-model-join-reference.test.ts
       ;;
     schema-joins)
       cargo fmt --all -- --check
@@ -363,6 +370,7 @@ run_stage() {
       ;;
     provider-options)
       cargo clippy --locked -p better-auth-api --features axum -- -D warnings
+      cargo clippy --locked --features axum,seaorm2,redis-cache --test oauth_token_duration_tests -- -D warnings
       cargo test --locked -p better-auth-api --features axum --lib -- \
         plugins::oauth::google_client_ids_tests:: \
         plugins::oauth::verifier_context_tests:: \
@@ -371,12 +379,14 @@ run_stage() {
         plugins::oauth::apple_tests:: \
         plugins::oauth::apple_flow_tests:: \
         plugins::oauth::tiktok_tests:: \
+        plugins::oauth::provider_tokens:: \
         plugins::oauth::providers::twitch::tests:: \
         plugins::oauth::signin::override_tests:: \
         plugins::oauth::generic_profile::result_tests::
       cargo test --locked -p better-auth-api --features axum \
         --test account_oauth_tests --test oauth_session_revocation_tests
       cargo test --locked --test social_refresh_context_tests
+      cargo test --locked --features axum,seaorm2,redis-cache --test oauth_token_duration_tests
       cargo test --locked --test telemetry_options_tests
       cargo check --locked --manifest-path compat-tests/rust-server/Cargo.toml
       bun --no-install test \
@@ -388,6 +398,7 @@ run_stage() {
         ./compat-tests/reference-server/contracts/twitch-provider.test.ts \
         ./compat-tests/reference-server/contracts/oauth-profile-override.test.ts \
         ./compat-tests/reference-server/contracts/social-refresh-context.test.ts \
+        ./compat-tests/reference-server/contracts/oauth-token-duration.test.ts \
         ./compat-tests/reference-server/contracts/social-verifier-context.test.ts \
         ./compat-tests/reference-server/contracts/telemetry-options.test.ts \
         ./compat-tests/reference-server/contracts/generic-profile-results.test.ts

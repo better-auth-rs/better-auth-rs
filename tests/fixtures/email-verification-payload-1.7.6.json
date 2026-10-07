@@ -1,0 +1,1995 @@
+{
+  "version": "1.7.6",
+  "scenarios": [
+    {
+      "name": "missing-email",
+      "payload": "{\"iat\":1700000000,\"exp\":4102444800}",
+      "invalidField": "email"
+    },
+    {
+      "name": "non-string-email",
+      "payload": "{\"email\":7,\"iat\":1700000000,\"exp\":4102444800}",
+      "invalidField": "email"
+    },
+    {
+      "name": "non-string-update-to",
+      "payload": "{\"email\":\"owner@verify-payload.test\",\"updateTo\":7,\"iat\":1700000000,\"exp\":4102444800}",
+      "invalidField": "updateTo"
+    },
+    {
+      "name": "bad-json",
+      "payload": "{"
+    },
+    {
+      "name": "bad-signature",
+      "payload": "{\"email\":\"owner@verify-payload.test\",\"iat\":1700000000,\"exp\":4102444800}",
+      "badSignature": true
+    }
+  ],
+  "cases": [
+    {
+      "backend": "memory",
+      "scenario": "missing-email",
+      "callbackURL": null,
+      "token": "eyJhbGciOiJIUzI1NiJ9.eyJpYXQiOjE3MDAwMDAwMDAsImV4cCI6NDEwMjQ0NDgwMH0.Zk6Uth1AgzmP_6Jm0UH2GWweAY79UKZG9mqYiIgsnvI",
+      "payload": "{\"iat\":1700000000,\"exp\":4102444800}",
+      "request": {
+        "method": "GET",
+        "url": "http://email-verification-payload.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJpYXQiOjE3MDAwMDAwMDAsImV4cCI6NDEwMjQ0NDgwMH0.Zk6Uth1AgzmP_6Jm0UH2GWweAY79UKZG9mqYiIgsnvI",
+        "headers": [
+          [
+            "origin",
+            "http://email-verification-payload.test"
+          ]
+        ]
+      },
+      "before": {
+        "user": [
+          {
+            "name": "Payload Owner",
+            "email": "owner@verify-payload.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "payload-owner"
+          }
+        ],
+        "session": [],
+        "account": [],
+        "verification": []
+      },
+      "events": [
+        {
+          "kind": "api-error",
+          "error": {
+            "name": "ZodError",
+            "message": "[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"email\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]",
+            "keys": [
+              "name",
+              "message"
+            ],
+            "properties": {
+              "name": "ZodError",
+              "message": "[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"email\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]"
+            },
+            "issues": [
+              {
+                "expected": "string",
+                "code": "invalid_type",
+                "path": [
+                  "email"
+                ],
+                "message": "Invalid input: expected string, received undefined"
+              }
+            ]
+          }
+        },
+        {
+          "kind": "console.error",
+          "args": [
+            "# SERVER_ERROR: ",
+            {
+              "name": "ZodError",
+              "message": "[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"email\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]",
+              "keys": [
+                "name",
+                "message"
+              ],
+              "properties": {
+                "name": "ZodError",
+                "message": "[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"email\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]"
+              },
+              "issues": [
+                {
+                  "expected": "string",
+                  "code": "invalid_type",
+                  "path": [
+                    "email"
+                  ],
+                  "message": "Invalid input: expected string, received undefined"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "response": {
+        "status": 500,
+        "statusText": "Internal Server Error",
+        "headers": [],
+        "cookies": [],
+        "body": ""
+      },
+      "after": {
+        "user": [
+          {
+            "name": "Payload Owner",
+            "email": "owner@verify-payload.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "payload-owner"
+          }
+        ],
+        "session": [],
+        "account": [],
+        "verification": []
+      }
+    },
+    {
+      "backend": "memory",
+      "scenario": "missing-email",
+      "callbackURL": "/verified?source=mail#done",
+      "token": "eyJhbGciOiJIUzI1NiJ9.eyJpYXQiOjE3MDAwMDAwMDAsImV4cCI6NDEwMjQ0NDgwMH0.Zk6Uth1AgzmP_6Jm0UH2GWweAY79UKZG9mqYiIgsnvI",
+      "payload": "{\"iat\":1700000000,\"exp\":4102444800}",
+      "request": {
+        "method": "GET",
+        "url": "http://email-verification-payload.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJpYXQiOjE3MDAwMDAwMDAsImV4cCI6NDEwMjQ0NDgwMH0.Zk6Uth1AgzmP_6Jm0UH2GWweAY79UKZG9mqYiIgsnvI&callbackURL=%2Fverified%3Fsource%3Dmail%23done",
+        "headers": [
+          [
+            "origin",
+            "http://email-verification-payload.test"
+          ]
+        ]
+      },
+      "before": {
+        "user": [
+          {
+            "name": "Payload Owner",
+            "email": "owner@verify-payload.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "payload-owner"
+          }
+        ],
+        "session": [],
+        "account": [],
+        "verification": []
+      },
+      "events": [
+        {
+          "kind": "api-error",
+          "error": {
+            "name": "ZodError",
+            "message": "[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"email\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]",
+            "keys": [
+              "name",
+              "message"
+            ],
+            "properties": {
+              "name": "ZodError",
+              "message": "[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"email\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]"
+            },
+            "issues": [
+              {
+                "expected": "string",
+                "code": "invalid_type",
+                "path": [
+                  "email"
+                ],
+                "message": "Invalid input: expected string, received undefined"
+              }
+            ]
+          }
+        },
+        {
+          "kind": "console.error",
+          "args": [
+            "# SERVER_ERROR: ",
+            {
+              "name": "ZodError",
+              "message": "[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"email\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]",
+              "keys": [
+                "name",
+                "message"
+              ],
+              "properties": {
+                "name": "ZodError",
+                "message": "[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"email\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]"
+              },
+              "issues": [
+                {
+                  "expected": "string",
+                  "code": "invalid_type",
+                  "path": [
+                    "email"
+                  ],
+                  "message": "Invalid input: expected string, received undefined"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "response": {
+        "status": 500,
+        "statusText": "Internal Server Error",
+        "headers": [],
+        "cookies": [],
+        "body": ""
+      },
+      "after": {
+        "user": [
+          {
+            "name": "Payload Owner",
+            "email": "owner@verify-payload.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "payload-owner"
+          }
+        ],
+        "session": [],
+        "account": [],
+        "verification": []
+      }
+    },
+    {
+      "backend": "memory",
+      "scenario": "non-string-email",
+      "callbackURL": null,
+      "token": "eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6NywiaWF0IjoxNzAwMDAwMDAwLCJleHAiOjQxMDI0NDQ4MDB9.lzEJ9-dvL3Hv3dvHKEjTzi2PBURe3Iyn_hxCccZqwHo",
+      "payload": "{\"email\":7,\"iat\":1700000000,\"exp\":4102444800}",
+      "request": {
+        "method": "GET",
+        "url": "http://email-verification-payload.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6NywiaWF0IjoxNzAwMDAwMDAwLCJleHAiOjQxMDI0NDQ4MDB9.lzEJ9-dvL3Hv3dvHKEjTzi2PBURe3Iyn_hxCccZqwHo",
+        "headers": [
+          [
+            "origin",
+            "http://email-verification-payload.test"
+          ]
+        ]
+      },
+      "before": {
+        "user": [
+          {
+            "name": "Payload Owner",
+            "email": "owner@verify-payload.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "payload-owner"
+          }
+        ],
+        "session": [],
+        "account": [],
+        "verification": []
+      },
+      "events": [
+        {
+          "kind": "api-error",
+          "error": {
+            "name": "ZodError",
+            "message": "[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"email\"\n    ],\n    \"message\": \"Invalid input: expected string, received number\"\n  }\n]",
+            "keys": [
+              "name",
+              "message"
+            ],
+            "properties": {
+              "name": "ZodError",
+              "message": "[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"email\"\n    ],\n    \"message\": \"Invalid input: expected string, received number\"\n  }\n]"
+            },
+            "issues": [
+              {
+                "expected": "string",
+                "code": "invalid_type",
+                "path": [
+                  "email"
+                ],
+                "message": "Invalid input: expected string, received number"
+              }
+            ]
+          }
+        },
+        {
+          "kind": "console.error",
+          "args": [
+            "# SERVER_ERROR: ",
+            {
+              "name": "ZodError",
+              "message": "[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"email\"\n    ],\n    \"message\": \"Invalid input: expected string, received number\"\n  }\n]",
+              "keys": [
+                "name",
+                "message"
+              ],
+              "properties": {
+                "name": "ZodError",
+                "message": "[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"email\"\n    ],\n    \"message\": \"Invalid input: expected string, received number\"\n  }\n]"
+              },
+              "issues": [
+                {
+                  "expected": "string",
+                  "code": "invalid_type",
+                  "path": [
+                    "email"
+                  ],
+                  "message": "Invalid input: expected string, received number"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "response": {
+        "status": 500,
+        "statusText": "Internal Server Error",
+        "headers": [],
+        "cookies": [],
+        "body": ""
+      },
+      "after": {
+        "user": [
+          {
+            "name": "Payload Owner",
+            "email": "owner@verify-payload.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "payload-owner"
+          }
+        ],
+        "session": [],
+        "account": [],
+        "verification": []
+      }
+    },
+    {
+      "backend": "memory",
+      "scenario": "non-string-email",
+      "callbackURL": "/verified?source=mail#done",
+      "token": "eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6NywiaWF0IjoxNzAwMDAwMDAwLCJleHAiOjQxMDI0NDQ4MDB9.lzEJ9-dvL3Hv3dvHKEjTzi2PBURe3Iyn_hxCccZqwHo",
+      "payload": "{\"email\":7,\"iat\":1700000000,\"exp\":4102444800}",
+      "request": {
+        "method": "GET",
+        "url": "http://email-verification-payload.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6NywiaWF0IjoxNzAwMDAwMDAwLCJleHAiOjQxMDI0NDQ4MDB9.lzEJ9-dvL3Hv3dvHKEjTzi2PBURe3Iyn_hxCccZqwHo&callbackURL=%2Fverified%3Fsource%3Dmail%23done",
+        "headers": [
+          [
+            "origin",
+            "http://email-verification-payload.test"
+          ]
+        ]
+      },
+      "before": {
+        "user": [
+          {
+            "name": "Payload Owner",
+            "email": "owner@verify-payload.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "payload-owner"
+          }
+        ],
+        "session": [],
+        "account": [],
+        "verification": []
+      },
+      "events": [
+        {
+          "kind": "api-error",
+          "error": {
+            "name": "ZodError",
+            "message": "[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"email\"\n    ],\n    \"message\": \"Invalid input: expected string, received number\"\n  }\n]",
+            "keys": [
+              "name",
+              "message"
+            ],
+            "properties": {
+              "name": "ZodError",
+              "message": "[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"email\"\n    ],\n    \"message\": \"Invalid input: expected string, received number\"\n  }\n]"
+            },
+            "issues": [
+              {
+                "expected": "string",
+                "code": "invalid_type",
+                "path": [
+                  "email"
+                ],
+                "message": "Invalid input: expected string, received number"
+              }
+            ]
+          }
+        },
+        {
+          "kind": "console.error",
+          "args": [
+            "# SERVER_ERROR: ",
+            {
+              "name": "ZodError",
+              "message": "[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"email\"\n    ],\n    \"message\": \"Invalid input: expected string, received number\"\n  }\n]",
+              "keys": [
+                "name",
+                "message"
+              ],
+              "properties": {
+                "name": "ZodError",
+                "message": "[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"email\"\n    ],\n    \"message\": \"Invalid input: expected string, received number\"\n  }\n]"
+              },
+              "issues": [
+                {
+                  "expected": "string",
+                  "code": "invalid_type",
+                  "path": [
+                    "email"
+                  ],
+                  "message": "Invalid input: expected string, received number"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "response": {
+        "status": 500,
+        "statusText": "Internal Server Error",
+        "headers": [],
+        "cookies": [],
+        "body": ""
+      },
+      "after": {
+        "user": [
+          {
+            "name": "Payload Owner",
+            "email": "owner@verify-payload.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "payload-owner"
+          }
+        ],
+        "session": [],
+        "account": [],
+        "verification": []
+      }
+    },
+    {
+      "backend": "memory",
+      "scenario": "non-string-update-to",
+      "callbackURL": null,
+      "token": "eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQHZlcmlmeS1wYXlsb2FkLnRlc3QiLCJ1cGRhdGVUbyI6NywiaWF0IjoxNzAwMDAwMDAwLCJleHAiOjQxMDI0NDQ4MDB9.C_NnA_lJeIezTdju0FsHDDWZGY1XQ5TGHKEX65D-BJs",
+      "payload": "{\"email\":\"owner@verify-payload.test\",\"updateTo\":7,\"iat\":1700000000,\"exp\":4102444800}",
+      "request": {
+        "method": "GET",
+        "url": "http://email-verification-payload.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQHZlcmlmeS1wYXlsb2FkLnRlc3QiLCJ1cGRhdGVUbyI6NywiaWF0IjoxNzAwMDAwMDAwLCJleHAiOjQxMDI0NDQ4MDB9.C_NnA_lJeIezTdju0FsHDDWZGY1XQ5TGHKEX65D-BJs",
+        "headers": [
+          [
+            "origin",
+            "http://email-verification-payload.test"
+          ]
+        ]
+      },
+      "before": {
+        "user": [
+          {
+            "name": "Payload Owner",
+            "email": "owner@verify-payload.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "payload-owner"
+          }
+        ],
+        "session": [],
+        "account": [],
+        "verification": []
+      },
+      "events": [
+        {
+          "kind": "api-error",
+          "error": {
+            "name": "ZodError",
+            "message": "[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"updateTo\"\n    ],\n    \"message\": \"Invalid input: expected string, received number\"\n  }\n]",
+            "keys": [
+              "name",
+              "message"
+            ],
+            "properties": {
+              "name": "ZodError",
+              "message": "[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"updateTo\"\n    ],\n    \"message\": \"Invalid input: expected string, received number\"\n  }\n]"
+            },
+            "issues": [
+              {
+                "expected": "string",
+                "code": "invalid_type",
+                "path": [
+                  "updateTo"
+                ],
+                "message": "Invalid input: expected string, received number"
+              }
+            ]
+          }
+        },
+        {
+          "kind": "console.error",
+          "args": [
+            "# SERVER_ERROR: ",
+            {
+              "name": "ZodError",
+              "message": "[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"updateTo\"\n    ],\n    \"message\": \"Invalid input: expected string, received number\"\n  }\n]",
+              "keys": [
+                "name",
+                "message"
+              ],
+              "properties": {
+                "name": "ZodError",
+                "message": "[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"updateTo\"\n    ],\n    \"message\": \"Invalid input: expected string, received number\"\n  }\n]"
+              },
+              "issues": [
+                {
+                  "expected": "string",
+                  "code": "invalid_type",
+                  "path": [
+                    "updateTo"
+                  ],
+                  "message": "Invalid input: expected string, received number"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "response": {
+        "status": 500,
+        "statusText": "Internal Server Error",
+        "headers": [],
+        "cookies": [],
+        "body": ""
+      },
+      "after": {
+        "user": [
+          {
+            "name": "Payload Owner",
+            "email": "owner@verify-payload.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "payload-owner"
+          }
+        ],
+        "session": [],
+        "account": [],
+        "verification": []
+      }
+    },
+    {
+      "backend": "memory",
+      "scenario": "non-string-update-to",
+      "callbackURL": "/verified?source=mail#done",
+      "token": "eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQHZlcmlmeS1wYXlsb2FkLnRlc3QiLCJ1cGRhdGVUbyI6NywiaWF0IjoxNzAwMDAwMDAwLCJleHAiOjQxMDI0NDQ4MDB9.C_NnA_lJeIezTdju0FsHDDWZGY1XQ5TGHKEX65D-BJs",
+      "payload": "{\"email\":\"owner@verify-payload.test\",\"updateTo\":7,\"iat\":1700000000,\"exp\":4102444800}",
+      "request": {
+        "method": "GET",
+        "url": "http://email-verification-payload.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQHZlcmlmeS1wYXlsb2FkLnRlc3QiLCJ1cGRhdGVUbyI6NywiaWF0IjoxNzAwMDAwMDAwLCJleHAiOjQxMDI0NDQ4MDB9.C_NnA_lJeIezTdju0FsHDDWZGY1XQ5TGHKEX65D-BJs&callbackURL=%2Fverified%3Fsource%3Dmail%23done",
+        "headers": [
+          [
+            "origin",
+            "http://email-verification-payload.test"
+          ]
+        ]
+      },
+      "before": {
+        "user": [
+          {
+            "name": "Payload Owner",
+            "email": "owner@verify-payload.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "payload-owner"
+          }
+        ],
+        "session": [],
+        "account": [],
+        "verification": []
+      },
+      "events": [
+        {
+          "kind": "api-error",
+          "error": {
+            "name": "ZodError",
+            "message": "[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"updateTo\"\n    ],\n    \"message\": \"Invalid input: expected string, received number\"\n  }\n]",
+            "keys": [
+              "name",
+              "message"
+            ],
+            "properties": {
+              "name": "ZodError",
+              "message": "[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"updateTo\"\n    ],\n    \"message\": \"Invalid input: expected string, received number\"\n  }\n]"
+            },
+            "issues": [
+              {
+                "expected": "string",
+                "code": "invalid_type",
+                "path": [
+                  "updateTo"
+                ],
+                "message": "Invalid input: expected string, received number"
+              }
+            ]
+          }
+        },
+        {
+          "kind": "console.error",
+          "args": [
+            "# SERVER_ERROR: ",
+            {
+              "name": "ZodError",
+              "message": "[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"updateTo\"\n    ],\n    \"message\": \"Invalid input: expected string, received number\"\n  }\n]",
+              "keys": [
+                "name",
+                "message"
+              ],
+              "properties": {
+                "name": "ZodError",
+                "message": "[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"updateTo\"\n    ],\n    \"message\": \"Invalid input: expected string, received number\"\n  }\n]"
+              },
+              "issues": [
+                {
+                  "expected": "string",
+                  "code": "invalid_type",
+                  "path": [
+                    "updateTo"
+                  ],
+                  "message": "Invalid input: expected string, received number"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "response": {
+        "status": 500,
+        "statusText": "Internal Server Error",
+        "headers": [],
+        "cookies": [],
+        "body": ""
+      },
+      "after": {
+        "user": [
+          {
+            "name": "Payload Owner",
+            "email": "owner@verify-payload.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "payload-owner"
+          }
+        ],
+        "session": [],
+        "account": [],
+        "verification": []
+      }
+    },
+    {
+      "backend": "memory",
+      "scenario": "bad-json",
+      "callbackURL": null,
+      "token": "eyJhbGciOiJIUzI1NiJ9.ew.IO-ToFRUNoOWYd2XFv8Tygo5oI8cF-znOudTSnDcflM",
+      "payload": "{",
+      "request": {
+        "method": "GET",
+        "url": "http://email-verification-payload.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.ew.IO-ToFRUNoOWYd2XFv8Tygo5oI8cF-znOudTSnDcflM",
+        "headers": [
+          [
+            "origin",
+            "http://email-verification-payload.test"
+          ]
+        ]
+      },
+      "before": {
+        "user": [
+          {
+            "name": "Payload Owner",
+            "email": "owner@verify-payload.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "payload-owner"
+          }
+        ],
+        "session": [],
+        "account": [],
+        "verification": []
+      },
+      "events": [],
+      "response": {
+        "status": 401,
+        "statusText": "UNAUTHORIZED",
+        "headers": [
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "cookies": [],
+        "body": "{\"message\":\"Invalid token\",\"code\":\"INVALID_TOKEN\"}"
+      },
+      "after": {
+        "user": [
+          {
+            "name": "Payload Owner",
+            "email": "owner@verify-payload.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "payload-owner"
+          }
+        ],
+        "session": [],
+        "account": [],
+        "verification": []
+      }
+    },
+    {
+      "backend": "memory",
+      "scenario": "bad-json",
+      "callbackURL": "/verified?source=mail#done",
+      "token": "eyJhbGciOiJIUzI1NiJ9.ew.IO-ToFRUNoOWYd2XFv8Tygo5oI8cF-znOudTSnDcflM",
+      "payload": "{",
+      "request": {
+        "method": "GET",
+        "url": "http://email-verification-payload.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.ew.IO-ToFRUNoOWYd2XFv8Tygo5oI8cF-znOudTSnDcflM&callbackURL=%2Fverified%3Fsource%3Dmail%23done",
+        "headers": [
+          [
+            "origin",
+            "http://email-verification-payload.test"
+          ]
+        ]
+      },
+      "before": {
+        "user": [
+          {
+            "name": "Payload Owner",
+            "email": "owner@verify-payload.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "payload-owner"
+          }
+        ],
+        "session": [],
+        "account": [],
+        "verification": []
+      },
+      "events": [],
+      "response": {
+        "status": 302,
+        "statusText": "FOUND",
+        "headers": [
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "location",
+            "/verified?source=mail&error=INVALID_TOKEN#done"
+          ]
+        ],
+        "cookies": [],
+        "body": ""
+      },
+      "after": {
+        "user": [
+          {
+            "name": "Payload Owner",
+            "email": "owner@verify-payload.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "payload-owner"
+          }
+        ],
+        "session": [],
+        "account": [],
+        "verification": []
+      }
+    },
+    {
+      "backend": "memory",
+      "scenario": "bad-signature",
+      "callbackURL": null,
+      "token": "eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQHZlcmlmeS1wYXlsb2FkLnRlc3QiLCJpYXQiOjE3MDAwMDAwMDAsImV4cCI6NDEwMjQ0NDgwMH0.F0C68ThZ_qb1z7evmFSNPDcmysLdnQOWOg_mXt4myz0",
+      "payload": "{\"email\":\"owner@verify-payload.test\",\"iat\":1700000000,\"exp\":4102444800}",
+      "request": {
+        "method": "GET",
+        "url": "http://email-verification-payload.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQHZlcmlmeS1wYXlsb2FkLnRlc3QiLCJpYXQiOjE3MDAwMDAwMDAsImV4cCI6NDEwMjQ0NDgwMH0.F0C68ThZ_qb1z7evmFSNPDcmysLdnQOWOg_mXt4myz0",
+        "headers": [
+          [
+            "origin",
+            "http://email-verification-payload.test"
+          ]
+        ]
+      },
+      "before": {
+        "user": [
+          {
+            "name": "Payload Owner",
+            "email": "owner@verify-payload.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "payload-owner"
+          }
+        ],
+        "session": [],
+        "account": [],
+        "verification": []
+      },
+      "events": [],
+      "response": {
+        "status": 401,
+        "statusText": "UNAUTHORIZED",
+        "headers": [
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "cookies": [],
+        "body": "{\"message\":\"Invalid token\",\"code\":\"INVALID_TOKEN\"}"
+      },
+      "after": {
+        "user": [
+          {
+            "name": "Payload Owner",
+            "email": "owner@verify-payload.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "payload-owner"
+          }
+        ],
+        "session": [],
+        "account": [],
+        "verification": []
+      }
+    },
+    {
+      "backend": "memory",
+      "scenario": "bad-signature",
+      "callbackURL": "/verified?source=mail#done",
+      "token": "eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQHZlcmlmeS1wYXlsb2FkLnRlc3QiLCJpYXQiOjE3MDAwMDAwMDAsImV4cCI6NDEwMjQ0NDgwMH0.F0C68ThZ_qb1z7evmFSNPDcmysLdnQOWOg_mXt4myz0",
+      "payload": "{\"email\":\"owner@verify-payload.test\",\"iat\":1700000000,\"exp\":4102444800}",
+      "request": {
+        "method": "GET",
+        "url": "http://email-verification-payload.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQHZlcmlmeS1wYXlsb2FkLnRlc3QiLCJpYXQiOjE3MDAwMDAwMDAsImV4cCI6NDEwMjQ0NDgwMH0.F0C68ThZ_qb1z7evmFSNPDcmysLdnQOWOg_mXt4myz0&callbackURL=%2Fverified%3Fsource%3Dmail%23done",
+        "headers": [
+          [
+            "origin",
+            "http://email-verification-payload.test"
+          ]
+        ]
+      },
+      "before": {
+        "user": [
+          {
+            "name": "Payload Owner",
+            "email": "owner@verify-payload.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "payload-owner"
+          }
+        ],
+        "session": [],
+        "account": [],
+        "verification": []
+      },
+      "events": [],
+      "response": {
+        "status": 302,
+        "statusText": "FOUND",
+        "headers": [
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "location",
+            "/verified?source=mail&error=INVALID_TOKEN#done"
+          ]
+        ],
+        "cookies": [],
+        "body": ""
+      },
+      "after": {
+        "user": [
+          {
+            "name": "Payload Owner",
+            "email": "owner@verify-payload.test",
+            "emailVerified": false,
+            "image": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "payload-owner"
+          }
+        ],
+        "session": [],
+        "account": [],
+        "verification": []
+      }
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "missing-email",
+      "callbackURL": null,
+      "token": "eyJhbGciOiJIUzI1NiJ9.eyJpYXQiOjE3MDAwMDAwMDAsImV4cCI6NDEwMjQ0NDgwMH0.Zk6Uth1AgzmP_6Jm0UH2GWweAY79UKZG9mqYiIgsnvI",
+      "payload": "{\"iat\":1700000000,\"exp\":4102444800}",
+      "request": {
+        "method": "GET",
+        "url": "http://email-verification-payload.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJpYXQiOjE3MDAwMDAwMDAsImV4cCI6NDEwMjQ0NDgwMH0.Zk6Uth1AgzmP_6Jm0UH2GWweAY79UKZG9mqYiIgsnvI",
+        "headers": [
+          [
+            "origin",
+            "http://email-verification-payload.test"
+          ]
+        ]
+      },
+      "before": {
+        "user": [
+          {
+            "id": "payload-owner",
+            "name": "Payload Owner",
+            "email": "owner@verify-payload.test",
+            "emailVerified": 0,
+            "image": null,
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          }
+        ],
+        "session": [],
+        "account": [],
+        "verification": []
+      },
+      "events": [
+        {
+          "kind": "api-error",
+          "error": {
+            "name": "ZodError",
+            "message": "[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"email\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]",
+            "keys": [
+              "name",
+              "message"
+            ],
+            "properties": {
+              "name": "ZodError",
+              "message": "[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"email\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]"
+            },
+            "issues": [
+              {
+                "expected": "string",
+                "code": "invalid_type",
+                "path": [
+                  "email"
+                ],
+                "message": "Invalid input: expected string, received undefined"
+              }
+            ]
+          }
+        },
+        {
+          "kind": "console.error",
+          "args": [
+            "# SERVER_ERROR: ",
+            {
+              "name": "ZodError",
+              "message": "[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"email\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]",
+              "keys": [
+                "name",
+                "message"
+              ],
+              "properties": {
+                "name": "ZodError",
+                "message": "[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"email\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]"
+              },
+              "issues": [
+                {
+                  "expected": "string",
+                  "code": "invalid_type",
+                  "path": [
+                    "email"
+                  ],
+                  "message": "Invalid input: expected string, received undefined"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "response": {
+        "status": 500,
+        "statusText": "Internal Server Error",
+        "headers": [],
+        "cookies": [],
+        "body": ""
+      },
+      "after": {
+        "user": [
+          {
+            "id": "payload-owner",
+            "name": "Payload Owner",
+            "email": "owner@verify-payload.test",
+            "emailVerified": 0,
+            "image": null,
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          }
+        ],
+        "session": [],
+        "account": [],
+        "verification": []
+      }
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "missing-email",
+      "callbackURL": "/verified?source=mail#done",
+      "token": "eyJhbGciOiJIUzI1NiJ9.eyJpYXQiOjE3MDAwMDAwMDAsImV4cCI6NDEwMjQ0NDgwMH0.Zk6Uth1AgzmP_6Jm0UH2GWweAY79UKZG9mqYiIgsnvI",
+      "payload": "{\"iat\":1700000000,\"exp\":4102444800}",
+      "request": {
+        "method": "GET",
+        "url": "http://email-verification-payload.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJpYXQiOjE3MDAwMDAwMDAsImV4cCI6NDEwMjQ0NDgwMH0.Zk6Uth1AgzmP_6Jm0UH2GWweAY79UKZG9mqYiIgsnvI&callbackURL=%2Fverified%3Fsource%3Dmail%23done",
+        "headers": [
+          [
+            "origin",
+            "http://email-verification-payload.test"
+          ]
+        ]
+      },
+      "before": {
+        "user": [
+          {
+            "id": "payload-owner",
+            "name": "Payload Owner",
+            "email": "owner@verify-payload.test",
+            "emailVerified": 0,
+            "image": null,
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          }
+        ],
+        "session": [],
+        "account": [],
+        "verification": []
+      },
+      "events": [
+        {
+          "kind": "api-error",
+          "error": {
+            "name": "ZodError",
+            "message": "[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"email\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]",
+            "keys": [
+              "name",
+              "message"
+            ],
+            "properties": {
+              "name": "ZodError",
+              "message": "[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"email\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]"
+            },
+            "issues": [
+              {
+                "expected": "string",
+                "code": "invalid_type",
+                "path": [
+                  "email"
+                ],
+                "message": "Invalid input: expected string, received undefined"
+              }
+            ]
+          }
+        },
+        {
+          "kind": "console.error",
+          "args": [
+            "# SERVER_ERROR: ",
+            {
+              "name": "ZodError",
+              "message": "[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"email\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]",
+              "keys": [
+                "name",
+                "message"
+              ],
+              "properties": {
+                "name": "ZodError",
+                "message": "[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"email\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]"
+              },
+              "issues": [
+                {
+                  "expected": "string",
+                  "code": "invalid_type",
+                  "path": [
+                    "email"
+                  ],
+                  "message": "Invalid input: expected string, received undefined"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "response": {
+        "status": 500,
+        "statusText": "Internal Server Error",
+        "headers": [],
+        "cookies": [],
+        "body": ""
+      },
+      "after": {
+        "user": [
+          {
+            "id": "payload-owner",
+            "name": "Payload Owner",
+            "email": "owner@verify-payload.test",
+            "emailVerified": 0,
+            "image": null,
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          }
+        ],
+        "session": [],
+        "account": [],
+        "verification": []
+      }
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "non-string-email",
+      "callbackURL": null,
+      "token": "eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6NywiaWF0IjoxNzAwMDAwMDAwLCJleHAiOjQxMDI0NDQ4MDB9.lzEJ9-dvL3Hv3dvHKEjTzi2PBURe3Iyn_hxCccZqwHo",
+      "payload": "{\"email\":7,\"iat\":1700000000,\"exp\":4102444800}",
+      "request": {
+        "method": "GET",
+        "url": "http://email-verification-payload.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6NywiaWF0IjoxNzAwMDAwMDAwLCJleHAiOjQxMDI0NDQ4MDB9.lzEJ9-dvL3Hv3dvHKEjTzi2PBURe3Iyn_hxCccZqwHo",
+        "headers": [
+          [
+            "origin",
+            "http://email-verification-payload.test"
+          ]
+        ]
+      },
+      "before": {
+        "user": [
+          {
+            "id": "payload-owner",
+            "name": "Payload Owner",
+            "email": "owner@verify-payload.test",
+            "emailVerified": 0,
+            "image": null,
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          }
+        ],
+        "session": [],
+        "account": [],
+        "verification": []
+      },
+      "events": [
+        {
+          "kind": "api-error",
+          "error": {
+            "name": "ZodError",
+            "message": "[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"email\"\n    ],\n    \"message\": \"Invalid input: expected string, received number\"\n  }\n]",
+            "keys": [
+              "name",
+              "message"
+            ],
+            "properties": {
+              "name": "ZodError",
+              "message": "[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"email\"\n    ],\n    \"message\": \"Invalid input: expected string, received number\"\n  }\n]"
+            },
+            "issues": [
+              {
+                "expected": "string",
+                "code": "invalid_type",
+                "path": [
+                  "email"
+                ],
+                "message": "Invalid input: expected string, received number"
+              }
+            ]
+          }
+        },
+        {
+          "kind": "console.error",
+          "args": [
+            "# SERVER_ERROR: ",
+            {
+              "name": "ZodError",
+              "message": "[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"email\"\n    ],\n    \"message\": \"Invalid input: expected string, received number\"\n  }\n]",
+              "keys": [
+                "name",
+                "message"
+              ],
+              "properties": {
+                "name": "ZodError",
+                "message": "[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"email\"\n    ],\n    \"message\": \"Invalid input: expected string, received number\"\n  }\n]"
+              },
+              "issues": [
+                {
+                  "expected": "string",
+                  "code": "invalid_type",
+                  "path": [
+                    "email"
+                  ],
+                  "message": "Invalid input: expected string, received number"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "response": {
+        "status": 500,
+        "statusText": "Internal Server Error",
+        "headers": [],
+        "cookies": [],
+        "body": ""
+      },
+      "after": {
+        "user": [
+          {
+            "id": "payload-owner",
+            "name": "Payload Owner",
+            "email": "owner@verify-payload.test",
+            "emailVerified": 0,
+            "image": null,
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          }
+        ],
+        "session": [],
+        "account": [],
+        "verification": []
+      }
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "non-string-email",
+      "callbackURL": "/verified?source=mail#done",
+      "token": "eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6NywiaWF0IjoxNzAwMDAwMDAwLCJleHAiOjQxMDI0NDQ4MDB9.lzEJ9-dvL3Hv3dvHKEjTzi2PBURe3Iyn_hxCccZqwHo",
+      "payload": "{\"email\":7,\"iat\":1700000000,\"exp\":4102444800}",
+      "request": {
+        "method": "GET",
+        "url": "http://email-verification-payload.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6NywiaWF0IjoxNzAwMDAwMDAwLCJleHAiOjQxMDI0NDQ4MDB9.lzEJ9-dvL3Hv3dvHKEjTzi2PBURe3Iyn_hxCccZqwHo&callbackURL=%2Fverified%3Fsource%3Dmail%23done",
+        "headers": [
+          [
+            "origin",
+            "http://email-verification-payload.test"
+          ]
+        ]
+      },
+      "before": {
+        "user": [
+          {
+            "id": "payload-owner",
+            "name": "Payload Owner",
+            "email": "owner@verify-payload.test",
+            "emailVerified": 0,
+            "image": null,
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          }
+        ],
+        "session": [],
+        "account": [],
+        "verification": []
+      },
+      "events": [
+        {
+          "kind": "api-error",
+          "error": {
+            "name": "ZodError",
+            "message": "[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"email\"\n    ],\n    \"message\": \"Invalid input: expected string, received number\"\n  }\n]",
+            "keys": [
+              "name",
+              "message"
+            ],
+            "properties": {
+              "name": "ZodError",
+              "message": "[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"email\"\n    ],\n    \"message\": \"Invalid input: expected string, received number\"\n  }\n]"
+            },
+            "issues": [
+              {
+                "expected": "string",
+                "code": "invalid_type",
+                "path": [
+                  "email"
+                ],
+                "message": "Invalid input: expected string, received number"
+              }
+            ]
+          }
+        },
+        {
+          "kind": "console.error",
+          "args": [
+            "# SERVER_ERROR: ",
+            {
+              "name": "ZodError",
+              "message": "[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"email\"\n    ],\n    \"message\": \"Invalid input: expected string, received number\"\n  }\n]",
+              "keys": [
+                "name",
+                "message"
+              ],
+              "properties": {
+                "name": "ZodError",
+                "message": "[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"email\"\n    ],\n    \"message\": \"Invalid input: expected string, received number\"\n  }\n]"
+              },
+              "issues": [
+                {
+                  "expected": "string",
+                  "code": "invalid_type",
+                  "path": [
+                    "email"
+                  ],
+                  "message": "Invalid input: expected string, received number"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "response": {
+        "status": 500,
+        "statusText": "Internal Server Error",
+        "headers": [],
+        "cookies": [],
+        "body": ""
+      },
+      "after": {
+        "user": [
+          {
+            "id": "payload-owner",
+            "name": "Payload Owner",
+            "email": "owner@verify-payload.test",
+            "emailVerified": 0,
+            "image": null,
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          }
+        ],
+        "session": [],
+        "account": [],
+        "verification": []
+      }
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "non-string-update-to",
+      "callbackURL": null,
+      "token": "eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQHZlcmlmeS1wYXlsb2FkLnRlc3QiLCJ1cGRhdGVUbyI6NywiaWF0IjoxNzAwMDAwMDAwLCJleHAiOjQxMDI0NDQ4MDB9.C_NnA_lJeIezTdju0FsHDDWZGY1XQ5TGHKEX65D-BJs",
+      "payload": "{\"email\":\"owner@verify-payload.test\",\"updateTo\":7,\"iat\":1700000000,\"exp\":4102444800}",
+      "request": {
+        "method": "GET",
+        "url": "http://email-verification-payload.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQHZlcmlmeS1wYXlsb2FkLnRlc3QiLCJ1cGRhdGVUbyI6NywiaWF0IjoxNzAwMDAwMDAwLCJleHAiOjQxMDI0NDQ4MDB9.C_NnA_lJeIezTdju0FsHDDWZGY1XQ5TGHKEX65D-BJs",
+        "headers": [
+          [
+            "origin",
+            "http://email-verification-payload.test"
+          ]
+        ]
+      },
+      "before": {
+        "user": [
+          {
+            "id": "payload-owner",
+            "name": "Payload Owner",
+            "email": "owner@verify-payload.test",
+            "emailVerified": 0,
+            "image": null,
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          }
+        ],
+        "session": [],
+        "account": [],
+        "verification": []
+      },
+      "events": [
+        {
+          "kind": "api-error",
+          "error": {
+            "name": "ZodError",
+            "message": "[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"updateTo\"\n    ],\n    \"message\": \"Invalid input: expected string, received number\"\n  }\n]",
+            "keys": [
+              "name",
+              "message"
+            ],
+            "properties": {
+              "name": "ZodError",
+              "message": "[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"updateTo\"\n    ],\n    \"message\": \"Invalid input: expected string, received number\"\n  }\n]"
+            },
+            "issues": [
+              {
+                "expected": "string",
+                "code": "invalid_type",
+                "path": [
+                  "updateTo"
+                ],
+                "message": "Invalid input: expected string, received number"
+              }
+            ]
+          }
+        },
+        {
+          "kind": "console.error",
+          "args": [
+            "# SERVER_ERROR: ",
+            {
+              "name": "ZodError",
+              "message": "[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"updateTo\"\n    ],\n    \"message\": \"Invalid input: expected string, received number\"\n  }\n]",
+              "keys": [
+                "name",
+                "message"
+              ],
+              "properties": {
+                "name": "ZodError",
+                "message": "[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"updateTo\"\n    ],\n    \"message\": \"Invalid input: expected string, received number\"\n  }\n]"
+              },
+              "issues": [
+                {
+                  "expected": "string",
+                  "code": "invalid_type",
+                  "path": [
+                    "updateTo"
+                  ],
+                  "message": "Invalid input: expected string, received number"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "response": {
+        "status": 500,
+        "statusText": "Internal Server Error",
+        "headers": [],
+        "cookies": [],
+        "body": ""
+      },
+      "after": {
+        "user": [
+          {
+            "id": "payload-owner",
+            "name": "Payload Owner",
+            "email": "owner@verify-payload.test",
+            "emailVerified": 0,
+            "image": null,
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          }
+        ],
+        "session": [],
+        "account": [],
+        "verification": []
+      }
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "non-string-update-to",
+      "callbackURL": "/verified?source=mail#done",
+      "token": "eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQHZlcmlmeS1wYXlsb2FkLnRlc3QiLCJ1cGRhdGVUbyI6NywiaWF0IjoxNzAwMDAwMDAwLCJleHAiOjQxMDI0NDQ4MDB9.C_NnA_lJeIezTdju0FsHDDWZGY1XQ5TGHKEX65D-BJs",
+      "payload": "{\"email\":\"owner@verify-payload.test\",\"updateTo\":7,\"iat\":1700000000,\"exp\":4102444800}",
+      "request": {
+        "method": "GET",
+        "url": "http://email-verification-payload.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQHZlcmlmeS1wYXlsb2FkLnRlc3QiLCJ1cGRhdGVUbyI6NywiaWF0IjoxNzAwMDAwMDAwLCJleHAiOjQxMDI0NDQ4MDB9.C_NnA_lJeIezTdju0FsHDDWZGY1XQ5TGHKEX65D-BJs&callbackURL=%2Fverified%3Fsource%3Dmail%23done",
+        "headers": [
+          [
+            "origin",
+            "http://email-verification-payload.test"
+          ]
+        ]
+      },
+      "before": {
+        "user": [
+          {
+            "id": "payload-owner",
+            "name": "Payload Owner",
+            "email": "owner@verify-payload.test",
+            "emailVerified": 0,
+            "image": null,
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          }
+        ],
+        "session": [],
+        "account": [],
+        "verification": []
+      },
+      "events": [
+        {
+          "kind": "api-error",
+          "error": {
+            "name": "ZodError",
+            "message": "[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"updateTo\"\n    ],\n    \"message\": \"Invalid input: expected string, received number\"\n  }\n]",
+            "keys": [
+              "name",
+              "message"
+            ],
+            "properties": {
+              "name": "ZodError",
+              "message": "[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"updateTo\"\n    ],\n    \"message\": \"Invalid input: expected string, received number\"\n  }\n]"
+            },
+            "issues": [
+              {
+                "expected": "string",
+                "code": "invalid_type",
+                "path": [
+                  "updateTo"
+                ],
+                "message": "Invalid input: expected string, received number"
+              }
+            ]
+          }
+        },
+        {
+          "kind": "console.error",
+          "args": [
+            "# SERVER_ERROR: ",
+            {
+              "name": "ZodError",
+              "message": "[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"updateTo\"\n    ],\n    \"message\": \"Invalid input: expected string, received number\"\n  }\n]",
+              "keys": [
+                "name",
+                "message"
+              ],
+              "properties": {
+                "name": "ZodError",
+                "message": "[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"updateTo\"\n    ],\n    \"message\": \"Invalid input: expected string, received number\"\n  }\n]"
+              },
+              "issues": [
+                {
+                  "expected": "string",
+                  "code": "invalid_type",
+                  "path": [
+                    "updateTo"
+                  ],
+                  "message": "Invalid input: expected string, received number"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "response": {
+        "status": 500,
+        "statusText": "Internal Server Error",
+        "headers": [],
+        "cookies": [],
+        "body": ""
+      },
+      "after": {
+        "user": [
+          {
+            "id": "payload-owner",
+            "name": "Payload Owner",
+            "email": "owner@verify-payload.test",
+            "emailVerified": 0,
+            "image": null,
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          }
+        ],
+        "session": [],
+        "account": [],
+        "verification": []
+      }
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "bad-json",
+      "callbackURL": null,
+      "token": "eyJhbGciOiJIUzI1NiJ9.ew.IO-ToFRUNoOWYd2XFv8Tygo5oI8cF-znOudTSnDcflM",
+      "payload": "{",
+      "request": {
+        "method": "GET",
+        "url": "http://email-verification-payload.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.ew.IO-ToFRUNoOWYd2XFv8Tygo5oI8cF-znOudTSnDcflM",
+        "headers": [
+          [
+            "origin",
+            "http://email-verification-payload.test"
+          ]
+        ]
+      },
+      "before": {
+        "user": [
+          {
+            "id": "payload-owner",
+            "name": "Payload Owner",
+            "email": "owner@verify-payload.test",
+            "emailVerified": 0,
+            "image": null,
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          }
+        ],
+        "session": [],
+        "account": [],
+        "verification": []
+      },
+      "events": [],
+      "response": {
+        "status": 401,
+        "statusText": "UNAUTHORIZED",
+        "headers": [
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "cookies": [],
+        "body": "{\"message\":\"Invalid token\",\"code\":\"INVALID_TOKEN\"}"
+      },
+      "after": {
+        "user": [
+          {
+            "id": "payload-owner",
+            "name": "Payload Owner",
+            "email": "owner@verify-payload.test",
+            "emailVerified": 0,
+            "image": null,
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          }
+        ],
+        "session": [],
+        "account": [],
+        "verification": []
+      }
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "bad-json",
+      "callbackURL": "/verified?source=mail#done",
+      "token": "eyJhbGciOiJIUzI1NiJ9.ew.IO-ToFRUNoOWYd2XFv8Tygo5oI8cF-znOudTSnDcflM",
+      "payload": "{",
+      "request": {
+        "method": "GET",
+        "url": "http://email-verification-payload.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.ew.IO-ToFRUNoOWYd2XFv8Tygo5oI8cF-znOudTSnDcflM&callbackURL=%2Fverified%3Fsource%3Dmail%23done",
+        "headers": [
+          [
+            "origin",
+            "http://email-verification-payload.test"
+          ]
+        ]
+      },
+      "before": {
+        "user": [
+          {
+            "id": "payload-owner",
+            "name": "Payload Owner",
+            "email": "owner@verify-payload.test",
+            "emailVerified": 0,
+            "image": null,
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          }
+        ],
+        "session": [],
+        "account": [],
+        "verification": []
+      },
+      "events": [],
+      "response": {
+        "status": 302,
+        "statusText": "FOUND",
+        "headers": [
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "location",
+            "/verified?source=mail&error=INVALID_TOKEN#done"
+          ]
+        ],
+        "cookies": [],
+        "body": ""
+      },
+      "after": {
+        "user": [
+          {
+            "id": "payload-owner",
+            "name": "Payload Owner",
+            "email": "owner@verify-payload.test",
+            "emailVerified": 0,
+            "image": null,
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          }
+        ],
+        "session": [],
+        "account": [],
+        "verification": []
+      }
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "bad-signature",
+      "callbackURL": null,
+      "token": "eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQHZlcmlmeS1wYXlsb2FkLnRlc3QiLCJpYXQiOjE3MDAwMDAwMDAsImV4cCI6NDEwMjQ0NDgwMH0.F0C68ThZ_qb1z7evmFSNPDcmysLdnQOWOg_mXt4myz0",
+      "payload": "{\"email\":\"owner@verify-payload.test\",\"iat\":1700000000,\"exp\":4102444800}",
+      "request": {
+        "method": "GET",
+        "url": "http://email-verification-payload.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQHZlcmlmeS1wYXlsb2FkLnRlc3QiLCJpYXQiOjE3MDAwMDAwMDAsImV4cCI6NDEwMjQ0NDgwMH0.F0C68ThZ_qb1z7evmFSNPDcmysLdnQOWOg_mXt4myz0",
+        "headers": [
+          [
+            "origin",
+            "http://email-verification-payload.test"
+          ]
+        ]
+      },
+      "before": {
+        "user": [
+          {
+            "id": "payload-owner",
+            "name": "Payload Owner",
+            "email": "owner@verify-payload.test",
+            "emailVerified": 0,
+            "image": null,
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          }
+        ],
+        "session": [],
+        "account": [],
+        "verification": []
+      },
+      "events": [],
+      "response": {
+        "status": 401,
+        "statusText": "UNAUTHORIZED",
+        "headers": [
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "cookies": [],
+        "body": "{\"message\":\"Invalid token\",\"code\":\"INVALID_TOKEN\"}"
+      },
+      "after": {
+        "user": [
+          {
+            "id": "payload-owner",
+            "name": "Payload Owner",
+            "email": "owner@verify-payload.test",
+            "emailVerified": 0,
+            "image": null,
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          }
+        ],
+        "session": [],
+        "account": [],
+        "verification": []
+      }
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "bad-signature",
+      "callbackURL": "/verified?source=mail#done",
+      "token": "eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQHZlcmlmeS1wYXlsb2FkLnRlc3QiLCJpYXQiOjE3MDAwMDAwMDAsImV4cCI6NDEwMjQ0NDgwMH0.F0C68ThZ_qb1z7evmFSNPDcmysLdnQOWOg_mXt4myz0",
+      "payload": "{\"email\":\"owner@verify-payload.test\",\"iat\":1700000000,\"exp\":4102444800}",
+      "request": {
+        "method": "GET",
+        "url": "http://email-verification-payload.test/api/auth/verify-email?token=eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6Im93bmVyQHZlcmlmeS1wYXlsb2FkLnRlc3QiLCJpYXQiOjE3MDAwMDAwMDAsImV4cCI6NDEwMjQ0NDgwMH0.F0C68ThZ_qb1z7evmFSNPDcmysLdnQOWOg_mXt4myz0&callbackURL=%2Fverified%3Fsource%3Dmail%23done",
+        "headers": [
+          [
+            "origin",
+            "http://email-verification-payload.test"
+          ]
+        ]
+      },
+      "before": {
+        "user": [
+          {
+            "id": "payload-owner",
+            "name": "Payload Owner",
+            "email": "owner@verify-payload.test",
+            "emailVerified": 0,
+            "image": null,
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          }
+        ],
+        "session": [],
+        "account": [],
+        "verification": []
+      },
+      "events": [],
+      "response": {
+        "status": 302,
+        "statusText": "FOUND",
+        "headers": [
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "location",
+            "/verified?source=mail&error=INVALID_TOKEN#done"
+          ]
+        ],
+        "cookies": [],
+        "body": ""
+      },
+      "after": {
+        "user": [
+          {
+            "id": "payload-owner",
+            "name": "Payload Owner",
+            "email": "owner@verify-payload.test",
+            "emailVerified": 0,
+            "image": null,
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          }
+        ],
+        "session": [],
+        "account": [],
+        "verification": []
+      }
+    }
+  ]
+}

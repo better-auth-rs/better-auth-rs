@@ -1,0 +1,2056 @@
+{
+  "version": "1.7.6",
+  "backend": "memory",
+  "model": "apikey",
+  "field": "name",
+  "table": "memory_name_coercion",
+  "column": "stored_name",
+  "cases": [
+    {
+      "name": "null-first",
+      "seeds": [
+        {
+          "input": null,
+          "result": {
+            "id": "key-0",
+            "present": true,
+            "value": null
+          },
+          "events": [
+            {
+              "phase": "input",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "value": null
+            }
+          ]
+        },
+        {
+          "input": {
+            "toString": 0
+          },
+          "result": {
+            "id": "key-1",
+            "present": true,
+            "value": {
+              "toString": 0
+            }
+          },
+          "events": [
+            {
+              "phase": "input",
+              "value": {
+                "toString": 0
+              }
+            },
+            {
+              "phase": "output",
+              "value": {
+                "toString": 0
+              }
+            }
+          ]
+        }
+      ],
+      "stored": [
+        {
+          "configId": "default",
+          "stored_name": null,
+          "referenceId": "sort-owner",
+          "key": "ordinary-0",
+          "enabled": true,
+          "rateLimitEnabled": false,
+          "rateLimitTimeWindow": 86400000,
+          "rateLimitMax": 10,
+          "requestCount": 0,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "id": "key-0"
+        },
+        {
+          "configId": "default",
+          "stored_name": {
+            "toString": 0
+          },
+          "referenceId": "sort-owner",
+          "key": "ordinary-1",
+          "enabled": true,
+          "rateLimitEnabled": false,
+          "rateLimitTimeWindow": 86400000,
+          "rateLimitMax": 10,
+          "requestCount": 0,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "id": "key-1"
+        }
+      ],
+      "operations": [
+        {
+          "direction": null,
+          "returned": true,
+          "rows": [
+            {
+              "id": "key-0",
+              "present": true,
+              "value": null
+            },
+            {
+              "id": "key-1",
+              "present": true,
+              "value": {
+                "toString": 0
+              }
+            }
+          ],
+          "events": [
+            {
+              "phase": "output",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "value": {
+                "toString": 0
+              }
+            }
+          ],
+          "stored": [
+            {
+              "configId": "default",
+              "stored_name": null,
+              "referenceId": "sort-owner",
+              "key": "ordinary-0",
+              "enabled": true,
+              "rateLimitEnabled": false,
+              "rateLimitTimeWindow": 86400000,
+              "rateLimitMax": 10,
+              "requestCount": 0,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "key-0"
+            },
+            {
+              "configId": "default",
+              "stored_name": {
+                "toString": 0
+              },
+              "referenceId": "sort-owner",
+              "key": "ordinary-1",
+              "enabled": true,
+              "rateLimitEnabled": false,
+              "rateLimitTimeWindow": 86400000,
+              "rateLimitMax": 10,
+              "requestCount": 0,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "key-1"
+            }
+          ]
+        },
+        {
+          "direction": "asc",
+          "returned": true,
+          "rows": [
+            {
+              "id": "key-0",
+              "present": true,
+              "value": null
+            },
+            {
+              "id": "key-1",
+              "present": true,
+              "value": {
+                "toString": 0
+              }
+            }
+          ],
+          "events": [
+            {
+              "phase": "output",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "value": {
+                "toString": 0
+              }
+            }
+          ],
+          "stored": [
+            {
+              "configId": "default",
+              "stored_name": null,
+              "referenceId": "sort-owner",
+              "key": "ordinary-0",
+              "enabled": true,
+              "rateLimitEnabled": false,
+              "rateLimitTimeWindow": 86400000,
+              "rateLimitMax": 10,
+              "requestCount": 0,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "key-0"
+            },
+            {
+              "configId": "default",
+              "stored_name": {
+                "toString": 0
+              },
+              "referenceId": "sort-owner",
+              "key": "ordinary-1",
+              "enabled": true,
+              "rateLimitEnabled": false,
+              "rateLimitTimeWindow": 86400000,
+              "rateLimitMax": 10,
+              "requestCount": 0,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "key-1"
+            }
+          ]
+        },
+        {
+          "direction": "desc",
+          "returned": true,
+          "rows": [
+            {
+              "id": "key-1",
+              "present": true,
+              "value": {
+                "toString": 0
+              }
+            },
+            {
+              "id": "key-0",
+              "present": true,
+              "value": null
+            }
+          ],
+          "events": [
+            {
+              "phase": "output",
+              "value": {
+                "toString": 0
+              }
+            },
+            {
+              "phase": "output",
+              "value": null
+            }
+          ],
+          "stored": [
+            {
+              "configId": "default",
+              "stored_name": null,
+              "referenceId": "sort-owner",
+              "key": "ordinary-0",
+              "enabled": true,
+              "rateLimitEnabled": false,
+              "rateLimitTimeWindow": 86400000,
+              "rateLimitMax": 10,
+              "requestCount": 0,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "key-0"
+            },
+            {
+              "configId": "default",
+              "stored_name": {
+                "toString": 0
+              },
+              "referenceId": "sort-owner",
+              "key": "ordinary-1",
+              "enabled": true,
+              "rateLimitEnabled": false,
+              "rateLimitTimeWindow": 86400000,
+              "rateLimitMax": 10,
+              "requestCount": 0,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "key-1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "null-last",
+      "seeds": [
+        {
+          "input": {
+            "toString": 0
+          },
+          "result": {
+            "id": "key-0",
+            "present": true,
+            "value": {
+              "toString": 0
+            }
+          },
+          "events": [
+            {
+              "phase": "input",
+              "value": {
+                "toString": 0
+              }
+            },
+            {
+              "phase": "output",
+              "value": {
+                "toString": 0
+              }
+            }
+          ]
+        },
+        {
+          "input": null,
+          "result": {
+            "id": "key-1",
+            "present": true,
+            "value": null
+          },
+          "events": [
+            {
+              "phase": "input",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "value": null
+            }
+          ]
+        }
+      ],
+      "stored": [
+        {
+          "configId": "default",
+          "stored_name": {
+            "toString": 0
+          },
+          "referenceId": "sort-owner",
+          "key": "ordinary-0",
+          "enabled": true,
+          "rateLimitEnabled": false,
+          "rateLimitTimeWindow": 86400000,
+          "rateLimitMax": 10,
+          "requestCount": 0,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "id": "key-0"
+        },
+        {
+          "configId": "default",
+          "stored_name": null,
+          "referenceId": "sort-owner",
+          "key": "ordinary-1",
+          "enabled": true,
+          "rateLimitEnabled": false,
+          "rateLimitTimeWindow": 86400000,
+          "rateLimitMax": 10,
+          "requestCount": 0,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "id": "key-1"
+        }
+      ],
+      "operations": [
+        {
+          "direction": null,
+          "returned": true,
+          "rows": [
+            {
+              "id": "key-0",
+              "present": true,
+              "value": {
+                "toString": 0
+              }
+            },
+            {
+              "id": "key-1",
+              "present": true,
+              "value": null
+            }
+          ],
+          "events": [
+            {
+              "phase": "output",
+              "value": {
+                "toString": 0
+              }
+            },
+            {
+              "phase": "output",
+              "value": null
+            }
+          ],
+          "stored": [
+            {
+              "configId": "default",
+              "stored_name": {
+                "toString": 0
+              },
+              "referenceId": "sort-owner",
+              "key": "ordinary-0",
+              "enabled": true,
+              "rateLimitEnabled": false,
+              "rateLimitTimeWindow": 86400000,
+              "rateLimitMax": 10,
+              "requestCount": 0,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "key-0"
+            },
+            {
+              "configId": "default",
+              "stored_name": null,
+              "referenceId": "sort-owner",
+              "key": "ordinary-1",
+              "enabled": true,
+              "rateLimitEnabled": false,
+              "rateLimitTimeWindow": 86400000,
+              "rateLimitMax": 10,
+              "requestCount": 0,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "key-1"
+            }
+          ]
+        },
+        {
+          "direction": "asc",
+          "returned": true,
+          "rows": [
+            {
+              "id": "key-1",
+              "present": true,
+              "value": null
+            },
+            {
+              "id": "key-0",
+              "present": true,
+              "value": {
+                "toString": 0
+              }
+            }
+          ],
+          "events": [
+            {
+              "phase": "output",
+              "value": null
+            },
+            {
+              "phase": "output",
+              "value": {
+                "toString": 0
+              }
+            }
+          ],
+          "stored": [
+            {
+              "configId": "default",
+              "stored_name": {
+                "toString": 0
+              },
+              "referenceId": "sort-owner",
+              "key": "ordinary-0",
+              "enabled": true,
+              "rateLimitEnabled": false,
+              "rateLimitTimeWindow": 86400000,
+              "rateLimitMax": 10,
+              "requestCount": 0,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "key-0"
+            },
+            {
+              "configId": "default",
+              "stored_name": null,
+              "referenceId": "sort-owner",
+              "key": "ordinary-1",
+              "enabled": true,
+              "rateLimitEnabled": false,
+              "rateLimitTimeWindow": 86400000,
+              "rateLimitMax": 10,
+              "requestCount": 0,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "key-1"
+            }
+          ]
+        },
+        {
+          "direction": "desc",
+          "returned": true,
+          "rows": [
+            {
+              "id": "key-0",
+              "present": true,
+              "value": {
+                "toString": 0
+              }
+            },
+            {
+              "id": "key-1",
+              "present": true,
+              "value": null
+            }
+          ],
+          "events": [
+            {
+              "phase": "output",
+              "value": {
+                "toString": 0
+              }
+            },
+            {
+              "phase": "output",
+              "value": null
+            }
+          ],
+          "stored": [
+            {
+              "configId": "default",
+              "stored_name": {
+                "toString": 0
+              },
+              "referenceId": "sort-owner",
+              "key": "ordinary-0",
+              "enabled": true,
+              "rateLimitEnabled": false,
+              "rateLimitTimeWindow": 86400000,
+              "rateLimitMax": 10,
+              "requestCount": 0,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "key-0"
+            },
+            {
+              "configId": "default",
+              "stored_name": null,
+              "referenceId": "sort-owner",
+              "key": "ordinary-1",
+              "enabled": true,
+              "rateLimitEnabled": false,
+              "rateLimitTimeWindow": 86400000,
+              "rateLimitMax": 10,
+              "requestCount": 0,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "key-1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "undefined-first",
+      "seeds": [
+        {
+          "input": {
+            "type": "undefined"
+          },
+          "result": {
+            "id": "key-0",
+            "present": true,
+            "value": {
+              "type": "undefined"
+            }
+          },
+          "events": [
+            {
+              "phase": "input",
+              "value": {
+                "type": "undefined"
+              }
+            },
+            {
+              "phase": "output",
+              "value": {
+                "type": "undefined"
+              }
+            }
+          ]
+        },
+        {
+          "input": {
+            "toString": 0
+          },
+          "result": {
+            "id": "key-1",
+            "present": true,
+            "value": {
+              "toString": 0
+            }
+          },
+          "events": [
+            {
+              "phase": "input",
+              "value": {
+                "toString": 0
+              }
+            },
+            {
+              "phase": "output",
+              "value": {
+                "toString": 0
+              }
+            }
+          ]
+        }
+      ],
+      "stored": [
+        {
+          "configId": "default",
+          "referenceId": "sort-owner",
+          "key": "ordinary-0",
+          "enabled": true,
+          "rateLimitEnabled": false,
+          "rateLimitTimeWindow": 86400000,
+          "rateLimitMax": 10,
+          "requestCount": 0,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "id": "key-0"
+        },
+        {
+          "configId": "default",
+          "stored_name": {
+            "toString": 0
+          },
+          "referenceId": "sort-owner",
+          "key": "ordinary-1",
+          "enabled": true,
+          "rateLimitEnabled": false,
+          "rateLimitTimeWindow": 86400000,
+          "rateLimitMax": 10,
+          "requestCount": 0,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "id": "key-1"
+        }
+      ],
+      "operations": [
+        {
+          "direction": null,
+          "returned": true,
+          "rows": [
+            {
+              "id": "key-0",
+              "present": true,
+              "value": {
+                "type": "undefined"
+              }
+            },
+            {
+              "id": "key-1",
+              "present": true,
+              "value": {
+                "toString": 0
+              }
+            }
+          ],
+          "events": [
+            {
+              "phase": "output",
+              "value": {
+                "type": "undefined"
+              }
+            },
+            {
+              "phase": "output",
+              "value": {
+                "toString": 0
+              }
+            }
+          ],
+          "stored": [
+            {
+              "configId": "default",
+              "referenceId": "sort-owner",
+              "key": "ordinary-0",
+              "enabled": true,
+              "rateLimitEnabled": false,
+              "rateLimitTimeWindow": 86400000,
+              "rateLimitMax": 10,
+              "requestCount": 0,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "key-0"
+            },
+            {
+              "configId": "default",
+              "stored_name": {
+                "toString": 0
+              },
+              "referenceId": "sort-owner",
+              "key": "ordinary-1",
+              "enabled": true,
+              "rateLimitEnabled": false,
+              "rateLimitTimeWindow": 86400000,
+              "rateLimitMax": 10,
+              "requestCount": 0,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "key-1"
+            }
+          ]
+        },
+        {
+          "direction": "asc",
+          "returned": true,
+          "rows": [
+            {
+              "id": "key-0",
+              "present": true,
+              "value": {
+                "type": "undefined"
+              }
+            },
+            {
+              "id": "key-1",
+              "present": true,
+              "value": {
+                "toString": 0
+              }
+            }
+          ],
+          "events": [
+            {
+              "phase": "output",
+              "value": {
+                "type": "undefined"
+              }
+            },
+            {
+              "phase": "output",
+              "value": {
+                "toString": 0
+              }
+            }
+          ],
+          "stored": [
+            {
+              "configId": "default",
+              "referenceId": "sort-owner",
+              "key": "ordinary-0",
+              "enabled": true,
+              "rateLimitEnabled": false,
+              "rateLimitTimeWindow": 86400000,
+              "rateLimitMax": 10,
+              "requestCount": 0,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "key-0"
+            },
+            {
+              "configId": "default",
+              "stored_name": {
+                "toString": 0
+              },
+              "referenceId": "sort-owner",
+              "key": "ordinary-1",
+              "enabled": true,
+              "rateLimitEnabled": false,
+              "rateLimitTimeWindow": 86400000,
+              "rateLimitMax": 10,
+              "requestCount": 0,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "key-1"
+            }
+          ]
+        },
+        {
+          "direction": "desc",
+          "returned": true,
+          "rows": [
+            {
+              "id": "key-1",
+              "present": true,
+              "value": {
+                "toString": 0
+              }
+            },
+            {
+              "id": "key-0",
+              "present": true,
+              "value": {
+                "type": "undefined"
+              }
+            }
+          ],
+          "events": [
+            {
+              "phase": "output",
+              "value": {
+                "toString": 0
+              }
+            },
+            {
+              "phase": "output",
+              "value": {
+                "type": "undefined"
+              }
+            }
+          ],
+          "stored": [
+            {
+              "configId": "default",
+              "referenceId": "sort-owner",
+              "key": "ordinary-0",
+              "enabled": true,
+              "rateLimitEnabled": false,
+              "rateLimitTimeWindow": 86400000,
+              "rateLimitMax": 10,
+              "requestCount": 0,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "key-0"
+            },
+            {
+              "configId": "default",
+              "stored_name": {
+                "toString": 0
+              },
+              "referenceId": "sort-owner",
+              "key": "ordinary-1",
+              "enabled": true,
+              "rateLimitEnabled": false,
+              "rateLimitTimeWindow": 86400000,
+              "rateLimitMax": 10,
+              "requestCount": 0,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "key-1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "undefined-last",
+      "seeds": [
+        {
+          "input": {
+            "toString": 0
+          },
+          "result": {
+            "id": "key-0",
+            "present": true,
+            "value": {
+              "toString": 0
+            }
+          },
+          "events": [
+            {
+              "phase": "input",
+              "value": {
+                "toString": 0
+              }
+            },
+            {
+              "phase": "output",
+              "value": {
+                "toString": 0
+              }
+            }
+          ]
+        },
+        {
+          "input": {
+            "type": "undefined"
+          },
+          "result": {
+            "id": "key-1",
+            "present": true,
+            "value": {
+              "type": "undefined"
+            }
+          },
+          "events": [
+            {
+              "phase": "input",
+              "value": {
+                "type": "undefined"
+              }
+            },
+            {
+              "phase": "output",
+              "value": {
+                "type": "undefined"
+              }
+            }
+          ]
+        }
+      ],
+      "stored": [
+        {
+          "configId": "default",
+          "stored_name": {
+            "toString": 0
+          },
+          "referenceId": "sort-owner",
+          "key": "ordinary-0",
+          "enabled": true,
+          "rateLimitEnabled": false,
+          "rateLimitTimeWindow": 86400000,
+          "rateLimitMax": 10,
+          "requestCount": 0,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "id": "key-0"
+        },
+        {
+          "configId": "default",
+          "referenceId": "sort-owner",
+          "key": "ordinary-1",
+          "enabled": true,
+          "rateLimitEnabled": false,
+          "rateLimitTimeWindow": 86400000,
+          "rateLimitMax": 10,
+          "requestCount": 0,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "id": "key-1"
+        }
+      ],
+      "operations": [
+        {
+          "direction": null,
+          "returned": true,
+          "rows": [
+            {
+              "id": "key-0",
+              "present": true,
+              "value": {
+                "toString": 0
+              }
+            },
+            {
+              "id": "key-1",
+              "present": true,
+              "value": {
+                "type": "undefined"
+              }
+            }
+          ],
+          "events": [
+            {
+              "phase": "output",
+              "value": {
+                "toString": 0
+              }
+            },
+            {
+              "phase": "output",
+              "value": {
+                "type": "undefined"
+              }
+            }
+          ],
+          "stored": [
+            {
+              "configId": "default",
+              "stored_name": {
+                "toString": 0
+              },
+              "referenceId": "sort-owner",
+              "key": "ordinary-0",
+              "enabled": true,
+              "rateLimitEnabled": false,
+              "rateLimitTimeWindow": 86400000,
+              "rateLimitMax": 10,
+              "requestCount": 0,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "key-0"
+            },
+            {
+              "configId": "default",
+              "referenceId": "sort-owner",
+              "key": "ordinary-1",
+              "enabled": true,
+              "rateLimitEnabled": false,
+              "rateLimitTimeWindow": 86400000,
+              "rateLimitMax": 10,
+              "requestCount": 0,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "key-1"
+            }
+          ]
+        },
+        {
+          "direction": "asc",
+          "returned": true,
+          "rows": [
+            {
+              "id": "key-1",
+              "present": true,
+              "value": {
+                "type": "undefined"
+              }
+            },
+            {
+              "id": "key-0",
+              "present": true,
+              "value": {
+                "toString": 0
+              }
+            }
+          ],
+          "events": [
+            {
+              "phase": "output",
+              "value": {
+                "type": "undefined"
+              }
+            },
+            {
+              "phase": "output",
+              "value": {
+                "toString": 0
+              }
+            }
+          ],
+          "stored": [
+            {
+              "configId": "default",
+              "stored_name": {
+                "toString": 0
+              },
+              "referenceId": "sort-owner",
+              "key": "ordinary-0",
+              "enabled": true,
+              "rateLimitEnabled": false,
+              "rateLimitTimeWindow": 86400000,
+              "rateLimitMax": 10,
+              "requestCount": 0,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "key-0"
+            },
+            {
+              "configId": "default",
+              "referenceId": "sort-owner",
+              "key": "ordinary-1",
+              "enabled": true,
+              "rateLimitEnabled": false,
+              "rateLimitTimeWindow": 86400000,
+              "rateLimitMax": 10,
+              "requestCount": 0,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "key-1"
+            }
+          ]
+        },
+        {
+          "direction": "desc",
+          "returned": true,
+          "rows": [
+            {
+              "id": "key-0",
+              "present": true,
+              "value": {
+                "toString": 0
+              }
+            },
+            {
+              "id": "key-1",
+              "present": true,
+              "value": {
+                "type": "undefined"
+              }
+            }
+          ],
+          "events": [
+            {
+              "phase": "output",
+              "value": {
+                "toString": 0
+              }
+            },
+            {
+              "phase": "output",
+              "value": {
+                "type": "undefined"
+              }
+            }
+          ],
+          "stored": [
+            {
+              "configId": "default",
+              "stored_name": {
+                "toString": 0
+              },
+              "referenceId": "sort-owner",
+              "key": "ordinary-0",
+              "enabled": true,
+              "rateLimitEnabled": false,
+              "rateLimitTimeWindow": 86400000,
+              "rateLimitMax": 10,
+              "requestCount": 0,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "key-0"
+            },
+            {
+              "configId": "default",
+              "referenceId": "sort-owner",
+              "key": "ordinary-1",
+              "enabled": true,
+              "rateLimitEnabled": false,
+              "rateLimitTimeWindow": 86400000,
+              "rateLimitMax": 10,
+              "requestCount": 0,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "key-1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "object-only",
+      "seeds": [
+        {
+          "input": {
+            "toString": 0
+          },
+          "result": {
+            "id": "key-0",
+            "present": true,
+            "value": {
+              "toString": 0
+            }
+          },
+          "events": [
+            {
+              "phase": "input",
+              "value": {
+                "toString": 0
+              }
+            },
+            {
+              "phase": "output",
+              "value": {
+                "toString": 0
+              }
+            }
+          ]
+        }
+      ],
+      "stored": [
+        {
+          "configId": "default",
+          "stored_name": {
+            "toString": 0
+          },
+          "referenceId": "sort-owner",
+          "key": "ordinary-0",
+          "enabled": true,
+          "rateLimitEnabled": false,
+          "rateLimitTimeWindow": 86400000,
+          "rateLimitMax": 10,
+          "requestCount": 0,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "id": "key-0"
+        }
+      ],
+      "operations": [
+        {
+          "direction": null,
+          "returned": true,
+          "rows": [
+            {
+              "id": "key-0",
+              "present": true,
+              "value": {
+                "toString": 0
+              }
+            }
+          ],
+          "events": [
+            {
+              "phase": "output",
+              "value": {
+                "toString": 0
+              }
+            }
+          ],
+          "stored": [
+            {
+              "configId": "default",
+              "stored_name": {
+                "toString": 0
+              },
+              "referenceId": "sort-owner",
+              "key": "ordinary-0",
+              "enabled": true,
+              "rateLimitEnabled": false,
+              "rateLimitTimeWindow": 86400000,
+              "rateLimitMax": 10,
+              "requestCount": 0,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "key-0"
+            }
+          ]
+        },
+        {
+          "direction": "asc",
+          "returned": true,
+          "rows": [
+            {
+              "id": "key-0",
+              "present": true,
+              "value": {
+                "toString": 0
+              }
+            }
+          ],
+          "events": [
+            {
+              "phase": "output",
+              "value": {
+                "toString": 0
+              }
+            }
+          ],
+          "stored": [
+            {
+              "configId": "default",
+              "stored_name": {
+                "toString": 0
+              },
+              "referenceId": "sort-owner",
+              "key": "ordinary-0",
+              "enabled": true,
+              "rateLimitEnabled": false,
+              "rateLimitTimeWindow": 86400000,
+              "rateLimitMax": 10,
+              "requestCount": 0,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "key-0"
+            }
+          ]
+        },
+        {
+          "direction": "desc",
+          "returned": true,
+          "rows": [
+            {
+              "id": "key-0",
+              "present": true,
+              "value": {
+                "toString": 0
+              }
+            }
+          ],
+          "events": [
+            {
+              "phase": "output",
+              "value": {
+                "toString": 0
+              }
+            }
+          ],
+          "stored": [
+            {
+              "configId": "default",
+              "stored_name": {
+                "toString": 0
+              },
+              "referenceId": "sort-owner",
+              "key": "ordinary-0",
+              "enabled": true,
+              "rateLimitEnabled": false,
+              "rateLimitTimeWindow": 86400000,
+              "rateLimitMax": 10,
+              "requestCount": 0,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "key-0"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "string-first",
+      "seeds": [
+        {
+          "input": "desk",
+          "result": {
+            "id": "key-0",
+            "present": true,
+            "value": "desk"
+          },
+          "events": [
+            {
+              "phase": "input",
+              "value": "desk"
+            },
+            {
+              "phase": "output",
+              "value": "desk"
+            }
+          ]
+        },
+        {
+          "input": {
+            "toString": 0
+          },
+          "result": {
+            "id": "key-1",
+            "present": true,
+            "value": {
+              "toString": 0
+            }
+          },
+          "events": [
+            {
+              "phase": "input",
+              "value": {
+                "toString": 0
+              }
+            },
+            {
+              "phase": "output",
+              "value": {
+                "toString": 0
+              }
+            }
+          ]
+        }
+      ],
+      "stored": [
+        {
+          "configId": "default",
+          "stored_name": "desk",
+          "referenceId": "sort-owner",
+          "key": "ordinary-0",
+          "enabled": true,
+          "rateLimitEnabled": false,
+          "rateLimitTimeWindow": 86400000,
+          "rateLimitMax": 10,
+          "requestCount": 0,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "id": "key-0"
+        },
+        {
+          "configId": "default",
+          "stored_name": {
+            "toString": 0
+          },
+          "referenceId": "sort-owner",
+          "key": "ordinary-1",
+          "enabled": true,
+          "rateLimitEnabled": false,
+          "rateLimitTimeWindow": 86400000,
+          "rateLimitMax": 10,
+          "requestCount": 0,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "id": "key-1"
+        }
+      ],
+      "operations": [
+        {
+          "direction": null,
+          "returned": true,
+          "rows": [
+            {
+              "id": "key-0",
+              "present": true,
+              "value": "desk"
+            },
+            {
+              "id": "key-1",
+              "present": true,
+              "value": {
+                "toString": 0
+              }
+            }
+          ],
+          "events": [
+            {
+              "phase": "output",
+              "value": "desk"
+            },
+            {
+              "phase": "output",
+              "value": {
+                "toString": 0
+              }
+            }
+          ],
+          "stored": [
+            {
+              "configId": "default",
+              "stored_name": "desk",
+              "referenceId": "sort-owner",
+              "key": "ordinary-0",
+              "enabled": true,
+              "rateLimitEnabled": false,
+              "rateLimitTimeWindow": 86400000,
+              "rateLimitMax": 10,
+              "requestCount": 0,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "key-0"
+            },
+            {
+              "configId": "default",
+              "stored_name": {
+                "toString": 0
+              },
+              "referenceId": "sort-owner",
+              "key": "ordinary-1",
+              "enabled": true,
+              "rateLimitEnabled": false,
+              "rateLimitTimeWindow": 86400000,
+              "rateLimitMax": 10,
+              "requestCount": 0,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "key-1"
+            }
+          ]
+        },
+        {
+          "direction": "asc",
+          "returned": false,
+          "error": {
+            "name": "TypeError",
+            "message": "No default value",
+            "properties": {}
+          },
+          "events": [],
+          "stored": [
+            {
+              "configId": "default",
+              "stored_name": "desk",
+              "referenceId": "sort-owner",
+              "key": "ordinary-0",
+              "enabled": true,
+              "rateLimitEnabled": false,
+              "rateLimitTimeWindow": 86400000,
+              "rateLimitMax": 10,
+              "requestCount": 0,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "key-0"
+            },
+            {
+              "configId": "default",
+              "stored_name": {
+                "toString": 0
+              },
+              "referenceId": "sort-owner",
+              "key": "ordinary-1",
+              "enabled": true,
+              "rateLimitEnabled": false,
+              "rateLimitTimeWindow": 86400000,
+              "rateLimitMax": 10,
+              "requestCount": 0,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "key-1"
+            }
+          ]
+        },
+        {
+          "direction": "desc",
+          "returned": false,
+          "error": {
+            "name": "TypeError",
+            "message": "No default value",
+            "properties": {}
+          },
+          "events": [],
+          "stored": [
+            {
+              "configId": "default",
+              "stored_name": "desk",
+              "referenceId": "sort-owner",
+              "key": "ordinary-0",
+              "enabled": true,
+              "rateLimitEnabled": false,
+              "rateLimitTimeWindow": 86400000,
+              "rateLimitMax": 10,
+              "requestCount": 0,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "key-0"
+            },
+            {
+              "configId": "default",
+              "stored_name": {
+                "toString": 0
+              },
+              "referenceId": "sort-owner",
+              "key": "ordinary-1",
+              "enabled": true,
+              "rateLimitEnabled": false,
+              "rateLimitTimeWindow": 86400000,
+              "rateLimitMax": 10,
+              "requestCount": 0,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "key-1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "string-last",
+      "seeds": [
+        {
+          "input": {
+            "toString": 0
+          },
+          "result": {
+            "id": "key-0",
+            "present": true,
+            "value": {
+              "toString": 0
+            }
+          },
+          "events": [
+            {
+              "phase": "input",
+              "value": {
+                "toString": 0
+              }
+            },
+            {
+              "phase": "output",
+              "value": {
+                "toString": 0
+              }
+            }
+          ]
+        },
+        {
+          "input": "desk",
+          "result": {
+            "id": "key-1",
+            "present": true,
+            "value": "desk"
+          },
+          "events": [
+            {
+              "phase": "input",
+              "value": "desk"
+            },
+            {
+              "phase": "output",
+              "value": "desk"
+            }
+          ]
+        }
+      ],
+      "stored": [
+        {
+          "configId": "default",
+          "stored_name": {
+            "toString": 0
+          },
+          "referenceId": "sort-owner",
+          "key": "ordinary-0",
+          "enabled": true,
+          "rateLimitEnabled": false,
+          "rateLimitTimeWindow": 86400000,
+          "rateLimitMax": 10,
+          "requestCount": 0,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "id": "key-0"
+        },
+        {
+          "configId": "default",
+          "stored_name": "desk",
+          "referenceId": "sort-owner",
+          "key": "ordinary-1",
+          "enabled": true,
+          "rateLimitEnabled": false,
+          "rateLimitTimeWindow": 86400000,
+          "rateLimitMax": 10,
+          "requestCount": 0,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "id": "key-1"
+        }
+      ],
+      "operations": [
+        {
+          "direction": null,
+          "returned": true,
+          "rows": [
+            {
+              "id": "key-0",
+              "present": true,
+              "value": {
+                "toString": 0
+              }
+            },
+            {
+              "id": "key-1",
+              "present": true,
+              "value": "desk"
+            }
+          ],
+          "events": [
+            {
+              "phase": "output",
+              "value": {
+                "toString": 0
+              }
+            },
+            {
+              "phase": "output",
+              "value": "desk"
+            }
+          ],
+          "stored": [
+            {
+              "configId": "default",
+              "stored_name": {
+                "toString": 0
+              },
+              "referenceId": "sort-owner",
+              "key": "ordinary-0",
+              "enabled": true,
+              "rateLimitEnabled": false,
+              "rateLimitTimeWindow": 86400000,
+              "rateLimitMax": 10,
+              "requestCount": 0,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "key-0"
+            },
+            {
+              "configId": "default",
+              "stored_name": "desk",
+              "referenceId": "sort-owner",
+              "key": "ordinary-1",
+              "enabled": true,
+              "rateLimitEnabled": false,
+              "rateLimitTimeWindow": 86400000,
+              "rateLimitMax": 10,
+              "requestCount": 0,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "key-1"
+            }
+          ]
+        },
+        {
+          "direction": "asc",
+          "returned": false,
+          "error": {
+            "name": "TypeError",
+            "message": "No default value",
+            "properties": {}
+          },
+          "events": [],
+          "stored": [
+            {
+              "configId": "default",
+              "stored_name": {
+                "toString": 0
+              },
+              "referenceId": "sort-owner",
+              "key": "ordinary-0",
+              "enabled": true,
+              "rateLimitEnabled": false,
+              "rateLimitTimeWindow": 86400000,
+              "rateLimitMax": 10,
+              "requestCount": 0,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "key-0"
+            },
+            {
+              "configId": "default",
+              "stored_name": "desk",
+              "referenceId": "sort-owner",
+              "key": "ordinary-1",
+              "enabled": true,
+              "rateLimitEnabled": false,
+              "rateLimitTimeWindow": 86400000,
+              "rateLimitMax": 10,
+              "requestCount": 0,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "key-1"
+            }
+          ]
+        },
+        {
+          "direction": "desc",
+          "returned": false,
+          "error": {
+            "name": "TypeError",
+            "message": "No default value",
+            "properties": {}
+          },
+          "events": [],
+          "stored": [
+            {
+              "configId": "default",
+              "stored_name": {
+                "toString": 0
+              },
+              "referenceId": "sort-owner",
+              "key": "ordinary-0",
+              "enabled": true,
+              "rateLimitEnabled": false,
+              "rateLimitTimeWindow": 86400000,
+              "rateLimitMax": 10,
+              "requestCount": 0,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "key-0"
+            },
+            {
+              "configId": "default",
+              "stored_name": "desk",
+              "referenceId": "sort-owner",
+              "key": "ordinary-1",
+              "enabled": true,
+              "rateLimitEnabled": false,
+              "rateLimitTimeWindow": 86400000,
+              "rateLimitMax": 10,
+              "requestCount": 0,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "key-1"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
