@@ -35,3 +35,9 @@ The following boundaries are retained in the upstream fixture but are not paired
 - The upstream Memory `checked.completeStorage` flag. The Rust public adapter cannot reproduce that raw-table observation.
 
 The focused Rust target is `cargo test --features axum,seaorm2 --test account_user_auth_boundary_reference_tests`. The CI runner must invoke the target inside the project devenv.
+
+## OAuth profile overrides
+
+`account-user-auth-override-1.7.6.json` retains all sixteen baseline requests and adds eight profile-override requests. Capture CI 37656074995 used source `53432c489c3a33f99da9dd21a673e455648c4ffd`. The artifact file was named `account-user-auth-boundary-1.7.6.json`; its SHA-256 is `f97d69b2b6f847115fae88d18182239b2b9d048a9d09a52490b83799483e37c2`. Repeat capture is byte-identical. The Bun contract checks the complete expanded observation and requires the original scenarios and requests to remain unchanged.
+
+The direct ID-token path ignores the provider profile-override flag. The OAuth callback path updates Account tokens, attempts the User update with an Undefined ID, runs the User after-update hook with null, and continues Session issuance. Memory returns a redirect and persists the ownerless Session. SQLite then rejects Session creation at the owner NOT NULL constraint. Both backends preserve the seeded Users and the completed Account update. The callback capture also verifies OAuth state, PKCE, token exchange input, response headers, cookies, and complete storage. Rust pairing for these eight added requests remains pending.
