@@ -24,7 +24,7 @@ export const observeValue = value => {
   return value;
 };
 
-export async function captureDeviceWhereGroup(backend, serial, scenarios = deviceWhereScenarios(), { diagnostics = [], ownerRefType = "string" } = {}) {
+export async function captureDeviceWhereGroup(backend, serial, scenarios = deviceWhereScenarios(), { diagnostics = [], ownerRefType = "string", ownerId = "ordinary-owner" } = {}) {
   const memory = { user: [], session: [], account: [], verification: [], deviceCode: [] };
   const sqlite = backend === "sqlite" ? new Database(":memory:") : undefined;
   const events = [];
@@ -45,7 +45,7 @@ export async function captureDeviceWhereGroup(backend, serial, scenarios = devic
   const capture = async (options, readRaw) => {
     const { adapter } = await betterAuth(options).$context;
     const owner = await adapter.create({ model: "user", forceAllowId: true, data: {
-      ...(serial ? {} : { id: "ordinary-owner" }), name: "Where owner", email: "owner@device-where.test",
+      ...(serial ? {} : { id: ownerId }), name: "Where owner", email: "owner@device-where.test",
       emailVerified: false, image: null, createdAt: new Date(fixedDate), updatedAt: new Date(fixedDate),
     } });
     assert.equal(typeof owner.id, "string");
