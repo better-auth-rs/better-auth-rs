@@ -1,6 +1,7 @@
 use super::hooks::CommittedWrite;
 use super::*;
 use crate::store::database_hooks::{DatabaseHookControl, DatabaseHookUpdate};
+use crate::store::schema::EntityRole;
 
 impl EphemeralStore {
     async fn account_records(
@@ -8,6 +9,7 @@ impl EphemeralStore {
         provider: &str,
         account_id: &str,
     ) -> AuthResult<Vec<serde_json::Map<String, Value>>> {
+        self.model_fields.canonicalize_id(EntityRole::Account)?;
         let fields = self.config.account.field_schema();
         let provider =
             self.memory_field_query(&fields, "providerId", Value::String(provider.to_owned()))?;
@@ -33,6 +35,7 @@ impl EphemeralStore {
         &self,
         user_id: &str,
     ) -> AuthResult<Vec<Map<String, Value>>> {
+        self.model_fields.canonicalize_id(EntityRole::Account)?;
         let fields = self.config.account.field_schema();
         let user_id =
             self.memory_field_query(&fields, "userId", Value::String(user_id.to_owned()))?;
@@ -60,6 +63,9 @@ impl EphemeralStore {
         &self,
         records: &[Map<String, Value>],
     ) -> AuthResult<Vec<AccountView>> {
+        if !records.is_empty() {
+            self.model_fields.canonicalize_id(EntityRole::Account)?;
+        }
         Ok(self
             .config
             .account
@@ -75,6 +81,7 @@ impl EphemeralStore {
         &self,
         record: &Map<String, Value>,
     ) -> AuthResult<AccountView> {
+        self.model_fields.canonicalize_id(EntityRole::Account)?;
         Ok(AccountView::from_adapter_fields(
             self.config
                 .account
@@ -116,6 +123,7 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
                 return Ok(None);
             }
         }
+        self.model_fields.canonicalize_id(EntityRole::Account)?;
         let mut fields = self
             .config
             .account
@@ -220,6 +228,7 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
     }
 
     async fn get_credential_account(&self, user_id: &str) -> AuthResult<Option<AccountView>> {
+        self.model_fields.canonicalize_id(EntityRole::Account)?;
         let fields = self.config.account.field_schema();
         let account_id =
             self.memory_field_query(&fields, "accountId", Value::String(user_id.to_owned()))?;
@@ -280,6 +289,7 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
                 DatabaseHookUpdate::Patch(patch) => update.merge(patch),
             }
         }
+        self.model_fields.canonicalize_id(EntityRole::Account)?;
         let patch = self
             .config
             .account
@@ -314,6 +324,7 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
     }
 
     async fn delete_account(&self, id: &str) -> AuthResult<()> {
+        self.model_fields.canonicalize_id(EntityRole::Account)?;
         let record = self
             .raw("account", "findOne", |state| {
                 Ok(state

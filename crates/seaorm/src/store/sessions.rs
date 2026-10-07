@@ -527,6 +527,8 @@ where
                 .await?
                 .map(|session| (session, None)));
         }
+        self.model_fields
+            .canonicalize_id(better_auth_core::store::schema::EntityRole::User)?;
         let query = super::joins::joined_query::<
             <S::Session as SeaOrmSessionModel>::Entity,
             <S::User as SeaOrmUserModel>::Entity,
@@ -591,6 +593,8 @@ where
                     self.connection().get_database_backend(),
                 )?);
             if self.config().advanced.database.joins == Some(true) {
+                self.model_fields
+                    .canonicalize_id(better_auth_core::store::schema::EntityRole::User)?;
                 let query = super::joins::joined_query::<
                     <S::Session as SeaOrmSessionModel>::Entity,
                     <S::User as SeaOrmUserModel>::Entity,
@@ -636,6 +640,9 @@ where
                             .into_value();
                         let user = match owner_id {
                             Some(owner_id) => {
+                                self.model_fields.canonicalize_id(
+                                    better_auth_core::store::schema::EntityRole::User,
+                                )?;
                                 database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
                                     self.config(),
                                     "findOne",

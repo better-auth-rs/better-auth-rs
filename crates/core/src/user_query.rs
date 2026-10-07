@@ -40,11 +40,19 @@ fn date_field(user: &UserView, field: &str) -> Option<DateTime<Utc>> {
 }
 
 fn matches_search(user: &UserView, params: &ListUsersParams) -> bool {
-    let Some(search_value) = params.search_value.as_deref() else {
+    let Some(search_value) = params
+        .search_value
+        .as_deref()
+        .filter(|value| !value.is_empty())
+    else {
         return true;
     };
 
-    let field = params.search_field.as_deref().unwrap_or("email");
+    let field = params
+        .search_field
+        .as_deref()
+        .filter(|name| !name.is_empty())
+        .unwrap_or("email");
     let operator = params.search_operator.as_deref().unwrap_or("contains");
     let haystack = match string_field(user, field) {
         Some(value) => value,
@@ -112,7 +120,11 @@ fn matches_filter(user: &UserView, params: &ListUsersParams) -> bool {
     let Some(filter_value) = params.filter_value.as_ref() else {
         return true;
     };
-    let field = params.filter_field.as_deref().unwrap_or("email");
+    let field = params
+        .filter_field
+        .as_deref()
+        .filter(|name| !name.is_empty())
+        .unwrap_or("email");
     let operator = params.filter_operator.as_deref().unwrap_or("eq");
     let matches = |expected: &serde_json::Value, operator: &str| {
         if let Some(value) = string_field(user, field) {
@@ -221,17 +233,24 @@ pub fn bind_filter(field: &UserFieldConfig, value: &Value) -> AuthResult<Value> 
 fn additional_filter<'a>(
     params: &ListUsersParams,
     fields: &'a UserConfig,
+    on_field: &mut impl FnMut() -> AuthResult<()>,
 ) -> AuthResult<Option<(&'a str, &'a UserFieldConfig, Value)>> {
     let Some(value) = params.filter_value.as_ref() else {
         return Ok(None);
     };
-    let name = params.filter_field.as_deref().unwrap_or("email");
+    let name = params
+        .filter_field
+        .as_deref()
+        .filter(|name| !name.is_empty())
+        .unwrap_or("email");
     if name == "_id" || UserView::NATIVE_FIELDS.contains(&name) {
+        on_field()?;
         return Ok(None);
     }
     let (logical, field) = declared_field(name, fields).ok_or_else(|| {
         crate::AuthError::internal(format!("Field {name} not found in model user"))
     })?;
+    on_field()?;
     if logical == "_id" || UserView::NATIVE_FIELDS.contains(&logical) {
         return Ok(None);
     }
@@ -343,12 +362,52 @@ pub struct PreparedUserQuery<'a> {
 }
 
 impl<'a> PreparedUserQuery<'a> {
-    /// Resolve and bind the filter without validating the sort declaration.
+    /// Resolve and bind Where fields without validating the sort declaration.
     pub fn new(params: &'a ListUsersParams, fields: &'a UserConfig) -> AuthResult<Self> {
+        Self::prepare(params, fields, || Ok(()))
+    }
+
+    /// Resolve query fields in Where order and retain each successful lookup in the adapter runtime.
+    #[doc(hidden)]
+    pub fn for_adapter(
+        params: &'a ListUsersParams,
+        fields: &'a UserConfig,
+        runtime: &crate::plugin_runtime::ModelFields,
+    ) -> AuthResult<Self> {
+        Self::prepare(params, fields, || {
+            runtime.canonicalize_id(crate::store::schema::EntityRole::User)
+        })
+    }
+
+    fn prepare(
+        params: &'a ListUsersParams,
+        fields: &'a UserConfig,
+        mut on_field: impl FnMut() -> AuthResult<()>,
+    ) -> AuthResult<Self> {
+        if params
+            .search_value
+            .as_deref()
+            .is_some_and(|value| !value.is_empty())
+        {
+            let name = params
+                .search_field
+                .as_deref()
+                .filter(|name| !name.is_empty())
+                .unwrap_or("email");
+            if name != "_id"
+                && !UserView::NATIVE_FIELDS.contains(&name)
+                && declared_field(name, fields).is_none()
+            {
+                return Err(crate::AuthError::internal(format!(
+                    "Field {name} not found in model user"
+                )));
+            }
+            on_field()?;
+        }
         Ok(Self {
             params,
             fields,
-            filter: additional_filter(params, fields)?,
+            filter: additional_filter(params, fields, &mut on_field)?,
         })
     }
 

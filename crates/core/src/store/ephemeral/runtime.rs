@@ -21,7 +21,7 @@ impl RuntimeStore<StatelessSchema> for EphemeralStore {
         Ok(Arc::new(Self {
             session_config: config.session.clone(),
             config,
-            model_fields,
+            model_fields: model_fields.fresh_runtime(),
             state: self.state.clone(),
             verification_locks: self.verification_locks.clone(),
             device_code_consumptions: self.device_code_consumptions.clone(),

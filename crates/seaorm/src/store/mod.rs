@@ -10,6 +10,8 @@ mod device_code_transactions;
 mod device_codes;
 pub mod entities;
 mod field_output;
+#[cfg(test)]
+mod history_tests;
 mod id_filter;
 mod identity_schema;
 mod instrumentation;
@@ -252,6 +254,24 @@ struct SeaOrmTransaction<
     effects: std::sync::Weak<Mutex<Vec<transaction_hooks::PendingEffect>>>,
 }
 
+impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema>
+    SeaOrmTransaction<S, O, P>
+{
+    async fn begin(
+        parent: &SeaOrmStore<S, O, P>,
+        effects: &Arc<Mutex<Vec<transaction_hooks::PendingEffect>>>,
+    ) -> AuthResult<Self> {
+        let tx = crate::TransactionConnection::new(parent.db.begin().await.map_err(map_db_err)?);
+        let mut store = parent.clone();
+        store.model_fields = parent.model_fields.fresh_runtime();
+        Ok(Self {
+            store,
+            tx,
+            effects: Arc::downgrade(effects),
+        })
+    }
+}
+
 #[async_trait]
 impl<S, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> AuthTransaction<S>
     for SeaOrmTransaction<S, O, P>
@@ -455,6 +475,9 @@ where
         id: &str,
     ) -> AuthResult<Option<better_auth_core::wire::UserView>> {
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+        self.store
+            .model_fields
+            .canonicalize_id(better_auth_core::store::schema::EntityRole::User)?;
         let id = self.store.parse_id(id, S::User::parse_id)?;
         match <S::User as SeaOrmUserModel>::Entity::find()
             .filter(<S::User as SeaOrmUserModel>::id_column().eq(id))
@@ -472,6 +495,9 @@ where
         email: &str,
     ) -> AuthResult<Option<better_auth_core::wire::UserView>> {
         use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+        self.store
+            .model_fields
+            .canonicalize_id(better_auth_core::store::schema::EntityRole::User)?;
         match <S::User as SeaOrmUserModel>::Entity::find()
             .filter(
                 <S::User as SeaOrmUserModel>::email_column()
@@ -615,22 +641,17 @@ where
         &self,
         work: Box<TransactionWork<S>>,
     ) -> AuthResult<BoxedTransactionValue> {
-        let tx = crate::TransactionConnection::new(self.db.begin().await.map_err(map_db_err)?);
         let effects = Arc::new(Mutex::new(Vec::new()));
-        let tx_store = SeaOrmTransaction {
-            store: self.clone(),
-            tx: tx.clone(),
-            effects: Arc::downgrade(&effects),
-        };
+        let tx_store = SeaOrmTransaction::begin(self, &effects).await?;
 
         match work(&tx_store).await {
             Ok(value) => {
-                tx.commit().await.map_err(map_db_err)?;
+                tx_store.tx.commit().await.map_err(map_db_err)?;
                 self.finish_queued_transaction_effects(&effects).await?;
                 Ok(value)
             }
             Err(err) => {
-                tx.rollback().await.map_err(map_db_err)?;
+                tx_store.tx.rollback().await.map_err(map_db_err)?;
                 Err(err)
             }
         }

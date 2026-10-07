@@ -20,6 +20,8 @@ where
         tx: Option<HookTransaction<'_, S>>,
         user_id: &str,
     ) -> AuthResult<Option<usize>> {
+        self.model_fields
+            .canonicalize_id(better_auth_core::store::schema::EntityRole::Account)?;
         let user_id = self.parse_id(user_id, S::Account::parse_user_id)?;
         let condition = S::Account::user_id_column().eq(user_id);
         let snapshot: AuthResult<Vec<better_auth_core::wire::AccountView>> = async {
@@ -112,6 +114,8 @@ where
         let _ = self
             .delete_user_accounts_with_connection(db, tx, id)
             .await?;
+        self.model_fields
+            .canonicalize_id(better_auth_core::store::schema::EntityRole::User)?;
         let user_id = self.parse_id(id, S::User::parse_id)?;
         let snapshot = database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
             self.config(),

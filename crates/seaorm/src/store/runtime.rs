@@ -54,7 +54,7 @@ where
     ) -> AuthResult<Arc<dyn AuthStore<S>>> {
         let mut store = self.clone();
         store.config = config;
-        store.model_fields = model_fields;
+        store.model_fields = model_fields.fresh_runtime();
         store.validate_api_key_fields()?;
         store.validate_session_fields()?;
         store.validate_device_code_fields()?;

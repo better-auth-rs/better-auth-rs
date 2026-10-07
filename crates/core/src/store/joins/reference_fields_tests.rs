@@ -87,14 +87,14 @@ fn selected_reference_fields_match_upstream() -> Result<(), Box<dyn std::error::
         let account = config.account.field_schema();
         let (base, model, joined_table, operation) = match case.operation {
             Operation::Accounts => (
-                ("user", &config.user),
-                ("account", &account),
+                (EntityRole::User, "user", &config.user),
+                (EntityRole::Account, "account", &account),
                 "auth_accounts",
                 "accounts",
             ),
             Operation::Owner => (
-                ("account", &account),
-                ("user", &config.user),
+                (EntityRole::Account, "account", &account),
+                (EntityRole::User, "user", &config.user),
                 "auth_users",
                 "owner",
             ),

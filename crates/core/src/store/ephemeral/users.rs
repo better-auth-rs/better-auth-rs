@@ -2,6 +2,7 @@ use super::hooks::CommittedWrite;
 use super::rows::RowRef;
 use super::*;
 use crate::store::database_hooks::{DatabaseHookControl, DatabaseHookUpdate};
+use crate::store::schema::EntityRole;
 use crate::store::schema::resolve_field_name;
 
 impl EphemeralStore {
@@ -14,6 +15,7 @@ impl EphemeralStore {
         &self,
         predicate: impl Fn(&UserView) -> bool + Send,
     ) -> AuthResult<Option<RowRef<UserView>>> {
+        self.model_fields.canonicalize_id(EntityRole::User)?;
         self.raw("user", "findOne", move |state| {
             state.users.first_ref(predicate)
         })
@@ -56,6 +58,9 @@ impl EphemeralStore {
     }
 
     pub(super) async fn output_users(&self, mut users: Vec<UserView>) -> AuthResult<Vec<UserView>> {
+        if !users.is_empty() {
+            self.model_fields.canonicalize_id(EntityRole::User)?;
+        }
         let storage = users
             .iter_mut()
             .map(|user| {
@@ -122,6 +127,7 @@ impl EphemeralStore {
             }
         }
         let fields = update.take_user_field_input(&self.config.user)?;
+        self.model_fields.canonicalize_id(EntityRole::User)?;
         update.additional_fields = self
             .config
             .user
@@ -166,6 +172,7 @@ impl EphemeralStore {
         id: &str,
         mut update: UpdateUser,
     ) -> AuthResult<Option<UserView>> {
+        self.model_fields.canonicalize_id(EntityRole::User)?;
         let user = self
             .raw("user", "update", |state| {
                 Ok({
@@ -304,6 +311,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             create_user.prepare_user_fields(&self.config.user)?;
         }
         let fields = create_user.take_user_field_input(&self.config.user)?;
+        self.model_fields.canonicalize_id(EntityRole::User)?;
         let mut fields = self
             .config
             .user
@@ -421,6 +429,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
     }
 
     async fn list_users_by_ids(&self, ids: &[String], limit: f64) -> AuthResult<Vec<UserView>> {
+        self.model_fields.canonicalize_id(EntityRole::User)?;
         let users: Vec<_> = self
             .raw("user", "findMany", |state| {
                 Ok(crate::query::paginate_memory(
@@ -508,6 +517,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             self.delete_user_sessions(id).await?;
         }
         self.delete_user_accounts_with_hooks(id).await?;
+        self.model_fields.canonicalize_id(EntityRole::User)?;
         let user = self
             .raw("user", "findOne", |state| state.users.get(id))
             .await?;
@@ -549,7 +559,11 @@ impl UserStore<StatelessSchema> for EphemeralStore {
         let _ = params
             .limit
             .get_or_insert(self.config.advanced.database.find_many_limit());
-        let query = crate::user_query::PreparedUserQuery::new(&params, &self.config.user)?;
+        let query = crate::user_query::PreparedUserQuery::for_adapter(
+            &params,
+            &self.config.user,
+            &self.model_fields,
+        )?;
         let users: Vec<_> = self
             .raw("user", "findMany", |state| {
                 state

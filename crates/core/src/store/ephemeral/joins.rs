@@ -14,6 +14,10 @@ type SessionSnapshot = (SessionView, Option<SessionData>);
 
 impl EphemeralStore {
     pub(super) async fn output_user_refs(&self, users: Vec<UserRef>) -> AuthResult<Vec<UserView>> {
+        if !users.is_empty() {
+            self.model_fields
+                .canonicalize_id(crate::store::schema::EntityRole::User)?;
+        }
         // Core fields keep their schema positions even when an application replaces a policy.
         let mut fields: IndexMap<String, UserFieldConfig> = [
             "name",
@@ -80,6 +84,8 @@ impl EphemeralStore {
     }
 
     pub(super) async fn output_account_ref(&self, source: &AccountRef) -> AuthResult<AccountView> {
+        self.model_fields
+            .canonicalize_id(crate::store::schema::EntityRole::Account)?;
         let schema = self.config.account.field_schema();
         let mut fields = IndexMap::new();
         for (name, field) in schema.fields() {
@@ -99,6 +105,8 @@ impl EphemeralStore {
     }
 
     pub(super) async fn user_account_refs(&self, user_id: &str) -> AuthResult<Vec<AccountRef>> {
+        self.model_fields
+            .canonicalize_id(crate::store::schema::EntityRole::Account)?;
         let fields = self.config.account.field_schema();
         let user_id =
             self.memory_field_query(&fields, "userId", Value::String(user_id.to_owned()))?;

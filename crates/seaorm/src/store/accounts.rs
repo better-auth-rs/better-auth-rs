@@ -7,6 +7,7 @@ use sea_orm::{
 };
 
 use better_auth_core::store::AccountStore;
+use better_auth_core::store::schema::EntityRole;
 use better_auth_core::wire::AccountView;
 
 use crate::error::{AuthError, AuthResult};
@@ -44,6 +45,7 @@ where
         provider: &str,
         provider_account_id: &str,
     ) -> AuthResult<Vec<S::Account>> {
+        self.model_fields.canonicalize_id(EntityRole::Account)?;
         database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(
             self.config(),
             "findMany",
@@ -64,6 +66,7 @@ where
     }
 
     pub(super) async fn user_account_records(&self, user_id: &str) -> AuthResult<Vec<S::Account>> {
+        self.model_fields.canonicalize_id(EntityRole::Account)?;
         let user_id = self.parse_id(user_id, <S::Account as SeaOrmAccountModel>::parse_user_id)?;
         database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(
             self.config(),
@@ -88,6 +91,9 @@ where
         rows: &[S::Account],
         db: &impl ConnectionTrait,
     ) -> AuthResult<Vec<better_auth_core::wire::AccountView>> {
+        if !rows.is_empty() {
+            self.model_fields.canonicalize_id(EntityRole::Account)?;
+        }
         let fields = self.config().account.field_schema();
         let records = rows
             .iter()
@@ -110,6 +116,7 @@ where
         account: &S::Account,
         db: &impl ConnectionTrait,
     ) -> AuthResult<AccountView> {
+        self.model_fields.canonicalize_id(EntityRole::Account)?;
         account
             .record(
                 &self.config().account.field_schema(),
@@ -185,6 +192,7 @@ where
                 return Ok(None);
             }
         }
+        self.model_fields.canonicalize_id(EntityRole::Account)?;
         let fields = self.config().account.field_schema();
         let input = fields
             .record_storage_fields_with_binding(
@@ -304,6 +312,7 @@ where
             super::model_names::table_matches::<S, O, P>,
         )?;
         let (records, native_users) = if self.config().advanced.database.joins == Some(true) {
+            self.model_fields.canonicalize_id(EntityRole::User)?;
             let query = super::joins::joined_query::<
                 <S::Account as SeaOrmAccountModel>::Entity,
                 <S::User as SeaOrmUserModel>::Entity,
@@ -371,6 +380,7 @@ where
                                     &stored_owner_id,
                                 );
                             };
+                            self.model_fields.canonicalize_id(EntityRole::User)?;
                             let owner =
                                 database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
                                     self.config(),
@@ -410,6 +420,7 @@ where
     }
 
     async fn get_credential_account(&self, user_id: &str) -> AuthResult<Option<AccountView>> {
+        self.model_fields.canonicalize_id(EntityRole::Account)?;
         let stored_user_id =
             self.parse_id(user_id, <S::Account as SeaOrmAccountModel>::parse_user_id)?;
         let account = database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(
@@ -472,6 +483,7 @@ where
         }
         let fields = self.config().account.field_schema();
         let backend = self.connection().get_database_backend();
+        self.model_fields.canonicalize_id(EntityRole::Account)?;
         let input = fields
             .record_storage_fields_with_binding(update.fields()?, false, |name, field, value| {
                 crate::reference_id::input_binding(
@@ -535,6 +547,7 @@ where
     }
 
     async fn delete_account(&self, id: &str) -> AuthResult<()> {
+        self.model_fields.canonicalize_id(EntityRole::Account)?;
         let account_id = self.parse_id(id, <S::Account as SeaOrmAccountModel>::parse_id)?;
         // The upstream single-delete snapshot catch also covers adapter output failures.
         let snapshot: AuthResult<Option<AccountView>> = async {

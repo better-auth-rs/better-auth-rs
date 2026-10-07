@@ -29,6 +29,8 @@ mod api_keys;
 mod device_codes;
 mod field_bindings;
 mod fields;
+#[cfg(test)]
+mod history_tests;
 mod hooks;
 mod invitation_accept;
 mod joins;

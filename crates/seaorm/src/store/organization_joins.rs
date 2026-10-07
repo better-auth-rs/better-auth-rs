@@ -47,6 +47,8 @@ where
         require_user: bool,
     ) -> AuthResult<Option<MemberUser>> {
         let (member, selected_user) = if self.config().advanced.database.joins == Some(true) {
+            self.model_fields
+                .canonicalize_id(better_auth_core::store::schema::EntityRole::User)?;
             let query = super::joins::joined_query::<
                 Entity<O::Member>,
                 <S::User as SeaOrmUserModel>::Entity,
@@ -80,11 +82,15 @@ where
             .await?;
         let user = match selected_user {
             Some(user) => user,
-            None => <S::User as SeaOrmUserModel>::Entity::find()
-                .filter(S::User::id_column().eq(owner_id))
-                .one(self.connection())
-                .await
-                .map_err(map_db_err)?,
+            None => {
+                self.model_fields
+                    .canonicalize_id(better_auth_core::store::schema::EntityRole::User)?;
+                <S::User as SeaOrmUserModel>::Entity::find()
+                    .filter(S::User::id_column().eq(owner_id))
+                    .one(self.connection())
+                    .await
+                    .map_err(map_db_err)?
+            }
         };
         match user {
             Some(user) => Ok(Some(MemberUser {
@@ -296,6 +302,8 @@ where
         let user_rows = if members.is_empty() {
             Vec::new()
         } else {
+            self.model_fields
+                .canonicalize_id(better_auth_core::store::schema::EntityRole::User)?;
             let (limit, _) = super::pagination::sql_pagination(
                 self.connection().get_database_backend(),
                 Some(input.users_limit),

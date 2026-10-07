@@ -30,6 +30,12 @@ mod unknown;
 #[path = "schema_join_reference_tests/reference_fields.rs"]
 mod reference_fields;
 
+#[path = "schema_join_reference_tests/history.rs"]
+mod history;
+
+#[path = "schema_join_reference_tests/history_mixed_filter.rs"]
+mod history_mixed_filter;
+
 #[path = "native_core_join_tests/account.rs"]
 #[expect(
     unreachable_pub,

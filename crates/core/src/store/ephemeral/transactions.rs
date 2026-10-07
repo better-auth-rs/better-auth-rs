@@ -273,6 +273,15 @@ impl EphemeralStore {
         Ok((base, isolated, queue))
     }
 
+    pub(super) fn begin_adapter_transaction(
+        &self,
+    ) -> AuthResult<(State, Self, Arc<PendingHookQueue>)> {
+        let (base, mut isolated, queue) = self.begin_transaction()?;
+        // Internal atomic snapshots share the adapter. Explicit adapter transactions construct a new runtime.
+        isolated.model_fields = self.model_fields.fresh_runtime();
+        Ok((base, isolated, queue))
+    }
+
     pub(super) async fn commit_transaction(
         &self,
         base: State,
@@ -339,7 +348,7 @@ impl TransactionStore<StatelessSchema> for EphemeralStore {
             })
             .await;
         }
-        let (base, isolated, queue) = self.begin_transaction()?;
+        let (base, isolated, queue) = self.begin_adapter_transaction()?;
         let result = work(&EphemeralTransaction {
             store: isolated.clone(),
         })

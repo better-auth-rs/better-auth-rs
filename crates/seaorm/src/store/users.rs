@@ -1,6 +1,6 @@
 use super::instrumentation::database_operation;
 use async_trait::async_trait;
-use better_auth_core::store::schema::resolve_field_name;
+use better_auth_core::store::schema::{EntityRole, resolve_field_name};
 use chrono::Utc;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QuerySelect,
@@ -31,6 +31,9 @@ where
         rows: &[S::User],
         db: &impl ConnectionTrait,
     ) -> AuthResult<Vec<better_auth_core::wire::UserView>> {
+        if !rows.is_empty() {
+            self.model_fields.canonicalize_id(EntityRole::User)?;
+        }
         let sqlite = db.get_database_backend() == sea_orm::DbBackend::Sqlite;
         let mut output =
             better_auth_core::wire::UserView::with_internal_fields_many_for_adapter_using(
@@ -69,6 +72,7 @@ where
     }
 
     async fn user_record_by_email(&self, email: &str) -> AuthResult<Option<S::User>> {
+        self.model_fields.canonicalize_id(EntityRole::User)?;
         let email = normalize_user_email(email);
         database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
             self.config(),
@@ -141,6 +145,7 @@ where
         let Some(column) = S::User::username_column() else {
             return Ok(None);
         };
+        self.model_fields.canonicalize_id(EntityRole::User)?;
         match database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
             self.config(),
             "findOne",
@@ -186,6 +191,7 @@ where
             }
             create_user.prepare_user_fields(&self.config().user)?;
         }
+        self.model_fields.canonicalize_id(EntityRole::User)?;
         let now = Utc::now();
         let generated_id = self.generated_id("user", create_user.id.take())?;
         let user_id = generated_id.as_deref().map(S::User::parse_id).transpose()?;
@@ -346,6 +352,7 @@ where
         user_id: <S::User as SeaOrmUserModel>::Id,
         mut update: UpdateUser,
     ) -> AuthResult<Option<S::User>> {
+        self.model_fields.canonicalize_id(EntityRole::User)?;
         let mut fields = self
             .config()
             .user
@@ -463,6 +470,7 @@ where
         &self,
         id: &str,
     ) -> AuthResult<Option<better_auth_core::wire::UserView>> {
+        self.model_fields.canonicalize_id(EntityRole::User)?;
         let user_id = self.parse_id(id, S::User::parse_id)?;
         match database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
             self.config(),
@@ -487,6 +495,7 @@ where
         &self,
         id: &serde_json::Value,
     ) -> AuthResult<Option<better_auth_core::wire::UserView>> {
+        self.model_fields.canonicalize_id(EntityRole::User)?;
         if let Some(id) = id.as_str() {
             return self.get_user_by_id(id).await;
         }
@@ -517,6 +526,7 @@ where
         ids: &[String],
         limit: f64,
     ) -> AuthResult<Vec<better_auth_core::wire::UserView>> {
+        self.model_fields.canonicalize_id(EntityRole::User)?;
         let user_ids = ids
             .iter()
             .map(|id| self.parse_id(id, S::User::parse_id))
@@ -559,6 +569,7 @@ where
             super::model_names::table_matches::<S, O, P>,
         )?;
         let (record, native_accounts) = if self.config().advanced.database.joins == Some(true) {
+            self.model_fields.canonicalize_id(EntityRole::Account)?;
             let query = super::joins::joined_query::<
                 <S::User as SeaOrmUserModel>::Entity,
                 <S::Account as SeaOrmAccountModel>::Entity,
@@ -639,6 +650,7 @@ where
     ) -> AuthResult<Option<better_auth_core::wire::UserView>> {
         let column = S::User::phone_number_column()
             .ok_or_else(|| AuthError::config("The user entity requires phone_number"))?;
+        self.model_fields.canonicalize_id(EntityRole::User)?;
         match database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
             self.config(),
             "findOne",
@@ -705,8 +717,11 @@ where
         )?;
         params.limit = limit.map(|value| value as f64);
         params.offset = offset.map(|value| value as f64);
-        let query =
-            better_auth_core::user_query::PreparedUserQuery::new(&params, &self.config().user)?;
+        let query = better_auth_core::user_query::PreparedUserQuery::for_adapter(
+            &params,
+            &self.config().user,
+            &self.model_fields,
+        )?;
         query.validate_sort()?;
         let models = database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
             self.config(),

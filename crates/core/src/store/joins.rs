@@ -33,8 +33,12 @@ impl AccountOwner {
         table_matches: impl Fn(EntityRole, &str) -> bool,
     ) -> AuthResult<()> {
         resolve_references(
-            ("account", &config.account.field_schema()),
-            ("user", &config.user),
+            (
+                EntityRole::Account,
+                "account",
+                &config.account.field_schema(),
+            ),
+            (EntityRole::User, "user", &config.user),
             schema,
             table_matches,
         )
@@ -75,8 +79,12 @@ impl UserAccounts {
         table_matches: impl Fn(EntityRole, &str) -> bool,
     ) -> AuthResult<()> {
         resolve_references(
-            ("user", &config.user),
-            ("account", &config.account.field_schema()),
+            (EntityRole::User, "user", &config.user),
+            (
+                EntityRole::Account,
+                "account",
+                &config.account.field_schema(),
+            ),
             schema,
             table_matches,
         )
@@ -158,17 +166,16 @@ fn resolve_field<'a>(model: &str, fields: &'a UserConfig, name: &'a str) -> Auth
 }
 
 fn resolve_references(
-    (base, base_fields): (&str, &UserConfig),
-    (model, model_fields): (&str, &UserConfig),
+    (base_role, base, base_fields): (EntityRole, &str, &UserConfig),
+    (model_role, model, model_fields): (EntityRole, &str, &UserConfig),
     schema: &ModelFields,
     table_matches: impl Fn(EntityRole, &str) -> bool,
 ) -> AuthResult<(String, String)> {
-    // The preceding where conversion replaces the base model's configured primary-key policy.
-    let mut base_fields = base_fields.clone();
-    let _ = base_fields
-        .fields_mut()
-        .insert("id".into(), UserFieldConfig::default());
-    let forward = matching_references(model_fields, model, base, schema, &table_matches)?;
+    // Where conversion changes adapter metadata before join validation, including failed joins.
+    schema.canonicalize_id(base_role)?;
+    let base_fields = schema.runtime_fields(base_role, base_fields)?;
+    let model_fields = schema.runtime_fields(model_role, model_fields)?;
+    let forward = matching_references(&model_fields, model, base, schema, &table_matches)?;
     let is_forward = !forward.is_empty();
     let selected = if is_forward {
         forward
@@ -183,12 +190,12 @@ fn resolve_references(
             let (from, to) = if is_forward {
                 (
                     resolve_field(base, &base_fields, &reference.field)?,
-                    resolve_field(model, model_fields, foreign_key)?,
+                    resolve_field(model, &model_fields, foreign_key)?,
                 )
             } else {
                 (
                     resolve_field(base, &base_fields, foreign_key)?,
-                    resolve_field(model, model_fields, &reference.field)?,
+                    resolve_field(model, &model_fields, &reference.field)?,
                 )
             };
             Ok((from.to_owned(), to.to_owned()))
@@ -199,6 +206,8 @@ fn resolve_references(
     }
 }
 
+#[cfg(test)]
+mod history_tests;
 #[cfg(test)]
 mod reference_fields_tests;
 

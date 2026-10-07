@@ -40,6 +40,7 @@ where
         };
         let mut revoked = None;
         let result = async {
+            self.model_fields.canonicalize_id(better_auth_core::store::schema::EntityRole::User)?;
             let Some(user) = database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(self.config(), "findOne", async { <S::User as SeaOrmUserModel>::Entity::find()
                 .filter(S::User::id_column().eq(self.parse_id(user_id, S::User::parse_id)?))
                 .lock_exclusive()
@@ -53,6 +54,7 @@ where
                 return self.output_user(&user, &tx).await.map(Some);
             }
             let hook_context = self.hook_context(Some((&tx, &hook_transaction)));
+            self.model_fields.canonicalize_id(better_auth_core::store::schema::EntityRole::Account)?;
             let accounts = match database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(self.config(), "findMany", async { <S::Account as SeaOrmAccountModel>::Entity::find()
                 .filter(S::Account::user_id_column().eq(self.parse_id(user_id, S::Account::parse_user_id)?))
                 .limit(super::pagination::default_limit(self.config(), tx.get_database_backend())?)

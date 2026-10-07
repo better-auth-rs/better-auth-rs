@@ -64,7 +64,7 @@ run_stage() {
       cargo fmt --all -- --check
       cargo clippy --locked -p better-auth-core -p better-auth-seaorm -- -D warnings
       cargo clippy --locked --features axum,seaorm2,redis-cache --test schema_join_reference_tests --test schema_join_reference_conflict_tests -- -D warnings
-      cargo test --locked -p better-auth-core store::joins::reference_fields_tests
+      cargo test --locked -p better-auth-core -p better-auth-seaorm --lib -- store::joins:: schema_history
       cargo test --locked --features axum,seaorm2,redis-cache \
         --test schema_join_reference_tests --test join_binding_tests \
         --test schema_join_reference_conflict_tests --test schema_preflight_tests \
@@ -74,7 +74,8 @@ run_stage() {
         ./compat-tests/reference-server/contracts/schema-join-reference.test.ts \
         ./compat-tests/reference-server/contracts/schema-join-reference-conflict.test.ts \
         ./compat-tests/reference-server/contracts/schema-join-reference-unknown.test.ts \
-        ./compat-tests/reference-server/contracts/schema-join-reference-field.test.ts
+        ./compat-tests/reference-server/contracts/schema-join-reference-field.test.ts \
+        ./compat-tests/reference-server/contracts/schema-join-reference-history.test.ts
       ;;
     passkey)
       cargo fmt --all -- --check

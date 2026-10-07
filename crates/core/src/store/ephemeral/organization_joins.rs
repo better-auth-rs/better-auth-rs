@@ -272,6 +272,8 @@ impl EphemeralStore {
         let user_rows = if owners.is_empty() {
             Vec::new()
         } else {
+            self.model_fields
+                .canonicalize_id(crate::store::schema::EntityRole::User)?;
             self.raw("user", "findMany", |state| {
                 Ok(crate::query::paginate_memory(
                     state

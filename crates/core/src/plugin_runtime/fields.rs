@@ -10,7 +10,7 @@ use crate::user_fields::{AdapterRecord, UserConfig, UserFieldType};
 use crate::{AuthConfig, AuthError, AuthResult, SchemaValue};
 use indexmap::{IndexMap, IndexSet};
 use serde_json::{Map, Value};
-use std::sync::LazyLock;
+use std::sync::{Arc, LazyLock, Mutex};
 
 /// Plugin field policies consumed by the selected adapter during auth initialization.
 #[derive(Clone, Default)]
@@ -20,6 +20,7 @@ pub struct ModelFields {
     native_fields: IndexMap<EntityRole, IndexSet<String>>,
     organization_output_order: IndexMap<EntityRole, Vec<String>>,
     organization: Option<crate::organization_fields::OrganizationFields>,
+    canonical_ids: Arc<Mutex<IndexSet<EntityRole>>>,
 }
 
 fn optional_string(
@@ -34,6 +35,43 @@ fn optional_string(
 }
 
 impl ModelFields {
+    /// Start an adapter runtime with the same policies and no operation history.
+    #[doc(hidden)]
+    pub fn fresh_runtime(&self) -> Self {
+        Self {
+            canonical_ids: Arc::default(),
+            ..self.clone()
+        }
+    }
+
+    /// Retain the upstream primary-key replacement across calls on this adapter runtime.
+    #[doc(hidden)]
+    pub fn canonicalize_id(&self, role: EntityRole) -> AuthResult<()> {
+        let _ = self
+            .canonical_ids
+            .lock()
+            .map_err(|_| AuthError::internal("Adapter schema history lock poisoned"))?
+            .insert(role);
+        Ok(())
+    }
+
+    pub(crate) fn runtime_fields(
+        &self,
+        role: EntityRole,
+        configured: &UserConfig,
+    ) -> AuthResult<UserConfig> {
+        let mut fields = configured.clone();
+        if self
+            .canonical_ids
+            .lock()
+            .map_err(|_| AuthError::internal("Adapter schema history lock poisoned"))?
+            .contains(&role)
+        {
+            let _ = fields.fields_mut().insert("id".into(), Default::default());
+        }
+        Ok(fields)
+    }
+
     /// Retain the same active logical models used by runtime schema validation.
     pub fn set_schema_configuration(&mut self, config: &crate::store::schema::SchemaConfiguration) {
         self.schema_models = Some(config.models());
