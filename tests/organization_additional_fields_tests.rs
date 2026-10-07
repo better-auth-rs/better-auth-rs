@@ -28,6 +28,10 @@ use serde_json::json;
 type TestResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
 
 #[tokio::test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "Assertions verify persistence and invitation atomicity; setup errors propagate separately."
+)]
 async fn custom_organization_tables_preserve_fields_and_atomic_invitation_defaults_after_reopen()
 -> TestResult {
     let path = std::env::temp_dir().join(format!(
@@ -294,6 +298,10 @@ async fn assert_http_metadata(
 }
 
 #[tokio::test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "Assertions verify accepted policies and exact configuration failures; setup errors propagate separately."
+)]
 async fn organization_field_configuration_accepts_replacement_policies_and_rejects_invalid_mappings()
 -> TestResult {
     use better_auth::{

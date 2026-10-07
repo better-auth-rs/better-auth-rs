@@ -9,29 +9,35 @@ pub(super) fn policy(events: Arc<Mutex<Vec<String>>>) -> UserFieldConfig {
         on_update: Some(Arc::new(|| "Renewed".into())),
         transform: Some(FieldTransforms {
             input: Some(UserFieldTransform::new(move |value| {
-                events
-                    .lock()
-                    .unwrap()
-                    .push(format!("input:{}", value.json()?.unwrap()));
+                trace_lock(&events)?.push(format!(
+                    "input:{}",
+                    required(value.json()?, "Expected a present JSON callback value")?
+                ));
                 if value == FieldValue::from("input-error") {
                     return Err(AuthError::internal("ordinary API Key input error"));
                 }
                 Ok(match value {
                     FieldValue::Undefined => FieldValue::Undefined,
-                    value => value.as_str().unwrap().trim().into(),
+                    value => required(value.as_str(), "Expected a string field callback value")?
+                        .trim()
+                        .into(),
                 })
             })),
             output: Some(UserFieldTransform::new(move |value| {
-                output
-                    .lock()
-                    .unwrap()
-                    .push(format!("output:{}", value.json()?.unwrap()));
+                trace_lock(&output)?.push(format!(
+                    "output:{}",
+                    required(value.json()?, "Expected a present JSON callback value")?
+                ));
                 if value == FieldValue::from("output-error") {
                     return Err(AuthError::internal("ordinary API Key output error"));
                 }
                 Ok(match value {
                     FieldValue::Undefined => FieldValue::Undefined,
-                    value => format!("{}:out", value.as_str().unwrap()).into(),
+                    value => format!(
+                        "{}:out",
+                        required(value.as_str(), "Expected a string field callback value")?
+                    )
+                    .into(),
                 })
             })),
         }),
@@ -75,18 +81,17 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
     let created = store
         .create_api_key(input(Some("  Desk  "), "ordinary-first"))
         .await?;
-    assert_eq!(created.name.typed().unwrap().as_deref(), Some("Desk:out"));
+    assert_eq!(created.name.typed()?.as_deref(), Some("Desk:out"));
     assert_eq!(
-        *events.lock().unwrap(),
+        *trace_lock(&events)?,
         ["input:\"  Desk  \"", "output:\"Desk\""]
     );
     assert_eq!(
         raw.get_api_key_by_hash("ordinary-first")
             .await?
-            .unwrap()
+            .ok_or_else(|| AuthError::internal("Expected the stored model record"))?
             .name
-            .typed()
-            .unwrap()
+            .typed()?
             .as_deref(),
         Some("Desk")
     );
@@ -95,17 +100,13 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
     let fallback = store
         .create_api_key(input(None, "ordinary-default"))
         .await?;
-    assert_eq!(
-        fallback.name.typed().unwrap().as_deref(),
-        Some("Fallback:out")
-    );
+    assert_eq!(fallback.name.typed()?.as_deref(), Some("Fallback:out"));
     assert_eq!(
         raw.get_api_key_by_hash("ordinary-default")
             .await?
-            .unwrap()
+            .ok_or_else(|| AuthError::internal("Expected the stored model record"))?
             .name
-            .typed()
-            .unwrap()
+            .typed()?
             .as_deref(),
         Some("Fallback")
     );
@@ -118,34 +119,43 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
             },
         )
         .await?;
-    assert_eq!(updated.name.typed().unwrap().as_deref(), Some("Mobile:out"));
+    assert_eq!(updated.name.typed()?.as_deref(), Some("Mobile:out"));
     for found in [
-        store.get_api_key_by_id(created.id.typed()?).await?.unwrap(),
-        store.get_api_key_by_id_value(&created.id).await?.unwrap(),
-        store.get_api_key_by_hash("ordinary-first").await?.unwrap(),
+        store
+            .get_api_key_by_id(created.id.typed()?)
+            .await?
+            .ok_or_else(|| AuthError::internal("Expected the stored model record"))?,
+        store
+            .get_api_key_by_id_value(&created.id)
+            .await?
+            .ok_or_else(|| AuthError::internal("Expected the stored model record"))?,
+        store
+            .get_api_key_by_hash("ordinary-first")
+            .await?
+            .ok_or_else(|| AuthError::internal("Expected the stored model record"))?,
     ] {
-        assert_eq!(found.name.typed().unwrap().as_deref(), Some("Mobile:out"));
+        assert_eq!(found.name.typed()?.as_deref(), Some("Mobile:out"));
     }
-    events.lock().unwrap().clear();
+    trace_lock(&events)?.clear();
     let list = store
         .find_api_keys_by_reference("ordinary-owner", Some(("name", "asc")))
         .await?;
     assert_eq!(
         list.iter()
-            .map(|key| key.name.typed().unwrap().as_deref())
-            .collect::<Vec<_>>(),
+            .map(|key| key.name.typed().map(|name| name.as_deref()))
+            .collect::<AuthResult<Vec<_>>>()?,
         [Some("Fallback:out"), Some("Mobile:out")]
     );
     assert_eq!(
-        *events.lock().unwrap(),
+        *trace_lock(&events)?,
         ["output:\"Fallback\"", "output:\"Mobile\""]
     );
-    events.lock().unwrap().clear();
+    trace_lock(&events)?.clear();
     assert_eq!(
         store.count_api_keys_by_reference("ordinary-owner").await?,
         2
     );
-    assert!(events.lock().unwrap().is_empty());
+    assert!(trace_lock(&events)?.is_empty());
 
     let now = chrono::Utc::now();
     let writes = [
@@ -183,30 +193,33 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
         ),
     ];
     for (write, remaining, count, set) in writes {
-        events.lock().unwrap().clear();
+        trace_lock(&events)?.clear();
         let row = store
             .write_api_key_usage(&created.id, write)
             .await?
-            .unwrap();
+            .ok_or_else(|| AuthError::internal("Expected the stored model record"))?;
         assert_eq!(row.remaining, Some(remaining));
         assert_eq!(row.request_count, Some(count));
         assert_eq!(row.key_hash, created.key_hash);
         assert_eq!(row.reference_id, created.reference_id);
         if set {
-            assert_eq!(row.name.typed().unwrap().as_deref(), Some("Renewed:out"));
+            assert_eq!(row.name.typed()?.as_deref(), Some("Renewed:out"));
             assert_eq!(
-                *events.lock().unwrap(),
+                *trace_lock(&events)?,
                 ["input:\"Renewed\"", "output:\"Renewed\""]
             );
         } else {
-            assert_eq!(row.name.typed().unwrap().as_deref(), Some("Mobile:out"));
-            assert_eq!(*events.lock().unwrap(), ["output:\"Mobile\""]);
+            assert_eq!(row.name.typed()?.as_deref(), Some("Mobile:out"));
+            assert_eq!(*trace_lock(&events)?, ["output:\"Mobile\""]);
         }
-        let stored = raw.get_api_key_by_hash("ordinary-first").await?.unwrap();
+        let stored = raw
+            .get_api_key_by_hash("ordinary-first")
+            .await?
+            .ok_or_else(|| AuthError::internal("Expected the stored model record"))?;
         assert_eq!(stored.remaining, Some(remaining));
         assert_eq!(stored.request_count, Some(count));
         assert_eq!(
-            stored.name.typed().unwrap().as_deref(),
+            stored.name.typed()?.as_deref(),
             Some(if set { "Renewed" } else { "Mobile" })
         );
     }
@@ -220,16 +233,16 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
                 },
             )
             .await
-            .unwrap_err(),
+            .err()
+            .ok_or_else(|| AuthError::internal("Expected the model operation to fail"))?,
         "ordinary API Key input error",
     );
     assert_eq!(
         raw.get_api_key_by_hash("ordinary-first")
             .await?
-            .unwrap()
+            .ok_or_else(|| AuthError::internal("Expected the stored model record"))?
             .name
-            .typed()
-            .unwrap()
+            .typed()?
             .as_deref(),
         Some("Renewed")
     );
@@ -243,14 +256,15 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
                 },
             )
             .await
-            .unwrap_err(),
+            .err()
+            .ok_or_else(|| AuthError::internal("Expected the model operation to fail"))?,
         "ordinary API Key output error",
     );
-    let stored = raw.get_api_key_by_hash("ordinary-first").await?.unwrap();
-    assert_eq!(
-        stored.name.typed().unwrap().as_deref(),
-        Some("output-error")
-    );
+    let stored = raw
+        .get_api_key_by_hash("ordinary-first")
+        .await?
+        .ok_or_else(|| AuthError::internal("Expected the stored model record"))?;
+    assert_eq!(stored.name.typed()?.as_deref(), Some("output-error"));
     assert_eq!(
         (stored.remaining, stored.request_count),
         (Some(8.0), Some(2.0))
@@ -259,7 +273,8 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
         store
             .create_api_key(input(Some("input-error"), "ordinary-input-error"))
             .await
-            .unwrap_err(),
+            .err()
+            .ok_or_else(|| AuthError::internal("Expected the model operation to fail"))?,
         "ordinary API Key input error",
     );
     assert!(
@@ -271,16 +286,16 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
         store
             .create_api_key(input(Some("output-error"), "ordinary-output-error"))
             .await
-            .unwrap_err(),
+            .err()
+            .ok_or_else(|| AuthError::internal("Expected the model operation to fail"))?,
         "ordinary API Key output error",
     );
     assert_eq!(
         raw.get_api_key_by_hash("ordinary-output-error")
             .await?
-            .unwrap()
+            .ok_or_else(|| AuthError::internal("Expected the stored model record"))?
             .name
-            .typed()
-            .unwrap()
+            .typed()?
             .as_deref(),
         Some("output-error")
     );
@@ -307,14 +322,16 @@ async fn awaited_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResu
             .create_api_key(input(Some("Waiting"), "ordinary-await"))
             .await
     });
-    let call = calls.recv().await.unwrap();
+    let call = required(calls.recv().await, "Expected the next field callback")?;
     assert_eq!(
         (call.stage, call.value),
         ("input", FieldValue::from("Waiting"))
     );
     assert!(raw.get_api_key_by_hash("ordinary-await").await?.is_none());
-    call.reply.send(Ok(FieldValue::from("Stored"))).unwrap();
-    let call = calls.recv().await.unwrap();
+    call.reply
+        .send(Ok(FieldValue::from("Stored")))
+        .map_err(|_| AuthError::internal("Field callback receiver closed"))?;
+    let call = required(calls.recv().await, "Expected the next field callback")?;
     assert_eq!(
         (call.stage, call.value),
         ("output", FieldValue::from("Stored"))
@@ -322,16 +339,22 @@ async fn awaited_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResu
     assert_eq!(
         raw.get_api_key_by_hash("ordinary-await")
             .await?
-            .unwrap()
+            .ok_or_else(|| AuthError::internal("Expected the stored model record"))?
             .name
-            .typed()
-            .unwrap()
+            .typed()?
             .as_deref(),
         Some("Stored")
     );
-    call.reply.send(Ok(FieldValue::from("Projected"))).unwrap();
+    call.reply
+        .send(Ok(FieldValue::from("Projected")))
+        .map_err(|_| AuthError::internal("Field callback receiver closed"))?;
     assert_eq!(
-        pending.await.unwrap()?.name.typed().unwrap().as_deref(),
+        pending
+            .await
+            .map_err(|error| AuthError::internal(format!("Model field task failed: {error}")))??
+            .name
+            .typed()?
+            .as_deref(),
         Some("Projected")
     );
     Ok(())

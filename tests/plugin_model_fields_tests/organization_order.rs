@@ -8,7 +8,7 @@ use better_auth_core::{
 use better_auth_seaorm::sea_orm::{ConnectionTrait, Schema};
 
 #[path = "../../compat-tests/rust-server/src/organization_fields/models.rs"]
-#[allow(
+#[expect(
     unreachable_pub,
     reason = "The shared SeaORM fixture derives require public model types"
 )]
@@ -32,23 +32,29 @@ fn policy(field: &'static str, events: &Events) -> UserFieldConfig {
         required: Some(false),
         transform: Some(FieldTransforms {
             input: Some(UserFieldTransform::new(move |value| {
-                input
-                    .lock()
-                    .unwrap()
-                    .push(json!([field, "input", value.json()?]));
+                trace_lock(&input)?.push(json!([field, "input", value.json()?]));
                 Ok(match value {
                     FieldValue::Undefined => FieldValue::Undefined,
-                    value => value.as_str().unwrap().trim().into(),
+                    value => required(
+                        value.as_str(),
+                        "Organization input policy requires a string",
+                    )?
+                    .trim()
+                    .into(),
                 })
             })),
             output: Some(UserFieldTransform::new(move |value| {
-                output
-                    .lock()
-                    .unwrap()
-                    .push(json!([field, "output", value.json()?]));
+                trace_lock(&output)?.push(json!([field, "output", value.json()?]));
                 Ok(
                     if !value.is_undefined() && matches!(field, "name" | "logo" | "label") {
-                        format!("{}:out", value.as_str().unwrap()).into()
+                        format!(
+                            "{}:out",
+                            required(
+                                value.as_str(),
+                                "Organization output policy requires a string"
+                            )?
+                        )
+                        .into()
                     } else {
                         value
                     },
@@ -59,7 +65,11 @@ fn policy(field: &'static str, events: &Events) -> UserFieldConfig {
     }
 }
 
-fn declared(model: &str, events: &Events) -> UserConfig {
+#[expect(
+    clippy::expect_used,
+    reason = "Default and onUpdate callbacks cannot return errors; a poisoned trace lock must fail the field-order contract"
+)]
+fn declared(model: &str, events: &Events) -> AuthResult<UserConfig> {
     let default = events.clone();
     let update = events.clone();
     let mut result = fields(
@@ -74,11 +84,15 @@ fn declared(model: &str, events: &Events) -> UserConfig {
                 .into(),
             ),
             default_value_fn: Some(Arc::new(move || {
-                default.lock().unwrap().push(json!(["label", "default"]));
+                trace_lock(&default)
+                    .expect("Label default trace lock must remain available")
+                    .push(json!(["label", "default"]));
                 " Label ".into()
             })),
             on_update: Some(Arc::new(move || {
-                update.lock().unwrap().push(json!(["label", "onUpdate"]));
+                trace_lock(&update)
+                    .expect("Label update trace lock must remain available")
+                    .push(json!(["label", "onUpdate"]));
                 " Updated ".into()
             })),
             ..policy("label", events)
@@ -90,22 +104,29 @@ fn declared(model: &str, events: &Events) -> UserConfig {
             .insert((*field).into(), policy(field, events));
     }
     if model == "organization" {
-        let logo = result.fields_mut().get_mut("logo").unwrap();
+        let logo = required(
+            result.fields_mut().get_mut("logo"),
+            "Organization field order must declare logo",
+        )?;
         let default = events.clone();
         logo.default_value_fn = Some(Arc::new(move || {
-            default.lock().unwrap().push(json!(["logo", "default"]));
+            trace_lock(&default)
+                .expect("Logo default trace lock must remain available")
+                .push(json!(["logo", "default"]));
             " Logo ".into()
         }));
         let update = events.clone();
         logo.on_update = Some(Arc::new(move || {
-            update.lock().unwrap().push(json!(["logo", "onUpdate"]));
+            trace_lock(&update)
+                .expect("Logo update trace lock must remain available")
+                .push(json!(["logo", "onUpdate"]));
             " Next Logo ".into()
         }));
     }
-    result
+    Ok(result)
 }
 
-fn schema(model: &str, fields: UserConfig) -> OrganizationFields {
+fn schema(model: &str, fields: UserConfig) -> AuthResult<OrganizationFields> {
     let mut schema = OrganizationFields::default();
     *match model {
         "organization" => &mut schema.organization,
@@ -113,18 +134,28 @@ fn schema(model: &str, fields: UserConfig) -> OrganizationFields {
         "member" => &mut schema.member,
         "invitation" => &mut schema.invitation,
         "organizationRole" => &mut schema.organization_role,
-        _ => unreachable!("The pinned fixture contains five Organization models"),
+        _ => {
+            return Err(AuthError::internal(format!(
+                "Unknown Organization fixture model: {model}"
+            )));
+        }
     } = fields;
-    schema
+    Ok(schema)
 }
 
 async fn sqlite_custom() -> AuthResult<Arc<dyn AuthStore<BundledSchema>>> {
     let database = Database::connect("sqlite::memory:")
         .await
-        .expect("SQLite fixture connects");
-    migrator::run_migrations(&database)
-        .await
-        .expect("SQLite fixture migrates");
+        .map_err(|error| {
+            AuthError::internal(format!(
+                "Cannot connect Organization field-order fixture: {error}"
+            ))
+        })?;
+    migrator::run_migrations(&database).await.map_err(|error| {
+        AuthError::internal(format!(
+            "Cannot migrate Organization field-order fixture: {error}"
+        ))
+    })?;
     let schema = Schema::new(database.get_database_backend());
     for statement in [
         schema.create_table_from_entity(models::organization::Entity),
@@ -134,10 +165,11 @@ async fn sqlite_custom() -> AuthResult<Arc<dyn AuthStore<BundledSchema>>> {
         schema.create_table_from_entity(models::team_member::Entity),
         schema.create_table_from_entity(models::organization_role::Entity),
     ] {
-        let _ = database
-            .execute(&statement)
-            .await
-            .expect("Organization fixture creates its typed tables");
+        let _ = database.execute(&statement).await.map_err(|error| {
+            AuthError::internal(format!(
+                "Cannot create Organization field-order tables: {error}"
+            ))
+        })?;
     }
     Ok(Arc::new(
         SeaOrmStore::<BundledSchema>::new(config(), database)
@@ -145,12 +177,21 @@ async fn sqlite_custom() -> AuthResult<Arc<dyn AuthStore<BundledSchema>>> {
     ))
 }
 
-fn visible(model: &str, row: &Value) -> Value {
+fn visible(model: &str, row: &Value) -> AuthResult<Value> {
     std::iter::once("label")
         .chain(names(model).iter().copied())
-        .map(|field| (field.into(), row[field].clone()))
-        .collect::<serde_json::Map<_, _>>()
-        .into()
+        .map(|field| {
+            Ok((
+                field.into(),
+                required(
+                    row.get(field),
+                    "Organization projection must contain each declared field",
+                )?
+                .clone(),
+            ))
+        })
+        .collect::<AuthResult<serde_json::Map<_, _>>>()
+        .map(Value::Object)
 }
 
 async fn capture<S: AuthSchema>(
@@ -160,16 +201,19 @@ async fn capture<S: AuthSchema>(
     mode: &str,
 ) -> AuthResult<Value> {
     let events = Events::default();
-    let mut declaration = declared(model, &events);
+    let mut declaration = declared(model, &events)?;
     let store = if mode == "direct" {
-        raw.configure_organization_fields(schema(model, declaration))?;
+        raw.configure_organization_fields(schema(model, declaration)?)?;
         raw.clone()
     } else {
-        let label = declaration.fields_mut().shift_remove("label").unwrap();
+        let label = required(
+            declaration.fields_mut().shift_remove("label"),
+            "Field-order fixture must declare label",
+        )?;
         let custom = Fields(vec![(EntityRole::Organization, fields("label", label))]);
         let mut options = OrganizationConfig::default();
         options.teams.enabled = true;
-        options.schema = schema(model, declaration);
+        options.schema = schema(model, declaration)?;
         let organization = OrganizationPlugin::with_config(options);
         let builder = BetterAuth::new(config()).store_arc(raw.clone());
         let auth = if mode == "before" {
@@ -191,7 +235,8 @@ async fn capture<S: AuthSchema>(
     };
     let parent_id = parent
         .as_ref()
-        .map(|row| row.id.typed().unwrap().as_str())
+        .map(|row| row.id.typed().map(String::as_str))
+        .transpose()?
         .unwrap_or("");
     let created = match model {
         "organization" => serde_json::to_value(
@@ -221,7 +266,11 @@ async fn capture<S: AuthSchema>(
                     "member",
                     &user,
                     chrono::DateTime::parse_from_rfc3339("2030-01-01T00:00:00Z")
-                        .unwrap()
+                        .map_err(|error| {
+                            AuthError::internal(format!(
+                                "Invalid Organization fixture expiration: {error}"
+                            ))
+                        })?
                         .to_utc()
                         .into(),
                 ))
@@ -241,9 +290,16 @@ async fn capture<S: AuthSchema>(
                 })
                 .await?,
         )?,
-        _ => unreachable!(),
+        _ => {
+            return Err(AuthError::internal(format!(
+                "Unknown Organization fixture model: {model}"
+            )));
+        }
     };
-    let id = created["id"].as_str().unwrap();
+    let id = required(
+        created.get("id").and_then(Value::as_str),
+        "Created Organization record must have a string ID",
+    )?;
     let updated = match model {
         "organization" => serde_json::to_value(
             store
@@ -284,47 +340,82 @@ async fn capture<S: AuthSchema>(
                 )
                 .await?,
         )?,
-        _ => unreachable!(),
+        _ => {
+            return Err(AuthError::internal(format!(
+                "Unknown Organization fixture model: {model}"
+            )));
+        }
     };
     let found = match model {
-        "organization" => serde_json::to_value(store.get_organization_by_id(id).await?.unwrap())?,
-        "team" => serde_json::to_value(store.get_team(id).await?.unwrap())?,
-        "member" => serde_json::to_value(store.get_member_by_id(id).await?.unwrap())?,
-        "invitation" => serde_json::to_value(store.get_invitation_by_id(id).await?.unwrap())?,
-        "organizationRole" => {
-            serde_json::to_value(store.get_organization_role(id).await?.unwrap())?
+        "organization" => serde_json::to_value(required(
+            store.get_organization_by_id(id).await?,
+            "Updated organization must remain stored",
+        )?)?,
+        "team" => serde_json::to_value(required(
+            store.get_team(id).await?,
+            "Updated team must remain stored",
+        )?)?,
+        "member" => serde_json::to_value(required(
+            store.get_member_by_id(id).await?,
+            "Updated member must remain stored",
+        )?)?,
+        "invitation" => serde_json::to_value(required(
+            store.get_invitation_by_id(id).await?,
+            "Updated invitation must remain stored",
+        )?)?,
+        "organizationRole" => serde_json::to_value(required(
+            store.get_organization_role(id).await?,
+            "Updated organization role must remain stored",
+        )?)?,
+        _ => {
+            return Err(AuthError::internal(format!(
+                "Unknown Organization fixture model: {model}"
+            )));
         }
-        _ => unreachable!(),
     };
     if mode != "direct" {
-        let stored = raw.get_organization_by_id(id).await?.unwrap();
+        let stored = required(
+            raw.get_organization_by_id(id).await?,
+            "Organization field-order fixture must remain stored",
+        )?;
         assert_eq!(stored.name.typed()?, "Renamed");
         assert_eq!(stored.logo.typed()?.as_deref(), Some("Next Logo"));
     }
-    let events = events.lock().unwrap().clone();
+    let events = trace_lock(&events)?.clone();
     Ok(json!({
         "backend": backend, "model": model, "mode": mode,
-        "created": visible(model, &created), "updated": visible(model, &updated),
-        "found": visible(model, &found), "events": events,
+        "created": visible(model, &created)?, "updated": visible(model, &updated)?,
+        "found": visible(model, &found)?, "events": events,
     }))
 }
 
 #[tokio::test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "The Memory contract must assert each complete captured field-order observation"
+)]
 async fn memory_raw_and_runtime_organization_fields_match_upstream_order() -> AuthResult<()> {
     let fixture: Value = serde_json::from_str(include_str!(
         "../fixtures/organization-direct-order-1.7.6.json"
     ))?;
-    for expected in fixture["cases"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .filter(|case| case["backend"] == "memory")
+    for expected in required(
+        fixture.get("cases").and_then(Value::as_array),
+        "Organization fixture must contain cases",
+    )?
+    .iter()
+    .filter(|case| case.get("backend").and_then(Value::as_str) == Some("memory"))
     {
         let actual = capture(
             memory(),
             "memory",
-            expected["model"].as_str().unwrap(),
-            expected["mode"].as_str().unwrap(),
+            required(
+                expected.get("model").and_then(Value::as_str),
+                "Organization case must name a model",
+            )?,
+            required(
+                expected.get("mode").and_then(Value::as_str),
+                "Organization case must name a mode",
+            )?,
         )
         .await?;
         assert_eq!(&actual, expected);
@@ -333,21 +424,32 @@ async fn memory_raw_and_runtime_organization_fields_match_upstream_order() -> Au
 }
 
 #[tokio::test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "The SQLite contract must assert each complete captured field-order observation"
+)]
 async fn sqlite_raw_and_runtime_organization_fields_match_upstream_order() -> AuthResult<()> {
     let fixture: Value = serde_json::from_str(include_str!(
         "../fixtures/organization-direct-order-1.7.6.json"
     ))?;
-    for expected in fixture["cases"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .filter(|case| case["backend"] == "sqlite")
+    for expected in required(
+        fixture.get("cases").and_then(Value::as_array),
+        "Organization fixture must contain cases",
+    )?
+    .iter()
+    .filter(|case| case.get("backend").and_then(Value::as_str) == Some("sqlite"))
     {
         let actual = capture(
             sqlite_custom().await?,
             "sqlite",
-            expected["model"].as_str().unwrap(),
-            expected["mode"].as_str().unwrap(),
+            required(
+                expected.get("model").and_then(Value::as_str),
+                "Organization case must name a model",
+            )?,
+            required(
+                expected.get("mode").and_then(Value::as_str),
+                "Organization case must name a mode",
+            )?,
         )
         .await?;
         assert_eq!(&actual, expected);

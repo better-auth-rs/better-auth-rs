@@ -14,22 +14,34 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
                 let sender = sender.clone();
                 let trace = input_trace.clone();
                 async move {
-                    trace.lock().unwrap().push("name:input".to_owned());
+                    trace_lock(&trace)?.push("name:input".to_owned());
                     let entered_at = Utc::now();
                     let (reply, result) = oneshot::channel();
-                    sender.send((entered_at, reply)).unwrap();
-                    result.await.unwrap();
+                    sender
+                        .send((entered_at, reply))
+                        .map_err(|_| AuthError::internal("Field callback receiver closed"))?;
+                    result
+                        .await
+                        .map_err(|_| AuthError::internal("Creation callback reply missing"))?;
                     Ok(match value {
                         FieldValue::Undefined => FieldValue::Undefined,
-                        value => value.as_str().unwrap().trim().into(),
+                        value => {
+                            required(value.as_str(), "Expected a string field callback value")?
+                                .trim()
+                                .into()
+                        }
                     })
                 }
             })),
             output: Some(UserFieldTransform::new(move |value| {
-                output_trace.lock().unwrap().push("name:output".to_owned());
+                trace_lock(&output_trace)?.push("name:output".to_owned());
                 Ok(match value {
                     FieldValue::Undefined => FieldValue::Undefined,
-                    value => format!("{}:out", value.as_str().unwrap()).into(),
+                    value => format!(
+                        "{}:out",
+                        required(value.as_str(), "Expected a string field callback value")?
+                    )
+                    .into(),
                 })
             })),
         }),
@@ -40,10 +52,7 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
     let sequence = AtomicUsize::new(0);
     config.advanced.database.generate_id =
         Some(IdGeneration::Custom(IdGenerator::new(move |request| {
-            generator_trace
-                .lock()
-                .unwrap()
-                .push(format!("id:{}", request.model));
+            trace_lock(&generator_trace)?.push(format!("id:{}", request.model));
             Ok(Some(format!(
                 "ordinary-create-{}",
                 sequence.fetch_add(1, Ordering::SeqCst)
@@ -59,17 +68,16 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
         .await?;
     let owner = owner(raw.as_ref(), "create-order").await?;
     for role in [EntityRole::Passkey, EntityRole::ApiKey] {
-        trace.lock().unwrap().clear();
+        trace_lock(&trace)?.clear();
         let store = auth.store().clone();
         let owner = owner.clone();
         let pending = tokio::spawn(async move {
             if role == EntityRole::Passkey {
                 let row = store.create_passkey(input(&owner, " Desk ")).await?;
                 Ok((
-                    row.created_at
-                        .typed()?
-                        .clone()
-                        .expect("Legacy passkey creation returns createdAt"),
+                    row.created_at.typed()?.clone().ok_or_else(|| {
+                        AuthError::internal("Legacy passkey creation must return createdAt")
+                    })?,
                     row.name,
                 ))
             } else {
@@ -79,8 +87,8 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
                 Ok::<_, AuthError>((row.created_at, row.name))
             }
         });
-        let (entered_at, reply) = calls.recv().await.unwrap();
-        assert_eq!(*trace.lock().unwrap(), ["name:input"]);
+        let (entered_at, reply) = required(calls.recv().await, "Expected the next field callback")?;
+        assert_eq!(*trace_lock(&trace)?, ["name:input"]);
         if role == EntityRole::Passkey {
             assert!(
                 raw.get_passkey_by_credential_id("credential: Desk ")
@@ -90,8 +98,12 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
         } else {
             assert!(raw.get_api_key_by_hash("ordinary-order").await?.is_none());
         }
-        reply.send(()).unwrap();
-        let (created_at, name) = pending.await.unwrap()?;
+        reply
+            .send(())
+            .map_err(|_| AuthError::internal("Field callback receiver closed"))?;
+        let (created_at, name) = pending
+            .await
+            .map_err(|error| AuthError::internal(format!("Model field task failed: {error}")))??;
         assert!(
             created_at.milliseconds() <= entered_at.timestamp_millis() as f64,
             "creation timestamp must precede the awaited name callback"
@@ -103,7 +115,7 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
             "apikey"
         };
         assert_eq!(
-            *trace.lock().unwrap(),
+            *trace_lock(&trace)?,
             [
                 "name:input".to_owned(),
                 format!("id:{model}"),
@@ -114,20 +126,25 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
             let stored = raw
                 .get_passkey_by_credential_id("credential: Desk ")
                 .await?
-                .unwrap();
+                .ok_or_else(|| AuthError::internal("Expected the stored model record"))?;
             assert_eq!(
                 stored
                     .created_at
                     .typed()?
                     .clone()
-                    .expect("Legacy passkey storage retains createdAt"),
+                    .ok_or_else(|| AuthError::internal(
+                        "Legacy passkey storage must retain createdAt"
+                    ))?,
                 created_at
             );
-            assert_eq!(stored.name.typed().unwrap().as_deref(), Some("Desk"));
+            assert_eq!(stored.name.typed()?.as_deref(), Some("Desk"));
         } else {
-            let stored = raw.get_api_key_by_hash("ordinary-order").await?.unwrap();
+            let stored = raw
+                .get_api_key_by_hash("ordinary-order")
+                .await?
+                .ok_or_else(|| AuthError::internal("Expected the stored model record"))?;
             assert_eq!(stored.created_at, created_at);
-            assert_eq!(stored.name.typed().unwrap().as_deref(), Some("Desk"));
+            assert_eq!(stored.name.typed()?.as_deref(), Some("Desk"));
         }
     }
     Ok(())

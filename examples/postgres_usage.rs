@@ -467,10 +467,11 @@ mod session {
             create_session: CreateSession,
             now: DateTime<Utc>,
         ) -> AuthResult<Self::ActiveModel> {
-            let user_id = create_session.user_id.as_str().map(|id| {
-                id.parse()
-                    .expect("session user ids come from validated auth user identifiers")
-            });
+            let user_id = create_session
+                .user_id
+                .as_str()
+                .map(Self::parse_user_id)
+                .transpose()?;
             Ok(ActiveModel {
                 id: id.map_or(NotSet, Set),
                 expires_at: NotSet,
@@ -918,7 +919,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let legacy_data = parse_body(&legacy_signin.body.bytes()?);
     println!(
         "Legacy DB user id: {}\n",
-        legacy_data["user"]["id"].as_str().unwrap_or("<missing>")
+        legacy_data
+            .pointer("/user/id")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("<missing>")
     );
 
     println!("=== Sign up ===");
@@ -946,7 +950,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .to_string();
     println!(
         "New DB user id: {}",
-        signup_data["user"]["id"].as_str().unwrap_or("<missing>")
+        signup_data
+            .pointer("/user/id")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("<missing>")
     );
     println!(
         "Locale defaulted to: {}",

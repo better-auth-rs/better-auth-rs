@@ -28,13 +28,17 @@ pub(super) async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthR
         required: Some(false),
         transform: Some(FieldTransforms {
             output: Some(UserFieldTransform::new(move |value| {
-                output_events.lock().unwrap().push(value.clone());
+                trace_lock(&output_events)?.push(value.clone());
                 if output_failure.load(Ordering::SeqCst) {
                     return Err(AuthError::internal("ordinary Device scope output error"));
                 }
                 Ok(match value {
                     FieldValue::Undefined => FieldValue::Undefined,
-                    value => format!("{}:out", value.as_str().unwrap()).into(),
+                    value => format!(
+                        "{}:out",
+                        required(value.as_str(), "Expected a string field callback value")?
+                    )
+                    .into(),
                 })
             })),
             ..Default::default()
@@ -59,9 +63,9 @@ pub(super) async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthR
         .store()
         .get_device_code_by_device_code(&initial.device_code)
         .await?
-        .unwrap();
+        .ok_or_else(|| AuthError::internal("Expected the stored model record"))?;
     let polled = chrono::DateTime::parse_from_rfc3339("2030-01-01T00:00:00Z")
-        .unwrap()
+        .map_err(|error| AuthError::internal(format!("Invalid fixture timestamp: {error}")))?
         .with_timezone(&chrono::Utc);
     let _ = auth
         .store()
@@ -74,15 +78,15 @@ pub(super) async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthR
             },
         )
         .await?;
-    events.lock().unwrap().clear();
+    trace_lock(&events)?.clear();
     let consumed = auth
         .store()
         .consume_device_code(&expected, &ownership)
         .await?
-        .unwrap();
+        .ok_or_else(|| AuthError::internal("Expected the stored model record"))?;
     assert_eq!(consumed.scope.json()?, Some(json!("Current:out")));
     assert_eq!(consumed.last_polled_at, Some(polled.into()));
-    assert_eq!(*events.lock().unwrap(), [FieldValue::from("Current")]);
+    assert_eq!(*trace_lock(&events)?, [FieldValue::from("Current")]);
     assert!(
         raw.get_device_code_by_device_code(&initial.device_code)
             .await?
@@ -97,7 +101,8 @@ pub(super) async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthR
         auth.store()
             .consume_device_code(&expected, &ownership)
             .await
-            .unwrap_err(),
+            .err()
+            .ok_or_else(|| AuthError::internal("Expected the model operation to fail"))?,
         "ordinary Device scope output error",
     );
     assert!(
@@ -122,7 +127,12 @@ pub(super) async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthR
         })
     })
     .await;
-    original_error(result.unwrap_err(), "ordinary Device scope output error");
+    original_error(
+        result
+            .err()
+            .ok_or_else(|| AuthError::internal("Expected the model operation to fail"))?,
+        "ordinary Device scope output error",
+    );
     failure.store(false, Ordering::SeqCst);
     assert_eq!(
         raw.get_device_code_by_device_code(&expected.device_code)
@@ -150,7 +160,7 @@ pub(super) async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthR
             let expected = tx
                 .get_device_code_by_user_code(&created.user_code)
                 .await?
-                .unwrap();
+                .ok_or_else(|| AuthError::internal("Expected the stored model record"))?;
             let _ = tx
                 .update_device_code(
                     &created.id,
@@ -163,7 +173,7 @@ pub(super) async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthR
             let consumed = tx
                 .consume_device_code(&expected, &ownership)
                 .await?
-                .unwrap();
+                .ok_or_else(|| AuthError::internal("Expected the stored model record"))?;
             assert_eq!(
                 consumed.scope.json()?,
                 Some(json!("Inside transaction:out"))

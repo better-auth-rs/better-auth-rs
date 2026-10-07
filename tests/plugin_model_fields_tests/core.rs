@@ -11,7 +11,7 @@ impl<S: AuthSchema> AuthPlugin<S> for LegacyFields {
         Vec::new()
     }
     async fn on_init(&self, context: &mut AuthInitContext<S>) -> AuthResult<()> {
-        self.2.lock().unwrap().push(self.0);
+        trace_lock(&self.2)?.push(self.0);
         context.register_user_fields(self.1.clone());
         Ok(())
     }
@@ -34,10 +34,14 @@ async fn legacy_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResul
             UserFieldConfig {
                 transform: Some(FieldTransforms {
                     input: Some(UserFieldTransform::new(move |value| {
-                        events.lock().unwrap().push(label);
+                        trace_lock(&events)?.push(label);
                         Ok(match value {
                             FieldValue::Undefined => FieldValue::Undefined,
-                            value => format!("{label}:{}", value.as_str().unwrap()).into(),
+                            value => format!(
+                                "{label}:{}",
+                                required(value.as_str(), "Expected a string field callback value")?
+                            )
+                            .into(),
                         })
                     })),
                     ..Default::default()
@@ -69,8 +73,8 @@ async fn legacy_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResul
         )
         .await?;
     assert_eq!(user.name.json()?, Some(json!("second:Name")));
-    assert_eq!(*events.lock().unwrap(), ["second"]);
-    assert_eq!(*initializations.lock().unwrap(), ["first", "second"]);
+    assert_eq!(*trace_lock(&events)?, ["second"]);
+    assert_eq!(*trace_lock(&initializations)?, ["first", "second"]);
     Ok(())
 }
 
@@ -89,7 +93,11 @@ fn prefix(prefix: &'static str) -> UserFieldConfig {
             input: Some(UserFieldTransform::new(move |value| {
                 Ok(match value {
                     FieldValue::Undefined => FieldValue::Undefined,
-                    value => format!("{prefix}:{}", value.as_str().unwrap()).into(),
+                    value => format!(
+                        "{prefix}:{}",
+                        required(value.as_str(), "Expected a string field callback value")?
+                    )
+                    .into(),
                 })
             })),
             ..Default::default()
@@ -170,8 +178,11 @@ async fn core_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<
             })
             .await?;
         assert_eq!(
-            serde_json::to_value(session)?["userAgent"],
-            format!("{expected}:Agent")
+            required(
+                serde_json::to_value(session)?.get("userAgent"),
+                "Expected the session userAgent field"
+            )?,
+            &json!(format!("{expected}:Agent"))
         );
         let verification = auth
             .store()

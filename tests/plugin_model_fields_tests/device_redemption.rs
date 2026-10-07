@@ -46,9 +46,12 @@ async fn observe<S: AuthSchema>(
         &token,
         move |row, _endpoint| {
             Box::pin(async move {
-                authorize_events.lock().unwrap().push(format!(
+                trace_lock(&authorize_events)?.push(format!(
                     "authorize:{}",
-                    row.scope.typed()?.as_deref().unwrap()
+                    required(
+                        row.scope.typed()?.as_deref(),
+                        "Expected the authorization scope"
+                    )?
                 ));
                 if mode == "authorization error" {
                     return Err(AuthError::internal("ordinary authorization error"));
@@ -61,9 +64,12 @@ async fn observe<S: AuthSchema>(
         },
         move |row, authorization, endpoint| {
             Box::pin(async move {
-                prepare_events.lock().unwrap().push(format!(
+                trace_lock(&prepare_events)?.push(format!(
                     "prepare:{}:{authorization}",
-                    row.scope.typed()?.as_deref().unwrap()
+                    required(
+                        row.scope.typed()?.as_deref(),
+                        "Expected the preparation scope"
+                    )?
                 ));
                 if mode == "preparation error" {
                     return Err(AuthError::internal("ordinary preparation error"));
@@ -103,7 +109,7 @@ async fn observe<S: AuthSchema>(
     let remaining = store.get_device_code_by_device_code(&token).await?;
     Ok(json!({
         "name": mode,
-        "events": *events.lock().unwrap(),
+        "events": *trace_lock(&events)?,
         "result": result,
         "error": error,
         "remaining": remaining.map(|row| json!({
@@ -126,20 +132,27 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, backend: &str) -> A
     }
     let fixture: Value =
         serde_json::from_str(include_str!("../fixtures/device-redemption-1.7.6.json"))?;
-    let expected = fixture["backends"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|item| item["backend"] == backend)
-        .unwrap();
-    assert_eq!(json!(cases), expected["cases"]);
+    let expected = required(
+        fixture.get("backends").and_then(Value::as_array),
+        "Expected captured redemption backends",
+    )?
+    .iter()
+    .find(|item| item.get("backend") == Some(&json!(backend)))
+    .ok_or_else(|| AuthError::internal("Missing captured redemption backend"))?;
+    assert_eq!(
+        &json!(cases),
+        required(expected.get("cases"), "Expected captured redemption cases")?
+    );
 
     let context = auth.context().clone();
     let observed = transaction(auth.store().as_ref(), move |transaction| {
         Box::pin(async move { observe(&context, Some(transaction), "success", &owner).await })
     })
     .await?;
-    assert_eq!(observed, cases[0]);
+    assert_eq!(
+        &observed,
+        required(cases.first(), "Expected the successful redemption case")?
+    );
     assert!(
         auth.store()
             .get_device_code_by_device_code("ordinary-device:success")
@@ -193,10 +206,14 @@ async fn hidden_user_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> Auth
             returned: Some(false),
             transform: Some(FieldTransforms {
                 output: Some(UserFieldTransform::new(move |value| {
-                    callback_outputs.lock().unwrap().push(value.clone());
+                    trace_lock(&callback_outputs)?.push(value.clone());
                     Ok(match value {
                         FieldValue::Undefined => FieldValue::Undefined,
-                        value => format!("{}:out", value.as_str().unwrap()).into(),
+                        value => format!(
+                            "{}:out",
+                            required(value.as_str(), "Expected a string field callback value")?
+                        )
+                        .into(),
                     })
                 })),
                 ..Default::default()
@@ -211,7 +228,7 @@ async fn hidden_user_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> Auth
         .await?;
     let created_at: FieldDate = "2030-01-01T00:00:00Z"
         .parse::<chrono::DateTime<chrono::Utc>>()
-        .unwrap()
+        .map_err(|error| AuthError::internal(format!("Invalid fixture timestamp: {error}")))?
         .into();
     let owner = auth
         .store()
@@ -241,7 +258,7 @@ async fn hidden_user_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> Auth
                 additional_fields: Default::default(),
             })
             .await?;
-        outputs.lock().unwrap().clear();
+        trace_lock(&outputs)?.clear();
         let observed = if mode == "transaction" {
             let context = auth.context().clone();
             transaction(auth.store().as_ref(), move |transaction| {
@@ -265,7 +282,7 @@ async fn hidden_user_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> Auth
             "{mode} redemption must preserve the complete internal user schema"
         );
         assert_eq!(
-            *outputs.lock().unwrap(),
+            *trace_lock(&outputs)?,
             [FieldValue::from("Hidden owner")],
             "{mode} redemption must apply the user output callback once"
         );

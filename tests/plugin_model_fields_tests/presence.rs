@@ -64,18 +64,14 @@ async fn passkey_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, sql: bool) 
             required: Some(false),
             transform: Some(FieldTransforms {
                 input: Some(UserFieldTransform::new(move |value| {
-                    input_trace
-                        .lock()
-                        .unwrap()
+                    trace_lock(&input_trace)?
                         .push(format!("input:{field}:{}", describe(&value.json()?)));
                     Ok(value)
                 })),
                 output: Some(UserFieldTransform::new(move |value| {
-                    output_trace
-                        .lock()
-                        .unwrap()
+                    trace_lock(&output_trace)?
                         .push(format!("output:{field}:{}", describe(&value.json()?)));
-                    Ok(output.lock().unwrap().clone().unwrap_or(value))
+                    Ok(trace_lock(&output)?.clone().unwrap_or(value))
                 })),
             }),
             ..Default::default()
@@ -106,7 +102,7 @@ async fn passkey_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, sql: bool) 
     data.aaguid = Some(AAGUID.into()).into();
     let created = auth.store().create_passkey(data).await?;
     assert_eq!(
-        *trace.lock().unwrap(),
+        *trace_lock(&trace)?,
         [
             "input:name:\"Desk\"",
             &format!("input:aaguid:\"{AAGUID}\""),
@@ -114,14 +110,14 @@ async fn passkey_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, sql: bool) 
             &format!("output:aaguid:\"{AAGUID}\""),
         ]
     );
-    trace.lock().unwrap().clear();
+    trace_lock(&trace)?.clear();
     for expected in [
         Some(json!("Display label")),
         Some(json!("")),
         Some(Value::Null),
         None,
     ] {
-        *output.lock().unwrap() = Some(
+        *trace_lock(&output)? = Some(
             expected
                 .clone()
                 .map(FieldValue::from_json)
@@ -130,38 +126,55 @@ async fn passkey_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, sql: bool) 
         );
         let rows = auth.store().list_passkeys_by_user(&owner).await?;
         assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0].name.json()?, expected);
-        assert_eq!(rows[0].aaguid.json()?, expected);
-        let view = serde_json::to_value(PasskeyView::from(&rows[0]))?;
+        let row = required(
+            rows.first(),
+            "Passkey list must contain the created credential",
+        )?;
+        assert_eq!(row.name.json()?, expected);
+        assert_eq!(row.aaguid.json()?, expected);
+        let view = serde_json::to_value(PasskeyView::from(row))?;
         for field in ["name", "aaguid"] {
             assert_display(&view, field, expected.clone());
         }
         assert_eq!(
-            *trace.lock().unwrap(),
+            *trace_lock(&trace)?,
             [
                 "output:name:\"Desk\"",
                 &format!("output:aaguid:\"{AAGUID}\"")
             ]
         );
-        trace.lock().unwrap().clear();
+        trace_lock(&trace)?.clear();
         let body = read(&auth, &token, "/passkey/list-user-passkeys", None).await?;
-        assert_eq!(body.as_array().unwrap().len(), 1);
+        assert_eq!(
+            required(body.as_array(), "Passkey response must be an array")?.len(),
+            1
+        );
         for field in ["name", "aaguid"] {
-            assert_display(&body[0], field, expected.clone());
+            assert_display(
+                required(
+                    body.get(0),
+                    "Passkey response must contain the created credential",
+                )?,
+                field,
+                expected.clone(),
+            );
         }
         assert_eq!(
-            *trace.lock().unwrap(),
+            *trace_lock(&trace)?,
             [
                 "output:name:\"Desk\"",
                 &format!("output:aaguid:\"{AAGUID}\"")
             ]
         );
-        trace.lock().unwrap().clear();
+        trace_lock(&trace)?.clear();
     }
-    let stored = raw.get_passkey_by_id(created.id.typed()?).await?.unwrap();
+    let stored = required(
+        raw.get_passkey_by_id(created.id.typed()?).await?,
+        "Created Passkey must remain stored",
+    )?;
     assert_eq!(stored.name, Some("Desk".into()));
     assert_eq!(stored.aaguid, Some(AAGUID.into()));
-    *output.lock().unwrap() = None;
+    *trace_lock(&output)? = None;
     for null in [false, true] {
         let mut data = input(&owner, if null { "null" } else { "omitted" });
         data.name = if null {
@@ -174,7 +187,7 @@ async fn passkey_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, sql: bool) 
         let expected_input = if null { Some(Value::Null) } else { None };
         let expected_output = if sql || null { Some(Value::Null) } else { None };
         assert_eq!(
-            *trace.lock().unwrap(),
+            *trace_lock(&trace)?,
             [
                 format!("input:name:{}", describe(&expected_input)),
                 format!("input:aaguid:{}", describe(&expected_input)),
@@ -182,11 +195,11 @@ async fn passkey_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, sql: bool) 
                 format!("output:aaguid:{}", describe(&expected_output)),
             ]
         );
-        trace.lock().unwrap().clear();
+        trace_lock(&trace)?.clear();
         assert_eq!(row.name.json()?, expected_output);
         assert_eq!(row.aaguid.json()?, expected_output);
     }
-    *output.lock().unwrap() = Some(42.0.into());
+    *trace_lock(&output)? = Some(42.0.into());
     let updated = auth
         .store()
         .update_passkey_name(created.id.typed()?, "Updated display")
@@ -198,14 +211,17 @@ async fn passkey_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, sql: bool) 
         assert_display(&view, field, Some(json!(42)));
     }
     assert_eq!(
-        *trace.lock().unwrap(),
+        *trace_lock(&trace)?,
         [
             "input:name:\"Updated display\"",
             "output:name:\"Updated display\"",
             &format!("output:aaguid:\"{AAGUID}\"")
         ]
     );
-    let stored = raw.get_passkey_by_id(created.id.typed()?).await?.unwrap();
+    let stored = required(
+        raw.get_passkey_by_id(created.id.typed()?).await?,
+        "Updated Passkey must remain stored",
+    )?;
     assert_eq!(stored.name, Some("Updated display".into()));
     assert_eq!(stored.aaguid, Some(AAGUID.into()));
     Ok(())

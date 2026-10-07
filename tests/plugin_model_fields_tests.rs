@@ -101,10 +101,12 @@ fn config() -> AuthConfig {
 async fn sqlite() -> AuthResult<Arc<dyn AuthStore<BundledSchema>>> {
     let database = Database::connect("sqlite::memory:")
         .await
-        .expect("SQLite fixture connects");
-    migrator::run_migrations(&database)
-        .await
-        .expect("SQLite fixture migrates");
+        .map_err(|error| {
+            AuthError::internal(format!("SQLite fixture connection failed: {error}"))
+        })?;
+    migrator::run_migrations(&database).await.map_err(|error| {
+        AuthError::internal(format!("SQLite fixture migration failed: {error}"))
+    })?;
     Ok(Arc::new(SeaOrmStore::<BundledSchema>::new(
         config(),
         database,
@@ -113,6 +115,16 @@ async fn sqlite() -> AuthResult<Arc<dyn AuthStore<BundledSchema>>> {
 
 fn memory() -> Arc<dyn AuthStore<StatelessSchema>> {
     Arc::new(EphemeralStore::new(Arc::new(config())))
+}
+
+fn required<T>(value: Option<T>, context: &str) -> AuthResult<T> {
+    value.ok_or_else(|| AuthError::internal(context))
+}
+
+fn trace_lock<T>(trace: &Mutex<T>) -> AuthResult<std::sync::MutexGuard<'_, T>> {
+    trace
+        .lock()
+        .map_err(|_| AuthError::internal("Model field contract trace lock poisoned"))
 }
 
 fn input(owner: &str, name: &str) -> CreatePasskey {
@@ -156,29 +168,35 @@ async fn passkey_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResu
         on_update: Some(Arc::new(|| "Renewed".into())),
         transform: Some(FieldTransforms {
             input: Some(UserFieldTransform::new(move |value| {
-                input_events
-                    .lock()
-                    .unwrap()
-                    .push(format!("input:{}", value.json()?.unwrap()));
+                trace_lock(&input_events)?.push(format!(
+                    "input:{}",
+                    required(value.json()?, "Expected a present JSON callback value")?
+                ));
                 if value == FieldValue::from("input-error") {
                     return Err(AuthError::internal("ordinary input error"));
                 }
                 Ok(match value {
                     FieldValue::Undefined => FieldValue::Undefined,
-                    value => value.as_str().unwrap().trim().into(),
+                    value => required(value.as_str(), "Expected a string field callback value")?
+                        .trim()
+                        .into(),
                 })
             })),
             output: Some(UserFieldTransform::new(move |value| {
-                output_events
-                    .lock()
-                    .unwrap()
-                    .push(format!("output:{}", value.json()?.unwrap()));
+                trace_lock(&output_events)?.push(format!(
+                    "output:{}",
+                    required(value.json()?, "Expected a present JSON callback value")?
+                ));
                 if value == FieldValue::from("output-error") {
                     return Err(AuthError::internal("ordinary output error"));
                 }
                 Ok(match value {
                     FieldValue::Undefined => FieldValue::Undefined,
-                    value => format!("{}:out", value.as_str().unwrap()).into(),
+                    value => format!(
+                        "{}:out",
+                        required(value.as_str(), "Expected a string field callback value")?
+                    )
+                    .into(),
                 })
             })),
         }),
@@ -194,33 +212,31 @@ async fn passkey_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResu
         .store()
         .create_passkey(input(&owner, "  Desk  "))
         .await?;
-    assert_eq!(created.name.typed().unwrap().as_deref(), Some("Desk:out"));
+    assert_eq!(created.name.typed()?.as_deref(), Some("Desk:out"));
     assert_eq!(created.credential.typed()?, "ordinary-private-record");
     assert_eq!(
-        *events.lock().unwrap(),
+        *trace_lock(&events)?,
         ["input:\"  Desk  \"", "output:\"Desk\""]
     );
     let id = created.id.typed()?;
     assert_eq!(
         raw.get_passkey_by_id(id)
             .await?
-            .unwrap()
+            .ok_or_else(|| AuthError::internal("Expected the stored model record"))?
             .name
-            .typed()
-            .unwrap()
+            .typed()?
             .as_deref(),
         Some("Desk")
     );
     let updated = auth.store().update_passkey_name(id, "  Mobile  ").await?;
-    assert_eq!(updated.name.typed().unwrap().as_deref(), Some("Mobile:out"));
+    assert_eq!(updated.name.typed()?.as_deref(), Some("Mobile:out"));
     assert_eq!(
         auth.store()
             .get_passkey_by_id(id)
             .await?
-            .unwrap()
+            .ok_or_else(|| AuthError::internal("Expected the stored model record"))?
             .name
-            .typed()
-            .unwrap()
+            .typed()?
             .as_deref(),
         Some("Mobile:out")
     );
@@ -228,10 +244,9 @@ async fn passkey_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResu
         auth.store()
             .get_passkey_by_credential_id(&created.credential_id)
             .await?
-            .unwrap()
+            .ok_or_else(|| AuthError::internal("Expected the stored model record"))?
             .name
-            .typed()
-            .unwrap()
+            .typed()?
             .as_deref(),
         Some("Mobile:out")
     );
@@ -247,17 +262,13 @@ async fn passkey_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResu
             },
         )
         .await?;
-    assert_eq!(
-        renewed.name.typed().unwrap().as_deref(),
-        Some("Renewed:out")
-    );
+    assert_eq!(renewed.name.typed()?.as_deref(), Some("Renewed:out"));
     assert_eq!(
         raw.get_passkey_by_id(id)
             .await?
-            .unwrap()
+            .ok_or_else(|| AuthError::internal("Expected the stored model record"))?
             .name
-            .typed()
-            .unwrap()
+            .typed()?
             .as_deref(),
         Some("Renewed")
     );
@@ -265,30 +276,32 @@ async fn passkey_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResu
         .store()
         .create_passkey(input(&owner, " Travel "))
         .await?;
-    events.lock().unwrap().clear();
+    trace_lock(&events)?.clear();
     let listed = auth.store().list_passkeys_by_user(&owner).await?;
     let expected_events: Vec<_> = listed
         .iter()
         .map(|row| {
-            format!(
-                "output:{}",
-                json!(
-                    row.name
-                        .typed()
-                        .unwrap()
-                        .as_ref()
-                        .unwrap()
-                        .strip_suffix(":out")
-                        .unwrap()
-                )
-            )
+            let name = required(
+                row.name.typed()?.as_deref(),
+                "Expected a projected passkey name",
+            )?;
+            let stored = required(
+                name.strip_suffix(":out"),
+                "Expected the passkey output suffix",
+            )?;
+            Ok(format!("output:{}", json!(stored)))
         })
-        .collect();
-    assert_eq!(*events.lock().unwrap(), expected_events);
+        .collect::<AuthResult<_>>()?;
+    assert_eq!(*trace_lock(&events)?, expected_events);
     let mut names: Vec<_> = listed
         .iter()
-        .map(|row| row.name.typed().unwrap().clone().unwrap())
-        .collect();
+        .map(|row| {
+            required(
+                row.name.typed()?.clone(),
+                "Expected a projected passkey name",
+            )
+        })
+        .collect::<AuthResult<_>>()?;
     names.sort();
     assert_eq!(names, ["Renewed:out", "Travel:out"]);
     assert!(listed.iter().all(|row| row.credential
@@ -299,7 +312,7 @@ async fn passkey_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResu
         stored.iter().map(|row| &row.id).collect::<Vec<_>>()
     );
 
-    events.lock().unwrap().clear();
+    trace_lock(&events)?.clear();
     let rollback_owner = owner.clone();
     let rollback: AuthResult<()> =
         better_auth_core::store::transaction(auth.store().as_ref(), |tx| {
@@ -307,19 +320,24 @@ async fn passkey_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResu
                 let row = tx
                     .create_passkey(input(&rollback_owner, " Rollback "))
                     .await?;
-                assert_eq!(row.name.typed().unwrap().as_deref(), Some("Rollback:out"));
+                assert_eq!(row.name.typed()?.as_deref(), Some("Rollback:out"));
                 Err(AuthError::internal("ordinary transaction rollback"))
             })
         })
         .await;
-    original_error(rollback.unwrap_err(), "ordinary transaction rollback");
+    original_error(
+        rollback
+            .err()
+            .ok_or_else(|| AuthError::internal("Expected the model operation to fail"))?,
+        "ordinary transaction rollback",
+    );
     assert!(
         raw.get_passkey_by_credential_id("credential: Rollback ")
             .await?
             .is_none()
     );
     assert_eq!(
-        *events.lock().unwrap(),
+        *trace_lock(&events)?,
         ["input:\" Rollback \"", "output:\"Rollback\""]
     );
 
@@ -327,7 +345,8 @@ async fn passkey_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResu
         auth.store()
             .create_passkey(input(&owner, "input-error"))
             .await
-            .unwrap_err(),
+            .err()
+            .ok_or_else(|| AuthError::internal("Expected the model operation to fail"))?,
         "ordinary input error",
     );
     assert_eq!(raw.list_passkeys_by_user(&owner).await?.len(), 2);
@@ -335,16 +354,16 @@ async fn passkey_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResu
         auth.store()
             .update_passkey_name(id, "input-error")
             .await
-            .unwrap_err(),
+            .err()
+            .ok_or_else(|| AuthError::internal("Expected the model operation to fail"))?,
         "ordinary input error",
     );
     assert_eq!(
         raw.get_passkey_by_id(id)
             .await?
-            .unwrap()
+            .ok_or_else(|| AuthError::internal("Expected the stored model record"))?
             .name
-            .typed()
-            .unwrap()
+            .typed()?
             .as_deref(),
         Some("Renewed")
     );
@@ -352,16 +371,16 @@ async fn passkey_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResu
         auth.store()
             .create_passkey(input(&owner, "output-error"))
             .await
-            .unwrap_err(),
+            .err()
+            .ok_or_else(|| AuthError::internal("Expected the model operation to fail"))?,
         "ordinary output error",
     );
     assert_eq!(
         raw.get_passkey_by_credential_id("credential:output-error")
             .await?
-            .unwrap()
+            .ok_or_else(|| AuthError::internal("Expected the stored model record"))?
             .name
-            .typed()
-            .unwrap()
+            .typed()?
             .as_deref(),
         Some("output-error")
     );
@@ -410,7 +429,7 @@ async fn async_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult
     let owner = owner(raw.as_ref(), "async").await?;
     let store = auth.store().clone();
     let pending = tokio::spawn(async move { store.create_passkey(input(&owner, "Waiting")).await });
-    let call = calls.recv().await.unwrap();
+    let call = required(calls.recv().await, "Expected the next field callback")?;
     assert_eq!(call.stage, "input");
     assert_eq!(call.value, FieldValue::from("Waiting"));
     assert!(
@@ -418,23 +437,31 @@ async fn async_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult
             .await?
             .is_none()
     );
-    call.reply.send(Ok(FieldValue::from("Stored"))).unwrap();
-    let call = calls.recv().await.unwrap();
+    call.reply
+        .send(Ok(FieldValue::from("Stored")))
+        .map_err(|_| AuthError::internal("Field callback receiver closed"))?;
+    let call = required(calls.recv().await, "Expected the next field callback")?;
     assert_eq!(call.stage, "output");
     assert_eq!(call.value, FieldValue::from("Stored"));
     assert_eq!(
         raw.get_passkey_by_credential_id("credential:Waiting")
             .await?
-            .unwrap()
+            .ok_or_else(|| AuthError::internal("Expected the stored model record"))?
             .name
-            .typed()
-            .unwrap()
+            .typed()?
             .as_deref(),
         Some("Stored")
     );
-    call.reply.send(Ok(FieldValue::from("Projected"))).unwrap();
+    call.reply
+        .send(Ok(FieldValue::from("Projected")))
+        .map_err(|_| AuthError::internal("Field callback receiver closed"))?;
     assert_eq!(
-        pending.await.unwrap()?.name.typed().unwrap().as_deref(),
+        pending
+            .await
+            .map_err(|error| AuthError::internal(format!("Model field task failed: {error}")))??
+            .name
+            .typed()?
+            .as_deref(),
         Some("Projected")
     );
     Ok(())

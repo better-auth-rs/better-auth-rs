@@ -102,34 +102,31 @@ async fn contract<S: AuthSchema>(
         if column.is_some() && mode != "database" {
             cached_name(cache.as_ref(), id, expected).await?;
         }
-        assert_eq!(
-            created.api_key.name.typed().unwrap().as_deref(),
-            Some(expected)
-        );
+        assert_eq!(created.api_key.name.typed()?.as_deref(), Some(expected));
         if cached_only {
-            assert!(events.lock().unwrap().is_empty());
+            assert!(trace_lock(&events)?.is_empty());
             assert!(raw.get_api_key_by_id(id).await?.is_none());
         } else {
             assert_eq!(
-                *events.lock().unwrap(),
+                *trace_lock(&events)?,
                 ["input:\"  Desk  \"", "output:\"Desk\""]
             );
             assert_eq!(
-                raw.get_api_key_by_id(id)
-                    .await?
-                    .unwrap()
-                    .name
-                    .typed()
-                    .unwrap()
-                    .as_deref(),
+                required(
+                    raw.get_api_key_by_id(id).await?,
+                    "Database API Key must remain stored"
+                )?
+                .name
+                .typed()?
+                .as_deref(),
                 Some("Desk")
             );
         }
-        events.lock().unwrap().clear();
+        trace_lock(&events)?.clear();
         let found = read(&auth, token, "/api-key/get", Some(json!({"id":id}))).await?;
-        assert_eq!(found["name"], expected);
+        assert_eq!(found.get("name"), Some(&json!(expected)));
         assert_eq!(
-            *events.lock().unwrap(),
+            *trace_lock(&events)?,
             if mode == "database" {
                 vec!["output:\"Desk\"".to_owned()]
             } else {
@@ -137,12 +134,18 @@ async fn contract<S: AuthSchema>(
             }
         );
         for turn in 0..2 {
-            events.lock().unwrap().clear();
+            trace_lock(&events)?.clear();
             let listed = read(&auth, token, "/api-key/list", None).await?;
-            assert_eq!(listed["apiKeys"][0]["name"], expected);
+            assert_eq!(
+                listed
+                    .get("apiKeys")
+                    .and_then(|rows| rows.get(0))
+                    .and_then(|row| row.get("name")),
+                Some(&json!(expected))
+            );
             let database = mode == "database" || mode == "fallback" && turn == 0;
             assert_eq!(
-                *events.lock().unwrap(),
+                *trace_lock(&events)?,
                 if database {
                     vec!["output:\"Desk\"".to_owned()]
                 } else {
@@ -150,7 +153,7 @@ async fn contract<S: AuthSchema>(
                 }
             );
         }
-        events.lock().unwrap().clear();
+        trace_lock(&events)?.clear();
         let updated = auth
             .api_keys()?
             .update(
@@ -167,7 +170,7 @@ async fn contract<S: AuthSchema>(
         } else {
             "Mobile:out"
         };
-        assert_eq!(updated.name.typed().unwrap().as_deref(), Some(expected));
+        assert_eq!(updated.name.typed()?.as_deref(), Some(expected));
         if column.is_some() && mode != "database" {
             cached_name(cache.as_ref(), id, expected).await?;
         }
@@ -183,20 +186,20 @@ async fn contract<S: AuthSchema>(
         .into_iter()
         .map(str::to_owned)
         .collect();
-        assert_eq!(*events.lock().unwrap(), expected_events);
+        assert_eq!(*trace_lock(&events)?, expected_events);
         if mode == "fallback" {
-            events.lock().unwrap().clear();
+            trace_lock(&events)?.clear();
             cache.delete(&format!("api-key:by-id:{id}")).await?;
             let found = read(&auth, token, "/api-key/get", Some(json!({"id":id}))).await?;
-            assert_eq!(found["name"], expected);
-            assert_eq!(*events.lock().unwrap(), ["output:\"Mobile\""]);
+            assert_eq!(found.get("name"), Some(&json!(expected)));
+            assert_eq!(*trace_lock(&events)?, ["output:\"Mobile\""]);
             if column.is_some() {
                 cached_name(cache.as_ref(), id, expected).await?;
             }
-            events.lock().unwrap().clear();
+            trace_lock(&events)?.clear();
             let found = read(&auth, token, "/api-key/get", Some(json!({"id":id}))).await?;
-            assert_eq!(found["name"], expected);
-            assert!(events.lock().unwrap().is_empty());
+            assert_eq!(found.get("name"), Some(&json!(expected)));
+            assert!(trace_lock(&events)?.is_empty());
         }
     }
     Ok(())

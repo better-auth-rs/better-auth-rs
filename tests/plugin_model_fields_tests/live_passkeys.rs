@@ -36,6 +36,10 @@ fn passkey_input(owner: &str, key: &str, before: &str) -> CreatePasskey {
     value
 }
 
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "Passkey projection must assert every unchanged native field before normalizing generated values"
+)]
 fn visible(row: &Passkey, stored: &[Passkey], owner: &str, path: &str) -> AuthResult<Value> {
     let (key, _, _) = ROWS
         .iter()
@@ -70,11 +74,18 @@ fn visible(row: &Passkey, stored: &[Passkey], owner: &str, path: &str) -> AuthRe
     reason = "The paired contract requires complete scenarios, selected rows, declared string fields, and callback traces"
 )]
 async fn observe<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, case: &Value) -> AuthResult<Value> {
-    let path = case["path"].as_str().expect("captured path");
-    let configured = case["configuredAaguid"]
-        .as_bool()
+    let path = case
+        .get("path")
+        .and_then(Value::as_str)
+        .expect("captured path");
+    let configured = case
+        .get("configuredAaguid")
+        .and_then(Value::as_bool)
         .expect("captured field policy");
-    let failure = case["failOutput"].as_bool().expect("captured error policy");
+    let failure = case
+        .get("failOutput")
+        .and_then(Value::as_bool)
+        .expect("captured error policy");
     let owner = owner(raw.as_ref(), "live-passkey").await?;
     let mut writers = BTreeMap::new();
     for (key, _, after) in ROWS {
@@ -181,6 +192,12 @@ async fn observe<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, case: &Value) -> Aut
             );
         }
     }
+    let first_seed = || {
+        required(
+            seeded.first(),
+            "Passkey operation must have a seeded credential",
+        )
+    };
     let result = match path {
         "create" => reader
             .store()
@@ -189,29 +206,29 @@ async fn observe<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, case: &Value) -> Aut
             .map(|row| vec![row]),
         "get-id" => reader
             .store()
-            .get_passkey_by_id(seeded[0].id.typed()?)
+            .get_passkey_by_id(first_seed()?.id.typed()?)
             .await
             .map(|row| vec![row.expect("selected Passkey exists")]),
         "get-credential" => reader
             .store()
-            .get_passkey_by_credential_id(&seeded[0].credential_id)
+            .get_passkey_by_credential_id(&first_seed()?.credential_id)
             .await
             .map(|row| vec![row.expect("selected Passkey exists")]),
         "list" => reader.store().list_passkeys_by_user(&owner).await,
         "update-name" => reader
             .store()
-            .update_passkey_name(seeded[0].id.typed()?, "Desk-renamed")
+            .update_passkey_name(first_seed()?.id.typed()?, "Desk-renamed")
             .await
             .map(|row| vec![row]),
         "update-auth" => reader
             .store()
             .update_passkey_authentication(
-                &seeded[0].id,
+                &first_seed()?.id,
                 UpdatePasskeyAuthentication::Legacy {
-                    credential: seeded[0].credential.typed()?.clone(),
+                    credential: first_seed()?.credential.typed()?.clone(),
                     counter: 1,
-                    backed_up: seeded[0].backed_up,
-                    device_type: seeded[0].device_type.clone(),
+                    backed_up: first_seed()?.backed_up,
+                    device_type: first_seed()?.device_type.clone(),
                 },
             )
             .await
@@ -257,20 +274,24 @@ async fn observe<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, case: &Value) -> Aut
 async fn contract(backend: &str) -> AuthResult<()> {
     let fixture: Value =
         serde_json::from_str(include_str!("../fixtures/passkey-live-fields-1.7.6.json"))?;
-    assert_eq!(fixture["version"], "1.7.6");
-    let backends = fixture["backends"].as_array().expect("captured backends");
+    assert_eq!(fixture.get("version"), Some(&json!("1.7.6")));
+    let backends = fixture
+        .get("backends")
+        .and_then(Value::as_array)
+        .expect("captured backends");
     assert_eq!(
         backends
             .iter()
-            .map(|case| case["backend"].as_str())
+            .map(|case| case.get("backend").and_then(Value::as_str))
             .collect::<Vec<_>>(),
         [Some("memory"), Some("sqlite")]
     );
     let cases = backends
         .iter()
-        .find(|case| case["backend"] == backend)
-        .expect("captured backend")["cases"]
-        .as_array()
+        .find(|case| case.get("backend").and_then(Value::as_str) == Some(backend))
+        .expect("captured backend")
+        .get("cases")
+        .and_then(Value::as_array)
         .expect("captured cases");
     assert_eq!(cases.len(), 9);
     for case in cases {

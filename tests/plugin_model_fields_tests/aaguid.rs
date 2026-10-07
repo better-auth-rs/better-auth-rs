@@ -18,11 +18,13 @@ fn policy(
             .then(|| Arc::new(|| UPDATED.into()) as Arc<dyn Fn() -> FieldValue + Send + Sync>),
         transform: Some(FieldTransforms {
             input: Some(UserFieldTransform::new(move |value| {
-                trace.lock().unwrap().push(format!("input:{field}"));
+                trace_lock(&trace)?.push(format!("input:{field}"));
                 if field == "aaguid" && failure.load(Ordering::SeqCst) == 1 {
                     return Err(AuthError::internal("ordinary AAGUID input error"));
                 }
-                let text = value.as_str().unwrap().trim().to_owned();
+                let text = required(value.as_str(), "Expected a string field callback value")?
+                    .trim()
+                    .to_owned();
                 Ok(if field == "aaguid" {
                     text.to_ascii_lowercase()
                 } else {
@@ -31,11 +33,9 @@ fn policy(
                 .into())
             })),
             output: Some(UserFieldTransform::new(move |value| {
-                let text = value.as_str().unwrap().to_owned();
-                output_trace
-                    .lock()
-                    .unwrap()
-                    .push(format!("output:{field}:{text}"));
+                let text =
+                    required(value.as_str(), "Expected a string field callback value")?.to_owned();
+                trace_lock(&output_trace)?.push(format!("output:{field}:{text}"));
                 if field == "aaguid" && output_failure.load(Ordering::SeqCst) == 2 {
                     return Err(AuthError::internal("ordinary AAGUID output error"));
                 }
@@ -78,10 +78,10 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
     let mut data = input(&owner, " Desk ");
     data.aaguid = Some(format!(" {FIRST} ")).into();
     let created = auth.store().create_passkey(data).await?;
-    assert_eq!(created.name.typed().unwrap().as_deref(), Some("Desk:out"));
-    assert_eq!(created.aaguid.typed().unwrap().as_deref(), Some(FIRST));
+    assert_eq!(created.name.typed()?.as_deref(), Some("Desk:out"));
+    assert_eq!(created.aaguid.typed()?.as_deref(), Some(FIRST));
     assert_eq!(
-        *trace.lock().unwrap(),
+        *trace_lock(&trace)?,
         [
             "input:name".into(),
             "input:aaguid".into(),
@@ -90,7 +90,10 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
         ]
     );
     let id = created.id.typed()?.clone();
-    let stored = raw.get_passkey_by_id(&id).await?.unwrap();
+    let stored = raw
+        .get_passkey_by_id(&id)
+        .await?
+        .ok_or_else(|| AuthError::internal("Expected the stored model record"))?;
     assert_eq!(stored.aaguid, Some(FIRST.to_ascii_lowercase()));
     assert_eq!(stored.credential, created.credential);
 
@@ -98,12 +101,12 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
         .store()
         .create_passkey(input(&owner, " Default "))
         .await?;
-    assert_eq!(defaulted.aaguid.typed().unwrap().as_deref(), Some(FIRST));
-    trace.lock().unwrap().clear();
+    assert_eq!(defaulted.aaguid.typed()?.as_deref(), Some(FIRST));
+    trace_lock(&trace)?.clear();
     let updated = auth.store().update_passkey_name(&id, " Mobile ").await?;
-    assert_eq!(updated.aaguid.typed().unwrap().as_deref(), Some(UPDATED));
+    assert_eq!(updated.aaguid.typed()?.as_deref(), Some(UPDATED));
     assert_eq!(
-        *trace.lock().unwrap(),
+        *trace_lock(&trace)?,
         [
             "input:name".into(),
             "input:aaguid".into(),
@@ -111,7 +114,7 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
             format!("output:aaguid:{}", UPDATED.to_ascii_lowercase())
         ]
     );
-    trace.lock().unwrap().clear();
+    trace_lock(&trace)?.clear();
     let updated = auth
         .store()
         .update_passkey_authentication(
@@ -125,9 +128,9 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
         )
         .await?;
     assert_eq!(updated.counter, 1);
-    assert_eq!(updated.name.typed().unwrap().as_deref(), Some("Mobile:out"));
+    assert_eq!(updated.name.typed()?.as_deref(), Some("Mobile:out"));
     assert_eq!(
-        *trace.lock().unwrap(),
+        *trace_lock(&trace)?,
         [
             "input:aaguid".into(),
             "output:name:Mobile".into(),
@@ -135,15 +138,18 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
         ]
     );
     for found in [
-        auth.store().get_passkey_by_id(&id).await?.unwrap(),
+        auth.store()
+            .get_passkey_by_id(&id)
+            .await?
+            .ok_or_else(|| AuthError::internal("Expected the stored model record"))?,
         auth.store()
             .get_passkey_by_credential_id(&created.credential_id)
             .await?
-            .unwrap(),
+            .ok_or_else(|| AuthError::internal("Expected the stored model record"))?,
     ] {
-        assert_eq!(found.aaguid.typed().unwrap().as_deref(), Some(UPDATED));
+        assert_eq!(found.aaguid.typed()?.as_deref(), Some(UPDATED));
     }
-    trace.lock().unwrap().clear();
+    trace_lock(&trace)?.clear();
     let rows = auth.store().list_passkeys_by_user(&owner).await?;
     assert_eq!(rows.len(), 2);
     let expected_names: Vec<_> = rows
@@ -170,10 +176,10 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
                 .map(|value| format!("output:aaguid:{}", value.to_ascii_lowercase())),
         )
         .collect();
-    assert_eq!(*trace.lock().unwrap(), expected);
+    assert_eq!(*trace_lock(&trace)?, expected);
     for ((row, name), aaguid) in rows.iter().zip(expected_names).zip(expected_aaguids) {
         assert_eq!(row.name, Some(format!("{name}:out")));
-        assert_eq!(row.aaguid.typed().unwrap().as_deref(), Some(aaguid));
+        assert_eq!(row.aaguid.typed()?.as_deref(), Some(aaguid));
     }
 
     let rollback_owner = owner.clone();
@@ -183,12 +189,17 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
                 let row = tx
                     .create_passkey(input(&rollback_owner, "AaguidRollback"))
                     .await?;
-                assert_eq!(row.aaguid.typed().unwrap().as_deref(), Some(FIRST));
+                assert_eq!(row.aaguid.typed()?.as_deref(), Some(FIRST));
                 Err(AuthError::internal("ordinary AAGUID rollback"))
             })
         })
         .await;
-    original_error(rollback.unwrap_err(), "ordinary AAGUID rollback");
+    original_error(
+        rollback
+            .err()
+            .ok_or_else(|| AuthError::internal("Expected the model operation to fail"))?,
+        "ordinary AAGUID rollback",
+    );
     assert!(
         raw.get_passkey_by_credential_id("credential:AaguidRollback")
             .await?
@@ -199,22 +210,30 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
         auth.store()
             .update_passkey_name(&id, "Input failure")
             .await
-            .unwrap_err(),
+            .err()
+            .ok_or_else(|| AuthError::internal("Expected the model operation to fail"))?,
         "ordinary AAGUID input error",
     );
-    let stored = raw.get_passkey_by_id(&id).await?.unwrap();
-    assert_eq!(stored.name.typed().unwrap().as_deref(), Some("Mobile"));
+    let stored = raw
+        .get_passkey_by_id(&id)
+        .await?
+        .ok_or_else(|| AuthError::internal("Expected the stored model record"))?;
+    assert_eq!(stored.name.typed()?.as_deref(), Some("Mobile"));
     assert_eq!(stored.counter, 1);
     failure.store(2, Ordering::SeqCst);
     original_error(
         auth.store()
             .update_passkey_name(&id, " Output ")
             .await
-            .unwrap_err(),
+            .err()
+            .ok_or_else(|| AuthError::internal("Expected the model operation to fail"))?,
         "ordinary AAGUID output error",
     );
-    let stored = raw.get_passkey_by_id(&id).await?.unwrap();
-    assert_eq!(stored.name.typed().unwrap().as_deref(), Some("Output"));
+    let stored = raw
+        .get_passkey_by_id(&id)
+        .await?
+        .ok_or_else(|| AuthError::internal("Expected the stored model record"))?;
+    assert_eq!(stored.name.typed()?.as_deref(), Some("Output"));
     assert_eq!(stored.aaguid, Some(UPDATED.to_ascii_lowercase()));
     assert_eq!(stored.counter, 1);
     failure.store(0, Ordering::SeqCst);
@@ -237,7 +256,7 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
         };
         let row = auth.store().create_passkey(data).await?;
         assert_eq!(row.name, Some(expected_name));
-        assert_eq!(row.aaguid.typed().unwrap().as_deref(), Some(FIRST));
+        assert_eq!(row.aaguid.typed()?.as_deref(), Some(FIRST));
     }
     Ok(())
 }
@@ -266,7 +285,7 @@ async fn awaited_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResu
         data.aaguid = Some(FIRST.into()).into();
         store.create_passkey(data).await
     });
-    let call = calls.recv().await.unwrap();
+    let call = required(calls.recv().await, "Expected the next field callback")?;
     assert_eq!((call.stage, call.value), ("input", FieldValue::from(FIRST)));
     assert!(
         raw.get_passkey_by_credential_id("credential:AaguidAwait")
@@ -274,8 +293,10 @@ async fn awaited_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResu
             .is_none()
     );
     let stored_aaguid = FieldValue::from(FIRST.to_ascii_lowercase());
-    call.reply.send(Ok(stored_aaguid)).unwrap();
-    let call = calls.recv().await.unwrap();
+    call.reply
+        .send(Ok(stored_aaguid))
+        .map_err(|_| AuthError::internal("Field callback receiver closed"))?;
+    let call = required(calls.recv().await, "Expected the next field callback")?;
     assert_eq!(
         (call.stage, call.value),
         ("output", FieldValue::from(FIRST.to_ascii_lowercase()))
@@ -283,14 +304,18 @@ async fn awaited_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResu
     assert_eq!(
         raw.get_passkey_by_credential_id("credential:AaguidAwait")
             .await?
-            .unwrap()
+            .ok_or_else(|| AuthError::internal("Expected the stored model record"))?
             .aaguid,
         Some(FIRST.to_ascii_lowercase())
     );
-    call.reply.send(Ok(FieldValue::from(FIRST))).unwrap();
-    let row = pending.await.unwrap()?;
-    assert_eq!(row.name.typed().unwrap().as_deref(), Some("AaguidAwait"));
-    assert_eq!(row.aaguid.typed().unwrap().as_deref(), Some(FIRST));
+    call.reply
+        .send(Ok(FieldValue::from(FIRST)))
+        .map_err(|_| AuthError::internal("Field callback receiver closed"))?;
+    let row = pending
+        .await
+        .map_err(|error| AuthError::internal(format!("Model field task failed: {error}")))??;
+    assert_eq!(row.name.typed()?.as_deref(), Some("AaguidAwait"));
+    assert_eq!(row.aaguid.typed()?.as_deref(), Some(FIRST));
     Ok(())
 }
 

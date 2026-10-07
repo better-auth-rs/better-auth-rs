@@ -64,6 +64,10 @@ struct Observation {
 }
 
 impl Observation {
+    #[expect(
+        clippy::panic_in_result_fn,
+        reason = "The observation must assert Device identity and polling metadata before normalization"
+    )]
     fn device(&self, row: &DeviceCode) -> AuthResult<Value> {
         assert_eq!(row.id, self.seeded.id);
         assert_eq!(
@@ -71,27 +75,38 @@ impl Observation {
             Some(self.owner.id.typed()?.as_str())
         );
         let mut value = serde_json::to_value(row)?;
-        value["id"] = json!("<device-id>");
-        value["userId"] = json!("<owner-id>");
+        let _ = required(value.as_object_mut(), "Expected a model observation object")?
+            .insert("id".to_owned(), json!("<device-id>"));
+        let _ = required(value.as_object_mut(), "Expected a model observation object")?
+            .insert("userId".to_owned(), json!("<owner-id>"));
         if let Some(polled) = &row.last_polled_at {
             assert!(polled.milliseconds() >= self.started_at.timestamp_millis() as f64);
             assert!(polled.milliseconds() <= Utc::now().timestamp_millis() as f64);
             assert!(value.get("lastPolledAt").is_some_and(Value::is_string));
-            value["lastPolledAt"] = json!("<polled-at>");
+            let _ = required(value.as_object_mut(), "Expected a model observation object")?
+                .insert("lastPolledAt".to_owned(), json!("<polled-at>"));
         } else {
             assert_eq!(value.get("lastPolledAt"), Some(&Value::Null));
         }
         if let Some(interval) = row.polling_interval {
             // JSON has one numeric type; preserve the value with JavaScript's integral spelling.
-            value["pollingInterval"] = serde_json::from_str(&interval.to_string())?;
+            let _ = required(value.as_object_mut(), "Expected a model observation object")?.insert(
+                "pollingInterval".to_owned(),
+                serde_json::from_str(&interval.to_string())?,
+            );
         }
         Ok(value)
     }
 
+    #[expect(
+        clippy::panic_in_result_fn,
+        reason = "The observation must assert the redeemed User identity before normalization"
+    )]
     fn user(&self, row: &UserView) -> AuthResult<Value> {
         assert_eq!(row.id, self.owner.id);
         let mut value = serde_json::to_value(row)?;
-        value["id"] = json!("<owner-id>");
+        let _ = required(value.as_object_mut(), "Expected a model observation object")?
+            .insert("id".to_owned(), json!("<owner-id>"));
         Ok(value)
     }
 
@@ -130,7 +145,9 @@ async fn setup<S: AuthSchema>(
         .plugin(Fields(vec![(EntityRole::DeviceCode, model_fields)]))
         .build()
         .await?;
-    let owner_time = "2030-01-01T00:00:00Z".parse::<DateTime<Utc>>().unwrap();
+    let owner_time = "2030-01-01T00:00:00Z"
+        .parse::<DateTime<Utc>>()
+        .map_err(|error| AuthError::internal(format!("Invalid fixture timestamp: {error}")))?;
     let owner = auth
         .store()
         .create_user(CreateUser {
@@ -151,7 +168,9 @@ async fn setup<S: AuthSchema>(
             user_id: Some(owner.id.typed()?.clone()),
             expires_at: "2100-01-01T00:00:00Z"
                 .parse::<DateTime<Utc>>()
-                .unwrap()
+                .map_err(|error| {
+                    AuthError::internal(format!("Invalid fixture timestamp: {error}"))
+                })?
                 .into(),
             status: "approved".into(),
             last_polled_at: None,
@@ -197,7 +216,7 @@ async fn redeem<S: AuthSchema>(
         move |row, _| {
             Box::pin(async move {
                 let visible = authorize.device(row)?;
-                authorize.events.lock().unwrap().push(json!({
+                trace_lock(&authorize.events)?.push(json!({
                     "type": "authorize", "row": visible,
                 }));
                 Ok(DeviceCodeRedemptionAuthorization {
@@ -212,7 +231,7 @@ async fn redeem<S: AuthSchema>(
         move |row, authorization, endpoint| {
             Box::pin(async move {
                 let visible = prepare.device(row)?;
-                prepare.events.lock().unwrap().push(json!({
+                trace_lock(&prepare.events)?.push(json!({
                     "type": "prepare", "row": visible,
                     "authorizationContext": authorization,
                 }));
@@ -233,16 +252,16 @@ async fn redeem<S: AuthSchema>(
                     )
                     .await?;
                 let visible = prepare.device(&prepared)?;
-                prepare.events.lock().unwrap().push(json!({
+                trace_lock(&prepare.events)?.push(json!({
                     "type": "prepared", "row": visible,
                 }));
-                Ok(json!({"issuedFor": authorization["issuer"]}))
+                Ok(json!({"issuedFor": required(authorization.get("issuer"), "Expected the authorization issuer")?}))
             })
         },
     )
     .await;
     let remaining = observation.remaining(store).await?;
-    *observation.inside_remaining.lock().unwrap() = Some(remaining);
+    *trace_lock(&observation.inside_remaining)? = Some(remaining);
     let result = result?;
     Ok(json!({
         "claimedDeviceCode": observation.device(&result.claimed_device_code)?,
@@ -289,32 +308,41 @@ async fn contract<S: AuthSchema>(
         "name": name, "mode": mode,
         "ownershipWhere": {"field": field, "value": target},
         "before": before,
-        "events": observation.events.lock().unwrap().clone(),
+        "events": trace_lock(&observation.events)?.clone(),
         "result": result, "error": error,
-        "insideRemaining": observation.inside_remaining.lock().unwrap().clone().unwrap(),
+        "insideRemaining": required(trace_lock(&observation.inside_remaining)?.clone(), "Expected the transaction storage observation")?,
         "remaining": remaining,
     });
     let fixture: Value =
         serde_json::from_str(include_str!("../fixtures/device-ownership-1.7.6.json"))?;
-    assert_eq!(fixture["version"], "1.7.6");
-    let mut expected = fixture["backends"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|item| item["backend"] == backend)
-        .unwrap()["cases"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|item| item["name"] == name && item["mode"] == mode)
-        .unwrap()
-        .clone();
-    let events = expected["events"].as_array_mut().unwrap();
+    assert_eq!(fixture.get("version"), Some(&json!("1.7.6")));
+    let captured_backend = required(
+        fixture.get("backends").and_then(Value::as_array),
+        "Expected captured ownership backends",
+    )?
+    .iter()
+    .find(|item| item.get("backend") == Some(&json!(backend)))
+    .ok_or_else(|| AuthError::internal("Missing captured ownership backend"))?;
+    let mut expected = required(
+        captured_backend.get("cases").and_then(Value::as_array),
+        "Expected captured ownership cases",
+    )?
+    .iter()
+    .find(|item| item.get("name") == Some(&json!(name)) && item.get("mode") == Some(&json!(mode)))
+    .ok_or_else(|| AuthError::internal("Missing captured ownership case"))?
+    .clone();
+    let events = required(
+        expected.get_mut("events").and_then(Value::as_array_mut),
+        "Expected captured ownership events",
+    )?;
     assert_eq!(
         events
             .iter()
-            .map(|event| event["type"].as_str().unwrap())
-            .collect::<Vec<_>>(),
+            .map(|event| required(
+                event.get("type").and_then(Value::as_str),
+                "Expected the ownership event type"
+            ))
+            .collect::<AuthResult<Vec<_>>>()?,
         [
             "authorize",
             "prepare",
@@ -348,6 +376,10 @@ async fn sqlite_device_ownership_equality_matches_upstream() -> AuthResult<()> {
 }
 
 #[tokio::test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "The contract must assert that conflicting transactions preserve the external Device record"
+)]
 async fn memory_device_ownership_change_before_commit_preserves_external_record() -> AuthResult<()>
 {
     for (field, target, external_value) in [
@@ -365,16 +397,22 @@ async fn memory_device_ownership_change_before_commit_preserves_external_record(
                 Box::pin(async move {
                     let result =
                         redeem(&context, Some(transaction), active, (field, target)).await?;
-                    consumed.send(()).unwrap();
-                    continuation.await.unwrap();
+                    consumed
+                        .send(())
+                        .map_err(|_| AuthError::internal("Field callback receiver closed"))?;
+                    continuation.await.map_err(|_| {
+                        AuthError::internal("Device transaction continuation closed")
+                    })?;
                     Ok(result)
                 })
             })
             .await
         });
-        consumption.await.unwrap();
+        consumption
+            .await
+            .map_err(|_| AuthError::internal("Device transaction consumption signal missing"))?;
         assert_eq!(
-            observation.inside_remaining.lock().unwrap().as_ref(),
+            trace_lock(&observation.inside_remaining)?.as_ref(),
             Some(&json!([]))
         );
         let mut update = UpdateDeviceCode::default();
@@ -389,13 +427,25 @@ async fn memory_device_ownership_change_before_commit_preserves_external_record(
             .store()
             .update_device_code(&observation.seeded.id, update)
             .await?;
-        resume.send(()).unwrap();
+        resume
+            .send(())
+            .map_err(|_| AuthError::internal("Field callback receiver closed"))?;
         original_error(
-            pending.await.unwrap().unwrap_err(),
+            pending
+                .await
+                .map_err(|error| {
+                    AuthError::internal(format!("Device transaction task failed: {error}"))
+                })?
+                .err()
+                .ok_or_else(|| AuthError::internal("Expected the model operation to fail"))?,
             "Device code changed before transaction commit",
         );
         let mut expected = observation.device(&observation.seeded)?;
-        expected[field] = json!(external_value);
+        let _ = required(
+            expected.as_object_mut(),
+            "Expected a model observation object",
+        )?
+        .insert(field.to_owned(), json!(external_value));
         assert_eq!(observation.device(&external)?, expected);
         assert_eq!(
             observation.remaining(auth.store().as_ref()).await?,
@@ -406,10 +456,17 @@ async fn memory_device_ownership_change_before_commit_preserves_external_record(
 }
 
 #[tokio::test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "The contract must assert rejection errors and complete Device record preservation"
+)]
 async fn unsupported_device_ownership_conditions_leave_the_entire_record_stored() -> AuthResult<()>
 {
     let mut policies = ownership_fields();
-    let fields = policies.additional_fields.as_mut().unwrap();
+    let fields = required(
+        policies.additional_fields.as_mut(),
+        "Expected the ownership field declarations",
+    )?;
     let _ = fields.insert(
         "activatedAt".into(),
         UserFieldConfig {
@@ -435,7 +492,7 @@ async fn unsupported_device_ownership_conditions_leave_the_entire_record_stored(
         .store()
         .get_device_code_by_device_code(&observation.seeded.device_code)
         .await?
-        .unwrap();
+        .ok_or_else(|| AuthError::internal("Expected the stored model record"))?;
     let unsupported_type = "DeviceCode FieldEquals supports only declared string, number, and boolean fields without references";
     let non_scalar =
         "DeviceCode FieldEquals requires a scalar null, string, number, or boolean value";
@@ -468,7 +525,8 @@ async fn unsupported_device_ownership_conditions_leave_the_entire_record_stored(
                 },
             )
             .await
-            .unwrap_err();
+            .err()
+            .ok_or_else(|| AuthError::internal("Expected the model operation to fail"))?;
         assert!(matches!(error, AuthError::Config(ref actual) if actual == message));
         assert_eq!(
             auth.store()
@@ -482,6 +540,10 @@ async fn unsupported_device_ownership_conditions_leave_the_entire_record_stored(
 }
 
 #[tokio::test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "The contract must assert conflict detection after both ownership candidates matched"
+)]
 async fn memory_device_ownership_set_change_conflicts_even_when_both_values_match() -> AuthResult<()>
 {
     for (field, logical) in [("stored_tenant", "tenantKey"), ("scope", "scope")] {
@@ -529,7 +591,9 @@ async fn memory_device_ownership_set_change_conflicts_even_when_both_values_matc
         })
         .await;
         original_error(
-            result.unwrap_err(),
+            result
+                .err()
+                .ok_or_else(|| AuthError::internal("Expected the model operation to fail"))?,
             "Device code changed before transaction commit",
         );
         let mut expected = observation.seeded.clone();
@@ -551,6 +615,10 @@ async fn memory_device_ownership_set_change_conflicts_even_when_both_values_matc
 }
 
 #[tokio::test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "The contract must assert rejection before callbacks and complete Device record preservation"
+)]
 async fn memory_device_ownership_sets_reject_unsupported_fields_before_callbacks() -> AuthResult<()>
 {
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -559,11 +627,11 @@ async fn memory_device_ownership_sets_reject_unsupported_fields_before_callbacks
     let mut policies = ownership_fields();
     let input_calls = calls.clone();
     let output_calls = calls.clone();
-    policies
-        .fields_mut()
-        .get_mut("tenantKey")
-        .unwrap()
-        .transform = Some(FieldTransforms {
+    required(
+        policies.fields_mut().get_mut("tenantKey"),
+        "Expected the tenant ownership field",
+    )?
+    .transform = Some(FieldTransforms {
         input: Some(UserFieldTransform::new(move |value| {
             let _ = input_calls.fetch_add(1, Ordering::SeqCst);
             Ok(value)
@@ -640,7 +708,8 @@ async fn memory_device_ownership_sets_reject_unsupported_fields_before_callbacks
                 .store()
                 .consume_device_code(&before, &ownership)
                 .await
-                .unwrap_err();
+                .err()
+                .ok_or_else(|| AuthError::internal("Expected the model operation to fail"))?;
             assert!(matches!(error, AuthError::Config(ref actual) if actual == message));
             assert_eq!(calls.load(Ordering::SeqCst), 0);
             assert_eq!(

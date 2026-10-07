@@ -10,23 +10,23 @@ fn policy(field: &'static str, events: &Arc<Mutex<Vec<Value>>>) -> UserFieldConf
     UserFieldConfig {
         transform: Some(FieldTransforms {
             input: Some(UserFieldTransform::new(move |value| {
-                input_events
-                    .lock()
-                    .unwrap()
-                    .push(json!([field, "input", value.json()?]));
+                trace_lock(&input_events)?.push(json!([field, "input", value.json()?]));
                 Ok(match value {
                     FieldValue::Undefined => FieldValue::Undefined,
-                    value => value.as_str().unwrap().trim().into(),
+                    value => required(value.as_str(), "Expected a string field callback value")?
+                        .trim()
+                        .into(),
                 })
             })),
             output: Some(UserFieldTransform::new(move |value| {
-                output_events
-                    .lock()
-                    .unwrap()
-                    .push(json!([field, "output", value.json()?]));
+                trace_lock(&output_events)?.push(json!([field, "output", value.json()?]));
                 Ok(match value {
                     FieldValue::Undefined => FieldValue::Undefined,
-                    value => format!("{}:custom", value.as_str().unwrap()).into(),
+                    value => format!(
+                        "{}:custom",
+                        required(value.as_str(), "Expected a string field callback value")?
+                    )
+                    .into(),
                 })
             })),
         }),
@@ -78,14 +78,18 @@ async fn registration<S: AuthSchema>(
             required: Some(true),
             transform: Some(FieldTransforms {
                 output: Some(UserFieldTransform::new(move |value| {
-                    own_events.lock().unwrap().push(json!([
+                    trace_lock(&own_events)?.push(json!([
                         "organization.name",
                         "own-output",
                         value.json()?
                     ]));
                     Ok(match value {
                         FieldValue::Undefined => FieldValue::Undefined,
-                        value => format!("{}:own", value.as_str().unwrap()).into(),
+                        value => format!(
+                            "{}:own",
+                            required(value.as_str(), "Expected a string field callback value")?
+                        )
+                        .into(),
                     })
                 })),
                 ..Default::default()
@@ -142,16 +146,19 @@ async fn registration<S: AuthSchema>(
         "backend": backend, "order": order,
         "organizationCreated": organization_created, "organizationUpdated": organization_updated,
         "teamCreated": team_created, "teamUpdated": {"name": team.name.json()?},
-        "listed": listed, "events": *events.lock().unwrap(),
+        "listed": listed, "events": *trace_lock(&events)?,
     });
     let fixture: Value =
         serde_json::from_str(include_str!("../fixtures/organization-plugin-fields.json"))?;
-    let expected = fixture["cases"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|case| case["backend"] == backend && case["order"] == order)
-        .unwrap();
+    let expected = required(
+        fixture.get("cases").and_then(Value::as_array),
+        "Expected captured Organization field cases",
+    )?
+    .iter()
+    .find(|case| {
+        case.get("backend") == Some(&json!(backend)) && case.get("order") == Some(&json!(order))
+    })
+    .ok_or_else(|| AuthError::internal("Missing captured Organization field case"))?;
     assert_eq!(&actual, expected);
     Ok(())
 }

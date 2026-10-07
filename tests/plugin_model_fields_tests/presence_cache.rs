@@ -9,8 +9,14 @@ async fn cache_name(
     key: &str,
     expected: Option<Value>,
 ) -> AuthResult<()> {
-    let value = SecondaryStorage::get(cache, key).await?.unwrap();
-    let row: Value = serde_json::from_str(value.as_str().unwrap())?;
+    let value = required(
+        SecondaryStorage::get(cache, key).await?,
+        "API Key cache record must exist",
+    )?;
+    let row: Value = serde_json::from_str(required(
+        value.as_str(),
+        "API Key cache record must contain serialized JSON",
+    )?)?;
     assert_display(&row, "name", expected);
     Ok(())
 }
@@ -58,16 +64,12 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
                             required: Some(false),
                             transform: Some(FieldTransforms {
                                 input: Some(UserFieldTransform::new(move |value| {
-                                    input_trace
-                                        .lock()
-                                        .unwrap()
+                                    trace_lock(&input_trace)?
                                         .push(format!("input:name:{}", describe(&value.json()?)));
                                     Ok(value)
                                 })),
                                 output: Some(UserFieldTransform::new(move |value| {
-                                    output_trace
-                                        .lock()
-                                        .unwrap()
+                                    trace_lock(&output_trace)?
                                         .push(format!("output:name:{}", describe(&value.json()?)));
                                     Ok(projected.clone())
                                 })),
@@ -97,27 +99,27 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
                 expected.clone(),
             );
             assert_eq!(
-                *trace.lock().unwrap(),
+                *trace_lock(&trace)?,
                 if mode == "secondary" {
                     Vec::<String>::new()
                 } else {
                     vec!["input:name:\"Desk\"".into(), "output:name:\"Desk\"".into()]
                 }
             );
-            trace.lock().unwrap().clear();
+            trace_lock(&trace)?.clear();
             let id = created.api_key.id.typed()?;
             let by_id = format!("api-key:by-id:{id}");
             let body = read(&auth, &token, "/api-key/get", Some(json!({"id":id}))).await?;
             assert_display(&body, "name", expected.clone());
             assert_eq!(
-                *trace.lock().unwrap(),
+                *trace_lock(&trace)?,
                 if mode == "database" {
                     vec!["output:name:\"Desk\""]
                 } else {
                     vec![]
                 }
             );
-            trace.lock().unwrap().clear();
+            trace_lock(&trace)?.clear();
             if mode != "database" {
                 cache_name(cache.as_ref(), &by_id, expected.clone()).await?;
             }
@@ -125,38 +127,59 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
                 CacheAdapter::clear(cache.as_ref()).await?;
                 let body = read(&auth, &token, "/api-key/get", Some(json!({"id":id}))).await?;
                 assert_display(&body, "name", expected.clone());
-                assert_eq!(*trace.lock().unwrap(), ["output:name:\"Desk\""]);
-                trace.lock().unwrap().clear();
+                assert_eq!(*trace_lock(&trace)?, ["output:name:\"Desk\""]);
+                trace_lock(&trace)?.clear();
                 cache_name(cache.as_ref(), &by_id, expected.clone()).await?;
                 let body = read(&auth, &token, "/api-key/get", Some(json!({"id":id}))).await?;
                 assert_display(&body, "name", expected.clone());
-                assert!(trace.lock().unwrap().is_empty());
+                assert!(trace_lock(&trace)?.is_empty());
                 CacheAdapter::clear(cache.as_ref()).await?;
             }
             let listed = read(&auth, &token, "/api-key/list", None).await?;
-            assert_eq!(listed["total"], 1);
-            assert_eq!(listed["apiKeys"].as_array().unwrap().len(), 1);
-            assert_display(&listed["apiKeys"][0], "name", expected.clone());
+            assert_eq!(listed.get("total"), Some(&json!(1)));
+            let keys = required(
+                listed.get("apiKeys").and_then(Value::as_array),
+                "API Key response must contain an array",
+            )?;
+            assert_eq!(keys.len(), 1);
+            assert_display(
+                required(
+                    keys.first(),
+                    "API Key response must contain the created key",
+                )?,
+                "name",
+                expected.clone(),
+            );
             assert_eq!(
-                *trace.lock().unwrap(),
+                *trace_lock(&trace)?,
                 if mode == "secondary" {
                     vec![]
                 } else {
                     vec!["output:name:\"Desk\""]
                 }
             );
-            trace.lock().unwrap().clear();
+            trace_lock(&trace)?.clear();
             if mode == "fallback" {
                 cache_name(cache.as_ref(), &by_id, expected.clone()).await?;
                 let listed = read(&auth, &token, "/api-key/list", None).await?;
-                assert_display(&listed["apiKeys"][0], "name", expected.clone());
-                assert!(trace.lock().unwrap().is_empty());
+                assert_display(
+                    required(
+                        listed.get("apiKeys").and_then(|rows| rows.get(0)),
+                        "Cached API Key response must contain the created key",
+                    )?,
+                    "name",
+                    expected.clone(),
+                );
+                assert!(trace_lock(&trace)?.is_empty());
             }
             let stored = raw.get_api_key_by_id(id).await?;
             if mode == "secondary" {
                 assert!(stored.is_none());
             } else {
-                assert_eq!(stored.unwrap().name, Some("Desk".into()));
+                assert_eq!(
+                    required(stored, "Database API Key must remain stored")?.name,
+                    Some("Desk".into())
+                );
             }
         }
     }
