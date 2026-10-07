@@ -36,6 +36,7 @@ on:
           - schema-joins
           - user-fields
           - runtime-values
+          - serial-primary
       profile:
         description: Optional existing profile for the client-configuration stage
         type: string

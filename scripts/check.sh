@@ -88,6 +88,22 @@ run_stage() {
       cargo test --locked --features axum,seaorm2,redis-cache --test device_where_tests -- \
         --exact memory_device_where_matches_upstream_rows_callbacks_and_consumption
       ;;
+    serial-primary)
+      bun --no-install test \
+        ./compat-tests/reference-server/contracts/user-serial-create-order.test.ts \
+        ./compat-tests/reference-server/contracts/account-verification-serial-primary.test.ts \
+        ./compat-tests/reference-server/contracts/session-jwk-wallet-rate-limit-serial.test.ts
+      cargo clippy --locked -p better-auth-core -- -D warnings
+      cargo test --locked -p better-auth-core --lib -- \
+        store::ephemeral::serial_primary_tests:: store::ephemeral::user_serial_tests:: \
+        store::ephemeral::rows::tests::
+      cargo test --locked --no-fail-fast --features axum,seaorm2,redis-cache \
+        --test memory_serial_reference_tests --test organization_serial_reference_tests \
+        --test native_core_join_tests --test native_memory_join_tests \
+        --test jwt_transaction_tests --test session_additional_fields_tests \
+        --test jwk_additional_fields_tests --test wallet_additional_fields_tests \
+        --test rate_limit_database_tests
+      ;;
     user-fields)
       cargo fmt --all -- --check
       cargo clippy --locked -p better-auth-core -p better-auth-seaorm -- -D warnings
