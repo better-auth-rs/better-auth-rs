@@ -313,10 +313,6 @@ impl SecondaryStorage for ObservedCache {
     }
 }
 
-#[expect(
-    clippy::panic_in_result_fn,
-    reason = "The contract propagates store errors and asserts complete Session values, callback order, and persistence."
-)]
 async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, run: Run) -> TestResult {
     let _ = raw
         .create_user(CreateUser {

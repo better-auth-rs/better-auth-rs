@@ -42,6 +42,36 @@ export const memberJoinScenarios = [
   { name: "reverse-reference-unique-empty", userFields: { memberRef: { ...reference("member"), unique: true } }, missingChild: true },
   { name: "member-output-error", failure: "member.role" },
   { name: "user-output-error", failure: "user.name" },
+  {
+    name: "source-alias-chain",
+    memberFields: {
+      userId: {}, ownerRef: { fieldName: "lookup", ...reference("user") }, lookup: { fieldName: "stored_lookup" },
+    },
+    storageFields: { memberFields: { ownerRef: { fieldName: "lookup" }, lookup: { fieldName: "stored_lookup" } } },
+    memberSeed: { lookup: "user-c" },
+    on: { from: "lookup", to: "id" }, selected: "user-b", selectedFallback: "user-c",
+  },
+  {
+    name: "target-alias-chain",
+    userFields: {
+      memberRef: { fieldName: "lookup", ...reference("member"), unique: true }, lookup: { fieldName: "stored_lookup" },
+    },
+    storageFields: { userFields: { memberRef: { fieldName: "lookup" }, lookup: { fieldName: "stored_lookup" } } },
+    userSeeds: { a: { lookup: null }, b: { lookup: null }, c: { lookup: "member-a" } },
+    on: { from: "id", to: "lookup" }, selected: "user-b", selectedFallback: "user-c",
+  },
+  {
+    name: "reverse-reference-fractional-limit", userFields: { memberRef: reference("member") },
+    many: true, limit: 1.5, backends: ["memory"], childCounts: { native: 2, fallback: 1 },
+  },
+  {
+    name: "reverse-reference-nan-limit", userFields: { memberRef: reference("member") },
+    many: true, limit: NaN, backends: ["memory"], childCounts: { native: 2, fallback: 0 },
+  },
+  {
+    name: "reverse-reference-negative-limit", userFields: { memberRef: reference("member") },
+    many: true, limit: -1, backends: ["memory"], childCounts: { native: 0, fallback: 1 },
+  },
 ];
 
 function optionsFor(scenario, joins, state) {
@@ -132,12 +162,12 @@ async function boundary(scenario, joins) {
       if (joins) {
         const selected = state.events[0][1].join.user;
         const reverse = Boolean(scenario.userFields?.memberRef?.references);
-        assert.deepEqual(selected.on, {
+        assert.deepEqual(selected.on, scenario.on ?? {
           from: reverse ? "id" : scenario.memberFields?.ownerRef?.references ? "stored_owner_ref" : "userId",
           to: reverse ? "stored_member_ref" : "id",
         });
         assert.equal(selected.relation, scenario.many ? "one-to-many" : "one-to-one");
-        assert.equal(selected.limit, scenario.many ? scenario.limit ?? 100 : 1);
+        assert.deepEqual(selected.limit, observeValue(scenario.many ? scenario.limit ?? 100 : 1));
       }
     }
     operations.push({ path, events: state.events, ...result });
@@ -152,16 +182,18 @@ async function seed(adapter, scenario) {
     await create("user", {
       id: `user-${suffix}`, name: `User ${suffix}`, email: `${suffix}@member-join-reference.test`,
       emailVerified: true, image: `image-${suffix}`, memberRef: matches ? "member-a" : null,
+      ...scenario.userSeeds?.[suffix],
     });
   }
   await create("organization", { id: "organization-a", name: "Join organization", slug: "join-organization", logo: null, metadata: null });
   await create("member", {
     id: "member-a", organizationId: "organization-a", userId: "user-a", role: "member",
     ownerRef: scenario.missingChild ? "missing-user" : "user-b", label: "Member label", detail: "Member detail",
+    ...scenario.memberSeed,
   });
 }
 
-function assertOperation(scenario, populated, surface, path, result, events) {
+function assertOperation(scenario, joins, populated, surface, path, result, events) {
   if (scenario.error) {
     assert.equal(result.returned, false);
     assert.equal(result.error.message, scenario.error);
@@ -179,6 +211,7 @@ function assertOperation(scenario, populated, surface, path, result, events) {
   const parentFields = [
     ...(scenario.memberFields?.userId ? ["member.userId"] : []),
     "member.role", "member.label", "member.detail", "member.ownerRef",
+    ...(scenario.memberFields?.lookup ? ["member.lookup"] : []),
   ];
   if (scenario.failure) {
     assert.equal(result.returned, false);
@@ -187,10 +220,13 @@ function assertOperation(scenario, populated, surface, path, result, events) {
       ? ["member.role"] : [...parentFields, "user.name"]);
     return;
   }
-  const childCount = scenario.missingChild ? 0 : scenario.many ? scenario.limit ?? 2 : 1;
+  const childCount = scenario.childCounts?.[joins ? "native" : "fallback"]
+    ?? (scenario.missingChild ? 0 : scenario.many ? scenario.limit ?? 2 : 1);
   assert.deepEqual(callbacks.map(event => event[1]), [
     ...parentFields,
-    ...Array.from({ length: childCount }, () => ["user.name", "user.image", "user.memberRef"]).flat(),
+    ...Array.from({ length: childCount }, () => [
+      "user.name", "user.image", "user.memberRef", ...(scenario.userFields?.lookup ? ["user.lookup"] : []),
+    ]).flat(),
   ]);
   if (scenario.missingChild && !scenario.many && surface === "organization" && path === "by-id") {
     assert.equal(result.returned, false);
@@ -202,7 +238,7 @@ function assertOperation(scenario, populated, surface, path, result, events) {
   if (scenario.many) {
     if (surface === "adapter") {
       assert.ok(Array.isArray(result.result.user));
-      assert.equal(result.result.user.length, scenario.missingChild ? 0 : scenario.limit ?? 2);
+      assert.equal(result.result.user.length, childCount);
     } else {
       assert.deepEqual(result.json.user, {});
       assert.deepEqual(result.result.user, Object.fromEntries(["id", "name", "email", "image"].map(key => [key, { type: "undefined" }])));
@@ -210,7 +246,8 @@ function assertOperation(scenario, populated, surface, path, result, events) {
   } else if (scenario.missingChild) {
     assert.equal(surface === "adapter" ? result.result.user : result.result, null);
   } else {
-    assert.equal(result.result.user.id, scenario.selected ?? "user-a");
+    const selected = joins ? scenario.selected : scenario.selectedFallback ?? scenario.selected;
+    assert.equal(result.result.user.id, selected ?? "user-a");
   }
 }
 
@@ -221,7 +258,7 @@ async function runtime(backend, scenario, joins, populated, recorder) {
   const sqlite = backend === "sqlite" ? new Database(":memory:") : undefined;
   const memory = Object.fromEntries(tables.map(table => [table, []]));
   const database = sqlite ?? memoryAdapter(memory);
-  const baseline = { ...optionsFor({}, joins, state).options, database };
+  const baseline = { ...optionsFor(scenario.storageFields ?? {}, joins, state).options, database };
   const stored = () => Object.fromEntries(tables.map(table => [table, observeValue(sqlite
     ? sqlite.query(`SELECT * FROM "${table}" ORDER BY "id"`).all()
     : memory[table]) ]));
@@ -242,7 +279,7 @@ async function runtime(backend, scenario, joins, populated, recorder) {
       finally { state.enabled = false; recorder.events = null; }
       const after = stored();
       assert.deepEqual(after, before, "Join reads and callback failures must preserve every stored table");
-      assertOperation(scenario, populated, surface, path, result, state.events);
+      assertOperation(scenario, joins, populated, surface, path, result, state.events);
       operations.push({ surface, path, events: state.events, ...result, storageUnchanged: true });
     }
     return { backend, scenario: scenario.name, joins, populated, before, operations, after: stored() };
@@ -273,11 +310,11 @@ export async function captureOrganizationMemberJoinReferences() {
     const cases = [];
     for (const scenario of memberJoinScenarios) for (const joins of [false, true]) {
       boundaries.push(await boundary(scenario, joins));
-      for (const backend of ["memory", "sqlite"]) for (const populated of [false, true]) {
+      for (const backend of scenario.backends ?? ["memory", "sqlite"]) for (const populated of [false, true]) {
         cases.push(await runtime(backend, scenario, joins, populated, recorder));
       }
     }
-    return { version, scenarios: memberJoinScenarios, boundaries, cases };
+    return { version, scenarios: observeValue(memberJoinScenarios), boundaries, cases };
   } finally { trace.disable(); }
 }
 

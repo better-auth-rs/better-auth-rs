@@ -25,11 +25,15 @@ async fn stored(store: &EphemeralStore, target: Target) -> TestResult<Value> {
             .await?
             .map(|row| {
                 let mut value = serde_json::to_value(&row)?;
-                value["credential"] = row
+                let credential = row
                     .credential
                     .field_value()
                     .json()?
                     .ok_or("Missing Memory credential")?;
+                let _ = value
+                    .as_object_mut()
+                    .ok_or("Expected a Memory Passkey record")?
+                    .insert("credential".into(), credential);
                 Ok::<_, Box<dyn std::error::Error + Send + Sync>>(value)
             })
             .transpose()?
