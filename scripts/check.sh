@@ -340,13 +340,15 @@ run_stage() {
         ./compat-tests/reference-server/contracts/device-where-transactions.test.ts \
         ./compat-tests/reference-server/consumer-contracts/device-where-transactions.test.ts \
         ./compat-tests/reference-server/contracts/device-where-references.test.ts \
-        ./compat-tests/reference-server/consumer-contracts/device-where-references.test.ts
+        ./compat-tests/reference-server/consumer-contracts/device-where-references.test.ts \
+        ./compat-tests/reference-server/contracts/device-reference-sets.test.ts \
+        ./compat-tests/reference-server/consumer-contracts/device-reference-sets.test.ts
       cargo clippy --locked --features axum,seaorm2,redis-cache \
         --test device_where_tests --test sql_user_extra_output_tests \
         --test plugin_output_capabilities_tests --test native_json_driver_tests \
         --test plugin_model_fields_tests -- -D warnings
       cargo test --locked --no-fail-fast --features axum,seaorm2,redis-cache \
-        --test device_where_tests --test native_json_driver_tests -- --include-ignored
+        --test device_where_tests --test native_json_driver_tests -- --include-ignored --nocapture
       cargo test --locked --features axum,seaorm2,redis-cache --test plugin_model_fields_tests -- \
         device_ownership:: device_ownership_sets:: device_consumption::
       cargo test --locked --features axum,seaorm2,redis-cache \

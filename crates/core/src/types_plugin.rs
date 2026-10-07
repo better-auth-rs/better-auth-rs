@@ -222,7 +222,8 @@ pub struct DeviceCode {
 pub enum DeviceCodeOwnership {
     /// Require the stored client binding to equal this client identifier.
     ClientId(String),
-    /// Match native `scope` or a declared string, number, or boolean field without a reference.
+    /// Match native `scope` or a declared string, number, or boolean field.
+    /// String fields may reference `id`; other references are not supported.
     /// This condition uses `eq`, `AND`, and case-sensitive comparison.
     /// Other connectors and field types are not supported by this variant.
     FieldEquals {
@@ -233,18 +234,22 @@ pub enum DeviceCodeOwnership {
     },
     /// Require membership in a candidate set with `AND` and case-sensitive comparison.
     FieldIn {
-        /// Native `scope`, or a registered string or number field without a reference.
+        /// Native `scope`, or a registered string or number field.
+        /// String fields may reference `id` and use the configured ID policy.
         /// Configured storage field names are accepted.
         field: String,
-        /// Null, string, or number candidates. An empty set never matches.
+        /// Null, string, or number candidates.
+        /// An empty set does not match in Memory or SQLite and produces a PostgreSQL or MySQL syntax error.
         values: Vec<crate::FieldValue>,
     },
     /// Exclude a candidate set with `AND` and the selected adapter's null semantics.
     FieldNotIn {
-        /// Native `scope`, or a registered string or number field without a reference.
+        /// Native `scope`, or a registered string or number field.
+        /// String fields may reference `id` and use the configured ID policy.
         /// Configured storage field names are accepted.
         field: String,
-        /// Null, string, or number candidates. An empty set matches every bound row.
+        /// Null, string, or number candidates.
+        /// An empty set matches in Memory or SQLite and produces a PostgreSQL or MySQL syntax error.
         values: Vec<crate::FieldValue>,
     },
     /// Apply a typed `AND` condition while retaining the selected code and owner bindings.

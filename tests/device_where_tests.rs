@@ -19,11 +19,19 @@ async fn memory_device_where_matches_upstream_rows_callbacks_and_consumption() -
     let transactions = contract::load_transactions("memory")?;
     let transaction_cases = inventory::paired_transactions(&transactions, "memory");
     let references = contract::load_references("memory")?;
+    let reference_sets = contract::load_reference_sets("memory")?;
     for (serial, mut cases) in inventory::paired(&captured, "memory") {
         if !serial {
             cases.extend(transaction_cases.iter().copied());
             cases.extend(references.iter());
         }
+        cases.extend(
+            reference_sets
+                .groups
+                .iter()
+                .filter(|group| group.serial == serial)
+                .flat_map(|group| &group.cases),
+        );
         let config = contract::config(serial);
         contract::run(
             Arc::new(EphemeralStore::new(Arc::new(config.clone()))),
@@ -41,11 +49,19 @@ async fn sql_contract(database: DatabaseConnection, backend: &str) -> TestResult
     let transactions = contract::load_transactions(backend)?;
     let transaction_cases = inventory::paired_transactions(&transactions, backend);
     let references = contract::load_references(backend)?;
+    let reference_sets = contract::load_reference_sets(backend)?;
     for (serial, mut cases) in inventory::paired(&captured, backend) {
         if !serial {
             cases.extend(transaction_cases.iter().copied());
             cases.extend(references.iter());
         }
+        cases.extend(
+            reference_sets
+                .groups
+                .iter()
+                .filter(|group| group.serial == serial)
+                .flat_map(|group| &group.cases),
+        );
         let config = contract::config(serial);
         if serial {
             let store = fixture::setup_serial(config.clone(), database.clone()).await?;

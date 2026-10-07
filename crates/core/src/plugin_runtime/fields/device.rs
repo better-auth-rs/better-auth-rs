@@ -146,14 +146,13 @@ impl ModelFields {
         values: &[Value],
     ) -> AuthResult<(&str, &UserFieldConfig)> {
         let (logical, field) = self.declared_device_code_ownership_field(name)?;
-        if field.references.is_some()
-            || !matches!(
-                field.field_type,
-                UserFieldType::String | UserFieldType::Number
-            )
-        {
+        validate_reference(field)?;
+        if !matches!(
+            field.field_type,
+            UserFieldType::String | UserFieldType::Number
+        ) {
             return Err(AuthError::config(
-                "DeviceCode field sets support only declared string and number fields without references",
+                "DeviceCode field sets support only declared string and number fields",
             ));
         }
         if values.iter().any(|value| {

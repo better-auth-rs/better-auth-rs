@@ -79,7 +79,17 @@ fn ownership_predicate(
                 .into_iter()
                 .map(|value| candidate(lower(value), backend))
                 .collect::<AuthResult<Vec<_>>>()?;
-            if query.operator == WhereOperator::In {
+            if values.is_empty() {
+                // Preserve native empty-set SQL; SeaQuery otherwise replaces the predicate with a constant.
+                column.binary(
+                    BinOper::Custom(if query.operator == WhereOperator::In {
+                        "IN"
+                    } else {
+                        "NOT IN"
+                    }),
+                    SimpleExpr::Tuple(values),
+                )
+            } else if query.operator == WhereOperator::In {
                 column.is_in(values)
             } else {
                 column.is_not_in(values)

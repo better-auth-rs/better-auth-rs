@@ -663,7 +663,7 @@ async fn memory_device_ownership_sets_reject_unsupported_fields_before_callbacks
         UserFieldConfig {
             references: Some(UserFieldReference {
                 model: "user".into(),
-                field: "id".into(),
+                field: "email".into(),
             }),
             required: Some(false),
             ..Default::default()
@@ -671,8 +671,7 @@ async fn memory_device_ownership_sets_reject_unsupported_fields_before_callbacks
     );
     let (auth, observation) = setup(memory(), policies).await?;
     let before = observation.seeded.clone();
-    let unsupported_type =
-        "DeviceCode field sets support only declared string and number fields without references";
+    let unsupported_type = "DeviceCode field sets support only declared string and number fields";
     let non_scalar = "DeviceCode field sets require scalar null, string, or number candidates";
     for (field, value, message) in [
         (
@@ -692,7 +691,11 @@ async fn memory_device_ownership_sets_reject_unsupported_fields_before_callbacks
         ("labels", json!("tenant-before"), unsupported_type),
         ("scores", json!(1), unsupported_type),
         ("enabledFlag", json!("true"), unsupported_type),
-        ("referenceKey", json!("owner"), unsupported_type),
+        (
+            "referenceKey",
+            json!("owner"),
+            "DeviceCode ownership reference fields require the String type and an id target",
+        ),
     ] {
         for ownership in [
             DeviceCodeOwnership::FieldIn {

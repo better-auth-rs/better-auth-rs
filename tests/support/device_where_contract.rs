@@ -22,6 +22,9 @@ use values::{observe, revive};
 #[path = "device_where_references.rs"]
 mod references;
 pub(crate) use references::load_references;
+#[path = "device_where_reference_sets.rs"]
+mod reference_sets;
+pub(crate) use reference_sets::load_reference_sets;
 
 type Trace = Arc<Mutex<Vec<Value>>>;
 const FIELDS: [(&str, UserFieldType); 7] = [
@@ -334,6 +337,31 @@ fn condition(case: &Case, source: &DeviceCode) -> AuthResult<DeviceCodeOwnership
                 value: condition.value,
             }
         }
+        references::Entry::FieldIn | references::Entry::FieldNotIn => {
+            assert_eq!(condition.mode, WhereMode::Sensitive);
+            let values = condition
+                .value
+                .as_array()
+                .ok_or_else(|| {
+                    AuthError::internal("Typed Device sets require captured candidates")
+                })?
+                .iter()
+                .cloned()
+                .collect();
+            if matches!(case.entry, references::Entry::FieldIn) {
+                assert_eq!(condition.operator, WhereOperator::In);
+                DeviceCodeOwnership::FieldIn {
+                    field: condition.field,
+                    values,
+                }
+            } else {
+                assert_eq!(condition.operator, WhereOperator::NotIn);
+                DeviceCodeOwnership::FieldNotIn {
+                    field: condition.field,
+                    values,
+                }
+            }
+        }
     })
 }
 
@@ -548,27 +576,39 @@ pub(crate) async fn run<S: AuthSchema>(
                 if backend == "mysql" =>
             {
                 assert_eq!(expected.name, "Error");
-                let code = match expected.message.as_str() {
-                    "Unknown column 'NaN' in 'where clause'"
-                    | "Unknown column 'Infinity' in 'where clause'" => "1054 (42S22)",
-                    "Operand should contain 1 column(s)" => "1241 (21000)",
-                    other => {
-                        return Err(AuthError::internal(format!(
-                            "{backend}/{} unexpected fixture diagnostic: {other}",
-                            case.name
-                        )));
-                    }
-                };
-                assert_eq!(
-                    message,
-                    format!(
-                        "Query Error: error returned from database: {code}: {}",
-                        expected.message
-                    ),
-                    "{backend}/{} diagnostic",
-                    case.name
-                );
-                None
+                if expected
+                    .message
+                    .starts_with(reference_sets::MYSQL_SYNTAX_PREFIX)
+                {
+                    reference_sets::compare_mysql_syntax_error(
+                        &case.name,
+                        &expected.message,
+                        &message,
+                    )?;
+                    None
+                } else {
+                    let code = match expected.message.as_str() {
+                        "Unknown column 'NaN' in 'where clause'"
+                        | "Unknown column 'Infinity' in 'where clause'" => "1054 (42S22)",
+                        "Operand should contain 1 column(s)" => "1241 (21000)",
+                        other => {
+                            return Err(AuthError::internal(format!(
+                                "{backend}/{} unexpected fixture diagnostic: {other}",
+                                case.name
+                            )));
+                        }
+                    };
+                    assert_eq!(
+                        message,
+                        format!(
+                            "Query Error: error returned from database: {code}: {}",
+                            expected.message
+                        ),
+                        "{backend}/{} diagnostic",
+                        case.name
+                    );
+                    None
+                }
             }
             (expected, actual) => {
                 return Err(AuthError::internal(format!(
