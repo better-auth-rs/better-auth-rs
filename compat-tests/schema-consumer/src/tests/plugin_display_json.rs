@@ -8,8 +8,8 @@ use better_auth::{
         Database, DatabaseConnection, SeaOrmAccountModel, SeaOrmPluginModel, SeaOrmPluginSchema,
         SeaOrmSessionModel, SeaOrmStore, SeaOrmUserModel, SeaOrmVerificationModel,
         sea_orm::{
-            ConnectionTrait, DbBackend, EntityName, EntityTrait, Iden, Iterable, ModelTrait,
-            Statement,
+            ActiveModelTrait, ConnectionTrait, DbBackend, EntityName, EntityTrait, Iden,
+            IntoActiveModel, Iterable, Statement,
         },
     },
 };
@@ -70,10 +70,15 @@ async fn stored<M: SeaOrmPluginModel>(
     assert_eq!(table, target.table());
     let mut observations = Vec::new();
     for model in M::Entity::find().all(database).await? {
+        let model = model.into_active_model();
         let mut row = Map::new();
         for column in M::Column::iter() {
             let name = column.to_string();
-            let mut value = better_auth::seaorm::__private_field_value(model.get(column))?;
+            let value = model
+                .get(column)
+                .into_value()
+                .ok_or("Missing physical column in the stored model")?;
+            let mut value = better_auth::seaorm::__private_field_value(value)?;
             if backend != DbBackend::Postgres
                 && let FieldValue::Bool(boolean) = value
             {
