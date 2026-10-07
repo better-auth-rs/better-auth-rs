@@ -389,6 +389,10 @@ async fn memory_user_serial_id_is_assigned_after_reentrant_field_input() -> Auth
 }
 
 #[tokio::test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "The contract propagates adapter errors and asserts IDs, complete rows, and callback observations"
+)]
 async fn memory_uuid_create_resolves_force_allow_id_after_same_runtime_reads() -> AuthResult<()> {
     for id_first in [false, true] {
         for missing in [false, true] {
