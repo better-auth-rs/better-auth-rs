@@ -11,7 +11,7 @@ use better_auth::plugins::organization::{
     types::OrganizationResponse as Organization,
 };
 use better_auth_core::{
-    AuthError, AuthResult, CreateOrganization, CreateTeam, Member, Team, TeamMember,
+    AuthError, AuthResult, CreateOrganization, CreateTeam, FieldValue, Member, Team, TeamMember,
     UpdateOrganization, UpdateTeam, wire::UserView,
 };
 use serde_json::{Map, Value, json};
@@ -24,7 +24,7 @@ struct State {
     fail: Option<String>,
     organization_id_override: Option<String>,
     clear_logo: bool,
-    metadata_override: Option<Value>,
+    metadata_override: Option<FieldValue>,
     limits: Map<String, Value>,
 }
 
@@ -81,10 +81,11 @@ fn project(value: &Value) -> Value {
     projected.into()
 }
 
-fn put_optional(value: &mut Value, name: &str, field: Option<impl serde::Serialize>) {
-    if let Some(field) = field {
-        value[name] = json!(field);
+fn put_field(value: &mut Value, name: &str, field: FieldValue) -> AuthResult<()> {
+    if let Some(field) = field.json()? {
+        value[name] = field;
     }
+    Ok(())
 }
 
 fn member_event(event: OrganizationMemberEvent<'_>) -> Value {
@@ -148,11 +149,15 @@ impl OrganizationCallbacks {
                             .as_str()
                             .map(str::to_owned),
                         clear_logo: body["clearLogo"].as_bool() == Some(true),
-                        metadata_override: body.get("metadataOverride").cloned(),
+                        metadata_override: body
+                            .get("metadataOverride")
+                            .cloned()
+                            .map(FieldValue::from_json)
+                            .transpose()?,
                         fail: body["fail"].as_str().map(str::to_owned),
                         limits: body["limits"].as_object().cloned().unwrap_or_default(),
                     };
-                    Json(json!({"status":true}))
+                    Ok::<_, AuthError>(Json(json!({"status":true})))
                 }
             }),
         )
@@ -267,11 +272,7 @@ impl OrganizationHooks for OrganizationCallbacks {
         user: &UserView,
     ) -> AuthResult<()> {
         let mut organization = json!({"id":data.id,"name":data.name,"slug":data.slug});
-        put_optional(
-            &mut organization,
-            "metadata",
-            data.metadata.json()?.as_ref(),
-        );
+        put_field(&mut organization, "metadata", data.metadata.field_value())?;
         self.record(
             "beforeCreateOrganization",
             json!({"organization":organization,"user":user}),
@@ -297,8 +298,19 @@ impl OrganizationHooks for OrganizationCallbacks {
         actor: OrganizationActor<'_>,
     ) -> AuthResult<()> {
         let mut organization = json!({"id":data.id,"name":data.name,"slug":data.slug});
-        put_optional(&mut organization, "createdAt", data.created_at);
-        put_optional(&mut organization, "metadata", data.metadata.as_ref());
+        put_field(
+            &mut organization,
+            "createdAt",
+            data.created_at
+                .clone()
+                .map(FieldValue::from)
+                .unwrap_or_default(),
+        )?;
+        put_field(
+            &mut organization,
+            "metadata",
+            data.metadata.clone().unwrap_or_default(),
+        )?;
         self.record(
             "beforeUpdateOrganization",
             json!({"organization":organization,"member":actor.member,"user":actor.user}),
@@ -317,7 +329,7 @@ impl OrganizationHooks for OrganizationCallbacks {
             data.logo = Some(None);
         }
         if let Some(metadata) = self.state.lock().await.metadata_override.clone() {
-            data.metadata = Some(metadata).into();
+            data.metadata = Some(metadata);
         }
         Ok(())
     }
@@ -363,7 +375,14 @@ impl OrganizationHooks for OrganizationCallbacks {
         event: OrganizationUser<'_>,
     ) -> AuthResult<()> {
         let mut member = json!({"organizationId":data.organization_id,"userId":data.user_id,"role":data.role,"teamId":data.team_id});
-        put_optional(&mut member, "createdAt", data.created_at);
+        put_field(
+            &mut member,
+            "createdAt",
+            data.created_at
+                .clone()
+                .map(FieldValue::from)
+                .unwrap_or_default(),
+        )?;
         self.record(
             "beforeAddMember",
             json!({"member":member,"organization":event.organization,"user":event.user}),
@@ -413,8 +432,8 @@ impl OrganizationHooks for OrganizationCallbacks {
         event: OrganizationUser<'_>,
     ) -> AuthResult<()> {
         let mut invitation = json!({"id":data.id,"organizationId":data.organization_id,"email":data.email,"role":data.role,"teamId":data.team_id,"status":data.status});
-        put_optional(&mut invitation, "createdAt", data.created_at.json()?);
-        put_optional(&mut invitation, "expiresAt", data.expires_at.json()?);
+        put_field(&mut invitation, "createdAt", data.created_at.field_value())?;
+        put_field(&mut invitation, "expiresAt", data.expires_at.field_value())?;
         self.record(
             "beforeCreateInvitation",
             json!({"invitation":invitation,"organization":event.organization,"user":event.user}),
@@ -482,8 +501,22 @@ impl OrganizationHooks for OrganizationCallbacks {
         user: Option<&UserView>,
     ) -> AuthResult<()> {
         let mut team = json!({"id":data.id,"organizationId":data.organization_id,"name":data.name});
-        put_optional(&mut team, "createdAt", data.created_at);
-        put_optional(&mut team, "updatedAt", data.updated_at);
+        put_field(
+            &mut team,
+            "createdAt",
+            data.created_at
+                .clone()
+                .map(FieldValue::from)
+                .unwrap_or_default(),
+        )?;
+        put_field(
+            &mut team,
+            "updatedAt",
+            data.updated_at
+                .clone()
+                .map(|date| date.map_or(FieldValue::Null, FieldValue::from))
+                .unwrap_or_default(),
+        )?;
         self.record(
             "beforeCreateTeam",
             json!({"team":team,"organization":organization,"user":user}),

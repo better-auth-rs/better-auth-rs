@@ -5,8 +5,8 @@ pub(crate) use policies::{Fields, config};
 
 use better_auth::{
     __private_core::{
-        AuthError, AuthResult, AuthSchema, AuthStore, CreateTwoFactor, CreateUser, TwoFactor,
-        UpdateTwoFactor,
+        AuthError, AuthResult, AuthSchema, AuthStore, CreateTwoFactor, CreateUser, FieldMap,
+        TwoFactor, UpdateTwoFactor,
     },
     BetterAuth,
     plugins::TwoFactorPlugin,
@@ -62,6 +62,10 @@ impl Scenario {
     }
 }
 
+#[expect(
+    clippy::expect_used,
+    reason = "The fixture requires a fixed valid Date before adapter input callbacks run"
+)]
 fn input(owner: &str) -> CreateTwoFactor {
     CreateTwoFactor {
         user_id: owner.into(),
@@ -69,10 +73,20 @@ fn input(owner: &str) -> CreateTwoFactor {
         backup_codes: "ordinary-encrypted-codes".into(),
         verified: false,
         additional_fields: [
-            ("activatedAt".into(), json!("2029-01-02T03:04:05.000Z")),
+            (
+                "activatedAt".into(),
+                "2029-01-02T03:04:05.000Z"
+                    .parse::<chrono::DateTime<chrono::Utc>>()
+                    .expect("fixed activation date parses")
+                    .into(),
+            ),
             (
                 "details".into(),
-                json!({"channel":"ordinary","enabled":true}),
+                FieldMap::from([
+                    ("channel".into(), "ordinary".into()),
+                    ("enabled".into(), true.into()),
+                ])
+                .into(),
             ),
         ]
         .into_iter()
@@ -80,15 +94,29 @@ fn input(owner: &str) -> CreateTwoFactor {
     }
 }
 
+#[expect(
+    clippy::expect_used,
+    reason = "The fixture requires a fixed valid Date before adapter input callbacks run"
+)]
 fn update() -> UpdateTwoFactor {
     UpdateTwoFactor {
         verified: Some(true),
         additional_fields: [
-            ("label".into(), json!(" Changed ")),
-            ("activatedAt".into(), json!("2029-02-03T04:05:06.789Z")),
+            ("label".into(), " Changed ".into()),
+            (
+                "activatedAt".into(),
+                "2029-02-03T04:05:06.789Z"
+                    .parse::<chrono::DateTime<chrono::Utc>>()
+                    .expect("fixed activation date parses")
+                    .into(),
+            ),
             (
                 "details".into(),
-                json!({"channel":"updated","enabled":false}),
+                FieldMap::from([
+                    ("channel".into(), "updated".into()),
+                    ("enabled".into(), false.into()),
+                ])
+                .into(),
             ),
         ]
         .into_iter()

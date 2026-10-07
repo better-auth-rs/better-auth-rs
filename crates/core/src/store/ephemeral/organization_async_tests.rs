@@ -203,7 +203,7 @@ async fn canceled_reservation_has_no_seat_or_member_write() -> AuthResult<()> {
             .get(&team.id)?
             .unwrap()
             .additional_fields["memberCount"],
-        Value::from(0)
+        Value::from(0.0)
     );
     Ok(())
 }
@@ -294,7 +294,7 @@ async fn full_team_keeps_the_prepared_counter_repair() -> AuthResult<()> {
         .update_team(
             team.id.typed()?,
             UpdateTeam {
-                additional_fields: [("memberCount".into(), Value::from(0))]
+                additional_fields: [("memberCount".into(), Value::from(0.0))]
                     .into_iter()
                     .collect(),
                 ..Default::default()
@@ -308,7 +308,7 @@ async fn full_team_keeps_the_prepared_counter_repair() -> AuthResult<()> {
             .get(&team.id)?
             .unwrap()
             .additional_fields["memberCount"],
-        Value::from(0)
+        Value::from(0.0)
     );
     assert!(
         store
@@ -324,7 +324,7 @@ async fn full_team_keeps_the_prepared_counter_repair() -> AuthResult<()> {
             .get(&team.id)?
             .unwrap()
             .additional_fields["memberCount"],
-        Value::from(1)
+        Value::from(1.0)
     );
     Ok(())
 }
@@ -345,7 +345,7 @@ async fn invitation_member_output_failure_compensates_without_member_seat_or_ses
         "member@example.com",
         "member",
         "owner",
-        Utc::now() + chrono::Duration::days(1),
+        (Utc::now() + chrono::Duration::days(1)).into(),
     );
     input.team_id = Some(team.id.typed()?.clone());
     let invitation = store.create_invitation(input).await?;
@@ -418,7 +418,7 @@ async fn invitation_member_output_failure_compensates_without_member_seat_or_ses
     assert_eq!(state.team_members.len(), 0);
     assert_eq!(
         state.teams.get(&team.id)?.unwrap().additional_fields["memberCount"],
-        Value::from(0)
+        Value::from(0.0)
     );
     assert_eq!(
         state

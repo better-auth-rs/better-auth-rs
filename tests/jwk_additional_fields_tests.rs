@@ -92,13 +92,13 @@ async fn transaction_contract<S: AuthSchema>(
         "note":"default-note",
         "settings":{"compact":true,"theme":"dark"},
     });
-    assert_eq!(json!(committed.1), expected);
+    assert_eq!(json!(committed.1.json()?), expected);
     let read = auth
         .store()
         .get_jwk(&committed.0)
         .await?
         .expect("committed JWK display record exists");
-    assert_eq!(json!(read.additional_fields), expected);
+    assert_eq!(json!(read.additional_fields.json()?), expected);
     let before: Vec<_> = auth
         .store()
         .list_jwks()
@@ -106,7 +106,15 @@ async fn transaction_contract<S: AuthSchema>(
         .into_iter()
         .map(|row| row.additional_fields)
         .collect();
-    assert_eq!(json!(before), json!([expected]));
+    assert_eq!(
+        json!(
+            before
+                .iter()
+                .map(|fields| fields.json())
+                .collect::<AuthResult<Vec<_>>>()?
+        ),
+        json!([expected])
+    );
 
     let failed_events = Trace::default();
     let mut failed_builder = BetterAuth::new(contract::config())

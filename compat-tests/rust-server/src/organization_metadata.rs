@@ -4,7 +4,7 @@ use better_auth::plugins::{OrganizationPlugin, TestUtilsPlugin, test_utils::Test
 use better_auth::server_api::EndpointInput;
 use better_auth::{AuthBuilder, AuthConfig, AuthResult, AuthSchema, BetterAuth};
 use better_auth_core::{
-    CreateUser, HttpMethod, Organization, SchemaValue, middleware::RateLimitConfig,
+    CreateUser, FieldValue, HttpMethod, Organization, SchemaValue, middleware::RateLimitConfig,
 };
 use better_auth_seaorm::{
     Database, SeaOrmStore,
@@ -24,7 +24,7 @@ async fn observe<S: AuthSchema>(auth: BetterAuth<S>, sql: bool) -> AuthResult<Va
         json!({"key":"value"}),
     ] {
         let draft = organization.create_organization(Organization {
-            metadata: SchemaValue::Dynamic(metadata.clone()),
+            metadata: SchemaValue::Dynamic(FieldValue::from_json(metadata.clone())?),
             ..Default::default()
         })?;
         let draft_value = serde_json::to_value(&draft)?;

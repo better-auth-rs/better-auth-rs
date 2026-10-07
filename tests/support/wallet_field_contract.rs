@@ -2,7 +2,8 @@ use better_auth::__private_core::__private_async_trait::async_trait;
 use better_auth::{
     __private_core::{
         AuthContext, AuthError, AuthInitContext, AuthPlugin, AuthRequest, AuthResponse, AuthResult,
-        AuthRoute, AuthSchema, AuthStore, AuthUser, CreateUser, CreateWalletAddress,
+        AuthRoute, AuthSchema, AuthStore, AuthUser, CreateUser, CreateWalletAddress, FieldMap,
+        FieldValue,
         store::schema::EntityRole,
         user_fields::{
             FieldTransforms, UserConfig, UserFieldConfig, UserFieldTransform, UserFieldType,
@@ -85,7 +86,7 @@ pub(crate) fn policies(events: Option<Trace>, scenario: Scenario) -> UserConfig 
                     "note".into(),
                     UserFieldConfig {
                         required: Some(false),
-                        default_value: Some(json!("default-note")),
+                        default_value: Some("default-note".into()),
                         ..Default::default()
                     },
                 ),
@@ -113,15 +114,15 @@ pub(crate) fn policies(events: Option<Trace>, scenario: Scenario) -> UserConfig 
                     input_events
                         .lock()
                         .expect("ordinary Wallet trace lock")
-                        .push(json!(["input", input_name, value]));
+                        .push(json!(["input", input_name, value.json()?]));
                     if input_name == "label" {
                         if scenario == Scenario::InputError {
                             return Err(AuthError::internal("ordinary Wallet input-error"));
                         }
-                        return Ok(value.map(|value| match value {
-                            Value::String(value) => json!(value.trim()),
+                        return Ok(match value {
+                            FieldValue::String(value) => value.trim().into(),
                             value => value,
-                        }));
+                        });
                     }
                     Ok(value)
                 })),
@@ -129,14 +130,17 @@ pub(crate) fn policies(events: Option<Trace>, scenario: Scenario) -> UserConfig 
                     output_events
                         .lock()
                         .expect("ordinary Wallet trace lock")
-                        .push(json!(["output", output_name, value]));
+                        .push(json!(["output", output_name, value.json()?]));
                     if output_name == "label" {
                         if scenario == Scenario::OutputError {
                             return Err(AuthError::internal("ordinary Wallet output-error"));
                         }
-                        return Ok(value.map(|value| {
-                            json!(format!("{}:out", value.as_str().expect("string label")))
-                        }));
+                        return Ok(match value {
+                            FieldValue::Undefined => FieldValue::Undefined,
+                            value => {
+                                format!("{}:out", value.as_str().expect("string label")).into()
+                            }
+                        });
                     }
                     Ok(value)
                 })),
@@ -157,11 +161,19 @@ pub(crate) fn input(user_id: String) -> CreateWalletAddress {
         chain_id: 1,
         is_primary: false,
         created_at: "2030-01-01T00:00:00Z"
-            .parse()
-            .expect("fixed inert fixture date parses"),
+            .parse::<chrono::DateTime<chrono::Utc>>()
+            .expect("fixed inert fixture date parses")
+            .into(),
         additional_fields: [
-            ("label".into(), json!(" Display ")),
-            ("settings".into(), json!({"compact":true,"theme":"dark"})),
+            ("label".into(), " Display ".into()),
+            (
+                "settings".into(),
+                FieldMap::from([
+                    ("compact".into(), true.into()),
+                    ("theme".into(), "dark".into()),
+                ])
+                .into(),
+            ),
         ]
         .into_iter()
         .collect(),
@@ -221,9 +233,9 @@ pub(crate) async fn contract<S: AuthSchema>(
             .await?
             .expect("created Wallet display record exists");
         json!({
-            "created":created.additional_fields,
-            "readExact":read.additional_fields,
-            "readAddress":by_address.additional_fields,
+            "created":created.additional_fields.json()?,
+            "readExact":read.additional_fields.json()?,
+            "readAddress":by_address.additional_fields.json()?,
         })
     } else {
         let message = format!("ordinary Wallet {}", scenario.name());
@@ -238,7 +250,8 @@ pub(crate) async fn contract<S: AuthSchema>(
         .store()
         .get_wallet_address(ADDRESS, Some(1))
         .await?
-        .map(|row| row.additional_fields);
+        .map(|row| row.additional_fields.json())
+        .transpose()?;
     let actual = json!({
         "backend":backend,
         "scenario":scenario.name(),

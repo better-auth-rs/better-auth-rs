@@ -9,7 +9,7 @@ use axum::{
 };
 use better_auth::{AuthBuilder, AuthConfig, AuthError, AuthResult, BetterAuth};
 use better_auth_core::{
-    AuthSchema, CreateAccount, CreateSession, CreateUser,
+    AuthSchema, CreateAccount, CreateSession, CreateUser, FieldMap, FieldValue,
     store::{
         SecondaryStorage,
         database_hooks::{DatabaseHookUpdate, SessionUpdate},
@@ -53,10 +53,10 @@ fn stored_session_view(session: &Session) -> Value {
 
 fn session_view(session: &better_auth_core::SessionView) -> Value {
     json!({"id":session.id,"token":session.token,"userId":session.user_id,
-        "label":session.additional_fields.get("label"),
-        "createdAt":session.created_at.to_rfc3339_opts(SecondsFormat::Millis,true),
-        "updatedAt":session.updated_at.to_rfc3339_opts(SecondsFormat::Millis,true),
-        "expiresAt":session.expires_at.to_rfc3339_opts(SecondsFormat::Millis,true)})
+        "label":session.additional_fields.get("label").map(FieldValue::json).transpose().unwrap(),
+        "createdAt":FieldValue::Date(session.created_at.clone()).json().unwrap(),
+        "updatedAt":FieldValue::Date(session.updated_at.clone()).json().unwrap(),
+        "expiresAt":FieldValue::Date(session.expires_at.clone()).json().unwrap()})
 }
 
 #[derive(Default)]
@@ -291,7 +291,7 @@ impl SeaOrmHooks<Schema> for Events {
     ) -> AuthResult<DatabaseHookUpdate<SessionUpdate>> {
         self.record(
             "session.update.before",
-            Value::Object(patch.clone().into_public_fields()?),
+            Value::Object(patch.clone().into_public_fields()?.json()?),
         )
         .await?;
         let options = self.options();
@@ -304,16 +304,16 @@ impl SeaOrmHooks<Schema> for Events {
         let Some(patch) = options.get("patch") else {
             return Ok(DatabaseHookUpdate::Continue);
         };
-        let mut fields = patch.as_object().unwrap().clone();
+        let mut fields = FieldMap::from_json(patch.as_object().unwrap().clone())?;
         let mut update = SessionUpdate::default();
         if let Some(value) = fields.remove("token") {
             update.token = Some(value.as_str().unwrap().into());
         }
         if let Some(value) = fields.remove("createdAt") {
-            update.created_at = Some(date(value.as_str().unwrap()));
+            update.created_at = Some(date(value.as_str().unwrap()).into());
         }
         if let Some(value) = fields.remove("updatedAt") {
-            update.updated_at = Some(date(value.as_str().unwrap()));
+            update.updated_at = Some(date(value.as_str().unwrap()).into());
         }
         update.additional_fields = fields;
         Ok(DatabaseHookUpdate::Patch(update))
@@ -432,24 +432,23 @@ impl Fixture {
         user.updated_at = Set(date(UPDATED_AT));
         let user = user.insert(db).await.map_err(database_error)?;
         for id in ["a1", "a2"] {
-            let mut account = account::Model::new_active(
-                Some(id.into()),
-                CreateAccount {
-                    account_id: id.into(),
-                    provider_id: id.into(),
-                    user_id: "u1".into(),
-                    password: Default::default(),
-                    access_token: Default::default(),
-                    refresh_token: Default::default(),
-                    id_token: Default::default(),
-                    access_token_expires_at: Default::default(),
-                    refresh_token_expires_at: Default::default(),
-                    scope: Default::default(),
-                    ..Default::default()
-                }
-                .with_timestamps(date(CREATED_AT))
-                .fields()?,
-            )?;
+            let fields = CreateAccount {
+                account_id: id.into(),
+                provider_id: id.into(),
+                user_id: "u1".into(),
+                password: Default::default(),
+                access_token: Default::default(),
+                refresh_token: Default::default(),
+                id_token: Default::default(),
+                access_token_expires_at: Default::default(),
+                refresh_token_expires_at: Default::default(),
+                scope: Default::default(),
+                ..Default::default()
+            }
+            .with_timestamps(date(CREATED_AT).into())
+            .fields()?;
+            let mut account = account::Model::new_active(Some(id.into()), &fields)?;
+            account::Model::apply_fields(&mut account, fields)?;
             account.updated_at = Set(date(UPDATED_AT));
             let _ = account.insert(db).await.map_err(database_error)?;
         }
@@ -460,14 +459,15 @@ impl Fixture {
                 CreateSession {
                     additional_fields: Default::default(),
                     user_id: "u1".into(),
-                    expires_at: date(EXPIRES_AT),
+                    expires_at: date(EXPIRES_AT).into(),
                     ip_address: None,
                     user_agent: None,
                     impersonated_by: None,
                     active_organization_id: None,
                 },
                 date(CREATED_AT),
-            );
+            )?;
+            Session::set_expires_at(&mut session, date(EXPIRES_AT));
             session.updated_at = Set(date(UPDATED_AT));
             session.device_label = Set(Some(format!("{id}-old")));
             if self.events.stores_sessions {
@@ -577,7 +577,10 @@ impl Fixture {
                     .cloned()
                     .unwrap_or_else(|| json!({"label":"request"}));
                 return Ok(store
-                    .update_session_fields("s1-token", patch.as_object().unwrap().clone())
+                    .update_session_fields(
+                        "s1-token",
+                        FieldMap::from_json(patch.as_object().unwrap().clone())?,
+                    )
                     .await?
                     .as_ref()
                     .map(session_view)

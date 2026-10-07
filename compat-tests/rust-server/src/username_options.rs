@@ -463,6 +463,7 @@ async fn invoke<S: AuthSchema>(
         .filter(|(key, _)| ["username", "displayUsername", "id"].contains(&key.as_str()))
         .map(|(key, value)| (key.clone(), value.clone()))
         .collect();
+    let fields = better_auth::FieldMap::from_json(fields)?;
     match input["operation"].as_str().unwrap() {
         "admin-create" => {
             let body: CreateAdminUser = serde_json::from_value(input["data"].clone())?;
@@ -474,7 +475,7 @@ async fn invoke<S: AuthSchema>(
         }
         "create" => {
             let mut user = CreateUser::new().with_email(data["email"].as_str().unwrap());
-            user.name = better_auth::SchemaValue::from_json(data.get("name").cloned());
+            user.name = better_auth::SchemaValue::from_json(data.get("name").cloned())?;
             user.additional_fields = fields;
             let user = fixture.auth.store().create_user(user).await?;
             Ok(serde_json::to_value(

@@ -10,8 +10,8 @@ use better_auth::plugins::{
 };
 use better_auth::{AuthConfig, AuthError, AuthResult, BetterAuth, server_api::EndpointInput};
 use better_auth_core::{
-    AuthContext, AuthPlugin, AuthRequest, AuthResponse, HttpMethod, UpdateUser,
-    config::CookieCacheConfig, middleware::RateLimitConfig, store::StatelessSchema,
+    AuthContext, AuthPlugin, AuthRequest, AuthResponse, FieldMap, FieldValue, HttpMethod,
+    UpdateUser, config::CookieCacheConfig, middleware::RateLimitConfig, store::StatelessSchema,
     utils::password::PasswordHasher,
 };
 use serde_json::{Value, json};
@@ -81,6 +81,14 @@ fn context(endpoint: &EndpointContext<'_, StatelessSchema>) -> Value {
         "actorAnonymous":endpoint.session.as_ref().and_then(|(user,_)|user.is_anonymous)})
 }
 
+fn json_field(fields: &FieldMap, name: &str) -> AuthResult<Option<Value>> {
+    Ok(fields
+        .get(name)
+        .map(FieldValue::json)
+        .transpose()?
+        .flatten())
+}
+
 #[async_trait::async_trait]
 impl AuthPlugin<StatelessSchema> for Fixture {
     fn name(&self) -> &'static str {
@@ -110,15 +118,15 @@ impl AuthPlugin<StatelessSchema> for Fixture {
                     data.user.id.typed().unwrap(),
                     UpdateUser {
                         name: Some("Changed after issue".into()).into(),
-                        additional_fields: serde_json::Map::from_iter([(
+                        additional_fields: FieldMap::from_iter([(
                             "secretNote".into(),
-                            json!("changed-secret"),
+                            "changed-secret".into(),
                         )]),
                         ..Default::default()
                     },
                 )
                 .await?;
-            self.record(json!({"event":"application","name":data.user.name,"secret":data.user.additional_fields.get("secretNote")}));
+            self.record(json!({"event":"application","name":data.user.name,"secret":json_field(&data.user.additional_fields, "secretNote")?}));
         }
         Ok(())
     }
@@ -140,7 +148,7 @@ async fn build(base: &str, input: &Value, events: Arc<Mutex<Vec<Value>>>) -> Aut
         "secretNote".into(),
         better_auth_core::config::UserFieldConfig {
             returned: Some(false),
-            default_value: Some(json!("issued-secret")),
+            default_value: Some("issued-secret".into()),
             ..Default::default()
         },
     );
@@ -148,7 +156,7 @@ async fn build(base: &str, input: &Value, events: Arc<Mutex<Vec<Value>>>) -> Aut
         "secretSession".into(),
         better_auth_core::config::UserFieldConfig {
             returned: Some(false),
-            default_value: Some(json!("hidden-session")),
+            default_value: Some("hidden-session".into()),
             ..Default::default()
         },
     );
@@ -165,9 +173,9 @@ async fn build(base: &str, input: &Value, events: Arc<Mutex<Vec<Value>>>) -> Aut
             let stored = endpoint.auth.database.get_user_by_id(linked.new_user.id.typed().unwrap()).await?.unwrap();
             let snapshot=endpoint.new_session()?.unwrap();
             fixture.record(json!({"event":"link","context":context(endpoint),
-                "oldHidden":linked.anonymous_user.additional_fields.get("secretNote"),"oldSessionHidden":linked.anonymous_session.additional_fields.get("secretSession"),
-                "newHidden":linked.new_user.additional_fields.get("secretNote"),"newSessionHidden":linked.new_session.additional_fields.get("secretSession"),
-                "newName":linked.new_user.name,"storedName":stored.name,"storedHidden":stored.additional_fields.get("secretNote"),
+                "oldHidden":json_field(&linked.anonymous_user.additional_fields, "secretNote")?,"oldSessionHidden":json_field(&linked.anonymous_session.additional_fields, "secretSession")?,
+                "newHidden":json_field(&linked.new_user.additional_fields, "secretNote")?,"newSessionHidden":json_field(&linked.new_session.additional_fields, "secretSession")?,
+                "newName":linked.new_user.name,"storedName":stored.name,"storedHidden":json_field(&stored.additional_fields, "secretNote")?,
                 "sameSnapshot":snapshot.user.id == linked.new_user.id && snapshot.user.name == linked.new_user.name,
                 "oldExists":endpoint.auth.database.get_user_by_id(linked.anonymous_user.id.typed().unwrap()).await?.is_some()}));
             endpoint.set_header("x-callback-observed","anonymous-link")?;
@@ -322,8 +330,8 @@ async fn run(base: &str, input: Value) -> AuthResult<Value> {
     };
     let lifetime = sessions
         .first()
-        .map(|session| (session.expires_at - session.created_at).num_milliseconds())
-        .map(|ms| (ms + 500) / 1000);
+        .map(|session| session.expires_at.milliseconds() - session.created_at.milliseconds())
+        .map(|ms| ((ms + 500.0) / 1000.0).trunc());
     let old_exists = if let Some(id) = old_id {
         Some(store.get_user_by_id(&id).await?.is_some())
     } else {

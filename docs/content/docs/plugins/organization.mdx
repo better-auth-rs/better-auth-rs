@@ -95,7 +95,7 @@ let config = OrganizationConfig {
         organization: UserConfig {
             additional_fields: Some([("department".to_owned(), UserFieldConfig {
                 required: Some(false),
-                default_value: Some(serde_json::json!("general")),
+                default_value: Some("general".into()),
                 ..Default::default()
             })].into()),
         },

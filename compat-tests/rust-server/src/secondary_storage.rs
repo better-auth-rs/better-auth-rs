@@ -373,7 +373,7 @@ impl SecondaryFixture {
                             .create_session_with_deferred_secondary(CreateSession {
                                 additional_fields: Default::default(),
                                 user_id: user_id.into(),
-                                expires_at: Utc::now() + chrono::Duration::days(7),
+                                expires_at: (Utc::now() + chrono::Duration::days(7)).into(),
                                 ip_address: None,
                                 user_agent: None,
                                 impersonated_by: None,

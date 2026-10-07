@@ -29,9 +29,20 @@ impl OAuthAccountSubject for MappedIdentity {
 impl OAuthProfileMapper for MappedIdentity {
     async fn map_profile(&self, profile: &Value) -> AuthResult<OAuthProfile> {
         Ok(OAuthProfile {
-            additional_fields: serde_json::from_value(
-                serde_json::json!({"department": "identity", "alias": if profile.get("picture").is_some() { "picture" } else { "plain" }, "internalCode": "untrusted", "secretNote": "provider-private" }),
-            )?,
+            additional_fields: better_auth::FieldMap::from([
+                ("department".into(), "identity".into()),
+                (
+                    "alias".into(),
+                    if profile.get("picture").is_some() {
+                        "picture"
+                    } else {
+                        "plain"
+                    }
+                    .into(),
+                ),
+                ("internalCode".into(), "untrusted".into()),
+                ("secretNote".into(), "provider-private".into()),
+            ]),
             name: Some(Some("Mapped OIDC User".to_owned()).into()),
             image: Some(None),
             email_verified: Some(Some(false).into()),

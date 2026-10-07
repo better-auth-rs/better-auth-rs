@@ -67,9 +67,9 @@ pub(super) async fn contract<S: AuthSchema>(
                     .await?
                     .expect("transaction reads its Wallet display record");
                 Ok(json!({
-                    "created":created.additional_fields,
-                    "readExact":read.additional_fields,
-                    "readAddress":by_address.additional_fields,
+                    "created":created.additional_fields.json()?,
+                    "readExact":read.additional_fields.json()?,
+                    "readAddress":by_address.additional_fields.json()?,
                 }))
             })
         })
@@ -94,7 +94,8 @@ pub(super) async fn contract<S: AuthSchema>(
         .store()
         .get_wallet_address(ADDRESS, Some(1))
         .await?
-        .map(|row| row.additional_fields);
+        .map(|row| row.additional_fields.json())
+        .transpose()?;
     let scenario_name = if scenario == Scenario::Success {
         "commit"
     } else {

@@ -187,7 +187,10 @@ async fn seed(store: &EphemeralStore) -> AuthResult<()> {
             "recipient@ordinary-parent.test",
             "member",
             "user-a",
-            "2099-01-01T00:00:00Z".parse().unwrap(),
+            "2099-01-01T00:00:00Z"
+                .parse::<DateTime<Utc>>()
+                .unwrap()
+                .into(),
         );
         invitation.id = Some(format!("invitation-{suffix}"));
         invitation.created_at = Some(now.into());
@@ -202,9 +205,11 @@ async fn seed(store: &EphemeralStore) -> AuthResult<()> {
     Ok(())
 }
 
-fn member(row: MemberUser) -> JsonValue {
-    json!({"label":row.member.additional_fields["label"], "detail":row.member.additional_fields["detail"],
-        "user":{"name":row.user.name, "image":row.user.image}})
+fn member(row: MemberUser) -> AuthResult<JsonValue> {
+    Ok(
+        json!({"label":row.member.additional_fields["label"].json()?, "detail":row.member.additional_fields["detail"].json()?,
+        "user":{"name":row.user.name, "image":row.user.image}}),
+    )
 }
 
 async fn query(store: &EphemeralStore, path: &str) -> AuthResult<JsonValue> {
@@ -214,8 +219,8 @@ async fn query(store: &EphemeralStore, path: &str) -> AuthResult<JsonValue> {
                 .get_member_with_user("organization-a", "user-a")
                 .await?
                 .unwrap(),
-        ),
-        "member-id" => member(store.get_member_by_id_with_user("member-a").await?.unwrap()),
+        )?,
+        "member-id" => member(store.get_member_by_id_with_user("member-a").await?.unwrap())?,
         "organizations" => json!(
             store
                 .list_user_organizations("user-a")
@@ -229,12 +234,12 @@ async fn query(store: &EphemeralStore, path: &str) -> AuthResult<JsonValue> {
                 .list_user_invitations("RECIPIENT@ordinary-parent.test")
                 .await?
                 .into_iter()
-                .map(
-                    |row| json!({"label":row.invitation.additional_fields["label"],
-                "detail":row.invitation.additional_fields["detail"],
+                .map(|row| Ok(
+                    json!({"label":row.invitation.additional_fields["label"].json()?,
+                "detail":row.invitation.additional_fields["detail"].json()?,
                 "organizationName":row.organization.unwrap().name})
-                )
-                .collect::<Vec<_>>()
+                ))
+                .collect::<AuthResult<Vec<_>>>()?
         ),
         "full" => {
             let row = store
@@ -247,10 +252,10 @@ async fn query(store: &EphemeralStore, path: &str) -> AuthResult<JsonValue> {
                 .await?
                 .unwrap();
             json!({"name":row.organization.name,"logo":row.organization.logo,
-                "members":row.members.into_iter().map(member).collect::<Vec<_>>(),
-                "invitations":row.invitations.into_iter().map(|row| json!({
-                    "label":row.additional_fields["label"],"detail":row.additional_fields["detail"]
-                })).collect::<Vec<_>>()})
+                "members":row.members.into_iter().map(member).collect::<AuthResult<Vec<_>>>()?,
+                "invitations":row.invitations.into_iter().map(|row| Ok(json!({
+                    "label":row.additional_fields["label"].json()?,"detail":row.additional_fields["detail"].json()?
+                }))).collect::<AuthResult<Vec<_>>>()?})
         }
         _ => return Err(AuthError::internal("Unknown ordinary parent fixture")),
     })
@@ -354,8 +359,8 @@ async fn check_case(fixture: &JsonValue) -> AuthResult<()> {
     let state = store.lock()?;
     assert_eq!(
         json!({
-            "memberDetail":state.members.get("member-a")?.unwrap().additional_fields["detail"],
-            "invitationDetail":state.invitations.get("invitation-a")?.unwrap().additional_fields["detail"],
+            "memberDetail":state.members.get("member-a")?.unwrap().additional_fields["detail"].json()?,
+            "invitationDetail":state.invitations.get("invitation-a")?.unwrap().additional_fields["detail"].json()?,
             "logo":state.organizations.get("organization-a")?.unwrap().logo,
         }),
         fixture["stored"]

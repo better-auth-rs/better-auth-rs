@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use axum::{Json, Router, routing::post};
 use better_auth::{AuthBuilder, AuthConfig, AuthError, AuthResult};
 use better_auth_core::{
-    CreateVerification,
+    CreateVerification, FieldMap, FieldValue,
     store::{MemoryCacheAdapter, SecondaryStorage},
     user_fields::{UserFieldConfig, UserFieldType},
     wire::VerificationView,
@@ -112,11 +112,11 @@ async fn run(input: Input) -> AuthResult<Value> {
                 output: Some(UserFieldTransform::new(move |_| {
                     output_events.lock().unwrap().push("output");
                     Ok(match input.kind {
-                        Kind::Number => Some(json!(4_102_444_800_000_i64)),
-                        Kind::Null => Some(Value::Null),
-                        Kind::Undefined => None,
-                        Kind::Object => Some(json!({"unknown": true})),
-                        Kind::InvalidDate => Some(json!("invalid-date")),
+                        Kind::Number => 4_102_444_800_000_i64.into(),
+                        Kind::Null => FieldValue::Null,
+                        Kind::Undefined => FieldValue::Undefined,
+                        Kind::Object => FieldMap::from([("unknown".into(), true.into())]).into(),
+                        Kind::InvalidDate => "invalid-date".into(),
                     })
                 })),
                 ..Default::default()

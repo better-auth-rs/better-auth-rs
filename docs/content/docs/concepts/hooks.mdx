@@ -217,7 +217,7 @@ Plugins register shared `DatabaseHooks<S>` through `AuthInitContext::register_da
 
 Plugins can declare user fields through `register_user_fields`. Adapter policies merge plugin fields before application fields. Endpoint validation and public filtering merge application fields before plugin fields. Cached users retain the adapter projection and only reapply public filtering.
 
-Use `UserFieldTransform::new(|value| Ok(value))` for a synchronous field callback. Use `UserFieldTransform::new_async(|value| async move { Ok(value) })` for an awaited callback. Both callback forms receive `Option<serde_json::Value>` and resolve to `AuthResult<Option<Value>>`; `None` means undefined and `Some(Value::Null)` means null.
+Use `UserFieldTransform::new(|value| Ok(value))` for a synchronous field callback. Use `UserFieldTransform::new_async(|value| async move { Ok(value) })` for an awaited callback. Both callback forms receive `FieldValue` and resolve to `AuthResult<FieldValue>`. `FieldValue::Undefined` means undefined, and `FieldValue::Null` means null. Preserve native values through callbacks. Use `.json()` only at a JSON boundary; conversion can fail.
 
 Core User, Account, Session, and Verification adapters await input callbacks before binding stored values. The adapters await output callbacks before converting and returning values. Each row keeps schema field order. Async list projections can advance rows independently and retain the original result order. A failed row stops its callbacks; the batch completes other started rows before returning the first observed original error. JavaScript rejection and continuation microtask timing is not reproduced.
 
