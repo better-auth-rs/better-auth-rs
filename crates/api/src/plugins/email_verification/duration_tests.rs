@@ -1,7 +1,6 @@
 #![expect(
     clippy::expect_used,
     clippy::indexing_slicing,
-    clippy::panic_in_result_fn,
     reason = "The paired JWT contract fails immediately on incomplete captured claims or expiration observations"
 )]
 

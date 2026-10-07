@@ -1,0 +1,5196 @@
+{
+  "version": "1.7.6",
+  "scenarios": [
+    {
+      "name": "default"
+    },
+    {
+      "name": "removed-reference",
+      "sessionFields": {
+        "userId": {
+          "required": true,
+          "index": true
+        }
+      },
+      "error": "No foreign key found for model user and base model session while performing join operation."
+    },
+    {
+      "name": "second-optional-user-reference",
+      "sessionFields": {
+        "ownerRef": {
+          "references": {
+            "model": "user",
+            "field": "id"
+          }
+        }
+      },
+      "error": "Multiple foreign keys found for model user and base model session while performing join operation. Only one foreign key is supported."
+    }
+  ],
+  "cases": [
+    {
+      "backend": "memory",
+      "scenario": "default",
+      "joins": false,
+      "before": {
+        "user": [
+          {
+            "name": "User a",
+            "email": "a@session-user-join-reference.test",
+            "emailVerified": true,
+            "image": "image-a",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "user-a"
+          },
+          {
+            "name": "User b",
+            "email": "b@session-user-join-reference.test",
+            "emailVerified": true,
+            "image": "image-b",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "user-b"
+          }
+        ],
+        "session": [
+          {
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "token": "session-user-join-existing-token",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "ipAddress": "203.0.113.8",
+            "userAgent": "session-user-join-reference",
+            "userId": "user-a",
+            "ownerRef": "user-b",
+            "id": "session-a"
+          }
+        ],
+        "account": [],
+        "verification": []
+      },
+      "operations": [
+        {
+          "name": "session-control",
+          "surface": "adapter",
+          "input": {
+            "model": "session",
+            "where": [
+              {
+                "field": "token",
+                "value": "session-user-join-existing-token"
+              }
+            ]
+          },
+          "events": [
+            [
+              "query",
+              "findOne",
+              "session"
+            ],
+            [
+              "output",
+              "session.token",
+              "session-user-join-existing-token"
+            ],
+            [
+              "output",
+              "session.userId",
+              "user-a"
+            ],
+            [
+              "output",
+              "session.ownerRef",
+              "user-b"
+            ]
+          ],
+          "returned": true,
+          "result": {
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "token": "session-user-join-existing-token",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "ipAddress": "203.0.113.8",
+            "userAgent": "session-user-join-reference",
+            "userId": "user-a",
+            "ownerRef": "user-b",
+            "id": "session-a"
+          },
+          "json": {
+            "expiresAt": "2100-01-02T03:04:05.000Z",
+            "token": "session-user-join-existing-token",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z",
+            "ipAddress": "203.0.113.8",
+            "userAgent": "session-user-join-reference",
+            "userId": "user-a",
+            "ownerRef": "user-b",
+            "id": "session-a"
+          },
+          "keyOrder": [
+            {
+              "path": [],
+              "keys": [
+                "expiresAt",
+                "token",
+                "createdAt",
+                "updatedAt",
+                "ipAddress",
+                "userAgent",
+                "userId",
+                "ownerRef",
+                "id"
+              ]
+            }
+          ],
+          "storageUnchanged": true
+        },
+        {
+          "name": "user-control",
+          "surface": "adapter",
+          "input": {
+            "model": "user",
+            "where": [
+              {
+                "field": "id",
+                "value": "user-a"
+              }
+            ]
+          },
+          "events": [
+            [
+              "query",
+              "findOne",
+              "user"
+            ],
+            [
+              "output",
+              "user.name",
+              "User a"
+            ],
+            [
+              "output",
+              "user.image",
+              "image-a"
+            ]
+          ],
+          "returned": true,
+          "result": {
+            "name": "User a",
+            "email": "a@session-user-join-reference.test",
+            "emailVerified": true,
+            "image": "image-a",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "user-a"
+          },
+          "json": {
+            "name": "User a",
+            "email": "a@session-user-join-reference.test",
+            "emailVerified": true,
+            "image": "image-a",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z",
+            "id": "user-a"
+          },
+          "keyOrder": [
+            {
+              "path": [],
+              "keys": [
+                "name",
+                "email",
+                "emailVerified",
+                "image",
+                "createdAt",
+                "updatedAt",
+                "id"
+              ]
+            }
+          ],
+          "storageUnchanged": true
+        },
+        {
+          "name": "adapter-missing",
+          "surface": "adapter",
+          "joined": true,
+          "input": {
+            "model": "session",
+            "where": [
+              {
+                "field": "token",
+                "value": "session-user-join-missing-token"
+              }
+            ],
+            "join": {
+              "user": true
+            }
+          },
+          "events": [
+            [
+              "query",
+              "findOne",
+              "session"
+            ]
+          ],
+          "returned": true,
+          "result": null,
+          "json": null,
+          "keyOrder": [],
+          "storageUnchanged": true
+        },
+        {
+          "name": "internal-missing",
+          "surface": "internal",
+          "joined": true,
+          "token": "session-user-join-missing-token",
+          "events": [
+            [
+              "query",
+              "findOne",
+              "session"
+            ]
+          ],
+          "returned": true,
+          "result": null,
+          "json": null,
+          "keyOrder": [],
+          "storageUnchanged": true
+        },
+        {
+          "name": "adapter-existing",
+          "surface": "adapter",
+          "joined": true,
+          "input": {
+            "model": "session",
+            "where": [
+              {
+                "field": "token",
+                "value": "session-user-join-existing-token"
+              }
+            ],
+            "join": {
+              "user": true
+            }
+          },
+          "events": [
+            [
+              "query",
+              "findOne",
+              "session"
+            ],
+            [
+              "output",
+              "session.token",
+              "session-user-join-existing-token"
+            ],
+            [
+              "output",
+              "session.userId",
+              "user-a"
+            ],
+            [
+              "output",
+              "session.ownerRef",
+              "user-b"
+            ],
+            [
+              "query",
+              "findOne",
+              "user"
+            ],
+            [
+              "output",
+              "user.name",
+              "User a"
+            ],
+            [
+              "output",
+              "user.image",
+              "image-a"
+            ]
+          ],
+          "returned": true,
+          "result": {
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "token": "session-user-join-existing-token",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "ipAddress": "203.0.113.8",
+            "userAgent": "session-user-join-reference",
+            "userId": "user-a",
+            "ownerRef": "user-b",
+            "id": "session-a",
+            "user": {
+              "name": "User a",
+              "email": "a@session-user-join-reference.test",
+              "emailVerified": true,
+              "image": "image-a",
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "user-a"
+            }
+          },
+          "json": {
+            "expiresAt": "2100-01-02T03:04:05.000Z",
+            "token": "session-user-join-existing-token",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z",
+            "ipAddress": "203.0.113.8",
+            "userAgent": "session-user-join-reference",
+            "userId": "user-a",
+            "ownerRef": "user-b",
+            "id": "session-a",
+            "user": {
+              "name": "User a",
+              "email": "a@session-user-join-reference.test",
+              "emailVerified": true,
+              "image": "image-a",
+              "createdAt": "2030-01-02T03:04:05.000Z",
+              "updatedAt": "2030-01-02T03:04:05.000Z",
+              "id": "user-a"
+            }
+          },
+          "keyOrder": [
+            {
+              "path": [],
+              "keys": [
+                "expiresAt",
+                "token",
+                "createdAt",
+                "updatedAt",
+                "ipAddress",
+                "userAgent",
+                "userId",
+                "ownerRef",
+                "id",
+                "user"
+              ]
+            },
+            {
+              "path": [
+                "user"
+              ],
+              "keys": [
+                "name",
+                "email",
+                "emailVerified",
+                "image",
+                "createdAt",
+                "updatedAt",
+                "id"
+              ]
+            }
+          ],
+          "storageUnchanged": true
+        },
+        {
+          "name": "internal-existing",
+          "surface": "internal",
+          "joined": true,
+          "token": "session-user-join-existing-token",
+          "events": [
+            [
+              "query",
+              "findOne",
+              "session"
+            ],
+            [
+              "output",
+              "session.token",
+              "session-user-join-existing-token"
+            ],
+            [
+              "output",
+              "session.userId",
+              "user-a"
+            ],
+            [
+              "output",
+              "session.ownerRef",
+              "user-b"
+            ],
+            [
+              "query",
+              "findOne",
+              "user"
+            ],
+            [
+              "output",
+              "user.name",
+              "User a"
+            ],
+            [
+              "output",
+              "user.image",
+              "image-a"
+            ]
+          ],
+          "returned": true,
+          "result": {
+            "session": {
+              "expiresAt": {
+                "type": "date",
+                "value": "2100-01-02T03:04:05.000Z"
+              },
+              "token": "session-user-join-existing-token",
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "ipAddress": "203.0.113.8",
+              "userAgent": "session-user-join-reference",
+              "userId": "user-a",
+              "ownerRef": "user-b",
+              "id": "session-a"
+            },
+            "user": {
+              "name": "User a",
+              "email": "a@session-user-join-reference.test",
+              "emailVerified": true,
+              "image": "image-a",
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "user-a"
+            }
+          },
+          "json": {
+            "session": {
+              "expiresAt": "2100-01-02T03:04:05.000Z",
+              "token": "session-user-join-existing-token",
+              "createdAt": "2030-01-02T03:04:05.000Z",
+              "updatedAt": "2030-01-02T03:04:05.000Z",
+              "ipAddress": "203.0.113.8",
+              "userAgent": "session-user-join-reference",
+              "userId": "user-a",
+              "ownerRef": "user-b",
+              "id": "session-a"
+            },
+            "user": {
+              "name": "User a",
+              "email": "a@session-user-join-reference.test",
+              "emailVerified": true,
+              "image": "image-a",
+              "createdAt": "2030-01-02T03:04:05.000Z",
+              "updatedAt": "2030-01-02T03:04:05.000Z",
+              "id": "user-a"
+            }
+          },
+          "keyOrder": [
+            {
+              "path": [],
+              "keys": [
+                "session",
+                "user"
+              ]
+            },
+            {
+              "path": [
+                "session"
+              ],
+              "keys": [
+                "expiresAt",
+                "token",
+                "createdAt",
+                "updatedAt",
+                "ipAddress",
+                "userAgent",
+                "userId",
+                "ownerRef",
+                "id"
+              ]
+            },
+            {
+              "path": [
+                "user"
+              ],
+              "keys": [
+                "name",
+                "email",
+                "emailVerified",
+                "image",
+                "createdAt",
+                "updatedAt",
+                "id"
+              ]
+            }
+          ],
+          "storageUnchanged": true
+        }
+      ],
+      "after": {
+        "user": [
+          {
+            "name": "User a",
+            "email": "a@session-user-join-reference.test",
+            "emailVerified": true,
+            "image": "image-a",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "user-a"
+          },
+          {
+            "name": "User b",
+            "email": "b@session-user-join-reference.test",
+            "emailVerified": true,
+            "image": "image-b",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "user-b"
+          }
+        ],
+        "session": [
+          {
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "token": "session-user-join-existing-token",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "ipAddress": "203.0.113.8",
+            "userAgent": "session-user-join-reference",
+            "userId": "user-a",
+            "ownerRef": "user-b",
+            "id": "session-a"
+          }
+        ],
+        "account": [],
+        "verification": []
+      }
+    },
+    {
+      "backend": "memory",
+      "scenario": "default",
+      "joins": true,
+      "before": {
+        "user": [
+          {
+            "name": "User a",
+            "email": "a@session-user-join-reference.test",
+            "emailVerified": true,
+            "image": "image-a",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "user-a"
+          },
+          {
+            "name": "User b",
+            "email": "b@session-user-join-reference.test",
+            "emailVerified": true,
+            "image": "image-b",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "user-b"
+          }
+        ],
+        "session": [
+          {
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "token": "session-user-join-existing-token",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "ipAddress": "203.0.113.8",
+            "userAgent": "session-user-join-reference",
+            "userId": "user-a",
+            "ownerRef": "user-b",
+            "id": "session-a"
+          }
+        ],
+        "account": [],
+        "verification": []
+      },
+      "operations": [
+        {
+          "name": "session-control",
+          "surface": "adapter",
+          "input": {
+            "model": "session",
+            "where": [
+              {
+                "field": "token",
+                "value": "session-user-join-existing-token"
+              }
+            ]
+          },
+          "events": [
+            [
+              "query",
+              "findOne",
+              "session"
+            ],
+            [
+              "output",
+              "session.token",
+              "session-user-join-existing-token"
+            ],
+            [
+              "output",
+              "session.userId",
+              "user-a"
+            ],
+            [
+              "output",
+              "session.ownerRef",
+              "user-b"
+            ]
+          ],
+          "returned": true,
+          "result": {
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "token": "session-user-join-existing-token",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "ipAddress": "203.0.113.8",
+            "userAgent": "session-user-join-reference",
+            "userId": "user-a",
+            "ownerRef": "user-b",
+            "id": "session-a"
+          },
+          "json": {
+            "expiresAt": "2100-01-02T03:04:05.000Z",
+            "token": "session-user-join-existing-token",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z",
+            "ipAddress": "203.0.113.8",
+            "userAgent": "session-user-join-reference",
+            "userId": "user-a",
+            "ownerRef": "user-b",
+            "id": "session-a"
+          },
+          "keyOrder": [
+            {
+              "path": [],
+              "keys": [
+                "expiresAt",
+                "token",
+                "createdAt",
+                "updatedAt",
+                "ipAddress",
+                "userAgent",
+                "userId",
+                "ownerRef",
+                "id"
+              ]
+            }
+          ],
+          "storageUnchanged": true
+        },
+        {
+          "name": "user-control",
+          "surface": "adapter",
+          "input": {
+            "model": "user",
+            "where": [
+              {
+                "field": "id",
+                "value": "user-a"
+              }
+            ]
+          },
+          "events": [
+            [
+              "query",
+              "findOne",
+              "user"
+            ],
+            [
+              "output",
+              "user.name",
+              "User a"
+            ],
+            [
+              "output",
+              "user.image",
+              "image-a"
+            ]
+          ],
+          "returned": true,
+          "result": {
+            "name": "User a",
+            "email": "a@session-user-join-reference.test",
+            "emailVerified": true,
+            "image": "image-a",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "user-a"
+          },
+          "json": {
+            "name": "User a",
+            "email": "a@session-user-join-reference.test",
+            "emailVerified": true,
+            "image": "image-a",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z",
+            "id": "user-a"
+          },
+          "keyOrder": [
+            {
+              "path": [],
+              "keys": [
+                "name",
+                "email",
+                "emailVerified",
+                "image",
+                "createdAt",
+                "updatedAt",
+                "id"
+              ]
+            }
+          ],
+          "storageUnchanged": true
+        },
+        {
+          "name": "adapter-missing",
+          "surface": "adapter",
+          "joined": true,
+          "input": {
+            "model": "session",
+            "where": [
+              {
+                "field": "token",
+                "value": "session-user-join-missing-token"
+              }
+            ],
+            "join": {
+              "user": true
+            }
+          },
+          "events": [
+            [
+              "query",
+              "findOne",
+              "session"
+            ]
+          ],
+          "returned": true,
+          "result": null,
+          "json": null,
+          "keyOrder": [],
+          "storageUnchanged": true
+        },
+        {
+          "name": "internal-missing",
+          "surface": "internal",
+          "joined": true,
+          "token": "session-user-join-missing-token",
+          "events": [
+            [
+              "query",
+              "findOne",
+              "session"
+            ]
+          ],
+          "returned": true,
+          "result": null,
+          "json": null,
+          "keyOrder": [],
+          "storageUnchanged": true
+        },
+        {
+          "name": "adapter-existing",
+          "surface": "adapter",
+          "joined": true,
+          "input": {
+            "model": "session",
+            "where": [
+              {
+                "field": "token",
+                "value": "session-user-join-existing-token"
+              }
+            ],
+            "join": {
+              "user": true
+            }
+          },
+          "events": [
+            [
+              "query",
+              "findOne",
+              "session"
+            ],
+            [
+              "output",
+              "session.token",
+              "session-user-join-existing-token"
+            ],
+            [
+              "output",
+              "session.userId",
+              "user-a"
+            ],
+            [
+              "output",
+              "session.ownerRef",
+              "user-b"
+            ],
+            [
+              "output",
+              "user.name",
+              "User a"
+            ],
+            [
+              "output",
+              "user.image",
+              "image-a"
+            ]
+          ],
+          "returned": true,
+          "result": {
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "token": "session-user-join-existing-token",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "ipAddress": "203.0.113.8",
+            "userAgent": "session-user-join-reference",
+            "userId": "user-a",
+            "ownerRef": "user-b",
+            "id": "session-a",
+            "user": {
+              "name": "User a",
+              "email": "a@session-user-join-reference.test",
+              "emailVerified": true,
+              "image": "image-a",
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "user-a"
+            }
+          },
+          "json": {
+            "expiresAt": "2100-01-02T03:04:05.000Z",
+            "token": "session-user-join-existing-token",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z",
+            "ipAddress": "203.0.113.8",
+            "userAgent": "session-user-join-reference",
+            "userId": "user-a",
+            "ownerRef": "user-b",
+            "id": "session-a",
+            "user": {
+              "name": "User a",
+              "email": "a@session-user-join-reference.test",
+              "emailVerified": true,
+              "image": "image-a",
+              "createdAt": "2030-01-02T03:04:05.000Z",
+              "updatedAt": "2030-01-02T03:04:05.000Z",
+              "id": "user-a"
+            }
+          },
+          "keyOrder": [
+            {
+              "path": [],
+              "keys": [
+                "expiresAt",
+                "token",
+                "createdAt",
+                "updatedAt",
+                "ipAddress",
+                "userAgent",
+                "userId",
+                "ownerRef",
+                "id",
+                "user"
+              ]
+            },
+            {
+              "path": [
+                "user"
+              ],
+              "keys": [
+                "name",
+                "email",
+                "emailVerified",
+                "image",
+                "createdAt",
+                "updatedAt",
+                "id"
+              ]
+            }
+          ],
+          "storageUnchanged": true
+        },
+        {
+          "name": "internal-existing",
+          "surface": "internal",
+          "joined": true,
+          "token": "session-user-join-existing-token",
+          "events": [
+            [
+              "query",
+              "findOne",
+              "session"
+            ],
+            [
+              "output",
+              "session.token",
+              "session-user-join-existing-token"
+            ],
+            [
+              "output",
+              "session.userId",
+              "user-a"
+            ],
+            [
+              "output",
+              "session.ownerRef",
+              "user-b"
+            ],
+            [
+              "output",
+              "user.name",
+              "User a"
+            ],
+            [
+              "output",
+              "user.image",
+              "image-a"
+            ]
+          ],
+          "returned": true,
+          "result": {
+            "session": {
+              "expiresAt": {
+                "type": "date",
+                "value": "2100-01-02T03:04:05.000Z"
+              },
+              "token": "session-user-join-existing-token",
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "ipAddress": "203.0.113.8",
+              "userAgent": "session-user-join-reference",
+              "userId": "user-a",
+              "ownerRef": "user-b",
+              "id": "session-a"
+            },
+            "user": {
+              "name": "User a",
+              "email": "a@session-user-join-reference.test",
+              "emailVerified": true,
+              "image": "image-a",
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "user-a"
+            }
+          },
+          "json": {
+            "session": {
+              "expiresAt": "2100-01-02T03:04:05.000Z",
+              "token": "session-user-join-existing-token",
+              "createdAt": "2030-01-02T03:04:05.000Z",
+              "updatedAt": "2030-01-02T03:04:05.000Z",
+              "ipAddress": "203.0.113.8",
+              "userAgent": "session-user-join-reference",
+              "userId": "user-a",
+              "ownerRef": "user-b",
+              "id": "session-a"
+            },
+            "user": {
+              "name": "User a",
+              "email": "a@session-user-join-reference.test",
+              "emailVerified": true,
+              "image": "image-a",
+              "createdAt": "2030-01-02T03:04:05.000Z",
+              "updatedAt": "2030-01-02T03:04:05.000Z",
+              "id": "user-a"
+            }
+          },
+          "keyOrder": [
+            {
+              "path": [],
+              "keys": [
+                "session",
+                "user"
+              ]
+            },
+            {
+              "path": [
+                "session"
+              ],
+              "keys": [
+                "expiresAt",
+                "token",
+                "createdAt",
+                "updatedAt",
+                "ipAddress",
+                "userAgent",
+                "userId",
+                "ownerRef",
+                "id"
+              ]
+            },
+            {
+              "path": [
+                "user"
+              ],
+              "keys": [
+                "name",
+                "email",
+                "emailVerified",
+                "image",
+                "createdAt",
+                "updatedAt",
+                "id"
+              ]
+            }
+          ],
+          "storageUnchanged": true
+        }
+      ],
+      "after": {
+        "user": [
+          {
+            "name": "User a",
+            "email": "a@session-user-join-reference.test",
+            "emailVerified": true,
+            "image": "image-a",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "user-a"
+          },
+          {
+            "name": "User b",
+            "email": "b@session-user-join-reference.test",
+            "emailVerified": true,
+            "image": "image-b",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "user-b"
+          }
+        ],
+        "session": [
+          {
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "token": "session-user-join-existing-token",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "ipAddress": "203.0.113.8",
+            "userAgent": "session-user-join-reference",
+            "userId": "user-a",
+            "ownerRef": "user-b",
+            "id": "session-a"
+          }
+        ],
+        "account": [],
+        "verification": []
+      }
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "default",
+      "joins": false,
+      "before": {
+        "user": [
+          {
+            "id": "user-a",
+            "name": "User a",
+            "email": "a@session-user-join-reference.test",
+            "emailVerified": 1,
+            "image": "image-a",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          },
+          {
+            "id": "user-b",
+            "name": "User b",
+            "email": "b@session-user-join-reference.test",
+            "emailVerified": 1,
+            "image": "image-b",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          }
+        ],
+        "session": [
+          {
+            "id": "session-a",
+            "expiresAt": "2100-01-02T03:04:05.000Z",
+            "token": "session-user-join-existing-token",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z",
+            "ipAddress": "203.0.113.8",
+            "userAgent": "session-user-join-reference",
+            "userId": "user-a",
+            "ownerRef": "user-b"
+          }
+        ],
+        "account": [],
+        "verification": []
+      },
+      "operations": [
+        {
+          "name": "session-control",
+          "surface": "adapter",
+          "input": {
+            "model": "session",
+            "where": [
+              {
+                "field": "token",
+                "value": "session-user-join-existing-token"
+              }
+            ]
+          },
+          "events": [
+            [
+              "query",
+              "findOne",
+              "session"
+            ],
+            [
+              "output",
+              "session.token",
+              "session-user-join-existing-token"
+            ],
+            [
+              "output",
+              "session.userId",
+              "user-a"
+            ],
+            [
+              "output",
+              "session.ownerRef",
+              "user-b"
+            ]
+          ],
+          "returned": true,
+          "result": {
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "token": "session-user-join-existing-token",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "ipAddress": "203.0.113.8",
+            "userAgent": "session-user-join-reference",
+            "userId": "user-a",
+            "ownerRef": "user-b",
+            "id": "session-a"
+          },
+          "json": {
+            "expiresAt": "2100-01-02T03:04:05.000Z",
+            "token": "session-user-join-existing-token",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z",
+            "ipAddress": "203.0.113.8",
+            "userAgent": "session-user-join-reference",
+            "userId": "user-a",
+            "ownerRef": "user-b",
+            "id": "session-a"
+          },
+          "keyOrder": [
+            {
+              "path": [],
+              "keys": [
+                "expiresAt",
+                "token",
+                "createdAt",
+                "updatedAt",
+                "ipAddress",
+                "userAgent",
+                "userId",
+                "ownerRef",
+                "id"
+              ]
+            }
+          ],
+          "storageUnchanged": true
+        },
+        {
+          "name": "user-control",
+          "surface": "adapter",
+          "input": {
+            "model": "user",
+            "where": [
+              {
+                "field": "id",
+                "value": "user-a"
+              }
+            ]
+          },
+          "events": [
+            [
+              "query",
+              "findOne",
+              "user"
+            ],
+            [
+              "output",
+              "user.name",
+              "User a"
+            ],
+            [
+              "output",
+              "user.image",
+              "image-a"
+            ]
+          ],
+          "returned": true,
+          "result": {
+            "name": "User a",
+            "email": "a@session-user-join-reference.test",
+            "emailVerified": true,
+            "image": "image-a",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "user-a"
+          },
+          "json": {
+            "name": "User a",
+            "email": "a@session-user-join-reference.test",
+            "emailVerified": true,
+            "image": "image-a",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z",
+            "id": "user-a"
+          },
+          "keyOrder": [
+            {
+              "path": [],
+              "keys": [
+                "name",
+                "email",
+                "emailVerified",
+                "image",
+                "createdAt",
+                "updatedAt",
+                "id"
+              ]
+            }
+          ],
+          "storageUnchanged": true
+        },
+        {
+          "name": "adapter-missing",
+          "surface": "adapter",
+          "joined": true,
+          "input": {
+            "model": "session",
+            "where": [
+              {
+                "field": "token",
+                "value": "session-user-join-missing-token"
+              }
+            ],
+            "join": {
+              "user": true
+            }
+          },
+          "events": [
+            [
+              "query",
+              "findOne",
+              "session"
+            ]
+          ],
+          "returned": true,
+          "result": null,
+          "json": null,
+          "keyOrder": [],
+          "storageUnchanged": true
+        },
+        {
+          "name": "internal-missing",
+          "surface": "internal",
+          "joined": true,
+          "token": "session-user-join-missing-token",
+          "events": [
+            [
+              "query",
+              "findOne",
+              "session"
+            ]
+          ],
+          "returned": true,
+          "result": null,
+          "json": null,
+          "keyOrder": [],
+          "storageUnchanged": true
+        },
+        {
+          "name": "adapter-existing",
+          "surface": "adapter",
+          "joined": true,
+          "input": {
+            "model": "session",
+            "where": [
+              {
+                "field": "token",
+                "value": "session-user-join-existing-token"
+              }
+            ],
+            "join": {
+              "user": true
+            }
+          },
+          "events": [
+            [
+              "query",
+              "findOne",
+              "session"
+            ],
+            [
+              "output",
+              "session.token",
+              "session-user-join-existing-token"
+            ],
+            [
+              "output",
+              "session.userId",
+              "user-a"
+            ],
+            [
+              "output",
+              "session.ownerRef",
+              "user-b"
+            ],
+            [
+              "query",
+              "findOne",
+              "user"
+            ],
+            [
+              "output",
+              "user.name",
+              "User a"
+            ],
+            [
+              "output",
+              "user.image",
+              "image-a"
+            ]
+          ],
+          "returned": true,
+          "result": {
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "token": "session-user-join-existing-token",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "ipAddress": "203.0.113.8",
+            "userAgent": "session-user-join-reference",
+            "userId": "user-a",
+            "ownerRef": "user-b",
+            "id": "session-a",
+            "user": {
+              "name": "User a",
+              "email": "a@session-user-join-reference.test",
+              "emailVerified": true,
+              "image": "image-a",
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "user-a"
+            }
+          },
+          "json": {
+            "expiresAt": "2100-01-02T03:04:05.000Z",
+            "token": "session-user-join-existing-token",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z",
+            "ipAddress": "203.0.113.8",
+            "userAgent": "session-user-join-reference",
+            "userId": "user-a",
+            "ownerRef": "user-b",
+            "id": "session-a",
+            "user": {
+              "name": "User a",
+              "email": "a@session-user-join-reference.test",
+              "emailVerified": true,
+              "image": "image-a",
+              "createdAt": "2030-01-02T03:04:05.000Z",
+              "updatedAt": "2030-01-02T03:04:05.000Z",
+              "id": "user-a"
+            }
+          },
+          "keyOrder": [
+            {
+              "path": [],
+              "keys": [
+                "expiresAt",
+                "token",
+                "createdAt",
+                "updatedAt",
+                "ipAddress",
+                "userAgent",
+                "userId",
+                "ownerRef",
+                "id",
+                "user"
+              ]
+            },
+            {
+              "path": [
+                "user"
+              ],
+              "keys": [
+                "name",
+                "email",
+                "emailVerified",
+                "image",
+                "createdAt",
+                "updatedAt",
+                "id"
+              ]
+            }
+          ],
+          "storageUnchanged": true
+        },
+        {
+          "name": "internal-existing",
+          "surface": "internal",
+          "joined": true,
+          "token": "session-user-join-existing-token",
+          "events": [
+            [
+              "query",
+              "findOne",
+              "session"
+            ],
+            [
+              "output",
+              "session.token",
+              "session-user-join-existing-token"
+            ],
+            [
+              "output",
+              "session.userId",
+              "user-a"
+            ],
+            [
+              "output",
+              "session.ownerRef",
+              "user-b"
+            ],
+            [
+              "query",
+              "findOne",
+              "user"
+            ],
+            [
+              "output",
+              "user.name",
+              "User a"
+            ],
+            [
+              "output",
+              "user.image",
+              "image-a"
+            ]
+          ],
+          "returned": true,
+          "result": {
+            "session": {
+              "expiresAt": {
+                "type": "date",
+                "value": "2100-01-02T03:04:05.000Z"
+              },
+              "token": "session-user-join-existing-token",
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "ipAddress": "203.0.113.8",
+              "userAgent": "session-user-join-reference",
+              "userId": "user-a",
+              "ownerRef": "user-b",
+              "id": "session-a"
+            },
+            "user": {
+              "name": "User a",
+              "email": "a@session-user-join-reference.test",
+              "emailVerified": true,
+              "image": "image-a",
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "user-a"
+            }
+          },
+          "json": {
+            "session": {
+              "expiresAt": "2100-01-02T03:04:05.000Z",
+              "token": "session-user-join-existing-token",
+              "createdAt": "2030-01-02T03:04:05.000Z",
+              "updatedAt": "2030-01-02T03:04:05.000Z",
+              "ipAddress": "203.0.113.8",
+              "userAgent": "session-user-join-reference",
+              "userId": "user-a",
+              "ownerRef": "user-b",
+              "id": "session-a"
+            },
+            "user": {
+              "name": "User a",
+              "email": "a@session-user-join-reference.test",
+              "emailVerified": true,
+              "image": "image-a",
+              "createdAt": "2030-01-02T03:04:05.000Z",
+              "updatedAt": "2030-01-02T03:04:05.000Z",
+              "id": "user-a"
+            }
+          },
+          "keyOrder": [
+            {
+              "path": [],
+              "keys": [
+                "session",
+                "user"
+              ]
+            },
+            {
+              "path": [
+                "session"
+              ],
+              "keys": [
+                "expiresAt",
+                "token",
+                "createdAt",
+                "updatedAt",
+                "ipAddress",
+                "userAgent",
+                "userId",
+                "ownerRef",
+                "id"
+              ]
+            },
+            {
+              "path": [
+                "user"
+              ],
+              "keys": [
+                "name",
+                "email",
+                "emailVerified",
+                "image",
+                "createdAt",
+                "updatedAt",
+                "id"
+              ]
+            }
+          ],
+          "storageUnchanged": true
+        }
+      ],
+      "after": {
+        "user": [
+          {
+            "id": "user-a",
+            "name": "User a",
+            "email": "a@session-user-join-reference.test",
+            "emailVerified": 1,
+            "image": "image-a",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          },
+          {
+            "id": "user-b",
+            "name": "User b",
+            "email": "b@session-user-join-reference.test",
+            "emailVerified": 1,
+            "image": "image-b",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          }
+        ],
+        "session": [
+          {
+            "id": "session-a",
+            "expiresAt": "2100-01-02T03:04:05.000Z",
+            "token": "session-user-join-existing-token",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z",
+            "ipAddress": "203.0.113.8",
+            "userAgent": "session-user-join-reference",
+            "userId": "user-a",
+            "ownerRef": "user-b"
+          }
+        ],
+        "account": [],
+        "verification": []
+      }
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "default",
+      "joins": true,
+      "before": {
+        "user": [
+          {
+            "id": "user-a",
+            "name": "User a",
+            "email": "a@session-user-join-reference.test",
+            "emailVerified": 1,
+            "image": "image-a",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          },
+          {
+            "id": "user-b",
+            "name": "User b",
+            "email": "b@session-user-join-reference.test",
+            "emailVerified": 1,
+            "image": "image-b",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          }
+        ],
+        "session": [
+          {
+            "id": "session-a",
+            "expiresAt": "2100-01-02T03:04:05.000Z",
+            "token": "session-user-join-existing-token",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z",
+            "ipAddress": "203.0.113.8",
+            "userAgent": "session-user-join-reference",
+            "userId": "user-a",
+            "ownerRef": "user-b"
+          }
+        ],
+        "account": [],
+        "verification": []
+      },
+      "operations": [
+        {
+          "name": "session-control",
+          "surface": "adapter",
+          "input": {
+            "model": "session",
+            "where": [
+              {
+                "field": "token",
+                "value": "session-user-join-existing-token"
+              }
+            ]
+          },
+          "events": [
+            [
+              "query",
+              "findOne",
+              "session"
+            ],
+            [
+              "output",
+              "session.token",
+              "session-user-join-existing-token"
+            ],
+            [
+              "output",
+              "session.userId",
+              "user-a"
+            ],
+            [
+              "output",
+              "session.ownerRef",
+              "user-b"
+            ]
+          ],
+          "returned": true,
+          "result": {
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "token": "session-user-join-existing-token",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "ipAddress": "203.0.113.8",
+            "userAgent": "session-user-join-reference",
+            "userId": "user-a",
+            "ownerRef": "user-b",
+            "id": "session-a"
+          },
+          "json": {
+            "expiresAt": "2100-01-02T03:04:05.000Z",
+            "token": "session-user-join-existing-token",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z",
+            "ipAddress": "203.0.113.8",
+            "userAgent": "session-user-join-reference",
+            "userId": "user-a",
+            "ownerRef": "user-b",
+            "id": "session-a"
+          },
+          "keyOrder": [
+            {
+              "path": [],
+              "keys": [
+                "expiresAt",
+                "token",
+                "createdAt",
+                "updatedAt",
+                "ipAddress",
+                "userAgent",
+                "userId",
+                "ownerRef",
+                "id"
+              ]
+            }
+          ],
+          "storageUnchanged": true
+        },
+        {
+          "name": "user-control",
+          "surface": "adapter",
+          "input": {
+            "model": "user",
+            "where": [
+              {
+                "field": "id",
+                "value": "user-a"
+              }
+            ]
+          },
+          "events": [
+            [
+              "query",
+              "findOne",
+              "user"
+            ],
+            [
+              "output",
+              "user.name",
+              "User a"
+            ],
+            [
+              "output",
+              "user.image",
+              "image-a"
+            ]
+          ],
+          "returned": true,
+          "result": {
+            "name": "User a",
+            "email": "a@session-user-join-reference.test",
+            "emailVerified": true,
+            "image": "image-a",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "user-a"
+          },
+          "json": {
+            "name": "User a",
+            "email": "a@session-user-join-reference.test",
+            "emailVerified": true,
+            "image": "image-a",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z",
+            "id": "user-a"
+          },
+          "keyOrder": [
+            {
+              "path": [],
+              "keys": [
+                "name",
+                "email",
+                "emailVerified",
+                "image",
+                "createdAt",
+                "updatedAt",
+                "id"
+              ]
+            }
+          ],
+          "storageUnchanged": true
+        },
+        {
+          "name": "adapter-missing",
+          "surface": "adapter",
+          "joined": true,
+          "input": {
+            "model": "session",
+            "where": [
+              {
+                "field": "token",
+                "value": "session-user-join-missing-token"
+              }
+            ],
+            "join": {
+              "user": true
+            }
+          },
+          "events": [
+            [
+              "query",
+              "findOne",
+              "session"
+            ]
+          ],
+          "returned": true,
+          "result": null,
+          "json": null,
+          "keyOrder": [],
+          "storageUnchanged": true
+        },
+        {
+          "name": "internal-missing",
+          "surface": "internal",
+          "joined": true,
+          "token": "session-user-join-missing-token",
+          "events": [
+            [
+              "query",
+              "findOne",
+              "session"
+            ]
+          ],
+          "returned": true,
+          "result": null,
+          "json": null,
+          "keyOrder": [],
+          "storageUnchanged": true
+        },
+        {
+          "name": "adapter-existing",
+          "surface": "adapter",
+          "joined": true,
+          "input": {
+            "model": "session",
+            "where": [
+              {
+                "field": "token",
+                "value": "session-user-join-existing-token"
+              }
+            ],
+            "join": {
+              "user": true
+            }
+          },
+          "events": [
+            [
+              "query",
+              "findOne",
+              "session"
+            ],
+            [
+              "output",
+              "session.token",
+              "session-user-join-existing-token"
+            ],
+            [
+              "output",
+              "session.userId",
+              "user-a"
+            ],
+            [
+              "output",
+              "session.ownerRef",
+              "user-b"
+            ],
+            [
+              "output",
+              "user.name",
+              "User a"
+            ],
+            [
+              "output",
+              "user.image",
+              "image-a"
+            ]
+          ],
+          "returned": true,
+          "result": {
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "token": "session-user-join-existing-token",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "ipAddress": "203.0.113.8",
+            "userAgent": "session-user-join-reference",
+            "userId": "user-a",
+            "ownerRef": "user-b",
+            "id": "session-a",
+            "user": {
+              "name": "User a",
+              "email": "a@session-user-join-reference.test",
+              "emailVerified": true,
+              "image": "image-a",
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "user-a"
+            }
+          },
+          "json": {
+            "expiresAt": "2100-01-02T03:04:05.000Z",
+            "token": "session-user-join-existing-token",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z",
+            "ipAddress": "203.0.113.8",
+            "userAgent": "session-user-join-reference",
+            "userId": "user-a",
+            "ownerRef": "user-b",
+            "id": "session-a",
+            "user": {
+              "name": "User a",
+              "email": "a@session-user-join-reference.test",
+              "emailVerified": true,
+              "image": "image-a",
+              "createdAt": "2030-01-02T03:04:05.000Z",
+              "updatedAt": "2030-01-02T03:04:05.000Z",
+              "id": "user-a"
+            }
+          },
+          "keyOrder": [
+            {
+              "path": [],
+              "keys": [
+                "expiresAt",
+                "token",
+                "createdAt",
+                "updatedAt",
+                "ipAddress",
+                "userAgent",
+                "userId",
+                "ownerRef",
+                "id",
+                "user"
+              ]
+            },
+            {
+              "path": [
+                "user"
+              ],
+              "keys": [
+                "name",
+                "email",
+                "emailVerified",
+                "image",
+                "createdAt",
+                "updatedAt",
+                "id"
+              ]
+            }
+          ],
+          "storageUnchanged": true
+        },
+        {
+          "name": "internal-existing",
+          "surface": "internal",
+          "joined": true,
+          "token": "session-user-join-existing-token",
+          "events": [
+            [
+              "query",
+              "findOne",
+              "session"
+            ],
+            [
+              "output",
+              "session.token",
+              "session-user-join-existing-token"
+            ],
+            [
+              "output",
+              "session.userId",
+              "user-a"
+            ],
+            [
+              "output",
+              "session.ownerRef",
+              "user-b"
+            ],
+            [
+              "output",
+              "user.name",
+              "User a"
+            ],
+            [
+              "output",
+              "user.image",
+              "image-a"
+            ]
+          ],
+          "returned": true,
+          "result": {
+            "session": {
+              "expiresAt": {
+                "type": "date",
+                "value": "2100-01-02T03:04:05.000Z"
+              },
+              "token": "session-user-join-existing-token",
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "ipAddress": "203.0.113.8",
+              "userAgent": "session-user-join-reference",
+              "userId": "user-a",
+              "ownerRef": "user-b",
+              "id": "session-a"
+            },
+            "user": {
+              "name": "User a",
+              "email": "a@session-user-join-reference.test",
+              "emailVerified": true,
+              "image": "image-a",
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "id": "user-a"
+            }
+          },
+          "json": {
+            "session": {
+              "expiresAt": "2100-01-02T03:04:05.000Z",
+              "token": "session-user-join-existing-token",
+              "createdAt": "2030-01-02T03:04:05.000Z",
+              "updatedAt": "2030-01-02T03:04:05.000Z",
+              "ipAddress": "203.0.113.8",
+              "userAgent": "session-user-join-reference",
+              "userId": "user-a",
+              "ownerRef": "user-b",
+              "id": "session-a"
+            },
+            "user": {
+              "name": "User a",
+              "email": "a@session-user-join-reference.test",
+              "emailVerified": true,
+              "image": "image-a",
+              "createdAt": "2030-01-02T03:04:05.000Z",
+              "updatedAt": "2030-01-02T03:04:05.000Z",
+              "id": "user-a"
+            }
+          },
+          "keyOrder": [
+            {
+              "path": [],
+              "keys": [
+                "session",
+                "user"
+              ]
+            },
+            {
+              "path": [
+                "session"
+              ],
+              "keys": [
+                "expiresAt",
+                "token",
+                "createdAt",
+                "updatedAt",
+                "ipAddress",
+                "userAgent",
+                "userId",
+                "ownerRef",
+                "id"
+              ]
+            },
+            {
+              "path": [
+                "user"
+              ],
+              "keys": [
+                "name",
+                "email",
+                "emailVerified",
+                "image",
+                "createdAt",
+                "updatedAt",
+                "id"
+              ]
+            }
+          ],
+          "storageUnchanged": true
+        }
+      ],
+      "after": {
+        "user": [
+          {
+            "id": "user-a",
+            "name": "User a",
+            "email": "a@session-user-join-reference.test",
+            "emailVerified": 1,
+            "image": "image-a",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          },
+          {
+            "id": "user-b",
+            "name": "User b",
+            "email": "b@session-user-join-reference.test",
+            "emailVerified": 1,
+            "image": "image-b",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          }
+        ],
+        "session": [
+          {
+            "id": "session-a",
+            "expiresAt": "2100-01-02T03:04:05.000Z",
+            "token": "session-user-join-existing-token",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z",
+            "ipAddress": "203.0.113.8",
+            "userAgent": "session-user-join-reference",
+            "userId": "user-a",
+            "ownerRef": "user-b"
+          }
+        ],
+        "account": [],
+        "verification": []
+      }
+    },
+    {
+      "backend": "memory",
+      "scenario": "removed-reference",
+      "joins": false,
+      "before": {
+        "user": [
+          {
+            "name": "User a",
+            "email": "a@session-user-join-reference.test",
+            "emailVerified": true,
+            "image": "image-a",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "user-a"
+          },
+          {
+            "name": "User b",
+            "email": "b@session-user-join-reference.test",
+            "emailVerified": true,
+            "image": "image-b",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "user-b"
+          }
+        ],
+        "session": [
+          {
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "token": "session-user-join-existing-token",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "ipAddress": "203.0.113.8",
+            "userAgent": "session-user-join-reference",
+            "userId": "user-a",
+            "ownerRef": "user-b",
+            "id": "session-a"
+          }
+        ],
+        "account": [],
+        "verification": []
+      },
+      "operations": [
+        {
+          "name": "session-control",
+          "surface": "adapter",
+          "input": {
+            "model": "session",
+            "where": [
+              {
+                "field": "token",
+                "value": "session-user-join-existing-token"
+              }
+            ]
+          },
+          "events": [
+            [
+              "query",
+              "findOne",
+              "session"
+            ],
+            [
+              "output",
+              "session.token",
+              "session-user-join-existing-token"
+            ],
+            [
+              "output",
+              "session.userId",
+              "user-a"
+            ],
+            [
+              "output",
+              "session.ownerRef",
+              "user-b"
+            ]
+          ],
+          "returned": true,
+          "result": {
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "token": "session-user-join-existing-token",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "ipAddress": "203.0.113.8",
+            "userAgent": "session-user-join-reference",
+            "userId": "user-a",
+            "ownerRef": "user-b",
+            "id": "session-a"
+          },
+          "json": {
+            "expiresAt": "2100-01-02T03:04:05.000Z",
+            "token": "session-user-join-existing-token",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z",
+            "ipAddress": "203.0.113.8",
+            "userAgent": "session-user-join-reference",
+            "userId": "user-a",
+            "ownerRef": "user-b",
+            "id": "session-a"
+          },
+          "keyOrder": [
+            {
+              "path": [],
+              "keys": [
+                "expiresAt",
+                "token",
+                "createdAt",
+                "updatedAt",
+                "ipAddress",
+                "userAgent",
+                "userId",
+                "ownerRef",
+                "id"
+              ]
+            }
+          ],
+          "storageUnchanged": true
+        },
+        {
+          "name": "user-control",
+          "surface": "adapter",
+          "input": {
+            "model": "user",
+            "where": [
+              {
+                "field": "id",
+                "value": "user-a"
+              }
+            ]
+          },
+          "events": [
+            [
+              "query",
+              "findOne",
+              "user"
+            ],
+            [
+              "output",
+              "user.name",
+              "User a"
+            ],
+            [
+              "output",
+              "user.image",
+              "image-a"
+            ]
+          ],
+          "returned": true,
+          "result": {
+            "name": "User a",
+            "email": "a@session-user-join-reference.test",
+            "emailVerified": true,
+            "image": "image-a",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "user-a"
+          },
+          "json": {
+            "name": "User a",
+            "email": "a@session-user-join-reference.test",
+            "emailVerified": true,
+            "image": "image-a",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z",
+            "id": "user-a"
+          },
+          "keyOrder": [
+            {
+              "path": [],
+              "keys": [
+                "name",
+                "email",
+                "emailVerified",
+                "image",
+                "createdAt",
+                "updatedAt",
+                "id"
+              ]
+            }
+          ],
+          "storageUnchanged": true
+        },
+        {
+          "name": "adapter-missing",
+          "surface": "adapter",
+          "joined": true,
+          "input": {
+            "model": "session",
+            "where": [
+              {
+                "field": "token",
+                "value": "session-user-join-missing-token"
+              }
+            ],
+            "join": {
+              "user": true
+            }
+          },
+          "events": [],
+          "returned": false,
+          "error": {
+            "name": "BetterAuthError",
+            "message": "No foreign key found for model user and base model session while performing join operation.",
+            "properties": {
+              "name": "BetterAuthError"
+            },
+            "keys": [
+              "name"
+            ]
+          },
+          "storageUnchanged": true
+        },
+        {
+          "name": "internal-missing",
+          "surface": "internal",
+          "joined": true,
+          "token": "session-user-join-missing-token",
+          "events": [],
+          "returned": false,
+          "error": {
+            "name": "BetterAuthError",
+            "message": "No foreign key found for model user and base model session while performing join operation.",
+            "properties": {
+              "name": "BetterAuthError"
+            },
+            "keys": [
+              "name"
+            ]
+          },
+          "storageUnchanged": true
+        },
+        {
+          "name": "adapter-existing",
+          "surface": "adapter",
+          "joined": true,
+          "input": {
+            "model": "session",
+            "where": [
+              {
+                "field": "token",
+                "value": "session-user-join-existing-token"
+              }
+            ],
+            "join": {
+              "user": true
+            }
+          },
+          "events": [],
+          "returned": false,
+          "error": {
+            "name": "BetterAuthError",
+            "message": "No foreign key found for model user and base model session while performing join operation.",
+            "properties": {
+              "name": "BetterAuthError"
+            },
+            "keys": [
+              "name"
+            ]
+          },
+          "storageUnchanged": true
+        },
+        {
+          "name": "internal-existing",
+          "surface": "internal",
+          "joined": true,
+          "token": "session-user-join-existing-token",
+          "events": [],
+          "returned": false,
+          "error": {
+            "name": "BetterAuthError",
+            "message": "No foreign key found for model user and base model session while performing join operation.",
+            "properties": {
+              "name": "BetterAuthError"
+            },
+            "keys": [
+              "name"
+            ]
+          },
+          "storageUnchanged": true
+        }
+      ],
+      "after": {
+        "user": [
+          {
+            "name": "User a",
+            "email": "a@session-user-join-reference.test",
+            "emailVerified": true,
+            "image": "image-a",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "user-a"
+          },
+          {
+            "name": "User b",
+            "email": "b@session-user-join-reference.test",
+            "emailVerified": true,
+            "image": "image-b",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "user-b"
+          }
+        ],
+        "session": [
+          {
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "token": "session-user-join-existing-token",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "ipAddress": "203.0.113.8",
+            "userAgent": "session-user-join-reference",
+            "userId": "user-a",
+            "ownerRef": "user-b",
+            "id": "session-a"
+          }
+        ],
+        "account": [],
+        "verification": []
+      }
+    },
+    {
+      "backend": "memory",
+      "scenario": "removed-reference",
+      "joins": true,
+      "before": {
+        "user": [
+          {
+            "name": "User a",
+            "email": "a@session-user-join-reference.test",
+            "emailVerified": true,
+            "image": "image-a",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "user-a"
+          },
+          {
+            "name": "User b",
+            "email": "b@session-user-join-reference.test",
+            "emailVerified": true,
+            "image": "image-b",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "user-b"
+          }
+        ],
+        "session": [
+          {
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "token": "session-user-join-existing-token",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "ipAddress": "203.0.113.8",
+            "userAgent": "session-user-join-reference",
+            "userId": "user-a",
+            "ownerRef": "user-b",
+            "id": "session-a"
+          }
+        ],
+        "account": [],
+        "verification": []
+      },
+      "operations": [
+        {
+          "name": "session-control",
+          "surface": "adapter",
+          "input": {
+            "model": "session",
+            "where": [
+              {
+                "field": "token",
+                "value": "session-user-join-existing-token"
+              }
+            ]
+          },
+          "events": [
+            [
+              "query",
+              "findOne",
+              "session"
+            ],
+            [
+              "output",
+              "session.token",
+              "session-user-join-existing-token"
+            ],
+            [
+              "output",
+              "session.userId",
+              "user-a"
+            ],
+            [
+              "output",
+              "session.ownerRef",
+              "user-b"
+            ]
+          ],
+          "returned": true,
+          "result": {
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "token": "session-user-join-existing-token",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "ipAddress": "203.0.113.8",
+            "userAgent": "session-user-join-reference",
+            "userId": "user-a",
+            "ownerRef": "user-b",
+            "id": "session-a"
+          },
+          "json": {
+            "expiresAt": "2100-01-02T03:04:05.000Z",
+            "token": "session-user-join-existing-token",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z",
+            "ipAddress": "203.0.113.8",
+            "userAgent": "session-user-join-reference",
+            "userId": "user-a",
+            "ownerRef": "user-b",
+            "id": "session-a"
+          },
+          "keyOrder": [
+            {
+              "path": [],
+              "keys": [
+                "expiresAt",
+                "token",
+                "createdAt",
+                "updatedAt",
+                "ipAddress",
+                "userAgent",
+                "userId",
+                "ownerRef",
+                "id"
+              ]
+            }
+          ],
+          "storageUnchanged": true
+        },
+        {
+          "name": "user-control",
+          "surface": "adapter",
+          "input": {
+            "model": "user",
+            "where": [
+              {
+                "field": "id",
+                "value": "user-a"
+              }
+            ]
+          },
+          "events": [
+            [
+              "query",
+              "findOne",
+              "user"
+            ],
+            [
+              "output",
+              "user.name",
+              "User a"
+            ],
+            [
+              "output",
+              "user.image",
+              "image-a"
+            ]
+          ],
+          "returned": true,
+          "result": {
+            "name": "User a",
+            "email": "a@session-user-join-reference.test",
+            "emailVerified": true,
+            "image": "image-a",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "user-a"
+          },
+          "json": {
+            "name": "User a",
+            "email": "a@session-user-join-reference.test",
+            "emailVerified": true,
+            "image": "image-a",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z",
+            "id": "user-a"
+          },
+          "keyOrder": [
+            {
+              "path": [],
+              "keys": [
+                "name",
+                "email",
+                "emailVerified",
+                "image",
+                "createdAt",
+                "updatedAt",
+                "id"
+              ]
+            }
+          ],
+          "storageUnchanged": true
+        },
+        {
+          "name": "adapter-missing",
+          "surface": "adapter",
+          "joined": true,
+          "input": {
+            "model": "session",
+            "where": [
+              {
+                "field": "token",
+                "value": "session-user-join-missing-token"
+              }
+            ],
+            "join": {
+              "user": true
+            }
+          },
+          "events": [],
+          "returned": false,
+          "error": {
+            "name": "BetterAuthError",
+            "message": "No foreign key found for model user and base model session while performing join operation.",
+            "properties": {
+              "name": "BetterAuthError"
+            },
+            "keys": [
+              "name"
+            ]
+          },
+          "storageUnchanged": true
+        },
+        {
+          "name": "internal-missing",
+          "surface": "internal",
+          "joined": true,
+          "token": "session-user-join-missing-token",
+          "events": [],
+          "returned": false,
+          "error": {
+            "name": "BetterAuthError",
+            "message": "No foreign key found for model user and base model session while performing join operation.",
+            "properties": {
+              "name": "BetterAuthError"
+            },
+            "keys": [
+              "name"
+            ]
+          },
+          "storageUnchanged": true
+        },
+        {
+          "name": "adapter-existing",
+          "surface": "adapter",
+          "joined": true,
+          "input": {
+            "model": "session",
+            "where": [
+              {
+                "field": "token",
+                "value": "session-user-join-existing-token"
+              }
+            ],
+            "join": {
+              "user": true
+            }
+          },
+          "events": [],
+          "returned": false,
+          "error": {
+            "name": "BetterAuthError",
+            "message": "No foreign key found for model user and base model session while performing join operation.",
+            "properties": {
+              "name": "BetterAuthError"
+            },
+            "keys": [
+              "name"
+            ]
+          },
+          "storageUnchanged": true
+        },
+        {
+          "name": "internal-existing",
+          "surface": "internal",
+          "joined": true,
+          "token": "session-user-join-existing-token",
+          "events": [],
+          "returned": false,
+          "error": {
+            "name": "BetterAuthError",
+            "message": "No foreign key found for model user and base model session while performing join operation.",
+            "properties": {
+              "name": "BetterAuthError"
+            },
+            "keys": [
+              "name"
+            ]
+          },
+          "storageUnchanged": true
+        }
+      ],
+      "after": {
+        "user": [
+          {
+            "name": "User a",
+            "email": "a@session-user-join-reference.test",
+            "emailVerified": true,
+            "image": "image-a",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "user-a"
+          },
+          {
+            "name": "User b",
+            "email": "b@session-user-join-reference.test",
+            "emailVerified": true,
+            "image": "image-b",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "user-b"
+          }
+        ],
+        "session": [
+          {
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "token": "session-user-join-existing-token",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "ipAddress": "203.0.113.8",
+            "userAgent": "session-user-join-reference",
+            "userId": "user-a",
+            "ownerRef": "user-b",
+            "id": "session-a"
+          }
+        ],
+        "account": [],
+        "verification": []
+      }
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "removed-reference",
+      "joins": false,
+      "before": {
+        "user": [
+          {
+            "id": "user-a",
+            "name": "User a",
+            "email": "a@session-user-join-reference.test",
+            "emailVerified": 1,
+            "image": "image-a",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          },
+          {
+            "id": "user-b",
+            "name": "User b",
+            "email": "b@session-user-join-reference.test",
+            "emailVerified": 1,
+            "image": "image-b",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          }
+        ],
+        "session": [
+          {
+            "id": "session-a",
+            "expiresAt": "2100-01-02T03:04:05.000Z",
+            "token": "session-user-join-existing-token",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z",
+            "ipAddress": "203.0.113.8",
+            "userAgent": "session-user-join-reference",
+            "userId": "user-a",
+            "ownerRef": "user-b"
+          }
+        ],
+        "account": [],
+        "verification": []
+      },
+      "operations": [
+        {
+          "name": "session-control",
+          "surface": "adapter",
+          "input": {
+            "model": "session",
+            "where": [
+              {
+                "field": "token",
+                "value": "session-user-join-existing-token"
+              }
+            ]
+          },
+          "events": [
+            [
+              "query",
+              "findOne",
+              "session"
+            ],
+            [
+              "output",
+              "session.token",
+              "session-user-join-existing-token"
+            ],
+            [
+              "output",
+              "session.userId",
+              "user-a"
+            ],
+            [
+              "output",
+              "session.ownerRef",
+              "user-b"
+            ]
+          ],
+          "returned": true,
+          "result": {
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "token": "session-user-join-existing-token",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "ipAddress": "203.0.113.8",
+            "userAgent": "session-user-join-reference",
+            "userId": "user-a",
+            "ownerRef": "user-b",
+            "id": "session-a"
+          },
+          "json": {
+            "expiresAt": "2100-01-02T03:04:05.000Z",
+            "token": "session-user-join-existing-token",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z",
+            "ipAddress": "203.0.113.8",
+            "userAgent": "session-user-join-reference",
+            "userId": "user-a",
+            "ownerRef": "user-b",
+            "id": "session-a"
+          },
+          "keyOrder": [
+            {
+              "path": [],
+              "keys": [
+                "expiresAt",
+                "token",
+                "createdAt",
+                "updatedAt",
+                "ipAddress",
+                "userAgent",
+                "userId",
+                "ownerRef",
+                "id"
+              ]
+            }
+          ],
+          "storageUnchanged": true
+        },
+        {
+          "name": "user-control",
+          "surface": "adapter",
+          "input": {
+            "model": "user",
+            "where": [
+              {
+                "field": "id",
+                "value": "user-a"
+              }
+            ]
+          },
+          "events": [
+            [
+              "query",
+              "findOne",
+              "user"
+            ],
+            [
+              "output",
+              "user.name",
+              "User a"
+            ],
+            [
+              "output",
+              "user.image",
+              "image-a"
+            ]
+          ],
+          "returned": true,
+          "result": {
+            "name": "User a",
+            "email": "a@session-user-join-reference.test",
+            "emailVerified": true,
+            "image": "image-a",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "user-a"
+          },
+          "json": {
+            "name": "User a",
+            "email": "a@session-user-join-reference.test",
+            "emailVerified": true,
+            "image": "image-a",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z",
+            "id": "user-a"
+          },
+          "keyOrder": [
+            {
+              "path": [],
+              "keys": [
+                "name",
+                "email",
+                "emailVerified",
+                "image",
+                "createdAt",
+                "updatedAt",
+                "id"
+              ]
+            }
+          ],
+          "storageUnchanged": true
+        },
+        {
+          "name": "adapter-missing",
+          "surface": "adapter",
+          "joined": true,
+          "input": {
+            "model": "session",
+            "where": [
+              {
+                "field": "token",
+                "value": "session-user-join-missing-token"
+              }
+            ],
+            "join": {
+              "user": true
+            }
+          },
+          "events": [],
+          "returned": false,
+          "error": {
+            "name": "BetterAuthError",
+            "message": "No foreign key found for model user and base model session while performing join operation.",
+            "properties": {
+              "name": "BetterAuthError"
+            },
+            "keys": [
+              "name"
+            ]
+          },
+          "storageUnchanged": true
+        },
+        {
+          "name": "internal-missing",
+          "surface": "internal",
+          "joined": true,
+          "token": "session-user-join-missing-token",
+          "events": [],
+          "returned": false,
+          "error": {
+            "name": "BetterAuthError",
+            "message": "No foreign key found for model user and base model session while performing join operation.",
+            "properties": {
+              "name": "BetterAuthError"
+            },
+            "keys": [
+              "name"
+            ]
+          },
+          "storageUnchanged": true
+        },
+        {
+          "name": "adapter-existing",
+          "surface": "adapter",
+          "joined": true,
+          "input": {
+            "model": "session",
+            "where": [
+              {
+                "field": "token",
+                "value": "session-user-join-existing-token"
+              }
+            ],
+            "join": {
+              "user": true
+            }
+          },
+          "events": [],
+          "returned": false,
+          "error": {
+            "name": "BetterAuthError",
+            "message": "No foreign key found for model user and base model session while performing join operation.",
+            "properties": {
+              "name": "BetterAuthError"
+            },
+            "keys": [
+              "name"
+            ]
+          },
+          "storageUnchanged": true
+        },
+        {
+          "name": "internal-existing",
+          "surface": "internal",
+          "joined": true,
+          "token": "session-user-join-existing-token",
+          "events": [],
+          "returned": false,
+          "error": {
+            "name": "BetterAuthError",
+            "message": "No foreign key found for model user and base model session while performing join operation.",
+            "properties": {
+              "name": "BetterAuthError"
+            },
+            "keys": [
+              "name"
+            ]
+          },
+          "storageUnchanged": true
+        }
+      ],
+      "after": {
+        "user": [
+          {
+            "id": "user-a",
+            "name": "User a",
+            "email": "a@session-user-join-reference.test",
+            "emailVerified": 1,
+            "image": "image-a",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          },
+          {
+            "id": "user-b",
+            "name": "User b",
+            "email": "b@session-user-join-reference.test",
+            "emailVerified": 1,
+            "image": "image-b",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          }
+        ],
+        "session": [
+          {
+            "id": "session-a",
+            "expiresAt": "2100-01-02T03:04:05.000Z",
+            "token": "session-user-join-existing-token",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z",
+            "ipAddress": "203.0.113.8",
+            "userAgent": "session-user-join-reference",
+            "userId": "user-a",
+            "ownerRef": "user-b"
+          }
+        ],
+        "account": [],
+        "verification": []
+      }
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "removed-reference",
+      "joins": true,
+      "before": {
+        "user": [
+          {
+            "id": "user-a",
+            "name": "User a",
+            "email": "a@session-user-join-reference.test",
+            "emailVerified": 1,
+            "image": "image-a",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          },
+          {
+            "id": "user-b",
+            "name": "User b",
+            "email": "b@session-user-join-reference.test",
+            "emailVerified": 1,
+            "image": "image-b",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          }
+        ],
+        "session": [
+          {
+            "id": "session-a",
+            "expiresAt": "2100-01-02T03:04:05.000Z",
+            "token": "session-user-join-existing-token",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z",
+            "ipAddress": "203.0.113.8",
+            "userAgent": "session-user-join-reference",
+            "userId": "user-a",
+            "ownerRef": "user-b"
+          }
+        ],
+        "account": [],
+        "verification": []
+      },
+      "operations": [
+        {
+          "name": "session-control",
+          "surface": "adapter",
+          "input": {
+            "model": "session",
+            "where": [
+              {
+                "field": "token",
+                "value": "session-user-join-existing-token"
+              }
+            ]
+          },
+          "events": [
+            [
+              "query",
+              "findOne",
+              "session"
+            ],
+            [
+              "output",
+              "session.token",
+              "session-user-join-existing-token"
+            ],
+            [
+              "output",
+              "session.userId",
+              "user-a"
+            ],
+            [
+              "output",
+              "session.ownerRef",
+              "user-b"
+            ]
+          ],
+          "returned": true,
+          "result": {
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "token": "session-user-join-existing-token",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "ipAddress": "203.0.113.8",
+            "userAgent": "session-user-join-reference",
+            "userId": "user-a",
+            "ownerRef": "user-b",
+            "id": "session-a"
+          },
+          "json": {
+            "expiresAt": "2100-01-02T03:04:05.000Z",
+            "token": "session-user-join-existing-token",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z",
+            "ipAddress": "203.0.113.8",
+            "userAgent": "session-user-join-reference",
+            "userId": "user-a",
+            "ownerRef": "user-b",
+            "id": "session-a"
+          },
+          "keyOrder": [
+            {
+              "path": [],
+              "keys": [
+                "expiresAt",
+                "token",
+                "createdAt",
+                "updatedAt",
+                "ipAddress",
+                "userAgent",
+                "userId",
+                "ownerRef",
+                "id"
+              ]
+            }
+          ],
+          "storageUnchanged": true
+        },
+        {
+          "name": "user-control",
+          "surface": "adapter",
+          "input": {
+            "model": "user",
+            "where": [
+              {
+                "field": "id",
+                "value": "user-a"
+              }
+            ]
+          },
+          "events": [
+            [
+              "query",
+              "findOne",
+              "user"
+            ],
+            [
+              "output",
+              "user.name",
+              "User a"
+            ],
+            [
+              "output",
+              "user.image",
+              "image-a"
+            ]
+          ],
+          "returned": true,
+          "result": {
+            "name": "User a",
+            "email": "a@session-user-join-reference.test",
+            "emailVerified": true,
+            "image": "image-a",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "user-a"
+          },
+          "json": {
+            "name": "User a",
+            "email": "a@session-user-join-reference.test",
+            "emailVerified": true,
+            "image": "image-a",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z",
+            "id": "user-a"
+          },
+          "keyOrder": [
+            {
+              "path": [],
+              "keys": [
+                "name",
+                "email",
+                "emailVerified",
+                "image",
+                "createdAt",
+                "updatedAt",
+                "id"
+              ]
+            }
+          ],
+          "storageUnchanged": true
+        },
+        {
+          "name": "adapter-missing",
+          "surface": "adapter",
+          "joined": true,
+          "input": {
+            "model": "session",
+            "where": [
+              {
+                "field": "token",
+                "value": "session-user-join-missing-token"
+              }
+            ],
+            "join": {
+              "user": true
+            }
+          },
+          "events": [],
+          "returned": false,
+          "error": {
+            "name": "BetterAuthError",
+            "message": "No foreign key found for model user and base model session while performing join operation.",
+            "properties": {
+              "name": "BetterAuthError"
+            },
+            "keys": [
+              "name"
+            ]
+          },
+          "storageUnchanged": true
+        },
+        {
+          "name": "internal-missing",
+          "surface": "internal",
+          "joined": true,
+          "token": "session-user-join-missing-token",
+          "events": [],
+          "returned": false,
+          "error": {
+            "name": "BetterAuthError",
+            "message": "No foreign key found for model user and base model session while performing join operation.",
+            "properties": {
+              "name": "BetterAuthError"
+            },
+            "keys": [
+              "name"
+            ]
+          },
+          "storageUnchanged": true
+        },
+        {
+          "name": "adapter-existing",
+          "surface": "adapter",
+          "joined": true,
+          "input": {
+            "model": "session",
+            "where": [
+              {
+                "field": "token",
+                "value": "session-user-join-existing-token"
+              }
+            ],
+            "join": {
+              "user": true
+            }
+          },
+          "events": [],
+          "returned": false,
+          "error": {
+            "name": "BetterAuthError",
+            "message": "No foreign key found for model user and base model session while performing join operation.",
+            "properties": {
+              "name": "BetterAuthError"
+            },
+            "keys": [
+              "name"
+            ]
+          },
+          "storageUnchanged": true
+        },
+        {
+          "name": "internal-existing",
+          "surface": "internal",
+          "joined": true,
+          "token": "session-user-join-existing-token",
+          "events": [],
+          "returned": false,
+          "error": {
+            "name": "BetterAuthError",
+            "message": "No foreign key found for model user and base model session while performing join operation.",
+            "properties": {
+              "name": "BetterAuthError"
+            },
+            "keys": [
+              "name"
+            ]
+          },
+          "storageUnchanged": true
+        }
+      ],
+      "after": {
+        "user": [
+          {
+            "id": "user-a",
+            "name": "User a",
+            "email": "a@session-user-join-reference.test",
+            "emailVerified": 1,
+            "image": "image-a",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          },
+          {
+            "id": "user-b",
+            "name": "User b",
+            "email": "b@session-user-join-reference.test",
+            "emailVerified": 1,
+            "image": "image-b",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          }
+        ],
+        "session": [
+          {
+            "id": "session-a",
+            "expiresAt": "2100-01-02T03:04:05.000Z",
+            "token": "session-user-join-existing-token",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z",
+            "ipAddress": "203.0.113.8",
+            "userAgent": "session-user-join-reference",
+            "userId": "user-a",
+            "ownerRef": "user-b"
+          }
+        ],
+        "account": [],
+        "verification": []
+      }
+    },
+    {
+      "backend": "memory",
+      "scenario": "second-optional-user-reference",
+      "joins": false,
+      "before": {
+        "user": [
+          {
+            "name": "User a",
+            "email": "a@session-user-join-reference.test",
+            "emailVerified": true,
+            "image": "image-a",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "user-a"
+          },
+          {
+            "name": "User b",
+            "email": "b@session-user-join-reference.test",
+            "emailVerified": true,
+            "image": "image-b",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "user-b"
+          }
+        ],
+        "session": [
+          {
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "token": "session-user-join-existing-token",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "ipAddress": "203.0.113.8",
+            "userAgent": "session-user-join-reference",
+            "userId": "user-a",
+            "ownerRef": "user-b",
+            "id": "session-a"
+          }
+        ],
+        "account": [],
+        "verification": []
+      },
+      "operations": [
+        {
+          "name": "session-control",
+          "surface": "adapter",
+          "input": {
+            "model": "session",
+            "where": [
+              {
+                "field": "token",
+                "value": "session-user-join-existing-token"
+              }
+            ]
+          },
+          "events": [
+            [
+              "query",
+              "findOne",
+              "session"
+            ],
+            [
+              "output",
+              "session.token",
+              "session-user-join-existing-token"
+            ],
+            [
+              "output",
+              "session.userId",
+              "user-a"
+            ],
+            [
+              "output",
+              "session.ownerRef",
+              "user-b"
+            ]
+          ],
+          "returned": true,
+          "result": {
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "token": "session-user-join-existing-token",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "ipAddress": "203.0.113.8",
+            "userAgent": "session-user-join-reference",
+            "userId": "user-a",
+            "ownerRef": "user-b",
+            "id": "session-a"
+          },
+          "json": {
+            "expiresAt": "2100-01-02T03:04:05.000Z",
+            "token": "session-user-join-existing-token",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z",
+            "ipAddress": "203.0.113.8",
+            "userAgent": "session-user-join-reference",
+            "userId": "user-a",
+            "ownerRef": "user-b",
+            "id": "session-a"
+          },
+          "keyOrder": [
+            {
+              "path": [],
+              "keys": [
+                "expiresAt",
+                "token",
+                "createdAt",
+                "updatedAt",
+                "ipAddress",
+                "userAgent",
+                "userId",
+                "ownerRef",
+                "id"
+              ]
+            }
+          ],
+          "storageUnchanged": true
+        },
+        {
+          "name": "user-control",
+          "surface": "adapter",
+          "input": {
+            "model": "user",
+            "where": [
+              {
+                "field": "id",
+                "value": "user-a"
+              }
+            ]
+          },
+          "events": [
+            [
+              "query",
+              "findOne",
+              "user"
+            ],
+            [
+              "output",
+              "user.name",
+              "User a"
+            ],
+            [
+              "output",
+              "user.image",
+              "image-a"
+            ]
+          ],
+          "returned": true,
+          "result": {
+            "name": "User a",
+            "email": "a@session-user-join-reference.test",
+            "emailVerified": true,
+            "image": "image-a",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "user-a"
+          },
+          "json": {
+            "name": "User a",
+            "email": "a@session-user-join-reference.test",
+            "emailVerified": true,
+            "image": "image-a",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z",
+            "id": "user-a"
+          },
+          "keyOrder": [
+            {
+              "path": [],
+              "keys": [
+                "name",
+                "email",
+                "emailVerified",
+                "image",
+                "createdAt",
+                "updatedAt",
+                "id"
+              ]
+            }
+          ],
+          "storageUnchanged": true
+        },
+        {
+          "name": "adapter-missing",
+          "surface": "adapter",
+          "joined": true,
+          "input": {
+            "model": "session",
+            "where": [
+              {
+                "field": "token",
+                "value": "session-user-join-missing-token"
+              }
+            ],
+            "join": {
+              "user": true
+            }
+          },
+          "events": [],
+          "returned": false,
+          "error": {
+            "name": "BetterAuthError",
+            "message": "Multiple foreign keys found for model user and base model session while performing join operation. Only one foreign key is supported.",
+            "properties": {
+              "name": "BetterAuthError"
+            },
+            "keys": [
+              "name"
+            ]
+          },
+          "storageUnchanged": true
+        },
+        {
+          "name": "internal-missing",
+          "surface": "internal",
+          "joined": true,
+          "token": "session-user-join-missing-token",
+          "events": [],
+          "returned": false,
+          "error": {
+            "name": "BetterAuthError",
+            "message": "Multiple foreign keys found for model user and base model session while performing join operation. Only one foreign key is supported.",
+            "properties": {
+              "name": "BetterAuthError"
+            },
+            "keys": [
+              "name"
+            ]
+          },
+          "storageUnchanged": true
+        },
+        {
+          "name": "adapter-existing",
+          "surface": "adapter",
+          "joined": true,
+          "input": {
+            "model": "session",
+            "where": [
+              {
+                "field": "token",
+                "value": "session-user-join-existing-token"
+              }
+            ],
+            "join": {
+              "user": true
+            }
+          },
+          "events": [],
+          "returned": false,
+          "error": {
+            "name": "BetterAuthError",
+            "message": "Multiple foreign keys found for model user and base model session while performing join operation. Only one foreign key is supported.",
+            "properties": {
+              "name": "BetterAuthError"
+            },
+            "keys": [
+              "name"
+            ]
+          },
+          "storageUnchanged": true
+        },
+        {
+          "name": "internal-existing",
+          "surface": "internal",
+          "joined": true,
+          "token": "session-user-join-existing-token",
+          "events": [],
+          "returned": false,
+          "error": {
+            "name": "BetterAuthError",
+            "message": "Multiple foreign keys found for model user and base model session while performing join operation. Only one foreign key is supported.",
+            "properties": {
+              "name": "BetterAuthError"
+            },
+            "keys": [
+              "name"
+            ]
+          },
+          "storageUnchanged": true
+        }
+      ],
+      "after": {
+        "user": [
+          {
+            "name": "User a",
+            "email": "a@session-user-join-reference.test",
+            "emailVerified": true,
+            "image": "image-a",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "user-a"
+          },
+          {
+            "name": "User b",
+            "email": "b@session-user-join-reference.test",
+            "emailVerified": true,
+            "image": "image-b",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "user-b"
+          }
+        ],
+        "session": [
+          {
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "token": "session-user-join-existing-token",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "ipAddress": "203.0.113.8",
+            "userAgent": "session-user-join-reference",
+            "userId": "user-a",
+            "ownerRef": "user-b",
+            "id": "session-a"
+          }
+        ],
+        "account": [],
+        "verification": []
+      }
+    },
+    {
+      "backend": "memory",
+      "scenario": "second-optional-user-reference",
+      "joins": true,
+      "before": {
+        "user": [
+          {
+            "name": "User a",
+            "email": "a@session-user-join-reference.test",
+            "emailVerified": true,
+            "image": "image-a",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "user-a"
+          },
+          {
+            "name": "User b",
+            "email": "b@session-user-join-reference.test",
+            "emailVerified": true,
+            "image": "image-b",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "user-b"
+          }
+        ],
+        "session": [
+          {
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "token": "session-user-join-existing-token",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "ipAddress": "203.0.113.8",
+            "userAgent": "session-user-join-reference",
+            "userId": "user-a",
+            "ownerRef": "user-b",
+            "id": "session-a"
+          }
+        ],
+        "account": [],
+        "verification": []
+      },
+      "operations": [
+        {
+          "name": "session-control",
+          "surface": "adapter",
+          "input": {
+            "model": "session",
+            "where": [
+              {
+                "field": "token",
+                "value": "session-user-join-existing-token"
+              }
+            ]
+          },
+          "events": [
+            [
+              "query",
+              "findOne",
+              "session"
+            ],
+            [
+              "output",
+              "session.token",
+              "session-user-join-existing-token"
+            ],
+            [
+              "output",
+              "session.userId",
+              "user-a"
+            ],
+            [
+              "output",
+              "session.ownerRef",
+              "user-b"
+            ]
+          ],
+          "returned": true,
+          "result": {
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "token": "session-user-join-existing-token",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "ipAddress": "203.0.113.8",
+            "userAgent": "session-user-join-reference",
+            "userId": "user-a",
+            "ownerRef": "user-b",
+            "id": "session-a"
+          },
+          "json": {
+            "expiresAt": "2100-01-02T03:04:05.000Z",
+            "token": "session-user-join-existing-token",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z",
+            "ipAddress": "203.0.113.8",
+            "userAgent": "session-user-join-reference",
+            "userId": "user-a",
+            "ownerRef": "user-b",
+            "id": "session-a"
+          },
+          "keyOrder": [
+            {
+              "path": [],
+              "keys": [
+                "expiresAt",
+                "token",
+                "createdAt",
+                "updatedAt",
+                "ipAddress",
+                "userAgent",
+                "userId",
+                "ownerRef",
+                "id"
+              ]
+            }
+          ],
+          "storageUnchanged": true
+        },
+        {
+          "name": "user-control",
+          "surface": "adapter",
+          "input": {
+            "model": "user",
+            "where": [
+              {
+                "field": "id",
+                "value": "user-a"
+              }
+            ]
+          },
+          "events": [
+            [
+              "query",
+              "findOne",
+              "user"
+            ],
+            [
+              "output",
+              "user.name",
+              "User a"
+            ],
+            [
+              "output",
+              "user.image",
+              "image-a"
+            ]
+          ],
+          "returned": true,
+          "result": {
+            "name": "User a",
+            "email": "a@session-user-join-reference.test",
+            "emailVerified": true,
+            "image": "image-a",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "user-a"
+          },
+          "json": {
+            "name": "User a",
+            "email": "a@session-user-join-reference.test",
+            "emailVerified": true,
+            "image": "image-a",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z",
+            "id": "user-a"
+          },
+          "keyOrder": [
+            {
+              "path": [],
+              "keys": [
+                "name",
+                "email",
+                "emailVerified",
+                "image",
+                "createdAt",
+                "updatedAt",
+                "id"
+              ]
+            }
+          ],
+          "storageUnchanged": true
+        },
+        {
+          "name": "adapter-missing",
+          "surface": "adapter",
+          "joined": true,
+          "input": {
+            "model": "session",
+            "where": [
+              {
+                "field": "token",
+                "value": "session-user-join-missing-token"
+              }
+            ],
+            "join": {
+              "user": true
+            }
+          },
+          "events": [],
+          "returned": false,
+          "error": {
+            "name": "BetterAuthError",
+            "message": "Multiple foreign keys found for model user and base model session while performing join operation. Only one foreign key is supported.",
+            "properties": {
+              "name": "BetterAuthError"
+            },
+            "keys": [
+              "name"
+            ]
+          },
+          "storageUnchanged": true
+        },
+        {
+          "name": "internal-missing",
+          "surface": "internal",
+          "joined": true,
+          "token": "session-user-join-missing-token",
+          "events": [],
+          "returned": false,
+          "error": {
+            "name": "BetterAuthError",
+            "message": "Multiple foreign keys found for model user and base model session while performing join operation. Only one foreign key is supported.",
+            "properties": {
+              "name": "BetterAuthError"
+            },
+            "keys": [
+              "name"
+            ]
+          },
+          "storageUnchanged": true
+        },
+        {
+          "name": "adapter-existing",
+          "surface": "adapter",
+          "joined": true,
+          "input": {
+            "model": "session",
+            "where": [
+              {
+                "field": "token",
+                "value": "session-user-join-existing-token"
+              }
+            ],
+            "join": {
+              "user": true
+            }
+          },
+          "events": [],
+          "returned": false,
+          "error": {
+            "name": "BetterAuthError",
+            "message": "Multiple foreign keys found for model user and base model session while performing join operation. Only one foreign key is supported.",
+            "properties": {
+              "name": "BetterAuthError"
+            },
+            "keys": [
+              "name"
+            ]
+          },
+          "storageUnchanged": true
+        },
+        {
+          "name": "internal-existing",
+          "surface": "internal",
+          "joined": true,
+          "token": "session-user-join-existing-token",
+          "events": [],
+          "returned": false,
+          "error": {
+            "name": "BetterAuthError",
+            "message": "Multiple foreign keys found for model user and base model session while performing join operation. Only one foreign key is supported.",
+            "properties": {
+              "name": "BetterAuthError"
+            },
+            "keys": [
+              "name"
+            ]
+          },
+          "storageUnchanged": true
+        }
+      ],
+      "after": {
+        "user": [
+          {
+            "name": "User a",
+            "email": "a@session-user-join-reference.test",
+            "emailVerified": true,
+            "image": "image-a",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "user-a"
+          },
+          {
+            "name": "User b",
+            "email": "b@session-user-join-reference.test",
+            "emailVerified": true,
+            "image": "image-b",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "user-b"
+          }
+        ],
+        "session": [
+          {
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "token": "session-user-join-existing-token",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "ipAddress": "203.0.113.8",
+            "userAgent": "session-user-join-reference",
+            "userId": "user-a",
+            "ownerRef": "user-b",
+            "id": "session-a"
+          }
+        ],
+        "account": [],
+        "verification": []
+      }
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "second-optional-user-reference",
+      "joins": false,
+      "before": {
+        "user": [
+          {
+            "id": "user-a",
+            "name": "User a",
+            "email": "a@session-user-join-reference.test",
+            "emailVerified": 1,
+            "image": "image-a",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          },
+          {
+            "id": "user-b",
+            "name": "User b",
+            "email": "b@session-user-join-reference.test",
+            "emailVerified": 1,
+            "image": "image-b",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          }
+        ],
+        "session": [
+          {
+            "id": "session-a",
+            "expiresAt": "2100-01-02T03:04:05.000Z",
+            "token": "session-user-join-existing-token",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z",
+            "ipAddress": "203.0.113.8",
+            "userAgent": "session-user-join-reference",
+            "userId": "user-a",
+            "ownerRef": "user-b"
+          }
+        ],
+        "account": [],
+        "verification": []
+      },
+      "operations": [
+        {
+          "name": "session-control",
+          "surface": "adapter",
+          "input": {
+            "model": "session",
+            "where": [
+              {
+                "field": "token",
+                "value": "session-user-join-existing-token"
+              }
+            ]
+          },
+          "events": [
+            [
+              "query",
+              "findOne",
+              "session"
+            ],
+            [
+              "output",
+              "session.token",
+              "session-user-join-existing-token"
+            ],
+            [
+              "output",
+              "session.userId",
+              "user-a"
+            ],
+            [
+              "output",
+              "session.ownerRef",
+              "user-b"
+            ]
+          ],
+          "returned": true,
+          "result": {
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "token": "session-user-join-existing-token",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "ipAddress": "203.0.113.8",
+            "userAgent": "session-user-join-reference",
+            "userId": "user-a",
+            "ownerRef": "user-b",
+            "id": "session-a"
+          },
+          "json": {
+            "expiresAt": "2100-01-02T03:04:05.000Z",
+            "token": "session-user-join-existing-token",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z",
+            "ipAddress": "203.0.113.8",
+            "userAgent": "session-user-join-reference",
+            "userId": "user-a",
+            "ownerRef": "user-b",
+            "id": "session-a"
+          },
+          "keyOrder": [
+            {
+              "path": [],
+              "keys": [
+                "expiresAt",
+                "token",
+                "createdAt",
+                "updatedAt",
+                "ipAddress",
+                "userAgent",
+                "userId",
+                "ownerRef",
+                "id"
+              ]
+            }
+          ],
+          "storageUnchanged": true
+        },
+        {
+          "name": "user-control",
+          "surface": "adapter",
+          "input": {
+            "model": "user",
+            "where": [
+              {
+                "field": "id",
+                "value": "user-a"
+              }
+            ]
+          },
+          "events": [
+            [
+              "query",
+              "findOne",
+              "user"
+            ],
+            [
+              "output",
+              "user.name",
+              "User a"
+            ],
+            [
+              "output",
+              "user.image",
+              "image-a"
+            ]
+          ],
+          "returned": true,
+          "result": {
+            "name": "User a",
+            "email": "a@session-user-join-reference.test",
+            "emailVerified": true,
+            "image": "image-a",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "user-a"
+          },
+          "json": {
+            "name": "User a",
+            "email": "a@session-user-join-reference.test",
+            "emailVerified": true,
+            "image": "image-a",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z",
+            "id": "user-a"
+          },
+          "keyOrder": [
+            {
+              "path": [],
+              "keys": [
+                "name",
+                "email",
+                "emailVerified",
+                "image",
+                "createdAt",
+                "updatedAt",
+                "id"
+              ]
+            }
+          ],
+          "storageUnchanged": true
+        },
+        {
+          "name": "adapter-missing",
+          "surface": "adapter",
+          "joined": true,
+          "input": {
+            "model": "session",
+            "where": [
+              {
+                "field": "token",
+                "value": "session-user-join-missing-token"
+              }
+            ],
+            "join": {
+              "user": true
+            }
+          },
+          "events": [],
+          "returned": false,
+          "error": {
+            "name": "BetterAuthError",
+            "message": "Multiple foreign keys found for model user and base model session while performing join operation. Only one foreign key is supported.",
+            "properties": {
+              "name": "BetterAuthError"
+            },
+            "keys": [
+              "name"
+            ]
+          },
+          "storageUnchanged": true
+        },
+        {
+          "name": "internal-missing",
+          "surface": "internal",
+          "joined": true,
+          "token": "session-user-join-missing-token",
+          "events": [],
+          "returned": false,
+          "error": {
+            "name": "BetterAuthError",
+            "message": "Multiple foreign keys found for model user and base model session while performing join operation. Only one foreign key is supported.",
+            "properties": {
+              "name": "BetterAuthError"
+            },
+            "keys": [
+              "name"
+            ]
+          },
+          "storageUnchanged": true
+        },
+        {
+          "name": "adapter-existing",
+          "surface": "adapter",
+          "joined": true,
+          "input": {
+            "model": "session",
+            "where": [
+              {
+                "field": "token",
+                "value": "session-user-join-existing-token"
+              }
+            ],
+            "join": {
+              "user": true
+            }
+          },
+          "events": [],
+          "returned": false,
+          "error": {
+            "name": "BetterAuthError",
+            "message": "Multiple foreign keys found for model user and base model session while performing join operation. Only one foreign key is supported.",
+            "properties": {
+              "name": "BetterAuthError"
+            },
+            "keys": [
+              "name"
+            ]
+          },
+          "storageUnchanged": true
+        },
+        {
+          "name": "internal-existing",
+          "surface": "internal",
+          "joined": true,
+          "token": "session-user-join-existing-token",
+          "events": [],
+          "returned": false,
+          "error": {
+            "name": "BetterAuthError",
+            "message": "Multiple foreign keys found for model user and base model session while performing join operation. Only one foreign key is supported.",
+            "properties": {
+              "name": "BetterAuthError"
+            },
+            "keys": [
+              "name"
+            ]
+          },
+          "storageUnchanged": true
+        }
+      ],
+      "after": {
+        "user": [
+          {
+            "id": "user-a",
+            "name": "User a",
+            "email": "a@session-user-join-reference.test",
+            "emailVerified": 1,
+            "image": "image-a",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          },
+          {
+            "id": "user-b",
+            "name": "User b",
+            "email": "b@session-user-join-reference.test",
+            "emailVerified": 1,
+            "image": "image-b",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          }
+        ],
+        "session": [
+          {
+            "id": "session-a",
+            "expiresAt": "2100-01-02T03:04:05.000Z",
+            "token": "session-user-join-existing-token",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z",
+            "ipAddress": "203.0.113.8",
+            "userAgent": "session-user-join-reference",
+            "userId": "user-a",
+            "ownerRef": "user-b"
+          }
+        ],
+        "account": [],
+        "verification": []
+      }
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "second-optional-user-reference",
+      "joins": true,
+      "before": {
+        "user": [
+          {
+            "id": "user-a",
+            "name": "User a",
+            "email": "a@session-user-join-reference.test",
+            "emailVerified": 1,
+            "image": "image-a",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          },
+          {
+            "id": "user-b",
+            "name": "User b",
+            "email": "b@session-user-join-reference.test",
+            "emailVerified": 1,
+            "image": "image-b",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          }
+        ],
+        "session": [
+          {
+            "id": "session-a",
+            "expiresAt": "2100-01-02T03:04:05.000Z",
+            "token": "session-user-join-existing-token",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z",
+            "ipAddress": "203.0.113.8",
+            "userAgent": "session-user-join-reference",
+            "userId": "user-a",
+            "ownerRef": "user-b"
+          }
+        ],
+        "account": [],
+        "verification": []
+      },
+      "operations": [
+        {
+          "name": "session-control",
+          "surface": "adapter",
+          "input": {
+            "model": "session",
+            "where": [
+              {
+                "field": "token",
+                "value": "session-user-join-existing-token"
+              }
+            ]
+          },
+          "events": [
+            [
+              "query",
+              "findOne",
+              "session"
+            ],
+            [
+              "output",
+              "session.token",
+              "session-user-join-existing-token"
+            ],
+            [
+              "output",
+              "session.userId",
+              "user-a"
+            ],
+            [
+              "output",
+              "session.ownerRef",
+              "user-b"
+            ]
+          ],
+          "returned": true,
+          "result": {
+            "expiresAt": {
+              "type": "date",
+              "value": "2100-01-02T03:04:05.000Z"
+            },
+            "token": "session-user-join-existing-token",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "ipAddress": "203.0.113.8",
+            "userAgent": "session-user-join-reference",
+            "userId": "user-a",
+            "ownerRef": "user-b",
+            "id": "session-a"
+          },
+          "json": {
+            "expiresAt": "2100-01-02T03:04:05.000Z",
+            "token": "session-user-join-existing-token",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z",
+            "ipAddress": "203.0.113.8",
+            "userAgent": "session-user-join-reference",
+            "userId": "user-a",
+            "ownerRef": "user-b",
+            "id": "session-a"
+          },
+          "keyOrder": [
+            {
+              "path": [],
+              "keys": [
+                "expiresAt",
+                "token",
+                "createdAt",
+                "updatedAt",
+                "ipAddress",
+                "userAgent",
+                "userId",
+                "ownerRef",
+                "id"
+              ]
+            }
+          ],
+          "storageUnchanged": true
+        },
+        {
+          "name": "user-control",
+          "surface": "adapter",
+          "input": {
+            "model": "user",
+            "where": [
+              {
+                "field": "id",
+                "value": "user-a"
+              }
+            ]
+          },
+          "events": [
+            [
+              "query",
+              "findOne",
+              "user"
+            ],
+            [
+              "output",
+              "user.name",
+              "User a"
+            ],
+            [
+              "output",
+              "user.image",
+              "image-a"
+            ]
+          ],
+          "returned": true,
+          "result": {
+            "name": "User a",
+            "email": "a@session-user-join-reference.test",
+            "emailVerified": true,
+            "image": "image-a",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "user-a"
+          },
+          "json": {
+            "name": "User a",
+            "email": "a@session-user-join-reference.test",
+            "emailVerified": true,
+            "image": "image-a",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z",
+            "id": "user-a"
+          },
+          "keyOrder": [
+            {
+              "path": [],
+              "keys": [
+                "name",
+                "email",
+                "emailVerified",
+                "image",
+                "createdAt",
+                "updatedAt",
+                "id"
+              ]
+            }
+          ],
+          "storageUnchanged": true
+        },
+        {
+          "name": "adapter-missing",
+          "surface": "adapter",
+          "joined": true,
+          "input": {
+            "model": "session",
+            "where": [
+              {
+                "field": "token",
+                "value": "session-user-join-missing-token"
+              }
+            ],
+            "join": {
+              "user": true
+            }
+          },
+          "events": [],
+          "returned": false,
+          "error": {
+            "name": "BetterAuthError",
+            "message": "Multiple foreign keys found for model user and base model session while performing join operation. Only one foreign key is supported.",
+            "properties": {
+              "name": "BetterAuthError"
+            },
+            "keys": [
+              "name"
+            ]
+          },
+          "storageUnchanged": true
+        },
+        {
+          "name": "internal-missing",
+          "surface": "internal",
+          "joined": true,
+          "token": "session-user-join-missing-token",
+          "events": [],
+          "returned": false,
+          "error": {
+            "name": "BetterAuthError",
+            "message": "Multiple foreign keys found for model user and base model session while performing join operation. Only one foreign key is supported.",
+            "properties": {
+              "name": "BetterAuthError"
+            },
+            "keys": [
+              "name"
+            ]
+          },
+          "storageUnchanged": true
+        },
+        {
+          "name": "adapter-existing",
+          "surface": "adapter",
+          "joined": true,
+          "input": {
+            "model": "session",
+            "where": [
+              {
+                "field": "token",
+                "value": "session-user-join-existing-token"
+              }
+            ],
+            "join": {
+              "user": true
+            }
+          },
+          "events": [],
+          "returned": false,
+          "error": {
+            "name": "BetterAuthError",
+            "message": "Multiple foreign keys found for model user and base model session while performing join operation. Only one foreign key is supported.",
+            "properties": {
+              "name": "BetterAuthError"
+            },
+            "keys": [
+              "name"
+            ]
+          },
+          "storageUnchanged": true
+        },
+        {
+          "name": "internal-existing",
+          "surface": "internal",
+          "joined": true,
+          "token": "session-user-join-existing-token",
+          "events": [],
+          "returned": false,
+          "error": {
+            "name": "BetterAuthError",
+            "message": "Multiple foreign keys found for model user and base model session while performing join operation. Only one foreign key is supported.",
+            "properties": {
+              "name": "BetterAuthError"
+            },
+            "keys": [
+              "name"
+            ]
+          },
+          "storageUnchanged": true
+        }
+      ],
+      "after": {
+        "user": [
+          {
+            "id": "user-a",
+            "name": "User a",
+            "email": "a@session-user-join-reference.test",
+            "emailVerified": 1,
+            "image": "image-a",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          },
+          {
+            "id": "user-b",
+            "name": "User b",
+            "email": "b@session-user-join-reference.test",
+            "emailVerified": 1,
+            "image": "image-b",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          }
+        ],
+        "session": [
+          {
+            "id": "session-a",
+            "expiresAt": "2100-01-02T03:04:05.000Z",
+            "token": "session-user-join-existing-token",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z",
+            "ipAddress": "203.0.113.8",
+            "userAgent": "session-user-join-reference",
+            "userId": "user-a",
+            "ownerRef": "user-b"
+          }
+        ],
+        "account": [],
+        "verification": []
+      }
+    }
+  ]
+}

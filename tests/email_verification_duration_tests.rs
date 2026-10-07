@@ -2,7 +2,6 @@
 #![expect(
     clippy::expect_used,
     clippy::indexing_slicing,
-    clippy::panic_in_result_fn,
     reason = "The endpoint contract fails immediately on missing captured tokens or fixture fields"
 )]
 
@@ -86,11 +85,11 @@ async fn zero_duration<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, backend: &str)
                 .auto_sign_in_after_verification(true)
                 .custom_send_verification_email(sender.clone())
                 .before_email_verification(Arc::new(move |_| {
-                    before.fetch_add(1, Ordering::SeqCst);
+                    let _ = before.fetch_add(1, Ordering::SeqCst);
                     Box::pin(async { Ok(()) })
                 }))
                 .after_email_verification(Arc::new(move |_| {
-                    after.fetch_add(1, Ordering::SeqCst);
+                    let _ = after.fetch_add(1, Ordering::SeqCst);
                     Box::pin(async { Ok(()) })
                 })),
         )

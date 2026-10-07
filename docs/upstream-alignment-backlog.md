@@ -46,6 +46,19 @@ Capture CI 37669725030 at `531825e` passed four independent jobs and all selecte
 | `passkey-shared-display-1.7.6.json` | `782ee5da5c30513d8de802e80a180c9f55522773cd66118f7cd1e984d0a2ca0e` |
 | `telemetry-fields-unique-1.7.6.json` | `a51cf604792e5ab609d576c78b32a620d079a8570bf1bde54eb0d20800fcfdc2` |
 
+Capture CI 37673366103 at `cc96bf3` passed all six jobs and their existing strict regressions. Source SHA, SHA-256, and byte-identical replay are verified for every imported contract. Session/User captures 12 configurations and 72 reads, including successful controls and reference errors before query/output callbacks. Device String-ID references retain all 18 cases on each of Memory, SQLite, PostgreSQL, and MySQL, including complete storage and rollback. Cookie capture retains 12 serializer cases, six chunk cases, and six real LastLogin HTTP cases, including ordered headers and attribute mutations. Rust implementation and focused acceptance of these new boundaries remain pending.
+
+| Fixture | SHA-256 |
+| --- | --- |
+| `cookie-attribute-mutation-1.7.6.json` | `b40401d266cc77e2bb624843f5329c08e47d3b90ad5e58e69b88a0294d51056d` |
+| `session-user-join-reference-1.7.6.json` | `abc46e5e15f7297fc565e43365f137482ec868cac7ebbf8c695722212e881c4f` |
+| `device-where-references-memory-1.7.6.json` | `d7ad6a71f3a2223a12e9d387c6f136d4822d6d33fcf8353a7eb7e9d6cff11793` |
+| `device-where-references-sqlite-1.7.6.json` | `fa1c604ab0a4d338c48d6cf88ad1a9b4087216afb6beb81ba85fdacf81934ef4` |
+| `device-where-references-postgres-1.7.6.json` | `2d620862209a9582ef2867549acafa5387651f6fe33dbd9635d3ac31f6ff8bf2` |
+| `device-where-references-mysql-1.7.6.json` | `15a2db6f9ccd03772b805acb42fe204fed7e0e4fcb9f5084317bb09485b8af83` |
+
+Email CI 37672863374 at `3575209` passed production Clippy and stopped at two unused test counters and an unfulfilled lint expectation. The correction preserves every assertion. Source review also separated signed business-payload decoding from JWT validation: invalid email field shapes retain HTTP 500, while invalid JWTs use HTTP 401 or the configured error redirect. The new malformed-payload capture remains pending; the source-based regression does not establish complete upstream pairing.
+
 Number-order capture CI 37672477359 at `0e21da3` passed all four cases and strict replay of the original Number-name and shared-Passkey contracts. The imported `api-key-number-name-order-1.7.6.json` has SHA-256 `fc0bf4f87080686ce8879a9633968bc787cb88f75b631be63beed9dcc85648b1`; source SHA and byte-identical replay are verified. Root and generated-consumer tests reuse the existing complete HTTP/storage/catalog contract. Finite numbers and null are covered; locale string ordering and Object conversion timing remain unpaired. The current Memory comparator converts every selected name before nullish comparisons; upstream only converts operands in the applicable comparison branch.
 
 Focused account-user-auth CI 37672507575 and plugin-display-values CI 37672512714 at `0e21da3` stopped at test-only Clippy findings before behavior tests ran. Required fixture lookups replace unchecked JSON indexing. Narrow lint expectations document intentional assertions inside Result-returning test callbacks and configuration tests; every assertion remains. The plugin run passed both strict upstream replays and production Clippy before the test lint failure. Corrected focused acceptance remains pending.

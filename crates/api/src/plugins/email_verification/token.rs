@@ -18,6 +18,13 @@ pub(crate) struct EmailVerificationClaims {
     pub(crate) exp: f64,
 }
 
+#[derive(Deserialize)]
+struct VerificationTokenDates {
+    #[serde(rename = "iat")]
+    _issued_at: i64,
+    exp: f64,
+}
+
 fn numeric_date<S: serde::Serializer>(value: &f64, serializer: S) -> Result<S::Ok, S::Error> {
     better_auth_core::wire::serialize_optional_number(&Some(*value), serializer)
 }
@@ -78,22 +85,29 @@ fn decode_email_verification_token_at(
     now: DateTime<Utc>,
 ) -> AuthResult<EmailVerificationClaims> {
     let mut validation = Validation::new(Algorithm::HS256);
-    // The typed claims require exp. Validate its fractional value without the library's rounding or clock tolerance.
+    // The typed dates require exp. Validate its fractional value without the library's rounding or clock tolerance.
     validation.required_spec_claims.clear();
     validation.validate_exp = false;
 
-    let claims = decode::<EmailVerificationClaims>(
+    let payload = decode::<serde_json::Value>(
         token,
         &DecodingKey::from_secret(secret.as_bytes()),
         &validation,
     )?
     .claims;
-    if claims.exp <= now.timestamp() as f64 {
+    let dates: VerificationTokenDates =
+        serde_json::from_value(payload.clone()).map_err(jsonwebtoken::errors::Error::from)?;
+    if dates.exp <= now.timestamp() as f64 {
         return Err(jsonwebtoken::errors::Error::from(ErrorKind::ExpiredSignature).into());
     }
-    Ok(claims)
+    // Upstream parses email fields after JWT verification; business payload errors remain server errors.
+    Ok(serde_json::from_value(payload)?)
 }
 
 #[cfg(test)]
 #[path = "duration_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "payload_tests.rs"]
+mod payload_tests;
