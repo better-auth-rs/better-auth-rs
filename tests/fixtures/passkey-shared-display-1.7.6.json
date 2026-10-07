@@ -1,0 +1,2927 @@
+{
+  "version": "1.7.6",
+  "cases": [
+    {
+      "backend": "memory",
+      "declarationOrder": [
+        "name",
+        "aaguid"
+      ],
+      "table": "shared_display_passkey",
+      "column": "display",
+      "catalog": null,
+      "operations": [
+        {
+          "name": "create",
+          "events": [
+            [
+              "input",
+              "name",
+              "Desk"
+            ],
+            [
+              "input",
+              "aaguid",
+              "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4"
+            ],
+            [
+              "output",
+              "name",
+              "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4"
+            ],
+            [
+              "output",
+              "aaguid",
+              "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4"
+            ]
+          ],
+          "result": [
+            {
+              "keys": [
+                "name",
+                "publicKey",
+                "userId",
+                "credentialID",
+                "counter",
+                "deviceType",
+                "backedUp",
+                "transports",
+                "createdAt",
+                "aaguid",
+                "id"
+              ],
+              "fields": {
+                "name": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "publicKey": "ordinary-public-key",
+                "userId": "shared-display-owner",
+                "credentialID": "ordinary-shared-display-credential",
+                "counter": 0,
+                "deviceType": "singleDevice",
+                "backedUp": false,
+                "transports": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.123Z"
+                },
+                "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "id": "shared-display-passkey"
+              }
+            }
+          ],
+          "stored": [
+            {
+              "keys": [
+                "display",
+                "publicKey",
+                "userId",
+                "credentialID",
+                "counter",
+                "deviceType",
+                "backedUp",
+                "transports",
+                "createdAt",
+                "id"
+              ],
+              "fields": {
+                "display": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "publicKey": "ordinary-public-key",
+                "userId": "shared-display-owner",
+                "credentialID": "ordinary-shared-display-credential",
+                "counter": 0,
+                "deviceType": "singleDevice",
+                "backedUp": false,
+                "transports": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.123Z"
+                },
+                "id": "shared-display-passkey"
+              }
+            }
+          ]
+        },
+        {
+          "name": "get-id",
+          "events": [
+            [
+              "output",
+              "name",
+              "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4"
+            ],
+            [
+              "output",
+              "aaguid",
+              "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4"
+            ]
+          ],
+          "result": [
+            {
+              "keys": [
+                "name",
+                "publicKey",
+                "userId",
+                "credentialID",
+                "counter",
+                "deviceType",
+                "backedUp",
+                "transports",
+                "createdAt",
+                "aaguid",
+                "id"
+              ],
+              "fields": {
+                "name": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "publicKey": "ordinary-public-key",
+                "userId": "shared-display-owner",
+                "credentialID": "ordinary-shared-display-credential",
+                "counter": 0,
+                "deviceType": "singleDevice",
+                "backedUp": false,
+                "transports": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.123Z"
+                },
+                "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "id": "shared-display-passkey"
+              }
+            }
+          ],
+          "stored": [
+            {
+              "keys": [
+                "display",
+                "publicKey",
+                "userId",
+                "credentialID",
+                "counter",
+                "deviceType",
+                "backedUp",
+                "transports",
+                "createdAt",
+                "id"
+              ],
+              "fields": {
+                "display": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "publicKey": "ordinary-public-key",
+                "userId": "shared-display-owner",
+                "credentialID": "ordinary-shared-display-credential",
+                "counter": 0,
+                "deviceType": "singleDevice",
+                "backedUp": false,
+                "transports": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.123Z"
+                },
+                "id": "shared-display-passkey"
+              }
+            }
+          ]
+        },
+        {
+          "name": "get-credential",
+          "events": [
+            [
+              "output",
+              "name",
+              "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4"
+            ],
+            [
+              "output",
+              "aaguid",
+              "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4"
+            ]
+          ],
+          "result": [
+            {
+              "keys": [
+                "name",
+                "publicKey",
+                "userId",
+                "credentialID",
+                "counter",
+                "deviceType",
+                "backedUp",
+                "transports",
+                "createdAt",
+                "aaguid",
+                "id"
+              ],
+              "fields": {
+                "name": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "publicKey": "ordinary-public-key",
+                "userId": "shared-display-owner",
+                "credentialID": "ordinary-shared-display-credential",
+                "counter": 0,
+                "deviceType": "singleDevice",
+                "backedUp": false,
+                "transports": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.123Z"
+                },
+                "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "id": "shared-display-passkey"
+              }
+            }
+          ],
+          "stored": [
+            {
+              "keys": [
+                "display",
+                "publicKey",
+                "userId",
+                "credentialID",
+                "counter",
+                "deviceType",
+                "backedUp",
+                "transports",
+                "createdAt",
+                "id"
+              ],
+              "fields": {
+                "display": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "publicKey": "ordinary-public-key",
+                "userId": "shared-display-owner",
+                "credentialID": "ordinary-shared-display-credential",
+                "counter": 0,
+                "deviceType": "singleDevice",
+                "backedUp": false,
+                "transports": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.123Z"
+                },
+                "id": "shared-display-passkey"
+              }
+            }
+          ]
+        },
+        {
+          "name": "list",
+          "events": [
+            [
+              "output",
+              "name",
+              "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4"
+            ],
+            [
+              "output",
+              "aaguid",
+              "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4"
+            ]
+          ],
+          "result": [
+            {
+              "keys": [
+                "name",
+                "publicKey",
+                "userId",
+                "credentialID",
+                "counter",
+                "deviceType",
+                "backedUp",
+                "transports",
+                "createdAt",
+                "aaguid",
+                "id"
+              ],
+              "fields": {
+                "name": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "publicKey": "ordinary-public-key",
+                "userId": "shared-display-owner",
+                "credentialID": "ordinary-shared-display-credential",
+                "counter": 0,
+                "deviceType": "singleDevice",
+                "backedUp": false,
+                "transports": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.123Z"
+                },
+                "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "id": "shared-display-passkey"
+              }
+            }
+          ],
+          "stored": [
+            {
+              "keys": [
+                "display",
+                "publicKey",
+                "userId",
+                "credentialID",
+                "counter",
+                "deviceType",
+                "backedUp",
+                "transports",
+                "createdAt",
+                "id"
+              ],
+              "fields": {
+                "display": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "publicKey": "ordinary-public-key",
+                "userId": "shared-display-owner",
+                "credentialID": "ordinary-shared-display-credential",
+                "counter": 0,
+                "deviceType": "singleDevice",
+                "backedUp": false,
+                "transports": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.123Z"
+                },
+                "id": "shared-display-passkey"
+              }
+            }
+          ]
+        },
+        {
+          "name": "update-name",
+          "events": [
+            [
+              "output",
+              "name",
+              "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4"
+            ],
+            [
+              "output",
+              "aaguid",
+              "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4"
+            ],
+            [
+              "input",
+              "name",
+              "Renamed"
+            ],
+            [
+              "output",
+              "name",
+              "Renamed"
+            ],
+            [
+              "output",
+              "aaguid",
+              "Renamed"
+            ]
+          ],
+          "result": [
+            {
+              "keys": [
+                "name",
+                "publicKey",
+                "userId",
+                "credentialID",
+                "counter",
+                "deviceType",
+                "backedUp",
+                "transports",
+                "createdAt",
+                "aaguid",
+                "id"
+              ],
+              "fields": {
+                "name": "Renamed",
+                "publicKey": "ordinary-public-key",
+                "userId": "shared-display-owner",
+                "credentialID": "ordinary-shared-display-credential",
+                "counter": 0,
+                "deviceType": "singleDevice",
+                "backedUp": false,
+                "transports": null,
+                "createdAt": "2030-01-02T03:04:05.123Z",
+                "aaguid": "Renamed",
+                "id": "shared-display-passkey"
+              }
+            }
+          ],
+          "stored": [
+            {
+              "keys": [
+                "display",
+                "publicKey",
+                "userId",
+                "credentialID",
+                "counter",
+                "deviceType",
+                "backedUp",
+                "transports",
+                "createdAt",
+                "id"
+              ],
+              "fields": {
+                "display": "Renamed",
+                "publicKey": "ordinary-public-key",
+                "userId": "shared-display-owner",
+                "credentialID": "ordinary-shared-display-credential",
+                "counter": 0,
+                "deviceType": "singleDevice",
+                "backedUp": false,
+                "transports": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.123Z"
+                },
+                "id": "shared-display-passkey"
+              }
+            }
+          ]
+        },
+        {
+          "name": "update-auth",
+          "events": [
+            [
+              "output",
+              "name",
+              "Renamed"
+            ],
+            [
+              "output",
+              "aaguid",
+              "Renamed"
+            ]
+          ],
+          "result": [
+            {
+              "keys": [
+                "name",
+                "publicKey",
+                "userId",
+                "credentialID",
+                "counter",
+                "deviceType",
+                "backedUp",
+                "transports",
+                "createdAt",
+                "aaguid",
+                "id"
+              ],
+              "fields": {
+                "name": "Renamed",
+                "publicKey": "ordinary-public-key",
+                "userId": "shared-display-owner",
+                "credentialID": "ordinary-shared-display-credential",
+                "counter": 1,
+                "deviceType": "singleDevice",
+                "backedUp": false,
+                "transports": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.123Z"
+                },
+                "aaguid": "Renamed",
+                "id": "shared-display-passkey"
+              }
+            }
+          ],
+          "stored": [
+            {
+              "keys": [
+                "display",
+                "publicKey",
+                "userId",
+                "credentialID",
+                "counter",
+                "deviceType",
+                "backedUp",
+                "transports",
+                "createdAt",
+                "id"
+              ],
+              "fields": {
+                "display": "Renamed",
+                "publicKey": "ordinary-public-key",
+                "userId": "shared-display-owner",
+                "credentialID": "ordinary-shared-display-credential",
+                "counter": 1,
+                "deviceType": "singleDevice",
+                "backedUp": false,
+                "transports": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.123Z"
+                },
+                "id": "shared-display-passkey"
+              }
+            }
+          ]
+        }
+      ],
+      "http": [
+        {
+          "name": "update-name",
+          "request": {
+            "url": "http://passkey-shared-display.test/api/auth/passkey/update-passkey",
+            "method": "POST",
+            "headers": [
+              [
+                "accept",
+                "application/json"
+              ],
+              [
+                "content-type",
+                "application/json"
+              ],
+              [
+                "cookie",
+                "better-auth.session_token=<owner-session-cookie>"
+              ],
+              [
+                "origin",
+                "http://passkey-shared-display.test"
+              ]
+            ],
+            "body": "{\"id\":\"shared-display-passkey\",\"name\":\" Renamed \"}"
+          },
+          "response": {
+            "status": 200,
+            "statusText": "",
+            "headers": [
+              [
+                "content-type",
+                "application/json"
+              ]
+            ],
+            "cookies": [],
+            "body": "{\"passkey\":{\"name\":\"Renamed\",\"publicKey\":\"ordinary-public-key\",\"userId\":\"shared-display-owner\",\"credentialID\":\"ordinary-shared-display-credential\",\"counter\":0,\"deviceType\":\"singleDevice\",\"backedUp\":false,\"transports\":null,\"createdAt\":\"2030-01-02T03:04:05.123Z\",\"aaguid\":\"Renamed\",\"id\":\"shared-display-passkey\"}}"
+          }
+        }
+      ],
+      "finalRead": {
+        "name": "read-updated",
+        "events": [
+          [
+            "output",
+            "name",
+            "Renamed"
+          ],
+          [
+            "output",
+            "aaguid",
+            "Renamed"
+          ]
+        ],
+        "result": {
+          "keys": [
+            "name",
+            "publicKey",
+            "userId",
+            "credentialID",
+            "counter",
+            "deviceType",
+            "backedUp",
+            "transports",
+            "createdAt",
+            "aaguid",
+            "id"
+          ],
+          "fields": {
+            "name": "Renamed",
+            "publicKey": "ordinary-public-key",
+            "userId": "shared-display-owner",
+            "credentialID": "ordinary-shared-display-credential",
+            "counter": 1,
+            "deviceType": "singleDevice",
+            "backedUp": false,
+            "transports": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.123Z"
+            },
+            "aaguid": "Renamed",
+            "id": "shared-display-passkey"
+          }
+        },
+        "stored": [
+          {
+            "keys": [
+              "display",
+              "publicKey",
+              "userId",
+              "credentialID",
+              "counter",
+              "deviceType",
+              "backedUp",
+              "transports",
+              "createdAt",
+              "id"
+            ],
+            "fields": {
+              "display": "Renamed",
+              "publicKey": "ordinary-public-key",
+              "userId": "shared-display-owner",
+              "credentialID": "ordinary-shared-display-credential",
+              "counter": 1,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.123Z"
+              },
+              "id": "shared-display-passkey"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "backend": "memory",
+      "declarationOrder": [
+        "aaguid",
+        "name"
+      ],
+      "table": "shared_display_passkey",
+      "column": "display",
+      "catalog": null,
+      "operations": [
+        {
+          "name": "create",
+          "events": [
+            [
+              "input",
+              "name",
+              "Desk"
+            ],
+            [
+              "input",
+              "aaguid",
+              "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4"
+            ],
+            [
+              "output",
+              "name",
+              "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4"
+            ],
+            [
+              "output",
+              "aaguid",
+              "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4"
+            ]
+          ],
+          "result": [
+            {
+              "keys": [
+                "name",
+                "publicKey",
+                "userId",
+                "credentialID",
+                "counter",
+                "deviceType",
+                "backedUp",
+                "transports",
+                "createdAt",
+                "aaguid",
+                "id"
+              ],
+              "fields": {
+                "name": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "publicKey": "ordinary-public-key",
+                "userId": "shared-display-owner",
+                "credentialID": "ordinary-shared-display-credential",
+                "counter": 0,
+                "deviceType": "singleDevice",
+                "backedUp": false,
+                "transports": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.123Z"
+                },
+                "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "id": "shared-display-passkey"
+              }
+            }
+          ],
+          "stored": [
+            {
+              "keys": [
+                "display",
+                "publicKey",
+                "userId",
+                "credentialID",
+                "counter",
+                "deviceType",
+                "backedUp",
+                "transports",
+                "createdAt",
+                "id"
+              ],
+              "fields": {
+                "display": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "publicKey": "ordinary-public-key",
+                "userId": "shared-display-owner",
+                "credentialID": "ordinary-shared-display-credential",
+                "counter": 0,
+                "deviceType": "singleDevice",
+                "backedUp": false,
+                "transports": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.123Z"
+                },
+                "id": "shared-display-passkey"
+              }
+            }
+          ]
+        },
+        {
+          "name": "get-id",
+          "events": [
+            [
+              "output",
+              "name",
+              "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4"
+            ],
+            [
+              "output",
+              "aaguid",
+              "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4"
+            ]
+          ],
+          "result": [
+            {
+              "keys": [
+                "name",
+                "publicKey",
+                "userId",
+                "credentialID",
+                "counter",
+                "deviceType",
+                "backedUp",
+                "transports",
+                "createdAt",
+                "aaguid",
+                "id"
+              ],
+              "fields": {
+                "name": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "publicKey": "ordinary-public-key",
+                "userId": "shared-display-owner",
+                "credentialID": "ordinary-shared-display-credential",
+                "counter": 0,
+                "deviceType": "singleDevice",
+                "backedUp": false,
+                "transports": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.123Z"
+                },
+                "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "id": "shared-display-passkey"
+              }
+            }
+          ],
+          "stored": [
+            {
+              "keys": [
+                "display",
+                "publicKey",
+                "userId",
+                "credentialID",
+                "counter",
+                "deviceType",
+                "backedUp",
+                "transports",
+                "createdAt",
+                "id"
+              ],
+              "fields": {
+                "display": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "publicKey": "ordinary-public-key",
+                "userId": "shared-display-owner",
+                "credentialID": "ordinary-shared-display-credential",
+                "counter": 0,
+                "deviceType": "singleDevice",
+                "backedUp": false,
+                "transports": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.123Z"
+                },
+                "id": "shared-display-passkey"
+              }
+            }
+          ]
+        },
+        {
+          "name": "get-credential",
+          "events": [
+            [
+              "output",
+              "name",
+              "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4"
+            ],
+            [
+              "output",
+              "aaguid",
+              "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4"
+            ]
+          ],
+          "result": [
+            {
+              "keys": [
+                "name",
+                "publicKey",
+                "userId",
+                "credentialID",
+                "counter",
+                "deviceType",
+                "backedUp",
+                "transports",
+                "createdAt",
+                "aaguid",
+                "id"
+              ],
+              "fields": {
+                "name": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "publicKey": "ordinary-public-key",
+                "userId": "shared-display-owner",
+                "credentialID": "ordinary-shared-display-credential",
+                "counter": 0,
+                "deviceType": "singleDevice",
+                "backedUp": false,
+                "transports": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.123Z"
+                },
+                "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "id": "shared-display-passkey"
+              }
+            }
+          ],
+          "stored": [
+            {
+              "keys": [
+                "display",
+                "publicKey",
+                "userId",
+                "credentialID",
+                "counter",
+                "deviceType",
+                "backedUp",
+                "transports",
+                "createdAt",
+                "id"
+              ],
+              "fields": {
+                "display": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "publicKey": "ordinary-public-key",
+                "userId": "shared-display-owner",
+                "credentialID": "ordinary-shared-display-credential",
+                "counter": 0,
+                "deviceType": "singleDevice",
+                "backedUp": false,
+                "transports": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.123Z"
+                },
+                "id": "shared-display-passkey"
+              }
+            }
+          ]
+        },
+        {
+          "name": "list",
+          "events": [
+            [
+              "output",
+              "name",
+              "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4"
+            ],
+            [
+              "output",
+              "aaguid",
+              "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4"
+            ]
+          ],
+          "result": [
+            {
+              "keys": [
+                "name",
+                "publicKey",
+                "userId",
+                "credentialID",
+                "counter",
+                "deviceType",
+                "backedUp",
+                "transports",
+                "createdAt",
+                "aaguid",
+                "id"
+              ],
+              "fields": {
+                "name": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "publicKey": "ordinary-public-key",
+                "userId": "shared-display-owner",
+                "credentialID": "ordinary-shared-display-credential",
+                "counter": 0,
+                "deviceType": "singleDevice",
+                "backedUp": false,
+                "transports": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.123Z"
+                },
+                "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "id": "shared-display-passkey"
+              }
+            }
+          ],
+          "stored": [
+            {
+              "keys": [
+                "display",
+                "publicKey",
+                "userId",
+                "credentialID",
+                "counter",
+                "deviceType",
+                "backedUp",
+                "transports",
+                "createdAt",
+                "id"
+              ],
+              "fields": {
+                "display": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "publicKey": "ordinary-public-key",
+                "userId": "shared-display-owner",
+                "credentialID": "ordinary-shared-display-credential",
+                "counter": 0,
+                "deviceType": "singleDevice",
+                "backedUp": false,
+                "transports": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.123Z"
+                },
+                "id": "shared-display-passkey"
+              }
+            }
+          ]
+        },
+        {
+          "name": "update-name",
+          "events": [
+            [
+              "output",
+              "name",
+              "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4"
+            ],
+            [
+              "output",
+              "aaguid",
+              "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4"
+            ],
+            [
+              "input",
+              "name",
+              "Renamed"
+            ],
+            [
+              "output",
+              "name",
+              "Renamed"
+            ],
+            [
+              "output",
+              "aaguid",
+              "Renamed"
+            ]
+          ],
+          "result": [
+            {
+              "keys": [
+                "name",
+                "publicKey",
+                "userId",
+                "credentialID",
+                "counter",
+                "deviceType",
+                "backedUp",
+                "transports",
+                "createdAt",
+                "aaguid",
+                "id"
+              ],
+              "fields": {
+                "name": "Renamed",
+                "publicKey": "ordinary-public-key",
+                "userId": "shared-display-owner",
+                "credentialID": "ordinary-shared-display-credential",
+                "counter": 0,
+                "deviceType": "singleDevice",
+                "backedUp": false,
+                "transports": null,
+                "createdAt": "2030-01-02T03:04:05.123Z",
+                "aaguid": "Renamed",
+                "id": "shared-display-passkey"
+              }
+            }
+          ],
+          "stored": [
+            {
+              "keys": [
+                "display",
+                "publicKey",
+                "userId",
+                "credentialID",
+                "counter",
+                "deviceType",
+                "backedUp",
+                "transports",
+                "createdAt",
+                "id"
+              ],
+              "fields": {
+                "display": "Renamed",
+                "publicKey": "ordinary-public-key",
+                "userId": "shared-display-owner",
+                "credentialID": "ordinary-shared-display-credential",
+                "counter": 0,
+                "deviceType": "singleDevice",
+                "backedUp": false,
+                "transports": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.123Z"
+                },
+                "id": "shared-display-passkey"
+              }
+            }
+          ]
+        },
+        {
+          "name": "update-auth",
+          "events": [
+            [
+              "output",
+              "name",
+              "Renamed"
+            ],
+            [
+              "output",
+              "aaguid",
+              "Renamed"
+            ]
+          ],
+          "result": [
+            {
+              "keys": [
+                "name",
+                "publicKey",
+                "userId",
+                "credentialID",
+                "counter",
+                "deviceType",
+                "backedUp",
+                "transports",
+                "createdAt",
+                "aaguid",
+                "id"
+              ],
+              "fields": {
+                "name": "Renamed",
+                "publicKey": "ordinary-public-key",
+                "userId": "shared-display-owner",
+                "credentialID": "ordinary-shared-display-credential",
+                "counter": 1,
+                "deviceType": "singleDevice",
+                "backedUp": false,
+                "transports": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.123Z"
+                },
+                "aaguid": "Renamed",
+                "id": "shared-display-passkey"
+              }
+            }
+          ],
+          "stored": [
+            {
+              "keys": [
+                "display",
+                "publicKey",
+                "userId",
+                "credentialID",
+                "counter",
+                "deviceType",
+                "backedUp",
+                "transports",
+                "createdAt",
+                "id"
+              ],
+              "fields": {
+                "display": "Renamed",
+                "publicKey": "ordinary-public-key",
+                "userId": "shared-display-owner",
+                "credentialID": "ordinary-shared-display-credential",
+                "counter": 1,
+                "deviceType": "singleDevice",
+                "backedUp": false,
+                "transports": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.123Z"
+                },
+                "id": "shared-display-passkey"
+              }
+            }
+          ]
+        }
+      ],
+      "http": [
+        {
+          "name": "update-name",
+          "request": {
+            "url": "http://passkey-shared-display.test/api/auth/passkey/update-passkey",
+            "method": "POST",
+            "headers": [
+              [
+                "accept",
+                "application/json"
+              ],
+              [
+                "content-type",
+                "application/json"
+              ],
+              [
+                "cookie",
+                "better-auth.session_token=<owner-session-cookie>"
+              ],
+              [
+                "origin",
+                "http://passkey-shared-display.test"
+              ]
+            ],
+            "body": "{\"id\":\"shared-display-passkey\",\"name\":\" Renamed \"}"
+          },
+          "response": {
+            "status": 200,
+            "statusText": "",
+            "headers": [
+              [
+                "content-type",
+                "application/json"
+              ]
+            ],
+            "cookies": [],
+            "body": "{\"passkey\":{\"name\":\"Renamed\",\"publicKey\":\"ordinary-public-key\",\"userId\":\"shared-display-owner\",\"credentialID\":\"ordinary-shared-display-credential\",\"counter\":0,\"deviceType\":\"singleDevice\",\"backedUp\":false,\"transports\":null,\"createdAt\":\"2030-01-02T03:04:05.123Z\",\"aaguid\":\"Renamed\",\"id\":\"shared-display-passkey\"}}"
+          }
+        }
+      ],
+      "finalRead": {
+        "name": "read-updated",
+        "events": [
+          [
+            "output",
+            "name",
+            "Renamed"
+          ],
+          [
+            "output",
+            "aaguid",
+            "Renamed"
+          ]
+        ],
+        "result": {
+          "keys": [
+            "name",
+            "publicKey",
+            "userId",
+            "credentialID",
+            "counter",
+            "deviceType",
+            "backedUp",
+            "transports",
+            "createdAt",
+            "aaguid",
+            "id"
+          ],
+          "fields": {
+            "name": "Renamed",
+            "publicKey": "ordinary-public-key",
+            "userId": "shared-display-owner",
+            "credentialID": "ordinary-shared-display-credential",
+            "counter": 1,
+            "deviceType": "singleDevice",
+            "backedUp": false,
+            "transports": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.123Z"
+            },
+            "aaguid": "Renamed",
+            "id": "shared-display-passkey"
+          }
+        },
+        "stored": [
+          {
+            "keys": [
+              "display",
+              "publicKey",
+              "userId",
+              "credentialID",
+              "counter",
+              "deviceType",
+              "backedUp",
+              "transports",
+              "createdAt",
+              "id"
+            ],
+            "fields": {
+              "display": "Renamed",
+              "publicKey": "ordinary-public-key",
+              "userId": "shared-display-owner",
+              "credentialID": "ordinary-shared-display-credential",
+              "counter": 1,
+              "deviceType": "singleDevice",
+              "backedUp": false,
+              "transports": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.123Z"
+              },
+              "id": "shared-display-passkey"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "backend": "sqlite",
+      "declarationOrder": [
+        "name",
+        "aaguid"
+      ],
+      "table": "shared_display_passkey",
+      "column": "display",
+      "catalog": {
+        "catalog": {
+          "table": {
+            "type": "table",
+            "name": "shared_display_passkey",
+            "tbl_name": "shared_display_passkey"
+          },
+          "columns": [
+            {
+              "cid": 0,
+              "name": "id",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 1
+            },
+            {
+              "cid": 1,
+              "name": "display",
+              "type": "TEXT",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 2,
+              "name": "publicKey",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 3,
+              "name": "userId",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 4,
+              "name": "credentialID",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 5,
+              "name": "counter",
+              "type": "INTEGER",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 6,
+              "name": "deviceType",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 7,
+              "name": "backedUp",
+              "type": "INTEGER",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 8,
+              "name": "transports",
+              "type": "TEXT",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 9,
+              "name": "createdAt",
+              "type": "date",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            }
+          ],
+          "indexes": [
+            {
+              "definition": {
+                "seq": 0,
+                "name": "shared_display_passkey_credentialID_idx",
+                "unique": 0,
+                "origin": "c",
+                "partial": 0
+              },
+              "columns": [
+                {
+                  "seqno": 0,
+                  "cid": 4,
+                  "name": "credentialID"
+                }
+              ],
+              "extendedColumns": [
+                {
+                  "seqno": 0,
+                  "cid": 4,
+                  "name": "credentialID",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "cid": -1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "definition": {
+                "seq": 1,
+                "name": "shared_display_passkey_userId_idx",
+                "unique": 0,
+                "origin": "c",
+                "partial": 0
+              },
+              "columns": [
+                {
+                  "seqno": 0,
+                  "cid": 3,
+                  "name": "userId"
+                }
+              ],
+              "extendedColumns": [
+                {
+                  "seqno": 0,
+                  "cid": 3,
+                  "name": "userId",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "cid": -1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "definition": {
+                "seq": 2,
+                "name": "sqlite_autoindex_shared_display_passkey_1",
+                "unique": 1,
+                "origin": "pk",
+                "partial": 0
+              },
+              "columns": [
+                {
+                  "seqno": 0,
+                  "cid": 0,
+                  "name": "id"
+                }
+              ],
+              "extendedColumns": [
+                {
+                  "seqno": 0,
+                  "cid": 0,
+                  "name": "id",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "cid": -1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            }
+          ],
+          "foreignKeys": [
+            {
+              "id": 0,
+              "seq": 0,
+              "table": "user",
+              "from": "userId",
+              "to": "id",
+              "on_update": "NO ACTION",
+              "on_delete": "CASCADE",
+              "match": "NONE"
+            }
+          ]
+        },
+        "ddl": [
+          {
+            "type": "index",
+            "name": "shared_display_passkey_credentialID_idx",
+            "tbl_name": "shared_display_passkey",
+            "sql": "CREATE INDEX \"shared_display_passkey_credentialID_idx\" on \"shared_display_passkey\" (\"credentialID\")"
+          },
+          {
+            "type": "index",
+            "name": "shared_display_passkey_userId_idx",
+            "tbl_name": "shared_display_passkey",
+            "sql": "CREATE INDEX \"shared_display_passkey_userId_idx\" on \"shared_display_passkey\" (\"userId\")"
+          },
+          {
+            "type": "index",
+            "name": "sqlite_autoindex_shared_display_passkey_1",
+            "tbl_name": "shared_display_passkey",
+            "sql": null
+          },
+          {
+            "type": "table",
+            "name": "shared_display_passkey",
+            "tbl_name": "shared_display_passkey",
+            "sql": "CREATE TABLE \"shared_display_passkey\" (\"id\" text not null primary key, \"display\" text, \"publicKey\" text not null, \"userId\" text not null references \"user\" (\"id\") on delete cascade, \"credentialID\" text not null, \"counter\" integer not null, \"deviceType\" text not null, \"backedUp\" integer not null, \"transports\" text, \"createdAt\" date)"
+          }
+        ]
+      },
+      "operations": [
+        {
+          "name": "create",
+          "events": [
+            [
+              "input",
+              "name",
+              "Desk"
+            ],
+            [
+              "input",
+              "aaguid",
+              "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4"
+            ],
+            [
+              "output",
+              "name",
+              "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4"
+            ],
+            [
+              "output",
+              "aaguid",
+              "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4"
+            ]
+          ],
+          "result": [
+            {
+              "keys": [
+                "name",
+                "publicKey",
+                "userId",
+                "credentialID",
+                "counter",
+                "deviceType",
+                "backedUp",
+                "transports",
+                "createdAt",
+                "aaguid",
+                "id"
+              ],
+              "fields": {
+                "name": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "publicKey": "ordinary-public-key",
+                "userId": "shared-display-owner",
+                "credentialID": "ordinary-shared-display-credential",
+                "counter": 0,
+                "deviceType": "singleDevice",
+                "backedUp": false,
+                "transports": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.123Z"
+                },
+                "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "id": "shared-display-passkey"
+              }
+            }
+          ],
+          "stored": [
+            {
+              "keys": [
+                "id",
+                "display",
+                "publicKey",
+                "userId",
+                "credentialID",
+                "counter",
+                "deviceType",
+                "backedUp",
+                "transports",
+                "createdAt"
+              ],
+              "fields": {
+                "id": "shared-display-passkey",
+                "display": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "publicKey": "ordinary-public-key",
+                "userId": "shared-display-owner",
+                "credentialID": "ordinary-shared-display-credential",
+                "counter": 0,
+                "deviceType": "singleDevice",
+                "backedUp": 0,
+                "transports": null,
+                "createdAt": "2030-01-02T03:04:05.123Z"
+              }
+            }
+          ]
+        },
+        {
+          "name": "get-id",
+          "events": [
+            [
+              "output",
+              "name",
+              "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4"
+            ],
+            [
+              "output",
+              "aaguid",
+              "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4"
+            ]
+          ],
+          "result": [
+            {
+              "keys": [
+                "name",
+                "publicKey",
+                "userId",
+                "credentialID",
+                "counter",
+                "deviceType",
+                "backedUp",
+                "transports",
+                "createdAt",
+                "aaguid",
+                "id"
+              ],
+              "fields": {
+                "name": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "publicKey": "ordinary-public-key",
+                "userId": "shared-display-owner",
+                "credentialID": "ordinary-shared-display-credential",
+                "counter": 0,
+                "deviceType": "singleDevice",
+                "backedUp": false,
+                "transports": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.123Z"
+                },
+                "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "id": "shared-display-passkey"
+              }
+            }
+          ],
+          "stored": [
+            {
+              "keys": [
+                "id",
+                "display",
+                "publicKey",
+                "userId",
+                "credentialID",
+                "counter",
+                "deviceType",
+                "backedUp",
+                "transports",
+                "createdAt"
+              ],
+              "fields": {
+                "id": "shared-display-passkey",
+                "display": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "publicKey": "ordinary-public-key",
+                "userId": "shared-display-owner",
+                "credentialID": "ordinary-shared-display-credential",
+                "counter": 0,
+                "deviceType": "singleDevice",
+                "backedUp": 0,
+                "transports": null,
+                "createdAt": "2030-01-02T03:04:05.123Z"
+              }
+            }
+          ]
+        },
+        {
+          "name": "get-credential",
+          "events": [
+            [
+              "output",
+              "name",
+              "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4"
+            ],
+            [
+              "output",
+              "aaguid",
+              "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4"
+            ]
+          ],
+          "result": [
+            {
+              "keys": [
+                "name",
+                "publicKey",
+                "userId",
+                "credentialID",
+                "counter",
+                "deviceType",
+                "backedUp",
+                "transports",
+                "createdAt",
+                "aaguid",
+                "id"
+              ],
+              "fields": {
+                "name": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "publicKey": "ordinary-public-key",
+                "userId": "shared-display-owner",
+                "credentialID": "ordinary-shared-display-credential",
+                "counter": 0,
+                "deviceType": "singleDevice",
+                "backedUp": false,
+                "transports": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.123Z"
+                },
+                "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "id": "shared-display-passkey"
+              }
+            }
+          ],
+          "stored": [
+            {
+              "keys": [
+                "id",
+                "display",
+                "publicKey",
+                "userId",
+                "credentialID",
+                "counter",
+                "deviceType",
+                "backedUp",
+                "transports",
+                "createdAt"
+              ],
+              "fields": {
+                "id": "shared-display-passkey",
+                "display": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "publicKey": "ordinary-public-key",
+                "userId": "shared-display-owner",
+                "credentialID": "ordinary-shared-display-credential",
+                "counter": 0,
+                "deviceType": "singleDevice",
+                "backedUp": 0,
+                "transports": null,
+                "createdAt": "2030-01-02T03:04:05.123Z"
+              }
+            }
+          ]
+        },
+        {
+          "name": "list",
+          "events": [
+            [
+              "output",
+              "name",
+              "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4"
+            ],
+            [
+              "output",
+              "aaguid",
+              "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4"
+            ]
+          ],
+          "result": [
+            {
+              "keys": [
+                "name",
+                "publicKey",
+                "userId",
+                "credentialID",
+                "counter",
+                "deviceType",
+                "backedUp",
+                "transports",
+                "createdAt",
+                "aaguid",
+                "id"
+              ],
+              "fields": {
+                "name": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "publicKey": "ordinary-public-key",
+                "userId": "shared-display-owner",
+                "credentialID": "ordinary-shared-display-credential",
+                "counter": 0,
+                "deviceType": "singleDevice",
+                "backedUp": false,
+                "transports": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.123Z"
+                },
+                "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "id": "shared-display-passkey"
+              }
+            }
+          ],
+          "stored": [
+            {
+              "keys": [
+                "id",
+                "display",
+                "publicKey",
+                "userId",
+                "credentialID",
+                "counter",
+                "deviceType",
+                "backedUp",
+                "transports",
+                "createdAt"
+              ],
+              "fields": {
+                "id": "shared-display-passkey",
+                "display": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "publicKey": "ordinary-public-key",
+                "userId": "shared-display-owner",
+                "credentialID": "ordinary-shared-display-credential",
+                "counter": 0,
+                "deviceType": "singleDevice",
+                "backedUp": 0,
+                "transports": null,
+                "createdAt": "2030-01-02T03:04:05.123Z"
+              }
+            }
+          ]
+        },
+        {
+          "name": "update-name",
+          "events": [
+            [
+              "output",
+              "name",
+              "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4"
+            ],
+            [
+              "output",
+              "aaguid",
+              "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4"
+            ],
+            [
+              "input",
+              "name",
+              "Renamed"
+            ],
+            [
+              "output",
+              "name",
+              "Renamed"
+            ],
+            [
+              "output",
+              "aaguid",
+              "Renamed"
+            ]
+          ],
+          "result": [
+            {
+              "keys": [
+                "name",
+                "publicKey",
+                "userId",
+                "credentialID",
+                "counter",
+                "deviceType",
+                "backedUp",
+                "transports",
+                "createdAt",
+                "aaguid",
+                "id"
+              ],
+              "fields": {
+                "name": "Renamed",
+                "publicKey": "ordinary-public-key",
+                "userId": "shared-display-owner",
+                "credentialID": "ordinary-shared-display-credential",
+                "counter": 0,
+                "deviceType": "singleDevice",
+                "backedUp": false,
+                "transports": null,
+                "createdAt": "2030-01-02T03:04:05.123Z",
+                "aaguid": "Renamed",
+                "id": "shared-display-passkey"
+              }
+            }
+          ],
+          "stored": [
+            {
+              "keys": [
+                "id",
+                "display",
+                "publicKey",
+                "userId",
+                "credentialID",
+                "counter",
+                "deviceType",
+                "backedUp",
+                "transports",
+                "createdAt"
+              ],
+              "fields": {
+                "id": "shared-display-passkey",
+                "display": "Renamed",
+                "publicKey": "ordinary-public-key",
+                "userId": "shared-display-owner",
+                "credentialID": "ordinary-shared-display-credential",
+                "counter": 0,
+                "deviceType": "singleDevice",
+                "backedUp": 0,
+                "transports": null,
+                "createdAt": "2030-01-02T03:04:05.123Z"
+              }
+            }
+          ]
+        },
+        {
+          "name": "update-auth",
+          "events": [
+            [
+              "output",
+              "name",
+              "Renamed"
+            ],
+            [
+              "output",
+              "aaguid",
+              "Renamed"
+            ]
+          ],
+          "result": [
+            {
+              "keys": [
+                "name",
+                "publicKey",
+                "userId",
+                "credentialID",
+                "counter",
+                "deviceType",
+                "backedUp",
+                "transports",
+                "createdAt",
+                "aaguid",
+                "id"
+              ],
+              "fields": {
+                "name": "Renamed",
+                "publicKey": "ordinary-public-key",
+                "userId": "shared-display-owner",
+                "credentialID": "ordinary-shared-display-credential",
+                "counter": 1,
+                "deviceType": "singleDevice",
+                "backedUp": false,
+                "transports": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.123Z"
+                },
+                "aaguid": "Renamed",
+                "id": "shared-display-passkey"
+              }
+            }
+          ],
+          "stored": [
+            {
+              "keys": [
+                "id",
+                "display",
+                "publicKey",
+                "userId",
+                "credentialID",
+                "counter",
+                "deviceType",
+                "backedUp",
+                "transports",
+                "createdAt"
+              ],
+              "fields": {
+                "id": "shared-display-passkey",
+                "display": "Renamed",
+                "publicKey": "ordinary-public-key",
+                "userId": "shared-display-owner",
+                "credentialID": "ordinary-shared-display-credential",
+                "counter": 1,
+                "deviceType": "singleDevice",
+                "backedUp": 0,
+                "transports": null,
+                "createdAt": "2030-01-02T03:04:05.123Z"
+              }
+            }
+          ]
+        }
+      ],
+      "http": [
+        {
+          "name": "update-name",
+          "request": {
+            "url": "http://passkey-shared-display.test/api/auth/passkey/update-passkey",
+            "method": "POST",
+            "headers": [
+              [
+                "accept",
+                "application/json"
+              ],
+              [
+                "content-type",
+                "application/json"
+              ],
+              [
+                "cookie",
+                "better-auth.session_token=<owner-session-cookie>"
+              ],
+              [
+                "origin",
+                "http://passkey-shared-display.test"
+              ]
+            ],
+            "body": "{\"id\":\"shared-display-passkey\",\"name\":\" Renamed \"}"
+          },
+          "response": {
+            "status": 200,
+            "statusText": "",
+            "headers": [
+              [
+                "content-type",
+                "application/json"
+              ]
+            ],
+            "cookies": [],
+            "body": "{\"passkey\":{\"name\":\"Renamed\",\"publicKey\":\"ordinary-public-key\",\"userId\":\"shared-display-owner\",\"credentialID\":\"ordinary-shared-display-credential\",\"counter\":0,\"deviceType\":\"singleDevice\",\"backedUp\":false,\"transports\":null,\"createdAt\":\"2030-01-02T03:04:05.123Z\",\"aaguid\":\"Renamed\",\"id\":\"shared-display-passkey\"}}"
+          }
+        }
+      ],
+      "finalRead": {
+        "name": "read-updated",
+        "events": [
+          [
+            "output",
+            "name",
+            "Renamed"
+          ],
+          [
+            "output",
+            "aaguid",
+            "Renamed"
+          ]
+        ],
+        "result": {
+          "keys": [
+            "name",
+            "publicKey",
+            "userId",
+            "credentialID",
+            "counter",
+            "deviceType",
+            "backedUp",
+            "transports",
+            "createdAt",
+            "aaguid",
+            "id"
+          ],
+          "fields": {
+            "name": "Renamed",
+            "publicKey": "ordinary-public-key",
+            "userId": "shared-display-owner",
+            "credentialID": "ordinary-shared-display-credential",
+            "counter": 1,
+            "deviceType": "singleDevice",
+            "backedUp": false,
+            "transports": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.123Z"
+            },
+            "aaguid": "Renamed",
+            "id": "shared-display-passkey"
+          }
+        },
+        "stored": [
+          {
+            "keys": [
+              "id",
+              "display",
+              "publicKey",
+              "userId",
+              "credentialID",
+              "counter",
+              "deviceType",
+              "backedUp",
+              "transports",
+              "createdAt"
+            ],
+            "fields": {
+              "id": "shared-display-passkey",
+              "display": "Renamed",
+              "publicKey": "ordinary-public-key",
+              "userId": "shared-display-owner",
+              "credentialID": "ordinary-shared-display-credential",
+              "counter": 1,
+              "deviceType": "singleDevice",
+              "backedUp": 0,
+              "transports": null,
+              "createdAt": "2030-01-02T03:04:05.123Z"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "backend": "sqlite",
+      "declarationOrder": [
+        "aaguid",
+        "name"
+      ],
+      "table": "shared_display_passkey",
+      "column": "display",
+      "catalog": {
+        "catalog": {
+          "table": {
+            "type": "table",
+            "name": "shared_display_passkey",
+            "tbl_name": "shared_display_passkey"
+          },
+          "columns": [
+            {
+              "cid": 0,
+              "name": "id",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 1
+            },
+            {
+              "cid": 1,
+              "name": "display",
+              "type": "TEXT",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 2,
+              "name": "publicKey",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 3,
+              "name": "userId",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 4,
+              "name": "credentialID",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 5,
+              "name": "counter",
+              "type": "INTEGER",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 6,
+              "name": "deviceType",
+              "type": "TEXT",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 7,
+              "name": "backedUp",
+              "type": "INTEGER",
+              "notnull": 1,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 8,
+              "name": "transports",
+              "type": "TEXT",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            },
+            {
+              "cid": 9,
+              "name": "createdAt",
+              "type": "date",
+              "notnull": 0,
+              "dflt_value": null,
+              "pk": 0
+            }
+          ],
+          "indexes": [
+            {
+              "definition": {
+                "seq": 0,
+                "name": "shared_display_passkey_credentialID_idx",
+                "unique": 0,
+                "origin": "c",
+                "partial": 0
+              },
+              "columns": [
+                {
+                  "seqno": 0,
+                  "cid": 4,
+                  "name": "credentialID"
+                }
+              ],
+              "extendedColumns": [
+                {
+                  "seqno": 0,
+                  "cid": 4,
+                  "name": "credentialID",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "cid": -1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "definition": {
+                "seq": 1,
+                "name": "shared_display_passkey_userId_idx",
+                "unique": 0,
+                "origin": "c",
+                "partial": 0
+              },
+              "columns": [
+                {
+                  "seqno": 0,
+                  "cid": 3,
+                  "name": "userId"
+                }
+              ],
+              "extendedColumns": [
+                {
+                  "seqno": 0,
+                  "cid": 3,
+                  "name": "userId",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "cid": -1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            },
+            {
+              "definition": {
+                "seq": 2,
+                "name": "sqlite_autoindex_shared_display_passkey_1",
+                "unique": 1,
+                "origin": "pk",
+                "partial": 0
+              },
+              "columns": [
+                {
+                  "seqno": 0,
+                  "cid": 0,
+                  "name": "id"
+                }
+              ],
+              "extendedColumns": [
+                {
+                  "seqno": 0,
+                  "cid": 0,
+                  "name": "id",
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 1
+                },
+                {
+                  "seqno": 1,
+                  "cid": -1,
+                  "name": null,
+                  "desc": 0,
+                  "coll": "BINARY",
+                  "key": 0
+                }
+              ]
+            }
+          ],
+          "foreignKeys": [
+            {
+              "id": 0,
+              "seq": 0,
+              "table": "user",
+              "from": "userId",
+              "to": "id",
+              "on_update": "NO ACTION",
+              "on_delete": "CASCADE",
+              "match": "NONE"
+            }
+          ]
+        },
+        "ddl": [
+          {
+            "type": "index",
+            "name": "shared_display_passkey_credentialID_idx",
+            "tbl_name": "shared_display_passkey",
+            "sql": "CREATE INDEX \"shared_display_passkey_credentialID_idx\" on \"shared_display_passkey\" (\"credentialID\")"
+          },
+          {
+            "type": "index",
+            "name": "shared_display_passkey_userId_idx",
+            "tbl_name": "shared_display_passkey",
+            "sql": "CREATE INDEX \"shared_display_passkey_userId_idx\" on \"shared_display_passkey\" (\"userId\")"
+          },
+          {
+            "type": "index",
+            "name": "sqlite_autoindex_shared_display_passkey_1",
+            "tbl_name": "shared_display_passkey",
+            "sql": null
+          },
+          {
+            "type": "table",
+            "name": "shared_display_passkey",
+            "tbl_name": "shared_display_passkey",
+            "sql": "CREATE TABLE \"shared_display_passkey\" (\"id\" text not null primary key, \"display\" text, \"publicKey\" text not null, \"userId\" text not null references \"user\" (\"id\") on delete cascade, \"credentialID\" text not null, \"counter\" integer not null, \"deviceType\" text not null, \"backedUp\" integer not null, \"transports\" text, \"createdAt\" date)"
+          }
+        ]
+      },
+      "operations": [
+        {
+          "name": "create",
+          "events": [
+            [
+              "input",
+              "name",
+              "Desk"
+            ],
+            [
+              "input",
+              "aaguid",
+              "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4"
+            ],
+            [
+              "output",
+              "name",
+              "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4"
+            ],
+            [
+              "output",
+              "aaguid",
+              "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4"
+            ]
+          ],
+          "result": [
+            {
+              "keys": [
+                "name",
+                "publicKey",
+                "userId",
+                "credentialID",
+                "counter",
+                "deviceType",
+                "backedUp",
+                "transports",
+                "createdAt",
+                "aaguid",
+                "id"
+              ],
+              "fields": {
+                "name": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "publicKey": "ordinary-public-key",
+                "userId": "shared-display-owner",
+                "credentialID": "ordinary-shared-display-credential",
+                "counter": 0,
+                "deviceType": "singleDevice",
+                "backedUp": false,
+                "transports": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.123Z"
+                },
+                "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "id": "shared-display-passkey"
+              }
+            }
+          ],
+          "stored": [
+            {
+              "keys": [
+                "id",
+                "display",
+                "publicKey",
+                "userId",
+                "credentialID",
+                "counter",
+                "deviceType",
+                "backedUp",
+                "transports",
+                "createdAt"
+              ],
+              "fields": {
+                "id": "shared-display-passkey",
+                "display": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "publicKey": "ordinary-public-key",
+                "userId": "shared-display-owner",
+                "credentialID": "ordinary-shared-display-credential",
+                "counter": 0,
+                "deviceType": "singleDevice",
+                "backedUp": 0,
+                "transports": null,
+                "createdAt": "2030-01-02T03:04:05.123Z"
+              }
+            }
+          ]
+        },
+        {
+          "name": "get-id",
+          "events": [
+            [
+              "output",
+              "name",
+              "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4"
+            ],
+            [
+              "output",
+              "aaguid",
+              "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4"
+            ]
+          ],
+          "result": [
+            {
+              "keys": [
+                "name",
+                "publicKey",
+                "userId",
+                "credentialID",
+                "counter",
+                "deviceType",
+                "backedUp",
+                "transports",
+                "createdAt",
+                "aaguid",
+                "id"
+              ],
+              "fields": {
+                "name": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "publicKey": "ordinary-public-key",
+                "userId": "shared-display-owner",
+                "credentialID": "ordinary-shared-display-credential",
+                "counter": 0,
+                "deviceType": "singleDevice",
+                "backedUp": false,
+                "transports": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.123Z"
+                },
+                "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "id": "shared-display-passkey"
+              }
+            }
+          ],
+          "stored": [
+            {
+              "keys": [
+                "id",
+                "display",
+                "publicKey",
+                "userId",
+                "credentialID",
+                "counter",
+                "deviceType",
+                "backedUp",
+                "transports",
+                "createdAt"
+              ],
+              "fields": {
+                "id": "shared-display-passkey",
+                "display": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "publicKey": "ordinary-public-key",
+                "userId": "shared-display-owner",
+                "credentialID": "ordinary-shared-display-credential",
+                "counter": 0,
+                "deviceType": "singleDevice",
+                "backedUp": 0,
+                "transports": null,
+                "createdAt": "2030-01-02T03:04:05.123Z"
+              }
+            }
+          ]
+        },
+        {
+          "name": "get-credential",
+          "events": [
+            [
+              "output",
+              "name",
+              "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4"
+            ],
+            [
+              "output",
+              "aaguid",
+              "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4"
+            ]
+          ],
+          "result": [
+            {
+              "keys": [
+                "name",
+                "publicKey",
+                "userId",
+                "credentialID",
+                "counter",
+                "deviceType",
+                "backedUp",
+                "transports",
+                "createdAt",
+                "aaguid",
+                "id"
+              ],
+              "fields": {
+                "name": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "publicKey": "ordinary-public-key",
+                "userId": "shared-display-owner",
+                "credentialID": "ordinary-shared-display-credential",
+                "counter": 0,
+                "deviceType": "singleDevice",
+                "backedUp": false,
+                "transports": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.123Z"
+                },
+                "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "id": "shared-display-passkey"
+              }
+            }
+          ],
+          "stored": [
+            {
+              "keys": [
+                "id",
+                "display",
+                "publicKey",
+                "userId",
+                "credentialID",
+                "counter",
+                "deviceType",
+                "backedUp",
+                "transports",
+                "createdAt"
+              ],
+              "fields": {
+                "id": "shared-display-passkey",
+                "display": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "publicKey": "ordinary-public-key",
+                "userId": "shared-display-owner",
+                "credentialID": "ordinary-shared-display-credential",
+                "counter": 0,
+                "deviceType": "singleDevice",
+                "backedUp": 0,
+                "transports": null,
+                "createdAt": "2030-01-02T03:04:05.123Z"
+              }
+            }
+          ]
+        },
+        {
+          "name": "list",
+          "events": [
+            [
+              "output",
+              "name",
+              "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4"
+            ],
+            [
+              "output",
+              "aaguid",
+              "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4"
+            ]
+          ],
+          "result": [
+            {
+              "keys": [
+                "name",
+                "publicKey",
+                "userId",
+                "credentialID",
+                "counter",
+                "deviceType",
+                "backedUp",
+                "transports",
+                "createdAt",
+                "aaguid",
+                "id"
+              ],
+              "fields": {
+                "name": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "publicKey": "ordinary-public-key",
+                "userId": "shared-display-owner",
+                "credentialID": "ordinary-shared-display-credential",
+                "counter": 0,
+                "deviceType": "singleDevice",
+                "backedUp": false,
+                "transports": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.123Z"
+                },
+                "aaguid": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "id": "shared-display-passkey"
+              }
+            }
+          ],
+          "stored": [
+            {
+              "keys": [
+                "id",
+                "display",
+                "publicKey",
+                "userId",
+                "credentialID",
+                "counter",
+                "deviceType",
+                "backedUp",
+                "transports",
+                "createdAt"
+              ],
+              "fields": {
+                "id": "shared-display-passkey",
+                "display": "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+                "publicKey": "ordinary-public-key",
+                "userId": "shared-display-owner",
+                "credentialID": "ordinary-shared-display-credential",
+                "counter": 0,
+                "deviceType": "singleDevice",
+                "backedUp": 0,
+                "transports": null,
+                "createdAt": "2030-01-02T03:04:05.123Z"
+              }
+            }
+          ]
+        },
+        {
+          "name": "update-name",
+          "events": [
+            [
+              "output",
+              "name",
+              "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4"
+            ],
+            [
+              "output",
+              "aaguid",
+              "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4"
+            ],
+            [
+              "input",
+              "name",
+              "Renamed"
+            ],
+            [
+              "output",
+              "name",
+              "Renamed"
+            ],
+            [
+              "output",
+              "aaguid",
+              "Renamed"
+            ]
+          ],
+          "result": [
+            {
+              "keys": [
+                "name",
+                "publicKey",
+                "userId",
+                "credentialID",
+                "counter",
+                "deviceType",
+                "backedUp",
+                "transports",
+                "createdAt",
+                "aaguid",
+                "id"
+              ],
+              "fields": {
+                "name": "Renamed",
+                "publicKey": "ordinary-public-key",
+                "userId": "shared-display-owner",
+                "credentialID": "ordinary-shared-display-credential",
+                "counter": 0,
+                "deviceType": "singleDevice",
+                "backedUp": false,
+                "transports": null,
+                "createdAt": "2030-01-02T03:04:05.123Z",
+                "aaguid": "Renamed",
+                "id": "shared-display-passkey"
+              }
+            }
+          ],
+          "stored": [
+            {
+              "keys": [
+                "id",
+                "display",
+                "publicKey",
+                "userId",
+                "credentialID",
+                "counter",
+                "deviceType",
+                "backedUp",
+                "transports",
+                "createdAt"
+              ],
+              "fields": {
+                "id": "shared-display-passkey",
+                "display": "Renamed",
+                "publicKey": "ordinary-public-key",
+                "userId": "shared-display-owner",
+                "credentialID": "ordinary-shared-display-credential",
+                "counter": 0,
+                "deviceType": "singleDevice",
+                "backedUp": 0,
+                "transports": null,
+                "createdAt": "2030-01-02T03:04:05.123Z"
+              }
+            }
+          ]
+        },
+        {
+          "name": "update-auth",
+          "events": [
+            [
+              "output",
+              "name",
+              "Renamed"
+            ],
+            [
+              "output",
+              "aaguid",
+              "Renamed"
+            ]
+          ],
+          "result": [
+            {
+              "keys": [
+                "name",
+                "publicKey",
+                "userId",
+                "credentialID",
+                "counter",
+                "deviceType",
+                "backedUp",
+                "transports",
+                "createdAt",
+                "aaguid",
+                "id"
+              ],
+              "fields": {
+                "name": "Renamed",
+                "publicKey": "ordinary-public-key",
+                "userId": "shared-display-owner",
+                "credentialID": "ordinary-shared-display-credential",
+                "counter": 1,
+                "deviceType": "singleDevice",
+                "backedUp": false,
+                "transports": null,
+                "createdAt": {
+                  "type": "date",
+                  "value": "2030-01-02T03:04:05.123Z"
+                },
+                "aaguid": "Renamed",
+                "id": "shared-display-passkey"
+              }
+            }
+          ],
+          "stored": [
+            {
+              "keys": [
+                "id",
+                "display",
+                "publicKey",
+                "userId",
+                "credentialID",
+                "counter",
+                "deviceType",
+                "backedUp",
+                "transports",
+                "createdAt"
+              ],
+              "fields": {
+                "id": "shared-display-passkey",
+                "display": "Renamed",
+                "publicKey": "ordinary-public-key",
+                "userId": "shared-display-owner",
+                "credentialID": "ordinary-shared-display-credential",
+                "counter": 1,
+                "deviceType": "singleDevice",
+                "backedUp": 0,
+                "transports": null,
+                "createdAt": "2030-01-02T03:04:05.123Z"
+              }
+            }
+          ]
+        }
+      ],
+      "http": [
+        {
+          "name": "update-name",
+          "request": {
+            "url": "http://passkey-shared-display.test/api/auth/passkey/update-passkey",
+            "method": "POST",
+            "headers": [
+              [
+                "accept",
+                "application/json"
+              ],
+              [
+                "content-type",
+                "application/json"
+              ],
+              [
+                "cookie",
+                "better-auth.session_token=<owner-session-cookie>"
+              ],
+              [
+                "origin",
+                "http://passkey-shared-display.test"
+              ]
+            ],
+            "body": "{\"id\":\"shared-display-passkey\",\"name\":\" Renamed \"}"
+          },
+          "response": {
+            "status": 200,
+            "statusText": "",
+            "headers": [
+              [
+                "content-type",
+                "application/json"
+              ]
+            ],
+            "cookies": [],
+            "body": "{\"passkey\":{\"name\":\"Renamed\",\"publicKey\":\"ordinary-public-key\",\"userId\":\"shared-display-owner\",\"credentialID\":\"ordinary-shared-display-credential\",\"counter\":0,\"deviceType\":\"singleDevice\",\"backedUp\":false,\"transports\":null,\"createdAt\":\"2030-01-02T03:04:05.123Z\",\"aaguid\":\"Renamed\",\"id\":\"shared-display-passkey\"}}"
+          }
+        }
+      ],
+      "finalRead": {
+        "name": "read-updated",
+        "events": [
+          [
+            "output",
+            "name",
+            "Renamed"
+          ],
+          [
+            "output",
+            "aaguid",
+            "Renamed"
+          ]
+        ],
+        "result": {
+          "keys": [
+            "name",
+            "publicKey",
+            "userId",
+            "credentialID",
+            "counter",
+            "deviceType",
+            "backedUp",
+            "transports",
+            "createdAt",
+            "aaguid",
+            "id"
+          ],
+          "fields": {
+            "name": "Renamed",
+            "publicKey": "ordinary-public-key",
+            "userId": "shared-display-owner",
+            "credentialID": "ordinary-shared-display-credential",
+            "counter": 1,
+            "deviceType": "singleDevice",
+            "backedUp": false,
+            "transports": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.123Z"
+            },
+            "aaguid": "Renamed",
+            "id": "shared-display-passkey"
+          }
+        },
+        "stored": [
+          {
+            "keys": [
+              "id",
+              "display",
+              "publicKey",
+              "userId",
+              "credentialID",
+              "counter",
+              "deviceType",
+              "backedUp",
+              "transports",
+              "createdAt"
+            ],
+            "fields": {
+              "id": "shared-display-passkey",
+              "display": "Renamed",
+              "publicKey": "ordinary-public-key",
+              "userId": "shared-display-owner",
+              "credentialID": "ordinary-shared-display-credential",
+              "counter": 1,
+              "deviceType": "singleDevice",
+              "backedUp": 0,
+              "transports": null,
+              "createdAt": "2030-01-02T03:04:05.123Z"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

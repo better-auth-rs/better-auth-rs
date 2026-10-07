@@ -1,0 +1,2147 @@
+{
+  "version": "1.7.6",
+  "scenarios": [
+    {
+      "name": "social-owner-many-pure-secondary",
+      "route": "social",
+      "relation": "reverse-user-reference-many",
+      "many": true
+    }
+  ],
+  "cases": [
+    {
+      "backend": "memory",
+      "scenario": "social-owner-many-pure-secondary",
+      "joins": false,
+      "request": {
+        "url": "http://account-user-auth-boundary.test/api/auth/sign-in/social",
+        "method": "POST",
+        "headers": [
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "origin",
+            "http://account-user-auth-boundary.test"
+          ],
+          [
+            "user-agent",
+            "account-user-auth-contract"
+          ],
+          [
+            "x-forwarded-for",
+            "203.0.113.8"
+          ]
+        ],
+        "body": {
+          "provider": "google",
+          "idToken": {
+            "token": "account-user-auth-fixture-id-token",
+            "nonce": "account-user-auth-fixture-nonce"
+          }
+        }
+      },
+      "before": {
+        "user": [
+          {
+            "name": "User a",
+            "email": "a@account-user-auth-boundary.test",
+            "emailVerified": true,
+            "image": "account-b",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "user-a"
+          },
+          {
+            "name": "User b",
+            "email": "b@account-user-auth-boundary.test",
+            "emailVerified": true,
+            "image": "account-a",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "user-b"
+          },
+          {
+            "name": "User c",
+            "email": "c@account-user-auth-boundary.test",
+            "emailVerified": true,
+            "image": "account-a",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "user-c"
+          }
+        ],
+        "session": [],
+        "account": [
+          {
+            "accountId": "external-owner",
+            "providerId": "google",
+            "userId": "user-a",
+            "accessToken": "user-b",
+            "refreshToken": null,
+            "idToken": null,
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": null,
+            "password": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "account-a"
+          },
+          {
+            "accountId": "external-decoy",
+            "providerId": "google",
+            "userId": "user-b",
+            "accessToken": "user-a",
+            "refreshToken": null,
+            "idToken": null,
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": null,
+            "password": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "account-b"
+          }
+        ],
+        "verification": []
+      },
+      "events": [
+        {
+          "kind": "provider.verify",
+          "token": "account-user-auth-fixture-id-token",
+          "nonce": "account-user-auth-fixture-nonce"
+        },
+        {
+          "kind": "provider.userInfo",
+          "tokens": {
+            "idToken": "account-user-auth-fixture-id-token",
+            "accessToken": {
+              "type": "undefined"
+            },
+            "refreshToken": {
+              "type": "undefined"
+            },
+            "user": {
+              "type": "undefined"
+            }
+          }
+        },
+        {
+          "kind": "query",
+          "operation": "findMany",
+          "model": "account"
+        },
+        {
+          "kind": "output",
+          "model": "account",
+          "field": "accountId",
+          "value": "external-owner"
+        },
+        {
+          "kind": "output",
+          "model": "account",
+          "field": "userId",
+          "value": "user-a"
+        },
+        {
+          "kind": "output",
+          "model": "account",
+          "field": "accessToken",
+          "value": "user-b"
+        },
+        {
+          "kind": "query",
+          "operation": "findMany",
+          "model": "user"
+        },
+        {
+          "kind": "output",
+          "model": "user",
+          "field": "name",
+          "value": "User b"
+        },
+        {
+          "kind": "output",
+          "model": "user",
+          "field": "image",
+          "value": "account-a"
+        },
+        {
+          "kind": "output",
+          "model": "user",
+          "field": "name",
+          "value": "User c"
+        },
+        {
+          "kind": "output",
+          "model": "user",
+          "field": "image",
+          "value": "account-a"
+        },
+        {
+          "kind": "admission",
+          "data": {
+            "user": {
+              "name": "Provider User",
+              "email": "a@account-user-auth-boundary.test",
+              "emailVerified": true,
+              "image": "provider-image",
+              "id": {
+                "type": "undefined"
+              }
+            },
+            "source": {
+              "method": "oauth",
+              "oauth": {
+                "providerId": "google",
+                "profile": {
+                  "sub": "external-owner",
+                  "name": "Provider User",
+                  "email": "a@account-user-auth-boundary.test",
+                  "email_verified": true,
+                  "picture": "provider-image"
+                }
+              },
+              "action": "sign-in"
+            }
+          },
+          "request": {
+            "url": "http://account-user-auth-boundary.test/api/auth/sign-in/social",
+            "method": "POST",
+            "headers": [
+              [
+                "content-type",
+                "application/json"
+              ],
+              [
+                "origin",
+                "http://account-user-auth-boundary.test"
+              ],
+              [
+                "user-agent",
+                "account-user-auth-contract"
+              ],
+              [
+                "x-forwarded-for",
+                "203.0.113.8"
+              ]
+            ]
+          }
+        },
+        {
+          "kind": "hook",
+          "model": "account",
+          "operation": "update",
+          "phase": "before",
+          "data": {
+            "providerId": "google",
+            "idToken": "account-user-auth-fixture-id-token"
+          }
+        },
+        {
+          "kind": "query",
+          "operation": "update",
+          "model": "account"
+        },
+        {
+          "kind": "output",
+          "model": "account",
+          "field": "accountId",
+          "value": "external-owner"
+        },
+        {
+          "kind": "output",
+          "model": "account",
+          "field": "userId",
+          "value": "user-a"
+        },
+        {
+          "kind": "output",
+          "model": "account",
+          "field": "accessToken",
+          "value": "user-b"
+        },
+        {
+          "kind": "hook",
+          "model": "account",
+          "operation": "update",
+          "phase": "after",
+          "data": {
+            "accountId": "external-owner",
+            "providerId": "google",
+            "userId": "user-a",
+            "accessToken": "user-b",
+            "refreshToken": null,
+            "idToken": "account-user-auth-fixture-id-token",
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": null,
+            "password": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "<account.updatedAt>"
+            },
+            "id": "account-a"
+          }
+        },
+        {
+          "kind": "hook",
+          "model": "session",
+          "operation": "create",
+          "phase": "before",
+          "data": {
+            "id": "<session-id>",
+            "ipAddress": "203.0.113.8",
+            "userAgent": "account-user-auth-contract",
+            "expiresAt": {
+              "type": "date",
+              "value": "<session.expiresAt>"
+            },
+            "userId": {
+              "type": "undefined"
+            },
+            "token": "<session-token>",
+            "createdAt": {
+              "type": "date",
+              "value": "<session.createdAt>"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "<session.updatedAt>"
+            }
+          }
+        },
+        {
+          "kind": "secondary.get",
+          "key": "active-sessions-undefined",
+          "value": null
+        },
+        {
+          "kind": "secondary.set",
+          "key": "active-sessions-undefined",
+          "value": "[{\"token\":\"<session-token>\",\"expiresAt\":\"<session.expiresAt.milliseconds>\"}]",
+          "ttl": "<session-ttl>"
+        },
+        {
+          "kind": "adapter.findOne.call",
+          "input": {
+            "model": "user",
+            "where": [
+              {
+                "field": "id",
+                "value": {
+                  "type": "undefined"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "kind": "query",
+          "operation": "findOne",
+          "model": "user"
+        },
+        {
+          "kind": "adapter.findOne.return",
+          "value": null
+        },
+        {
+          "kind": "secondary.set",
+          "key": "<session-token>",
+          "value": "{\"session\":{\"id\":\"<session-id>\",\"ipAddress\":\"203.0.113.8\",\"userAgent\":\"account-user-auth-contract\",\"expiresAt\":\"<session.expiresAt>\",\"token\":\"<session-token>\",\"createdAt\":\"<session.createdAt>\",\"updatedAt\":\"<session.updatedAt>\"},\"user\":null}",
+          "ttl": "<session-ttl>"
+        },
+        {
+          "kind": "hook",
+          "model": "session",
+          "operation": "create",
+          "phase": "after",
+          "data": {
+            "id": "<session-id>",
+            "ipAddress": "203.0.113.8",
+            "userAgent": "account-user-auth-contract",
+            "expiresAt": {
+              "type": "date",
+              "value": "<session.expiresAt>"
+            },
+            "userId": {
+              "type": "undefined"
+            },
+            "token": "<session-token>",
+            "createdAt": {
+              "type": "date",
+              "value": "<session.createdAt>"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "<session.updatedAt>"
+            }
+          }
+        }
+      ],
+      "response": {
+        "status": 200,
+        "statusText": "",
+        "headers": [
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "set-cookie",
+            "better-auth.session_token=<verified-signed-session-token>; Max-Age=3600; Path=/; HttpOnly; SameSite=Lax"
+          ]
+        ],
+        "cookies": [
+          "better-auth.session_token=<verified-signed-session-token>; Max-Age=3600; Path=/; HttpOnly; SameSite=Lax"
+        ],
+        "body": "{\"redirect\":false,\"token\":\"<session-token>\",\"user\":{\"0\":{\"name\":\"User b\",\"email\":\"b@account-user-auth-boundary.test\",\"emailVerified\":true,\"image\":\"account-a\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"id\":\"user-b\"},\"1\":{\"name\":\"User c\",\"email\":\"c@account-user-auth-boundary.test\",\"emailVerified\":true,\"image\":\"account-a\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"id\":\"user-c\"}}}"
+      },
+      "after": {
+        "user": [
+          {
+            "name": "User a",
+            "email": "a@account-user-auth-boundary.test",
+            "emailVerified": true,
+            "image": "account-b",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "user-a"
+          },
+          {
+            "name": "User b",
+            "email": "b@account-user-auth-boundary.test",
+            "emailVerified": true,
+            "image": "account-a",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "user-b"
+          },
+          {
+            "name": "User c",
+            "email": "c@account-user-auth-boundary.test",
+            "emailVerified": true,
+            "image": "account-a",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "user-c"
+          }
+        ],
+        "session": [],
+        "account": [
+          {
+            "accountId": "external-owner",
+            "providerId": "google",
+            "userId": "user-a",
+            "accessToken": "user-b",
+            "refreshToken": null,
+            "idToken": "account-user-auth-fixture-id-token",
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": null,
+            "password": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "<account.updatedAt>"
+            },
+            "id": "account-a"
+          },
+          {
+            "accountId": "external-decoy",
+            "providerId": "google",
+            "userId": "user-b",
+            "accessToken": "user-a",
+            "refreshToken": null,
+            "idToken": null,
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": null,
+            "password": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "account-b"
+          }
+        ],
+        "verification": []
+      },
+      "observations": {
+        "before": {
+          "tablePresence": {
+            "user": true,
+            "session": true,
+            "account": true,
+            "verification": true
+          },
+          "cache": []
+        },
+        "after": {
+          "tablePresence": {
+            "user": true,
+            "session": true,
+            "account": true,
+            "verification": true
+          },
+          "cache": [
+            {
+              "key": "active-sessions-undefined",
+              "value": "[{\"token\":\"<session-token>\",\"expiresAt\":\"<session.expiresAt.milliseconds>\"}]",
+              "ttl": "<session-ttl>"
+            },
+            {
+              "key": "<session-token>",
+              "value": "{\"session\":{\"id\":\"<session-id>\",\"ipAddress\":\"203.0.113.8\",\"userAgent\":\"account-user-auth-contract\",\"expiresAt\":\"<session.expiresAt>\",\"token\":\"<session-token>\",\"createdAt\":\"<session.createdAt>\",\"updatedAt\":\"<session.updatedAt>\"},\"user\":null}",
+              "ttl": "<session-ttl>"
+            }
+          ]
+        }
+      },
+      "checked": {
+        "noNetwork": true,
+        "completeStorage": true,
+        "pureSecondarySession": true,
+        "completeSecondaryCalls": true,
+        "admissionIdIsUndefined": true,
+        "sessionOwnerIsOwnUndefined": true,
+        "adapterLookupValueIsOwnUndefined": true,
+        "sqliteUndefinedLookupObserved": false,
+        "lookupOutcome": "return",
+        "preservedCanonicalAccountOwner": true,
+        "sessionDatesWithinRequest": true,
+        "exactSharedTtl": true,
+        "sessionCookieMatchesToken": true
+      }
+    },
+    {
+      "backend": "memory",
+      "scenario": "social-owner-many-pure-secondary",
+      "joins": true,
+      "request": {
+        "url": "http://account-user-auth-boundary.test/api/auth/sign-in/social",
+        "method": "POST",
+        "headers": [
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "origin",
+            "http://account-user-auth-boundary.test"
+          ],
+          [
+            "user-agent",
+            "account-user-auth-contract"
+          ],
+          [
+            "x-forwarded-for",
+            "203.0.113.8"
+          ]
+        ],
+        "body": {
+          "provider": "google",
+          "idToken": {
+            "token": "account-user-auth-fixture-id-token",
+            "nonce": "account-user-auth-fixture-nonce"
+          }
+        }
+      },
+      "before": {
+        "user": [
+          {
+            "name": "User a",
+            "email": "a@account-user-auth-boundary.test",
+            "emailVerified": true,
+            "image": "account-b",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "user-a"
+          },
+          {
+            "name": "User b",
+            "email": "b@account-user-auth-boundary.test",
+            "emailVerified": true,
+            "image": "account-a",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "user-b"
+          },
+          {
+            "name": "User c",
+            "email": "c@account-user-auth-boundary.test",
+            "emailVerified": true,
+            "image": "account-a",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "user-c"
+          }
+        ],
+        "session": [],
+        "account": [
+          {
+            "accountId": "external-owner",
+            "providerId": "google",
+            "userId": "user-a",
+            "accessToken": "user-b",
+            "refreshToken": null,
+            "idToken": null,
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": null,
+            "password": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "account-a"
+          },
+          {
+            "accountId": "external-decoy",
+            "providerId": "google",
+            "userId": "user-b",
+            "accessToken": "user-a",
+            "refreshToken": null,
+            "idToken": null,
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": null,
+            "password": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "account-b"
+          }
+        ],
+        "verification": []
+      },
+      "events": [
+        {
+          "kind": "provider.verify",
+          "token": "account-user-auth-fixture-id-token",
+          "nonce": "account-user-auth-fixture-nonce"
+        },
+        {
+          "kind": "provider.userInfo",
+          "tokens": {
+            "idToken": "account-user-auth-fixture-id-token",
+            "accessToken": {
+              "type": "undefined"
+            },
+            "refreshToken": {
+              "type": "undefined"
+            },
+            "user": {
+              "type": "undefined"
+            }
+          }
+        },
+        {
+          "kind": "query",
+          "operation": "findMany",
+          "model": "account"
+        },
+        {
+          "kind": "output",
+          "model": "account",
+          "field": "accountId",
+          "value": "external-owner"
+        },
+        {
+          "kind": "output",
+          "model": "account",
+          "field": "userId",
+          "value": "user-a"
+        },
+        {
+          "kind": "output",
+          "model": "account",
+          "field": "accessToken",
+          "value": "user-b"
+        },
+        {
+          "kind": "output",
+          "model": "user",
+          "field": "name",
+          "value": "User b"
+        },
+        {
+          "kind": "output",
+          "model": "user",
+          "field": "image",
+          "value": "account-a"
+        },
+        {
+          "kind": "output",
+          "model": "user",
+          "field": "name",
+          "value": "User c"
+        },
+        {
+          "kind": "output",
+          "model": "user",
+          "field": "image",
+          "value": "account-a"
+        },
+        {
+          "kind": "admission",
+          "data": {
+            "user": {
+              "name": "Provider User",
+              "email": "a@account-user-auth-boundary.test",
+              "emailVerified": true,
+              "image": "provider-image",
+              "id": {
+                "type": "undefined"
+              }
+            },
+            "source": {
+              "method": "oauth",
+              "oauth": {
+                "providerId": "google",
+                "profile": {
+                  "sub": "external-owner",
+                  "name": "Provider User",
+                  "email": "a@account-user-auth-boundary.test",
+                  "email_verified": true,
+                  "picture": "provider-image"
+                }
+              },
+              "action": "sign-in"
+            }
+          },
+          "request": {
+            "url": "http://account-user-auth-boundary.test/api/auth/sign-in/social",
+            "method": "POST",
+            "headers": [
+              [
+                "content-type",
+                "application/json"
+              ],
+              [
+                "origin",
+                "http://account-user-auth-boundary.test"
+              ],
+              [
+                "user-agent",
+                "account-user-auth-contract"
+              ],
+              [
+                "x-forwarded-for",
+                "203.0.113.8"
+              ]
+            ]
+          }
+        },
+        {
+          "kind": "hook",
+          "model": "account",
+          "operation": "update",
+          "phase": "before",
+          "data": {
+            "providerId": "google",
+            "idToken": "account-user-auth-fixture-id-token"
+          }
+        },
+        {
+          "kind": "query",
+          "operation": "update",
+          "model": "account"
+        },
+        {
+          "kind": "output",
+          "model": "account",
+          "field": "accountId",
+          "value": "external-owner"
+        },
+        {
+          "kind": "output",
+          "model": "account",
+          "field": "userId",
+          "value": "user-a"
+        },
+        {
+          "kind": "output",
+          "model": "account",
+          "field": "accessToken",
+          "value": "user-b"
+        },
+        {
+          "kind": "hook",
+          "model": "account",
+          "operation": "update",
+          "phase": "after",
+          "data": {
+            "accountId": "external-owner",
+            "providerId": "google",
+            "userId": "user-a",
+            "accessToken": "user-b",
+            "refreshToken": null,
+            "idToken": "account-user-auth-fixture-id-token",
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": null,
+            "password": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "<account.updatedAt>"
+            },
+            "id": "account-a"
+          }
+        },
+        {
+          "kind": "hook",
+          "model": "session",
+          "operation": "create",
+          "phase": "before",
+          "data": {
+            "id": "<session-id>",
+            "ipAddress": "203.0.113.8",
+            "userAgent": "account-user-auth-contract",
+            "expiresAt": {
+              "type": "date",
+              "value": "<session.expiresAt>"
+            },
+            "userId": {
+              "type": "undefined"
+            },
+            "token": "<session-token>",
+            "createdAt": {
+              "type": "date",
+              "value": "<session.createdAt>"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "<session.updatedAt>"
+            }
+          }
+        },
+        {
+          "kind": "secondary.get",
+          "key": "active-sessions-undefined",
+          "value": null
+        },
+        {
+          "kind": "secondary.set",
+          "key": "active-sessions-undefined",
+          "value": "[{\"token\":\"<session-token>\",\"expiresAt\":\"<session.expiresAt.milliseconds>\"}]",
+          "ttl": "<session-ttl>"
+        },
+        {
+          "kind": "adapter.findOne.call",
+          "input": {
+            "model": "user",
+            "where": [
+              {
+                "field": "id",
+                "value": {
+                  "type": "undefined"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "kind": "query",
+          "operation": "findOne",
+          "model": "user"
+        },
+        {
+          "kind": "adapter.findOne.return",
+          "value": null
+        },
+        {
+          "kind": "secondary.set",
+          "key": "<session-token>",
+          "value": "{\"session\":{\"id\":\"<session-id>\",\"ipAddress\":\"203.0.113.8\",\"userAgent\":\"account-user-auth-contract\",\"expiresAt\":\"<session.expiresAt>\",\"token\":\"<session-token>\",\"createdAt\":\"<session.createdAt>\",\"updatedAt\":\"<session.updatedAt>\"},\"user\":null}",
+          "ttl": "<session-ttl>"
+        },
+        {
+          "kind": "hook",
+          "model": "session",
+          "operation": "create",
+          "phase": "after",
+          "data": {
+            "id": "<session-id>",
+            "ipAddress": "203.0.113.8",
+            "userAgent": "account-user-auth-contract",
+            "expiresAt": {
+              "type": "date",
+              "value": "<session.expiresAt>"
+            },
+            "userId": {
+              "type": "undefined"
+            },
+            "token": "<session-token>",
+            "createdAt": {
+              "type": "date",
+              "value": "<session.createdAt>"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "<session.updatedAt>"
+            }
+          }
+        }
+      ],
+      "response": {
+        "status": 200,
+        "statusText": "",
+        "headers": [
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "set-cookie",
+            "better-auth.session_token=<verified-signed-session-token>; Max-Age=3600; Path=/; HttpOnly; SameSite=Lax"
+          ]
+        ],
+        "cookies": [
+          "better-auth.session_token=<verified-signed-session-token>; Max-Age=3600; Path=/; HttpOnly; SameSite=Lax"
+        ],
+        "body": "{\"redirect\":false,\"token\":\"<session-token>\",\"user\":{\"0\":{\"name\":\"User b\",\"email\":\"b@account-user-auth-boundary.test\",\"emailVerified\":true,\"image\":\"account-a\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"id\":\"user-b\"},\"1\":{\"name\":\"User c\",\"email\":\"c@account-user-auth-boundary.test\",\"emailVerified\":true,\"image\":\"account-a\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"id\":\"user-c\"}}}"
+      },
+      "after": {
+        "user": [
+          {
+            "name": "User a",
+            "email": "a@account-user-auth-boundary.test",
+            "emailVerified": true,
+            "image": "account-b",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "user-a"
+          },
+          {
+            "name": "User b",
+            "email": "b@account-user-auth-boundary.test",
+            "emailVerified": true,
+            "image": "account-a",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "user-b"
+          },
+          {
+            "name": "User c",
+            "email": "c@account-user-auth-boundary.test",
+            "emailVerified": true,
+            "image": "account-a",
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "user-c"
+          }
+        ],
+        "session": [],
+        "account": [
+          {
+            "accountId": "external-owner",
+            "providerId": "google",
+            "userId": "user-a",
+            "accessToken": "user-b",
+            "refreshToken": null,
+            "idToken": "account-user-auth-fixture-id-token",
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": null,
+            "password": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "<account.updatedAt>"
+            },
+            "id": "account-a"
+          },
+          {
+            "accountId": "external-decoy",
+            "providerId": "google",
+            "userId": "user-b",
+            "accessToken": "user-a",
+            "refreshToken": null,
+            "idToken": null,
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": null,
+            "password": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "id": "account-b"
+          }
+        ],
+        "verification": []
+      },
+      "observations": {
+        "before": {
+          "tablePresence": {
+            "user": true,
+            "session": true,
+            "account": true,
+            "verification": true
+          },
+          "cache": []
+        },
+        "after": {
+          "tablePresence": {
+            "user": true,
+            "session": true,
+            "account": true,
+            "verification": true
+          },
+          "cache": [
+            {
+              "key": "active-sessions-undefined",
+              "value": "[{\"token\":\"<session-token>\",\"expiresAt\":\"<session.expiresAt.milliseconds>\"}]",
+              "ttl": "<session-ttl>"
+            },
+            {
+              "key": "<session-token>",
+              "value": "{\"session\":{\"id\":\"<session-id>\",\"ipAddress\":\"203.0.113.8\",\"userAgent\":\"account-user-auth-contract\",\"expiresAt\":\"<session.expiresAt>\",\"token\":\"<session-token>\",\"createdAt\":\"<session.createdAt>\",\"updatedAt\":\"<session.updatedAt>\"},\"user\":null}",
+              "ttl": "<session-ttl>"
+            }
+          ]
+        }
+      },
+      "checked": {
+        "noNetwork": true,
+        "completeStorage": true,
+        "pureSecondarySession": true,
+        "completeSecondaryCalls": true,
+        "admissionIdIsUndefined": true,
+        "sessionOwnerIsOwnUndefined": true,
+        "adapterLookupValueIsOwnUndefined": true,
+        "sqliteUndefinedLookupObserved": false,
+        "lookupOutcome": "return",
+        "preservedCanonicalAccountOwner": true,
+        "sessionDatesWithinRequest": true,
+        "exactSharedTtl": true,
+        "sessionCookieMatchesToken": true
+      }
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "social-owner-many-pure-secondary",
+      "joins": false,
+      "request": {
+        "url": "http://account-user-auth-boundary.test/api/auth/sign-in/social",
+        "method": "POST",
+        "headers": [
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "origin",
+            "http://account-user-auth-boundary.test"
+          ],
+          [
+            "user-agent",
+            "account-user-auth-contract"
+          ],
+          [
+            "x-forwarded-for",
+            "203.0.113.8"
+          ]
+        ],
+        "body": {
+          "provider": "google",
+          "idToken": {
+            "token": "account-user-auth-fixture-id-token",
+            "nonce": "account-user-auth-fixture-nonce"
+          }
+        }
+      },
+      "before": {
+        "user": [
+          {
+            "id": "user-a",
+            "name": "User a",
+            "email": "a@account-user-auth-boundary.test",
+            "emailVerified": 1,
+            "image": "account-b",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          },
+          {
+            "id": "user-b",
+            "name": "User b",
+            "email": "b@account-user-auth-boundary.test",
+            "emailVerified": 1,
+            "image": "account-a",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          },
+          {
+            "id": "user-c",
+            "name": "User c",
+            "email": "c@account-user-auth-boundary.test",
+            "emailVerified": 1,
+            "image": "account-a",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          }
+        ],
+        "session": null,
+        "account": [
+          {
+            "id": "account-a",
+            "accountId": "external-owner",
+            "providerId": "google",
+            "userId": "user-a",
+            "accessToken": "user-b",
+            "refreshToken": null,
+            "idToken": null,
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": null,
+            "password": null,
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          },
+          {
+            "id": "account-b",
+            "accountId": "external-decoy",
+            "providerId": "google",
+            "userId": "user-b",
+            "accessToken": "user-a",
+            "refreshToken": null,
+            "idToken": null,
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": null,
+            "password": null,
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          }
+        ],
+        "verification": []
+      },
+      "events": [
+        {
+          "kind": "provider.verify",
+          "token": "account-user-auth-fixture-id-token",
+          "nonce": "account-user-auth-fixture-nonce"
+        },
+        {
+          "kind": "provider.userInfo",
+          "tokens": {
+            "idToken": "account-user-auth-fixture-id-token",
+            "accessToken": {
+              "type": "undefined"
+            },
+            "refreshToken": {
+              "type": "undefined"
+            },
+            "user": {
+              "type": "undefined"
+            }
+          }
+        },
+        {
+          "kind": "query",
+          "operation": "findMany",
+          "model": "account"
+        },
+        {
+          "kind": "output",
+          "model": "account",
+          "field": "accountId",
+          "value": "external-owner"
+        },
+        {
+          "kind": "output",
+          "model": "account",
+          "field": "userId",
+          "value": "user-a"
+        },
+        {
+          "kind": "output",
+          "model": "account",
+          "field": "accessToken",
+          "value": "user-b"
+        },
+        {
+          "kind": "query",
+          "operation": "findMany",
+          "model": "user"
+        },
+        {
+          "kind": "output",
+          "model": "user",
+          "field": "name",
+          "value": "User b"
+        },
+        {
+          "kind": "output",
+          "model": "user",
+          "field": "image",
+          "value": "account-a"
+        },
+        {
+          "kind": "output",
+          "model": "user",
+          "field": "name",
+          "value": "User c"
+        },
+        {
+          "kind": "output",
+          "model": "user",
+          "field": "image",
+          "value": "account-a"
+        },
+        {
+          "kind": "admission",
+          "data": {
+            "user": {
+              "name": "Provider User",
+              "email": "a@account-user-auth-boundary.test",
+              "emailVerified": true,
+              "image": "provider-image",
+              "id": {
+                "type": "undefined"
+              }
+            },
+            "source": {
+              "method": "oauth",
+              "oauth": {
+                "providerId": "google",
+                "profile": {
+                  "sub": "external-owner",
+                  "name": "Provider User",
+                  "email": "a@account-user-auth-boundary.test",
+                  "email_verified": true,
+                  "picture": "provider-image"
+                }
+              },
+              "action": "sign-in"
+            }
+          },
+          "request": {
+            "url": "http://account-user-auth-boundary.test/api/auth/sign-in/social",
+            "method": "POST",
+            "headers": [
+              [
+                "content-type",
+                "application/json"
+              ],
+              [
+                "origin",
+                "http://account-user-auth-boundary.test"
+              ],
+              [
+                "user-agent",
+                "account-user-auth-contract"
+              ],
+              [
+                "x-forwarded-for",
+                "203.0.113.8"
+              ]
+            ]
+          }
+        },
+        {
+          "kind": "hook",
+          "model": "account",
+          "operation": "update",
+          "phase": "before",
+          "data": {
+            "providerId": "google",
+            "idToken": "account-user-auth-fixture-id-token"
+          }
+        },
+        {
+          "kind": "query",
+          "operation": "update",
+          "model": "account"
+        },
+        {
+          "kind": "output",
+          "model": "account",
+          "field": "accountId",
+          "value": "external-owner"
+        },
+        {
+          "kind": "output",
+          "model": "account",
+          "field": "userId",
+          "value": "user-a"
+        },
+        {
+          "kind": "output",
+          "model": "account",
+          "field": "accessToken",
+          "value": "user-b"
+        },
+        {
+          "kind": "hook",
+          "model": "account",
+          "operation": "update",
+          "phase": "after",
+          "data": {
+            "accountId": "external-owner",
+            "providerId": "google",
+            "userId": "user-a",
+            "accessToken": "user-b",
+            "refreshToken": null,
+            "idToken": "account-user-auth-fixture-id-token",
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": null,
+            "password": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "<account.updatedAt>"
+            },
+            "id": "account-a"
+          }
+        },
+        {
+          "kind": "hook",
+          "model": "session",
+          "operation": "create",
+          "phase": "before",
+          "data": {
+            "id": "<session-id>",
+            "ipAddress": "203.0.113.8",
+            "userAgent": "account-user-auth-contract",
+            "expiresAt": {
+              "type": "date",
+              "value": "<session.expiresAt>"
+            },
+            "userId": {
+              "type": "undefined"
+            },
+            "token": "<session-token>",
+            "createdAt": {
+              "type": "date",
+              "value": "<session.createdAt>"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "<session.updatedAt>"
+            }
+          }
+        },
+        {
+          "kind": "secondary.get",
+          "key": "active-sessions-undefined",
+          "value": null
+        },
+        {
+          "kind": "secondary.set",
+          "key": "active-sessions-undefined",
+          "value": "[{\"token\":\"<session-token>\",\"expiresAt\":\"<session.expiresAt.milliseconds>\"}]",
+          "ttl": "<session-ttl>"
+        },
+        {
+          "kind": "adapter.findOne.call",
+          "input": {
+            "model": "user",
+            "where": [
+              {
+                "field": "id",
+                "value": {
+                  "type": "undefined"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "kind": "query",
+          "operation": "findOne",
+          "model": "user"
+        },
+        {
+          "kind": "adapter.findOne.return",
+          "value": null
+        },
+        {
+          "kind": "secondary.set",
+          "key": "<session-token>",
+          "value": "{\"session\":{\"id\":\"<session-id>\",\"ipAddress\":\"203.0.113.8\",\"userAgent\":\"account-user-auth-contract\",\"expiresAt\":\"<session.expiresAt>\",\"token\":\"<session-token>\",\"createdAt\":\"<session.createdAt>\",\"updatedAt\":\"<session.updatedAt>\"},\"user\":null}",
+          "ttl": "<session-ttl>"
+        },
+        {
+          "kind": "hook",
+          "model": "session",
+          "operation": "create",
+          "phase": "after",
+          "data": {
+            "id": "<session-id>",
+            "ipAddress": "203.0.113.8",
+            "userAgent": "account-user-auth-contract",
+            "expiresAt": {
+              "type": "date",
+              "value": "<session.expiresAt>"
+            },
+            "userId": {
+              "type": "undefined"
+            },
+            "token": "<session-token>",
+            "createdAt": {
+              "type": "date",
+              "value": "<session.createdAt>"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "<session.updatedAt>"
+            }
+          }
+        }
+      ],
+      "response": {
+        "status": 200,
+        "statusText": "",
+        "headers": [
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "set-cookie",
+            "better-auth.session_token=<verified-signed-session-token>; Max-Age=3600; Path=/; HttpOnly; SameSite=Lax"
+          ]
+        ],
+        "cookies": [
+          "better-auth.session_token=<verified-signed-session-token>; Max-Age=3600; Path=/; HttpOnly; SameSite=Lax"
+        ],
+        "body": "{\"redirect\":false,\"token\":\"<session-token>\",\"user\":{\"0\":{\"name\":\"User b\",\"email\":\"b@account-user-auth-boundary.test\",\"emailVerified\":true,\"image\":\"account-a\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"id\":\"user-b\"},\"1\":{\"name\":\"User c\",\"email\":\"c@account-user-auth-boundary.test\",\"emailVerified\":true,\"image\":\"account-a\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"id\":\"user-c\"}}}"
+      },
+      "after": {
+        "user": [
+          {
+            "id": "user-a",
+            "name": "User a",
+            "email": "a@account-user-auth-boundary.test",
+            "emailVerified": 1,
+            "image": "account-b",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          },
+          {
+            "id": "user-b",
+            "name": "User b",
+            "email": "b@account-user-auth-boundary.test",
+            "emailVerified": 1,
+            "image": "account-a",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          },
+          {
+            "id": "user-c",
+            "name": "User c",
+            "email": "c@account-user-auth-boundary.test",
+            "emailVerified": 1,
+            "image": "account-a",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          }
+        ],
+        "session": null,
+        "account": [
+          {
+            "id": "account-a",
+            "accountId": "external-owner",
+            "providerId": "google",
+            "userId": "user-a",
+            "accessToken": "user-b",
+            "refreshToken": null,
+            "idToken": "account-user-auth-fixture-id-token",
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": null,
+            "password": null,
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "<account.updatedAt>"
+          },
+          {
+            "id": "account-b",
+            "accountId": "external-decoy",
+            "providerId": "google",
+            "userId": "user-b",
+            "accessToken": "user-a",
+            "refreshToken": null,
+            "idToken": null,
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": null,
+            "password": null,
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          }
+        ],
+        "verification": []
+      },
+      "observations": {
+        "before": {
+          "tablePresence": {
+            "user": true,
+            "session": false,
+            "account": true,
+            "verification": true
+          },
+          "cache": []
+        },
+        "after": {
+          "tablePresence": {
+            "user": true,
+            "session": false,
+            "account": true,
+            "verification": true
+          },
+          "cache": [
+            {
+              "key": "active-sessions-undefined",
+              "value": "[{\"token\":\"<session-token>\",\"expiresAt\":\"<session.expiresAt.milliseconds>\"}]",
+              "ttl": "<session-ttl>"
+            },
+            {
+              "key": "<session-token>",
+              "value": "{\"session\":{\"id\":\"<session-id>\",\"ipAddress\":\"203.0.113.8\",\"userAgent\":\"account-user-auth-contract\",\"expiresAt\":\"<session.expiresAt>\",\"token\":\"<session-token>\",\"createdAt\":\"<session.createdAt>\",\"updatedAt\":\"<session.updatedAt>\"},\"user\":null}",
+              "ttl": "<session-ttl>"
+            }
+          ]
+        }
+      },
+      "checked": {
+        "noNetwork": true,
+        "completeStorage": true,
+        "pureSecondarySession": true,
+        "completeSecondaryCalls": true,
+        "admissionIdIsUndefined": true,
+        "sessionOwnerIsOwnUndefined": true,
+        "adapterLookupValueIsOwnUndefined": true,
+        "sqliteUndefinedLookupObserved": true,
+        "lookupOutcome": "return",
+        "preservedCanonicalAccountOwner": true,
+        "sessionDatesWithinRequest": true,
+        "exactSharedTtl": true,
+        "sessionCookieMatchesToken": true
+      }
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "social-owner-many-pure-secondary",
+      "joins": true,
+      "request": {
+        "url": "http://account-user-auth-boundary.test/api/auth/sign-in/social",
+        "method": "POST",
+        "headers": [
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "origin",
+            "http://account-user-auth-boundary.test"
+          ],
+          [
+            "user-agent",
+            "account-user-auth-contract"
+          ],
+          [
+            "x-forwarded-for",
+            "203.0.113.8"
+          ]
+        ],
+        "body": {
+          "provider": "google",
+          "idToken": {
+            "token": "account-user-auth-fixture-id-token",
+            "nonce": "account-user-auth-fixture-nonce"
+          }
+        }
+      },
+      "before": {
+        "user": [
+          {
+            "id": "user-a",
+            "name": "User a",
+            "email": "a@account-user-auth-boundary.test",
+            "emailVerified": 1,
+            "image": "account-b",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          },
+          {
+            "id": "user-b",
+            "name": "User b",
+            "email": "b@account-user-auth-boundary.test",
+            "emailVerified": 1,
+            "image": "account-a",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          },
+          {
+            "id": "user-c",
+            "name": "User c",
+            "email": "c@account-user-auth-boundary.test",
+            "emailVerified": 1,
+            "image": "account-a",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          }
+        ],
+        "session": null,
+        "account": [
+          {
+            "id": "account-a",
+            "accountId": "external-owner",
+            "providerId": "google",
+            "userId": "user-a",
+            "accessToken": "user-b",
+            "refreshToken": null,
+            "idToken": null,
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": null,
+            "password": null,
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          },
+          {
+            "id": "account-b",
+            "accountId": "external-decoy",
+            "providerId": "google",
+            "userId": "user-b",
+            "accessToken": "user-a",
+            "refreshToken": null,
+            "idToken": null,
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": null,
+            "password": null,
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          }
+        ],
+        "verification": []
+      },
+      "events": [
+        {
+          "kind": "provider.verify",
+          "token": "account-user-auth-fixture-id-token",
+          "nonce": "account-user-auth-fixture-nonce"
+        },
+        {
+          "kind": "provider.userInfo",
+          "tokens": {
+            "idToken": "account-user-auth-fixture-id-token",
+            "accessToken": {
+              "type": "undefined"
+            },
+            "refreshToken": {
+              "type": "undefined"
+            },
+            "user": {
+              "type": "undefined"
+            }
+          }
+        },
+        {
+          "kind": "query",
+          "operation": "findMany",
+          "model": "account"
+        },
+        {
+          "kind": "output",
+          "model": "account",
+          "field": "accountId",
+          "value": "external-owner"
+        },
+        {
+          "kind": "output",
+          "model": "account",
+          "field": "userId",
+          "value": "user-a"
+        },
+        {
+          "kind": "output",
+          "model": "account",
+          "field": "accessToken",
+          "value": "user-b"
+        },
+        {
+          "kind": "output",
+          "model": "user",
+          "field": "name",
+          "value": "User b"
+        },
+        {
+          "kind": "output",
+          "model": "user",
+          "field": "image",
+          "value": "account-a"
+        },
+        {
+          "kind": "output",
+          "model": "user",
+          "field": "name",
+          "value": "User c"
+        },
+        {
+          "kind": "output",
+          "model": "user",
+          "field": "image",
+          "value": "account-a"
+        },
+        {
+          "kind": "admission",
+          "data": {
+            "user": {
+              "name": "Provider User",
+              "email": "a@account-user-auth-boundary.test",
+              "emailVerified": true,
+              "image": "provider-image",
+              "id": {
+                "type": "undefined"
+              }
+            },
+            "source": {
+              "method": "oauth",
+              "oauth": {
+                "providerId": "google",
+                "profile": {
+                  "sub": "external-owner",
+                  "name": "Provider User",
+                  "email": "a@account-user-auth-boundary.test",
+                  "email_verified": true,
+                  "picture": "provider-image"
+                }
+              },
+              "action": "sign-in"
+            }
+          },
+          "request": {
+            "url": "http://account-user-auth-boundary.test/api/auth/sign-in/social",
+            "method": "POST",
+            "headers": [
+              [
+                "content-type",
+                "application/json"
+              ],
+              [
+                "origin",
+                "http://account-user-auth-boundary.test"
+              ],
+              [
+                "user-agent",
+                "account-user-auth-contract"
+              ],
+              [
+                "x-forwarded-for",
+                "203.0.113.8"
+              ]
+            ]
+          }
+        },
+        {
+          "kind": "hook",
+          "model": "account",
+          "operation": "update",
+          "phase": "before",
+          "data": {
+            "providerId": "google",
+            "idToken": "account-user-auth-fixture-id-token"
+          }
+        },
+        {
+          "kind": "query",
+          "operation": "update",
+          "model": "account"
+        },
+        {
+          "kind": "output",
+          "model": "account",
+          "field": "accountId",
+          "value": "external-owner"
+        },
+        {
+          "kind": "output",
+          "model": "account",
+          "field": "userId",
+          "value": "user-a"
+        },
+        {
+          "kind": "output",
+          "model": "account",
+          "field": "accessToken",
+          "value": "user-b"
+        },
+        {
+          "kind": "hook",
+          "model": "account",
+          "operation": "update",
+          "phase": "after",
+          "data": {
+            "accountId": "external-owner",
+            "providerId": "google",
+            "userId": "user-a",
+            "accessToken": "user-b",
+            "refreshToken": null,
+            "idToken": "account-user-auth-fixture-id-token",
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": null,
+            "password": null,
+            "createdAt": {
+              "type": "date",
+              "value": "2030-01-02T03:04:05.000Z"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "<account.updatedAt>"
+            },
+            "id": "account-a"
+          }
+        },
+        {
+          "kind": "hook",
+          "model": "session",
+          "operation": "create",
+          "phase": "before",
+          "data": {
+            "id": "<session-id>",
+            "ipAddress": "203.0.113.8",
+            "userAgent": "account-user-auth-contract",
+            "expiresAt": {
+              "type": "date",
+              "value": "<session.expiresAt>"
+            },
+            "userId": {
+              "type": "undefined"
+            },
+            "token": "<session-token>",
+            "createdAt": {
+              "type": "date",
+              "value": "<session.createdAt>"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "<session.updatedAt>"
+            }
+          }
+        },
+        {
+          "kind": "secondary.get",
+          "key": "active-sessions-undefined",
+          "value": null
+        },
+        {
+          "kind": "secondary.set",
+          "key": "active-sessions-undefined",
+          "value": "[{\"token\":\"<session-token>\",\"expiresAt\":\"<session.expiresAt.milliseconds>\"}]",
+          "ttl": "<session-ttl>"
+        },
+        {
+          "kind": "adapter.findOne.call",
+          "input": {
+            "model": "user",
+            "where": [
+              {
+                "field": "id",
+                "value": {
+                  "type": "undefined"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "kind": "query",
+          "operation": "findOne",
+          "model": "user"
+        },
+        {
+          "kind": "adapter.findOne.return",
+          "value": null
+        },
+        {
+          "kind": "secondary.set",
+          "key": "<session-token>",
+          "value": "{\"session\":{\"id\":\"<session-id>\",\"ipAddress\":\"203.0.113.8\",\"userAgent\":\"account-user-auth-contract\",\"expiresAt\":\"<session.expiresAt>\",\"token\":\"<session-token>\",\"createdAt\":\"<session.createdAt>\",\"updatedAt\":\"<session.updatedAt>\"},\"user\":null}",
+          "ttl": "<session-ttl>"
+        },
+        {
+          "kind": "hook",
+          "model": "session",
+          "operation": "create",
+          "phase": "after",
+          "data": {
+            "id": "<session-id>",
+            "ipAddress": "203.0.113.8",
+            "userAgent": "account-user-auth-contract",
+            "expiresAt": {
+              "type": "date",
+              "value": "<session.expiresAt>"
+            },
+            "userId": {
+              "type": "undefined"
+            },
+            "token": "<session-token>",
+            "createdAt": {
+              "type": "date",
+              "value": "<session.createdAt>"
+            },
+            "updatedAt": {
+              "type": "date",
+              "value": "<session.updatedAt>"
+            }
+          }
+        }
+      ],
+      "response": {
+        "status": 200,
+        "statusText": "",
+        "headers": [
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "set-cookie",
+            "better-auth.session_token=<verified-signed-session-token>; Max-Age=3600; Path=/; HttpOnly; SameSite=Lax"
+          ]
+        ],
+        "cookies": [
+          "better-auth.session_token=<verified-signed-session-token>; Max-Age=3600; Path=/; HttpOnly; SameSite=Lax"
+        ],
+        "body": "{\"redirect\":false,\"token\":\"<session-token>\",\"user\":{\"0\":{\"name\":\"User b\",\"email\":\"b@account-user-auth-boundary.test\",\"emailVerified\":true,\"image\":\"account-a\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"id\":\"user-b\"},\"1\":{\"name\":\"User c\",\"email\":\"c@account-user-auth-boundary.test\",\"emailVerified\":true,\"image\":\"account-a\",\"createdAt\":\"2030-01-02T03:04:05.000Z\",\"updatedAt\":\"2030-01-02T03:04:05.000Z\",\"id\":\"user-c\"}}}"
+      },
+      "after": {
+        "user": [
+          {
+            "id": "user-a",
+            "name": "User a",
+            "email": "a@account-user-auth-boundary.test",
+            "emailVerified": 1,
+            "image": "account-b",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          },
+          {
+            "id": "user-b",
+            "name": "User b",
+            "email": "b@account-user-auth-boundary.test",
+            "emailVerified": 1,
+            "image": "account-a",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          },
+          {
+            "id": "user-c",
+            "name": "User c",
+            "email": "c@account-user-auth-boundary.test",
+            "emailVerified": 1,
+            "image": "account-a",
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          }
+        ],
+        "session": null,
+        "account": [
+          {
+            "id": "account-a",
+            "accountId": "external-owner",
+            "providerId": "google",
+            "userId": "user-a",
+            "accessToken": "user-b",
+            "refreshToken": null,
+            "idToken": "account-user-auth-fixture-id-token",
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": null,
+            "password": null,
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "<account.updatedAt>"
+          },
+          {
+            "id": "account-b",
+            "accountId": "external-decoy",
+            "providerId": "google",
+            "userId": "user-b",
+            "accessToken": "user-a",
+            "refreshToken": null,
+            "idToken": null,
+            "accessTokenExpiresAt": null,
+            "refreshTokenExpiresAt": null,
+            "scope": null,
+            "password": null,
+            "createdAt": "2030-01-02T03:04:05.000Z",
+            "updatedAt": "2030-01-02T03:04:05.000Z"
+          }
+        ],
+        "verification": []
+      },
+      "observations": {
+        "before": {
+          "tablePresence": {
+            "user": true,
+            "session": false,
+            "account": true,
+            "verification": true
+          },
+          "cache": []
+        },
+        "after": {
+          "tablePresence": {
+            "user": true,
+            "session": false,
+            "account": true,
+            "verification": true
+          },
+          "cache": [
+            {
+              "key": "active-sessions-undefined",
+              "value": "[{\"token\":\"<session-token>\",\"expiresAt\":\"<session.expiresAt.milliseconds>\"}]",
+              "ttl": "<session-ttl>"
+            },
+            {
+              "key": "<session-token>",
+              "value": "{\"session\":{\"id\":\"<session-id>\",\"ipAddress\":\"203.0.113.8\",\"userAgent\":\"account-user-auth-contract\",\"expiresAt\":\"<session.expiresAt>\",\"token\":\"<session-token>\",\"createdAt\":\"<session.createdAt>\",\"updatedAt\":\"<session.updatedAt>\"},\"user\":null}",
+              "ttl": "<session-ttl>"
+            }
+          ]
+        }
+      },
+      "checked": {
+        "noNetwork": true,
+        "completeStorage": true,
+        "pureSecondarySession": true,
+        "completeSecondaryCalls": true,
+        "admissionIdIsUndefined": true,
+        "sessionOwnerIsOwnUndefined": true,
+        "adapterLookupValueIsOwnUndefined": true,
+        "sqliteUndefinedLookupObserved": true,
+        "lookupOutcome": "return",
+        "preservedCanonicalAccountOwner": true,
+        "sessionDatesWithinRequest": true,
+        "exactSharedTtl": true,
+        "sessionCookieMatchesToken": true
+      }
+    }
+  ]
+}

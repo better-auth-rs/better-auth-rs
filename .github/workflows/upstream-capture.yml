@@ -31,6 +31,7 @@ on:
       - compat-tests/reference-server/contracts/account-user-auth-secondary-capture.mjs
       - compat-tests/reference-server/contracts/api-key-number-name-capture.mjs
       - compat-tests/reference-server/contracts/telemetry-fields-unique-capture.mjs
+      - compat-tests/reference-server/contracts/email-verification-duration-capture.mjs
       - compat-tests/reference-server/contracts/passkey-shared-display-capture.mjs
       - compat-tests/reference-server/contracts/account-user-auth-boundary.test.ts
 
@@ -43,17 +44,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - contract: account-user-auth-secondary
-            regressions: [account-user-auth-boundary, account-user-auth-email]
-            backend: ''
-          - contract: api-key-number-name
-            regressions: [api-key-fields]
-            backend: ''
-          - contract: telemetry-fields-unique
-            regressions: [telemetry-fields-init, telemetry-options]
-            backend: ''
-          - contract: passkey-shared-display
-            regressions: [passkey-display-mapping]
+          - contract: email-verification-duration
+            regressions: [duration-options]
             backend: ''
     runs-on: ubuntu-latest
     timeout-minutes: 10
