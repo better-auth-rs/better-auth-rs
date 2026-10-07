@@ -141,6 +141,10 @@ fn session_snapshot(config: &AuthConfig) -> AuthResult<Value> {
 }
 
 #[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "The synchronous contract asserts captured headers while Result propagates setup errors"
+)]
 fn chunk_attribute_mutations_preserve_pinned_header_order_and_caller_attributes() -> AuthResult<()>
 {
     let cases = capture()?.chunks;
