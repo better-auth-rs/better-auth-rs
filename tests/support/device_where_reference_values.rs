@@ -1,5 +1,5 @@
 use super::{Case, references};
-use better_auth_core::user_fields::UserFieldType;
+use better_auth_core::{AuthError, AuthResult, user_fields::UserFieldType};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
@@ -42,7 +42,7 @@ pub(crate) struct Group {
     pub(crate) cases: Vec<Case>,
 }
 
-fn inventory(field_type: ReferenceType) -> Vec<(String, Value)> {
+fn inventory(field_type: ReferenceType) -> AuthResult<Vec<(String, Value)>> {
     let date = json!({"type": "date", "value": "1970-01-01T00:00:00.001Z"});
     let mut inputs = vec![
         ("eq-number", "eq", false, json!(1)),
@@ -94,7 +94,11 @@ fn inventory(field_type: ReferenceType) -> Vec<(String, Value)> {
     {
         let mut query = condition("eq", index % 2 == 1, json!(1));
         let position = if index == 0 { 0 } else { index + 1 };
-        query[position]["value"] = json!(if matches!(field, "id" | "userId") {
+        let value = query
+            .get_mut(position)
+            .and_then(|condition| condition.get_mut("value"))
+            .ok_or_else(|| AuthError::internal("The native guard must contain its value"))?;
+        *value = json!(if matches!(field, "id" | "userId") {
             "2".into()
         } else {
             format!("{field}-mismatch")
@@ -111,7 +115,7 @@ fn inventory(field_type: ReferenceType) -> Vec<(String, Value)> {
             condition("eq", true, json!(1)),
         ),
     ]);
-    cases
+    Ok(cases)
 }
 
 #[expect(
@@ -138,7 +142,7 @@ pub(crate) fn load_reference_values(
     for group in &fixture.groups {
         assert!(group.serial);
         assert_eq!(group.cases.len(), 12);
-        let expected = inventory(group.owner_ref_type);
+        let expected = inventory(group.owner_ref_type)?;
         assert_eq!(expected.len(), group.cases.len());
         for (case, (name, condition)) in group.cases.iter().zip(expected) {
             assert_eq!(case.name, name);
@@ -146,7 +150,12 @@ pub(crate) fn load_reference_values(
             references::validate_storage(case)?;
             assert_eq!(case.seeded.get("ownerRef"), Some(&json!("1")));
             assert_eq!(case.before.len(), 1);
-            assert_eq!(case.before[0].get("stored_ownerRef"), Some(&json!(1)));
+            assert_eq!(
+                case.before
+                    .first()
+                    .and_then(|row| row.get("stored_ownerRef")),
+                Some(&json!(1))
+            );
             assert_eq!(
                 case.seed_events
                     .iter()

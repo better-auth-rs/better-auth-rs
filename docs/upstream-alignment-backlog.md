@@ -59,6 +59,8 @@ Device-storage CI 37693092988 passed all strict upstream replays, then stopped o
 
 Device reference-value capture CI 37693956363 at `aeaab84f` passed 96 cases across Memory, SQLite, PostgreSQL, and MySQL. Two Serial-ID configurations declare a Json or Date reference to `user.id`. Each configuration records five value-binding cases, all five native guards, commit, and rollback. Source SHA, SHA-256, and independent byte-identical replay are verified. Rust now retains the original operand before Serial conversion and reuses the Memory JSON and SQL adapter binding helpers. The Rust contract pairs all 96 cases with isolated Serial tables. Complete Device values, callbacks, native guards, owner views, and rollback assertions remain active; full unrelated table inventories remain upstream-only. Focused CI acceptance is pending.
 
+Device-storage CI 37695208711 at `1b771853` passed all 23 strict Bun replays. Rust test Clippy then rejected three indexing expressions in the new reference-value inventory. Checked access now propagates a missing guard, and the stored-row assertion uses `first()` without changing its expected value. The original failure is preserved in `/private/tmp/better-auth-device-values-37695208711-failed.log`; behavioral pairing requires a retry.
+
 | Device candidate-set fixture | SHA-256 |
 | --- | --- |
 | Memory | `5a1af11ffe122cdce398148003e540094f2a5fed2cff7d7402d05cbad8744927` |
