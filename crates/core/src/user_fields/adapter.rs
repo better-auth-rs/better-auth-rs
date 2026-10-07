@@ -182,7 +182,7 @@ impl UserFieldConfig {
                             UserFieldType::StringArray | UserFieldType::NumberArray
                         )) =>
             {
-                Value::from_json(crate::utils::json::safe_json_parse(&text))
+                revive_json(crate::utils::json::safe_json_parse(&text))
             }
             Value::Number(number)
                 if !capabilities.supports_booleans
@@ -197,4 +197,22 @@ impl UserFieldConfig {
 
 fn json_text(value: Value) -> AuthResult<Value> {
     Ok(value.stringify()?.map(Value::String).unwrap_or_default())
+}
+
+fn revive_json(value: serde_json::Value) -> AuthResult<Value> {
+    match value {
+        serde_json::Value::String(text) => Ok(crate::utils::json::parse_json_date(&text)
+            .map_or_else(|| Value::String(text), Value::from)),
+        serde_json::Value::Array(values) => values
+            .into_iter()
+            .map(revive_json)
+            .collect::<AuthResult<Vec<_>>>()
+            .map(Value::from),
+        serde_json::Value::Object(values) => values
+            .into_iter()
+            .map(|(name, value)| Ok((name, revive_json(value)?)))
+            .collect::<AuthResult<FieldMap>>()
+            .map(Value::from),
+        value => Value::from_json(value),
+    }
 }

@@ -37,6 +37,7 @@ impl Binding {
     pub(super) fn bind(self, backend: DbBackend) -> AuthResult<SimpleExpr> {
         match self {
             Self::Native(value) => Ok(SimpleExpr::Value(value)),
+            Self::Json(value) if backend == DbBackend::Postgres => parameter(value, backend),
             Self::Json(value) => Ok(SimpleExpr::Value(Value::Json(value.json()?.map(Box::new)))),
             Self::Raw(value) => parameter(value, backend),
             Self::Date(date) => {
