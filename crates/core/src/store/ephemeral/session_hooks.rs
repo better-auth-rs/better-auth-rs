@@ -156,7 +156,8 @@ impl EphemeralStore {
         if configured_user_id {
             user_id = update
                 .additional_fields
-                .remove(schema.record_storage_key("userId"))
+                .get(schema.record_storage_key("userId"))
+                .cloned()
                 .map(crate::SchemaValue::from_field);
         }
         let _ = update.additional_fields.remove("id");
@@ -230,14 +231,15 @@ impl EphemeralStore {
             let schema = self.session_config.adapter_schema();
             self.model_fields
                 .begin_id_input(EntityRole::Session, crate::id::AdapterIdInput::default())?;
-            let mut fields = schema
+            let fields = schema
                 .storage_fields_with_binding(Default::default(), false, |_, field, value| {
                     self.memory_plugin_field_input(field, value)
                 })
                 .await?;
             let user_id = if schema.fields().contains_key("userId") {
                 fields
-                    .remove(schema.record_storage_key("userId"))
+                    .get(schema.record_storage_key("userId"))
+                    .cloned()
                     .map(crate::SchemaValue::from_field)
             } else {
                 None
