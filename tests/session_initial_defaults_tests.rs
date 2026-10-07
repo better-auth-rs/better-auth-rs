@@ -5,7 +5,7 @@ use better_auth_core::{
     FieldValue, SessionView,
     id::{IdGeneration, IdGenerator},
     store::{
-        EphemeralStore, MemoryCacheAdapter, SecondaryStorage, StatelessSchema,
+        EphemeralStore, MemoryCacheAdapter, RuntimeStore, SecondaryStorage, StatelessSchema,
         database_hooks::{DatabaseHookContext, DatabaseHookControl, DatabaseHooks},
         secondary::SecondaryStore,
         transaction,
@@ -416,10 +416,12 @@ async fn sql_session_defaults_precede_hooks_and_secondary_generation() -> TestRe
                 let _ = user::Entity::delete_many().exec(&database).await?;
                 let (events, receiver) = mpsc::channel();
                 let config = config(case, pure, &events);
-                let store: Arc<dyn AuthStore<BundledSchema>> = Arc::new(
-                    SeaOrmStore::new(config.clone(), database.clone())
-                        .with_hooks(vec![Arc::new(Hooks { case, events })]),
-                );
+                let store = SeaOrmStore::<BundledSchema>::new(config.clone(), database.clone())
+                    .with_runtime(
+                        Arc::new(config.clone()),
+                        vec![Arc::new(Hooks { case, events })],
+                        Default::default(),
+                    )?;
                 contract(
                     store,
                     Run {
