@@ -186,6 +186,54 @@ async function captureCase(model, slot, operation) {
   };
 }
 
+async function captureCreateAlias(model, slot, serial) {
+  const memory = { user: [], account: [], session: [], verification: [], jwks: [], walletAddress: [] };
+  const events = [];
+  const generateId = serial ? "serial" : ({ model: generatedModel }) => {
+    events.push(["generateId", { model: generatedModel }, "G", observeValue(memory)]);
+    return "G";
+  };
+  const fields = {};
+  const id = { type: "string", transform: {
+    input() { throw new Error("configured-id-input-called"); },
+    output() { throw new Error("configured-id-output-called"); },
+  } };
+  if (slot === "before-alias") fields.id = id;
+  fields.aliasId = { type: "string", fieldName: "id", transform: {
+    input(value) {
+      events.push(["input", "aliasId", observeValue(value)]);
+      return value;
+    },
+    output(value) {
+      events.push(["output", "aliasId", observeValue(value)]);
+      return value;
+    },
+  } };
+  if (slot === "after-alias") fields.id = id;
+  const context = await betterAuth(options(memory, model, fields, generateId)).$context;
+  const values = data(model, "alias", serial ? "001" : "owner");
+  delete values.label;
+  if (model === "session") {
+    values.ipAddress = "";
+    values.userAgent = "";
+  }
+  values.aliasId = "A";
+  const request = { model, data: values };
+  const input = observeValue(request);
+  const before = observeValue(memory);
+  let result = null;
+  let error = null;
+  try {
+    result = observeValue(await context.adapter.create(request));
+  } catch (caught) {
+    error = observedError(caught, "create");
+  }
+  return {
+    model, slot, operation: "create-id-alias", idGeneration: serial ? "serial" : "custom",
+    setup: [], seedEvents: [], before, input, events, result, error, after: observeValue(memory),
+  };
+}
+
 export async function captureAdapterIdSlots() {
   const cases = [];
   for (const model of models) {
@@ -194,6 +242,12 @@ export async function captureAdapterIdSlots() {
     }
   }
   assert.equal(cases.length, 16);
+  for (const model of ["user", "session"]) {
+    for (const slot of ["before-alias", "after-alias"]) {
+      for (const serial of [false, true]) cases.push(await captureCreateAlias(model, slot, serial));
+    }
+  }
+  assert.equal(cases.length, 24);
   return { version, backend: "memory", cases };
 }
 

@@ -7,5 +7,5 @@ test("adapter ID policies retain explicit slots and reentrant schema changes", a
   const actual = await captureAdapterIdSlots();
   expect(actual).toStrictEqual(fixture);
   expect(actual.version).toBe("1.7.6");
-  expect(actual.cases).toHaveLength(16);
+  expect(actual.cases).toHaveLength(24);
 }, 30_000);
