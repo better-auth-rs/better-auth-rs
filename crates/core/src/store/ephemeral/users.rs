@@ -353,7 +353,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             .flatten();
         let now = Utc::now();
         let id = id.map(crate::SchemaValue::Typed).unwrap_or_default();
-        let user = UserView {
+        let mut user = UserView {
             additional_fields: fields,
             visible_fields: Some(
                 [
@@ -408,7 +408,9 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             "user",
             "create",
             async {
-                self.lock()?.users.push(user.clone());
+                let mut state = self.lock()?;
+                self.assign_insert_serial_id(&mut user.id, state.users.len());
+                state.users.push(user.clone());
                 Ok(())
             },
         )

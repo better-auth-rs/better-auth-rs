@@ -17,7 +17,7 @@ use better_auth_seaorm::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock, Weak};
 
 type Trace = Arc<Mutex<Vec<Value>>>;
 
@@ -309,4 +309,78 @@ async fn contract() -> Result<(), Box<dyn std::error::Error>> {
 async fn user_id_generation_matches_pinned_memory_and_sqlite()
 -> Result<(), Box<dyn std::error::Error>> {
     contract().await
+}
+
+fn serial_user(label: &str) -> CreateUser {
+    CreateUser {
+        name: Some(label.to_owned()).into(),
+        email: Some(format!("{label}@serial-user.test")),
+        created_at: Some(chrono::DateTime::UNIX_EPOCH),
+        updated_at: Some(chrono::DateTime::UNIX_EPOCH),
+        is_anonymous: Some(false),
+        additional_fields: Map::from_iter([("label".into(), json!(label))]),
+        ..Default::default()
+    }
+}
+
+async fn reentrant_serial_user() -> AuthResult<()> {
+    let target = Arc::new(OnceLock::<Weak<EphemeralStore>>::new());
+    let completed_child = Arc::new(OnceLock::<UserView>::new());
+    let mut config = AuthConfig::default();
+    config.advanced.database.generate_id = Some(IdGeneration::Serial);
+    let _ = config
+        .user
+        .fields_mut()
+        .insert("id".into(), UserFieldConfig::default());
+    let callback_target = target.clone();
+    let callback_child = completed_child.clone();
+    let _ = config.user.fields_mut().insert(
+        "label".into(),
+        UserFieldConfig {
+            transform: Some(FieldTransforms {
+                input: Some(UserFieldTransform::new_async(move |value| {
+                    let target = callback_target.clone();
+                    let completed_child = callback_child.clone();
+                    async move {
+                        if value.as_ref().and_then(Value::as_str) == Some("parent") {
+                            let store = target.get().and_then(Weak::upgrade).ok_or_else(|| {
+                                AuthError::internal("Reentrant User store is not available")
+                            })?;
+                            let child = store.create_user(serial_user("child")).await?;
+                            completed_child.set(child).map_err(|_| {
+                                AuthError::internal("Reentrant child completed more than once")
+                            })?;
+                        }
+                        Ok(value)
+                    }
+                })),
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+    );
+    let store = Arc::new(EphemeralStore::new(Arc::new(config)));
+    target
+        .set(Arc::downgrade(&store))
+        .map_err(|_| AuthError::internal("Reentrant User store was already assigned"))?;
+    let parent = store.create_user(serial_user("parent")).await?;
+    let child = completed_child
+        .get()
+        .ok_or_else(|| AuthError::internal("Reentrant child did not complete"))?;
+    assert_eq!(child.id, "1");
+    assert_eq!(parent.id, "2");
+    assert_eq!(child.additional_fields.get("label"), Some(&json!("child")));
+    assert_eq!(
+        parent.additional_fields.get("label"),
+        Some(&json!("parent"))
+    );
+    let (rows, total) = store.list_users(ListUsersParams::default()).await?;
+    assert_eq!(total, 2);
+    assert_eq!(rows, [child.clone(), parent]);
+    Ok(())
+}
+
+#[tokio::test]
+async fn memory_user_serial_id_is_assigned_after_reentrant_field_input() -> AuthResult<()> {
+    reentrant_serial_user().await
 }
