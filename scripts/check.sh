@@ -177,6 +177,14 @@ run_stage() {
       cargo test --locked -p better-auth-core --lib store::secondary::users::tests::
       cargo test --locked --features axum,seaorm2,redis-cache --test nullable_user_update_tests --test secondary_storage_hooks_tests --test background_transaction_tests
       ;;
+    account-user-auth)
+      cargo fmt --all -- --check
+      cargo clippy --locked --features axum,seaorm2,redis-cache --test account_user_auth_boundary_reference_tests -- -D warnings
+      cargo test --locked --features axum,seaorm2,redis-cache --test account_user_auth_boundary_reference_tests
+      bun --no-install test \
+        ./compat-tests/reference-server/contracts/account-user-auth-boundary.test.ts \
+        ./compat-tests/reference-server/contracts/account-user-auth-email.test.ts
+      ;;
     schema-joins)
       cargo fmt --all -- --check
       cargo clippy --locked --keep-going -p better-auth-core -p better-auth-api -p better-auth-seaorm -- -D warnings
