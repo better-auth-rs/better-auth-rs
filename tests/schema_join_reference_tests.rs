@@ -182,7 +182,7 @@ fn output(name: &'static str, events: &Events) -> UserFieldConfig {
         required: Some(true),
         transform: Some(FieldTransforms {
             output: Some(UserFieldTransform::new(move |value| {
-                events.push(json!(["output", name, value]));
+                events.push(json!(["output", name, value.json()?]));
                 Ok(value)
             })),
             ..Default::default()

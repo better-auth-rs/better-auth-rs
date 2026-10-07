@@ -398,7 +398,7 @@ async fn builtin_dynamic_outputs_preserve_storage_and_core_column_remaps_fail_ex
             "recipient@example.com",
             "member",
             "owner",
-            chrono::Utc::now() + chrono::Duration::days(1),
+            (chrono::Utc::now() + chrono::Duration::days(1)).into(),
         ))
         .await
         .unwrap();
@@ -440,7 +440,7 @@ async fn team_capacity_uses_the_transformed_durable_counter() {
                 output: Some(UserFieldTransform::new(|value| {
                     Ok(match value {
                         Value::Undefined => Value::Undefined,
-                        value => Value::from(value.as_i64().unwrap() + 10),
+                        value => Value::from(value.as_f64().unwrap() + 10.0),
                     })
                 })),
             }),

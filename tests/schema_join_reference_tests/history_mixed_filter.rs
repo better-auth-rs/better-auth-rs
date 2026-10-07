@@ -16,7 +16,7 @@ struct Case {
 fn cases() -> Vec<Case> {
     let invalid_filter = ListUsersParams {
         filter_field: Some("missingUserField".into()),
-        filter_value: Some(json!("missing")),
+        filter_value: Some("missing".into()),
         ..Default::default()
     };
     vec![
@@ -62,7 +62,7 @@ fn cases() -> Vec<Case> {
             name: "empty-filter-field-uses-email",
             probe: Probe::List(Box::new(ListUsersParams {
                 filter_field: Some(String::new()),
-                filter_value: Some(json!("missing")),
+                filter_value: Some("missing".into()),
                 ..Default::default()
             })),
             warmed: true,

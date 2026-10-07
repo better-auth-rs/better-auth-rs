@@ -1,7 +1,8 @@
 #![cfg(feature = "seaorm2")]
 
 use better_auth_core::{
-    AuthConfig, AuthError, AuthResult, AuthSchema, CreateUser, ListUsersParams, UserView,
+    AuthConfig, AuthError, AuthResult, AuthSchema, CreateUser, FieldMap, FieldValue,
+    ListUsersParams, UserView,
     id::{IdGeneration, IdGenerator},
     store::{EphemeralStore, StatelessSchema, UserStore},
     user_fields::{
@@ -29,14 +30,19 @@ fn observed(value: Option<&Value>) -> Value {
     }
 }
 
-fn display(user: UserView) -> Value {
-    Value::Object(Map::from_iter(["marker", "label"].map(|name| {
-        let value = user.additional_fields.get(name);
-        (
-            name.into(),
-            json!({"own":value.is_some(),"value":observed(value)}),
-        )
-    })))
+fn display(user: UserView) -> AuthResult<Value> {
+    let fields = ["marker", "label"]
+        .into_iter()
+        .map(|name| {
+            let value = user.additional_fields.get(name);
+            let output = value.map(FieldValue::json).transpose()?.flatten();
+            Ok((
+                name.into(),
+                json!({"own":value.is_some(),"value":observed(output.as_ref())}),
+            ))
+        })
+        .collect::<AuthResult<Map<_, _>>>()?;
+    Ok(Value::Object(fields))
 }
 
 fn take_events(trace: &Trace) -> AuthResult<Vec<Value>> {
@@ -75,8 +81,12 @@ fn config(trace: &Trace) -> AuthConfig {
                     trace
                         .lock()
                         .map_err(|_| AuthError::internal("Nullable query trace lock poisoned"))?
-                        .push(json!(["output", "label", observed(value.as_ref())]));
-                    Ok(Some(value.unwrap_or_else(|| json!("(missing)"))))
+                        .push(json!(["output", "label", observed(value.json()?.as_ref())]));
+                    Ok(if value.is_undefined() {
+                        "(missing)".into()
+                    } else {
+                        value
+                    })
                 })),
             }),
             ..Default::default()
@@ -85,7 +95,7 @@ fn config(trace: &Trace) -> AuthConfig {
     config
 }
 
-fn params(field: &str, value: Value, operator: &str) -> ListUsersParams {
+fn params(field: &str, value: FieldValue, operator: &str) -> ListUsersParams {
     ListUsersParams {
         limit: Some(10.0),
         offset: Some(0.0),
@@ -170,9 +180,9 @@ async fn observe<S: AuthSchema>(
                 name: Some(name.into()).into(),
                 email: Some(format!("{marker}@user-null-query.test")),
                 email_verified: Some(false),
-                created_at: Some(timestamp),
-                updated_at: Some(timestamp),
-                additional_fields,
+                created_at: Some(timestamp.into()),
+                updated_at: Some(timestamp.into()),
+                additional_fields: FieldMap::from_json(additional_fields)?,
                 ..Default::default()
             })
             .await?;
@@ -186,15 +196,15 @@ async fn observe<S: AuthSchema>(
         ("physical-ne-null", "stored_label", "ne"),
     ] {
         let (users, total) = store
-            .list_users(params(field, Value::Null, operator))
+            .list_users(params(field, FieldValue::Null, operator))
             .await?;
         queries.push(json!({
             "name":name,
             "events":take_events(trace)?,
-            "result":{"users":users.into_iter().map(display).collect::<Vec<_>>(),"total":total},
+            "result":{"users":users.into_iter().map(display).collect::<AuthResult<Vec<_>>>()?,"total":total},
         }));
     }
-    let unknown = params("unknownLabel", json!("ordinary"), "eq");
+    let unknown = params("unknownLabel", "ordinary".into(), "eq");
     let list_error = observe_error(
         "unknown-list",
         store.list_users(unknown.clone()).await,

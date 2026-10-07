@@ -1,7 +1,8 @@
 #![cfg(feature = "seaorm2")]
 
 use better_auth_core::{
-    AuthConfig, AuthError, AuthResult, AuthSchema, CreateUser, ListUsersParams, UserView,
+    AuthConfig, AuthError, AuthResult, AuthSchema, CreateUser, FieldMap, FieldValue,
+    ListUsersParams, UserView,
     id::{IdGeneration, IdGenerator},
     store::{EphemeralStore, RuntimeStore, StatelessSchema, UserStore},
     user_fields::{FieldTransforms, UserFieldConfig, UserFieldTransform, UserFieldType},
@@ -32,16 +33,18 @@ fn event(field: &str, value: Option<&Value>) -> Value {
     json!({"field":field,"present":value.is_some(),"kind":kind,"value":value})
 }
 
-fn display(user: UserView) -> Value {
-    Value::Object(Map::from_iter(["marker", "highlighted", "rank"].map(
-        |name| {
+fn display(user: UserView) -> AuthResult<Value> {
+    let fields = ["marker", "highlighted", "rank"]
+        .into_iter()
+        .map(|name| {
             let value = user.additional_fields.get(name);
-            (
+            Ok((
                 name.into(),
-                json!({"own":value.is_some(),"present":value.is_some(),"value":value}),
-            )
-        },
-    )))
+                json!({"own":value.is_some(),"present":value.is_some(),"value":value.map(FieldValue::json).transpose()?.flatten()}),
+            ))
+        })
+        .collect::<AuthResult<Map<_, _>>>()?;
+    Ok(Value::Object(fields))
 }
 
 fn take_events(trace: &Trace) -> AuthResult<Vec<Value>> {
@@ -77,7 +80,7 @@ fn config(trace: Option<&Trace>) -> AuthConfig {
                             .map_err(|_| {
                                 AuthError::internal("Scalar column query trace lock poisoned")
                             })?
-                            .push(event(name, value.as_ref()));
+                            .push(event(name, value.json()?.as_ref()));
                         Ok(value)
                     })),
                 }
@@ -130,9 +133,9 @@ async fn seed<S: AuthSchema>(
                 name: Some(name.into()).into(),
                 email: Some(format!("{marker}@user-scalar-column-query.test")),
                 email_verified: Some(false),
-                created_at: Some(timestamp),
-                updated_at: Some(timestamp),
-                additional_fields,
+                created_at: Some(timestamp.into()),
+                updated_at: Some(timestamp.into()),
+                additional_fields: FieldMap::from_json(additional_fields)?,
                 ..Default::default()
             })
             .await?;
@@ -148,7 +151,7 @@ fn queries(sqlite: bool) -> Vec<(&'static str, ListUsersParams)> {
         sort_direction: Some("asc".into()),
         ..Default::default()
     };
-    let filter = |field: &str, value: Value, operator: &str| ListUsersParams {
+    let filter = |field: &str, value: FieldValue, operator: &str| ListUsersParams {
         filter_field: Some(field.into()),
         filter_value: Some(value),
         filter_operator: Some(operator.into()),
@@ -159,11 +162,11 @@ fn queries(sqlite: bool) -> Vec<(&'static str, ListUsersParams)> {
         queries.extend([
             (
                 "logical-boolean-false",
-                filter("highlighted", json!(false), "eq"),
+                filter("highlighted", false.into(), "eq"),
             ),
             (
                 "physical-boolean-false",
-                filter("stored_highlighted", json!("false"), "eq"),
+                filter("stored_highlighted", "false".into(), "eq"),
             ),
             (
                 "logical-boolean-sort",
@@ -186,16 +189,19 @@ fn queries(sqlite: bool) -> Vec<(&'static str, ListUsersParams)> {
     queries.extend([
         (
             "logical-boolean-eq-null",
-            filter("highlighted", Value::Null, "eq"),
+            filter("highlighted", FieldValue::Null, "eq"),
         ),
         (
             "physical-boolean-ne-null",
-            filter("stored_highlighted", Value::Null, "ne"),
+            filter("stored_highlighted", FieldValue::Null, "ne"),
         ),
-        ("logical-number-eq-null", filter("rank", Value::Null, "eq")),
+        (
+            "logical-number-eq-null",
+            filter("rank", FieldValue::Null, "eq"),
+        ),
         (
             "physical-number-ne-null",
-            filter("stored_rank", Value::Null, "ne"),
+            filter("stored_rank", FieldValue::Null, "ne"),
         ),
     ]);
     queries
@@ -212,7 +218,7 @@ async fn observe<S: AuthSchema>(
         observations.push(json!({
             "name":name,
             "events":take_events(trace)?,
-            "result":{"users":users.into_iter().map(display).collect::<Vec<_>>(),"total":total},
+            "result":{"users":users.into_iter().map(display).collect::<AuthResult<Vec<_>>>()?,"total":total},
         }));
     }
     Ok(json!({"backend":backend,"queries":observations}))

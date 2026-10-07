@@ -183,9 +183,8 @@ impl OrganizationHooks for State {
             .get("label")
             .and_then(FieldValue::as_str)
             .unwrap_or("default");
-        let _ = member
-            .additional_fields
-            .insert("label".into(), FieldValue::from(format!("{label}:hook")));
+        let label = FieldValue::from(format!("{label}:hook"));
+        let _ = member.additional_fields.insert("label".into(), label);
         if self.mode.ends_with("reassign") {
             member.user_id = "owner".into();
         }

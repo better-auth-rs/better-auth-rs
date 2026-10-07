@@ -56,17 +56,19 @@ async fn contract() -> Result<(), Box<dyn std::error::Error>> {
                 name: Some(format!("Skipped Null {marker}")).into(),
                 email: Some(format!("{marker}@skipped-null-query.test")),
                 email_verified: Some(false),
-                additional_fields,
+                additional_fields: FieldMap::from_json(additional_fields)?,
                 ..Default::default()
             })
             .await?;
     }
     let _ = take_events(&trace)?;
-    let (users, total) = store.list_users(params("label", Value::Null, "ne")).await?;
+    let (users, total) = store
+        .list_users(params("label", FieldValue::Null, "ne"))
+        .await?;
     assert_eq!(
         json!({
             "events":take_events(&trace)?,
-            "result":{"users":users.into_iter().map(display).collect::<Vec<_>>(),"total":total},
+            "result":{"users":users.into_iter().map(display).collect::<AuthResult<Vec<_>>>()?,"total":total},
         }),
         json!({
             "events":[["output","label",{"defined":true,"value":"ordinary"}]],

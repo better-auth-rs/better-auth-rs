@@ -41,7 +41,7 @@ fn reference(trace: Option<Arc<Mutex<Vec<Value>>>>) -> UserFieldConfig {
         transform: Some(FieldTransforms {
             input: Some(UserFieldTransform::new(move |value| {
                 if let Some(trace) = &input_trace {
-                    trace.lock().unwrap().push(json!(["input", value]));
+                    trace.lock().unwrap().push(json!(["input", value.json()?]));
                 }
                 Ok(match value {
                     FieldValue::Undefined => FieldValue::Undefined,
@@ -50,7 +50,7 @@ fn reference(trace: Option<Arc<Mutex<Vec<Value>>>>) -> UserFieldConfig {
             })),
             output: Some(UserFieldTransform::new(move |value| {
                 if let Some(trace) = &trace {
-                    trace.lock().unwrap().push(json!(["output", value]));
+                    trace.lock().unwrap().push(json!(["output", value.json()?]));
                 }
                 Ok(value)
             })),
@@ -257,7 +257,7 @@ async fn explicit_native_reference_replacement_retains_ordinary_string_storage()
                         field_name: Some("stored_organization_id".into()),
                         transform: Some(FieldTransforms {
                             output: Some(UserFieldTransform::new(move |value| {
-                                trace.lock().unwrap().push(value.clone());
+                                trace.lock().unwrap().push(value.json()?);
                                 Ok(value)
                             })),
                             ..Default::default()

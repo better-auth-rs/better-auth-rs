@@ -349,7 +349,7 @@ async fn ephemeral_nullable_update_propagates_input_and_output_transform_user_no
         let mut change = update("Written");
         let _ = change
             .additional_fields
-            .insert("marker".into(), json!("value"));
+            .insert("marker".into(), "value".into());
         assert!(matches!(
             store
                 .update_user_optional(user.id.typed().unwrap(), change)

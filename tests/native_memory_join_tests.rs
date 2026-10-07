@@ -5,8 +5,8 @@
 )]
 
 use better_auth_core::{
-    AuthConfig, AuthError, AuthResult, CreateAccount, CreateSession, CreateUser, UpdateAccount,
-    UpdateUser,
+    AuthConfig, AuthError, AuthResult, CreateAccount, CreateSession, CreateUser, FieldMap,
+    FieldValue, UpdateAccount, UpdateUser,
     store::{AccountStore, EphemeralStore, SessionStore, UserStore, database_hooks::SessionUpdate},
     user_fields::{FieldTransforms, UserFieldConfig, UserFieldTransform},
     wire::{SessionView, UserView},
@@ -39,13 +39,13 @@ impl Trace {
         field: &str,
         mode: &str,
         parent: &str,
-        value: &Option<Value>,
+        value: &FieldValue,
     ) -> AuthResult<bool> {
         if !self.enabled.load(Ordering::SeqCst) || self.nested.load(Ordering::SeqCst) {
             return Ok(false);
         }
-        let value = value.as_ref().unwrap();
-        self.event(field, value);
+        let value = value.json()?.unwrap();
+        self.event(field, &value);
         if (mode == "parent-error" && field == parent && value == "A-agent")
             || (mode == "child-error" && field == "account.displayLabel" && value == "A-label-0")
         {
@@ -68,7 +68,7 @@ impl Trace {
                 .update_account(
                     "account-a-0",
                     UpdateAccount {
-                        additional_fields: [("displayLabel".into(), json!("A-label-0-after"))]
+                        additional_fields: [("displayLabel".into(), "A-label-0-after".into())]
                             .into_iter()
                             .collect(),
                         ..Default::default()
@@ -99,12 +99,9 @@ impl Trace {
     }
 }
 
-fn display(value: Option<Value>, enabled: bool) -> Option<Value> {
+fn display(value: FieldValue, enabled: bool) -> FieldValue {
     if enabled {
-        Some(json!(format!(
-            "{}-visible",
-            value.unwrap().as_str().unwrap()
-        )))
+        format!("{}-visible", value.as_str().unwrap()).into()
     } else {
         value
     }
@@ -125,7 +122,7 @@ fn field(trace: &Arc<Trace>, path: &str, mode: &str, name: &str, parent: &str) -
                 async move {
                     let enabled = trace.before(&name, &mode, &parent, &value)?;
                     if enabled {
-                        if mode == "parent-wait" && value.as_ref() == Some(&json!("A-agent")) {
+                        if mode == "parent-wait" && value.as_str() == Some("A-agent") {
                             trace.first_started.notify_one();
                             trace.release_first.notified().await;
                         }
@@ -205,8 +202,8 @@ async fn seed(store: &EphemeralStore) -> AuthResult<()> {
                 image: Some(format!("{label}-image")).into(),
                 email: Some(format!("{suffix}@ordinary-native-join.test")),
                 email_verified: Some(true),
-                created_at: Some(date),
-                updated_at: Some(date),
+                created_at: Some(date.into()),
+                updated_at: Some(date.into()),
                 ..Default::default()
             })
             .await?;
@@ -243,7 +240,7 @@ async fn seed(store: &EphemeralStore) -> AuthResult<()> {
                     account_id: format!("ordinary-{suffix}-{index}").into(),
                     additional_fields: [(
                         "displayLabel".into(),
-                        json!(format!("{label}-label-{index}")),
+                        format!("{label}-label-{index}").into(),
                     )]
                     .into_iter()
                     .collect(),
@@ -259,7 +256,8 @@ fn user(user: &UserView) -> Value {
     json!({ "name": user.name, "image": user.image })
 }
 fn session(session: &SessionView, owner: &UserView) -> Value {
-    let fields: serde_json::Map<String, Value> = session.clone().into();
+    let fields: FieldMap = session.clone().into();
+    let fields = fields.json().unwrap();
     json!({ "userAgent": fields["userAgent"], "user": user(owner) })
 }
 async fn query(store: &EphemeralStore, path: &str) -> AuthResult<Value> {
@@ -292,14 +290,14 @@ async fn query(store: &EphemeralStore, path: &str) -> AuthResult<Value> {
                 .get_account_owner("ordinary-provider", "ordinary-a-0")
                 .await?
                 .unwrap();
-            json!({ "kind": "owned", "displayLabel": owner.account.additional_fields["displayLabel"], "user": user(owner.user.as_ref().unwrap()) })
+            json!({ "kind": "owned", "displayLabel": owner.account.additional_fields["displayLabel"].json()?, "user": user(owner.user.as_ref().unwrap()) })
         }
         "accounts" => {
             let joined = store
                 .get_user_with_accounts("A@ordinary-native-join.test")
                 .await?
                 .unwrap();
-            json!({ "user": user(&joined.user), "accounts": joined.accounts.iter().map(|account| account.additional_fields["displayLabel"].clone()).collect::<Vec<_>>() })
+            json!({ "user": user(&joined.user), "accounts": joined.accounts.iter().map(|account| account.additional_fields["displayLabel"].json()).collect::<AuthResult<Vec<_>>>()? })
         }
         _ => return Err(AuthError::internal("unknown normal join fixture path")),
     })
@@ -374,7 +372,7 @@ async fn memory_native_and_fallback_core_reads_match_pinned_normal_contracts() -
                     .get_account("ordinary-provider", &format!("ordinary-{suffix}-{index}"))
                     .await?
                     .unwrap();
-                stored_accounts.push(account.additional_fields["displayLabel"].clone());
+                stored_accounts.push(account.additional_fields["displayLabel"].json()?);
             }
         }
         assert_eq!(
