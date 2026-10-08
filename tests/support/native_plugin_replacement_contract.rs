@@ -293,7 +293,7 @@ where
     }
     assert_eq!(count, 34);
     eprintln!(
-        "native replacement boundaries: backend={backend}; target={}; all values, timestamps, and field presence are paired; JavaScript property order remains unpaired",
+        "native replacement boundaries: backend={backend}; target={}; all values, timestamps, field presence, and field order are paired",
         target.name
     );
     Ok(())

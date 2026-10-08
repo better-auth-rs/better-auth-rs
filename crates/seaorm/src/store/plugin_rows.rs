@@ -17,14 +17,14 @@ pub(super) fn record<M: SeaOrmPluginModel>(
     let mut core = FieldMap::new();
     let mut storage = FieldMap::new();
     for column in M::Column::iter() {
-        if let Some(name) = M::core_field_name(&column) {
+        if M::core_field_name(&column) == Some("id") {
             let raw = value(row, column.as_str())?;
-            let value = if name == "id" && !raw.is_null() && !raw.is_undefined() {
+            let value = if !raw.is_null() && !raw.is_undefined() {
                 raw.display_utf16()?.into()
             } else {
                 raw
             };
-            let _ = core.insert(name.into(), value);
+            let _ = core.insert("id".into(), value);
         }
     }
     for (name, field) in fields.fields() {
@@ -43,6 +43,19 @@ pub(super) fn record<M: SeaOrmPluginModel>(
         |_, _| Ok(None),
     )?;
     Ok(record)
+}
+
+pub(super) fn undeclared_fields<M: SeaOrmPluginModel>(
+    row: &QueryResult,
+    fields: &UserConfig,
+) -> AuthResult<FieldMap> {
+    M::Column::iter()
+        .filter_map(|column| {
+            M::core_field_name(&column)
+                .filter(|name| !fields.fields().contains_key(*name))
+                .map(|name| value(row, column.as_str()).map(|value| (name.to_owned(), value)))
+        })
+        .collect()
 }
 
 fn error(column: &str, error: impl std::fmt::Display) -> AuthError {

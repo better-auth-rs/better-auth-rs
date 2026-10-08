@@ -282,7 +282,7 @@ impl ApiKeyPlugin {
         if let Some(required) = input.permissions {
             let permissions = api_key.permissions.field_value();
             let permitted = permissions.is_truthy()
-                && super::handlers::check_permissions(&permissions, required)?;
+                && super::permissions::check_permissions(&permissions, required)?;
             if !permitted {
                 return Err(ApiKeyErrorCode::KeyNotFound.into());
             }

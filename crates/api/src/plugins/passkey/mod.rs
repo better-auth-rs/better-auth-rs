@@ -3,6 +3,7 @@ use better_auth_core::{AuthRequest, AuthResponse};
 
 mod callbacks;
 mod credential;
+mod descriptors;
 mod options;
 mod registration;
 pub use callbacks::*;
@@ -81,7 +82,7 @@ impl PasskeyPlugin {
             ctx,
         )
         .await?;
-        Ok(AuthResponse::json(200, &result)?.with_header("Set-Cookie", cookie_header))
+        Ok(AuthResponse::native(200, result).with_header("Set-Cookie", cookie_header))
     }
 
     /// POST /passkey/verify-registration
@@ -122,7 +123,7 @@ impl PasskeyPlugin {
         let maybe_user = registration::optional_session(ctx, req).await?;
         let (result, cookie_header) =
             generate_authenticate_options_core(maybe_user.as_ref(), req, &self.config, ctx).await?;
-        Ok(AuthResponse::json(200, &result)?.with_header("Set-Cookie", cookie_header))
+        Ok(AuthResponse::native(200, result).with_header("Set-Cookie", cookie_header))
     }
 
     /// POST /passkey/verify-authentication
@@ -196,5 +197,14 @@ better_auth_core::impl_auth_plugin! {
         get  "/passkey/list-user-passkeys"             => handle_list_user_passkeys,             "listPasskeys";
         post "/passkey/delete-passkey"                 => handle_delete_passkey,                 "deletePasskey", body = types::deletion_body;
         post "/passkey/update-passkey"                 => handle_update_passkey,                 "updatePasskey", body = types::update_body;
+    }
+    extra {
+        async fn on_init(&self, ctx: &mut better_auth_core::AuthInitContext<S>) -> AuthResult<()> {
+            let role = better_auth_core::store::schema::EntityRole::Passkey;
+            ctx.register_model_fields(
+                role,
+                better_auth_core::plugin_runtime::ModelFields::plugin_native_fields(role),
+            )
+        }
     }
 }

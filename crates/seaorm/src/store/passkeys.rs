@@ -15,6 +15,10 @@ use crate::types::{CreatePasskey, Passkey, UpdatePasskeyAuthentication};
 
 use super::{SeaOrmStore, map_db_err};
 
+#[cfg(test)]
+#[path = "passkey_record_tests.rs"]
+mod record_tests;
+
 #[async_trait]
 impl<S, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> PasskeyStore
     for SeaOrmStore<S, O, P>
@@ -34,7 +38,11 @@ where
         let active = self
             .prepare_plugin_fields::<P::Passkey>(EntityRole::Passkey, "passkey", input, true)
             .await?;
-        self.insert_passkey(self.connection(), active).await
+        let row = self.insert_passkey(self.connection(), active).await?;
+        Ok(self
+            .project_plugin_rows::<P::Passkey, FieldMap>(EntityRole::Passkey, vec![row])
+            .await?
+            .remove(0))
     }
 
     async fn update_passkey_record(
@@ -46,25 +54,21 @@ where
         let patch = self
             .prepare_plugin_fields::<P::Passkey>(EntityRole::Passkey, "passkey", input, false)
             .await?;
-        self.update_passkey_patch(filter, patch).await
+        let row = self.update_passkey_patch(filter, patch).await?;
+        Ok(self
+            .project_plugin_rows::<P::Passkey, FieldMap>(
+                EntityRole::Passkey,
+                row.into_iter().collect(),
+            )
+            .await?
+            .pop())
     }
 
     async fn get_passkey_record(
         &self,
         id: &better_auth_core::SchemaValue<String>,
     ) -> AuthResult<Option<FieldMap>> {
-        let filter = self.plugin_id_filter::<P::Passkey>(EntityRole::Passkey, id)?;
-        let row = database_operation::<Entity<P::Passkey>, _>(self.config(), "findOne", async {
-            self.connection()
-                .query_one_raw(
-                    Entity::<P::Passkey>::find()
-                        .filter(filter)
-                        .build(self.connection().get_database_backend()),
-                )
-                .await
-                .map_err(map_db_err)
-        })
-        .await?;
+        let row = self.get_passkey_row(id).await?;
         Ok(self
             .project_plugin_rows::<P::Passkey, FieldMap>(
                 EntityRole::Passkey,
@@ -75,10 +79,11 @@ where
     }
 
     async fn get_passkey_by_id(&self, id: &str) -> AuthResult<Option<Passkey>> {
-        self.get_passkey_record(&id.to_owned().into())
+        let row = self.get_passkey_row(&id.to_owned().into()).await?;
+        Ok(self
+            .project_passkey_models(row.into_iter().collect())
             .await?
-            .map(|fields| self.typed_passkey(fields))
-            .transpose()
+            .pop())
     }
 
     async fn get_passkey_by_credential_id(
@@ -211,11 +216,11 @@ where
             );
         }
         let patch = self.prepare_passkey_fields(fields, extras, false).await?;
-        self.update_passkey_patch(filter, patch)
+        let row = self
+            .update_passkey_patch(filter, patch)
             .await?
-            .map(|fields| self.typed_passkey(fields))
-            .transpose()?
-            .ok_or_else(|| AuthError::not_found("Passkey not found"))
+            .ok_or_else(|| AuthError::not_found("Passkey not found"))?;
+        Ok(self.project_passkey_models(vec![row]).await?.remove(0))
     }
     async fn delete_passkey(&self, id: &str) -> AuthResult<()> {
         let filter =
@@ -235,12 +240,30 @@ where
 impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema>
     SeaOrmStore<S, O, P>
 {
+    async fn get_passkey_row(
+        &self,
+        id: &better_auth_core::SchemaValue<String>,
+    ) -> AuthResult<Option<sea_orm::QueryResult>> {
+        let filter = self.plugin_id_filter::<P::Passkey>(EntityRole::Passkey, id)?;
+        database_operation::<Entity<P::Passkey>, _>(self.config(), "findOne", async {
+            self.connection()
+                .query_one_raw(
+                    Entity::<P::Passkey>::find()
+                        .filter(filter)
+                        .build(self.connection().get_database_backend()),
+                )
+                .await
+                .map_err(map_db_err)
+        })
+        .await
+    }
+
     async fn update_passkey_patch(
         &self,
         filter: sea_orm::sea_query::SimpleExpr,
         patch: super::plugin_models::Write<P::Passkey>,
-    ) -> AuthResult<Option<FieldMap>> {
-        let model = database_operation::<Entity<P::Passkey>, _>(self.config(), "update", async {
+    ) -> AuthResult<Option<sea_orm::QueryResult>> {
+        database_operation::<Entity<P::Passkey>, _>(self.config(), "update", async {
             let Some(_model) = self
                 .connection()
                 .query_one_raw(
@@ -262,14 +285,7 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
             )
             .await
         })
-        .await?;
-        Ok(self
-            .project_plugin_rows::<P::Passkey, FieldMap>(
-                EntityRole::Passkey,
-                model.into_iter().collect(),
-            )
-            .await?
-            .pop())
+        .await
     }
 }
 
@@ -284,10 +300,22 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         &self,
         rows: Vec<sea_orm::QueryResult>,
     ) -> AuthResult<Vec<Passkey>> {
+        let fields = self
+            .model_fields
+            .plugin_fields(EntityRole::Passkey)
+            .adapter_fields(&[]);
+        let internal = rows
+            .iter()
+            .map(|row| super::plugin_rows::undeclared_fields::<P::Passkey>(row, &fields))
+            .collect::<AuthResult<Vec<_>>>()?;
         self.project_plugin_rows::<P::Passkey, FieldMap>(EntityRole::Passkey, rows)
             .await?
             .into_iter()
-            .map(|fields| self.typed_passkey(fields))
+            .zip(internal)
+            .map(|(mut fields, internal)| {
+                fields.extend(internal);
+                self.typed_passkey(fields)
+            })
             .collect()
     }
 
@@ -355,21 +383,18 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
             );
         }
         let active = self.prepare_passkey_fields(fields, extras, true).await?;
-        self.typed_passkey(self.insert_passkey(connection, active).await?)
+        let row = self.insert_passkey(connection, active).await?;
+        Ok(self.project_passkey_models(vec![row]).await?.remove(0))
     }
 
     async fn insert_passkey(
         &self,
         connection: &impl sea_orm::ConnectionTrait,
         active: super::plugin_models::Write<P::Passkey>,
-    ) -> AuthResult<FieldMap> {
-        let model = database_operation::<Entity<P::Passkey>, _>(self.config(), "create", async {
+    ) -> AuthResult<sea_orm::QueryResult> {
+        database_operation::<Entity<P::Passkey>, _>(self.config(), "create", async {
             active.insert_raw(connection).await
         })
-        .await?;
-        Ok(self
-            .project_plugin_rows::<P::Passkey, FieldMap>(EntityRole::Passkey, vec![model])
-            .await?
-            .remove(0))
+        .await
     }
 }

@@ -110,10 +110,20 @@ impl ModelFields {
     /// Merge complete replacement declarations without changing existing schema positions.
     #[doc(hidden)]
     pub fn plugin_fields(&self, role: EntityRole) -> UserConfig {
-        let mut fields = Self::plugin_native_fields(role);
-        fields
-            .fields_mut()
-            .extend(self.fields(role).fields().clone());
+        let fields = if self
+            .schema_models
+            .as_ref()
+            .is_some_and(|models| models.iter().any(|(model, _)| *model == role))
+        {
+            self.fields(role).clone()
+        } else {
+            // Standalone store calls retain native defaults without plugin initialization.
+            let mut fields = Self::plugin_native_fields(role);
+            fields
+                .fields_mut()
+                .extend(self.fields(role).fields().clone());
+            fields
+        };
         UserConfig {
             additional_fields: Some(
                 fields

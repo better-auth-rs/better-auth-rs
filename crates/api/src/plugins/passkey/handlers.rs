@@ -1,8 +1,8 @@
 use better_auth_core::entity::{AuthPasskey, AuthUser};
 use better_auth_core::wire::PasskeyView;
-use better_auth_core::{AuthContext, AuthError, AuthResult, CreateVerification};
+use better_auth_core::{AuthContext, AuthError, AuthResult, CreateVerification, FieldValue};
 use chrono::{Duration, Utc};
-use serde_json::{Value, json};
+use serde_json::Value;
 use uuid::Uuid;
 use webauthn_rs_core::proto::{COSEAlgorithm, PublicKeyCredential};
 
@@ -11,6 +11,7 @@ use crate::plugins::helpers::{SessionIssueError, issue_user_session};
 
 use super::PasskeyConfig;
 use super::credential::WebAuthnCredential;
+use super::descriptors::credential_descriptors;
 use super::types::{
     DeletePasskeyRequest, PasskeyResponse, SessionResponse, UpdatePasskeyRequest,
     VerifyAuthenticationRequest,
@@ -19,8 +20,8 @@ use super::webauthn::{
     AuthenticationChallenge, RegistrationChallenge, StoredAuthenticationState,
     StoredRegistrationState, VERIFICATION_POLICY, authentication_options_json, build_webauthn,
     challenge_cookie_name, create_challenge_cookie, credential_id_from_authentication,
-    decode_challenge_cookie, decode_credential_id, generate_ts_user_handle, get_cookie_value,
-    parse_transports_csv, registration_options_json, resolve_origins,
+    decode_challenge_cookie, generate_ts_user_handle, get_cookie_value, registration_options_json,
+    resolve_origins,
 };
 
 pub(super) fn response_message<T>(status: u16, message: &str) -> PasskeyHandlerResult<T> {
@@ -58,38 +59,13 @@ pub(super) async fn generate_register_options_core(
     authenticator_attachment: Option<&str>,
     config: &PasskeyConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<(Value, String)> {
+) -> AuthResult<(FieldValue, String)> {
     let webauthn = build_webauthn(
         config,
         &ctx.config,
         &[ctx.config.base_url.as_static().unwrap_or("").to_owned()],
     )?;
     let existing_passkeys = ctx.database.list_passkeys_by_user(&user.id).await?;
-    let exclude_credentials = existing_passkeys
-        .iter()
-        .filter_map(|passkey| {
-            passkey
-                .credential_id()
-                .as_str()
-                .and_then(|id| decode_credential_id(id).ok())
-        })
-        .collect::<Vec<_>>();
-    let exclude_credentials_json = existing_passkeys
-        .iter()
-        .map(|passkey| {
-            let mut descriptor = json!({
-                "id": passkey.credential_id(),
-                "type": "public-key",
-            });
-            if let Some(transports) = parse_transports_csv(passkey.transports())?
-                && let Some(object) = descriptor.as_object_mut()
-            {
-                let _ = object.insert("transports".to_string(), json!(transports));
-            }
-            Ok(descriptor)
-        })
-        .collect::<AuthResult<Vec<_>>>()?;
-
     let user_name = passkey_name
         .filter(|name| !name.is_empty())
         .unwrap_or(&user.name);
@@ -107,6 +83,11 @@ pub(super) async fn generate_register_options_core(
         super::PasskeyEndpoint::new(ctx, req, &Value::Null, &users),
     )
     .await?;
+    let descriptors = credential_descriptors(&existing_passkeys, "excludeCredential")?;
+    let exclude_credentials = descriptors
+        .iter()
+        .map(super::descriptors::CredentialDescriptor::registration_id)
+        .collect::<AuthResult<Vec<_>>>()?;
     let builder = webauthn
         .new_challenge_register_builder(Uuid::new_v4().as_bytes(), user_name, user_display_name)
         .map_err(|error| {
@@ -150,13 +131,15 @@ pub(super) async fn generate_register_options_core(
         &config.authenticator_selection,
         extensions,
     )?;
-    if let Some(object) = response.as_object_mut() {
-        let _ = object.insert(
-            "excludeCredentials".to_string(),
-            Value::Array(exclude_credentials_json),
-        );
-    }
-    Ok((response, cookie))
+    let _ = response.insert(
+        "excludeCredentials".into(),
+        descriptors
+            .into_iter()
+            .map(super::descriptors::CredentialDescriptor::into_value)
+            .collect::<Vec<_>>()
+            .into(),
+    );
+    Ok((response.into(), cookie))
 }
 
 pub(super) async fn generate_authenticate_options_core<U: AuthUser>(
@@ -164,7 +147,7 @@ pub(super) async fn generate_authenticate_options_core<U: AuthUser>(
     req: &better_auth_core::AuthRequest,
     config: &PasskeyConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<(Value, String)> {
+) -> AuthResult<(FieldValue, String)> {
     let webauthn = build_webauthn(
         config,
         &ctx.config,
@@ -178,22 +161,6 @@ pub(super) async fn generate_authenticate_options_core<U: AuthUser>(
     } else {
         Vec::new()
     };
-    let allow_credentials_json = stored_passkeys
-        .iter()
-        .map(|passkey| {
-            let mut descriptor = json!({
-                "id": passkey.credential_id(),
-                "type": "public-key",
-            });
-            if let Some(transports) = parse_transports_csv(passkey.transports())?
-                && let Some(object) = descriptor.as_object_mut()
-            {
-                let _ = object.insert("transports".to_string(), json!(transports));
-            }
-            Ok(descriptor)
-        })
-        .collect::<AuthResult<Vec<_>>>()?;
-
     let users = super::callbacks::Users {
         ctx,
         transaction: None,
@@ -203,6 +170,7 @@ pub(super) async fn generate_authenticate_options_core<U: AuthUser>(
         super::PasskeyEndpoint::new(ctx, req, &Value::Null, &users),
     )
     .await?;
+    let descriptors = credential_descriptors(&stored_passkeys, "allowCredential")?;
     let discoverable = stored_passkeys.is_empty();
     let (options, state) = webauthn
         .new_challenge_authenticate_builder(Vec::new(), Some(VERIFICATION_POLICY))
@@ -233,17 +201,17 @@ pub(super) async fn generate_authenticate_options_core<U: AuthUser>(
 
     let cookie = create_challenge_cookie(&ctx.config, config, &token)?;
     let mut response = authentication_options_json(options, extensions)?;
-    if let Some(object) = response.as_object_mut() {
-        if allow_credentials_json.is_empty() {
-            let _ = object.remove("allowCredentials");
-        } else {
-            let _ = object.insert(
-                "allowCredentials".to_string(),
-                Value::Array(allow_credentials_json),
-            );
-        }
+    if !descriptors.is_empty() {
+        let _ = response.insert(
+            "allowCredentials".into(),
+            descriptors
+                .into_iter()
+                .map(super::descriptors::CredentialDescriptor::into_value)
+                .collect::<Vec<_>>()
+                .into(),
+        );
     }
-    Ok((response, cookie))
+    Ok((response.into(), cookie))
 }
 
 pub(super) async fn verify_authentication_core(

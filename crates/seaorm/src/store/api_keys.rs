@@ -226,24 +226,21 @@ where
         let backend = self.connection().get_database_backend();
         let reselect = self.plugin_id_filter::<P::ApiKey>(EntityRole::ApiKey, id)?;
         let mut guard = reselect.clone();
-        let mut query = Entity::<P::ApiKey>::update_many();
+        let mut increment = None;
         match write {
             ApiKeyUsageWrite::Refill { previous, .. } => {
-                let last = self.plugin_column::<P::ApiKey>(EntityRole::ApiKey, "lastRefillAt")?;
-                guard = guard.and(if previous.is_null() || previous.is_undefined() {
-                    last.is_null()
-                } else {
-                    last.into_expr().eq(last.save_as(self.plugin_parameter(
-                        EntityRole::ApiKey,
-                        "lastRefillAt",
-                        previous,
-                    )?))
-                });
+                guard = guard.and(self.plugin_equals::<P::ApiKey>(
+                    EntityRole::ApiKey,
+                    "lastRefillAt",
+                    previous,
+                )?);
             }
             ApiKeyUsageWrite::Decrement => {
                 let remaining = self.plugin_column::<P::ApiKey>(EntityRole::ApiKey, "remaining")?;
-                guard = guard.and(remaining.gt(0));
-                query = query.col_expr(remaining, Expr::col(remaining).sub(1.0));
+                guard = guard.and(remaining.into_expr().gt(remaining.save_as(
+                    self.plugin_parameter(EntityRole::ApiKey, "remaining", 0.0.into())?,
+                )));
+                increment = Some((remaining, Expr::col(remaining).sub(1.0)));
             }
             ApiKeyUsageWrite::StartWindow {
                 previous_before, ..
@@ -255,7 +252,11 @@ where
                         "lastRequest",
                         previous.into(),
                     )?)),
-                    None => last.is_null(),
+                    None => self.plugin_equals::<P::ApiKey>(
+                        EntityRole::ApiKey,
+                        "lastRequest",
+                        FieldValue::Null,
+                    )?,
                 });
             }
             ApiKeyUsageWrite::IncrementWindow {
@@ -276,17 +277,24 @@ where
                         "requestCount",
                         maximum,
                     )?)));
-                query = query.col_expr(count, Expr::col(count).add(1.0));
+                increment = Some((count, Expr::col(count).add(1.0)));
             }
             ApiKeyUsageWrite::LastRequest(_) | ApiKeyUsageWrite::UpdatedAt(_) => {}
         }
-        let fields = if has_set {
+        let mut fields = if has_set {
             self.prepare_plugin_fields::<P::ApiKey>(EntityRole::ApiKey, "apikey", set, false)
                 .await?
         } else {
             Default::default()
         };
-        query = fields.apply_to(query, backend)?;
+        if let Some((column, _)) = &increment {
+            // Kysely evaluates set policies, then replaces colliding assignments with increments.
+            fields.not_set(*column);
+        }
+        let mut query = fields.update(backend)?;
+        if let Some((column, expression)) = increment {
+            query = query.col_expr(column, expression);
+        }
         let query = query.filter(guard.clone());
         let model = database_operation::<Entity<P::ApiKey>, _>(self.config(), operation, async {
             if operation == "incrementOne" {
@@ -345,6 +353,10 @@ where
 #[cfg(test)]
 #[path = "api_key_concurrency_tests.rs"]
 mod concurrency_tests;
+
+#[cfg(test)]
+#[path = "api_key_record_tests.rs"]
+mod record_tests;
 
 #[cfg(test)]
 mod start_tests {

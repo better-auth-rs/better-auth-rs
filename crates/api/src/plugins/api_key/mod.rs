@@ -13,6 +13,7 @@ pub(crate) mod storage;
 pub use storage::ApiKeyStorage;
 mod callbacks;
 mod metadata;
+mod permissions;
 mod request;
 pub(super) mod types;
 mod verification;

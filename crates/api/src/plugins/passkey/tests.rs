@@ -8,6 +8,9 @@ use super::*;
 use crate::plugins::test_helpers;
 use better_auth_core::{CreatePasskey, CreateUser, HttpMethod};
 
+#[path = "descriptor_tests.rs"]
+mod descriptor_tests;
+
 fn passkey_plugin() -> PasskeyPlugin {
     PasskeyPlugin::new()
         .rp_id("localhost")

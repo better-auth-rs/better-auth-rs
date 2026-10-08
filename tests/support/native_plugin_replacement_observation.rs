@@ -1,14 +1,12 @@
 use super::*;
 
 fn keys(value: &Value) -> TestResult<Vec<&str>> {
-    let mut keys = value
+    Ok(value
         .as_array()
         .ok_or("Missing observed keys")?
         .iter()
         .map(|value| value.as_str().ok_or("Invalid field name"))
-        .collect::<Result<Vec<_>, _>>()?;
-    keys.sort_unstable();
-    Ok(keys)
+        .collect::<Result<Vec<_>, _>>()?)
 }
 
 pub(super) fn storage(actual: &Value, expected: &Value) -> TestResult {
@@ -20,7 +18,7 @@ pub(super) fn storage(actual: &Value, expected: &Value) -> TestResult {
         assert_eq!(
             keys(&actual["keys"])?,
             keys(&expected["keys"])?,
-            "stored field presence"
+            "stored field presence and order"
         );
     }
     Ok(())
@@ -66,17 +64,10 @@ pub(super) fn compare(
                 "{} complete result",
                 expected["name"]
             );
-            let names = json!(
-                actual
-                    .as_object()
-                    .ok_or("Missing projected record")?
-                    .keys()
-                    .collect::<Vec<_>>()
-            );
             assert_eq!(
-                keys(&names)?,
+                row.keys().map(String::as_str).collect::<Vec<_>>(),
                 keys(&expected["keys"])?,
-                "projected field presence"
+                "projected field presence and order"
             );
         }
         Ok(None) => assert_eq!(expected["result"], Value::Null),

@@ -173,7 +173,7 @@ pub(super) fn registration_options_json(
     authenticator_attachment: Option<&str>,
     config: &super::AuthenticatorSelection,
     extensions: Option<serde_json::Map<String, Value>>,
-) -> AuthResult<Value> {
+) -> AuthResult<better_auth_core::FieldMap> {
     let mut value = serde_json::to_value(options.public_key)?;
     let Some(root) = value.as_object_mut() else {
         return Err(AuthError::internal(
@@ -227,13 +227,13 @@ pub(super) fn registration_options_json(
         "timeout".to_string(),
         Value::Number(OPTIONS_TIMEOUT_MS.into()),
     );
-    Ok(value)
+    better_auth_core::FieldMap::from_json(std::mem::take(root))
 }
 
 pub(super) fn authentication_options_json(
     options: RequestChallengeResponse,
     extensions: Option<serde_json::Map<String, Value>>,
-) -> AuthResult<Value> {
+) -> AuthResult<better_auth_core::FieldMap> {
     let mut value = serde_json::to_value(options.public_key)?;
     let Some(root) = value.as_object_mut() else {
         return Err(AuthError::internal(
@@ -262,7 +262,7 @@ pub(super) fn authentication_options_json(
         Value::String("preferred".to_string()),
     );
     let _ = root.remove("hints");
-    Ok(value)
+    better_auth_core::FieldMap::from_json(std::mem::take(root))
 }
 
 pub(super) fn decode_credential_id(credential_id: &str) -> AuthResult<CredentialID> {
@@ -355,13 +355,23 @@ pub(super) fn extract_registration_metadata(
 
 pub(super) fn parse_transports_csv(
     transports: &better_auth_core::SchemaValue<Option<String>>,
-) -> AuthResult<Option<Vec<String>>> {
+) -> AuthResult<Option<Vec<better_auth_core::Utf16String>>> {
     let value = transports.field_value();
     match value {
         better_auth_core::FieldValue::Null | better_auth_core::FieldValue::Undefined => Ok(None),
-        better_auth_core::FieldValue::String(value) => {
-            Ok(Some(value.split(',').map(str::to_owned).collect()))
-        }
+        better_auth_core::FieldValue::String(value) => Ok(Some(
+            value
+                .split(',')
+                .map(better_auth_core::Utf16String::from)
+                .collect(),
+        )),
+        better_auth_core::FieldValue::Utf16String(value) => Ok(Some(
+            value
+                .as_utf16()
+                .split(|unit| *unit == u16::from(b','))
+                .map(|units| better_auth_core::Utf16String::from_units(units.to_vec()))
+                .collect(),
+        )),
         _ => Err(AuthError::internal("transports.split is not a function")),
     }
 }

@@ -458,8 +458,8 @@ impl<S: AuthSchema> AuthInitContext<S> {
         }
     }
 
-    /// Register adapter fields for core models, Organization, Team, or supported plugin display fields.
-    /// Other plugin roles and fields return a configuration error.
+    /// Merge complete adapter field declarations for a supported model in registration order.
+    /// Model-specific restrictions apply until the model uses the shared native field policies.
     pub fn register_model_fields(
         &mut self,
         role: crate::store::schema::EntityRole,

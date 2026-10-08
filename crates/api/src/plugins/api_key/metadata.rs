@@ -70,13 +70,8 @@ pub(super) async fn batch(
 ) {
     let migrations: Vec<_> = keys
         .iter()
-        .filter_map(|key| {
-            matches!(
-                key.metadata,
-                FieldValue::String(_) | FieldValue::Utf16String(_)
-            )
-            .then(|| (key.id.clone(), key.metadata.clone()))
-        })
+        .filter(|key| key.metadata.is_string())
+        .map(|key| (key.id.clone(), key.metadata.clone()))
         .collect();
     for key in keys {
         let _ = decode(key);

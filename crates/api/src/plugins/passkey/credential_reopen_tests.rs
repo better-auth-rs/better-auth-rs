@@ -16,6 +16,9 @@ use better_auth_seaorm::{
 use serde_json::{Value, json};
 use std::{path::Path, sync::Arc};
 
+#[path = "descriptor_authentication_tests.rs"]
+mod descriptor_authentication_tests;
+
 mod native {
     use better_auth_seaorm::{
         AuthEntity,

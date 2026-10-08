@@ -211,22 +211,23 @@ async fn sqlite_core_registration_keeps_application_adapter_precedence() -> Auth
 }
 
 #[tokio::test]
-async fn unsupported_model_fields_fail_during_initialization() {
+async fn native_replacements_initialize_while_unsupported_model_roles_fail() {
     let cases = [
         (
             EntityRole::Passkey,
             "credential",
             UserFieldType::String,
-            Some("Passkey additional field credential cannot replace native field credential"),
+            None,
         ),
         (EntityRole::Passkey, "name", UserFieldType::Json, None),
-        (
-            EntityRole::ApiKey,
-            "key",
-            UserFieldType::String,
-            Some("ApiKey additional field key cannot replace native field key"),
-        ),
+        (EntityRole::ApiKey, "key", UserFieldType::String, None),
         (EntityRole::ApiKey, "name", UserFieldType::Json, None),
+        (
+            EntityRole::RateLimit,
+            "count",
+            UserFieldType::Number,
+            Some("Plugin field registration does not support RateLimit"),
+        ),
     ];
     for (role, name, field_type, expected_error) in cases {
         let result = BetterAuth::new(config())

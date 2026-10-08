@@ -1,5 +1,8 @@
 use super::*;
 
+#[path = "verification_permissions_tests.rs"]
+mod permissions;
+
 #[tokio::test]
 async fn cached_dynamic_enabled_values_control_verification_before_consuming_usage() {
     use better_auth_core::{

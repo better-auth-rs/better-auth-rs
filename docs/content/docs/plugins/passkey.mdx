@@ -38,7 +38,11 @@ let auth = BetterAuth::<AppAuthSchema>::new(config)
 
 ### Storage modes
 
-Fresh generated models use `PasskeyStorage::Native`: the 11 upstream columns contain the credential state, and createdAt is nullable. The private adapter reconstructs the WebauthnCore credential from the standard COSE public key, credential ID, counter, transports, and backup fields. Registration still verifies the full response before storage. Authentication still verifies the challenge, origin, RP ID, signature, and counter before session creation. Options generation reads only credential IDs and transports; it does not decode stored public keys.
+Fresh generated models use `PasskeyStorage::Native`: the 11 upstream columns contain the credential state, and createdAt is nullable. The private adapter reconstructs the WebauthnCore credential from the standard COSE public key, credential ID, counter, and transport hints. Registration verifies the full response before storage. Authentication verifies the challenge, origin, RP ID, signature, and counter before session creation. Authentication validates backup flags from the signed assertion independently of stored display fields.
+
+Options generation reads credential IDs and transports without decoding stored public keys. Descriptor IDs must be strings. The plugin removes `=` characters and rejects characters outside the base64url alphabet, matching upstream option generation. Empty IDs and incomplete base64 groups retain the upstream options behavior. This acceptance does not establish that a credential can authenticate.
+
+Transport strings split on commas and preserve empty components and UTF-16 code units. HTTP options omit the transports property for null or omitted stored values. Other transport types reject options generation.
 
 Add `--passkey-legacy-schema` when regenerating an existing Legacy schema. Bundled models and models without `#[auth(role = "passkey", native_passkey)]` retain `PasskeyStorage::Legacy`, including the opaque credential and updatedAt columns. Legacy store methods preserve arbitrary opaque strings exactly. Authentication requires the existing valid credential envelope; an envelope decoding error never selects Native mode.
 
@@ -51,15 +55,15 @@ The store reports its mode through `passkey_storage()`. Custom stores and transa
 
 The selected input mode must match the store mode. A mismatch returns a configuration error. Native authentication updates only the counter; Legacy retains its envelope and metadata update contract. The plugin selects the mode automatically.
 
-The public Rust record preserves missing columns and nullable dates:
+Every native field in `Passkey` and `PasskeyView` uses `SchemaValue<T>`. The default schema represents its optional dates and Legacy extension columns as follows:
 
 | `Passkey` field | Type | Native representation |
 | --- | --- | --- |
 | `credential` | `SchemaValue<String>` | `Undefined` |
-| `updated_at` | `SchemaValue<DateTime<Utc>>` | `Undefined` |
-| `created_at` | `SchemaValue<Option<DateTime<Utc>>>` | `Typed(Some(date))` or `Typed(None)` for a stored null |
+| `updated_at` | `SchemaValue<FieldDate>` | `Undefined` |
+| `created_at` | `SchemaValue<Option<FieldDate>>` | `Typed(Some(date))` or `Typed(None)` for a stored null |
 
-The three `AuthPasskey` getters return references to these values. Use `.typed()?` only when a caller requires the default type. `PasskeyView.created_at` retains omission or null and formats present dates as UTC millisecond strings. The HTTP view does not expose credential or updatedAt.
+The corresponding `AuthPasskey` getters borrow these values. Replacement declarations and output transforms can retain another type as `Dynamic(FieldValue)`. Use `.field_value()` to inspect the runtime value or `.typed()?` when a caller requires the default Rust type. `PasskeyView.created_at` retains omission or null and serializes dates as UTC millisecond strings. The HTTP view does not expose credential or updatedAt.
 
 Applications own migration from Legacy to Native. Regeneration does not alter existing tables or convert opaque envelopes. Review column removal, nullable createdAt, server INTEGER counters, and nonunique credentialID indexes before binding the new model. Fresh MySQL has no automatic userId physical foreign key or database cascade; Rust reference conversion and owner/session checks remain unchanged. Explicit mappings retain precedence. See [database schema mapping](/docs/concepts/database#map-plugin-tables-and-columns) for backend types and migration boundaries.
 
@@ -103,11 +107,11 @@ With the default `require_session: true`, both registration endpoints require a 
 
 ### Adapter field policies
 
-Register native replacement declarations and application fields through `AuthInitContext::register_model_fields(EntityRole::Passkey, UserConfig)`. The shared `ModelFields` merge replaces each complete declaration and preserves upstream field order. Defaults, references, input and output transforms, and column mappings apply to every declared field through the same record and patch conversion. No native-field allowlist restricts registration.
+Register native replacement declarations and application fields through `AuthInitContext::register_model_fields(EntityRole::Passkey, UserConfig)`. Register the plugin that supplies overrides after `PasskeyPlugin`. The shared `ModelFields` merge replaces each complete declaration and preserves upstream field order. Defaults, references, input and output transforms, and column mappings apply to every declared field through the same record and patch conversion. The adapter retains control of `id`.
 
-Use ordinary `CreatePasskey` and `UpdatePasskey` inputs for typed callers. Native runtime fields use `SchemaValue<T>` and retain missing, null, and cross-type values until a consumer requires a specific representation. Read `.field_value()` for the dynamic value or `.typed()?` for a required Rust type. Public views preserve those values until serialization. The raw `create_passkey_record`, `get_passkey_record`, and `update_passkey_record` methods accept or return complete logical `FieldMap` records without inventing Legacy credential fields.
+Use ordinary `CreatePasskey` and `UpdatePasskey` inputs for typed callers. Native runtime fields use `SchemaValue<T>` and retain missing, null, and cross-type values until a consumer requires a specific representation. Public views preserve those values until serialization. The `create_passkey_record`, `get_passkey_record`, and `update_passkey_record` methods accept or return logical `FieldMap` records through the same policies. These methods do not add undeclared Legacy credential fields.
 
-Creation, both lookups, lists, name updates, and authentication updates use the shared field policies. Memory reads each physical field when its output phase starts, so later fields observe writes performed by earlier callbacks. SQL projects the selected query snapshot. Input errors prevent persistence; output errors preserve the completed write. Authentication retains the selected Native or Legacy credential representation and existing ownership checks.
+Creation, both lookups, lists, name updates, and authentication updates use the shared field policies. Memory reads each physical field when its output phase starts, so later fields observe writes performed by earlier callbacks. SQL reads supported driver values into a query snapshot before output transforms and runtime record construction. Input errors prevent persistence. Output errors propagate after the completed write. Authentication retains the selected Native or Legacy credential representation and existing ownership checks.
 
 Generate matching columns with `passkey.additionalFields` and `passkey.fields`, then register the corresponding runtime policies. Replacements retain their schema positions. Shared physical columns keep the first position and the last declaration's attributes. Legacy-only credential and update timestamp columns remain internal unless explicitly declared. Applications own migrations for changed columns. Adapter policies do not replace HTTP validators or WebAuthn protocol validation.
 

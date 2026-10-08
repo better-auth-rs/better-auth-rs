@@ -49,7 +49,12 @@ impl EphemeralStore {
         if name == "id" {
             self.memory_primary_id_query(&value)
         } else {
-            self.memory_field_query(&self.model_fields.plugin_fields(role), name, value)
+            let fields = self.model_fields.plugin_fields(role);
+            let field = fields.fields().get(name).ok_or_else(|| {
+                AuthError::config(format!("Unknown plugin field {role:?}.{name}"))
+            })?;
+            let value = self.memory_field_query(&fields, name, value)?;
+            crate::user_query::bind_filter(field, &value)
         }
     }
 

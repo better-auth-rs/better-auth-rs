@@ -15,12 +15,21 @@ impl ModelFields {
         if !records.is_empty() {
             self.begin_id_output(role)?;
         }
-        self.plugin_fields(role)
-            .adapter_fields(&[])
+        let schema = self.plugin_fields(role).adapter_fields(&[]);
+        schema
             .project_adapter_records_with_capabilities(records, capabilities, supports_native_dates)
             .await?
             .into_iter()
-            .map(T::from_field_values)
+            .map(|mut fields| {
+                let mut ordered = FieldMap::new();
+                for name in schema.fields().keys() {
+                    if let Some(value) = fields.shift_remove(name) {
+                        let _ = ordered.insert(name.clone(), value);
+                    }
+                }
+                ordered.extend(fields);
+                T::from_field_values(ordered)
+            })
             .collect()
     }
 }

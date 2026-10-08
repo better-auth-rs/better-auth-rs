@@ -1,4 +1,4 @@
-use crate::SeaOrmPluginModel;
+use crate::{SeaOrmPluginModel, schema::AuthSchema};
 use better_auth_core::store::schema::{EntityRole, core_fields, resolve_field_name};
 use better_auth_core::{AuthError, AuthResult, id::IdGeneration, user_fields::UserConfig};
 use better_auth_core::{FieldMap, FromFieldMap, SchemaField};
@@ -8,7 +8,7 @@ pub(super) type Write<M> = super::record_write::RecordWrite<Entity<M>>;
 
 pub(super) type Entity<M> = <M as SeaOrmPluginModel>::Entity;
 
-impl<S: crate::AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema>
+impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema>
     super::SeaOrmStore<S, O, P>
 {
     pub(super) fn plugin_column<M: SeaOrmPluginModel>(
@@ -16,6 +16,9 @@ impl<S: crate::AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmP
         role: EntityRole,
         name: &str,
     ) -> AuthResult<M::Column> {
+        if name == "id" {
+            return M::column("id");
+        }
         let fields = self.model_fields.plugin_fields(role);
         let storage = fields.fields().get(name).map_or(name, |field| {
             resolve_field_name(field.field_name.as_deref(), name)
@@ -34,12 +37,12 @@ impl<S: crate::AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmP
         Ok(())
     }
 
-    pub(super) fn plugin_parameter(
+    fn plugin_query_value(
         &self,
         role: EntityRole,
         name: &str,
         value: better_auth_core::FieldValue,
-    ) -> AuthResult<sea_orm::sea_query::SimpleExpr> {
+    ) -> AuthResult<better_auth_core::FieldValue> {
         self.model_fields.begin_id_query(role)?;
         let fields = self.model_fields.plugin_fields(role);
         let backend = self.connection().get_database_backend();
@@ -58,8 +61,19 @@ impl<S: crate::AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmP
             value
         };
         let value = better_auth_core::user_query::bind_filter(field, &value)?;
-        let converted = super::value_filter::adapter_query_value(value, &original, field, backend)?;
-        super::record_bindings::parameter(converted, backend)
+        super::value_filter::adapter_query_value(value, &original, field, backend)
+    }
+
+    pub(super) fn plugin_parameter(
+        &self,
+        role: EntityRole,
+        name: &str,
+        value: better_auth_core::FieldValue,
+    ) -> AuthResult<sea_orm::sea_query::SimpleExpr> {
+        super::record_bindings::parameter(
+            self.plugin_query_value(role, name, value)?,
+            self.connection().get_database_backend(),
+        )
     }
 
     pub(super) fn plugin_equals<M: SeaOrmPluginModel>(
@@ -69,13 +83,13 @@ impl<S: crate::AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmP
         value: better_auth_core::FieldValue,
     ) -> AuthResult<sea_orm::sea_query::SimpleExpr> {
         let column = self.plugin_column::<M>(role, name)?;
+        let value = self.plugin_query_value(role, name, value)?;
         if value.is_null() || value.is_undefined() {
-            self.model_fields.begin_id_query(role)?;
             return Ok(column.is_null());
         }
-        Ok(column
-            .into_expr()
-            .eq(column.save_as(self.plugin_parameter(role, name, value)?)))
+        let value =
+            super::record_bindings::parameter(value, self.connection().get_database_backend())?;
+        Ok(column.into_expr().eq(column.save_as(value)))
     }
 
     pub(super) fn plugin_id_filter<M: SeaOrmPluginModel>(

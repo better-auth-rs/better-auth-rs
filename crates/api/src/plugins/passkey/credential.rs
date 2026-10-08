@@ -73,7 +73,13 @@ impl WebAuthnCredential {
                         _ => 0,
                     },
                     transports: parse_transports_csv(passkey.transports())?
-                        .map(|values| serde_json::from_value(serde_json::to_value(values)?))
+                        .map(|values| values.into_iter().map(|value| {
+                            // Transports are hints; unknown UTF-16 values do not affect signature verification.
+                            match value.to_utf8() {
+                                Ok(value) => serde_json::from_value(serde_json::Value::String(value)),
+                                Err(_) => Ok(webauthn_rs_core::proto::AuthenticatorTransport::Unknown),
+                            }
+                        }).collect::<Result<Vec<_>, serde_json::Error>>())
                         .transpose()?,
                     // Native storage has no historical UV or attestation metadata. Authentication
                     // uses the same explicit policy as Legacy and verifies the current assertion.

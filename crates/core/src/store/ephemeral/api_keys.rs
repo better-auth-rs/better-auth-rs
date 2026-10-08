@@ -174,8 +174,29 @@ impl ApiKeyStore for EphemeralStore {
         id: &crate::SchemaValue<String>,
         write: ApiKeyUsageWrite,
     ) -> AuthResult<Option<ApiKey>> {
-        use crate::query::{field_add, field_compare, field_number};
+        use crate::query::{field_compare, field_matches_equality};
         let id = self.plugin_query_value(EntityRole::ApiKey, "id", id.field_value())?;
+        let query = |name, value| self.plugin_query_value(EntityRole::ApiKey, name, value);
+        let previous = match &write {
+            ApiKeyUsageWrite::Refill { previous, .. } => query("lastRefillAt", previous.clone())?,
+            ApiKeyUsageWrite::StartWindow {
+                previous_before, ..
+            } => query(
+                "lastRequest",
+                previous_before.clone().map_or(FieldValue::Null, Into::into),
+            )?,
+            ApiKeyUsageWrite::IncrementWindow { previous_after, .. } => {
+                query("lastRequest", previous_after.clone().into())?
+            }
+            _ => FieldValue::Undefined,
+        };
+        let maximum = match &write {
+            ApiKeyUsageWrite::Decrement => query("remaining", 0.0.into())?,
+            ApiKeyUsageWrite::IncrementWindow { maximum, .. } => {
+                query("requestCount", maximum.clone())?
+            }
+            _ => FieldValue::Undefined,
+        };
         let schema = self.model_fields.plugin_fields(EntityRole::ApiKey);
         let fields = if matches!(&write, ApiKeyUsageWrite::Decrement) {
             crate::FieldMap::new()
@@ -201,22 +222,22 @@ impl ApiKeyStore for EphemeralStore {
                             .unwrap_or_default()
                     };
                     let increment = match &write {
-                        ApiKeyUsageWrite::Refill { previous, .. } => {
-                            if !value("lastRefillAt").strict_equals(previous) {
+                        ApiKeyUsageWrite::Refill { .. } => {
+                            if !field_matches_equality(&value("lastRefillAt"), &previous) {
                                 return Ok(false);
                             }
                             None
                         }
                         ApiKeyUsageWrite::Decrement => {
                             let remaining = value("remaining");
-                            if !field_compare(&remaining, &0.0.into())?
+                            if !field_compare(&remaining, &maximum)?
                                 .is_some_and(|order| order.is_gt())
                             {
                                 return Ok(false);
                             }
                             Some((
                                 "remaining",
-                                FieldValue::Number(field_number(&remaining)? - 1.0),
+                                FieldValue::Number(remaining.as_f64().unwrap_or(0.0) - 1.0),
                             ))
                         }
                         ApiKeyUsageWrite::StartWindow {
@@ -224,8 +245,8 @@ impl ApiKeyStore for EphemeralStore {
                         } => {
                             let actual = value("lastRequest");
                             let matches = match previous_before {
-                                None => actual.is_null() || actual.is_undefined(),
-                                Some(previous) => field_compare(&actual, &previous.clone().into())?
+                                None => field_matches_equality(&actual, &previous),
+                                Some(_) => field_compare(&actual, &previous)?
                                     .is_some_and(|order| order.is_le()),
                             };
                             if !matches {
@@ -233,28 +254,19 @@ impl ApiKeyStore for EphemeralStore {
                             }
                             None
                         }
-                        ApiKeyUsageWrite::IncrementWindow {
-                            previous_after,
-                            maximum,
-                            ..
-                        } => {
+                        ApiKeyUsageWrite::IncrementWindow { .. } => {
                             let count = value("requestCount");
-                            if !field_compare(
-                                &value("lastRequest"),
-                                &previous_after.clone().into(),
-                            )?
-                            .is_some_and(|order| order.is_gt())
-                                || !field_compare(&count, maximum)?
+                            if !field_compare(&value("lastRequest"), &previous)?
+                                .is_some_and(|order| order.is_gt())
+                                || !field_compare(&count, &maximum)?
                                     .is_some_and(|order| order.is_lt())
                             {
                                 return Ok(false);
                             }
-                            let count = if count.is_null() || count.is_undefined() {
-                                FieldValue::Number(0.0)
-                            } else {
-                                count
-                            };
-                            Some(("requestCount", field_add(&count, &1.0.into())?))
+                            Some((
+                                "requestCount",
+                                FieldValue::Number(count.as_f64().unwrap_or(0.0) + 1.0),
+                            ))
                         }
                         ApiKeyUsageWrite::LastRequest(_) | ApiKeyUsageWrite::UpdatedAt(_) => None,
                     };
@@ -312,6 +324,7 @@ impl ApiKeyStore for EphemeralStore {
 mod tests {
     mod enabled;
     mod sorting;
+    mod usage_values;
 
     use super::*;
     use crate::store::ConsumeApiKeyResult;

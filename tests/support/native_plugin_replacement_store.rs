@@ -2,6 +2,7 @@ use super::*;
 use better_auth::{
     __private_core::{AuthSchema, AuthStore, CreateUser, SchemaValue, store::schema::EntityRole},
     BetterAuth,
+    plugins::{api_key::ApiKeyPlugin, passkey::PasskeyPlugin},
 };
 use std::sync::Arc;
 
@@ -95,11 +96,12 @@ where
         let raw = raw.clone();
         let observe_raw = observe_raw.clone();
         async move {
-            let auth = BetterAuth::new(config())
-                .store_arc(raw)
-                .plugin(policy)
-                .build()
-                .await?;
+            let builder = BetterAuth::new(config()).store_arc(raw);
+            let builder = match model {
+                Model::ApiKey => builder.plugin(ApiKeyPlugin::builder().build()),
+                Model::Passkey => builder.plugin(PasskeyPlugin::new()),
+            };
+            let auth = builder.plugin(policy).build().await?;
             Ok(Store {
                 model,
                 store: auth.store().clone(),

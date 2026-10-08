@@ -6,7 +6,9 @@ Memory sorting CI 37782951606 at `581978b5` passed the complete twelve-scenario 
 
 ## Active capability gaps
 
-Plugin-fields CI 37784239892 at `f6add8b3` passed the preceding upstream replay and Rust checks but failed while compiling the generated Device consumer with E0275. The complete failure log remains at `/private/tmp/better-auth-plugin-fields-37784239892-failed.log`. Shared User projection now returns an existing `BoxFuture` at the private batch boundary, preserving public signatures, callback order, errors, and every assertion. Compilation of this repair and the API Key/Passkey shared migration remains pending CI.
+Plugin-fields CI 37788147841 at `f9cfbf3a` passed the upstream replays, then stopped on the SeaORM `AuthSchema` import and API Key metadata iterator lint. Both issues are fixed in the pending batch. The complete failure log remains at `/private/tmp/better-auth-plugin-fields-37788147841-failed.log`. Focused acceptance of the shared migration remains pending.
+
+The follow-up batch registers the complete Passkey schema and retains actual plugin registration order instead of prepending native declarations during each read. The shared runner now installs the native plugin and compares unsorted return and storage key sequences against unchanged fixtures. Memory usage guards use declared query conversion; Memory increments treat non-number storage as zero and apply setters last, while SQL increments override a setter for the same physical column. SQL raw Passkey results exclude undeclared Legacy columns; typed Legacy reads preserve their snapshots after field projection. Source-derived regressions cover declaration replacement and ID positions, guarded writes and callback failures, canonical ID sorting, Passkey descriptor and authentication consumption, and API Key permission property access. These new regressions require CI and do not establish new upstream pairing by themselves.
 
 These groups remain incomplete. Pending CI and untested database combinations are separate acceptance work. Historical results below do not establish complete parity.
 
