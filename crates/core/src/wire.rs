@@ -7,6 +7,7 @@
 use crate::SchemaValue;
 #[cfg(test)]
 use chrono::Utc;
+use futures_util::future::BoxFuture;
 use serde::{Deserialize, Serialize, Serializer};
 use std::borrow::Cow;
 
@@ -269,15 +270,19 @@ impl SessionView {
     where
         F: std::future::Future<Output = crate::AuthResult<R>> + Send,
     {
-        let mut rows = session_projection::rows(sessions, config)?;
-        let schema = config.adapter_schema();
-        crate::user_fields::project_fields_then(
-            &mut rows,
-            schema.fields(),
-            |row, name, field| Box::pin(row.project(name, field, supports_native_json)),
-            |index, row| complete(index, row.view.clone().into_projected_fields()),
-        )
-        .await
+        // Erase the projection future so request callers do not expand its nested Send obligations.
+        let projection: BoxFuture<'_, crate::AuthResult<Vec<R>>> = Box::pin(async {
+            let mut rows = session_projection::rows(sessions, config)?;
+            let schema = config.adapter_schema();
+            crate::user_fields::project_fields_then(
+                &mut rows,
+                schema.fields(),
+                |row, name, field| Box::pin(row.project(name, field, supports_native_json)),
+                |index, row| complete(index, row.view.clone().into_projected_fields()),
+            )
+            .await
+        });
+        projection.await
     }
 
     /// Continue ready session projections together, retaining their original row indices.

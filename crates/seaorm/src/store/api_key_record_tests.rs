@@ -226,3 +226,94 @@ async fn undefined_refill_snapshot_does_not_match_a_null_timestamp() -> AuthResu
     assert_eq!(refilled.remaining, Some(7.0));
     Ok(())
 }
+
+// Source-derived: a failed nested input changes the runtime ID policy before the outer ID slot.
+#[tokio::test]
+async fn nested_create_without_id_leaves_an_unforced_uuid_policy() -> AuthResult<()> {
+    use better_auth_core::id::IdGeneration;
+    use better_auth_core::user_fields::{FieldTransforms, UserFieldTransform};
+    use std::sync::{Mutex, OnceLock, Weak};
+
+    let database = Database::connect("sqlite::memory:")
+        .await
+        .map_err(map_db_err)?;
+    run_migrations(&database).await.map_err(map_db_err)?;
+    let mut config = AuthConfig::new("a-secret-that-is-at-least-32-characters");
+    config.advanced.database.generate_id = Some(IdGeneration::Uuid);
+    let mut store = SeaOrmStore::<BundledSchema>::new(config, database);
+    let nested: Arc<OnceLock<Weak<SeaOrmStore<BundledSchema>>>> = Arc::default();
+    let calls = Arc::new(Mutex::new(Vec::new()));
+    let callback_store = nested.clone();
+    let callback_calls = calls.clone();
+    let mut init = AuthInitContext::new(store.config.clone(), Arc::new(store.clone()));
+    init.register_model_fields(
+        EntityRole::ApiKey,
+        UserConfig {
+            additional_fields: Some(
+                [(
+                    "name".into(),
+                    UserFieldConfig {
+                        transform: Some(FieldTransforms {
+                            input: Some(UserFieldTransform::new_async(move |value| {
+                                let nested = callback_store.clone();
+                                let calls = callback_calls.clone();
+                                async move {
+                                    calls.lock().unwrap().push(value.clone());
+                                    if value.strict_equals(&"inner".into()) {
+                                        return Err(AuthError::internal("nested input failure"));
+                                    }
+                                    let error = nested
+                                        .get()
+                                        .unwrap()
+                                        .upgrade()
+                                        .unwrap()
+                                        .create_api_key_record(
+                                            [("name".into(), "inner".into())].into(),
+                                        )
+                                        .await
+                                        .expect_err("nested input must fail before storing a row");
+                                    assert_eq!(
+                                        error.instrumentation_message(),
+                                        "nested input failure"
+                                    );
+                                    Ok(value)
+                                }
+                            })),
+                            ..Default::default()
+                        }),
+                        ..Default::default()
+                    },
+                )]
+                .into(),
+            ),
+        },
+    )?;
+    store.model_fields = init.into_parts().plugin_fields;
+    let store = Arc::new(store);
+    assert!(nested.set(Arc::downgrade(&store)).is_ok());
+    let at = Utc::now();
+    let created = store
+        .create_api_key_record(
+            [
+                ("id".into(), "not-a-uuid".into()),
+                ("name".into(), "outer".into()),
+                ("referenceId".into(), "owner".into()),
+                ("key".into(), "nested-uuid-key".into()),
+                ("createdAt".into(), at.into()),
+                ("updatedAt".into(), at.into()),
+            ]
+            .into(),
+        )
+        .await?;
+    assert_eq!(created.get("id"), Some(&"not-a-uuid".into()));
+    assert_eq!(
+        calls.lock().unwrap().as_slice(),
+        &[FieldValue::from("outer"), "inner".into()]
+    );
+    assert_eq!(
+        store.get_api_key_record(&"not-a-uuid".into()).await?,
+        Some(created)
+    );
+    assert_eq!(store.count_api_keys_by_reference("owner").await?, 1);
+    Ok(())
+}

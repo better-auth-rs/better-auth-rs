@@ -11,7 +11,7 @@ use better_auth_seaorm::store::{
 };
 
 macro_rules! passkey_model {
-    ($module:ident, $name:literal, $aaguid:literal) => {
+    ($module:ident, $name:literal, $aaguid:literal $(, $extra:ident)?) => {
         #[expect(
             unreachable_pub,
             reason = "SeaORM entity derives require public fixture types"
@@ -48,6 +48,7 @@ macro_rules! passkey_model {
                 #[serde(rename = $aaguid)]
                 #[sea_orm(column_name = $aaguid)]
                 pub aaguid: Option<String>,
+                $(pub $extra: Option<String>,)?
             }
 
             #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -60,6 +61,12 @@ macro_rules! passkey_model {
 
 passkey_model!(default, "name", "aaguid");
 passkey_model!(renamed, "stored_name", "stored_aaguid");
+passkey_model!(
+    renamed_independent,
+    "stored_name",
+    "stored_aaguid",
+    independent_label
+);
 
 pub(crate) type Plugins<M> = PluginModels<api_key::Model, device_code::Model, M, two_factor::Model>;
 

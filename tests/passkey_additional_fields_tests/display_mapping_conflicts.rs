@@ -85,7 +85,8 @@ async fn memory_accepts_display_shared_columns_without_invoking_callbacks() {
 async fn sqlite_accepts_display_shared_columns_without_invoking_callbacks()
 -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let (store, database) =
-        display_fixture::sqlite::<display_fixture::renamed::Model>(contract::config()).await;
+        display_fixture::sqlite::<display_fixture::renamed_independent::Model>(contract::config())
+            .await;
     accept_shared_columns(Arc::new(store)).await;
     database.close().await?;
     Ok(())

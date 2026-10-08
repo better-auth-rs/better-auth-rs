@@ -1,7 +1,9 @@
 use better_auth::{
     __private_core::{
-        AuthError, AuthResult, CreateUser, FieldValue,
-        store::{ApiKeyStore, EphemeralStore, MemoryCacheAdapter, SecondaryStorage, UserStore},
+        AuthResult, CreateUser, FieldValue,
+        store::{
+            EphemeralStore, MemoryCacheAdapter, SecondaryStorage, UserStore, schema::EntityRole,
+        },
         user_fields::{
             FieldTransforms, UserConfig, UserFieldConfig, UserFieldTransform, UserFieldType,
         },
@@ -145,14 +147,23 @@ async fn enabled_policies_reach_database_and_fallback_authentication_without_cac
                     usize::from(mode == "database")
                 );
             }
-            let stored = raw.get_api_key_by_id(created.api_key.id.typed()?).await?;
+            let stored = raw.plugin_storage_rows(EntityRole::ApiKey)?;
             if mode == "secondary" {
-                assert!(stored.is_none());
+                assert!(stored.is_empty());
                 assert_eq!(output_count.load(Ordering::SeqCst), 0);
             } else {
-                let stored = stored.ok_or("Missing stored enabled key")?;
-                assert_eq!(stored.enabled.field_value(), FieldValue::Number(5.25));
-                assert_eq!(stored.remaining, Some(if enabled { 1.0 } else { 2.0 }));
+                assert_eq!(stored.len(), 1);
+                let stored = stored.first().ok_or("Missing stored enabled key")?;
+                assert_eq!(stored.get("id"), Some(&created.api_key.id.field_value()));
+                assert_eq!(
+                    stored.get("stored_enabled"),
+                    Some(&FieldValue::Number(5.25))
+                );
+                assert!(!stored.contains_key("enabled"));
+                assert_eq!(
+                    stored.get("remaining"),
+                    Some(&FieldValue::Number(if enabled { 1.0 } else { 2.0 }))
+                );
             }
         }
     }
@@ -162,9 +173,9 @@ async fn enabled_policies_reach_database_and_fallback_authentication_without_cac
 #[tokio::test]
 #[expect(
     clippy::panic_in_result_fn,
-    reason = "The declaration contract asserts configuration failures while propagating setup errors"
+    reason = "The declaration contract asserts successful initialization for native and physical column aliases"
 )]
-async fn enabled_declarations_reject_native_and_physical_column_collisions() -> AuthResult<()> {
+async fn enabled_declarations_accept_native_and_physical_column_aliases() -> AuthResult<()> {
     for (enabled_column, other_name, other_column) in [
         ("key", "marker", "stored_marker"),
         ("stored_enabled", "marker", "stored_enabled"),
@@ -196,7 +207,11 @@ async fn enabled_declarations_reject_native_and_physical_column_collisions() -> 
             }))
             .build()
             .await;
-        assert!(matches!(result, Err(AuthError::Config(_))));
+        assert!(
+            result.is_ok(),
+            "enabled/{enabled_column}, {other_name}/{other_column}: {:?}",
+            result.err()
+        );
     }
     Ok(())
 }

@@ -66,6 +66,16 @@ async fn contract<S: AuthSchema>(
         });
         let mut policy = super::api_key::policy(events.clone());
         policy.field_name = column.map(str::to_owned);
+        let mut stored_policy = policy.clone();
+        stored_policy.transform = None;
+        let reader = BetterAuth::new(cfg.clone())
+            .store_arc(raw.clone())
+            .plugin(Fields(vec![(
+                EntityRole::ApiKey,
+                fields("name", stored_policy),
+            )]))
+            .build()
+            .await?;
         let auth = BetterAuth::new(cfg)
             .store_arc(raw.clone())
             .plugin(plugin)
@@ -105,7 +115,7 @@ async fn contract<S: AuthSchema>(
         assert_eq!(created.api_key.name.typed()?.as_deref(), Some(expected));
         if cached_only {
             assert!(trace_lock(&events)?.is_empty());
-            assert!(raw.get_api_key_by_id(id).await?.is_none());
+            assert!(reader.store().get_api_key_by_id(id).await?.is_none());
         } else {
             assert_eq!(
                 *trace_lock(&events)?,
@@ -113,7 +123,7 @@ async fn contract<S: AuthSchema>(
             );
             assert_eq!(
                 required(
-                    raw.get_api_key_by_id(id).await?,
+                    reader.store().get_api_key_by_id(id).await?,
                     "Database API Key must remain stored"
                 )?
                 .name

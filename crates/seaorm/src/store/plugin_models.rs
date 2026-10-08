@@ -118,7 +118,7 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         let backend = self.connection().get_database_backend();
         let policy = self.config().advanced.database.generate_id();
         let id_policy = better_auth_core::id::AdapterIdInput {
-            force_allow_id: create,
+            force_allow_id: create && input.contains_key("id"),
             supports_native_uuid: backend == DbBackend::Postgres,
         };
         self.model_fields.begin_id_input(role, id_policy)?;

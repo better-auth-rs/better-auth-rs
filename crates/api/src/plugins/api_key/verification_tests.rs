@@ -29,10 +29,7 @@ async fn cached_json_null_uses_database_fallback_or_rejects_without_consuming_us
         let cache_key = format!("api-key:{hash}");
         let id_key = format!("api-key:by-id:{id}");
         let alias = cache.get(&id_key).await.unwrap();
-        cache
-            .set(&cache_key, &serde_json::Value::String("null".into()), None)
-            .await
-            .unwrap();
+        cache.set(&cache_key, "null", None).await.unwrap();
         let result = plugin
             .verify_api_key(
                 &VerifyApiKey {

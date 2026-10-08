@@ -131,9 +131,9 @@ async fn missing_passkey_display_requires_explicit_shared_storage() -> TestResul
 #[tokio::test]
 #[expect(
     clippy::panic_in_result_fn,
-    reason = "The security contract asserts exact rejection and zero callbacks while propagating database cleanup errors"
+    reason = "The configuration contract asserts accepted mappings and zero callbacks while propagating database cleanup errors"
 )]
-async fn shared_passkey_display_cannot_replace_protected_physical_columns() -> TestResult {
+async fn shared_passkey_display_accepts_native_physical_columns_without_callbacks() -> TestResult {
     for column in ["stored_owner", "stored_credential", "stored_counter"] {
         let events = Trace::default();
         let mut declaration = policies(false, Some(&events));
@@ -148,11 +148,14 @@ async fn shared_passkey_display_cannot_replace_protected_physical_columns() -> T
             .build()
             .await;
         assert!(
-            matches!(result, Err(AuthError::Config(ref message)) if message == "Passkey shared display fields cannot replace an identity or credential column"),
-            "Protected shared column {column}: {:?}",
+            result.is_ok(),
+            "Shared native column {column}: {:?}",
             result.err()
         );
-        assert!(take(&events).is_empty(), "Rejected shared column {column}");
+        assert!(
+            take(&events).is_empty(),
+            "Shared native column {column} invoked callbacks"
+        );
         database.close().await?;
     }
     Ok(())

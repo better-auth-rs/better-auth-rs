@@ -38,10 +38,10 @@ impl Check {
 
     pub(super) async fn stored<S: AuthSchema>(
         &self,
-        raw: &dyn AuthStore<S>,
+        reader: &dyn AuthStore<S>,
         database: Option<&DatabaseConnection>,
     ) -> TestResult<Value> {
-        let row = raw
+        let row = reader
             .get_passkey_by_id(ID)
             .await?
             .ok_or("Stored Passkey must exist")?;

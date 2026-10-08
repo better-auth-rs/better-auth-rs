@@ -3,7 +3,7 @@ use better_auth::{
     FieldValue,
     seaorm::{
         DatabaseConnection, SeaOrmPluginModel,
-        sea_orm::{ActiveModelTrait, ConnectionTrait, DbBackend, EntityTrait, Iden, Iterable},
+        sea_orm::{ActiveModelTrait, DbBackend, EntityTrait, Iden, Iterable},
     },
 };
 use serde_json::{Map, Value};

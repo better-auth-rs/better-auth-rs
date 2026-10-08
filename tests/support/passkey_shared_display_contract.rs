@@ -155,6 +155,12 @@ pub(crate) async fn run<S: AuthSchema>(
         .plugin(Fields(policies(reversed, Some(&events))))
         .build()
         .await?;
+    let reader = BetterAuth::new(config())
+        .store_arc(raw)
+        .plugin(PasskeyPlugin::new())
+        .plugin(Fields(policies(reversed, None)))
+        .build()
+        .await?;
     let owner = auth
         .store()
         .create_user(
@@ -346,7 +352,7 @@ pub(crate) async fn run<S: AuthSchema>(
             )
         };
         let observed = json!({"name": name, "result":result, "events":take(&events),
-            "stored":check.stored(raw.as_ref(), database).await?});
+            "stored":check.stored(reader.store().as_ref(), database).await?});
         assert_eq!(
             normalized(observed),
             normalized(expected.clone()),
@@ -360,7 +366,7 @@ pub(crate) async fn run<S: AuthSchema>(
         .await?
         .ok_or("Final Passkey read")?;
     let final_read = json!({"name":"read-updated", "result":check.visible(&row)?, "events":take(&events),
-        "stored":check.stored(raw.as_ref(), database).await?});
+        "stored":check.stored(reader.store().as_ref(), database).await?});
     assert_eq!(
         normalized(final_read),
         normalized(case["finalRead"].clone())

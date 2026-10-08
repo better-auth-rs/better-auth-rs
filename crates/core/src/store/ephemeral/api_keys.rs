@@ -124,7 +124,8 @@ impl ApiKeyStore for EphemeralStore {
                 ))
             })
             .await?;
-        self.project_api_key_refs(rows).await
+        self.project_api_key_refs(rows.into_iter().map(|(_, source)| source).collect())
+            .await
     }
 
     async fn count_api_keys_by_reference(&self, reference_id: &str) -> AuthResult<u64> {

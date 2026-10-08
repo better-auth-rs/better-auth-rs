@@ -385,11 +385,23 @@ async fn apply_session_ban<S: better_auth_core::AuthSchema>(
     user: &better_auth_core::wire::UserView,
     transaction: Option<&dyn better_auth_core::store::AuthTransaction<S>>,
 ) -> Result<(), SessionIssueError> {
-    if admin_plugin_enabled(ctx) && user.banned() {
-        if user
-            .ban_expires()
-            .is_some_and(|expires| expires.milliseconds() < Utc::now().timestamp_millis() as f64)
-        {
+    if !admin_plugin_enabled(ctx) {
+        return Ok(());
+    }
+    let fields = better_auth_core::FieldMap::from(user.clone());
+    if fields
+        .get("banned")
+        .is_some_and(better_auth_core::FieldValue::is_truthy)
+    {
+        let expires = fields.get("banExpires");
+        let expired = match expires.filter(|value| value.is_truthy()) {
+            Some(expires) => {
+                better_auth_core::query::field_date(expires)?.milliseconds()
+                    < Utc::now().timestamp_millis() as f64
+            }
+            None => false,
+        };
+        if expired {
             let update = UpdateUser {
                 banned: Some(false),
                 ban_reason: Some(None),

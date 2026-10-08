@@ -22,6 +22,9 @@ mod descriptor_authentication_tests;
 #[path = "native_boundary_tests.rs"]
 mod native_boundary_tests;
 
+#[path = "admission_authentication_tests.rs"]
+mod admission_authentication_tests;
+
 mod native {
     use better_auth_seaorm::{
         AuthEntity,
@@ -112,33 +115,7 @@ impl Fixture {
     }
 
     async fn route(&self, request: &AuthRequest) -> AuthResult<AuthResponse> {
-        let ctx = self.ctx.initialize_request_context().await?;
-        let plugin = PasskeyPlugin::new()
-            .rp_id(RP_ID)
-            .rp_name("Passkey reopen")
-            .origin(ORIGIN);
-        let response = match request.path.as_str() {
-            "/passkey/generate-register-options" => {
-                plugin
-                    .handle_generate_register_options(request, &ctx)
-                    .await?
-            }
-            "/passkey/verify-registration" => {
-                plugin.handle_verify_registration(request, &ctx).await?
-            }
-            "/passkey/generate-authenticate-options" => {
-                plugin
-                    .handle_generate_authenticate_options(request, &ctx)
-                    .await?
-            }
-            "/passkey/verify-authentication" => {
-                plugin.handle_verify_authentication(request, &ctx).await?
-            }
-            "/passkey/update-passkey" => plugin.handle_update_passkey(request, &ctx).await?,
-            "/passkey/delete-passkey" => plugin.handle_delete_passkey(request, &ctx).await?,
-            _ => return Err(AuthError::internal("Unknown Passkey fixture route")),
-        };
-        Ok(test_helpers::finalize_response(&ctx, request, response))
+        route(&self.ctx, request).await
     }
 
     async fn stored(&self) -> TestResult<Passkey> {
@@ -149,6 +126,37 @@ impl Fixture {
             .await?
             .ok_or("Persisted Native credential is missing")?)
     }
+}
+
+async fn route(
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+    request: &AuthRequest,
+) -> AuthResult<AuthResponse> {
+    let ctx = ctx.initialize_request_context().await?;
+    let plugin = PasskeyPlugin::new()
+        .rp_id(RP_ID)
+        .rp_name("Passkey reopen")
+        .origin(ORIGIN);
+    let response = match request.path.as_str() {
+        "/passkey/generate-register-options" => {
+            plugin
+                .handle_generate_register_options(request, &ctx)
+                .await?
+        }
+        "/passkey/verify-registration" => plugin.handle_verify_registration(request, &ctx).await?,
+        "/passkey/generate-authenticate-options" => {
+            plugin
+                .handle_generate_authenticate_options(request, &ctx)
+                .await?
+        }
+        "/passkey/verify-authentication" => {
+            plugin.handle_verify_authentication(request, &ctx).await?
+        }
+        "/passkey/update-passkey" => plugin.handle_update_passkey(request, &ctx).await?,
+        "/passkey/delete-passkey" => plugin.handle_delete_passkey(request, &ctx).await?,
+        _ => return Err(AuthError::internal("Unknown Passkey fixture route")),
+    };
+    Ok(test_helpers::finalize_response(&ctx, request, response))
 }
 
 fn request(
