@@ -96,6 +96,13 @@ fn apply_member_filter<M: SeaOrmOrganizationModel>(
     .then_some(column);
     let column = member_expression(column, field, config, backend);
     let field_type = config.fields().get(field).map(|field| &field.field_type);
+    let normalize_number = |value: &Value| match value {
+        Value::String(value) if matches!(field_type, Some(UserFieldType::Number)) => {
+            better_auth_core::organization_fields::numeric_filter(value)
+                .map_or_else(|| Value::String(value.clone()), Value::Number)
+        }
+        value => value.clone(),
+    };
     let convert =
         |value: &Value, number_strings: bool| -> AuthResult<sea_orm::sea_query::SimpleExpr> {
             if let (Value::String(value), Some(column)) = (value, id_column) {
@@ -107,12 +114,7 @@ fn apply_member_filter<M: SeaOrmOrganizationModel>(
                 {
                     Value::Bool(value == "true")
                 }
-                Value::String(value)
-                    if number_strings && matches!(field_type, Some(UserFieldType::Number)) =>
-                {
-                    better_auth_core::organization_fields::numeric_filter(value)
-                        .map_or_else(|| Value::String(value.clone()), Value::Number)
-                }
+                value if number_strings => normalize_number(value),
                 value => value.clone(),
             };
             super::record_bindings::parameter(value, backend)
@@ -166,8 +168,10 @@ fn apply_member_filter<M: SeaOrmOrganizationModel>(
         "lt" => query.filter(column.lt(value)),
         "lte" => query.filter(column.lte(value)),
         "contains" | "starts_with" | "ends_with" => {
-            let pattern =
-                super::record_bindings::utf16_string(&raw_value.display_utf16()?, backend);
+            let pattern = super::record_bindings::utf16_string(
+                &normalize_number(raw_value).display_utf16()?,
+                backend,
+            );
             let pattern = match operator {
                 "starts_with" => format!("{pattern}%"),
                 "ends_with" => format!("%{pattern}"),

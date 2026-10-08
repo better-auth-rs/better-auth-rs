@@ -1,5 +1,5 @@
 use better_auth::config::{FieldTransforms, UserFieldTransform};
-use better_auth::config::{UserFieldConfig, UserFieldType};
+use better_auth::config::{UserFieldConfig, UserFieldReference, UserFieldType};
 use better_auth::plugins::organization::OrganizationConfig;
 use better_auth::plugins::organization::hooks::{
     OrganizationHooks, OrganizationInvitationDraft, OrganizationUser,
@@ -64,6 +64,13 @@ pub fn configure(config: &mut OrganizationConfig, profile: &str) {
         required: Some(false),
         ..Default::default()
     };
+    let organization_id = UserFieldConfig {
+        references: Some(UserFieldReference {
+            model: "organization".into(),
+            field: "id".into(),
+        }),
+        ..unconstrained.clone()
+    };
     let json = UserFieldConfig {
         field_type: UserFieldType::Json,
         required: Some(false),
@@ -94,14 +101,23 @@ pub fn configure(config: &mut OrganizationConfig, profile: &str) {
                 ..json.clone()
             },
         ),
-        ("organizationId".into(), unconstrained.clone()),
-        ("userId".into(), unconstrained.clone()),
+        ("organizationId".into(), organization_id.clone()),
+        (
+            "userId".into(),
+            UserFieldConfig {
+                references: Some(UserFieldReference {
+                    model: "user".into(),
+                    field: "id".into(),
+                }),
+                ..unconstrained.clone()
+            },
+        ),
         ("teamId".into(), unconstrained.clone()),
     ]);
     config.schema.invitation.fields_mut().extend([
         ("email".into(), json.clone()),
         ("role".into(), json),
-        ("organizationId".into(), unconstrained.clone()),
+        ("organizationId".into(), organization_id),
         (
             "status".into(),
             UserFieldConfig {
