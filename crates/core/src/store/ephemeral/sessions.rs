@@ -52,6 +52,14 @@ impl EphemeralStore {
             .map(|source| {
                 let mut session = source.read(|row| Ok(row.clone()))?;
                 session.additional_fields.clear();
+                session.field_order = crate::store::session_create_schema(
+                    &self.session_config,
+                    &source.read(|row| row.field_values())?,
+                )
+                .fields()
+                .keys()
+                .cloned()
+                .collect();
                 Ok((session, source))
             })
             .collect::<AuthResult<_>>()?;
@@ -73,6 +81,9 @@ impl EphemeralStore {
             },
             |(session, _), name, field, value| {
                 Box::pin(async move {
+                    if !session.field_order.iter().any(|field| field == name) {
+                        session.field_order.push(name.into());
+                    }
                     if name == "id" {
                         session.id = Self::project_id(&crate::SchemaValue::from_field(value))?;
                         return Ok(());
@@ -191,13 +202,57 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
         EphemeralStore::update_session_with_writer(self, token, update, secondary).await
     }
 
+    async fn update_session_with_writer_by_token_value(
+        &self,
+        token: &crate::FieldValue,
+        update: SessionUpdate,
+        secondary: Option<crate::store::SessionUpdateWriter>,
+    ) -> AuthResult<Option<SessionView>> {
+        EphemeralStore::update_session_with_writer_by_token_value(self, token, update, secondary)
+            .await
+    }
+
+    async fn update_session_fields_by_token_value(
+        &self,
+        token: &crate::FieldValue,
+        fields: FieldMap,
+    ) -> AuthResult<Option<SessionView>> {
+        self.update_session_with_writer_by_token_value(
+            token,
+            SessionUpdate {
+                additional_fields: fields,
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+    }
+
+    async fn accept_invitation_with_teams_by_token_value(
+        &self,
+        invitation_id: &str,
+        user_id: &str,
+        session_token: Option<&crate::FieldValue>,
+        teams_enabled: bool,
+        maximum: crate::store::TeamMemberLimits<'_>,
+    ) -> AuthResult<(Member, Invitation, Option<SessionView>)> {
+        self.accept_invitation(
+            invitation_id,
+            user_id,
+            session_token,
+            teams_enabled,
+            maximum,
+        )
+        .await
+    }
+
     async fn end_session(&self, token: &str) -> AuthResult<()> {
         self.end_session_by_token_value(&token.into()).await
     }
 
     async fn end_session_by_token_value(&self, token: &crate::FieldValue) -> AuthResult<()> {
         let (column, token) = self.memory_session_token_query(token.clone())?;
-        self.delete_sessions_with_hooks(|row| session_token_matches(row, &column, &token), true)
+        self.delete_sessions_with_hooks(|row| Ok(session_token_matches(row, &column, &token)), true)
             .await
             .map(|_| ())
     }
@@ -210,10 +265,11 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
         teams_enabled: bool,
         maximum: crate::store::TeamMemberLimits<'_>,
     ) -> AuthResult<(Member, Invitation, Option<SessionView>)> {
+        let token = session_token.map(crate::FieldValue::from);
         self.accept_invitation(
             invitation_id,
             user_id,
-            session_token,
+            token.as_ref(),
             teams_enabled,
             maximum,
         )
@@ -257,17 +313,17 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
 
     async fn after_create_runtime_session(
         &self,
-        session: &SessionView,
+        session: Option<&SessionView>,
         request: Option<crate::hooks::RequestHookContext>,
     ) -> AuthResult<()> {
-        self.after_with_request(CommittedWrite::SessionCreated(session.clone()), request)
+        self.after_with_request(CommittedWrite::SessionCreated(session.cloned()), request)
             .await
     }
 
     async fn create_session(&self, input: CreateSession) -> AuthResult<SessionView> {
         self.create_session_optional(input)
             .await?
-            .ok_or_else(|| AuthError::forbidden("session creation cancelled by database hook"))
+            .ok_or_else(|| AuthError::forbidden("session creation returned no record"))
     }
     async fn create_session_optional(
         &self,
@@ -314,7 +370,8 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
             }
             None => None,
         };
-        self.after_create_runtime_session(&session, request).await?;
+        self.after_create_runtime_session(Some(&session), request)
+            .await?;
         if let Some(write) = deferred {
             if self.pending_hooks.is_some() {
                 EphemeralTransaction {
@@ -329,12 +386,20 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
     }
 
     async fn get_session(&self, token: &str) -> AuthResult<Option<SessionView>> {
+        self.get_session_by_token_value(&token.into()).await
+    }
+
+    async fn get_session_by_token_value(
+        &self,
+        token: &crate::FieldValue,
+    ) -> AuthResult<Option<SessionView>> {
         self.model_fields.begin_id_query(EntityRole::Session)?;
+        let (column, token) = self.memory_session_token_query(token.clone())?;
         let session = self
             .raw("session", "findOne", |state| {
                 Ok(state
                     .sessions
-                    .first_ref(|row| row.token == token)?
+                    .first_ref(|row| session_token_matches(row, &column, &token))?
                     .map(SessionSource::Live))
             })
             .await?;
@@ -495,15 +560,21 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
     }
 
     async fn delete_sessions(&self, tokens: &[String]) -> AuthResult<()> {
-        self.delete_sessions_with_hooks(|row| tokens.contains(&row.token), false)
-            .await
-            .map(|_| ())
+        self.delete_sessions_with_hooks(
+            |row| Ok(tokens.iter().any(|token| row.token == token.as_str())),
+            false,
+        )
+        .await
+        .map(|_| ())
     }
 
     async fn end_sessions(&self, tokens: &[String]) -> AuthResult<()> {
-        self.delete_sessions_with_hooks(|row| tokens.contains(&row.token), true)
-            .await
-            .map(|_| ())
+        self.delete_sessions_with_hooks(
+            |row| Ok(tokens.iter().any(|token| row.token == token.as_str())),
+            true,
+        )
+        .await
+        .map(|_| ())
     }
 
     async fn delete_user_sessions(&self, user_id: &str) -> AuthResult<()> {
@@ -519,7 +590,7 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
     ) -> AuthResult<Option<usize>> {
         let user_id = self.memory_session_user_id_query(Value::from(user_id))?;
         self.delete_sessions_with_hooks(
-            |row| row.user_id.field_value().strict_equals(&user_id),
+            |row| Ok(row.user_id.field_value().strict_equals(&user_id)),
             preserve,
         )
         .await
@@ -528,7 +599,7 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
     async fn delete_expired_sessions(&self) -> AuthResult<usize> {
         let now = Utc::now();
         self.delete_sessions_with_hooks(
-            |row| row.expires_at.milliseconds() <= now.timestamp_millis() as f64 || !row.active,
+            |row| Ok(row.expires_at.is_before_or_equal(now)? || !row.active),
             false,
         )
         .await
@@ -650,7 +721,7 @@ async fn invitation_fields_update_atomically_with_team_membership() {
             .accept_invitation_with_teams(
                 invitation.id.typed().unwrap(),
                 "member",
-                Some(&session.token),
+                Some(session.token.typed().unwrap()),
                 true,
                 TeamMemberLimits::Fixed(None)
             )
@@ -684,7 +755,7 @@ async fn invitation_fields_update_atomically_with_team_membership() {
         .accept_invitation_with_teams(
             invitation.id.typed().unwrap(),
             "member",
-            Some(&session.token),
+            Some(session.token.typed().unwrap()),
             true,
             TeamMemberLimits::Fixed(None),
         )
@@ -717,7 +788,11 @@ async fn invitation_fields_update_atomically_with_team_membership() {
     );
 }
 
-fn session_token_matches(row: &SessionView, column: &str, token: &crate::FieldValue) -> bool {
+pub(super) fn session_token_matches(
+    row: &SessionView,
+    column: &str,
+    token: &crate::FieldValue,
+) -> bool {
     let fields = crate::FieldMap::from(row.clone());
     crate::query::field_matches_equality(
         fields

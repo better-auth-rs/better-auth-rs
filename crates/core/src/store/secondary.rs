@@ -11,7 +11,6 @@ mod verifications;
 use super::{AuthStore, SecondaryStorage};
 use crate::plugin::MetadataMap;
 use crate::{AuthConfig, AuthError, AuthResult, AuthSchema};
-use chrono::Utc;
 use serde_json::{Map, Value};
 use std::sync::Arc;
 
@@ -91,10 +90,6 @@ impl<S: AuthSchema> SecondaryStore<S> {
             AuthError::internal("Secondary storage operation requires an installed backend")
         })
     }
-}
-
-fn ttl(expires: crate::FieldDate) -> u64 {
-    ((expires.milliseconds() - Utc::now().timestamp_millis() as f64) / 1000.0).floor() as u64
 }
 
 // Upstream safeJSONParse treats invalid cached JSON as a cache miss. Backend I/O errors still propagate.

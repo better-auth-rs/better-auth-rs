@@ -202,9 +202,10 @@ impl EphemeralStore {
 
 #[async_trait]
 impl DeviceCodeStore for EphemeralStore {
-    async fn create_device_code_record(&self, fields: FieldMap) -> AuthResult<FieldMap> {
+    async fn create_device_code_record(&self, fields: FieldMap) -> AuthResult<Option<FieldMap>> {
         self.create_plugin_record(EntityRole::DeviceCode, fields, FieldMap::new())
             .await
+            .map(Some)
     }
 
     async fn get_device_code_record(
@@ -395,7 +396,7 @@ impl DeviceCodeStore for EphemeralStore {
 
 #[async_trait]
 impl DeviceCodeStore for super::transactions::EphemeralTransaction {
-    async fn create_device_code_record(&self, fields: FieldMap) -> AuthResult<FieldMap> {
+    async fn create_device_code_record(&self, fields: FieldMap) -> AuthResult<Option<FieldMap>> {
         self.store.create_device_code_record(fields).await
     }
     async fn get_device_code_record(

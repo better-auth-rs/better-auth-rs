@@ -206,7 +206,7 @@ impl Fixture {
             let session = sessions
                 .first()
                 .ok_or_else(|| AuthError::internal("Expected one issued session"))?;
-            let expiry = session.expires_at.milliseconds();
+            let expiry = session.expires_at.date_milliseconds().unwrap();
             let ttl = body
                 .get("expires_in")
                 .and_then(Value::as_f64)

@@ -40,6 +40,7 @@ on:
           - totp-period
           - plugin-fields
           - api-key-cache
+          - native-create
           - plugin-display-json
           - plugin-display-values
           - memory-sorting
@@ -109,7 +110,7 @@ jobs:
           --health-retries 10
     env:
       CHECK_STAGE: ${{ github.event_name == 'workflow_dispatch' && inputs.stage || 'all' }}
-      RUST_CACHE_STAGE: ${{ contains(fromJSON('["oauth-duration", "oauth-proxy"]'), inputs.stage) && 'provider-options' || inputs.stage == 'totp-period' && 'two-factor' || inputs.stage == 'api-key-cache' && 'plugin-fields' || inputs.stage == 'memory-sorting' && 'plugin-display-values' || inputs.stage == 'credential-timing' && 'account-user-auth' || github.event_name == 'workflow_dispatch' && inputs.stage || 'all' }}
+      RUST_CACHE_STAGE: ${{ contains(fromJSON('["oauth-duration", "oauth-proxy"]'), inputs.stage) && 'provider-options' || inputs.stage == 'totp-period' && 'two-factor' || inputs.stage == 'api-key-cache' && 'plugin-fields' || inputs.stage == 'native-create' && 'user-fields' || inputs.stage == 'memory-sorting' && 'plugin-display-values' || inputs.stage == 'credential-timing' && 'account-user-auth' || github.event_name == 'workflow_dispatch' && inputs.stage || 'all' }}
       BETTER_AUTH_TEST_POSTGRES_URL: postgres://better_auth:better_auth_ci@127.0.0.1:5432/better_auth_test
       BETTER_AUTH_TEST_MYSQL_URL: mysql://root:better_auth_ci@127.0.0.1:3306/mysql
     steps:

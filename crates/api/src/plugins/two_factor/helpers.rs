@@ -244,7 +244,7 @@ pub(super) async fn create_trust_device_cookie_header(
     let expires_at = cookie_expires_at(max_age)?;
     _ = ctx
         .database
-        .create_verification(CreateVerification {
+        .create_verification_optional(CreateVerification {
             identifier: (identifier.clone()).into(),
             value: user.id().into_owned(),
             expires_at: (expires_at).into(),

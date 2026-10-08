@@ -218,7 +218,7 @@ async fn test_create_and_get_do_not_expose_hash() {
     let create_req = create_auth_request(
         HttpMethod::Post,
         "/api-key/create",
-        Some(&session.token),
+        Some(session.token.typed().unwrap()),
         Some(serde_json::json!({ "name": "primary" })),
         None,
     );
@@ -237,7 +237,7 @@ async fn test_create_and_get_do_not_expose_hash() {
     let get_req = create_auth_request(
         HttpMethod::Get,
         "/api-key/get",
-        Some(&session.token),
+        Some(session.token.typed().unwrap()),
         None,
         Some(query),
     );
@@ -258,7 +258,7 @@ async fn test_create_rejects_invalid_expires_in() {
     let req = create_auth_request(
         HttpMethod::Post,
         "/api-key/create",
-        Some(&session.token),
+        Some(session.token.typed().unwrap()),
         Some(serde_json::json!({ "expiresIn": -1 })),
         None,
     );
@@ -273,14 +273,15 @@ async fn test_get_update_delete_return_404_for_non_owner() {
     let plugin = ApiKeyPlugin::builder().build();
     let (ctx, _user1, session1) = create_test_context_with_user().await;
     let (_user2, session2) = create_user_with_session(&ctx, "other@example.com").await;
-    let key_id = create_key_and_get_id(&plugin, &ctx, &session1.token, "owner-key").await;
+    let key_id =
+        create_key_and_get_id(&plugin, &ctx, session1.token.typed().unwrap(), "owner-key").await;
 
     let mut get_query = HashMap::new();
     get_query.insert("id".to_string(), key_id.clone());
     let get_req = create_auth_request(
         HttpMethod::Get,
         "/api-key/get",
-        Some(&session2.token),
+        Some(session2.token.typed().unwrap()),
         None,
         Some(get_query),
     );
@@ -290,7 +291,7 @@ async fn test_get_update_delete_return_404_for_non_owner() {
     let update_req = create_auth_request(
         HttpMethod::Post,
         "/api-key/update",
-        Some(&session2.token),
+        Some(session2.token.typed().unwrap()),
         Some(serde_json::json!({ "keyId": key_id, "name": "new-name" })),
         None,
     );
@@ -300,7 +301,7 @@ async fn test_get_update_delete_return_404_for_non_owner() {
     let delete_req = create_auth_request(
         HttpMethod::Post,
         "/api-key/delete",
-        Some(&session2.token),
+        Some(session2.token.typed().unwrap()),
         Some(serde_json::json!({ "keyId": key_id })),
         None,
     );
@@ -315,13 +316,13 @@ async fn test_list_returns_only_user_keys() {
     let (ctx, user1, session1) = create_test_context_with_user().await;
     let (_user2, session2) = create_user_with_session(&ctx, "other@example.com").await;
 
-    let _ = create_key_and_get_id(&plugin, &ctx, &session1.token, "u1-key").await;
-    let _ = create_key_and_get_id(&plugin, &ctx, &session2.token, "u2-key").await;
+    let _ = create_key_and_get_id(&plugin, &ctx, session1.token.typed().unwrap(), "u1-key").await;
+    let _ = create_key_and_get_id(&plugin, &ctx, session2.token.typed().unwrap(), "u2-key").await;
 
     let list_req = create_auth_request(
         HttpMethod::Get,
         "/api-key/list",
-        Some(&session1.token),
+        Some(session1.token.typed().unwrap()),
         None,
         None,
     );
@@ -350,12 +351,13 @@ async fn test_list_returns_only_user_keys() {
 async fn test_owner_can_delete_key() {
     let plugin = ApiKeyPlugin::builder().build();
     let (ctx, _user, session) = create_test_context_with_user().await;
-    let key_id = create_key_and_get_id(&plugin, &ctx, &session.token, "to-delete").await;
+    let key_id =
+        create_key_and_get_id(&plugin, &ctx, session.token.typed().unwrap(), "to-delete").await;
 
     let delete_req = create_auth_request(
         HttpMethod::Post,
         "/api-key/delete",
-        Some(&session.token),
+        Some(session.token.typed().unwrap()),
         Some(serde_json::json!({ "keyId": key_id })),
         None,
     );
@@ -379,7 +381,7 @@ async fn test_verify_valid_key() {
     let (_id, raw_key) = create_key_and_get_raw(
         &plugin,
         &ctx,
-        &session.token,
+        session.token.typed().unwrap(),
         serde_json::json!({ "name": "verify-test" }),
     )
     .await;
@@ -407,7 +409,7 @@ async fn test_verify_disabled_key() {
     let (id, raw_key) = create_key_and_get_raw(
         &plugin,
         &ctx,
-        &session.token,
+        session.token.typed().unwrap(),
         serde_json::json!({ "name": "disable-test" }),
     )
     .await;
@@ -434,7 +436,7 @@ async fn test_verify_expired_key() {
     let (id, raw_key) = create_key_and_get_raw(
         &plugin,
         &ctx,
-        &session.token,
+        session.token.typed().unwrap(),
         serde_json::json!({ "name": "expire-test" }),
     )
     .await;
@@ -467,7 +469,7 @@ async fn test_verify_remaining_consumption() {
     let (_id, raw_key) = create_key_with_server_fields(
         &plugin,
         &ctx,
-        &session.token,
+        session.token.typed().unwrap(),
         serde_json::json!({ "name": "remain-test" }),
         UpdateApiKey {
             remaining: Some(2.0),
@@ -507,7 +509,7 @@ async fn test_verify_rate_limiting() {
     let (_id, raw_key) = create_key_with_server_fields(
         &plugin,
         &ctx,
-        &session.token,
+        session.token.typed().unwrap(),
         serde_json::json!({ "name": "rl-test" }),
         UpdateApiKey {
             rate_limit_enabled: Some(true),
@@ -540,14 +542,14 @@ async fn test_delete_all_expired() {
     let (id1, _) = create_key_and_get_raw(
         &plugin,
         &ctx,
-        &session.token,
+        session.token.typed().unwrap(),
         serde_json::json!({ "name": "will-expire" }),
     )
     .await;
     let (_id2, _) = create_key_and_get_raw(
         &plugin,
         &ctx,
-        &session.token,
+        session.token.typed().unwrap(),
         serde_json::json!({ "name": "wont-expire" }),
     )
     .await;
@@ -586,7 +588,7 @@ async fn test_verify_permissions() {
     let (_id, raw_key) = create_key_with_server_fields(
         &plugin,
         &ctx,
-        &session.token,
+        session.token.typed().unwrap(),
         serde_json::json!({ "name": "perm-test" }),
         UpdateApiKey {
             permissions: Some(
@@ -625,7 +627,7 @@ async fn test_config_validation_prefix_length() {
     let req = create_auth_request(
         HttpMethod::Post,
         "/api-key/create",
-        Some(&session.token),
+        Some(session.token.typed().unwrap()),
         Some(serde_json::json!({ "name": "test", "prefix": "a" })),
         None,
     );
@@ -636,7 +638,7 @@ async fn test_config_validation_prefix_length() {
     let req2 = create_auth_request(
         HttpMethod::Post,
         "/api-key/create",
-        Some(&session.token),
+        Some(session.token.typed().unwrap()),
         Some(serde_json::json!({ "name": "test", "prefix": "toolong" })),
         None,
     );
@@ -654,7 +656,7 @@ async fn test_config_require_name() {
     let req = create_auth_request(
         HttpMethod::Post,
         "/api-key/create",
-        Some(&session.token),
+        Some(session.token.typed().unwrap()),
         Some(serde_json::json!({})),
         None,
     );
@@ -671,7 +673,7 @@ async fn test_config_metadata_disabled() {
     let req = create_auth_request(
         HttpMethod::Post,
         "/api-key/create",
-        Some(&session.token),
+        Some(session.token.typed().unwrap()),
         Some(serde_json::json!({ "name": "test", "metadata": { "env": "prod" } })),
         None,
     );
@@ -688,7 +690,7 @@ async fn test_config_metadata_enabled() {
     let req = create_auth_request(
         HttpMethod::Post,
         "/api-key/create",
-        Some(&session.token),
+        Some(session.token.typed().unwrap()),
         Some(serde_json::json!({ "name": "test", "metadata": { "env": "prod" } })),
         None,
     );
@@ -703,12 +705,13 @@ async fn test_config_metadata_enabled() {
 async fn test_update_with_expires_in() {
     let plugin = ApiKeyPlugin::builder().build();
     let (ctx, _user, session) = create_test_context_with_user().await;
-    let key_id = create_key_and_get_id(&plugin, &ctx, &session.token, "update-exp").await;
+    let key_id =
+        create_key_and_get_id(&plugin, &ctx, session.token.typed().unwrap(), "update-exp").await;
 
     let update_req = create_auth_request(
         HttpMethod::Post,
         "/api-key/update",
-        Some(&session.token),
+        Some(session.token.typed().unwrap()),
         Some(serde_json::json!({
             "keyId": key_id,
             "expiresIn": 86400

@@ -65,7 +65,7 @@ async fn selected_users_without_an_admin_identity_reach_session_storage() -> Aut
         assert!(issued.user.strict_equals(&user));
         let stored = ctx
             .database
-            .get_session(&issued.session.token)
+            .get_session(issued.session.token.typed().unwrap())
             .await?
             .ok_or_else(|| AuthError::internal("Expected persisted Session"))?;
         assert_eq!(stored.id, issued.session.id);

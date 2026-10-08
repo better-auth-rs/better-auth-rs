@@ -37,7 +37,7 @@ impl<S: AuthSchema> DatabaseHooks<S> for Hooks {
 
     async fn after_create_user(
         &self,
-        _: &UserView,
+        _: Option<&UserView>,
         _: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
         self.record("user", "create", "after")
@@ -88,7 +88,7 @@ impl<S: AuthSchema> DatabaseHooks<S> for Hooks {
 
     async fn after_create_account(
         &self,
-        _: &AccountView,
+        _: Option<&AccountView>,
         _: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
         self.record("account", "create", "after")
@@ -145,9 +145,11 @@ impl<S: AuthSchema> DatabaseHooks<S> for Hooks {
 
     async fn after_create_session(
         &self,
-        data: &SessionView,
+        data: Option<&SessionView>,
         _: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
+        let data = data
+            .ok_or_else(|| better_auth_core::AuthError::internal("Expected created fixture row"))?;
         self.events.push(json!({"kind":"hook", "model":"session", "operation":"create", "phase":"after", "data": values::observe(&FieldMap::from(data.clone()).into())?}))
     }
 
@@ -196,7 +198,7 @@ impl<S: AuthSchema> DatabaseHooks<S> for Hooks {
 
     async fn after_create_verification(
         &self,
-        _: &VerificationView,
+        _: Option<&VerificationView>,
         _: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
         self.record("verification", "create", "after")

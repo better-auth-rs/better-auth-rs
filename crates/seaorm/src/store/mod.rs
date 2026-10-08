@@ -4,6 +4,7 @@ mod accounts;
 mod api_key_numbers;
 mod api_keys;
 mod bundled_schema;
+mod create_readback;
 mod device_code_consume;
 mod device_code_fields;
 mod device_code_transactions;
@@ -40,6 +41,7 @@ mod runtime;
 mod schema_preflight;
 mod session_delete;
 mod session_output;
+mod session_write;
 mod sessions;
 mod team_capacity;
 mod team_invitation;
@@ -238,6 +240,17 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         Ok(fields)
     }
 
+    fn readback_scope(
+        &self,
+        tx: Option<HookTransaction<'_, S>>,
+    ) -> create_readback::ReadbackScope<'_> {
+        if tx.is_some() {
+            create_readback::ReadbackScope::Transaction
+        } else {
+            create_readback::ReadbackScope::Direct(self.connection())
+        }
+    }
+
     pub(crate) fn hooks(&self) -> &[Arc<dyn SeaOrmHooks<S>>] {
         &self.hooks
     }
@@ -338,7 +351,11 @@ where
         input: better_auth_core::CreateMember,
     ) -> AuthResult<better_auth_core::Member> {
         self.store
-            .create_member_with_connection(&self.tx, input)
+            .create_member_with_connection(
+                &self.tx,
+                create_readback::ReadbackScope::Transaction,
+                input,
+            )
             .await
     }
     async fn add_team_member(
@@ -380,9 +397,6 @@ where
             .store
             .create_user_with_connection(&self.tx, Some((&self.tx, self)), input)
             .await?;
-        if let Some(record) = &record {
-            self.queue(transaction_hooks::Effect::UserCreated(record.clone()))?;
-        }
         Ok(record)
     }
     async fn create_session_optional(
@@ -432,18 +446,36 @@ where
             .before_runtime_verification_in_tx(input, Some((&self.tx, self)))
             .await
     }
+    async fn before_create_runtime_verification_optional(
+        &self,
+        input: &mut better_auth_core::CreateVerification,
+    ) -> AuthResult<bool> {
+        self.store
+            .before_runtime_verification_optional_in_tx(input, Some((&self.tx, self)))
+            .await
+    }
     async fn create_verification(
         &self,
         input: better_auth_core::CreateVerification,
     ) -> AuthResult<better_auth_core::wire::VerificationView> {
-        self.create_transaction_verification(input, None).await
+        self.create_verification_optional(input)
+            .await?
+            .ok_or_else(|| AuthError::internal("Verification creation returned no record"))
+    }
+    async fn create_verification_optional(
+        &self,
+        input: better_auth_core::CreateVerification,
+    ) -> AuthResult<Option<better_auth_core::wire::VerificationView>> {
+        self.create_verification_with_writer(input, None).await
     }
     async fn create_verification_with_writer(
         &self,
         input: better_auth_core::CreateVerification,
         writer: Option<better_auth_core::store::VerificationCreateWriter>,
-    ) -> AuthResult<better_auth_core::wire::VerificationView> {
-        self.create_transaction_verification(input, writer).await
+    ) -> AuthResult<Option<better_auth_core::wire::VerificationView>> {
+        self.store
+            .create_verification_with_connection(&self.tx, Some((&self.tx, self)), input, writer)
+            .await
     }
 
     async fn update_verification(
@@ -606,8 +638,20 @@ where
         &self,
         input: better_auth_core::CreatePasskey,
     ) -> AuthResult<better_auth_core::Passkey> {
+        self.create_passkey_optional(input)
+            .await?
+            .ok_or_else(|| AuthError::internal("Passkey creation returned no record"))
+    }
+    async fn create_passkey_optional(
+        &self,
+        input: better_auth_core::CreatePasskey,
+    ) -> AuthResult<Option<better_auth_core::Passkey>> {
         self.store
-            .create_passkey_with_connection(&self.tx, input)
+            .create_passkey_with_connection(
+                &self.tx,
+                create_readback::ReadbackScope::Transaction,
+                input,
+            )
             .await
     }
     async fn before_create_runtime_session(
@@ -626,8 +670,16 @@ where
             .store
             .create_user_in_tx((&self.tx, self), create_user)
             .await?;
-        self.queue(transaction_hooks::Effect::UserCreated(record.clone()))?;
         Ok(record)
+    }
+
+    async fn create_account_optional(
+        &self,
+        create_account: better_auth_core::CreateAccount,
+    ) -> AuthResult<Option<better_auth_core::wire::AccountView>> {
+        self.store
+            .create_account_with_connection(&self.tx, Some((&self.tx, self)), create_account)
+            .await
     }
 
     async fn create_account(
@@ -638,9 +690,6 @@ where
             .store
             .create_account_in_tx((&self.tx, self), create_account)
             .await?;
-        self.queue(transaction_hooks::Effect::AccountCreated(Box::new(
-            record.clone(),
-        )))?;
         Ok(record)
     }
 

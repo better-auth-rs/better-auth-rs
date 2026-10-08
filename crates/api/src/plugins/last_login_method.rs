@@ -177,7 +177,7 @@ impl<S: AuthSchema> DatabaseHooks<S> for LoginDatabaseHooks<S> {
 
     async fn after_create_session(
         &self,
-        session: &better_auth_core::wire::SessionView,
+        session: Option<&better_auth_core::wire::SessionView>,
         context: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
         if context.request.is_none() {
@@ -195,10 +195,13 @@ impl<S: AuthSchema> DatabaseHooks<S> for LoginDatabaseHooks<S> {
         else {
             return Ok(());
         };
-        let user_id = session.user_id().into_owned();
-        let Some(user_id) = user_id.as_str().filter(|id| !id.is_empty()) else {
+        let Some(session) = session else {
             return Ok(());
         };
+        let user_id = session.user_id().field_value();
+        if !user_id.is_truthy() {
+            return Ok(());
+        }
         let update = UpdateUser {
             additional_fields: better_auth_core::FieldMap::from_iter([(
                 "lastLoginMethod".into(),
@@ -206,7 +209,11 @@ impl<S: AuthSchema> DatabaseHooks<S> for LoginDatabaseHooks<S> {
             )]),
             ..Default::default()
         };
-        if let Err(error) = auth.database.update_user(user_id, update).await {
+        if let Err(error) = auth
+            .database
+            .update_user_by_id_value(&user_id, update)
+            .await
+        {
             // Upstream treats this post-commit metadata update as best effort.
             better_auth_core::observability::logger::current().error(
                 "Failed to update lastLoginMethod",

@@ -418,7 +418,7 @@ pub(crate) async fn setup<S: AuthSchema>(
     let cookie = format!(
         "better-auth.session_token={}",
         better_auth::__private_core::utils::cookie_utils::sign_cookie_value(
-            &login.token,
+            login.token.typed()?,
             auth.config().signing_secret()
         )
     );
@@ -504,6 +504,7 @@ async fn observe<S: AuthSchema>(input: Input, raw: Arc<dyn AuthStore<S>>) -> Aut
         .ok_or_else(|| AuthError::internal("Device access token has no persisted session"))?;
     let expiry = session
         .expires_at()
+        .typed()?
         .to_datetime()?
         .ok_or_else(|| AuthError::internal("Device session expiration is invalid"))?
         .timestamp_millis();

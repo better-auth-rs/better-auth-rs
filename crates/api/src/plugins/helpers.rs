@@ -12,14 +12,18 @@ pub(crate) use user_input::apply_user_create_fields;
 pub(crate) fn session_is_fresh(
     session: &impl better_auth_core::AuthSession,
     config: &better_auth_core::AuthConfig,
-) -> bool {
+) -> AuthResult<bool> {
     let fresh_age = config
         .session
         .fresh_age
         .unwrap_or_else(|| chrono::Duration::hours(24));
-    fresh_age.is_zero()
-        || Utc::now().timestamp_millis() as f64 - session.created_at().milliseconds()
-            < fresh_age.num_milliseconds() as f64
+    if fresh_age.is_zero() {
+        return Ok(true);
+    }
+    let created_at = session.created_at().converted_date()?.date_milliseconds()?;
+    let stale =
+        Utc::now().timestamp_millis() as f64 - created_at >= fresh_age.num_milliseconds() as f64;
+    Ok(!stale)
 }
 
 /// Convert an `expiresIn` value (**seconds** from now) into an RFC 3339

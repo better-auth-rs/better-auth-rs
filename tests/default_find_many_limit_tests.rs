@@ -98,7 +98,7 @@ async fn check_limit<S: AuthSchema>(
                 active_organization_id: None,
             })
             .await?;
-        tokens.push(session.token().to_owned());
+        tokens.push(session.token().typed()?.to_string());
         let _ = store
             .create_verification(CreateVerification {
                 identifier: format!("expired-{index}").into(),
@@ -287,7 +287,7 @@ async fn secondary_session_lists_do_not_apply_database_find_many_limits() -> Aut
                     active_organization_id: None,
                 })
                 .await?;
-            tokens.push(session.token().to_owned());
+            tokens.push(session.token().typed()?.to_string());
         }
         assert_eq!(store.get_user_sessions(user.id.typed()?).await?.len(), 4);
         for token in tokens {

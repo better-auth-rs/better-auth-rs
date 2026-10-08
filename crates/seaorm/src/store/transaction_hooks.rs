@@ -1,15 +1,16 @@
-use better_auth_core::{AuthResult, AuthSchema, CreateVerification};
+use better_auth_core::{AuthResult, AuthSchema};
 
 use super::{AuthError, HookTransaction, SeaOrmStore, SeaOrmTransaction};
 use crate::schema::SeaOrmVerificationModel;
 use better_auth_core::store::TypedTransactionFuture;
 
 pub(super) enum Effect {
-    UserCreated(better_auth_core::wire::UserView),
+    UserCreated(Option<better_auth_core::wire::UserView>),
     UserUpdated(Option<better_auth_core::wire::UserView>),
     UserDeleted(better_auth_core::wire::UserView),
-    AccountCreated(Box<better_auth_core::wire::AccountView>),
-    Created(Box<better_auth_core::wire::VerificationView>),
+    AccountCreated(Option<Box<better_auth_core::wire::AccountView>>),
+    SessionCreated(Option<Box<better_auth_core::wire::SessionView>>),
+    Created(Option<Box<better_auth_core::wire::VerificationView>>),
     Deleted(Box<better_auth_core::wire::VerificationView>),
 }
 
@@ -43,22 +44,6 @@ where
         }
         Ok(())
     }
-    pub(super) async fn create_transaction_verification(
-        &self,
-        input: CreateVerification,
-        writer: Option<better_auth_core::store::VerificationCreateWriter>,
-    ) -> AuthResult<better_auth_core::wire::VerificationView> {
-        let record = self
-            .store
-            .create_verification_with_connection(&self.tx, Some((&self.tx, self)), input)
-            .await?;
-        if let Some(writer) = writer {
-            writer(record.clone()).await?;
-        }
-        self.queue(Effect::Created(Box::new(record.clone())))?;
-        Ok(record)
-    }
-
     pub(super) async fn delete_expired_transaction_verifications(&self) -> AuthResult<usize> {
         let (count, records) = self
             .store
@@ -74,11 +59,28 @@ where
 impl<S, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> SeaOrmStore<S, O, P>
 where
     S: AuthSchema,
-    S::Verification: SeaOrmVerificationModel,
-    S::User: crate::schema::SeaOrmUserModel,
-    S::Account: crate::schema::SeaOrmAccountModel,
-    S::Session: crate::schema::SeaOrmSessionModel,
 {
+    pub(super) async fn after_creation(
+        &self,
+        transaction: Option<HookTransaction<'_, S>>,
+        effect: Effect,
+        request: Option<better_auth_core::hooks::RequestHookContext>,
+    ) -> AuthResult<()> {
+        let store = self.clone();
+        after_write(
+            transaction,
+            Box::pin(async move {
+                store
+                    .finish_transaction_effects(vec![PendingEffect::Database {
+                        effect: Box::new(effect),
+                        request: request.map(Box::new),
+                    }])
+                    .await
+            }),
+        )
+        .await
+    }
+
     pub(super) async fn finish_queued_transaction_effects(
         &self,
         queue: &std::sync::Mutex<Vec<PendingEffect>>,
@@ -114,16 +116,19 @@ where
             context.request = request;
             for hook in self.hooks() {
                 match effect.as_ref() {
-                    Effect::UserCreated(record) => better_auth_core::observability::database::with_database_hook(context.config, hook.hook_metadata(), better_auth_core::observability::database::DatabaseHook::AfterCreateUser, hook.after_create_user(record, &context)).await?,
+                    Effect::UserCreated(record) => better_auth_core::observability::database::with_database_hook(context.config, hook.hook_metadata(), better_auth_core::observability::database::DatabaseHook::AfterCreateUser, hook.after_create_user(record.as_ref(), &context)).await?,
                     Effect::UserUpdated(record) => {
                         better_auth_core::observability::database::with_database_hook(context.config, hook.hook_metadata(), better_auth_core::observability::database::DatabaseHook::AfterUpdateUser, hook.after_update_user(record.as_ref(), &context)).await?
                     }
                     Effect::UserDeleted(record) => better_auth_core::observability::database::with_database_hook(context.config, hook.hook_metadata(), better_auth_core::observability::database::DatabaseHook::AfterDeleteUser, hook.after_delete_user(record, &context)).await?,
                     Effect::AccountCreated(record) => {
-                        better_auth_core::observability::database::with_database_hook(context.config, hook.hook_metadata(), better_auth_core::observability::database::DatabaseHook::AfterCreateAccount, hook.after_create_account(record, &context)).await?
+                        better_auth_core::observability::database::with_database_hook(context.config, hook.hook_metadata(), better_auth_core::observability::database::DatabaseHook::AfterCreateAccount, hook.after_create_account(record.as_deref(), &context)).await?
+                    }
+                    Effect::SessionCreated(record) => {
+                        better_auth_core::observability::database::with_database_hook(context.config, hook.hook_metadata(), better_auth_core::observability::database::DatabaseHook::AfterCreateSession, hook.after_create_session(record.as_deref(), &context)).await?
                     }
                     Effect::Created(record) => {
-                        better_auth_core::observability::database::with_database_hook(context.config, hook.hook_metadata(), better_auth_core::observability::database::DatabaseHook::AfterCreateVerification, hook.after_create_verification(record, &context)).await?
+                        better_auth_core::observability::database::with_database_hook(context.config, hook.hook_metadata(), better_auth_core::observability::database::DatabaseHook::AfterCreateVerification, hook.after_create_verification(record.as_deref(), &context)).await?
                     }
                     Effect::Deleted(record) => {
                         better_auth_core::observability::database::with_database_hook(context.config, hook.hook_metadata(), better_auth_core::observability::database::DatabaseHook::AfterDeleteVerification, hook.after_delete_verification(record, &context)).await?

@@ -48,7 +48,9 @@ fn cookie_signature(value: &[u8], secret: &str) -> String {
     STANDARD.encode(mac.finalize().into_bytes())
 }
 
-fn sign_native_cookie_value(value: &crate::FieldValue, secret: &str) -> AuthResult<String> {
+/// Sign a native value before applying URI encoding at the HTTP cookie boundary.
+#[doc(hidden)]
+pub fn sign_cookie_value_native_raw(value: &crate::FieldValue, secret: &str) -> AuthResult<String> {
     // TextEncoder defaults undefined to empty text; template interpolation retains "undefined".
     let signing_text = if value.is_undefined() {
         String::new()
@@ -60,7 +62,7 @@ fn sign_native_cookie_value(value: &crate::FieldValue, secret: &str) -> AuthResu
         .display_utf16()?
         .to_utf8()
         .map_err(|_| AuthError::internal("URI malformed"))?;
-    Ok(encode_cookie_value(&format!("{text}.{signature}")))
+    Ok(format!("{text}.{signature}"))
 }
 
 /// Sign and percent-encode a cookie value for an HTTP response.
@@ -175,6 +177,22 @@ pub fn create_session_cookie_with_max_age(
     render_cookie(&signed.unwrap_or_default(), &resolved)
 }
 
+/// Sign a projected token without narrowing schema-replaced values to strings.
+#[doc(hidden)]
+pub fn create_session_cookie_with_native_value(
+    token: &crate::FieldValue,
+    max_age_seconds: Option<f64>,
+    config: &AuthConfig,
+) -> AuthResult<String> {
+    let signed = encode_cookie_value(&sign_cookie_value_native_raw(
+        token,
+        config.signing_secret(),
+    )?);
+    let mut resolved = config.auth_cookie("session_token", Default::default());
+    resolved.attributes.max_age = max_age_seconds;
+    render_cookie(&signed, &resolved)
+}
+
 /// Build session-token cookies and the explicit browser-session preference.
 pub fn create_session_cookies(
     token: &str,
@@ -199,7 +217,10 @@ pub(crate) fn native_session_cookie_headers(
 ) -> impl Iterator<Item = AuthResult<String>> + '_ {
     // Build each header only when requested so a later failure retains earlier writes.
     std::iter::once_with(move || {
-        let signed = sign_native_cookie_value(&token, config.signing_secret())?;
+        let signed = encode_cookie_value(&sign_cookie_value_native_raw(
+            &token,
+            config.signing_secret(),
+        )?);
         let mut resolved = config.auth_cookie("session_token", Default::default());
         resolved.attributes.max_age =
             (!dont_remember).then_some(config.session.expires_in().as_seconds_f64());

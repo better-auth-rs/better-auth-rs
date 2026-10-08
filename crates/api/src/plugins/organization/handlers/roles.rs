@@ -246,14 +246,14 @@ fn predefined(name: &str, config: &OrganizationConfig) -> bool {
 
 async fn unused_name(
     name: &str,
-    organization_id: &str,
+    organization_id: &FieldValue,
     config: &OrganizationConfig,
     ctx: &AuthContext<impl AuthSchema>,
 ) -> AuthResult<()> {
     if predefined(name, config)
         || ctx
             .database
-            .find_organization_role(
+            .find_organization_role_value(
                 organization_id,
                 better_auth_core::store::OrganizationRoleKey::Name(name),
             )
@@ -275,11 +275,14 @@ async fn authorize_member(
     action: &str,
     config: &OrganizationConfig,
     ctx: &AuthContext<impl AuthSchema>,
-) -> AuthResult<(String, String)> {
+) -> AuthResult<(FieldValue, String)> {
     let (user, session) = require_session(req, ctx).await?;
     let organization_id = organization_id
-        .or(session.active_organization_id.as_deref())
-        .filter(|id| !id.is_empty())
+        .map(FieldValue::from)
+        .unwrap_or_else(|| session.active_organization_id.field_value());
+    let organization_id = organization_id
+        .is_truthy()
+        .then_some(organization_id)
         .ok_or_else(|| {
             if action == "create" {
                 AuthError::Upstream {
@@ -293,13 +296,13 @@ async fn authorize_member(
         })?;
     let member = ctx
         .database
-        .get_member(organization_id, user.id.typed()?)
+        .get_member_value(&organization_id, &user.id.field_value())
         .await?
         .ok_or_else(|| AuthError::forbidden("You are not a member of this organization"))?;
     let permission = if action == "list" { "read" } else { action };
     if !check_permission(
         member.role.typed()?,
-        organization_id,
+        &organization_id,
         "ac",
         &[permission],
         config,
@@ -309,12 +312,12 @@ async fn authorize_member(
     {
         return Err(role_error(action));
     }
-    Ok((organization_id.to_owned(), member.role.typed()?.clone()))
+    Ok((organization_id, member.role.typed()?.clone()))
 }
 
 async fn select_role(
     selector: &RoleSelector,
-    organization_id: &str,
+    organization_id: &FieldValue,
     ctx: &AuthContext<impl AuthSchema>,
 ) -> AuthResult<OrganizationRole> {
     use better_auth_core::store::OrganizationRoleKey;
@@ -335,7 +338,7 @@ async fn select_role(
         return Err(missing());
     };
     ctx.database
-        .find_organization_role(organization_id, key)
+        .find_organization_role_value(organization_id, key)
         .await?
         .ok_or_else(missing)
 }
@@ -343,7 +346,7 @@ async fn select_role(
 async fn validate_permissions(
     permission: &RequestedPermissions,
     member_role: &str,
-    organization_id: &str,
+    organization_id: &FieldValue,
     action: &str,
     config: &OrganizationConfig,
     ctx: &AuthContext<impl AuthSchema>,
@@ -428,11 +431,12 @@ pub async fn handle_role_request(
             let body: CreateRole = super::super::request::read(req, &config.schema)?;
             let additional_fields = body.additional_fields.into_option().unwrap_or_default();
             let _ = require_ac(config)?;
-            if body
+            if !body
                 .organization_id
                 .as_deref()
-                .or(session.active_organization_id.as_deref())
-                .is_none_or(str::is_empty)
+                .map(FieldValue::from)
+                .unwrap_or_else(|| session.active_organization_id.field_value())
+                .is_truthy()
             {
                 return Err(AuthError::Upstream {
                     status: 400,
@@ -455,7 +459,7 @@ pub async fn handle_role_request(
             let maximum = config.role_limit(&organization_id).await?;
             let count = ctx
                 .database
-                .count_organization_roles(&organization_id)
+                .count_organization_roles_value(&organization_id)
                 .await?;
             if maximum.is_some_and(|limit| count >= limit as u64) {
                 return Err(AuthError::Upstream {
@@ -482,7 +486,7 @@ pub async fn handle_role_request(
                 .database
                 .create_organization_role(CreateOrganizationRole {
                     additional_fields,
-                    organization_id,
+                    organization_id: better_auth_core::SchemaValue::from_field(organization_id),
                     role: name,
                     permission: permission.clone(),
                 })
@@ -512,7 +516,7 @@ pub async fn handle_role_request(
             if action == "list" {
                 let roles = ctx
                     .database
-                    .list_organization_roles(&organization_id)
+                    .list_organization_roles_value(&organization_id)
                     .await?
                     .into_iter()
                     .map(|mut role| {
@@ -556,7 +560,7 @@ pub async fn handle_role_request(
             let _ = super::super::native_json::permission(&role.permission)?;
             if ctx
                 .database
-                .list_organization_members(&organization_id)
+                .list_organization_members_value(&organization_id)
                 .await?
                 .iter()
                 .map(|member| member.role.typed())
@@ -733,7 +737,7 @@ mod tests {
             create_auth_json_request_no_query(
                 HttpMethod::Post,
                 "/organization/create-role",
-                Some(&session.token),
+                Some(session.token.typed().unwrap()),
                 Some(json!({"organizationId":org.id,"role":"Editor","permission":permission})),
             )
         };
@@ -768,7 +772,7 @@ mod tests {
         assert!(
             check_permission(
                 "editor",
-                org.id.typed().unwrap(),
+                &org.id.field_value(),
                 "organization",
                 &["update"],
                 &config,
@@ -780,7 +784,7 @@ mod tests {
         assert!(
             !check_permission(
                 "editor",
-                "other-tenant",
+                &"other-tenant".into(),
                 "organization",
                 &["update"],
                 &config,

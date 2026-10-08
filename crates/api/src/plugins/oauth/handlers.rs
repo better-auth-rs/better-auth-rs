@@ -341,7 +341,7 @@ pub(super) async fn complete_link_social(
 
     let _ = ctx
         .database
-        .create_account(CreateAccount {
+        .create_account_optional(CreateAccount {
             user_id: (link.user_id.clone()).into(),
             account_id: (user_info.id.clone()).into(),
             provider_id: (provider_name.to_string()).into(),
@@ -369,7 +369,8 @@ pub(super) async fn complete_link_social(
             ..Default::default()
         })
         .await
-        .map_err(|_| "unable_to_link_account".to_string())?;
+        .map_err(|_| "unable_to_link_account".to_string())?
+        .ok_or_else(|| "unable_to_link_account".to_string())?;
 
     apply_link_user_info(&link.user_id, user_info, ctx).await;
     Ok(())
@@ -450,7 +451,7 @@ async fn sign_in_with_id_token_core(
         url: None,
         redirect: false,
         status: None,
-        token: Some(outcome.session.token().to_string()),
+        token: outcome.session.token().field_value(),
         user: Some(outcome.user),
     };
     ctx.session_manager()
@@ -541,7 +542,7 @@ async fn link_with_id_token_core(
             url: Some(String::new()),
             redirect: false,
             status: Some(true),
-            token: None,
+            token: better_auth_core::FieldValue::Undefined,
             user: None,
         });
     }
@@ -613,7 +614,7 @@ async fn link_with_id_token_core(
         url: Some(String::new()),
         redirect: false,
         status: Some(true),
-        token: None,
+        token: better_auth_core::FieldValue::Undefined,
         user: None,
     })
 }
@@ -818,7 +819,7 @@ pub(super) async fn store_oauth_flow(
     ) {
         let _ = ctx
             .database
-            .create_verification(CreateVerification {
+            .create_verification_optional(CreateVerification {
                 identifier: (flow.state.clone()).into(),
                 value: (serde_json::to_string(&flow.payload)?).into(),
                 expires_at: (Utc::now() + Duration::minutes(10)).into(),
@@ -868,7 +869,7 @@ pub(super) async fn initiate_oauth_flow_core(
             url: Some(url),
             redirect: !request.disable_redirect,
             status: None,
-            token: None,
+            token: better_auth_core::FieldValue::Undefined,
             user: None,
         },
         state: flow.state,

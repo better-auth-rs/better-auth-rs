@@ -231,15 +231,28 @@ where
             self.config().advanced.database.generate_id(),
         )
         .await?
-        .insert(self.connection())
+        .insert(
+            self.connection(),
+            super::create_readback::CreateReadback {
+                schema: &config,
+                policy: self.config().advanced.database.generate_id(),
+                scope: super::create_readback::ReadbackScope::Direct(self.connection()),
+                column: O::Member::column,
+            },
+        )
         .await?
+        .ok_or_else(|| AuthError::internal("Member creation returned no record"))?
         .record(&config, self.connection().get_database_backend())
         .await
     }
 
     async fn create_member(&self, member: CreateMember) -> AuthResult<Member> {
-        self.create_member_with_connection(self.connection(), member)
-            .await
+        self.create_member_with_connection(
+            self.connection(),
+            super::create_readback::ReadbackScope::Direct(self.connection()),
+            member,
+        )
+        .await
     }
 
     async fn get_member_with_user(
@@ -377,10 +390,20 @@ where
     }
 
     async fn list_organization_members(&self, organization_id: &str) -> AuthResult<Vec<Member>> {
+        self.list_organization_members_value(&organization_id.into())
+            .await
+    }
+
+    async fn list_organization_members_value(
+        &self,
+        organization_id: &better_auth_core::FieldValue,
+    ) -> AuthResult<Vec<Member>> {
         let rows = Entity::<O::Member>::find()
-            .filter(O::Member::column("organization_id")?.eq_id(
+            .filter(super::value_filter::equals_id(
+                O::Member::column("organization_id")?,
                 organization_id,
                 self.config().advanced.database.generate_id(),
+                self.connection().get_database_backend(),
             )?)
             .order_by_asc(O::Member::column("created_at")?)
             .all(self.connection())
@@ -398,11 +421,12 @@ where
         &self,
         params: &ListOrganizationMembersParams,
     ) -> AuthResult<(Vec<Member>, usize)> {
-        let base_query =
-            Entity::<O::Member>::find().filter(O::Member::column("organization_id")?.eq_id(
-                &params.organization_id,
-                self.config().advanced.database.generate_id(),
-            )?);
+        let base_query = Entity::<O::Member>::find().filter(super::value_filter::equals_id(
+            O::Member::column("organization_id")?,
+            &params.organization_id.field_value(),
+            self.config().advanced.database.generate_id(),
+            self.connection().get_database_backend(),
+        )?);
         let filtered_query = apply_member_filter::<O::Member>(
             base_query,
             params,
@@ -567,7 +591,7 @@ mod tests {
             .expect("admin should be created");
 
         let params = ListOrganizationMembersParams {
-            organization_id: org_id,
+            organization_id: org_id.into(),
             limit: Some(1.0),
             offset: Some(1.0),
             sort_by: Some("role".to_string()),
@@ -597,6 +621,7 @@ impl<
     pub(super) async fn create_member_with_connection<C: sea_orm::ConnectionTrait>(
         &self,
         db: &C,
+        scope: super::create_readback::ReadbackScope<'_>,
         member: CreateMember,
     ) -> AuthResult<Member> {
         let mut core = self.create_fields(
@@ -613,6 +638,7 @@ impl<
         }
         models::insert::<O::Member, _>(
             db,
+            scope,
             core,
             member.additional_fields,
             &self.organization_fields()?.member,

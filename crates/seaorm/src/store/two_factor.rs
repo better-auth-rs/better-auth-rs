@@ -121,13 +121,23 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
             .collect()
     }
 
-    async fn insert_two_factor(&self, mut input: FieldMap) -> AuthResult<QueryResult> {
+    async fn insert_two_factor(&self, mut input: FieldMap) -> AuthResult<Option<QueryResult>> {
         self.two_factor_timestamps(&mut input, true);
         let active = self
             .prepare_two_factor_fields(input, WriteOperation::Create)
             .await?;
         database_operation::<Entity<P::TwoFactor>, _>(self.config(), "create", async {
-            active.insert_raw(self.connection()).await
+            active
+                .insert_raw(
+                    self.connection(),
+                    super::create_readback::CreateReadback {
+                        schema: &self.model_fields.plugin_fields(EntityRole::TwoFactor),
+                        policy: self.config().advanced.database.generate_id(),
+                        scope: super::create_readback::ReadbackScope::Direct(self.connection()),
+                        column: P::TwoFactor::column,
+                    },
+                )
+                .await
         })
         .await
     }
@@ -173,12 +183,15 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
 impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> TwoFactorStore
     for SeaOrmStore<S, O, P>
 {
-    async fn create_two_factor_record(&self, input: FieldMap) -> AuthResult<FieldMap> {
+    async fn create_two_factor_record(&self, input: FieldMap) -> AuthResult<Option<FieldMap>> {
         let row = self.insert_two_factor(input).await?;
         Ok(self
-            .project_plugin_rows::<P::TwoFactor, FieldMap>(EntityRole::TwoFactor, vec![row])
+            .project_plugin_rows::<P::TwoFactor, FieldMap>(
+                EntityRole::TwoFactor,
+                row.into_iter().collect(),
+            )
             .await?
-            .remove(0))
+            .pop())
     }
 
     async fn get_two_factor_record(
@@ -207,7 +220,10 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
 
     async fn create_two_factor(&self, input: CreateTwoFactor) -> AuthResult<TwoFactor> {
         let row = self.insert_two_factor(input.into_adapter_fields()?).await?;
-        Ok(self.project_two_factor_models(vec![row]).await?.remove(0))
+        self.project_two_factor_models(row.into_iter().collect())
+            .await?
+            .pop()
+            .ok_or_else(|| AuthError::internal("Two-factor creation returned no record"))
     }
 
     async fn get_two_factor_by_user_id(&self, user_id: &str) -> AuthResult<Option<TwoFactor>> {
@@ -245,7 +261,10 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
             )
             .await?
             .ok_or_else(|| AuthError::not_found("Two-factor settings not found"))?;
-        Ok(self.project_two_factor_models(vec![row]).await?.remove(0))
+        self.project_two_factor_models(row.into_iter().collect())
+            .await?
+            .pop()
+            .ok_or_else(|| AuthError::internal("Two-factor creation returned no record"))
     }
 
     async fn update_two_factor(
@@ -258,7 +277,10 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
             .update_two_factor_row(filter, update.into_adapter_fields()?)
             .await?
             .ok_or_else(|| AuthError::not_found("Two-factor settings not found"))?;
-        Ok(self.project_two_factor_models(vec![row]).await?.remove(0))
+        self.project_two_factor_models(row.into_iter().collect())
+            .await?
+            .pop()
+            .ok_or_else(|| AuthError::internal("Two-factor creation returned no record"))
     }
 
     async fn delete_two_factor(&self, user_id: &str) -> AuthResult<()> {

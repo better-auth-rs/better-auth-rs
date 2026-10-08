@@ -144,7 +144,7 @@ impl AccountManagementPlugin {
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (user, session) = ctx.require_session(req).await?;
-        if !crate::plugins::helpers::session_is_fresh(&session, &ctx.config) {
+        if !crate::plugins::helpers::session_is_fresh(&session, &ctx.config)? {
             return Err(AuthError::Upstream {
                 status: 403,
                 code: "SESSION_NOT_FRESH",

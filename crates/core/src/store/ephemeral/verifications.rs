@@ -102,6 +102,22 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
         &self,
         input: &mut CreateVerification,
     ) -> AuthResult<()> {
+        if self
+            .before_create_runtime_verification_optional(input)
+            .await?
+        {
+            Ok(())
+        } else {
+            Err(AuthError::forbidden(
+                "verification creation cancelled by database hook",
+            ))
+        }
+    }
+
+    async fn before_create_runtime_verification_optional(
+        &self,
+        input: &mut CreateVerification,
+    ) -> AuthResult<bool> {
         let transaction = EphemeralTransaction {
             store: self.clone(),
         };
@@ -116,20 +132,21 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
             .await?
                 == DatabaseHookControl::Cancel
             {
-                return Err(AuthError::forbidden(
-                    "verification creation cancelled by database hook",
-                ));
+                return Ok(false);
             }
         }
-        Ok(())
+        Ok(true)
     }
     async fn after_create_runtime_verification(
         &self,
-        record: &VerificationView,
+        record: Option<&VerificationView>,
         request: Option<crate::hooks::RequestHookContext>,
     ) -> AuthResult<()> {
-        self.after_with_request(CommittedWrite::VerificationCreated(record.clone()), request)
-            .await
+        self.after_with_request(
+            CommittedWrite::VerificationCreated(record.cloned()),
+            request,
+        )
+        .await
     }
 
     async fn reserve_verification(&self, id: &str, input: CreateVerification) -> AuthResult<bool> {
@@ -170,15 +187,28 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
     }
 
     async fn create_verification(&self, input: CreateVerification) -> AuthResult<VerificationView> {
+        self.create_verification_optional(input)
+            .await?
+            .ok_or_else(|| AuthError::internal("Verification creation returned no record"))
+    }
+    async fn create_verification_optional(
+        &self,
+        input: CreateVerification,
+    ) -> AuthResult<Option<VerificationView>> {
         self.create_verification_with_writer(input, None).await
     }
     async fn create_verification_with_writer(
         &self,
         input: CreateVerification,
         writer: Option<VerificationCreateWriter>,
-    ) -> AuthResult<VerificationView> {
+    ) -> AuthResult<Option<VerificationView>> {
         let mut input = input.with_timestamps(Utc::now().into());
-        self.before_create_runtime_verification(&mut input).await?;
+        if !self
+            .before_create_runtime_verification_optional(&mut input)
+            .await?
+        {
+            return Ok(None);
+        }
         let mut record = self
             .config
             .verification
@@ -204,14 +234,14 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
         .await?;
         let projected = self.output_verification(&record).await?;
         if let Some(writer) = writer {
-            writer(projected.clone()).await?;
+            writer(projected.fields()?).await?;
         }
         self.after_create_runtime_verification(
-            &projected,
+            Some(&projected),
             crate::hooks::current_request_hook_context(),
         )
         .await?;
-        Ok(projected)
+        Ok(Some(projected))
     }
 
     async fn get_verification_including_expired(

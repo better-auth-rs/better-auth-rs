@@ -64,7 +64,10 @@ impl OrganizationConfig {
         }
         Ok(self.teams.maximum_members_per_team)
     }
-    pub(crate) async fn role_limit(&self, organization_id: &str) -> AuthResult<Option<usize>> {
+    pub(crate) async fn role_limit(
+        &self,
+        organization_id: &better_auth_core::FieldValue,
+    ) -> AuthResult<Option<usize>> {
         if let Some(policy) = &self.policy
             && let Some(value) = policy
                 .maximum_roles_per_organization(organization_id)

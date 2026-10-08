@@ -1,3 +1,4 @@
+use super::sessions::session_token_matches;
 use super::*;
 use crate::store::TeamMemberLimits;
 use crate::{SchemaValue, TeamMember};
@@ -8,7 +9,7 @@ impl EphemeralStore {
         &self,
         invitation_id: &str,
         user_id: &str,
-        session_token: Option<&str>,
+        session_token: Option<&crate::FieldValue>,
         teams_enabled: bool,
         maximum: TeamMemberLimits<'_>,
     ) -> AuthResult<(Member, Invitation, Option<SessionView>)> {
@@ -89,10 +90,13 @@ impl EphemeralStore {
         &self,
         invitation: &Invitation,
         user_id: &str,
-        session_token: Option<&str>,
+        session_token: Option<&crate::FieldValue>,
         teams_enabled: bool,
         maximum: TeamMemberLimits<'_>,
     ) -> AuthResult<(Member, Option<SessionView>)> {
+        let session_token = session_token
+            .map(|token| self.memory_session_token_query(token.clone()))
+            .transpose()?;
         let member_user =
             self.organization_query(EntityRole::Member, "userId", Value::from(user_id))?;
         let member_org = self.organization_reference_query(
@@ -164,10 +168,10 @@ impl EphemeralStore {
             {
                 return Err(AuthError::bad_request("User is already a member"));
             }
-            if let Some(token) = session_token {
+            if let Some((column, token)) = &session_token {
                 let _ = state
                     .sessions
-                    .find(|row| row.token == token)?
+                    .find(|row| session_token_matches(row, column, token))?
                     .ok_or(AuthError::SessionNotFound)?;
             }
             (state.members.len(), state.team_members.len())
@@ -242,6 +246,32 @@ impl EphemeralStore {
                 created_at: Utc::now().into(),
             });
         }
+        let organization_id =
+            Self::project_id(&self.organization_primary_id(&invitation.organization_id)?)?;
+        let team_patch = if session_token.is_some() {
+            if let [team_id] = team_ids.as_slice() {
+                Some(
+                    self.bind_session_update_fields(
+                        [("activeTeamId".into(), team_id.as_str().into())].into(),
+                    )
+                    .await?,
+                )
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        let organization_patch = if session_token.is_some() {
+            Some(
+                self.bind_session_update_fields(
+                    [("activeOrganizationId".into(), organization_id.field_value())].into(),
+                )
+                .await?,
+            )
+        } else {
+            None
+        };
         let mut state = self.lock()?;
         let current = state
             .invitations
@@ -265,10 +295,11 @@ impl EphemeralStore {
             return Err(AuthError::bad_request("User is already a member"));
         }
         let session = session_token
-            .map(|token| {
+            .as_ref()
+            .map(|(column, token)| {
                 state
                     .sessions
-                    .find(|row| row.token == token)?
+                    .find(|row| session_token_matches(row, column, token))?
                     .ok_or(AuthError::SessionNotFound)
             })
             .transpose()?;
@@ -317,16 +348,9 @@ impl EphemeralStore {
             teams.push((team.id.clone(), prepared.apply(team, actual)?));
         }
         // Validate the complete staged result before publishing any member, seat, or session delta.
-        let organization_id = self.organization_primary_id(&invitation.organization_id)?;
-        let organization_id = Self::project_id(&organization_id)?;
-        let organization_id = organization_id.typed()?.clone();
         let (session, cookie_session) = if let Some(mut session) = session {
-            let cookie_session = if let [team_id] = team_ids.as_slice() {
-                session.active_team_id = Some(team_id.clone());
-                if let Some(fields) = &mut session.visible_fields {
-                    let _ = fields.insert("activeTeamId".into());
-                }
-                session.updated_at = Utc::now().into();
+            let cookie_session = if let Some(fields) = &team_patch {
+                self.apply_session_storage_fields(&mut session, fields);
                 let mut cookie = session.clone();
                 cookie.id = Self::project_id(&cookie.id)?;
                 if !self.session_config.fields().contains_key("userId") {
@@ -336,11 +360,9 @@ impl EphemeralStore {
             } else {
                 None
             };
-            session.active_organization_id = Some(organization_id);
-            if let Some(fields) = &mut session.visible_fields {
-                let _ = fields.insert("activeOrganizationId".into());
+            if let Some(fields) = &organization_patch {
+                self.apply_session_storage_fields(&mut session, fields);
             }
-            session.updated_at = Utc::now().into();
             (Some(session), cookie_session)
         } else {
             (None, None)
@@ -367,7 +389,11 @@ impl EphemeralStore {
         if let Some(session) = session {
             let mut stored = state
                 .sessions
-                .find_mut(|row| row.token == session.token)?
+                .find_mut(|row| {
+                    row.token
+                        .field_value()
+                        .strict_equals(&session.token.field_value())
+                })?
                 .ok_or(AuthError::SessionNotFound)?;
             *stored = session;
         }

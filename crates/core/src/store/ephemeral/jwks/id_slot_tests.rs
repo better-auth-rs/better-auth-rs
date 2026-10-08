@@ -71,7 +71,7 @@ impl Model {
                     .await?
             }
         };
-        observe_fields(fields, false)
+        observe_fields(required(fields)?, false)
     }
 
     async fn get(self, store: &EphemeralStore, id: &str) -> AuthResult<JsonValue> {

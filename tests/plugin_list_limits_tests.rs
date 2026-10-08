@@ -107,7 +107,7 @@ async fn run<S: AuthSchema>(
                     "cookie".into(),
                     format!(
                         "better-auth.session_token={}",
-                        sign_cookie_value(&session.token, SECRET)
+                        sign_cookie_value(session.token.typed()?, SECRET)
                     ),
                 )])),
                 ..Default::default()
@@ -154,7 +154,8 @@ async fn passkey_lists_and_jwt_key_selection_apply_upstream_query_limits() -> Au
     let material = seed
         .jwt()?
         .create_key_pair(JwtKeyPairConfig::new(JwtAlgorithm::EdDsa))
-        .await?;
+        .await?
+        .ok_or_else(|| AuthError::internal("Expected created fixture key"))?;
     let cases: Vec<Value> =
         serde_json::from_str(include_str!("fixtures/plugin-list-limits-upstream.json"))?;
     for case in cases {

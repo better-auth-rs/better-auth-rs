@@ -26,13 +26,18 @@ where
     S: AuthSchema + Send + Sync,
 {
     async fn create_device_code(&self, input: CreateDeviceCode) -> AuthResult<DeviceCode> {
-        self.create_device_code_with_connection(self.connection(), input)
-            .await
+        self.create_device_code_with_connection(
+            self.connection(),
+            super::create_readback::ReadbackScope::Direct(self.connection()),
+            input,
+        )
+        .await
     }
 
-    async fn create_device_code_record(&self, input: FieldMap) -> AuthResult<FieldMap> {
+    async fn create_device_code_record(&self, input: FieldMap) -> AuthResult<Option<FieldMap>> {
         self.create_plugin_record::<P::DeviceCode>(
             self.connection(),
+            super::create_readback::ReadbackScope::Direct(self.connection()),
             EntityRole::DeviceCode,
             "deviceCode",
             input,
@@ -174,19 +179,24 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
     pub(super) async fn create_device_code_with_connection(
         &self,
         connection: &impl ConnectionTrait,
+        scope: super::create_readback::ReadbackScope<'_>,
         input: CreateDeviceCode,
     ) -> AuthResult<DeviceCode> {
         let row = self
-            .insert_device_code(connection, input.into_adapter_fields()?)
+            .insert_device_code(connection, scope, input.into_adapter_fields()?)
             .await?;
-        Ok(self.project_device_code_models(vec![row]).await?.remove(0))
+        self.project_device_code_models(row.into_iter().collect())
+            .await?
+            .pop()
+            .ok_or_else(|| AuthError::internal("Device code creation returned no record"))
     }
 
     pub(super) async fn insert_device_code(
         &self,
         connection: &impl ConnectionTrait,
+        scope: super::create_readback::ReadbackScope<'_>,
         input: FieldMap,
-    ) -> AuthResult<QueryResult> {
+    ) -> AuthResult<Option<QueryResult>> {
         let active = self
             .prepare_plugin_fields::<P::DeviceCode>(
                 EntityRole::DeviceCode,
@@ -196,7 +206,17 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
             )
             .await?;
         database_operation::<Entity<P::DeviceCode>, _>(self.config(), "create", async {
-            active.insert_raw(connection).await
+            active
+                .insert_raw(
+                    connection,
+                    super::create_readback::CreateReadback {
+                        schema: &self.model_fields.plugin_fields(EntityRole::DeviceCode),
+                        policy: self.config().advanced.database.generate_id(),
+                        scope,
+                        column: P::DeviceCode::column,
+                    },
+                )
+                .await
         })
         .await
     }
@@ -263,7 +283,10 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
             .update_device_code_row(connection, id, update.into_adapter_fields()?)
             .await?
             .ok_or_else(|| AuthError::not_found("Device code not found"))?;
-        Ok(self.project_device_code_models(vec![row]).await?.remove(0))
+        self.project_device_code_models(row.into_iter().collect())
+            .await?
+            .pop()
+            .ok_or_else(|| AuthError::internal("Device code creation returned no record"))
     }
 
     pub(super) async fn update_device_code_row(

@@ -149,11 +149,9 @@ impl EphemeralStore {
                 if single { "findOne" } else { "findMany" },
                 |state| {
                     let sessions = crate::query::paginate_memory(
-                        state.sessions.select_refs(|session| {
-                            tokens.contains(&session.token)
-                                && (!only_active
-                                    || session.expires_at.milliseconds()
-                                        > now.timestamp_millis() as f64)
+                        state.sessions.try_select_refs(|session| {
+                            Ok(tokens.iter().any(|token| session.token == token.as_str())
+                                && (!only_active || session.expires_at.is_after(now)?))
                         })?,
                         Some(if single {
                             1.0

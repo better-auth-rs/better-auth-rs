@@ -489,7 +489,7 @@ async fn test_set_password_public_route_absent_for_social_user() {
     headers.insert("content-type".to_string(), "application/json".to_string());
     headers.insert(
         "authorization".to_string(),
-        format!("Bearer {}", session.token),
+        format!("Bearer {}", session.token.typed().unwrap()),
     );
 
     let set_data = serde_json::json!({
@@ -617,7 +617,11 @@ async fn test_revoke_other_sessions_integration() {
     assert!(s1.is_some());
 
     // The other session should be revoked
-    let s2 = auth.store().get_session(&session2.token).await.unwrap();
+    let s2 = auth
+        .store()
+        .get_session(session2.token.typed().unwrap())
+        .await
+        .unwrap();
     assert!(s2.is_none());
 }
 
@@ -1159,7 +1163,7 @@ async fn test_unlink_last_account_fails() {
     headers.insert("content-type".to_string(), "application/json".to_string());
     headers.insert(
         "authorization".to_string(),
-        format!("Bearer {}", session.token),
+        format!("Bearer {}", session.token.typed().unwrap()),
     );
 
     let unlink_data = serde_json::json!({
@@ -1531,13 +1535,13 @@ mod postgres_tests {
         ).await.expect("Failed to create session");
 
         // Verify session can be retrieved
-        let retrieved_session = session_manager.get_session(&session.token).await
+        let retrieved_session = session_manager.get_session(session.token.typed().unwrap()).await
             .expect("Failed to get session")
             .expect("Session not found");
 
         assert_eq!(retrieved_session.user_id, user.id);
-        assert_eq!(retrieved_session.ip_address.as_deref(), Some("127.0.0.1"));
-        assert_eq!(retrieved_session.user_agent.as_deref(), Some("test-user-agent"));
+        assert_eq!(retrieved_session.ip_address.typed().unwrap().as_deref(), Some("127.0.0.1"));
+        assert_eq!(retrieved_session.user_agent.typed().unwrap().as_deref(), Some("test-user-agent"));
 
         // Test session cleanup
         let cleaned_count = session_manager.cleanup_expired_sessions().await
@@ -1547,11 +1551,11 @@ mod postgres_tests {
         assert_eq!(cleaned_count, 0);
 
         // Delete the session
-        session_manager.delete_session(&session.token).await
+        session_manager.delete_session(session.token.typed().unwrap()).await
             .expect("Failed to delete session");
 
         // Verify session is gone
-        let deleted_session = session_manager.get_session(&session.token).await
+        let deleted_session = session_manager.get_session(session.token.typed().unwrap()).await
             .expect("Failed to check deleted session");
         assert!(deleted_session.is_none());
     }

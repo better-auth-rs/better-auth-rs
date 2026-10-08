@@ -96,7 +96,7 @@ async fn contract<S: AuthSchema>(
                 additional_fields: Default::default(),
             })
             .await?;
-        let token = session.token();
+        let token = session.token.typed()?.clone();
         let created = auth
             .api_keys()?
             .create(
@@ -134,7 +134,7 @@ async fn contract<S: AuthSchema>(
             );
         }
         trace_lock(&events)?.clear();
-        let found = read(&auth, token, "/api-key/get", Some(json!({"id":id}))).await?;
+        let found = read(&auth, &token, "/api-key/get", Some(json!({"id":id}))).await?;
         assert_eq!(found.get("name"), Some(&json!(expected)));
         assert_eq!(
             *trace_lock(&events)?,
@@ -146,7 +146,7 @@ async fn contract<S: AuthSchema>(
         );
         for turn in 0..2 {
             trace_lock(&events)?.clear();
-            let listed = read(&auth, token, "/api-key/list", None).await?;
+            let listed = read(&auth, &token, "/api-key/list", None).await?;
             assert_eq!(
                 listed
                     .get("apiKeys")
@@ -206,14 +206,14 @@ async fn contract<S: AuthSchema>(
                     Some(value) => cache.set(&cache_key, value, None).await?,
                     None => cache.delete(&cache_key).await?,
                 }
-                let found = read(&auth, token, "/api-key/get", Some(json!({"id":id}))).await?;
+                let found = read(&auth, &token, "/api-key/get", Some(json!({"id":id}))).await?;
                 assert_eq!(found.get("name"), Some(&json!(expected)));
                 assert_eq!(*trace_lock(&events)?, ["output:\"Mobile\""]);
                 if column.is_some() {
                     cached_name(cache.as_ref(), id, expected).await?;
                 }
                 trace_lock(&events)?.clear();
-                let found = read(&auth, token, "/api-key/get", Some(json!({"id":id}))).await?;
+                let found = read(&auth, &token, "/api-key/get", Some(json!({"id":id}))).await?;
                 assert_eq!(found.get("name"), Some(&json!(expected)));
                 assert!(trace_lock(&events)?.is_empty());
             }

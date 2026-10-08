@@ -190,9 +190,11 @@ impl<S: AuthSchema> DatabaseHooks<S> for Hooks {
 
     async fn after_create_session(
         &self,
-        data: &SessionView,
+        data: Option<&SessionView>,
         _: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
+        let data = data
+            .ok_or_else(|| better_auth_core::AuthError::internal("Expected created fixture row"))?;
         emit(&self.events, Event::After(self.stage, data.clone().into()))
     }
 }
@@ -429,19 +431,19 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, run: Run) -> TestRe
     assert!(created.additional_fields.is_empty());
     assert_eq!(
         expected_final.get("token").and_then(FieldValue::as_str),
-        Some(created.token.as_str())
+        created.token.as_str()
     );
     assert_eq!(
         expected_final
             .get("createdAt")
             .and_then(FieldValue::as_date),
-        Some(&created.created_at)
+        Some(created.created_at.typed()?)
     );
     assert_eq!(
         expected_final
             .get("updatedAt")
             .and_then(FieldValue::as_date),
-        Some(&created.updated_at)
+        Some(created.updated_at.typed()?)
     );
     let mirror_token = if run.case == Case::Mutate {
         "hook-token"
@@ -495,8 +497,12 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, run: Run) -> TestRe
             assert_eq!(value, expected);
         }
         assert_eq!(cache.inner.get("active-sessions-other").await?, None);
-        if mirror_token != created.token {
-            assert_eq!(cache.inner.get(&created.token).await?, None);
+        if !created
+            .token
+            .field_value()
+            .strict_equals(&mirror_token.into())
+        {
+            assert_eq!(cache.inner.get(created.token.typed()?).await?, None);
         }
     }
     if run.call == Call::Deferred {
@@ -520,7 +526,7 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, run: Run) -> TestRe
         assert!(raw.get_user_sessions("other").await?.is_empty());
     } else {
         assert_eq!(
-            raw.get_session(&created.token).await?,
+            raw.get_session(created.token.typed()?).await?,
             Some(created.clone())
         );
         let user_id = if run.case == Case::Generated {

@@ -371,3 +371,9 @@ These routes require `dynamic_access_control: true`.
 | 403 | Insufficient permissions for the operation, or `EMAIL_VERIFICATION_REQUIRED_FOR_INVITATION` when listing invitations with an unverified email |
 | 404 | Organization, member, or invitation not found |
 | 409 | Slug already taken or user already a member |
+
+## Native selector inputs
+
+`CreateInvitation.organization_id`, `CreateOrganizationRole.organization_id`, and `ListOrganizationMembersParams.organization_id` use `SchemaValue<String>`. Use `.into()` for ordinary string inputs. Native Session organization and team IDs remain `FieldValue` through permission checks, list queries, and active-selection updates. `OrganizationTeamLimit` and `OrganizationTeamMemberLimit` expose their IDs as `&FieldValue`; `maximum_roles_per_organization` receives the same native ID. Use `.as_str()` only when application policy requires a string, rather than coercing every replacement value.
+
+The Store string convenience methods delegate to their native value counterparts. Memory preserves value identity and reference-query conversion; SQL preserves its column-binding semantics. Team capacity and membership operations retain their existing conditional updates and transaction boundaries.

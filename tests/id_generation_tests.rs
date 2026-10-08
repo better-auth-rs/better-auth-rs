@@ -95,10 +95,12 @@ async fn configured_generator_reaches_every_core_insert_and_preserves_forced_use
     assert_eq!(verification.id, "verification_4");
     assert_eq!(account.user_id, user.id.clone());
     assert_eq!(session.user_id.clone(), user.id.clone());
-    assert_eq!(session.token().len(), 32);
+    assert_eq!(session.token().typed().unwrap().len(), 32);
     assert!(
         session
             .token()
+            .typed()
+            .unwrap()
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric())
     );
@@ -188,10 +190,10 @@ async fn pure_secondary_sessions_use_context_ids_and_independent_tokens() {
                 .bytes()
                 .all(|byte| byte.is_ascii_alphanumeric())
         );
-        assert_ne!(row.id.clone(), row.token());
+        assert_ne!(row.id.field_value(), row.token().field_value());
         assert_eq!(
             auth.store()
-                .get_session(row.token())
+                .get_session(row.token().typed().unwrap())
                 .await
                 .unwrap()
                 .unwrap()

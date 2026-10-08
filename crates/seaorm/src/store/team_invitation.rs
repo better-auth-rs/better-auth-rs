@@ -9,8 +9,7 @@ use better_auth_core::{AuthError, AuthResult, Invitation, Member};
 use better_auth_core::{FieldValue, SchemaField};
 use chrono::Utc;
 use sea_orm::{
-    ColumnTrait, EntityTrait, IntoActiveModel, PaginatorTrait, QueryFilter, TransactionTrait,
-    sea_query::Expr,
+    ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, TransactionTrait, sea_query::Expr,
 };
 
 impl<S, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> SeaOrmStore<S, O, P>
@@ -22,7 +21,7 @@ where
         &self,
         invitation_id: &str,
         user_id: &str,
-        session_token: Option<&str>,
+        session_token: Option<&FieldValue>,
         teams_enabled: bool,
         maximum: better_auth_core::store::TeamMemberLimits<'_>,
     ) -> AuthResult<(
@@ -96,7 +95,7 @@ where
         &self,
         invitation: &Invitation,
         user_id: &str,
-        session_token: Option<&str>,
+        session_token: Option<&FieldValue>,
         teams_enabled: bool,
         maximum: better_auth_core::store::TeamMemberLimits<'_>,
     ) -> AuthResult<(Member, Option<better_auth_core::wire::SessionView>)> {
@@ -168,6 +167,7 @@ where
                     }
                     let _ = models::insert::<O::TeamMember, _>(
                         &tx,
+                        super::create_readback::ReadbackScope::Transaction,
                         self.create_fields(
                             "teamMember",
                             None,
@@ -193,6 +193,7 @@ where
             }
             let member = models::insert::<O::Member, _>(
                 &tx,
+                super::create_readback::ReadbackScope::Transaction,
                 self.create_fields(
                     "member",
                     None,
@@ -211,36 +212,37 @@ where
             let Some(session_token) = session_token else {
                 return Ok((member, None));
             };
-            let session = <S::Session as SeaOrmSessionModel>::Entity::find()
-                .filter(S::Session::token_column().eq(session_token))
-                .one(&tx)
-                .await
-                .map_err(map_db_err)?
-                .ok_or(AuthError::SessionNotFound)?;
-            let mut active = session.into_active_model();
             let cookie_session = if let [team_id] = team_ids.as_slice() {
-                S::Session::set_active_team_id(&mut active, Some((*team_id).to_owned()));
-                S::Session::set_updated_at(&mut active, Utc::now());
-                let write = self.apply_session_field_updates(active).await?;
-                let filter = S::Session::token_column().eq(session_token);
-                let updated =
-                    super::updates::update_record_returning_one(&tx, write, filter.clone(), filter)
-                        .await?
-                        .ok_or(AuthError::SessionNotFound)?;
-                active = updated.clone().into_active_model();
-                Some(self.output_session(&updated, &tx).await?)
+                Some(
+                    self.write_session_update(
+                        &tx,
+                        session_token,
+                        better_auth_core::store::SessionUpdate {
+                            additional_fields: [("activeTeamId".into(), (*team_id).into())].into(),
+                            ..Default::default()
+                        },
+                    )
+                    .await?
+                    .ok_or(AuthError::SessionNotFound)?,
+                )
             } else {
                 None
             };
-            S::Session::set_active_organization_id(
-                &mut active,
-                Some(invitation.organization_id.typed()?.clone()),
-            );
-            S::Session::set_updated_at(&mut active, Utc::now());
-            let write = self.apply_session_field_updates(active).await?;
-            let filter = S::Session::token_column().eq(session_token);
-            let _ = super::updates::update_record_returning_one(&tx, write, filter.clone(), filter)
-                .await?;
+            let _ = self
+                .write_session_update(
+                    &tx,
+                    session_token,
+                    better_auth_core::store::SessionUpdate {
+                        additional_fields: [(
+                            "activeOrganizationId".into(),
+                            invitation.organization_id.field_value(),
+                        )]
+                        .into(),
+                        ..Default::default()
+                    },
+                )
+                .await?
+                .ok_or(AuthError::SessionNotFound)?;
             Ok((member, cookie_session))
         }
         .await;

@@ -161,7 +161,8 @@ async fn declared_legacy_fields_follow_raw_and_typed_output_policies() -> AuthRe
             ("credential".into(), "opaque-credential".into()),
             ("updatedAt".into(), at.to_rfc3339().into()),
         ]))
-        .await?;
+        .await?
+        .ok_or_else(|| AuthError::internal("Expected the created Passkey record"))?;
     let expected_keys = NATIVE_FIELDS
         .into_iter()
         .chain(["credential", "updatedAt", "id"])

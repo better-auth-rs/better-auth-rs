@@ -320,10 +320,10 @@ where
         .session_manager()
         .create_session(&owner, None, None)
         .await?;
-    let signed = sign_cookie_value(&session.token, SECRET);
+    let signed = sign_cookie_value(session.token.typed()?, SECRET);
     assert_eq!(
         verify_cookie_value(&signed, SECRET).as_deref(),
-        Some(session.token.as_str())
+        session.token.as_str()
     );
     let cookie = format!("better-auth.session_token={signed}");
     state.lock().expect("API Key setup trace").events.clear();

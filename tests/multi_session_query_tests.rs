@@ -59,7 +59,7 @@ async fn run<S: AuthSchema>(
             .await?;
         let session = store
             .update_session_with_writer(
-                &session.token,
+                session.token.typed()?,
                 SessionUpdate {
                     token: Some(name.into()),
                     ..Default::default()

@@ -272,12 +272,12 @@ fn decode_statements(
 /// Check the complete permission request against each assigned role independently.
 pub(crate) async fn check_permissions(
     role: &str,
-    organization_id: &str,
+    organization_id: &better_auth_core::FieldValue,
     permissions: Option<&Statements>,
     config: &super::OrganizationConfig,
     ctx: &better_auth_core::AuthContext<impl better_auth_core::AuthSchema>,
 ) -> better_auth_core::AuthResult<bool> {
-    let roles = permission_roles(&organization_id.into(), config, ctx).await?;
+    let roles = permission_roles(organization_id, config, ctx).await?;
     Ok(permissions.is_some_and(|permissions| authorize(role, permissions, &roles)))
 }
 
@@ -328,7 +328,7 @@ async fn permission_roles(
 /// Authorize one resource through the organization's configured and persisted roles.
 pub(crate) async fn check_permission(
     role: &str,
-    organization_id: &str,
+    organization_id: &better_auth_core::FieldValue,
     resource: &str,
     actions: &[&str],
     config: &super::OrganizationConfig,

@@ -115,18 +115,36 @@ impl<S: AuthSchema> AuthTransaction<S> for Transaction<S> {
         &self,
         input: crate::CreateVerification,
     ) -> AuthResult<crate::wire::VerificationView> {
+        self.create_verification_optional(input)
+            .await?
+            .ok_or_else(|| crate::AuthError::internal("Verification creation returned no record"))
+    }
+
+    async fn before_create_runtime_verification_optional(
+        &self,
+        input: &mut crate::CreateVerification,
+    ) -> AuthResult<bool> {
+        self.inner
+            .before_create_runtime_verification_optional(input)
+            .await
+    }
+
+    async fn create_verification_optional(
+        &self,
+        input: crate::CreateVerification,
+    ) -> AuthResult<Option<crate::wire::VerificationView>> {
         let request = crate::hooks::current_request_hook_context();
         let verification = self
             .runtime
             .create_verification_in_transaction(input, Some(self.inner.as_ref()))
             .await?;
-        if !self.runtime.database_verifications() {
+        if !self.runtime.database_verifications() && verification.is_some() {
             let runtime = self.runtime.clone();
             let created = verification.clone();
             self.inner.queue_after_commit(Box::pin(async move {
                 runtime
                     .inner
-                    .after_create_runtime_verification(&created, request)
+                    .after_create_runtime_verification(created.as_ref(), request)
                     .await
             }))?;
         }
@@ -136,7 +154,7 @@ impl<S: AuthSchema> AuthTransaction<S> for Transaction<S> {
         &self,
         input: crate::CreateVerification,
         writer: Option<crate::store::VerificationCreateWriter>,
-    ) -> AuthResult<crate::wire::VerificationView> {
+    ) -> AuthResult<Option<crate::wire::VerificationView>> {
         self.inner
             .create_verification_with_writer(input, writer)
             .await
@@ -256,11 +274,24 @@ impl<S: AuthSchema> AuthTransaction<S> for Transaction<S> {
     fn passkey_storage(&self) -> crate::PasskeyStorage {
         self.inner.passkey_storage()
     }
+    async fn create_passkey_optional(
+        &self,
+        input: crate::CreatePasskey,
+    ) -> AuthResult<Option<crate::Passkey>> {
+        self.inner.create_passkey_optional(input).await
+    }
+
     async fn create_passkey(&self, input: crate::CreatePasskey) -> AuthResult<crate::Passkey> {
         self.inner.create_passkey(input).await
     }
     async fn create_user(&self, input: CreateUser) -> AuthResult<crate::wire::UserView> {
         self.inner.create_user(input).await
+    }
+    async fn create_account_optional(
+        &self,
+        input: CreateAccount,
+    ) -> AuthResult<Option<crate::wire::AccountView>> {
+        self.inner.create_account_optional(input).await
     }
     async fn create_account(&self, input: CreateAccount) -> AuthResult<crate::wire::AccountView> {
         self.inner.create_account(input).await
@@ -318,7 +349,10 @@ impl<S: AuthSchema> TransactionStore<S> for SecondaryStore<S> {
 
 #[async_trait]
 impl<S: AuthSchema> crate::store::JwksStore for Transaction<S> {
-    async fn create_jwk_record(&self, input: crate::FieldMap) -> AuthResult<crate::FieldMap> {
+    async fn create_jwk_record(
+        &self,
+        input: crate::FieldMap,
+    ) -> AuthResult<Option<crate::FieldMap>> {
         self.inner.create_jwk_record(input).await
     }
     async fn get_jwk_record(
@@ -347,7 +381,7 @@ impl<S: AuthSchema> crate::store::WalletStore for Transaction<S> {
     async fn create_wallet_address_record(
         &self,
         input: crate::FieldMap,
-    ) -> AuthResult<crate::FieldMap> {
+    ) -> AuthResult<Option<crate::FieldMap>> {
         self.inner.create_wallet_address_record(input).await
     }
     async fn get_wallet_address_record(
@@ -383,7 +417,7 @@ impl<S: AuthSchema> crate::store::DeviceCodeStore for Transaction<S> {
     async fn create_device_code_record(
         &self,
         fields: crate::FieldMap,
-    ) -> AuthResult<crate::FieldMap> {
+    ) -> AuthResult<Option<crate::FieldMap>> {
         self.inner.create_device_code_record(fields).await
     }
     async fn get_device_code_record(

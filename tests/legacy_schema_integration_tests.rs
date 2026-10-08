@@ -313,32 +313,34 @@ mod session {
         fn id(&self) -> better_auth_core::SchemaValue<Cow<'_, str>> {
             better_auth_core::SchemaValue::Typed(Cow::Owned(self.id.to_string()))
         }
-        fn expires_at(&self) -> FieldDate {
-            self.expires_at.into()
+        fn expires_at(&self) -> better_auth_core::SchemaValue<FieldDate> {
+            better_auth_core::SchemaValue::Typed(self.expires_at.into())
         }
-        fn token(&self) -> &str {
-            &self.token
+        fn token(&self) -> better_auth_core::SchemaValue<Cow<'_, str>> {
+            better_auth_core::SchemaValue::Typed(Cow::Borrowed(&self.token))
         }
-        fn created_at(&self) -> FieldDate {
-            self.created_at.into()
+        fn created_at(&self) -> better_auth_core::SchemaValue<FieldDate> {
+            better_auth_core::SchemaValue::Typed(self.created_at.into())
         }
-        fn updated_at(&self) -> FieldDate {
-            self.updated_at.into()
+        fn updated_at(&self) -> better_auth_core::SchemaValue<FieldDate> {
+            better_auth_core::SchemaValue::Typed(self.updated_at.into())
         }
-        fn ip_address(&self) -> Option<&str> {
-            self.ip_address.as_deref()
+        fn ip_address(&self) -> better_auth_core::SchemaValue<Option<Cow<'_, str>>> {
+            better_auth_core::SchemaValue::Typed(self.ip_address.as_deref().map(Cow::Borrowed))
         }
-        fn user_agent(&self) -> Option<&str> {
-            self.user_agent.as_deref()
+        fn user_agent(&self) -> better_auth_core::SchemaValue<Option<Cow<'_, str>>> {
+            better_auth_core::SchemaValue::Typed(self.user_agent.as_deref().map(Cow::Borrowed))
         }
         fn user_id(&self) -> better_auth_core::SchemaValue<Cow<'_, str>> {
             better_auth_core::SchemaValue::Typed(Cow::Owned(self.user_id.to_string()))
         }
-        fn impersonated_by(&self) -> Option<&str> {
-            self.impersonated_by.as_deref()
+        fn impersonated_by(&self) -> better_auth_core::SchemaValue<Option<Cow<'_, str>>> {
+            better_auth_core::SchemaValue::Typed(self.impersonated_by.as_deref().map(Cow::Borrowed))
         }
-        fn active_organization_id(&self) -> Option<&str> {
-            self.active_organization_id.as_deref()
+        fn active_organization_id(&self) -> better_auth_core::SchemaValue<Option<Cow<'_, str>>> {
+            better_auth_core::SchemaValue::Typed(
+                self.active_organization_id.as_deref().map(Cow::Borrowed),
+            )
         }
         fn active(&self) -> bool {
             self.active
@@ -458,17 +460,26 @@ mod session {
                 active: Set(true),
             })
         }
-        fn set_expires_at(active: &mut Self::ActiveModel, expires_at: DateTime<Utc>) {
+        fn set_expires_at(
+            active: &mut Self::ActiveModel,
+            expires_at: DateTime<Utc>,
+        ) -> AuthResult<()> {
             active.expires_at = Set(expires_at);
+            Ok(())
         }
-        fn set_updated_at(active: &mut Self::ActiveModel, updated_at: DateTime<Utc>) {
+        fn set_updated_at(
+            active: &mut Self::ActiveModel,
+            updated_at: DateTime<Utc>,
+        ) -> AuthResult<()> {
             active.updated_at = Set(updated_at);
+            Ok(())
         }
         fn set_active_organization_id(
             active: &mut Self::ActiveModel,
             organization_id: Option<String>,
-        ) {
+        ) -> AuthResult<()> {
             active.active_organization_id = Set(organization_id);
+            Ok(())
         }
     }
 }

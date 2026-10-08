@@ -69,7 +69,10 @@ async fn memory_session_create_hooks_resolve_supplied_ids_before_generation() ->
         assert_eq!(created.id.field_value(), expected);
         assert!(created.additional_fields.is_empty());
         assert_eq!(store.lock()?.sessions.snapshot()?, [created.clone()]);
-        assert_eq!(required(store.get_session(&created.token).await?)?, created);
+        assert_eq!(
+            required(store.get_session(created.token.typed().unwrap()).await?)?,
+            created
+        );
         let mut expected_events = vec![json!(["hook", false])];
         if generated {
             expected_events.push(json!(["generate", "session"]));
@@ -147,12 +150,13 @@ async fn memory_session_create_aliases_share_the_physical_id_slot() -> AuthResul
             let started = Utc::now().timestamp_millis() as f64;
             let created = store.create_session(create).await?;
             let ended = Utc::now().timestamp_millis() as f64;
-            assert!((started..=ended).contains(&created.created_at.milliseconds()));
-            assert!((started..=ended).contains(&created.updated_at.milliseconds()));
-            assert_eq!(created.token.len(), 32);
+            assert!((started..=ended).contains(&created.created_at.date_milliseconds().unwrap()));
+            assert!((started..=ended).contains(&created.updated_at.date_milliseconds().unwrap()));
+            assert_eq!(created.token.typed().unwrap().len(), 32);
             assert!(
                 created
                     .token
+                    .typed()?
                     .bytes()
                     .all(|byte| byte.is_ascii_alphanumeric())
             );
@@ -183,8 +187,8 @@ async fn memory_session_create_aliases_share_the_physical_id_slot() -> AuthResul
             // The Store owns token and clock fields; normalize only those generated values for the adapter observation.
             let normalize = |mut row: SessionView| -> AuthResult<SessionView> {
                 row.token = "slot-alias".into();
-                row.created_at = date(CREATED_AT)?;
-                row.updated_at = date(CREATED_AT)?;
+                row.created_at = date(CREATED_AT)?.into();
+                row.updated_at = date(CREATED_AT)?.into();
                 Ok(row)
             };
             let result = observe(normalize(created.clone())?.into(), false)?;
@@ -210,7 +214,10 @@ async fn memory_session_create_aliases_share_the_physical_id_slot() -> AuthResul
                     && case["idGeneration"] == if serial { "serial" } else { "custom" }
             }))?;
             assert_eq!(actual, *expected, "{slot}, serial={serial}");
-            assert_eq!(required(store.get_session(&created.token).await?)?, created);
+            assert_eq!(
+                required(store.get_session(created.token.typed().unwrap()).await?)?,
+                created
+            );
         }
     }
     Ok(())
@@ -278,7 +285,7 @@ async fn memory_session_failed_nested_create_retains_its_forced_uuid_policy() ->
             let updated = required(
                 store
                     .update_session_with_writer(
-                        &stored.token,
+                        stored.token.typed().unwrap(),
                         SessionUpdate {
                             id: Some("outer-invalid".into()),
                             updated_at: Some(changed_at.clone()),
@@ -295,7 +302,7 @@ async fn memory_session_failed_nested_create_retains_its_forced_uuid_policy() ->
                 "7"
             }
             .into();
-            stored.updated_at = changed_at;
+            stored.updated_at = changed_at.into();
             stored.additional_fields = [("label".into(), "outer".into())].into();
             assert_eq!(updated, stored);
             assert_eq!(store.lock()?.sessions.snapshot()?, [stored]);

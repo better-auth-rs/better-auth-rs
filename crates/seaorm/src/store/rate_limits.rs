@@ -82,7 +82,17 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPluginSchema> RateLimi
                     )?,
                     self.config().advanced.database.generate_id(),
                 )?
-                .insert(self.connection())
+                .insert(
+                    self.connection(),
+                    super::create_readback::CreateReadback {
+                        schema: &self
+                            .model_fields
+                            .plugin_fields(better_auth_core::store::schema::EntityRole::RateLimit),
+                        policy: self.config().advanced.database.generate_id(),
+                        scope: super::create_readback::ReadbackScope::Direct(self.connection()),
+                        column: P::RateLimit::column,
+                    },
+                )
                 .await;
                 if let Err(error) = insert {
                     // Upstream retries a competing creation only when the key now exists.

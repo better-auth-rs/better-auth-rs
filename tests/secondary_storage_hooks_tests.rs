@@ -61,14 +61,19 @@ impl SeaOrmHooks<BundledSchema> for Hooks {
     }
     async fn after_create_session(
         &self,
-        session: &better_auth_core::wire::SessionView,
+        session: Option<&better_auth_core::wire::SessionView>,
         ctx: &SeaOrmHookContext<'_, BundledSchema>,
     ) -> AuthResult<()> {
+        let session = session
+            .ok_or_else(|| better_auth_core::AuthError::internal("Expected created fixture row"))?;
         if self.pure {
             assert!(ctx.tx.is_none());
             // Deferred upstream creates enqueue the after hook before the cache mirror.
             assert_eq!(
-                self.cache.get(session.token()).await?.is_some(),
+                self.cache
+                    .get(session.token().typed().unwrap())
+                    .await?
+                    .is_some(),
                 !self.deferred_session.load(Ordering::SeqCst)
             );
         }
@@ -90,9 +95,11 @@ impl SeaOrmHooks<BundledSchema> for Hooks {
     }
     async fn after_create_verification(
         &self,
-        verification: &better_auth_core::wire::VerificationView,
+        verification: Option<&better_auth_core::wire::VerificationView>,
         _: &SeaOrmHookContext<'_, BundledSchema>,
     ) -> AuthResult<()> {
+        let verification = verification
+            .ok_or_else(|| better_auth_core::AuthError::internal("Expected created fixture row"))?;
         assert!(
             self.cache
                 .get(&format!(
@@ -175,7 +182,10 @@ async fn pure_secondary_creation_runs_hooks_and_cancellation_prevents_cache_writ
         .create_session(input(user.id.typed().unwrap().clone()))
         .await
         .unwrap();
-    assert_eq!(session.user_agent(), Some("hook-agent"));
+    assert_eq!(
+        session.user_agent().typed().unwrap().as_deref(),
+        Some("hook-agent")
+    );
     let verification = auth
         .store()
         .create_verification(CreateVerification {
@@ -270,10 +280,10 @@ async fn transaction_publishes_session_and_after_hook_only_after_commit() {
                 let session = tx
                     .create_session_with_deferred_secondary(input(user.id.typed().unwrap().clone()))
                     .await?;
-                *captured.lock().unwrap() = session.token().to_owned();
-                assert!(cache.get(session.token()).await?.is_none());
+                *captured.lock().unwrap() = session.token().typed().unwrap().to_string();
+                assert!(cache.get(session.token().typed().unwrap()).await?.is_none());
                 if commit {
-                    Ok(session.token().to_owned())
+                    Ok(session.token().typed().unwrap().to_string())
                 } else {
                     Err(AuthError::internal("rollback"))
                 }
@@ -320,8 +330,8 @@ async fn default_transaction_session_mirrors_the_uncommitted_user_without_deferr
                     let session = tx
                         .create_session(input(user.id.typed().unwrap().clone()))
                         .await?;
-                    *captured.lock().unwrap() = session.token().to_owned();
-                    let encoded = cache.get(session.token()).await?.unwrap();
+                    *captured.lock().unwrap() = session.token().typed().unwrap().to_string();
+                    let encoded = cache.get(session.token().typed().unwrap()).await?.unwrap();
                     let cached: serde_json::Value =
                         serde_json::from_str(encoded.as_str().unwrap())?;
                     assert_eq!(
@@ -389,16 +399,29 @@ async fn preserved_session_revoke_ends_the_row_and_runs_delete_hooks_once() {
         .await
         .unwrap();
     hooks.events.lock().unwrap().clear();
-    auth.store().delete_session(session.token()).await.unwrap();
-    auth.store().delete_session(session.token()).await.unwrap();
+    auth.store()
+        .delete_session(session.token().typed().unwrap())
+        .await
+        .unwrap();
+    auth.store()
+        .delete_session(session.token().typed().unwrap())
+        .await
+        .unwrap();
     assert!(
         auth.store()
-            .get_session(session.token())
+            .get_session(session.token().typed().unwrap())
             .await
             .unwrap()
             .is_none()
     );
-    assert!(hooks.cache.get(session.token()).await.unwrap().is_none());
+    assert!(
+        hooks
+            .cache
+            .get(session.token().typed().unwrap())
+            .await
+            .unwrap()
+            .is_none()
+    );
     let preserved = SessionEntity::find_by_id(session.id.typed().unwrap())
         .one(&database)
         .await
@@ -406,7 +429,16 @@ async fn preserved_session_revoke_ends_the_row_and_runs_delete_hooks_once() {
         .unwrap();
     assert!(preserved.expires_at <= Utc::now());
     // Upstream preserved revocation runs adapter.updateMany, including updatedAt.onUpdate.
-    assert!(preserved.updated_at > session.updated_at.to_datetime().unwrap().unwrap());
+    assert!(
+        preserved.updated_at
+            > session
+                .updated_at
+                .typed()
+                .unwrap()
+                .to_datetime()
+                .unwrap()
+                .unwrap()
+    );
     assert!(
         (preserved.updated_at - preserved.expires_at)
             .num_milliseconds()
@@ -475,14 +507,19 @@ async fn pure_secondary_email_verification_does_not_require_a_session_table() {
         );
         assert_eq!(
             auth.store()
-                .get_session(session.token())
+                .get_session(session.token().typed().unwrap())
                 .await
                 .unwrap()
                 .is_some(),
             verified
         );
         assert_eq!(
-            hooks.cache.get(session.token()).await.unwrap().is_some(),
+            hooks
+                .cache
+                .get(session.token().typed().unwrap())
+                .await
+                .unwrap()
+                .is_some(),
             verified
         );
     }
@@ -580,7 +617,7 @@ async fn late_email_proof_does_not_revoke_the_verified_owners_new_cached_session
     assert!(winner.email_verified());
     assert!(
         auth.store()
-            .get_session(unproven.token())
+            .get_session(unproven.token().typed().unwrap())
             .await
             .unwrap()
             .is_none()
@@ -595,7 +632,7 @@ async fn late_email_proof_does_not_revoke_the_verified_owners_new_cached_session
 
     assert!(
         auth.store()
-            .get_session(proven.token())
+            .get_session(proven.token().typed().unwrap())
             .await
             .unwrap()
             .is_some()
@@ -606,7 +643,10 @@ async fn late_email_proof_does_not_revoke_the_verified_owners_new_cached_session
         .await
         .unwrap();
     assert_eq!(active.len(), 1);
-    assert_eq!(active.first().unwrap().token(), proven.token());
+    assert_eq!(
+        active.first().unwrap().token().typed().unwrap(),
+        proven.token().typed().unwrap()
+    );
 }
 
 struct FailAfterVerification;
@@ -670,10 +710,16 @@ async fn committed_verification_revokes_cache_when_after_hook_fails() {
             .unwrap()
             .email_verified()
     );
-    assert!(cache.get(old.token()).await.unwrap().is_none());
+    assert!(
+        cache
+            .get(old.token().typed().unwrap())
+            .await
+            .unwrap()
+            .is_none()
+    );
     assert!(
         auth.store()
-            .get_session(old.token())
+            .get_session(old.token().typed().unwrap())
             .await
             .unwrap()
             .is_none()
@@ -701,7 +747,7 @@ async fn committed_verification_revokes_cache_when_after_hook_fails() {
     );
     assert!(
         auth.store()
-            .get_session(owner.token())
+            .get_session(owner.token().typed().unwrap())
             .await
             .unwrap()
             .is_some()
@@ -785,7 +831,7 @@ async fn cache_revocation_failure_rolls_back_verification_and_next_proof_finishe
     );
     assert!(
         auth.store()
-            .get_session(old.token())
+            .get_session(old.token().typed().unwrap())
             .await
             .unwrap()
             .is_some()
@@ -806,10 +852,16 @@ async fn cache_revocation_failure_rolls_back_verification_and_next_proof_finishe
             .unwrap()
             .is_empty()
     );
-    assert!(cache.get(old.token()).await.unwrap().is_none());
+    assert!(
+        cache
+            .get(old.token().typed().unwrap())
+            .await
+            .unwrap()
+            .is_none()
+    );
     assert!(
         auth.store()
-            .get_session(old.token())
+            .get_session(old.token().typed().unwrap())
             .await
             .unwrap()
             .is_none()
@@ -833,7 +885,10 @@ async fn cache_revocation_failure_rolls_back_verification_and_next_proof_finishe
         .await
         .unwrap();
     assert_eq!(sessions.len(), 1);
-    assert_eq!(sessions.first().unwrap().token(), owner.token());
+    assert_eq!(
+        sessions.first().unwrap().token().typed().unwrap(),
+        owner.token().typed().unwrap()
+    );
 }
 
 #[tokio::test]
@@ -855,7 +910,7 @@ async fn transaction_user_changes_refresh_or_revoke_cached_sessions_only_after_c
                 .create_session(input(user.id.typed().unwrap().clone()))
                 .await
                 .unwrap();
-            let token = session.token().to_owned();
+            let token = session.token().typed().unwrap().to_string();
             let user_id = user.id.clone();
             let cached_token = token.clone();
             let cache = hooks.cache.clone();
@@ -986,7 +1041,7 @@ async fn transaction_user_changes_without_secondary_follow_database_commit_and_r
                 assert!(stored.is_none());
                 assert!(
                     auth.store()
-                        .get_session(session.token())
+                        .get_session(session.token().typed().unwrap())
                         .await
                         .unwrap()
                         .is_none()
@@ -996,7 +1051,7 @@ async fn transaction_user_changes_without_secondary_follow_database_commit_and_r
                 assert_eq!(stored.unwrap().name.typed().unwrap().as_deref(), Some(name));
                 assert!(
                     auth.store()
-                        .get_session(session.token())
+                        .get_session(session.token().typed().unwrap())
                         .await
                         .unwrap()
                         .is_some()

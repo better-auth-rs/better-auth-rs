@@ -1,5 +1,7 @@
-use better_auth_core::utils::cookie_utils::sign_cookie_value_raw;
-use better_auth_core::{AuthContext, AuthSchema, CookieAttributes, SameSite};
+use better_auth_core::utils::cookie_utils::sign_cookie_value_native_raw;
+use better_auth_core::{
+    AuthContext, AuthResult, AuthSchema, CookieAttributes, FieldValue, SameSite,
+};
 use chrono::Utc;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -31,9 +33,9 @@ pub struct TestCookie {
 }
 fn signed<S: AuthSchema>(
     auth: &AuthContext<S>,
-    token: &str,
-) -> (better_auth_core::request_runtime::ResolvedCookie, String) {
-    (
+    token: &FieldValue,
+) -> AuthResult<(better_auth_core::request_runtime::ResolvedCookie, String)> {
+    Ok((
         auth.config.auth_cookie(
             "session_token",
             CookieAttributes {
@@ -41,22 +43,22 @@ fn signed<S: AuthSchema>(
                 ..Default::default()
             },
         ),
-        sign_cookie_value_raw(token, &auth.config.secret),
-    )
+        sign_cookie_value_native_raw(token, &auth.config.secret)?,
+    ))
 }
 pub(super) fn headers<S: AuthSchema>(
     auth: &AuthContext<S>,
-    token: &str,
-) -> HashMap<String, String> {
-    let (cookie, value) = signed(auth, token);
-    [("cookie".into(), format!("{}={value}", cookie.name))].into()
+    token: &FieldValue,
+) -> AuthResult<HashMap<String, String>> {
+    let (cookie, value) = signed(auth, token)?;
+    Ok([("cookie".into(), format!("{}={value}", cookie.name))].into())
 }
 pub(super) fn cookies<S: AuthSchema>(
     auth: &AuthContext<S>,
-    token: &str,
+    token: &FieldValue,
     domain: Option<&str>,
-) -> Vec<TestCookie> {
-    let (cookie, value) = signed(auth, token);
+) -> AuthResult<Vec<TestCookie>> {
+    let (cookie, value) = signed(auth, token)?;
     let attributes = cookie.attributes;
     let domain = domain
         .filter(|value| !value.is_empty())
@@ -67,7 +69,7 @@ pub(super) fn cookies<S: AuthSchema>(
                 .and_then(|url| url.host_str().map(str::to_owned))
                 .unwrap_or_else(|| "localhost".into())
         });
-    vec![TestCookie {
+    Ok(vec![TestCookie {
         name: cookie.name,
         value,
         domain,
@@ -86,5 +88,5 @@ pub(super) fn cookies<S: AuthSchema>(
             .max_age
             .filter(|value| *value != 0.0 && !value.is_nan())
             .map(|age| Utc::now().timestamp() as f64 + age),
-    }]
+    }])
 }

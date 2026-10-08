@@ -327,7 +327,7 @@ async fn explicit_native_reference_replacement_retains_ordinary_string_storage()
         .await?;
     let created = store
         .create_organization_role(CreateOrganizationRole {
-            organization_id: organization.id.typed()?.clone(),
+            organization_id: organization.id.clone(),
             role: "viewer".into(),
             permission: FieldValue::from(FieldMap::new()),
             additional_fields: Default::default(),

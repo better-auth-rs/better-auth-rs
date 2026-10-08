@@ -397,7 +397,7 @@ pub(crate) async fn begin_sign_in_challenge(
     let expires_at = cookie_expires_at(max_age)?;
     _ = ctx
         .database
-        .create_verification(CreateVerification {
+        .create_verification_optional(CreateVerification {
             identifier: (identifier.clone()).into(),
             value: user.id().into_owned(),
             expires_at: expires_at.into(),
@@ -407,7 +407,7 @@ pub(crate) async fn begin_sign_in_challenge(
 
     let _ = ctx
         .database
-        .create_verification(CreateVerification {
+        .create_verification_optional(CreateVerification {
             identifier: (format!("2fa-attempts-{identifier}")).into(),
             value: ("0".to_owned()).into(),
             expires_at: expires_at.into(),

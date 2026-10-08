@@ -188,7 +188,7 @@ async fn observe(
             .await?;
         let cookie = format!(
             "better-auth.session_token={}",
-            sign_cookie_value(&session.token, SECRET)
+            sign_cookie_value(session.token.typed().unwrap(), SECRET)
         );
         verifier.cookie.set(cookie.clone()).unwrap();
         Some(cookie)
@@ -392,7 +392,7 @@ async fn exercise_endpoint_verifier(
             "cookie".into(),
             format!(
                 "better-auth.session_token={}",
-                sign_cookie_value(&session.token, SECRET),
+                sign_cookie_value(session.token.typed().unwrap(), SECRET),
             ),
         );
     }
@@ -479,7 +479,7 @@ async fn exercise_endpoint_verifier(
                         context
                             .auth
                             .database
-                            .get_session(&session.token)
+                            .get_session(session.token.typed().unwrap())
                             .await?
                             .is_some()
                     );

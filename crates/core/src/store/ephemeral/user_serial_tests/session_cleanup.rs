@@ -72,10 +72,20 @@ async fn serial_user_deletion_cleans_owned_access_for_canonical_and_aliased_ids(
         store.delete_user(id).await?;
         assert!(store.get_user_by_id("1").await?.is_none());
         assert_eq!(required(store.get_user_by_id("2").await?)?.id, "2");
-        assert!(store.get_session(&first.token).await?.is_none());
-        assert!(store.get_session(&second.token).await?.is_none());
+        assert!(
+            store
+                .get_session(first.token.typed().unwrap())
+                .await?
+                .is_none()
+        );
+        assert!(
+            store
+                .get_session(second.token.typed().unwrap())
+                .await?
+                .is_none()
+        );
         assert_eq!(
-            required(store.get_session(&other.token).await?)?.user_id,
+            required(store.get_session(other.token.typed().unwrap()).await?)?.user_id,
             "2"
         );
         assert_eq!(
@@ -107,7 +117,7 @@ async fn serial_session_owner_update_rebinds_aliases_for_list_and_delete() -> Au
     let updated = required(
         SessionStore::update_session_with_writer(
             &store,
-            &moved.token,
+            moved.token.typed().unwrap(),
             SessionUpdate {
                 user_id: Some("0x2".into()),
                 ..Default::default()
@@ -121,20 +131,28 @@ async fn serial_session_owner_update_rebinds_aliases_for_list_and_delete() -> Au
         raw_owners(&store)?,
         (vec![Value::Number(2.0), Value::Number(1.0)], Vec::new())
     );
-    for (id, token, owner) in [("01", &retained.token, "1"), ("02", &moved.token, "2")] {
+    for (id, token, owner) in [
+        ("01", retained.token.typed().unwrap(), "1"),
+        ("02", moved.token.typed().unwrap(), "2"),
+    ] {
         let sessions = store.get_user_sessions(id).await?;
         assert_eq!(sessions.len(), 1);
         let session = required(sessions.first())?;
-        assert_eq!(&session.token, token);
+        assert_eq!(session.token.typed().unwrap(), token);
         assert_eq!(session.user_id, owner);
     }
     assert_eq!(
         store.delete_user_sessions_optional("0x2", false).await?,
         Some(1)
     );
-    assert!(store.get_session(&moved.token).await?.is_none());
+    assert!(
+        store
+            .get_session(moved.token.typed().unwrap())
+            .await?
+            .is_none()
+    );
     assert_eq!(
-        required(store.get_session(&retained.token).await?)?.user_id,
+        required(store.get_session(retained.token.typed().unwrap()).await?)?.user_id,
         "1"
     );
     assert_eq!(raw_owners(&store)?, (vec![Value::Number(1.0)], Vec::new()));
@@ -153,9 +171,14 @@ async fn serial_unproven_user_verification_cleans_access_once_through_aliases() 
     assert_eq!(verified.id, "1");
     assert!(verified.email_verified);
     assert!(!required(store.get_user_by_id("2").await?)?.email_verified);
-    assert!(store.get_session(&revoked.token).await?.is_none());
+    assert!(
+        store
+            .get_session(revoked.token.typed().unwrap())
+            .await?
+            .is_none()
+    );
     assert_eq!(
-        required(store.get_session(&retained.token).await?)?.user_id,
+        required(store.get_session(retained.token.typed().unwrap()).await?)?.user_id,
         "2"
     );
     assert_eq!(
@@ -165,7 +188,7 @@ async fn serial_unproven_user_verification_cleans_access_once_through_aliases() 
     let proven = access(&store, "1", "proven").await?;
     assert!(required(store.verify_user_and_revoke_unproven_access("01").await?)?.email_verified);
     assert_eq!(
-        required(store.get_session(&proven.token).await?)?.user_id,
+        required(store.get_session(proven.token.typed().unwrap()).await?)?.user_id,
         "1"
     );
     assert_eq!(
@@ -228,7 +251,7 @@ async fn configured_serial_session_owner_has_one_storage_and_output_value() -> A
         (1, 1)
     );
     assert_eq!(raw_owners(&store)?, (vec![Value::Number(2.0)], Vec::new()));
-    let read = required(store.get_session(&created.token).await?)?;
+    let read = required(store.get_session(created.token.typed().unwrap()).await?)?;
     assert_eq!(
         (
             input_calls.load(Ordering::Relaxed),
@@ -239,7 +262,7 @@ async fn configured_serial_session_owner_has_one_storage_and_output_value() -> A
     let updated = required(
         SessionStore::update_session_with_writer(
             &store,
-            &created.token,
+            created.token.typed().unwrap(),
             SessionUpdate {
                 user_id: Some("01".into()),
                 additional_fields: [("userId".into(), Value::from("99"))].into(),
@@ -322,14 +345,14 @@ async fn preserved_serial_sessions_apply_owner_on_update_once_per_batch() -> Aut
     assert_eq!(
         preserved
             .iter()
-            .map(|session| &session.token)
+            .map(|session| session.token.typed().unwrap())
             .collect::<Vec<_>>(),
-        [&first.token, &second.token]
+        [first.token.typed().unwrap(), second.token.typed().unwrap()]
     );
     let now = Utc::now().timestamp_millis() as f64;
     for session in preserved {
         assert_eq!(session.user_id, "2");
-        assert!(session.expires_at.milliseconds() <= now);
+        assert!(session.expires_at.date_milliseconds().unwrap() <= now);
     }
     assert_eq!(calls.load(Ordering::Relaxed), 1);
     Ok(())

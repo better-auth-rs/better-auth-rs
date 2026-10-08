@@ -74,6 +74,7 @@ impl Fixture {
                 ("verified".into(), verified),
             ]))
             .await?;
+        let row = row.ok_or_else(|| AuthError::internal("Expected created fixture factor"))?;
         let id = SchemaValue::from_field(row.get("id").cloned().unwrap_or_default());
         for (identifier, value) in [
             ("native-factor-challenge", user.id.clone()),

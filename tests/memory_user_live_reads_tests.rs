@@ -118,7 +118,7 @@ async fn seed(store: &EphemeralStore) -> AuthResult<String> {
             ..Default::default()
         })
         .await?;
-    Ok(session.token)
+    Ok(session.token.typed()?.clone())
 }
 
 #[tokio::test]

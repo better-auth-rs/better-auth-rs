@@ -99,7 +99,7 @@ impl FieldMap {
     }
 
     /// Preserve source property order, then append remaining fields.
-    pub(crate) fn in_field_order(mut self, order: &[String]) -> Self {
+    pub fn in_field_order(mut self, order: &[String]) -> Self {
         let mut fields = Self::new();
         for name in order {
             if let Some(value) = self.remove(name) {
@@ -317,24 +317,7 @@ impl FieldValue {
 
     /// Import JSON values without reviving strings as Date objects.
     pub fn from_json(value: JsonValue) -> AuthResult<Self> {
-        Ok(match value {
-            JsonValue::Null => Self::Null,
-            JsonValue::Bool(value) => Self::Bool(value),
-            JsonValue::Number(value) => Self::Number(value.as_f64().ok_or_else(|| {
-                AuthError::internal("JSON number exceeds JavaScript number range")
-            })?),
-            JsonValue::String(value) => Self::String(value),
-            JsonValue::Array(values) => values
-                .into_iter()
-                .map(Self::from_json)
-                .collect::<AuthResult<Vec<_>>>()?
-                .into(),
-            JsonValue::Object(values) => values
-                .into_iter()
-                .map(|(name, value)| Ok((name, Self::from_json(value)?)))
-                .collect::<AuthResult<FieldMap>>()?
-                .into(),
-        })
+        Ok(value.into())
     }
 
     /// Project at a JSON boundary. Top-level undefined has no JSON value.
@@ -552,4 +535,36 @@ impl StructuredCloneContext {
     pub fn clone_field<T: crate::SchemaField>(&mut self, value: &T) -> AuthResult<T> {
         self.clone_value(&value.clone().into_field()).decode()
     }
+}
+
+impl From<JsonValue> for FieldValue {
+    fn from(value: JsonValue) -> Self {
+        match value {
+            JsonValue::Null => Self::Null,
+            JsonValue::Bool(value) => Self::Bool(value),
+            JsonValue::Number(value) => Self::Number(json_number(&value)),
+            JsonValue::String(value) => Self::String(value),
+            JsonValue::Array(values) => values
+                .into_iter()
+                .map(Self::from)
+                .collect::<Vec<_>>()
+                .into(),
+            JsonValue::Object(values) => values
+                .into_iter()
+                .map(|(name, value)| (name, Self::from(value)))
+                .collect::<FieldMap>()
+                .into(),
+        }
+    }
+}
+
+fn json_number(value: &serde_json::Number) -> f64 {
+    value.as_f64().unwrap_or_else(|| {
+        // Arbitrary-precision JSON numbers can exceed f64. JavaScript JSON.parse retains signed infinity.
+        if value.to_string().starts_with('-') {
+            f64::NEG_INFINITY
+        } else {
+            f64::INFINITY
+        }
+    })
 }

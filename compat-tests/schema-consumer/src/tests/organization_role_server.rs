@@ -209,7 +209,7 @@ where
     let cookie = format!(
         "better-auth.session_token={}",
         better_auth::__private_core::utils::cookie_utils::sign_cookie_value(
-            &login.token,
+            login.token.typed()?,
             auth.config().signing_secret()
         )
     );

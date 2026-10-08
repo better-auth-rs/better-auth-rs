@@ -63,7 +63,7 @@ impl DatabaseHooks<BundledSchema> for Hooks {
     }
     async fn after_create_verification(
         &self,
-        _: &VerificationView,
+        _: Option<&VerificationView>,
         context: &DatabaseHookContext<'_, BundledSchema>,
     ) -> AuthResult<()> {
         self.state.event("verification:create.after");
@@ -90,7 +90,7 @@ impl DatabaseHooks<BundledSchema> for Hooks {
     }
     async fn after_create_user(
         &self,
-        _: &UserView,
+        _: Option<&UserView>,
         context: &DatabaseHookContext<'_, BundledSchema>,
     ) -> AuthResult<()> {
         self.state.event("user:create.after");
@@ -116,7 +116,7 @@ impl DatabaseHooks<BundledSchema> for Hooks {
     }
     async fn after_create_session(
         &self,
-        _: &SessionView,
+        _: Option<&SessionView>,
         context: &DatabaseHookContext<'_, BundledSchema>,
     ) -> AuthResult<()> {
         self.state.event("session:create.after");

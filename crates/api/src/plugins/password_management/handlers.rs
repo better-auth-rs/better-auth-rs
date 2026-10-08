@@ -62,7 +62,7 @@ pub(crate) async fn request_password_reset_core(
 
     let _ = ctx
         .database
-        .create_verification(better_auth_core::CreateVerification {
+        .create_verification_optional(better_auth_core::CreateVerification {
             identifier: (format!("reset-password:{}", reset_token)).into(),
             value: user.id().into_owned(),
             expires_at: (expires_at).into(),
@@ -159,7 +159,7 @@ pub(crate) async fn reset_password_core(
     } else {
         let _ = ctx
             .database
-            .create_account(CreateAccount {
+            .create_account_optional(CreateAccount {
                 user_id: (user_id.clone()).into(),
                 account_id: (user_id.clone()).into(),
                 provider_id: ("credential".to_string()).into(),

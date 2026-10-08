@@ -117,14 +117,57 @@ pub trait SeaOrmSessionModel:
         create_session: CreateSession,
         now: DateTime<Utc>,
     ) -> AuthResult<Self::ActiveModel>;
-    fn set_expires_at(active: &mut Self::ActiveModel, expires_at: DateTime<Utc>);
-    fn set_updated_at(active: &mut Self::ActiveModel, updated_at: DateTime<Utc>);
+    /// Initialize application columns from logical creation fields before SQL binding.
+    /// The default bridge requires the native String and Date types accepted by `new_active`.
+    /// Override this method when application initialization must accept replacement field types.
+    /// The store applies prepared physical fields after this method returns.
+    fn new_active_from_fields(
+        id: Option<Self::Id>,
+        fields: &better_auth_core::FieldMap,
+    ) -> AuthResult<Self::ActiveModel> {
+        let field = |name: &str| fields.get(name).cloned().unwrap_or_default();
+        let created_at: better_auth_core::FieldDate = field("createdAt").decode()?;
+        let now = created_at.to_datetime()?.ok_or_else(|| {
+            better_auth_core::AuthError::config(
+                "The Session constructor requires a valid createdAt Date",
+            )
+        })?;
+        let user_id = better_auth_core::SchemaValue::<String>::from_field(field("userId"));
+        if let Some(value) = user_id.as_str() {
+            let _ = Self::parse_user_id(value)?;
+        }
+        Self::new_active(
+            id,
+            field("token").decode()?,
+            CreateSession {
+                inherited_fields: Default::default(),
+                user_id,
+                expires_at: field("expiresAt").decode()?,
+                ip_address: field("ipAddress").decode()?,
+                user_agent: field("userAgent").decode()?,
+                impersonated_by: field("impersonatedBy").decode()?,
+                active_organization_id: field("activeOrganizationId").decode()?,
+                additional_fields: Default::default(),
+            },
+            now,
+        )
+    }
+    fn set_expires_at(active: &mut Self::ActiveModel, expires_at: DateTime<Utc>) -> AuthResult<()>;
+    fn set_updated_at(active: &mut Self::ActiveModel, updated_at: DateTime<Utc>) -> AuthResult<()>;
     /// Apply core and enabled plugin values returned by session update hooks.
     fn apply_update(active: &mut Self::ActiveModel, update: crate::SessionUpdate)
     -> AuthResult<()>;
     /// Persist the active team after plugin field validation.
-    fn set_active_team_id(_active: &mut Self::ActiveModel, _team_id: Option<String>) {}
-    fn set_active_organization_id(active: &mut Self::ActiveModel, organization_id: Option<String>);
+    fn set_active_team_id(
+        _active: &mut Self::ActiveModel,
+        _team_id: Option<String>,
+    ) -> AuthResult<()> {
+        Ok(())
+    }
+    fn set_active_organization_id(
+        active: &mut Self::ActiveModel,
+        organization_id: Option<String>,
+    ) -> AuthResult<()>;
     /// Apply fields validated against the application's session configuration.
     fn apply_fields(
         _active: &mut Self::ActiveModel,

@@ -68,7 +68,10 @@ async fn invalid_team_input_precedes_policies_and_preserves_null_errors() {
         .await
         .unwrap();
     ctx.database
-        .update_session_active_organization(&session.token, Some(org.id.typed().unwrap()))
+        .update_session_active_organization(
+            session.token.typed().unwrap(),
+            Some(org.id.typed().unwrap()),
+        )
         .await
         .unwrap();
     let callbacks = Arc::new(Callbacks::default());
@@ -92,7 +95,7 @@ async fn invalid_team_input_precedes_policies_and_preserves_null_errors() {
         create_auth_json_request_no_query(
             HttpMethod::Post,
             "/organization/create-team",
-            Some(&session.token),
+            Some(session.token.typed().unwrap()),
             Some(body),
         )
     };
@@ -133,7 +136,7 @@ async fn invalid_team_input_precedes_policies_and_preserves_null_errors() {
         create_auth_json_request_no_query(
             HttpMethod::Post,
             "/organization/update-team",
-            Some(&session.token),
+            Some(session.token.typed().unwrap()),
             Some(json!({"teamId":team["id"], "data":data})),
         )
     };

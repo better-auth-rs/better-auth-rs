@@ -50,21 +50,23 @@ pub struct UserView {
 }
 
 /// Public session response shape.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Default)]
 pub struct SessionView {
+    /// Source property order, independent of the current typed values.
+    pub field_order: Vec<String>,
     /// Plugin field presence in the database projection or signed cache.
     pub visible_fields: Option<std::collections::BTreeSet<String>>,
     pub id: SchemaValue<String>,
-    pub expires_at: crate::FieldDate,
-    pub token: String,
-    pub created_at: crate::FieldDate,
-    pub updated_at: crate::FieldDate,
-    pub ip_address: Option<String>,
-    pub user_agent: Option<String>,
+    pub expires_at: SchemaValue<crate::FieldDate>,
+    pub token: SchemaValue<String>,
+    pub created_at: SchemaValue<crate::FieldDate>,
+    pub updated_at: SchemaValue<crate::FieldDate>,
+    pub ip_address: SchemaValue<Option<String>>,
+    pub user_agent: SchemaValue<Option<String>>,
     pub user_id: SchemaValue<String>,
-    pub impersonated_by: Option<String>,
-    pub active_organization_id: Option<String>,
-    pub active_team_id: Option<String>,
+    pub impersonated_by: SchemaValue<Option<String>>,
+    pub active_organization_id: SchemaValue<Option<String>>,
+    pub active_team_id: SchemaValue<Option<String>>,
     pub active: bool,
     pub additional_fields: crate::FieldMap,
 }
@@ -155,6 +157,7 @@ impl From<&UserView> for UserView {
 impl<T: AuthSession> From<&T> for SessionView {
     fn from(session: &T) -> Self {
         Self {
+            field_order: session.field_order().unwrap_or_default().to_vec(),
             visible_fields: Some(session.field_presence().cloned().unwrap_or_else(|| {
                 [
                     ("impersonated_by", "impersonatedBy"),
@@ -168,15 +171,21 @@ impl<T: AuthSession> From<&T> for SessionView {
             })),
             id: session.id().into_owned(),
             expires_at: session.expires_at(),
-            token: session.token().to_owned(),
+            token: session.token().into_owned(),
             created_at: session.created_at(),
             updated_at: session.updated_at(),
-            ip_address: session.ip_address().map(str::to_owned),
-            user_agent: session.user_agent().map(str::to_owned),
+            ip_address: session.ip_address().map(|value| value.map(Cow::into_owned)),
+            user_agent: session.user_agent().map(|value| value.map(Cow::into_owned)),
             user_id: session.user_id().into_owned(),
-            impersonated_by: session.impersonated_by().map(str::to_owned),
-            active_organization_id: session.active_organization_id().map(str::to_owned),
-            active_team_id: session.active_team_id().map(str::to_owned),
+            impersonated_by: session
+                .impersonated_by()
+                .map(|value| value.map(Cow::into_owned)),
+            active_organization_id: session
+                .active_organization_id()
+                .map(|value| value.map(Cow::into_owned)),
+            active_team_id: session
+                .active_team_id()
+                .map(|value| value.map(Cow::into_owned)),
             active: session.active(),
             additional_fields: Default::default(),
         }
@@ -201,6 +210,20 @@ impl SessionView {
 
     /// Apply current public visibility without materializing absent cached fields.
     pub fn filter_returned_fields(&mut self, config: &crate::config::SessionConfig) {
+        macro_rules! hide {
+            ($($field:ident => $name:literal),* $(,)?) => {$(
+                if config.fields().get($name).is_some_and(|field| !field.returned()) {
+                    self.$field = SchemaValue::Undefined;
+                    self.field_order.retain(|name| name != $name);
+                }
+            )*};
+        }
+        hide!(
+            token => "token", user_id => "userId", expires_at => "expiresAt",
+            created_at => "createdAt", updated_at => "updatedAt", ip_address => "ipAddress",
+            user_agent => "userAgent", impersonated_by => "impersonatedBy",
+            active_organization_id => "activeOrganizationId", active_team_id => "activeTeamId",
+        );
         self.additional_fields.retain(|name, _| {
             config
                 .fields()
@@ -375,6 +398,9 @@ impl AuthUser for UserView {
 }
 
 impl AuthSession for SessionView {
+    fn field_order(&self) -> Option<&[String]> {
+        Some(&self.field_order)
+    }
     fn field_presence(&self) -> Option<&std::collections::BTreeSet<String>> {
         self.visible_fields.as_ref()
     }
@@ -390,35 +416,47 @@ impl AuthSession for SessionView {
     fn id(&self) -> SchemaValue<Cow<'_, str>> {
         self.id.as_ref().map(|id| Cow::Borrowed(id.as_str()))
     }
-    fn expires_at(&self) -> crate::FieldDate {
+    fn expires_at(&self) -> SchemaValue<crate::FieldDate> {
         self.expires_at.clone()
     }
-    fn token(&self) -> &str {
-        &self.token
+    fn token(&self) -> SchemaValue<Cow<'_, str>> {
+        self.token
+            .as_ref()
+            .map(|value| Cow::Borrowed(value.as_str()))
     }
-    fn created_at(&self) -> crate::FieldDate {
+    fn created_at(&self) -> SchemaValue<crate::FieldDate> {
         self.created_at.clone()
     }
-    fn updated_at(&self) -> crate::FieldDate {
+    fn updated_at(&self) -> SchemaValue<crate::FieldDate> {
         self.updated_at.clone()
     }
-    fn ip_address(&self) -> Option<&str> {
-        self.ip_address.as_deref()
+    fn ip_address(&self) -> SchemaValue<Option<Cow<'_, str>>> {
+        self.ip_address
+            .as_ref()
+            .map(|value| value.as_deref().map(Cow::Borrowed))
     }
-    fn user_agent(&self) -> Option<&str> {
-        self.user_agent.as_deref()
+    fn user_agent(&self) -> SchemaValue<Option<Cow<'_, str>>> {
+        self.user_agent
+            .as_ref()
+            .map(|value| value.as_deref().map(Cow::Borrowed))
     }
     fn user_id(&self) -> SchemaValue<Cow<'_, str>> {
         self.user_id.as_ref().map(|id| Cow::Borrowed(id.as_str()))
     }
-    fn impersonated_by(&self) -> Option<&str> {
-        self.impersonated_by.as_deref()
+    fn impersonated_by(&self) -> SchemaValue<Option<Cow<'_, str>>> {
+        self.impersonated_by
+            .as_ref()
+            .map(|value| value.as_deref().map(Cow::Borrowed))
     }
-    fn active_team_id(&self) -> Option<&str> {
-        self.active_team_id.as_deref()
+    fn active_team_id(&self) -> SchemaValue<Option<Cow<'_, str>>> {
+        self.active_team_id
+            .as_ref()
+            .map(|value| value.as_deref().map(Cow::Borrowed))
     }
-    fn active_organization_id(&self) -> Option<&str> {
-        self.active_organization_id.as_deref()
+    fn active_organization_id(&self) -> SchemaValue<Option<Cow<'_, str>>> {
+        self.active_organization_id
+            .as_ref()
+            .map(|value| value.as_deref().map(Cow::Borrowed))
     }
     fn active(&self) -> bool {
         self.active
@@ -660,18 +698,19 @@ mod tests {
     #[test]
     fn session_view_serializes_camel_case() {
         let session = SessionView {
+            field_order: Default::default(),
             visible_fields: None,
             id: "session-1".to_string().into(),
             expires_at: Utc::now().into(),
-            token: "token".to_string(),
+            token: "token".to_string().into(),
             created_at: Utc::now().into(),
             updated_at: Utc::now().into(),
-            ip_address: Some("127.0.0.1".to_string()),
-            user_agent: Some("agent".to_string()),
+            ip_address: Some("127.0.0.1".to_string()).into(),
+            user_agent: Some("agent".to_string()).into(),
             user_id: "user-1".to_string().into(),
-            impersonated_by: Some("admin-1".to_string()),
-            active_organization_id: Some("org-1".to_string()),
-            active_team_id: None,
+            impersonated_by: Some("admin-1".to_string()).into(),
+            active_organization_id: Some("org-1".to_string()).into(),
+            active_team_id: None.into(),
             active: true,
             additional_fields: Default::default(),
         };

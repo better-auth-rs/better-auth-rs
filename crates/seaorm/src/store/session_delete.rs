@@ -1,8 +1,8 @@
 use super::instrumentation::database_operation;
 use chrono::Utc;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, Condition, ConnectionTrait, EntityTrait, QueryFilter,
-    QuerySelect, sea_query::ExprTrait,
+    ColumnTrait, Condition, ConnectionTrait, EntityTrait, QueryFilter, QuerySelect,
+    sea_query::ExprTrait,
 };
 
 use crate::SeaOrmStore;
@@ -117,16 +117,16 @@ where
 
         // One statement preserves the all-before/all-write/all-after batch boundary.
         let count = if preserve {
-            let mut active = <S::Session as SeaOrmSessionModel>::ActiveModel::default();
-            S::Session::apply_update(
-                &mut active,
-                SessionUpdate {
-                    expires_at: Some(Utc::now().into()),
-                    updated_at: Some(Utc::now().into()),
-                    ..Default::default()
-                },
-            )?;
-            let active = self.apply_session_field_updates(active).await?;
+            let (active, _) = self
+                .prepare_session_update(
+                    db,
+                    SessionUpdate {
+                        expires_at: Some(Utc::now().into()),
+                        updated_at: Some(Utc::now().into()),
+                        ..Default::default()
+                    },
+                )
+                .await?;
             database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
                 self.config(),
                 "updateMany",

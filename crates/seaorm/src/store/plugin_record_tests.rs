@@ -171,6 +171,8 @@ async fn api_key_and_passkey_preflight_accepts_merged_columns_and_rejects_missin
             "credential-material",
         ),
     ] {
+        let created = created
+            .ok_or_else(|| AuthError::internal("Expected the merged-column plugin record"))?;
         assert_eq!(created.get("name"), Some(&material.into()));
     }
     let _ = database
@@ -344,7 +346,8 @@ async fn native_key_and_wallet_records_keep_dynamic_fields_and_transaction_bound
             ("privateKey".into(), 4.into()),
             ("createdAt".into(), "key timestamp".into()),
         ]))
-        .await?;
+        .await?
+        .ok_or_else(|| AuthError::internal("Expected the replacement JWK record"))?;
     assert_eq!(created_key.get("publicKey"), Some(&14.into()));
     assert_eq!(created_key.get("privateKey"), Some(&14.into()));
     assert_eq!(store.list_jwk_records().await?, vec![created_key.clone()]);
@@ -368,7 +371,8 @@ async fn native_key_and_wallet_records_keep_dynamic_fields_and_transaction_bound
             ("isPrimary".into(), "primary".into()),
             ("createdAt".into(), "wallet timestamp".into()),
         ]))
-        .await?;
+        .await?
+        .ok_or_else(|| AuthError::internal("Expected the replacement Wallet record"))?;
     assert_eq!(created_wallet.get("address"), Some(&30.into()));
     let wallet = store
         .get_wallet_address_value(&15.into(), Some(&"main".into()))

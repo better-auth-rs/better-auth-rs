@@ -106,7 +106,7 @@ impl SiwePlugin {
         }
         let _ = ctx
             .database
-            .create_verification(CreateVerification {
+            .create_verification_optional(CreateVerification {
                 identifier: (format!("siwe:{nonce}")).into(),
                 value: (nonce.clone()).into(),
                 expires_at: (Utc::now() + Duration::minutes(15)).into(),
@@ -278,12 +278,13 @@ impl SiwePlugin {
                 ctx,
             );
             let created =
-                super::user_admission::create_user(create.clone(), "siwe", &endpoint).await;
+                super::user_admission::create_user_optional(create.clone(), "siwe", &endpoint)
+                    .await;
             let created = match created {
                 Err(error) if supplied_email.as_deref() == Some(user_email.as_str()) => {
                     if ctx.database.get_user_by_email(&user_email).await?.is_some() {
                         create.email = Some(wallet_email);
-                        super::user_admission::create_user(create, "siwe", &endpoint).await
+                        super::user_admission::create_user_optional(create, "siwe", &endpoint).await
                     } else {
                         Err(error)
                     }
@@ -301,7 +302,9 @@ impl SiwePlugin {
                     &[better_auth_core::observability::LogArgument::Error(&cause)],
                 );
             }
-            created?
+            created?.ok_or_else(|| {
+                AuthError::internal("Cannot read properties of null (reading 'id')")
+            })?
         };
         if new_user || exact_wallet.is_none() {
             let _ = ctx
@@ -319,7 +322,7 @@ impl SiwePlugin {
                 .await?;
             let _ = ctx
                 .database
-                .create_account(CreateAccount {
+                .create_account_optional(CreateAccount {
                     user_id: user.id().into_owned(),
                     provider_id: "siwe".into(),
                     account_id: (format!(

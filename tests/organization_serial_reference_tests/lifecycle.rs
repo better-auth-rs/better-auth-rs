@@ -44,7 +44,7 @@ pub(super) async fn observe(joins: bool) -> AuthResult<Value> {
     let padded_user = format!("00{user_id}");
     let role = store
         .create_organization_role(CreateOrganizationRole {
-            organization_id: padded_organization.clone(),
+            organization_id: padded_organization.clone().into(),
             role: "viewer".into(),
             permission: FieldValue::from(FieldMap::new()),
             additional_fields: Default::default(),
@@ -84,7 +84,7 @@ pub(super) async fn observe(joins: bool) -> AuthResult<Value> {
     let invitation = store.create_invitation(invitation).await?;
     let (filtered, total) = store
         .query_organization_members(&ListOrganizationMembersParams {
-            organization_id: padded_organization.clone(),
+            organization_id: padded_organization.clone().into(),
             filter_field: Some("reference".into()),
             filter_value: Some(FieldValue::from(padded_role)),
             filter_operator: Some("eq".into()),
@@ -168,7 +168,7 @@ pub(super) async fn observe(joins: bool) -> AuthResult<Value> {
         .accept_invitation_with_teams(
             invitation.id.typed()?,
             &user_id,
-            Some(&session.token),
+            Some(session.token.typed()?),
             true,
             Some(10).into(),
         )
@@ -176,14 +176,14 @@ pub(super) async fn observe(joins: bool) -> AuthResult<Value> {
     let _ = snapshot
         .ok_or_else(|| AuthError::internal("ordinary acceptance returns its cookie snapshot"))?;
     let session_after = store
-        .get_session(&session.token)
+        .get_session(session.token.typed()?)
         .await?
         .ok_or_else(|| AuthError::internal("ordinary accepted session remains available"))?;
     let acceptance = json!({
         "member":member(&accepted_member),"status":accepted_invitation.status,"teamId":present(accepted_invitation.team_id.json()?),
         "teamMembers":team_members(store.list_team_members(&padded_team).await?),
-        "activeOrganizationId":present(session_after.active_organization_id.map(Value::String)),
-        "activeTeamId":present(session_after.active_team_id.map(Value::String)),
+        "activeOrganizationId":present(session_after.active_organization_id.json()?),
+        "activeTeamId":present(session_after.active_team_id.json()?),
     });
     store.remove_team_member(&padded_team, &padded_user).await?;
     let removed_team_member = store.count_team_members(&padded_team).await?;

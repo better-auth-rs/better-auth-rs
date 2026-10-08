@@ -89,7 +89,7 @@ async fn cache_renewal_preserves_account_binding_chunks_and_pending_cookies() {
     .unwrap();
     assert!(account_cookies.len() > 1);
     let request_with_account = || {
-        let mut req = request(&data.session.token, &manager.config);
+        let mut req = request(data.session.token.typed().unwrap(), &manager.config);
         for cookie in &account_cookies {
             req.headers
                 .get_mut("cookie")
@@ -236,7 +236,10 @@ async fn cache_is_bound_to_session_token_and_signature() {
             .await
             .unwrap();
         let other = manager.create_session(&user, None, None).await.unwrap();
-        let req = with_cache(request(other.token(), &manager.config), &encoded);
+        let req = with_cache(
+            request(other.token.typed().unwrap(), &manager.config),
+            &encoded,
+        );
         let resolved = manager
             .resolve(&req, SessionRead::Cached)
             .await
@@ -244,7 +247,7 @@ async fn cache_is_bound_to_session_token_and_signature() {
             .data
             .unwrap();
         assert_eq!(resolved.user.id, user.id().into_owned());
-        assert_eq!(resolved.session.token, other.token());
+        assert_eq!(resolved.session.token, other.token);
         let headers = req.take_response_headers().unwrap();
         assert!(
             headers
@@ -280,10 +283,13 @@ async fn valid_cache_survives_revocation_until_authoritative_read() {
         .unwrap();
     manager
         .database
-        .delete_session(&data.session.token)
+        .delete_session(data.session.token.typed().unwrap())
         .await
         .unwrap();
-    let req = with_cache(request(&data.session.token, &manager.config), &encoded);
+    let req = with_cache(
+        request(data.session.token.typed().unwrap(), &manager.config),
+        &encoded,
+    );
     assert!(
         manager
             .resolve(&req, SessionRead::Cached)
@@ -351,16 +357,16 @@ async fn deferred_get_reports_refresh_and_post_updates_storage_and_cookie() {
     let stale = Utc::now() + Duration::hours(1);
     let _ = manager
         .database
-        .update_session_expiry(&data.session.token, stale)
+        .update_session_expiry(data.session.token.typed().unwrap(), stale)
         .await
         .unwrap();
-    let req = request(&data.session.token, &manager.config);
+    let req = request(data.session.token.typed().unwrap(), &manager.config);
     let resolved = manager.resolve(&req, SessionRead::Cached).await.unwrap();
     assert_eq!(resolved.needs_refresh, Some(true));
     assert_eq!(
         manager
             .database
-            .get_session(&data.session.token)
+            .get_session(data.session.token.typed().unwrap())
             .await
             .unwrap()
             .unwrap()
@@ -374,7 +380,14 @@ async fn deferred_get_reports_refresh_and_post_updates_storage_and_cookie() {
     let refreshed = manager.resolve(&post, SessionRead::Cached).await.unwrap();
     assert!(refreshed.needs_refresh.is_none());
     assert!(
-        refreshed.data.unwrap().session.expires_at.milliseconds() > stale.timestamp_millis() as f64
+        refreshed
+            .data
+            .unwrap()
+            .session
+            .expires_at
+            .date_milliseconds()
+            .unwrap()
+            > stale.timestamp_millis() as f64
     );
     assert!(
         post.take_response_headers()
@@ -391,17 +404,17 @@ async fn disable_refresh_and_dont_remember_do_not_extend_expiry() {
     let stale = Utc::now() + Duration::hours(1);
     let _ = manager
         .database
-        .update_session_expiry(&data.session.token, stale)
+        .update_session_expiry(data.session.token.typed().unwrap(), stale)
         .await
         .unwrap();
-    let mut query = request(&data.session.token, &manager.config);
+    let mut query = request(data.session.token.typed().unwrap(), &manager.config);
     query
         .query
         .get_or_insert_with(|| serde_json::json!({}))
         .as_object_mut()
         .unwrap()
         .insert("disableRefresh".into(), serde_json::Value::from("true"));
-    let mut remembered = request(&data.session.token, &manager.config);
+    let mut remembered = request(data.session.token.typed().unwrap(), &manager.config);
     remembered
         .headers
         .get_mut("cookie")
@@ -422,7 +435,7 @@ async fn disable_refresh_and_dont_remember_do_not_extend_expiry() {
     assert_eq!(
         manager
             .database
-            .get_session(&data.session.token)
+            .get_session(data.session.token.typed().unwrap())
             .await
             .unwrap()
             .unwrap()
@@ -437,7 +450,7 @@ async fn bearer_requires_opt_in_and_supports_signed_tokens_and_case_folding() {
     let mut req = AuthRequest::new(HttpMethod::Get, "/get-session");
     req.headers.insert(
         "authorization".into(),
-        format!("bEaReR   {}  ", data.session.token),
+        format!("bEaReR   {}  ", data.session.token.typed().unwrap()),
     );
     assert!(manager.extract_session_token(&req).is_none());
     let mut enabled = (*manager.config).clone();
@@ -445,23 +458,23 @@ async fn bearer_requires_opt_in_and_supports_signed_tokens_and_case_folding() {
     let manager = SessionManager::new(Arc::new(enabled.clone()), manager.database);
     assert_eq!(
         manager.extract_session_token(&req),
-        Some(data.session.token.clone())
+        Some(data.session.token.typed().unwrap().clone())
     );
     enabled.session.bearer.as_mut().unwrap().require_signature = true;
     let strict = SessionManager::new(Arc::new(enabled), manager.database.clone());
     assert!(strict.extract_session_token(&req).is_none());
-    let signed = sign_cookie_value(&data.session.token, &strict.config.secret);
+    let signed = sign_cookie_value(data.session.token.typed().unwrap(), &strict.config.secret);
     req.headers
         .insert("authorization".into(), format!("bearer {signed}"));
     assert_eq!(
         strict.extract_session_token(&req),
-        Some(data.session.token.clone())
+        Some(data.session.token.typed().unwrap().clone())
     );
     let mut response = AuthResponse::json(200, &serde_json::json!({}))
         .unwrap()
         .with_header(
             "Set-Cookie",
-            create_session_cookie(&data.session.token, &strict.config).unwrap(),
+            create_session_cookie(data.session.token.typed().unwrap(), &strict.config).unwrap(),
         );
     strict.finish_response(&req, &mut response).unwrap();
     let signed_raw = percent_encoding::percent_decode_str(&signed)
@@ -475,7 +488,7 @@ async fn bearer_requires_opt_in_and_supports_signed_tokens_and_case_folding() {
         .insert("authorization".into(), format!("Bearer {signed_raw}"));
     assert_eq!(
         strict.extract_session_token(&req),
-        Some(data.session.token.clone())
+        Some(data.session.token.typed().unwrap().clone())
     );
     assert!(
         response
@@ -490,7 +503,7 @@ async fn bearer_requires_opt_in_and_supports_signed_tokens_and_case_folding() {
 async fn large_cache_chunks_are_read_and_cleared_after_revocation() {
     let (manager, mut data) = setup(config(CookieCacheStrategy::Jwe)).await;
     data.user.name = Some("name".repeat(3000)).into();
-    let req = request(&data.session.token, &manager.config);
+    let req = request(data.session.token.typed().unwrap(), &manager.config);
     manager.write_cache(&req, &data, false).await.unwrap();
     let headers = req.take_response_headers().unwrap();
     let chunks: Vec<_> = headers
@@ -503,7 +516,7 @@ async fn large_cache_chunks_are_read_and_cleared_after_revocation() {
             .get_all("Set-Cookie")
             .all(|cookie| cookie.len() <= 4050)
     );
-    let mut cached = request(&data.session.token, &manager.config);
+    let mut cached = request(data.session.token.typed().unwrap(), &manager.config);
     cached
         .headers
         .get_mut("cookie")
@@ -522,7 +535,7 @@ async fn large_cache_chunks_are_read_and_cleared_after_revocation() {
     );
     manager
         .database
-        .delete_session(&data.session.token)
+        .delete_session(data.session.token.typed().unwrap())
         .await
         .unwrap();
     assert!(
@@ -595,7 +608,7 @@ async fn fractional_cookie_cache_lifetimes_match_pinned_fixture() {
             if strategy != CookieCacheStrategy::Compact {
                 assert_eq!(expires % 1000, lifetime_ms % 1000);
             }
-            let request = request(&data.session.token, &manager.config);
+            let request = request(data.session.token.typed().unwrap(), &manager.config);
             manager.write_cache(&request, &data, false).await.unwrap();
             let headers = request.take_response_headers().unwrap();
             let header = headers
@@ -645,7 +658,7 @@ async fn account_cookie_renewal_preserves_fractional_override() {
         3600.5,
     )
     .unwrap();
-    let mut req = request(&data.session.token, &manager.config);
+    let mut req = request(data.session.token.typed().unwrap(), &manager.config);
     req.headers
         .get_mut("cookie")
         .unwrap()

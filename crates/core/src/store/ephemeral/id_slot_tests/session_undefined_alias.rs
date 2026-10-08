@@ -16,8 +16,8 @@ fn observed_session(session: &SessionView, updated: bool, raw: bool) -> AuthResu
     let mut normalized = session.clone();
     // The Store owns token and creation time; compare those values before normalizing adapter observations.
     normalized.token = TOKEN.into();
-    normalized.created_at = date(CREATED_AT)?;
-    normalized.updated_at = date(if updated { CHANGED_AT } else { CREATED_AT })?;
+    normalized.created_at = date(CREATED_AT)?.into();
+    normalized.updated_at = date(if updated { CHANGED_AT } else { CREATED_AT })?.into();
     let mut value = observe(normalized.into(), raw)?;
     value["id"] = observed_value(&session.id.field_value())?;
     Ok(value)
@@ -84,12 +84,14 @@ async fn memory_session_undefined_id_alias_matches_complete_upstream_observation
     let started = Utc::now().timestamp_millis() as f64;
     let created = store.create_session(create).await?;
     let ended = Utc::now().timestamp_millis() as f64;
-    assert!((started..=ended).contains(&created.created_at.milliseconds()));
-    assert!((started..=ended).contains(&created.updated_at.milliseconds()));
-    assert_eq!(created.token.len(), 32);
+    assert!((started..=ended).contains(&created.created_at.date_milliseconds().unwrap()));
+    assert!((started..=ended).contains(&created.updated_at.date_milliseconds().unwrap()));
+    assert_eq!(created.token.typed().unwrap().len(), 32);
     assert!(
         created
             .token
+            .typed()
+            .unwrap()
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric())
     );
@@ -111,7 +113,7 @@ async fn memory_session_undefined_id_alias_matches_complete_upstream_observation
     let updated = required(
         store
             .update_session_with_writer(
-                &created.token,
+                created.token.typed().unwrap(),
                 SessionUpdate {
                     updated_at: Some(date(CHANGED_AT)?),
                     additional_fields: [("aliasId".into(), "clear".into())].into(),
@@ -131,7 +133,7 @@ async fn memory_session_undefined_id_alias_matches_complete_upstream_observation
     let mut comparable = stored.clone();
     comparable.id = "NaN".into();
     expected_stored.id = "NaN".into();
-    expected_stored.updated_at = date(CHANGED_AT)?;
+    expected_stored.updated_at = date(CHANGED_AT)?.into();
     assert_eq!(comparable, expected_stored);
     let mut after = memory(&store, "after-label")?;
     after["session"] = json!([observed_session(stored, true, true)?]);

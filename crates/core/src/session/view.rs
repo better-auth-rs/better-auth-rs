@@ -7,10 +7,10 @@ impl From<SessionView> for FieldMap {
     fn from(session: SessionView) -> Self {
         let mut fields = FieldMap::from_iter([
             ("id".into(), session.id.into_field_value()),
-            ("token".into(), session.token.into()),
-            ("expiresAt".into(), session.expires_at.into()),
-            ("createdAt".into(), session.created_at.into()),
-            ("updatedAt".into(), session.updated_at.into()),
+            ("token".into(), session.token.into_field_value()),
+            ("expiresAt".into(), session.expires_at.into_field_value()),
+            ("createdAt".into(), session.created_at.into_field_value()),
+            ("updatedAt".into(), session.updated_at.into_field_value()),
             ("ipAddress".into(), session.ip_address.into_field()),
             ("userAgent".into(), session.user_agent.into_field()),
             ("userId".into(), session.user_id.into_field_value()),
@@ -28,8 +28,9 @@ impl From<SessionView> for FieldMap {
                 let _ = fields.insert(name.into(), value.into_field());
             }
         }
+        fields.retain(|name, value| !value.is_undefined() || session.field_order.contains(name));
         fields.extend(session.additional_fields);
-        fields
+        fields.in_field_order(&session.field_order)
     }
 }
 
@@ -44,6 +45,13 @@ impl AuthRecordFields for SessionView {
         let mut output = self.clone();
         output.id = context.clone_field(&self.id)?;
         output.user_id = context.clone_field(&self.user_id)?;
+        output.token = context.clone_field(&self.token)?;
+        output.ip_address = context.clone_field(&self.ip_address)?;
+        output.user_agent = context.clone_field(&self.user_agent)?;
+        output.impersonated_by = context.clone_field(&self.impersonated_by)?;
+        output.active_organization_id = context.clone_field(&self.active_organization_id)?;
+        output.active_team_id = context.clone_field(&self.active_team_id)?;
+
         output.expires_at = context.clone_field(&self.expires_at)?;
         output.created_at = context.clone_field(&self.created_at)?;
         output.updated_at = context.clone_field(&self.updated_at)?;
@@ -80,10 +88,16 @@ mod tests {
         assert!(
             snapshot
                 .expires_at
+                .typed()?
                 .same_object(snapshot.additional_fields["alias"].as_date().unwrap())
         );
-        assert!(snapshot.expires_at.same_object(&snapshot.created_at));
-        assert!(!snapshot.expires_at.same_object(&date));
+        assert!(
+            snapshot
+                .expires_at
+                .typed()?
+                .same_object(snapshot.created_at.typed()?)
+        );
+        assert!(!snapshot.expires_at.typed()?.same_object(&date));
         assert!(serde_json::to_value(&snapshot)?.get("active").is_none());
         Ok(())
     }
@@ -97,6 +111,11 @@ impl FromFieldMap for SessionView {
                 .unwrap_or(FieldValue::Undefined)
                 .decode()
         }
+        let field_order = fields
+            .keys()
+            .filter(|name| name.as_str() != "active")
+            .cloned()
+            .collect();
         let visible_fields = Some(
             ["impersonatedBy", "activeOrganizationId", "activeTeamId"]
                 .into_iter()
@@ -105,6 +124,7 @@ impl FromFieldMap for SessionView {
                 .collect(),
         );
         Ok(Self {
+            field_order,
             id: SchemaValue::from_field(fields.remove("id").unwrap_or_default()),
             token: take(&mut fields, "token")?,
             expires_at: take(&mut fields, "expiresAt")?,
@@ -133,13 +153,10 @@ impl<'de> serde::Deserialize<'de> for SessionView {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let mut fields = crate::field_value::serde::map::deserialize(deserializer)?;
         for name in ["expiresAt", "createdAt", "updatedAt"] {
-            if let Some(FieldValue::String(text)) = fields.get(name) {
-                let date =
-                    chrono::DateTime::parse_from_rfc3339(text).map_err(serde::de::Error::custom)?;
-                let _ = fields.insert(
-                    name.into(),
-                    FieldDate::from(date.with_timezone(&chrono::Utc)).into(),
-                );
+            if let Some(FieldValue::String(text)) = fields.get(name)
+                && let Some(date) = crate::utils::json::parse_json_date(text)
+            {
+                let _ = fields.insert(name.into(), FieldDate::from(date).into());
             }
         }
         Self::from_field_values(fields).map_err(serde::de::Error::custom)
@@ -147,78 +164,88 @@ impl<'de> serde::Deserialize<'de> for SessionView {
 }
 
 impl SessionView {
-    /// Synchronize representable output values; retain other runtime shapes in the wire overlay.
+    /// Move projected native replacements into their typed slots without narrowing their values.
     pub(crate) fn into_projected_fields(mut self) -> Self {
-        for name in [
-            "id",
-            "userId",
-            "token",
-            "expiresAt",
-            "createdAt",
-            "updatedAt",
-            "ipAddress",
-            "userAgent",
-            "impersonatedBy",
-            "activeOrganizationId",
-            "activeTeamId",
-        ] {
-            let Some(value) = self.additional_fields.get(name) else {
-                continue;
-            };
-            let applied = match (name, value) {
-                ("id", value) => {
-                    self.id = SchemaValue::from_field(value.clone());
-                    true
+        macro_rules! apply {
+            ($($field:ident => $name:literal),* $(,)?) => {$(
+                if let Some(value) = self.additional_fields.remove($name) {
+                    self.$field = SchemaValue::from_field(value);
                 }
-                ("userId", value) => {
-                    self.user_id = SchemaValue::from_field(value.clone());
-                    true
-                }
-                ("token", FieldValue::String(value)) => {
-                    self.token = value.clone();
-                    true
-                }
-                ("expiresAt", FieldValue::Date(value)) => {
-                    self.expires_at = value.clone();
-                    true
-                }
-                ("createdAt", FieldValue::Date(value)) => {
-                    self.created_at = value.clone();
-                    true
-                }
-                ("updatedAt", FieldValue::Date(value)) => {
-                    self.updated_at = value.clone();
-                    true
-                }
-                (name, FieldValue::String(_) | FieldValue::Null) => {
-                    let target = match name {
-                        "ipAddress" => Some(&mut self.ip_address),
-                        "userAgent" => Some(&mut self.user_agent),
-                        "impersonatedBy" => Some(&mut self.impersonated_by),
-                        "activeOrganizationId" => Some(&mut self.active_organization_id),
-                        "activeTeamId" => Some(&mut self.active_team_id),
-                        _ => None,
-                    };
-                    if let Some(target) = target {
-                        *target = value.as_str().map(str::to_owned);
-                        if matches!(
-                            name,
-                            "impersonatedBy" | "activeOrganizationId" | "activeTeamId"
-                        ) && let Some(visible) = &mut self.visible_fields
-                        {
-                            let _ = visible.insert(name.into());
-                        }
-                        true
-                    } else {
-                        false
-                    }
-                }
-                _ => false,
-            };
-            if applied {
-                let _ = self.additional_fields.remove(name);
+            )*};
+        }
+        for name in ["impersonatedBy", "activeOrganizationId", "activeTeamId"] {
+            if self.additional_fields.contains_key(name)
+                && let Some(visible) = &mut self.visible_fields
+            {
+                let _ = visible.insert(name.into());
             }
         }
+        apply!(
+            id => "id", user_id => "userId", token => "token", expires_at => "expiresAt",
+            created_at => "createdAt", updated_at => "updatedAt", ip_address => "ipAddress",
+            user_agent => "userAgent", impersonated_by => "impersonatedBy",
+            active_organization_id => "activeOrganizationId", active_team_id => "activeTeamId",
+        );
         self
+    }
+}
+
+impl PartialEq for SessionView {
+    fn eq(&self, other: &Self) -> bool {
+        self.visible_fields == other.visible_fields
+            && self.id == other.id
+            && self.token == other.token
+            && self.expires_at == other.expires_at
+            && self.created_at == other.created_at
+            && self.updated_at == other.updated_at
+            && self.ip_address == other.ip_address
+            && self.user_agent == other.user_agent
+            && self.user_id == other.user_id
+            && self.impersonated_by == other.impersonated_by
+            && self.active_organization_id == other.active_organization_id
+            && self.active_team_id == other.active_team_id
+            && self.active == other.active
+            && self.additional_fields == other.additional_fields
+    }
+}
+
+#[cfg(test)]
+mod native_field_tests {
+    use super::*;
+
+    #[test]
+    fn session_fields_preserve_native_values_omission_and_source_order() -> AuthResult<()> {
+        let token = FieldValue::from(vec![FieldValue::from("native-token")]);
+        let source = FieldMap::from([
+            ("updatedAt".into(), "unparsed-date".into()),
+            ("token".into(), token.clone()),
+            ("expiresAt".into(), FieldValue::Null),
+            ("ipAddress".into(), FieldValue::Undefined),
+            ("ownUndefined".into(), FieldValue::Undefined),
+        ]);
+        let mut session = SessionView::from_field_values(source.clone())?;
+        assert!(session.created_at.is_undefined());
+        assert!(session.user_agent.is_undefined());
+        assert!(session.token.field_value().strict_equals(&token));
+        assert_eq!(FieldMap::from(session.clone()), source);
+        assert_eq!(
+            FieldMap::from(session.clone()).keys().collect::<Vec<_>>(),
+            source.keys().collect::<Vec<_>>()
+        );
+        assert!(session.expires_at.date_milliseconds().is_err());
+        assert_eq!(
+            serde_json::to_value(&session)?,
+            serde_json::json!({
+                "updatedAt": "unparsed-date", "token": ["native-token"], "expiresAt": null
+            })
+        );
+        session.token = SchemaValue::from_field(7.into());
+        let updated = FieldMap::from(session);
+        assert_eq!(updated.get("token"), Some(&7.into()));
+        assert_eq!(
+            updated.keys().collect::<Vec<_>>(),
+            source.keys().collect::<Vec<_>>()
+        );
+        Ok(())
     }
 }

@@ -17,9 +17,16 @@ pub(super) fn rows<'a, T: AuthSession>(
     sessions
         .iter()
         .map(|session| {
-            let view = SessionView::from(session);
+            let mut view = SessionView::from(session);
             // Core getters retain public names when models serialize application field names.
             let core = view.clone().into();
+            if session.projected_fields().is_none() {
+                view.field_order = crate::store::session_create_schema(config, &core)
+                    .fields()
+                    .keys()
+                    .cloned()
+                    .collect();
+            }
             Ok(SessionProjection {
                 session,
                 view,
@@ -41,6 +48,9 @@ impl<T: AuthSession> SessionProjection<'_, T> {
         field: &UserFieldConfig,
         supports_native_json: bool,
     ) -> AuthResult<()> {
+        if !self.view.field_order.iter().any(|field| field == name) {
+            self.view.field_order.push(name.into());
+        }
         if name == "id" {
             return Ok(());
         }

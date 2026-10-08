@@ -231,7 +231,7 @@ pub(crate) async fn delete_user_core<S: better_auth_core::AuthSchema>(
         };
         let _ = ctx
             .database
-            .create_verification(better_auth_core::CreateVerification {
+            .create_verification_optional(better_auth_core::CreateVerification {
                 identifier: (format!("delete-account-{token}")).into(),
                 value: user.id.clone(),
                 expires_at: (Utc::now()
@@ -292,7 +292,7 @@ pub(crate) async fn delete_user_core<S: better_auth_core::AuthSchema>(
     }
 
     if body.password.as_deref().is_none_or(str::is_empty)
-        && !crate::plugins::helpers::session_is_fresh(session, &ctx.config)
+        && !crate::plugins::helpers::session_is_fresh(session, &ctx.config)?
     {
         return Err(AuthError::Upstream {
             status: 400,

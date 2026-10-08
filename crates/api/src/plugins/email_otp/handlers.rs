@@ -178,7 +178,11 @@ impl EmailOtpPlugin {
                     ))?,
                     ctx,
                 );
-                crate::plugins::user_admission::create_user(input, "email-otp", &endpoint).await?
+                crate::plugins::user_admission::create_user_optional(input, "email-otp", &endpoint)
+                    .await?
+                    .ok_or_else(|| {
+                        AuthError::internal("Cannot read properties of null (reading 'id')")
+                    })?
             }
         };
         self.session_response(req, ctx, user.id().typed()?, false)
@@ -253,7 +257,7 @@ impl EmailOtpPlugin {
         } else {
             let _ = ctx
                 .database
-                .create_account(CreateAccount {
+                .create_account_optional(CreateAccount {
                     user_id: user.id().into_owned(),
                     account_id: user.id().into_owned(),
                     provider_id: ("credential".to_owned()).into(),
@@ -434,11 +438,14 @@ impl EmailOtpPlugin {
             .await
             .map_err(SessionIssueError::into_auth_error)?;
         let user = ctx.user_view(&issued.user).await?;
-        let body = if verification {
-            json!({"status": true, "token": issued.session.token(), "user": user})
-        } else {
-            json!({"token": issued.session.token(), "user": user})
-        };
+        let mut body = better_auth_core::FieldMap::new();
+        if verification {
+            let _ = body.insert("status".into(), true.into());
+        }
+        body.extend([
+            ("token".into(), issued.session.token().field_value()),
+            ("user".into(), better_auth_core::FieldMap::from(user).into()),
+        ]);
         let manager = ctx.session_manager();
         manager
             .set_session_cookie(
@@ -447,7 +454,7 @@ impl EmailOtpPlugin {
                 None,
             )
             .await?;
-        Ok(AuthResponse::json(200, &body)?)
+        Ok(AuthResponse::native(200, body.into()))
     }
 }
 

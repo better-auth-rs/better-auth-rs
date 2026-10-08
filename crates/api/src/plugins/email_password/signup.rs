@@ -82,7 +82,7 @@ pub(super) fn synthetic_response<S: AuthSchema>(
         core
     };
     Ok(SignUpResponse {
-        token: None,
+        token: better_auth_core::FieldValue::Null,
         user: UserView::synthetic_output(data, &ctx.config.user, &ctx.metadata)?,
     })
 }
@@ -209,8 +209,15 @@ pub(super) async fn sign_up_core<S: AuthSchema>(
                     }
                     return Err(error.into_auth_error());
                 }
-                let user = match tx.create_user(create_user).await {
-                    Ok(user) => user,
+                let user = match tx.create_user_optional(create_user).await {
+                    Ok(Some(user)) => user,
+                    Ok(None) => {
+                        return Err(AuthError::Upstream {
+                            status: 400,
+                            code: "FAILED_TO_CREATE_USER",
+                            message: "Failed to create user",
+                        });
+                    }
                     Err(error) if protect_enumeration && error.status_code() == 403 => {
                         return Ok(None);
                     }
@@ -223,7 +230,7 @@ pub(super) async fn sign_up_core<S: AuthSchema>(
                 };
 
                 let _ = tx
-                    .create_account(CreateAccount {
+                    .create_account_optional(CreateAccount {
                         user_id: user.id().into_owned(),
                         account_id: user.id().into_owned(),
                         provider_id: ("credential".to_string()).into(),
@@ -255,7 +262,7 @@ pub(super) async fn sign_up_core<S: AuthSchema>(
 
                 if auto_sign_in {
                     let session = tx
-                        .create_session(CreateSession {
+                        .create_session_optional(CreateSession {
                             inherited_fields: Default::default(),
                             additional_fields: Default::default(),
                             user_id: user.id().into_owned(),
@@ -265,8 +272,13 @@ pub(super) async fn sign_up_core<S: AuthSchema>(
                             impersonated_by: None,
                             active_organization_id: None,
                         })
-                        .await?;
-                    let token = session.token().to_string();
+                        .await?
+                        .ok_or(AuthError::Upstream {
+                            status: 400,
+                            code: "FAILED_TO_CREATE_SESSION",
+                            message: "Failed to create session",
+                        })?;
+                    let token = session.token().field_value();
 
                     let manager = admission_context.session_manager();
                     let data = manager.internal_data(&user, &session).await?;
@@ -279,7 +291,7 @@ pub(super) async fn sign_up_core<S: AuthSchema>(
                         )
                         .await?;
                     Ok(Some(SignUpResponse {
-                        token: Some(token),
+                        token,
                         user: UserView::with_field_policies(
                             &user,
                             &adapter_user_config,
@@ -292,7 +304,7 @@ pub(super) async fn sign_up_core<S: AuthSchema>(
                     }))
                 } else {
                     Ok(Some(SignUpResponse {
-                        token: None,
+                        token: better_auth_core::FieldValue::Null,
                         user: UserView::with_field_policies(
                             &user,
                             &adapter_user_config,

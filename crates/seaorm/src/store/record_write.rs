@@ -1,13 +1,13 @@
 //! Keep transformed fields intact until SQL parameter encoding.
 
-use better_auth_core::{AuthError, AuthResult, FieldValue};
+use better_auth_core::{AuthResult, FieldValue};
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, FromQueryResult, Iden, Iterable,
-    PrimaryKeyToColumn, QueryFilter, QueryResult, QueryTrait,
-    sea_query::{ExprTrait, Query, Value},
+    QueryResult,
+    sea_query::{Query, Value},
 };
 
-use super::{map_db_err, record_bindings::Binding};
+use super::{create_readback::CreateReadback, map_db_err, record_bindings::Binding};
 
 pub(super) struct RecordWrite<E: EntityTrait> {
     fields: Vec<(E::Column, Binding)>,
@@ -20,6 +20,10 @@ impl<E: EntityTrait> Default for RecordWrite<E> {
 }
 
 impl<E: EntityTrait> RecordWrite<E> {
+    pub(super) fn from_bindings(fields: Vec<(E::Column, Binding)>) -> Self {
+        Self { fields }
+    }
+
     pub(super) fn is_empty(&self) -> bool {
         self.fields.is_empty()
     }
@@ -123,24 +127,25 @@ impl<E: EntityTrait> RecordWrite<E> {
         self.apply_to(E::update_many(), backend)
     }
 
-    pub(super) async fn insert(self, db: &impl ConnectionTrait) -> AuthResult<E::Model> {
-        let row = self.insert_raw(db).await?;
-        E::Model::from_query_result(&row, "").map_err(map_db_err)
+    pub(super) async fn insert(
+        self,
+        db: &impl ConnectionTrait,
+        readback: CreateReadback<'_, E>,
+    ) -> AuthResult<Option<E::Model>> {
+        self.insert_raw(db, readback)
+            .await?
+            .map(|row| E::Model::from_query_result(&row, "").map_err(map_db_err))
+            .transpose()
     }
 
-    pub(super) async fn insert_raw(self, db: &impl ConnectionTrait) -> AuthResult<QueryResult> {
+    pub(super) async fn insert_raw(
+        self,
+        db: &impl ConnectionTrait,
+        readback: CreateReadback<'_, E>,
+    ) -> AuthResult<Option<QueryResult>> {
         let backend = db.get_database_backend();
-        let primary = E::PrimaryKey::iter()
-            .next()
-            .ok_or_else(|| AuthError::config("An auth model requires a primary key"))?
-            .into_column();
-        let (columns, bindings): (Vec<_>, Vec<_>) = self.fields.into_iter().unzip();
+        let (columns, bindings): (Vec<_>, Vec<_>) = self.fields.iter().cloned().unzip();
         let values = super::record_bindings::bind(backend, bindings)?;
-        let id = columns
-            .iter()
-            .zip(&values)
-            .find(|(column, _)| column.to_string() == primary.to_string())
-            .map(|(_, value)| value.clone());
         let values = columns
             .iter()
             .zip(values)
@@ -160,21 +165,12 @@ impl<E: EntityTrait> RecordWrite<E> {
             return db
                 .query_one_raw(backend.build(&query))
                 .await
-                .map_err(map_db_err)?
-                .ok_or_else(|| AuthError::internal("SQL insert returned no record"));
+                .map_err(map_db_err);
         }
-        let result = db
+        let _ = db
             .execute_raw(backend.build(&query))
             .await
             .map_err(map_db_err)?;
-        let select = E::find().filter(
-            primary
-                .into_expr()
-                .eq(primary.save_as(id.unwrap_or_else(|| result.last_insert_id().into()))),
-        );
-        db.query_one_raw(select.build(backend))
-            .await
-            .map_err(map_db_err)?
-            .ok_or_else(|| AuthError::internal("SQL insert returned no record"))
+        readback.fetch(db, &self.fields).await
     }
 }

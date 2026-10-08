@@ -15,7 +15,7 @@ async fn test_virtual_session_answers_get_and_post_get_session() {
     let (id, raw_key) = create_key_and_get_raw(
         &plugin,
         &ctx,
-        &session.token,
+        session.token.typed().unwrap(),
         serde_json::json!({ "name": "get-session" }),
     )
     .await;
@@ -52,7 +52,7 @@ async fn test_virtual_session_creates_no_db_session() {
     let (_id, raw_key) = create_key_and_get_raw(
         &plugin,
         &ctx,
-        &session.token,
+        session.token.typed().unwrap(),
         serde_json::json!({ "name": "virtual-session-test" }),
     )
     .await;
@@ -116,7 +116,7 @@ async fn test_virtual_session_on_get_session() {
     let (_id, raw_key) = create_key_and_get_raw(
         &plugin,
         &ctx,
-        &session.token,
+        session.token.typed().unwrap(),
         serde_json::json!({ "name": "get-session-test" }),
     )
     .await;
@@ -171,7 +171,7 @@ async fn test_rate_limiting_third_call_fails() {
     let (_id, raw_key) = create_key_with_server_fields(
         &plugin,
         &ctx,
-        &session.token,
+        session.token.typed().unwrap(),
         serde_json::json!({ "name": "rl-integration" }),
         UpdateApiKey {
             rate_limit_enabled: Some(true),
@@ -205,7 +205,7 @@ async fn test_remaining_consumption_no_refill() {
     let (_id, raw_key) = create_key_with_server_fields(
         &plugin,
         &ctx,
-        &session.token,
+        session.token.typed().unwrap(),
         serde_json::json!({ "name": "remaining-test" }),
         UpdateApiKey {
             remaining: Some(2.0),
@@ -243,7 +243,7 @@ async fn test_refill_resets_remaining_after_interval() {
     let (_id, raw_key) = create_key_with_server_fields(
         &plugin,
         &ctx,
-        &session.token,
+        session.token.typed().unwrap(),
         serde_json::json!({ "name": "refill-test" }),
         UpdateApiKey {
             remaining: Some(1.0),
@@ -279,7 +279,7 @@ async fn test_permissions_mismatch_fails() {
     let (_id, raw_key) = create_key_with_server_fields(
         &plugin,
         &ctx,
-        &session.token,
+        session.token.typed().unwrap(),
         serde_json::json!({ "name": "perm-mismatch" }),
         UpdateApiKey {
             permissions: Some(
@@ -319,7 +319,7 @@ async fn test_concurrent_rate_limiting() {
     let (_id, raw_key) = create_key_with_server_fields(
         &plugin,
         &ctx,
-        &session.token,
+        session.token.typed().unwrap(),
         serde_json::json!({ "name": "concurrent-rl" }),
         UpdateApiKey {
             rate_limit_enabled: Some(true),
@@ -359,14 +359,14 @@ async fn test_delete_expired_api_keys_memory_adapter() {
     let (id1, _) = create_key_and_get_raw(
         &plugin,
         &ctx,
-        &session.token,
+        session.token.typed().unwrap(),
         serde_json::json!({ "name": "will-expire" }),
     )
     .await;
     let (_id2, _) = create_key_and_get_raw(
         &plugin,
         &ctx,
-        &session.token,
+        session.token.typed().unwrap(),
         serde_json::json!({ "name": "wont-expire" }),
     )
     .await;
@@ -407,14 +407,14 @@ async fn test_delete_expired_removes_only_expired() {
     let (id1, _) = create_key_and_get_raw(
         &plugin,
         &ctx,
-        &session.token,
+        session.token.typed().unwrap(),
         serde_json::json!({ "name": "expired" }),
     )
     .await;
     let (_id2, _) = create_key_and_get_raw(
         &plugin,
         &ctx,
-        &session.token,
+        session.token.typed().unwrap(),
         serde_json::json!({ "name": "active" }),
     )
     .await;
@@ -452,7 +452,7 @@ async fn test_before_request_disabled_returns_none() {
     let (_id, raw_key) = create_key_and_get_raw(
         &plugin,
         &ctx,
-        &session.token,
+        session.token.typed().unwrap(),
         serde_json::json!({ "name": "disabled-session" }),
     )
     .await;
@@ -539,7 +539,7 @@ async fn test_create_for_organization_requires_organization_id() {
     let req = create_auth_request(
         HttpMethod::Post,
         "/api-key/create",
-        Some(&session.token),
+        Some(session.token.typed().unwrap()),
         Some(serde_json::json!({ "name": "org-key" })),
         None,
     );
@@ -564,7 +564,7 @@ async fn test_create_for_organization_requires_the_organization_plugin() {
     let req = create_auth_request(
         HttpMethod::Post,
         "/api-key/create",
-        Some(&session.token),
+        Some(session.token.typed().unwrap()),
         Some(serde_json::json!({ "name": "org-key", "organizationId": "org-1" })),
         None,
     );
@@ -596,7 +596,7 @@ async fn test_create_for_organization_rejects_non_member() {
     let req = create_auth_request(
         HttpMethod::Post,
         "/api-key/create",
-        Some(&session.token),
+        Some(session.token.typed().unwrap()),
         Some(serde_json::json!({ "name": "org-key", "organizationId": "org-the-user-is-not-in" })),
         None,
     );

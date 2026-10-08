@@ -6,9 +6,10 @@ mod id_slot_tests;
 
 #[async_trait]
 impl crate::store::JwksStore for EphemeralStore {
-    async fn create_jwk_record(&self, input: FieldMap) -> AuthResult<FieldMap> {
+    async fn create_jwk_record(&self, input: FieldMap) -> AuthResult<Option<FieldMap>> {
         self.create_plugin_record(EntityRole::Jwk, input, Default::default())
             .await
+            .map(Some)
     }
 
     async fn get_jwk_record(

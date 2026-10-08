@@ -173,7 +173,7 @@ async fn observe<S: AuthSchema>(
             "cookie".into(),
             format!(
                 "better-auth.session_token={}",
-                sign_cookie_value(&actor.token, SECRET)
+                sign_cookie_value(actor.token.typed()?, SECRET)
             ),
         ),
     ]

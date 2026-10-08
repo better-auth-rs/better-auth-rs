@@ -148,14 +148,20 @@ async fn contract<S: AuthSchema>(
         login.session.additional_fields["label"],
         FieldValue::from("selected")
     );
-    assert_eq!(login.session.ip_address.as_deref(), Some(""));
-    assert_eq!(login.session.user_agent.as_deref(), Some(""));
+    assert_eq!(
+        login.session.ip_address.typed().unwrap().as_deref(),
+        Some("")
+    );
+    assert_eq!(
+        login.session.user_agent.typed().unwrap().as_deref(),
+        Some("")
+    );
     assert!(
-        login.session.expires_at.milliseconds()
+        login.session.expires_at.date_milliseconds().unwrap()
             >= (start + Duration::seconds(400)).timestamp_millis() as f64
     );
     assert!(
-        login.session.expires_at.milliseconds()
+        login.session.expires_at.date_milliseconds().unwrap()
             <= (Utc::now() + Duration::seconds(400)).timestamp_millis() as f64
     );
     assert_eq!(
@@ -175,7 +181,7 @@ async fn contract<S: AuthSchema>(
             &cookie.value,
             &auth.context().config.secret
         ),
-        Some(login.token.clone())
+        Some(login.token.typed()?.clone())
     );
     assert!(!cookie.value.contains('%'));
     let response = auth
@@ -191,7 +197,7 @@ async fn contract<S: AuthSchema>(
     assert_eq!(response.status, 200);
     let body: serde_json::Value = serde_json::from_slice(&response.body.bytes()?)?;
     assert_eq!(body["user"]["id"], "supplied-user");
-    assert_eq!(body["session"]["token"], login.token);
+    assert_eq!(body["session"]["token"], login.token.json()?.unwrap());
     let header = test
         .get_auth_headers(TestAuthOptions::new("supplied-user"))
         .await?;
@@ -329,9 +335,11 @@ impl<S: AuthSchema> DatabaseHooks<S> for CancellingHooks {
     }
     async fn after_create_session(
         &self,
-        input: &better_auth_core::wire::SessionView,
+        input: Option<&better_auth_core::wire::SessionView>,
         _: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
+        let input = input
+            .ok_or_else(|| better_auth_core::AuthError::internal("Expected created fixture row"))?;
         if input.additional_fields.get("label") == Some(&FieldValue::from("fail-after")) {
             Err(AuthError::internal("after failed"))
         } else {
@@ -445,17 +453,32 @@ async fn raw_organization_cleanup_retains_earlier_deletes_when_parent_delete_fai
         })
         .await?;
     assert_eq!(
-        login.session.active_organization_id.as_deref(),
+        login
+            .session
+            .active_organization_id
+            .typed()
+            .unwrap()
+            .as_deref(),
         Some("seed-org")
     );
-    assert_eq!(login.session.active_team_id.as_deref(), Some("seed-team"));
-    assert!(login.session.impersonated_by.is_none());
-    let persisted = auth.store().get_session(&login.token).await?.unwrap();
     assert_eq!(
-        persisted.active_organization_id.as_deref(),
+        login.session.active_team_id.typed().unwrap().as_deref(),
+        Some("seed-team")
+    );
+    assert!(login.session.impersonated_by.typed().unwrap().is_none());
+    let persisted = auth
+        .store()
+        .get_session(login.token.typed().unwrap())
+        .await?
+        .unwrap();
+    assert_eq!(
+        persisted.active_organization_id.typed().unwrap().as_deref(),
         Some("seed-org")
     );
-    assert_eq!(persisted.active_team_id.as_deref(), Some("seed-team"));
+    assert_eq!(
+        persisted.active_team_id.typed().unwrap().as_deref(),
+        Some("seed-team")
+    );
     let draft = org.create_organization(Organization {
         id: "seed-org".to_owned().into(),
         name: "Seed".to_owned().into(),
@@ -609,7 +632,7 @@ async fn admission_requires_endpoint_and_transactional_helpers_commit_or_roll_ba
                 if reject {
                     Err(AuthError::forbidden("rollback"))
                 } else {
-                    Ok(login.token)
+                    Ok(login.token.typed()?.clone())
                 }
             })
         })
@@ -814,4 +837,71 @@ async fn raw_metadata_retains_adapter_values_and_route_json_is_encoded_once() ->
         .build()
         .await?;
     metadata_contract(sql, true).await
+}
+
+#[tokio::test]
+async fn login_retains_native_tokens_and_signs_their_javascript_text() -> AuthResult<()> {
+    use better_auth_core::user_fields::{FieldTransforms, UserFieldTransform};
+    use better_auth_core::utils::cookie_utils::sign_cookie_value_raw;
+
+    for (value, text, signing_text) in [
+        (FieldValue::Null, "null", "null"),
+        (FieldValue::Number(19.0), "19", "19"),
+        (
+            FieldValue::Object(FieldMap::new().into()),
+            "[object Object]",
+            "[object Object]",
+        ),
+        (FieldValue::Undefined, "undefined", ""),
+    ] {
+        let expected = value.clone();
+        let mut config = AuthConfig::new("native-test-token-secret-at-least-thirty-two-characters")
+            .base_url("https://test-utils.example/auth");
+        config.advanced.use_secure_cookies = Some(false);
+        config.session.additional_fields = Some(
+            [(
+                "token".into(),
+                UserFieldConfig {
+                    field_type: UserFieldType::String,
+                    transform: Some(FieldTransforms {
+                        input: None,
+                        output: Some(UserFieldTransform::new(move |_| Ok(value.clone()))),
+                    }),
+                    ..Default::default()
+                },
+            )]
+            .into(),
+        );
+        let auth = BetterAuth::<StatelessSchema>::new(config.clone())
+            .store(EphemeralStore::new(Arc::new(config)))
+            .plugin(TestUtilsPlugin::default())
+            .build()
+            .await?;
+        let user = auth
+            .store()
+            .create_user(CreateUser::new().with_email("native-token@example.test"))
+            .await?;
+        let login = auth
+            .test()?
+            .login(TestAuthOptions::new(user.id.typed()?.clone()))
+            .await?;
+        assert_eq!(login.token.field_value(), expected);
+        assert_eq!(login.session.token.field_value(), expected);
+        let signed = sign_cookie_value_raw(signing_text, &auth.config().secret);
+        let signature = signed.rsplit_once('.').unwrap().1;
+        let cookie = format!("{text}.{signature}");
+        assert_eq!(login.cookies[0].value, cookie);
+        assert_eq!(
+            login.headers["cookie"],
+            format!("better-auth.session_token={cookie}")
+        );
+        assert_eq!(
+            auth.store()
+                .get_user_sessions(user.id.typed()?)
+                .await?
+                .len(),
+            1
+        );
+    }
+    Ok(())
 }

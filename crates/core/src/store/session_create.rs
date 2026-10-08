@@ -104,6 +104,15 @@ pub fn session_create_schema(
     config: &crate::config::SessionConfig,
     input: &FieldMap,
 ) -> crate::user_fields::UserConfig {
+    session_field_schema(config, input).adapter_fields(&[])
+}
+
+/// Preserve complete ordered declarations for adapter readback before ID canonicalization.
+#[doc(hidden)]
+pub fn session_field_schema(
+    config: &crate::config::SessionConfig,
+    input: &FieldMap,
+) -> crate::user_fields::UserConfig {
     use crate::user_fields::{UserConfig, UserFieldConfig, UserFieldReference, UserFieldType};
     let field = |field_type, required| UserFieldConfig {
         field_type,
@@ -112,7 +121,13 @@ pub fn session_create_schema(
     };
     let mut fields: indexmap::IndexMap<_, _> = [
         ("expiresAt".into(), field(UserFieldType::Date, true)),
-        ("token".into(), field(UserFieldType::String, true)),
+        (
+            "token".into(),
+            UserFieldConfig {
+                unique: Some(true),
+                ..field(UserFieldType::String, true)
+            },
+        ),
         (
             "createdAt".into(),
             UserFieldConfig {
@@ -120,12 +135,19 @@ pub fn session_create_schema(
                 ..field(UserFieldType::Date, true)
             },
         ),
-        ("updatedAt".into(), field(UserFieldType::Date, true)),
+        (
+            "updatedAt".into(),
+            UserFieldConfig {
+                on_update: Some(std::sync::Arc::new(|| Ok(chrono::Utc::now().into()))),
+                ..field(UserFieldType::Date, true)
+            },
+        ),
         ("ipAddress".into(), field(UserFieldType::String, false)),
         ("userAgent".into(), field(UserFieldType::String, false)),
         (
             "userId".into(),
             UserFieldConfig {
+                index: Some(true),
                 references: Some(UserFieldReference {
                     model: "user".into(),
                     field: "id".into(),
@@ -145,7 +167,7 @@ pub fn session_create_schema(
     UserConfig {
         additional_fields: Some(fields),
     }
-    .adapter_fields(&[])
+    .ordered_declarations(&[])
 }
 
 /// Recover native values from the final physical fields without consuming shared aliases.

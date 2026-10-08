@@ -49,7 +49,7 @@ impl JwtPlugin {
         &self,
         mut data: CreateJwk,
         endpoint: &EndpointContext<'_, S>,
-    ) -> AuthResult<Jwk> {
+    ) -> AuthResult<Option<Jwk>> {
         if let Some(callback) = endpoint
             .auth
             .extensions
@@ -73,6 +73,10 @@ impl JwtPlugin {
         }
         fields.extend(data.additional_fields);
         use better_auth_core::FromFieldMap as _;
-        Jwk::from_field_values(store(endpoint).create_jwk_record(fields).await?)
+        store(endpoint)
+            .create_jwk_record(fields)
+            .await?
+            .map(Jwk::from_field_values)
+            .transpose()
     }
 }

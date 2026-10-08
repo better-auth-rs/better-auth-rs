@@ -63,7 +63,7 @@ async fn setup_with_config(
         .create_session(&user, None, None)
         .await
         .unwrap();
-    (database, auth, session.token)
+    (database, auth, session.token.typed().unwrap().clone())
 }
 
 #[tokio::test]
@@ -309,7 +309,10 @@ async fn extractor_refreshes_valid_sessions_through_session_manager() {
     let session = CurrentSession::<Schema>::from_request_parts(&mut request(&token), &auth)
         .await
         .unwrap();
-    assert!(session.session.expires_at.milliseconds() > previous_expiry.timestamp_millis() as f64);
+    assert!(
+        session.session.expires_at.date_milliseconds().unwrap()
+            > previous_expiry.timestamp_millis() as f64
+    );
     assert_eq!(
         auth.store()
             .get_session(&token)

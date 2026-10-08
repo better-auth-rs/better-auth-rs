@@ -39,7 +39,7 @@ pub(crate) async fn create_organization_core(
     request: Option<&AuthRequest>,
 ) -> AuthResult<(
     CreateOrganizationResponse<CreatedOrganizationResponse, BasicMemberResponse>,
-    Option<String>,
+    Option<better_auth_core::FieldValue>,
 )> {
     let user_view = user.clone();
     if !config.may_create(&user_view).await? && !system_action {
@@ -163,7 +163,7 @@ pub(crate) async fn create_organization_core(
             }
         };
         let team = crate::plugins::organization::fields::team(team, ctx);
-        let _ = ctx
+        let team_member = ctx
             .database
             .add_team_member(&team.id, user.id().typed()?, None)
             .await?;
@@ -176,7 +176,7 @@ pub(crate) async fn create_organization_core(
                 })
                 .await?;
         }
-        default_team_id = team.id.as_str().map(str::to_owned);
+        default_team_id = team_member.map(|member| member.team_id.field_value());
     }
     if let Some(hooks) = &config.hooks {
         hooks.after_create_organization(event).await?;
@@ -226,7 +226,7 @@ pub(crate) async fn update_organization_core(
 
     let member = ctx
         .database
-        .get_member_with_user(&org_id, user.id().typed()?)
+        .get_member_with_user_value(&org_id, &user.id().field_value())
         .await?
         .map(|joined| joined.member)
         .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;
@@ -248,7 +248,7 @@ pub(crate) async fn update_organization_core(
 
     if let Some(ref new_slug) = slug
         && let Some(existing) = ctx.database.get_organization_by_slug(new_slug).await?
-        && existing.id != org_id
+        && !existing.id.field_value().strict_equals(&org_id)
     {
         return Err(AuthError::bad_request("Organization slug already taken"));
     }
@@ -278,7 +278,7 @@ pub(crate) async fn update_organization_core(
     }
     let mut updated = ctx
         .database
-        .update_organization(&org_id, update_data)
+        .update_organization_value(&org_id, update_data)
         .await?;
     updated.metadata = super::super::native_json::metadata(updated.metadata, false)?;
 
@@ -318,7 +318,7 @@ pub(crate) async fn delete_organization_core(
 
     if !check_permission(
         member.role().typed()?,
-        &body.organization_id,
+        &body.organization_id.as_str().into(),
         "organization",
         &["delete"],
         config,
@@ -331,10 +331,14 @@ pub(crate) async fn delete_organization_core(
         ));
     }
 
-    if session.active_organization_id() == Some(&body.organization_id) {
+    if session
+        .active_organization_id()
+        .field_value()
+        .strict_equals(&body.organization_id.as_str().into())
+    {
         let _ = ctx
             .database
-            .update_session_active_organization(session.token(), None)
+            .update_session_active_organization_by_token_value(&session.token().field_value(), None)
             .await?;
     }
     let organization = ctx
@@ -392,17 +396,22 @@ pub(crate) async fn get_full_organization_core(
 ) -> AuthResult<Option<FullOrganizationResponse<OrganizationResponse, InvitationView>>> {
     use better_auth_core::store::{OrganizationDetailsQuery, OrganizationKey};
 
-    let selector = if let Some(slug) = query.organization_slug.as_deref() {
+    let active_id = session.active_organization_id().field_value();
+    let selector = if let Some(slug) = query
+        .organization_slug
+        .as_deref()
+        .filter(|slug| !slug.is_empty())
+    {
         OrganizationKey::Slug(slug)
     } else {
-        let Some(id) = query
-            .organization_id
-            .as_deref()
-            .or_else(|| session.active_organization_id())
-        else {
+        let id = query.organization_id.as_deref().filter(|id| !id.is_empty());
+        if let Some(id) = id {
+            OrganizationKey::Id(id)
+        } else if active_id.is_truthy() {
+            OrganizationKey::IdValue(&active_id)
+        } else {
             return Ok(None);
-        };
-        OrganizationKey::Id(id)
+        }
     };
     let details = ctx
         .database
@@ -417,15 +426,20 @@ pub(crate) async fn get_full_organization_core(
         .await?
         .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
     let organization = details.organization;
-    let org_id = match selector {
-        OrganizationKey::Id(id) => id,
-        OrganizationKey::Slug(_) => organization.id.typed()?,
-    };
-    let _ = ctx
+    if ctx
         .database
-        .get_member(org_id, user.id().typed()?)
+        .get_member_value(&organization.id.field_value(), &user.id().field_value())
         .await?
-        .ok_or_else(|| AuthError::forbidden("User is not a member of the organization"))?;
+        .is_none()
+    {
+        let _ = ctx
+            .database
+            .update_session_active_organization_by_token_value(&session.token().field_value(), None)
+            .await?;
+        return Err(AuthError::forbidden(
+            "User is not a member of the organization",
+        ));
+    }
     Ok(Some(FullOrganizationResponse {
         organization: crate::plugins::organization::fields::organization(&organization, ctx),
         members: details
@@ -471,13 +485,13 @@ pub(crate) async fn set_active_organization_core(
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<Option<OrganizationResponse>> {
     if matches!(body.organization_id, NullableStringField::Null) {
-        if session.active_organization_id().is_none() {
+        if !session.active_organization_id().field_value().is_truthy() {
             return Ok(None);
         }
 
         let updated = ctx
             .database
-            .update_session_active_organization(session.token(), None)
+            .update_session_active_organization_by_token_value(&session.token().field_value(), None)
             .await?;
         let manager = ctx.session_manager();
         manager
@@ -486,36 +500,58 @@ pub(crate) async fn set_active_organization_core(
         return Ok(None);
     }
 
-    let org_id = if let NullableStringField::Value(id) = &body.organization_id {
-        id.clone()
-    } else if let Some(slug) = body.organization_slug.as_deref() {
+    let org_id = if let NullableStringField::Value(id) = &body.organization_id
+        && !id.is_empty()
+    {
+        id.as_str().into()
+    } else if let Some(slug) = body
+        .organization_slug
+        .as_deref()
+        .filter(|slug| !slug.is_empty())
+    {
         let organization = ctx
             .database
             .get_organization_by_slug(slug)
             .await?
             .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
-        organization.id().typed()?.to_string()
-    } else if let Some(active_org_id) = session.active_organization_id() {
-        active_org_id.to_string()
+        organization.id().field_value()
     } else {
-        return Ok(None);
+        let active_id = session.active_organization_id().field_value();
+        if !active_id.is_truthy() {
+            return Ok(None);
+        }
+        active_id
     };
-
-    let _ = ctx
+    if !org_id.is_truthy() {
+        return Err(AuthError::bad_request("Organization not found"));
+    }
+    if ctx
         .database
-        .get_member(&org_id, user.id().typed()?)
+        .get_member_value(&org_id, &user.id().field_value())
         .await?
-        .ok_or_else(|| AuthError::forbidden("User is not a member of the organization"))?;
+        .is_none()
+    {
+        let _ = ctx
+            .database
+            .update_session_active_organization_by_token_value(&session.token().field_value(), None)
+            .await?;
+        return Err(AuthError::forbidden(
+            "User is not a member of the organization",
+        ));
+    }
 
     let organization = ctx
         .database
-        .get_organization_by_id(&org_id)
+        .get_organization_by_id_value(&org_id)
         .await?
         .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
 
     let updated = ctx
         .database
-        .update_session_active_organization(session.token(), Some(&org_id))
+        .update_session_active_organization_by_token_value(
+            &session.token().field_value(),
+            Some(&organization.id.field_value()),
+        )
         .await?;
     let manager = ctx.session_manager();
     manager
@@ -564,10 +600,14 @@ pub(crate) async fn leave_organization_core(
     let response = MemberResponse::from_member_and_user(member, &joined.user);
     ctx.database.delete_member(member.id().typed()?).await?;
 
-    if session.active_organization_id() == Some(&body.organization_id) {
+    if session
+        .active_organization_id()
+        .field_value()
+        .strict_equals(&body.organization_id.as_str().into())
+    {
         let _ = ctx
             .database
-            .update_session_active_organization(session.token(), None)
+            .update_session_active_organization_by_token_value(&session.token().field_value(), None)
             .await?;
     }
 
@@ -613,12 +653,18 @@ pub async fn handle_create_organization(
     {
         let _ = ctx
             .database
-            .update_session_active_organization(session.token(), response.organization.id.as_str())
+            .update_session_active_organization_by_token_value(
+                &session.token().field_value(),
+                Some(&response.organization.id.field_value()),
+            )
             .await?;
         if let Some(team_id) = default_team_id {
             let _ = ctx
                 .database
-                .update_session_active_team(session.token(), Some(&team_id))
+                .update_session_active_team_by_token_value(
+                    &session.token().field_value(),
+                    Some(&team_id),
+                )
                 .await?;
         }
     }
@@ -685,22 +731,26 @@ pub async fn handle_get_organization(
     };
     let organization = if let Some(slug) = nonempty("organizationSlug")? {
         ctx.database.get_organization_by_slug(slug).await?
-    } else if let Some(id) = nonempty("organizationId")?.or(session.active_organization_id()) {
-        ctx.database.get_organization_by_id(id).await?
     } else {
-        return Ok(AuthResponse::json(200, &serde_json::Value::Null)?);
+        let id = nonempty("organizationId")?
+            .map(better_auth_core::FieldValue::from)
+            .unwrap_or_else(|| session.active_organization_id().field_value());
+        if !id.is_truthy() {
+            return Ok(AuthResponse::json(200, &serde_json::Value::Null)?);
+        }
+        ctx.database.get_organization_by_id_value(&id).await?
     }
     .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
 
     if ctx
         .database
-        .get_member(organization.id().typed()?, user.id().typed()?)
+        .get_member_value(&organization.id().field_value(), &user.id().field_value())
         .await?
         .is_none()
     {
         _ = ctx
             .database
-            .update_session_active_organization(session.token(), None)
+            .update_session_active_organization_by_token_value(&session.token().field_value(), None)
             .await?;
         return Err(AuthError::forbidden(
             "User is not a member of the organization",
@@ -819,14 +869,17 @@ mod tests {
             .await
             .expect("organization should be created");
         ctx.database
-            .update_session_active_organization(&session.token, Some(existing.id.typed().unwrap()))
+            .update_session_active_organization(
+                session.token.typed().unwrap(),
+                Some(existing.id.typed().unwrap()),
+            )
             .await
             .expect("active organization should update");
 
         let request = create_auth_json_request_no_query(
             HttpMethod::Post,
             "/organization/create",
-            Some(&session.token),
+            Some(session.token.typed().unwrap()),
             Some(serde_json::json!({
                 "name": "Next",
                 "slug": "next",
@@ -840,13 +893,17 @@ mod tests {
 
         let updated_session = ctx
             .database
-            .get_session(&session.token)
+            .get_session(session.token.typed().unwrap())
             .await
             .expect("session lookup should succeed")
             .expect("session should exist");
         assert_eq!(
-            updated_session.active_organization_id,
-            Some(existing.id.typed().unwrap().clone())
+            updated_session
+                .active_organization_id
+                .typed()
+                .unwrap()
+                .as_ref(),
+            Some(existing.id.typed().unwrap())
         );
         assert_eq!(user.id, session.user_id);
     }
@@ -865,7 +922,7 @@ mod tests {
         let request = create_auth_json_request_no_query(
             HttpMethod::Post,
             "/organization/create",
-            Some(&session.token),
+            Some(session.token.typed().unwrap()),
             Some(serde_json::json!({
                 "name": "Created",
                 "slug": "created"
@@ -883,12 +940,16 @@ mod tests {
 
         let updated_session = ctx
             .database
-            .get_session(&session.token)
+            .get_session(session.token.typed().unwrap())
             .await
             .expect("session lookup should succeed")
             .expect("session should exist");
         assert_eq!(
-            updated_session.active_organization_id.as_deref(),
+            updated_session
+                .active_organization_id
+                .typed()
+                .unwrap()
+                .as_deref(),
             Some(created_id)
         );
     }

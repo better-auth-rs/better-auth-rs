@@ -242,7 +242,7 @@ async fn native_sqlite_credential_authenticates_after_reopen() -> TestResult {
         fixture
             .route(&request(
                 "/passkey/generate-register-options",
-                Some(&session.token),
+                Some(session.token.typed().unwrap()),
                 None,
                 None,
             ))
@@ -257,7 +257,7 @@ async fn native_sqlite_credential_authenticates_after_reopen() -> TestResult {
     let registered = fixture
         .route(&request(
             "/passkey/verify-registration",
-            Some(&session.token),
+            Some(session.token.typed().unwrap()),
             Some(json!({"response":response,"name":"Persisted authenticator"})),
             Some(&cookie),
         ))
@@ -316,7 +316,12 @@ async fn native_sqlite_credential_authenticates_after_reopen() -> TestResult {
         ),
     ] {
         let result = fixture
-            .route(&request(path, Some(&other_session.token), Some(body), None))
+            .route(&request(
+                path,
+                Some(other_session.token.typed().unwrap()),
+                Some(body),
+                None,
+            ))
             .await;
         let error = match result {
             Err(error) => error,

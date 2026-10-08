@@ -378,6 +378,8 @@ impl MemberUser {
 pub enum OrganizationKey<'a> {
     /// Match the stored organization ID.
     Id(&'a str),
+    /// Match a native session organization ID.
+    IdValue(&'a crate::FieldValue),
     /// Match the stored organization slug.
     Slug(&'a str),
 }

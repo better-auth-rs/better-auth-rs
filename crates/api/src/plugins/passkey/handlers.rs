@@ -116,7 +116,7 @@ pub(super) async fn generate_register_options_core(
     })?;
     let _ = ctx
         .database
-        .create_verification(CreateVerification {
+        .create_verification_optional(CreateVerification {
             identifier: (token.clone()).into(),
             value: (serialized_state).into(),
             expires_at: (expires_at).into(),
@@ -192,7 +192,7 @@ pub(super) async fn generate_authenticate_options_core<U: AuthUser>(
     let expires_at = Utc::now() + Duration::seconds(config.challenge_ttl_secs);
     let _ = ctx
         .database
-        .create_verification(CreateVerification {
+        .create_verification_optional(CreateVerification {
             identifier: (token.clone()).into(),
             value: (serde_json::to_string(&state)?).into(),
             expires_at: (expires_at).into(),

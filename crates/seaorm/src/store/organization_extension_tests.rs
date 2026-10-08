@@ -469,7 +469,7 @@ async fn dynamic_roles_persist_json_and_organization_deletion_cascades() {
 
 #[tokio::test]
 async fn accepting_multiple_teams_rolls_back_every_write_when_one_team_is_full() {
-    use better_auth_core::{AuthSession, CreateSession, InvitationStatus, store::SessionStore};
+    use better_auth_core::{CreateSession, InvitationStatus, store::SessionStore};
     let store = store().await;
     let first = store
         .create_team(CreateTeam {
@@ -524,7 +524,7 @@ async fn accepting_multiple_teams_rolls_back_every_write_when_one_team_is_full()
             .accept_invitation_with_teams(
                 invitation.id.typed().unwrap(),
                 "user-b",
-                Some(session.token()),
+                Some(session.token.typed().unwrap()),
                 true,
                 Some(1).into()
             )
@@ -550,11 +550,14 @@ async fn accepting_multiple_teams_rolls_back_every_write_when_one_team_is_full()
     assert!(store.get_member("org-a", "user-b").await.unwrap().is_none());
     assert_eq!(
         store
-            .get_session(session.token())
+            .get_session(session.token.typed().unwrap())
             .await
             .unwrap()
             .unwrap()
-            .active_organization_id(),
+            .active_organization_id
+            .typed()
+            .unwrap()
+            .as_deref(),
         None
     );
     store
@@ -565,14 +568,14 @@ async fn accepting_multiple_teams_rolls_back_every_write_when_one_team_is_full()
         store.accept_invitation_with_teams(
             invitation.id.typed().unwrap(),
             "user-b",
-            Some(session.token()),
+            Some(session.token.typed().unwrap()),
             true,
             Some(1).into()
         ),
         store.accept_invitation_with_teams(
             invitation.id.typed().unwrap(),
             "user-b",
-            Some(session.token()),
+            Some(session.token.typed().unwrap()),
             true,
             Some(1).into()
         )
@@ -596,18 +599,21 @@ async fn accepting_multiple_teams_rolls_back_every_write_when_one_team_is_full()
     );
     assert_eq!(
         store
-            .get_session(session.token())
+            .get_session(session.token.typed().unwrap())
             .await
             .unwrap()
             .unwrap()
-            .active_organization_id(),
+            .active_organization_id
+            .typed()
+            .unwrap()
+            .as_deref(),
         Some("org-a")
     );
 }
 
 #[tokio::test]
 async fn single_team_invitation_captures_cookie_before_switching_organization() {
-    use better_auth_core::{AuthSession, CreateSession, store::SessionStore};
+    use better_auth_core::{CreateSession, store::SessionStore};
     let store = store().await;
     let team = store
         .create_team(CreateTeam {
@@ -644,7 +650,7 @@ async fn single_team_invitation_captures_cookie_before_switching_organization() 
         .accept_invitation_with_teams(
             invitation.id.typed().unwrap(),
             "user-b",
-            Some(session.token()),
+            Some(session.token.typed().unwrap()),
             true,
             None.into(),
         )
@@ -656,17 +662,33 @@ async fn single_team_invitation_captures_cookie_before_switching_organization() 
         better_auth_core::InvitationStatus::Accepted
     );
     let snapshot = snapshot.unwrap();
-    assert_eq!(snapshot.active_organization_id(), Some("org-b"));
-    assert_eq!(snapshot.active_team_id(), team.id.as_str());
-    let persisted = store.get_session(session.token()).await.unwrap().unwrap();
-    assert_eq!(persisted.active_organization_id(), Some("org-a"));
-    assert_eq!(persisted.active_team_id(), team.id.as_str());
+    assert_eq!(
+        snapshot.active_organization_id.typed().unwrap().as_deref(),
+        Some("org-b")
+    );
+    assert_eq!(
+        snapshot.active_team_id.typed().unwrap().as_deref(),
+        team.id.as_str()
+    );
+    let persisted = store
+        .get_session(session.token.typed().unwrap())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        persisted.active_organization_id.typed().unwrap().as_deref(),
+        Some("org-a")
+    );
+    assert_eq!(
+        persisted.active_team_id.typed().unwrap().as_deref(),
+        team.id.as_str()
+    );
 }
 
 #[tokio::test]
 async fn dynamic_team_limits_run_in_order_and_rollback_callback_failures() {
     use better_auth_core::store::{SessionStore, TeamMemberLimitResolver, TeamMemberLimits};
-    use better_auth_core::{AuthError, AuthResult, AuthSession, CreateSession, InvitationStatus};
+    use better_auth_core::{AuthError, AuthResult, CreateSession, InvitationStatus};
     struct Limits {
         calls: std::sync::Mutex<Vec<String>>,
         fail: std::sync::atomic::AtomicBool,
@@ -727,7 +749,7 @@ async fn dynamic_team_limits_run_in_order_and_rollback_callback_failures() {
         .accept_invitation_with_teams(
             invitation.id.typed().unwrap(),
             "user-b",
-            Some(session.token()),
+            Some(session.token.typed().unwrap()),
             true,
             TeamMemberLimits::Resolver(&limits),
         )
@@ -749,11 +771,14 @@ async fn dynamic_team_limits_run_in_order_and_rollback_callback_failures() {
     );
     assert_eq!(
         store
-            .get_session(session.token())
+            .get_session(session.token.typed().unwrap())
             .await
             .unwrap()
             .unwrap()
-            .active_organization_id(),
+            .active_organization_id
+            .typed()
+            .unwrap()
+            .as_deref(),
         None
     );
     limits
@@ -763,7 +788,7 @@ async fn dynamic_team_limits_run_in_order_and_rollback_callback_failures() {
         .accept_invitation_with_teams(
             invitation.id.typed().unwrap(),
             "user-b",
-            Some(session.token()),
+            Some(session.token.typed().unwrap()),
             true,
             TeamMemberLimits::Resolver(&limits),
         )

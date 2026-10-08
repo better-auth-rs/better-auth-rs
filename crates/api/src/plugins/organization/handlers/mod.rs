@@ -87,22 +87,22 @@ pub(crate) async fn resolve_organization_id(
     org_slug: Option<&str>,
     session: &impl AuthSession,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<String> {
+) -> AuthResult<better_auth_core::FieldValue> {
     if let Some(id) = org_id.filter(|id| !id.is_empty()) {
-        return Ok(id.to_string());
+        return Ok(id.into());
     }
 
     if let Some(slug) = org_slug.filter(|slug| !slug.is_empty()) {
         if let Some(org) = ctx.database.get_organization_by_slug(slug).await? {
             use better_auth_core::entity::AuthOrganization;
-            return Ok(org.id().typed()?.to_string());
+            return Ok(org.id().field_value());
         }
         return Err(AuthError::not_found("Organization not found"));
     }
 
-    session
-        .active_organization_id()
-        .map(|s| s.to_string())
+    let id = session.active_organization_id().field_value();
+    id.is_truthy()
+        .then_some(id)
         .ok_or_else(|| AuthError::bad_request("No active organization"))
 }
 
@@ -122,7 +122,7 @@ pub(crate) async fn has_permission_core(
 
     let member = ctx
         .database
-        .get_member_with_user(&org_id, user.id().typed()?)
+        .get_member_with_user_value(&org_id, &user.id().field_value())
         .await?
         .map(|joined| joined.member)
         .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;

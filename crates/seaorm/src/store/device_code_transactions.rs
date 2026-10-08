@@ -16,14 +16,19 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
 {
     async fn create_device_code(&self, input: CreateDeviceCode) -> AuthResult<DeviceCode> {
         self.store
-            .create_device_code_with_connection(&self.tx, input)
+            .create_device_code_with_connection(
+                &self.tx,
+                super::create_readback::ReadbackScope::Transaction,
+                input,
+            )
             .await
     }
 
-    async fn create_device_code_record(&self, input: FieldMap) -> AuthResult<FieldMap> {
+    async fn create_device_code_record(&self, input: FieldMap) -> AuthResult<Option<FieldMap>> {
         self.store
             .create_plugin_record::<P::DeviceCode>(
                 &self.tx,
+                super::create_readback::ReadbackScope::Transaction,
                 EntityRole::DeviceCode,
                 "deviceCode",
                 input,

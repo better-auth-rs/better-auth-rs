@@ -172,8 +172,14 @@ pub(crate) async fn revoke_other_sessions_core(
 ) -> AuthResult<StatusResponse> {
     let all_sessions = ctx.session_manager().list_user_sessions(user_id).await?;
     for session in all_sessions {
-        if session.token() != current_session.token() {
-            ctx.database.delete_session(session.token()).await?;
+        if !session
+            .token()
+            .field_value()
+            .strict_equals(&current_session.token().field_value())
+        {
+            ctx.database
+                .delete_session_by_token_value(&session.token().field_value())
+                .await?;
         }
     }
     Ok(StatusResponse { status: true })
@@ -234,7 +240,7 @@ impl SessionManagementPlugin {
         let (user, _) = ctx.require_authoritative_session(req).await?;
         let mut sessions = list_sessions_core(user.id().typed()?, ctx).await?;
         if admin_plugin_enabled(ctx) {
-            sessions.retain(|session| session.impersonated_by.is_none());
+            sessions.retain(|session| !session.impersonated_by.field_value().is_truthy());
         }
         Ok(AuthResponse::json(200, &sessions)?)
     }
@@ -330,7 +336,7 @@ mod tests {
             let req = test_helpers::create_auth_json_request_no_query(
                 HttpMethod::Post,
                 "/sign-out",
-                Some(&session.token),
+                Some(session.token.typed().unwrap()),
                 Some(body),
             );
             let response = plugin.on_request(&req, &ctx).await.unwrap().unwrap();
@@ -340,7 +346,7 @@ mod tests {
             assert_eq!(body["code"], "VALIDATION_ERROR");
             assert!(
                 ctx.database
-                    .get_session(&session.token)
+                    .get_session(session.token.typed().unwrap())
                     .await
                     .unwrap()
                     .is_some()
@@ -406,7 +412,7 @@ mod tests {
         let req = test_helpers::create_auth_request_no_query(
             HttpMethod::Get,
             "/get-session",
-            Some(&session.token),
+            Some(session.token.typed().unwrap()),
             None,
         );
         let response = plugin.handle_get_session(&req, &ctx).await.unwrap();
@@ -417,7 +423,7 @@ mod tests {
         let response_data: serde_json::Value = serde_json::from_str(&body_str).unwrap();
         assert_eq!(
             response_data["session"]["token"].as_str().unwrap(),
-            session.token
+            session.token.typed().unwrap()
         );
         assert_eq!(
             response_data["user"]["email"]
@@ -463,7 +469,7 @@ mod tests {
         let req = test_helpers::create_auth_request_no_query(
             HttpMethod::Post,
             "/sign-out",
-            Some(&session.token),
+            Some(session.token.typed().unwrap()),
             Some(b"{}".to_vec()),
         );
         let response = handle_sign_out(&req, &ctx).await.unwrap();
@@ -474,7 +480,11 @@ mod tests {
         let response_data: SuccessResponse = serde_json::from_str(&body_str).unwrap();
         assert!(response_data.success);
 
-        let session_check = ctx.database.get_session(&session.token).await.unwrap();
+        let session_check = ctx
+            .database
+            .get_session(session.token.typed().unwrap())
+            .await
+            .unwrap();
         assert!(session_check.is_none());
     }
 
@@ -497,7 +507,7 @@ mod tests {
         let req = test_helpers::create_auth_request_no_query(
             HttpMethod::Post,
             "/sign-out",
-            Some(&session.token),
+            Some(session.token.typed().unwrap()),
             Some(b"{}".to_vec()),
         );
         let response = handle_sign_out(&req, &ctx).await.unwrap();
@@ -525,7 +535,7 @@ mod tests {
         let req = test_helpers::create_auth_request_no_query(
             HttpMethod::Post,
             "/sign-out",
-            Some(&session.token),
+            Some(session.token.typed().unwrap()),
             Some(b"{}".to_vec()),
         );
         let response = handle_sign_out(&req, &ctx).await.unwrap();
@@ -567,7 +577,7 @@ mod tests {
         let req = test_helpers::create_auth_request_no_query(
             HttpMethod::Get,
             "/list-sessions",
-            Some(&session.token),
+            Some(session.token.typed().unwrap()),
             None,
         );
         let response = plugin.handle_list_sessions(&req, &ctx).await.unwrap();
@@ -622,7 +632,7 @@ mod tests {
         let req = test_helpers::create_auth_request_no_query(
             HttpMethod::Get,
             "/list-sessions",
-            Some(&session.token),
+            Some(session.token.typed().unwrap()),
             None,
         );
         let response = plugin.handle_list_sessions(&req, &ctx).await.unwrap();
@@ -668,17 +678,25 @@ mod tests {
         let req = test_helpers::create_auth_request_no_query(
             HttpMethod::Post,
             "/revoke-session",
-            Some(&session.token),
+            Some(session.token.typed().unwrap()),
             Some(body.to_string().into_bytes()),
         );
 
         let response = plugin.handle_revoke_session(&req, &ctx).await.unwrap();
         assert_eq!(response.status, 200);
 
-        let session2_check = ctx.database.get_session(&session2.token).await.unwrap();
+        let session2_check = ctx
+            .database
+            .get_session(session2.token.typed().unwrap())
+            .await
+            .unwrap();
         assert!(session2_check.is_none());
 
-        let session1_check = ctx.database.get_session(&session.token).await.unwrap();
+        let session1_check = ctx
+            .database
+            .get_session(session.token.typed().unwrap())
+            .await
+            .unwrap();
         assert!(session1_check.is_some());
     }
 
@@ -715,7 +733,7 @@ mod tests {
         let req = test_helpers::create_auth_request_no_query(
             HttpMethod::Post,
             "/revoke-session",
-            Some(&session1.token),
+            Some(session1.token.typed().unwrap()),
             Some(body.to_string().into_bytes()),
         );
 
@@ -726,7 +744,11 @@ mod tests {
             serde_json::from_slice(response.body.bytes().unwrap().as_ref()).unwrap();
         assert_eq!(body["status"], true);
 
-        let still_exists = ctx.database.get_session(&session2.token).await.unwrap();
+        let still_exists = ctx
+            .database
+            .get_session(session2.token.typed().unwrap())
+            .await
+            .unwrap();
         assert!(
             still_exists.is_some(),
             "other user's session must not be revoked"
@@ -760,7 +782,7 @@ mod tests {
         let req = test_helpers::create_auth_request_no_query(
             HttpMethod::Post,
             "/revoke-sessions",
-            Some(&session1.token),
+            Some(session1.token.typed().unwrap()),
             Some(b"{}".to_vec()),
         );
         let response = plugin.handle_revoke_sessions(&req, &ctx).await.unwrap();
@@ -833,7 +855,7 @@ mod tests {
         let req = test_helpers::create_auth_request_no_query(
             HttpMethod::Get,
             "/get-session",
-            Some(&session.token),
+            Some(session.token.typed().unwrap()),
             None,
         );
         let response = plugin.on_request(&req, &ctx).await.unwrap();
@@ -845,7 +867,7 @@ mod tests {
         let req = test_helpers::create_auth_request_no_query(
             HttpMethod::Post,
             "/get-session",
-            Some(&session.token),
+            Some(session.token.typed().unwrap()),
             Some(b"{}".to_vec()),
         );
         let err = plugin.on_request(&req, &ctx).await.unwrap_err();
@@ -855,7 +877,7 @@ mod tests {
         let req = test_helpers::create_auth_request_no_query(
             HttpMethod::Get,
             "/invalid-route",
-            Some(&session.token),
+            Some(session.token.typed().unwrap()),
             None,
         );
         let response = plugin.on_request(&req, &ctx).await.unwrap();
@@ -885,7 +907,7 @@ mod tests {
         let req = test_helpers::create_auth_request_no_query(
             HttpMethod::Get,
             "/list-sessions",
-            Some(&session.token),
+            Some(session.token.typed().unwrap()),
             None,
         );
         let response = plugin.on_request(&req, &ctx).await.unwrap();
@@ -894,7 +916,7 @@ mod tests {
         let req = test_helpers::create_auth_request_no_query(
             HttpMethod::Post,
             "/revoke-session",
-            Some(&session.token),
+            Some(session.token.typed().unwrap()),
             Some(b"{}".to_vec()),
         );
         let response = plugin.on_request(&req, &ctx).await.unwrap();

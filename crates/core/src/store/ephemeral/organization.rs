@@ -192,7 +192,15 @@ impl OrganizationStore for EphemeralStore {
         id: &str,
         update: UpdateOrganization,
     ) -> AuthResult<Organization> {
-        let id = self.organization_query(EntityRole::Organization, "id", Value::from(id))?;
+        self.update_organization_value(&Value::from(id), update)
+            .await
+    }
+    async fn update_organization_value(
+        &self,
+        id: &Value,
+        update: UpdateOrganization,
+    ) -> AuthResult<Organization> {
+        let id = self.organization_query(EntityRole::Organization, "id", id.clone())?;
         let mut patch = FieldMap::new();
         if let Some(name) = update.name {
             let _ = patch.insert("name".into(), Value::from(name));

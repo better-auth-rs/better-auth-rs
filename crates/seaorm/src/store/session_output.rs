@@ -35,6 +35,44 @@ where
         );
     }
 
+    pub(super) async fn output_session_raw(
+        &self,
+        row: &sea_orm::QueryResult,
+        schema: &better_auth_core::user_fields::UserConfig,
+        db: &impl ConnectionTrait,
+    ) -> AuthResult<SessionView> {
+        use better_auth_core::FromFieldMap;
+        let backend = db.get_database_backend();
+        self.model_fields.begin_id_output(EntityRole::Session)?;
+        let record =
+            super::plugin_rows::record_from_columns::<<S::Session as SeaOrmSessionModel>::Entity>(
+                row,
+                schema,
+                backend,
+                S::Session::id_column(),
+                S::Session::field_column,
+            )?;
+        let fields = schema
+            .project_adapter_records_with_capabilities(
+                vec![record],
+                super::field_output::capabilities(backend),
+                backend != sea_orm::DbBackend::Sqlite,
+            )
+            .await?
+            .remove(0);
+        let order = schema.fields().keys().cloned().collect::<Vec<_>>();
+        let mut session = SessionView::from_field_values(fields.in_field_order(&order))?;
+        session.active = match S::Session::active_column() {
+            Some(column) => {
+                use sea_orm::IdenStatic;
+                super::plugin_rows::value(row, column.as_str())?.is_truthy()
+            }
+            None => true,
+        };
+        self.set_session_field_visibility(&mut session);
+        Ok(session)
+    }
+
     pub(super) async fn output_sessions(
         &self,
         rows: &[S::Session],

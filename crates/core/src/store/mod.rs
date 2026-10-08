@@ -12,7 +12,7 @@ mod runtime;
 mod session_create;
 pub use session_create::{
     PreparedSessionCreate, SessionCreateWriter, session_create_native_fields,
-    session_create_schema, session_from_create_fields,
+    session_create_schema, session_field_schema, session_from_create_fields,
 };
 pub mod schema;
 pub use runtime::RuntimeStore;
@@ -71,7 +71,7 @@ pub struct SessionUpdateWriter {
 /// Write a projected verification to secondary storage before database after hooks are queued.
 /// The write is immediate inside a transaction; database rollback does not undo secondary storage.
 pub type VerificationCreateWriter =
-    Box<dyn FnOnce(crate::wire::VerificationView) -> TypedTransactionFuture<'static, ()> + Send>;
+    Box<dyn FnOnce(crate::FieldMap) -> TypedTransactionFuture<'static, ()> + Send>;
 
 #[async_trait]
 pub trait AuthTransaction<S: AuthSchema>:
@@ -164,6 +164,15 @@ pub trait AuthTransaction<S: AuthSchema>:
             "The store must support nullable transactional user creation",
         ))
     }
+    /// Preserve a nullable Account creation result in this transaction.
+    async fn create_account_optional(
+        &self,
+        _input: CreateAccount,
+    ) -> AuthResult<Option<crate::wire::AccountView>> {
+        Err(AuthError::config(
+            "The store must support nullable transactional account creation",
+        ))
+    }
     /// Create a session while preserving cancellation and the active transaction.
     async fn create_session_optional(
         &self,
@@ -200,6 +209,16 @@ pub trait AuthTransaction<S: AuthSchema>:
     fn queue_after_commit(&self, effect: TypedTransactionFuture<'static, ()>) -> AuthResult<()>;
 
     /// Run verification creation hooks for secondary-only values in this transaction.
+    /// Run verification before hooks without converting cancellation into an error.
+    async fn before_create_runtime_verification_optional(
+        &self,
+        verification: &mut CreateVerification,
+    ) -> AuthResult<bool> {
+        self.before_create_runtime_verification(verification)
+            .await?;
+        Ok(true)
+    }
+
     async fn before_create_runtime_verification(
         &self,
         _verification: &mut CreateVerification,
@@ -211,18 +230,28 @@ pub trait AuthTransaction<S: AuthSchema>:
         &self,
         verification: CreateVerification,
     ) -> AuthResult<crate::wire::VerificationView>;
+    /// Preserve cancellation and a successful adapter creation with no returned row.
+    async fn create_verification_optional(
+        &self,
+        _verification: CreateVerification,
+    ) -> AuthResult<Option<crate::wire::VerificationView>> {
+        Err(AuthError::config(
+            "The store must support nullable verification creation",
+        ))
+    }
+
     /// Run a verification create lifecycle, then its secondary write, then queue database after hooks.
     async fn create_verification_with_writer(
         &self,
         verification: CreateVerification,
         writer: Option<VerificationCreateWriter>,
-    ) -> AuthResult<crate::wire::VerificationView> {
+    ) -> AuthResult<Option<crate::wire::VerificationView>> {
         if writer.is_some() {
             return Err(AuthError::config(
                 "The store must support ordered verification creation",
             ));
         }
-        self.create_verification(verification).await
+        self.create_verification_optional(verification).await
     }
 
     /// Update adapter fields and return the projection produced after the write.
@@ -329,6 +358,10 @@ pub trait AuthTransaction<S: AuthSchema>:
         crate::PasskeyStorage::Legacy
     }
     async fn create_passkey(&self, passkey: CreatePasskey) -> AuthResult<Passkey>;
+    /// Preserve a successful write whose adapter returns no row.
+    async fn create_passkey_optional(&self, passkey: CreatePasskey) -> AuthResult<Option<Passkey>> {
+        self.create_passkey(passkey).await.map(Some)
+    }
     async fn create_user(&self, create_user: CreateUser) -> AuthResult<crate::wire::UserView>;
     async fn create_account(
         &self,
@@ -554,6 +587,101 @@ pub trait SessionStore<S: AuthSchema>: Send + Sync {
         ))
     }
 
+    /// Run an update using the projected token before adapter query conversion.
+    async fn update_session_with_writer_by_token_value(
+        &self,
+        token: &crate::FieldValue,
+        update: database_hooks::SessionUpdate,
+        secondary: Option<SessionUpdateWriter>,
+    ) -> AuthResult<Option<crate::wire::SessionView>> {
+        let token = token.as_str().ok_or_else(|| {
+            AuthError::config("The store must support native Session token updates")
+        })?;
+        self.update_session_with_writer(token, update, secondary)
+            .await
+    }
+
+    /// Read a Session using its projected token before adapter query conversion.
+    async fn get_session_by_token_value(
+        &self,
+        token: &crate::FieldValue,
+    ) -> AuthResult<Option<crate::wire::SessionView>> {
+        let token = token.as_str().ok_or_else(|| {
+            AuthError::config("The store must support native Session token queries")
+        })?;
+        self.get_session(token).await
+    }
+
+    /// Apply logical fields using the projected token without narrowing the token.
+    async fn update_session_fields_by_token_value(
+        &self,
+        token: &crate::FieldValue,
+        fields: crate::FieldMap,
+    ) -> AuthResult<Option<crate::wire::SessionView>> {
+        let token = token.as_str().ok_or_else(|| {
+            AuthError::config("The store must support native Session token updates")
+        })?;
+        self.update_session_fields(token, fields).await
+    }
+
+    /// Set the active team using native token and team values.
+    async fn update_session_active_team_by_token_value(
+        &self,
+        token: &crate::FieldValue,
+        team_id: Option<&crate::FieldValue>,
+    ) -> AuthResult<crate::wire::SessionView> {
+        self.update_session_fields_by_token_value(
+            token,
+            [(
+                "activeTeamId".into(),
+                team_id.cloned().unwrap_or(crate::FieldValue::Null),
+            )]
+            .into(),
+        )
+        .await?
+        .ok_or(AuthError::SessionNotFound)
+    }
+
+    /// Set the active organization using native token and organization values.
+    async fn update_session_active_organization_by_token_value(
+        &self,
+        token: &crate::FieldValue,
+        organization_id: Option<&crate::FieldValue>,
+    ) -> AuthResult<crate::wire::SessionView> {
+        self.update_session_fields_by_token_value(
+            token,
+            [(
+                "activeOrganizationId".into(),
+                organization_id.cloned().unwrap_or(crate::FieldValue::Null),
+            )]
+            .into(),
+        )
+        .await?
+        .ok_or(AuthError::SessionNotFound)
+    }
+
+    /// Accept an invitation without narrowing a projected Session token.
+    async fn accept_invitation_with_teams_by_token_value(
+        &self,
+        invitation_id: &str,
+        user_id: &str,
+        session_token: Option<&crate::FieldValue>,
+        teams_enabled: bool,
+        maximum: TeamMemberLimits<'_>,
+    ) -> AuthResult<(Member, Invitation, Option<crate::wire::SessionView>)> {
+        let token = session_token
+            .map(|token| {
+                token.as_str().ok_or_else(|| {
+                    AuthError::config(
+                        "The store must support native Session token invitation acceptance",
+                    )
+                })
+            })
+            .transpose()?;
+        self.accept_invitation_with_teams(invitation_id, user_id, token, teams_enabled, maximum)
+            .await
+    }
+
     /// None cancels cleanup. Some(0) means a completed write matched no rows.
     async fn delete_user_sessions_optional(
         &self,
@@ -576,7 +704,7 @@ pub trait SessionStore<S: AuthSchema>: Send + Sync {
     /// Keep the caller's ambient request scope when invoking each hook.
     async fn after_create_runtime_session(
         &self,
-        _session: &crate::wire::SessionView,
+        _session: Option<&crate::wire::SessionView>,
         _request: Option<crate::hooks::RequestHookContext>,
     ) -> AuthResult<()> {
         Ok(())
@@ -585,8 +713,7 @@ pub trait SessionStore<S: AuthSchema>: Send + Sync {
     async fn end_session(&self, token: &str) -> AuthResult<()> {
         let now = chrono::Utc::now();
         if let Some(session) = self.get_session(token).await?
-            && crate::entity::AuthSession::expires_at(&session).milliseconds()
-                > now.timestamp_millis() as f64
+            && crate::entity::AuthSession::expires_at(&session).is_after(now)?
         {
             let _ = self.update_session_expiry(token, now).await?;
         }
@@ -766,18 +893,28 @@ pub trait AccountStore<S: AuthSchema>: Send + Sync {
 
 #[async_trait]
 pub trait VerificationStore<S: AuthSchema>: Send + Sync {
+    /// Preserve cancellation and a successful adapter creation with no returned row.
+    async fn create_verification_optional(
+        &self,
+        _verification: CreateVerification,
+    ) -> AuthResult<Option<crate::wire::VerificationView>> {
+        Err(AuthError::config(
+            "The store must support nullable verification creation",
+        ))
+    }
+
     /// Run a verification create lifecycle, then its secondary write, then queue database after hooks.
     async fn create_verification_with_writer(
         &self,
         verification: CreateVerification,
         writer: Option<VerificationCreateWriter>,
-    ) -> AuthResult<crate::wire::VerificationView> {
+    ) -> AuthResult<Option<crate::wire::VerificationView>> {
         if writer.is_some() {
             return Err(AuthError::config(
                 "The store must support ordered verification creation",
             ));
         }
-        self.create_verification(verification).await
+        self.create_verification_optional(verification).await
     }
 
     /// Update adapter fields and return the projection produced after the write.
@@ -802,6 +939,16 @@ pub trait VerificationStore<S: AuthSchema>: Send + Sync {
     }
 
     /// Run verification creation hooks when secondary storage owns the record.
+    /// Run verification before hooks without converting cancellation into an error.
+    async fn before_create_runtime_verification_optional(
+        &self,
+        verification: &mut CreateVerification,
+    ) -> AuthResult<bool> {
+        self.before_create_runtime_verification(verification)
+            .await?;
+        Ok(true)
+    }
+
     async fn before_create_runtime_verification(
         &self,
         _verification: &mut CreateVerification,
@@ -812,7 +959,7 @@ pub trait VerificationStore<S: AuthSchema>: Send + Sync {
     /// Keep the caller's ambient request scope when invoking each hook.
     async fn after_create_runtime_verification(
         &self,
-        _verification: &crate::wire::VerificationView,
+        _verification: Option<&crate::wire::VerificationView>,
         _request: Option<crate::hooks::RequestHookContext>,
     ) -> AuthResult<()> {
         Ok(())
@@ -884,7 +1031,7 @@ pub trait VerificationStore<S: AuthSchema>: Send + Sync {
 #[derive(Debug, Clone, Default)]
 pub struct ListOrganizationMembersParams {
     /// Organization id whose members should be listed.
-    pub organization_id: String,
+    pub organization_id: crate::SchemaValue<String>,
     /// Maximum number of members to return.
     pub limit: Option<f64>,
     /// Number of matching members to skip before returning rows.
@@ -979,6 +1126,14 @@ pub trait OrganizationStore: Send + Sync {
         id: &str,
         update: UpdateOrganization,
     ) -> AuthResult<Organization>;
+    async fn update_organization_value(
+        &self,
+        id: &crate::FieldValue,
+        update: UpdateOrganization,
+    ) -> AuthResult<Organization> {
+        let id = crate::SchemaValue::<String>::from_field(id.clone());
+        self.update_organization(id.typed()?, update).await
+    }
     async fn delete_organization(&self, id: &str) -> AuthResult<()>;
     async fn list_user_organizations(&self, user_id: &str) -> AuthResult<Vec<Organization>>;
 }
@@ -1063,6 +1218,13 @@ pub trait MemberStore: Send + Sync {
         ))
     }
     async fn list_organization_members(&self, org_id: &str) -> AuthResult<Vec<Member>>;
+    async fn list_organization_members_value(
+        &self,
+        org_id: &crate::FieldValue,
+    ) -> AuthResult<Vec<Member>> {
+        let id = crate::SchemaValue::<String>::from_field(org_id.clone());
+        self.list_organization_members(id.typed()?).await
+    }
     /// Query organization members with filter, sort, and pagination applied in
     /// the store when possible.
     async fn query_organization_members(
@@ -1090,6 +1252,14 @@ pub trait InvitationStore: Send + Sync {
         org_id: &str,
         email: &str,
     ) -> AuthResult<Option<Invitation>>;
+    async fn get_pending_invitation_value(
+        &self,
+        org_id: &crate::FieldValue,
+        email: &str,
+    ) -> AuthResult<Option<Invitation>> {
+        let id = crate::SchemaValue::<String>::from_field(org_id.clone());
+        self.get_pending_invitation(id.typed()?, email).await
+    }
     async fn update_invitation_status(
         &self,
         id: &str,
@@ -1102,8 +1272,23 @@ pub trait InvitationStore: Send + Sync {
         expires_at: chrono::DateTime<chrono::Utc>,
     ) -> AuthResult<Invitation>;
     async fn list_organization_invitations(&self, org_id: &str) -> AuthResult<Vec<Invitation>>;
+    async fn list_organization_invitations_value(
+        &self,
+        org_id: &crate::FieldValue,
+    ) -> AuthResult<Vec<Invitation>> {
+        let id = crate::SchemaValue::<String>::from_field(org_id.clone());
+        self.list_organization_invitations(id.typed()?).await
+    }
     /// Count still-pending, unexpired invitations for an organization.
     async fn count_pending_organization_invitations(&self, org_id: &str) -> AuthResult<i64>;
+    async fn count_pending_organization_invitations_value(
+        &self,
+        org_id: &crate::FieldValue,
+    ) -> AuthResult<i64> {
+        let id = crate::SchemaValue::<String>::from_field(org_id.clone());
+        self.count_pending_organization_invitations(id.typed()?)
+            .await
+    }
     /// Read the email's adapter-limited page before status filtering, with its stored organizations.
     async fn list_user_invitations(&self, email: &str) -> AuthResult<Vec<InvitationOrganization>>;
 }
@@ -1111,8 +1296,10 @@ pub trait InvitationStore: Send + Sync {
 #[async_trait]
 pub trait TwoFactorStore: Send + Sync {
     /// Create complete logical fields through the shared adapter policies.
-    async fn create_two_factor_record(&self, input: crate::FieldMap)
-    -> AuthResult<crate::FieldMap>;
+    async fn create_two_factor_record(
+        &self,
+        input: crate::FieldMap,
+    ) -> AuthResult<Option<crate::FieldMap>>;
     /// Read complete projected fields without narrowing native replacements.
     async fn get_two_factor_record(
         &self,
@@ -1179,7 +1366,10 @@ pub trait TwoFactorStore: Send + Sync {
 #[async_trait]
 pub trait ApiKeyStore: Send + Sync {
     /// Create a complete adapter record before field policies and storage conversion.
-    async fn create_api_key_record(&self, _input: crate::FieldMap) -> AuthResult<crate::FieldMap> {
+    async fn create_api_key_record(
+        &self,
+        _input: crate::FieldMap,
+    ) -> AuthResult<Option<crate::FieldMap>> {
         Err(AuthError::config(
             "The store must support API Key record writes",
         ))
@@ -1281,7 +1471,10 @@ pub enum ConsumeApiKeyResult {
 #[async_trait]
 pub trait PasskeyStore: Send + Sync {
     /// Create a complete adapter record before field policies and storage conversion.
-    async fn create_passkey_record(&self, _input: crate::FieldMap) -> AuthResult<crate::FieldMap> {
+    async fn create_passkey_record(
+        &self,
+        _input: crate::FieldMap,
+    ) -> AuthResult<Option<crate::FieldMap>> {
         Err(AuthError::config(
             "The store must support Passkey record writes",
         ))
@@ -1313,6 +1506,10 @@ pub trait PasskeyStore: Send + Sync {
         crate::PasskeyStorage::Legacy
     }
     async fn create_passkey(&self, input: CreatePasskey) -> AuthResult<Passkey>;
+    /// Preserve private passkey fields while retaining a nullable adapter result.
+    async fn create_passkey_optional(&self, input: CreatePasskey) -> AuthResult<Option<Passkey>> {
+        self.create_passkey(input).await.map(Some)
+    }
     async fn get_passkey_by_id(&self, id: &str) -> AuthResult<Option<Passkey>>;
     async fn get_passkey_by_credential_id(
         &self,
@@ -1351,7 +1548,7 @@ pub trait DeviceCodeStore: Send + Sync {
     async fn create_device_code_record(
         &self,
         fields: crate::FieldMap,
-    ) -> AuthResult<crate::FieldMap>;
+    ) -> AuthResult<Option<crate::FieldMap>>;
     /// Read a complete logical record without narrowing native values.
     async fn get_device_code_record(
         &self,
@@ -1435,7 +1632,7 @@ pub trait WalletStore: Send + Sync {
     async fn create_wallet_address_record(
         &self,
         input: crate::FieldMap,
-    ) -> AuthResult<crate::FieldMap>;
+    ) -> AuthResult<Option<crate::FieldMap>>;
     /// Read complete wallet fields by the adapter ID.
     async fn get_wallet_address_record(
         &self,
@@ -1473,7 +1670,8 @@ pub trait WalletStore: Send + Sync {
     ) -> AuthResult<crate::WalletAddress> {
         crate::FromFieldMap::from_field_values(
             self.create_wallet_address_record(wallet.into_adapter_fields()?)
-                .await?,
+                .await?
+                .ok_or_else(|| AuthError::internal("Wallet creation returned no record"))?,
         )
     }
 }
@@ -1495,15 +1693,46 @@ pub trait TeamStore: Send + Sync {
     async fn update_team(&self, id: &str, update: crate::UpdateTeam) -> AuthResult<crate::Team>;
     async fn delete_team(&self, id: &str) -> AuthResult<()>;
     async fn list_organization_teams(&self, organization_id: &str) -> AuthResult<Vec<crate::Team>>;
+    async fn list_organization_teams_value(
+        &self,
+        organization_id: &crate::FieldValue,
+    ) -> AuthResult<Vec<crate::Team>> {
+        let id = crate::SchemaValue::<String>::from_field(organization_id.clone());
+        self.list_organization_teams(id.typed()?).await
+    }
     /// Count all stored teams independently of the read-page limit.
     async fn count_organization_teams(&self, organization_id: &str) -> AuthResult<u64>;
+    async fn count_organization_teams_value(
+        &self,
+        organization_id: &crate::FieldValue,
+    ) -> AuthResult<u64> {
+        let id = crate::SchemaValue::<String>::from_field(organization_id.clone());
+        self.count_organization_teams(id.typed()?).await
+    }
     async fn list_user_teams(&self, user_id: &str) -> AuthResult<Vec<crate::Team>>;
     async fn get_team_member(
         &self,
         team_id: &str,
         user_id: &str,
     ) -> AuthResult<Option<crate::TeamMember>>;
+    async fn get_team_member_value(
+        &self,
+        team_id: &crate::FieldValue,
+        user_id: &crate::FieldValue,
+    ) -> AuthResult<Option<crate::TeamMember>> {
+        let team_id = crate::SchemaValue::<String>::from_field(team_id.clone());
+        let user_id = crate::SchemaValue::<String>::from_field(user_id.clone());
+        self.get_team_member(team_id.typed()?, user_id.typed()?)
+            .await
+    }
     async fn list_team_members(&self, team_id: &str) -> AuthResult<Vec<crate::TeamMember>>;
+    async fn list_team_members_value(
+        &self,
+        team_id: &crate::FieldValue,
+    ) -> AuthResult<Vec<crate::TeamMember>> {
+        let id = crate::SchemaValue::<String>::from_field(team_id.clone());
+        self.list_team_members(id.typed()?).await
+    }
     /// Count all stored team memberships independently of the read-page limit.
     async fn count_team_members(&self, team_id: &str) -> AuthResult<u64>;
     /// Atomically return an existing membership or reserve capacity and create one.
@@ -1540,14 +1769,37 @@ pub trait OrganizationRoleStore: Send + Sync {
         organization_id: &str,
         key: OrganizationRoleKey<'_>,
     ) -> AuthResult<Option<crate::OrganizationRole>>;
+    async fn find_organization_role_value(
+        &self,
+        organization_id: &crate::FieldValue,
+        key: OrganizationRoleKey<'_>,
+    ) -> AuthResult<Option<crate::OrganizationRole>> {
+        let id = crate::SchemaValue::<String>::from_field(organization_id.clone());
+        self.find_organization_role(id.typed()?, key).await
+    }
     /// Filter stored role names before applying the adapter's default page limit.
     async fn query_organization_roles(
         &self,
         organization_id: &str,
         names: &[String],
     ) -> AuthResult<Vec<crate::OrganizationRole>>;
+    async fn query_organization_roles_value(
+        &self,
+        organization_id: &crate::FieldValue,
+        names: &[String],
+    ) -> AuthResult<Vec<crate::OrganizationRole>> {
+        let id = crate::SchemaValue::<String>::from_field(organization_id.clone());
+        self.query_organization_roles(id.typed()?, names).await
+    }
     /// Count stored roles without projecting or paginating records.
     async fn count_organization_roles(&self, organization_id: &str) -> AuthResult<u64>;
+    async fn count_organization_roles_value(
+        &self,
+        organization_id: &crate::FieldValue,
+    ) -> AuthResult<u64> {
+        let id = crate::SchemaValue::<String>::from_field(organization_id.clone());
+        self.count_organization_roles(id.typed()?).await
+    }
     async fn list_organization_roles(
         &self,
         organization_id: &str,
@@ -1669,7 +1921,10 @@ where
 #[async_trait]
 pub trait JwksStore: Send + Sync {
     /// Create complete key fields through shared adapter policies.
-    async fn create_jwk_record(&self, input: crate::FieldMap) -> AuthResult<crate::FieldMap>;
+    async fn create_jwk_record(
+        &self,
+        input: crate::FieldMap,
+    ) -> AuthResult<Option<crate::FieldMap>>;
     /// Read complete key fields before constructing a runtime record.
     async fn get_jwk_record(
         &self,
@@ -1703,7 +1958,9 @@ pub trait JwksStore: Send + Sync {
     /// Persist a generated signing key.
     async fn create_jwk(&self, input: crate::CreateJwk) -> AuthResult<crate::Jwk> {
         crate::FromFieldMap::from_field_values(
-            self.create_jwk_record(input.into_adapter_fields()?).await?,
+            self.create_jwk_record(input.into_adapter_fields()?)
+                .await?
+                .ok_or_else(|| AuthError::internal("JWK creation returned no record"))?,
         )
     }
 }

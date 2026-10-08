@@ -1,3 +1,4 @@
+use super::sessions::decode_native;
 use super::{SecondaryStore, decode};
 use crate::entity::AuthUser;
 use crate::store::{AuthTransaction, UserStore, VerificationCleanup, VerificationSessionCleanup};
@@ -135,11 +136,7 @@ impl<S: AuthSchema> SecondaryStore<S> {
             let _ = futures_util::future::join_all(tokens.into_iter().map(|token| {
                 let sender = sender.clone();
                 async move {
-                    let result = async {
-                        let token = token.decode::<String>()?;
-                        runtime.refresh_cached_user_session(&token, user, now).await
-                    }
-                    .await;
+                    let result = runtime.refresh_cached_user_session(&token, user, now).await;
                     let _ = sender.send(result);
                 }
             }))
@@ -162,11 +159,11 @@ impl<S: AuthSchema> SecondaryStore<S> {
 
     async fn refresh_cached_user_session(
         &self,
-        token: &str,
+        token: &FieldValue,
         user: &FieldValue,
         now: chrono::DateTime<chrono::Utc>,
     ) -> AuthResult<()> {
-        let Some(cached) = decode(self.secondary()?.get(token).await?) else {
+        let Some(cached) = decode_native(self.secondary()?.get_native(token).await?)? else {
             return Ok(());
         };
         if !FieldValue::from_json(cached.clone())?.is_truthy() {
@@ -188,7 +185,7 @@ impl<S: AuthSchema> SecondaryStore<S> {
         ]));
         self.secondary()?
             .set_native(
-                &token.into(),
+                token,
                 &serde_json::to_string(&crate::field_value::serde::Json(&envelope))?,
                 Some(seconds),
             )

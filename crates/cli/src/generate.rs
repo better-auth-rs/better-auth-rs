@@ -185,6 +185,16 @@ pub(crate) fn generate_schema(
                 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize, FromJsonQueryResult)]
                 #[serde(transparent)]
                 pub struct #name(pub Vec<#element>);
+
+                impl better_auth::SchemaField for #name {
+                    fn from_field(value: better_auth::FieldValue) -> Result<Self, better_auth::FieldValue> {
+                        <Vec<#element> as better_auth::SchemaField>::from_field(value).map(Self)
+                    }
+
+                    fn into_field(self) -> better_auth::FieldValue {
+                        better_auth::SchemaField::into_field(self.0)
+                    }
+                }
             }
         })
     });

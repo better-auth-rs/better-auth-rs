@@ -84,7 +84,7 @@ impl<S: AuthSchema> DatabaseHooks<S> for Hooks<S> {
     }
     async fn after_create_user(
         &self,
-        _: &UserView,
+        _: Option<&UserView>,
         ctx: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
         self.state.event("user:create.after");
@@ -104,7 +104,7 @@ impl<S: AuthSchema> DatabaseHooks<S> for Hooks<S> {
     }
     async fn after_create_session(
         &self,
-        _: &SessionView,
+        _: Option<&SessionView>,
         ctx: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
         self.state.event("session:create.after");

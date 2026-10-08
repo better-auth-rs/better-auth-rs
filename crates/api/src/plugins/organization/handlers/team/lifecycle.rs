@@ -1,5 +1,7 @@
 use better_auth_core::entity::{AuthSession, AuthUser};
-use better_auth_core::{AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, AuthSchema};
+use better_auth_core::{
+    AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, AuthSchema, FieldValue,
+};
 
 use super::{CreateBody, TeamBody, authorize, find_team, optional_string};
 use crate::plugins::organization::{
@@ -24,23 +26,25 @@ pub(super) async fn create(
     let org = organization_id
         .as_deref()
         .filter(|id| !id.is_empty())
+        .map(FieldValue::from)
         .or_else(|| {
             session
                 .as_ref()
-                .and_then(|(_, session)| session.active_organization_id())
+                .map(|(_, session)| session.active_organization_id().field_value())
         })
+        .filter(FieldValue::is_truthy)
         .ok_or_else(|| AuthError::bad_request("No active organization"))?;
     if let Some((user, _)) = &session {
         let member = ctx
             .database
-            .get_member_with_user(org, user.id().typed()?)
+            .get_member_with_user_value(&org, &user.id().field_value())
             .await?
             .ok_or_else(|| {
                 AuthError::forbidden("You are not allowed to invite users to this organization")
             })?;
         authorize(
             &member.member,
-            org,
+            &org,
             ("team", "create"),
             "You are not allowed to create teams in this organization",
             config,
@@ -60,11 +64,11 @@ pub(super) async fn create(
         .as_ref()
         .zip(session_view.as_ref())
         .map(|(user, session)| OrganizationSession { user, session });
-    let count = ctx.database.count_organization_teams(org).await?;
+    let count = ctx.database.count_organization_teams_value(&org).await?;
     if let Some(maximum) = config
         .team_limit(
             OrganizationTeamLimit {
-                organization_id: org,
+                organization_id: &org,
                 session: actor,
             },
             OrganizationEndpoint::new(ctx, Some(req)),
@@ -79,7 +83,7 @@ pub(super) async fn create(
     }
     let organization = ctx
         .database
-        .get_organization_by_id(org)
+        .get_organization_by_id_value(&org)
         .await?
         .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
     let organization_view = fields::organization(&organization, ctx);
@@ -91,7 +95,7 @@ pub(super) async fn create(
             .map(str::to_owned),
         additional_fields,
         name: body.name,
-        organization_id: org.into(),
+        organization_id: better_auth_core::SchemaValue::from_field(org),
         created_at: None,
         updated_at: None,
     };
@@ -128,29 +132,35 @@ pub(super) async fn remove(
         .organization_id
         .as_deref()
         .filter(|id| !id.is_empty())
+        .map(FieldValue::from)
         .or_else(|| {
             session
                 .as_ref()
-                .and_then(|(_, session)| session.active_organization_id())
+                .map(|(_, session)| session.active_organization_id().field_value())
         })
+        .filter(FieldValue::is_truthy)
         .ok_or_else(|| AuthError::bad_request("No active organization"))?;
     if session.is_none() && request_present(req, ctx) {
         return Err(AuthResponse::new(401).into());
     }
     if let Some((user, session)) = &session {
-        if session.active_team_id() == Some(body.team_id.as_str()) {
+        let member = ctx
+            .database
+            .get_member_with_user_value(&org, &user.id().field_value())
+            .await?
+            .ok_or_else(|| AuthError::forbidden("You are not allowed to delete this team"))?;
+        if session
+            .active_team_id()
+            .field_value()
+            .strict_equals(&body.team_id.as_str().into())
+        {
             return Err(AuthError::forbidden(
                 "You are not allowed to delete this team",
             ));
         }
-        let member = ctx
-            .database
-            .get_member_with_user(org, user.id().typed()?)
-            .await?
-            .ok_or_else(|| AuthError::forbidden("You are not allowed to delete this team"))?;
         authorize(
             &member.member,
-            org,
+            &org,
             ("team", "delete"),
             "You are not allowed to delete teams in this organization",
             config,
@@ -162,15 +172,15 @@ pub(super) async fn remove(
         Some((user, _)) => Some(ctx.user_view(user).await?),
         None => None,
     };
-    let team = find_team(&body.team_id, org, ctx).await?;
+    let team = find_team(&body.team_id.as_str().into(), &org, ctx).await?;
     if !config.teams.allow_removing_all_teams
-        && ctx.database.count_organization_teams(org).await? <= 1
+        && ctx.database.count_organization_teams_value(&org).await? <= 1
     {
         return Err(AuthError::bad_request("Unable to remove last team"));
     }
     let organization = ctx
         .database
-        .get_organization_by_id(org)
+        .get_organization_by_id_value(&org)
         .await?
         .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
     let organization_view = fields::organization(&organization, ctx);

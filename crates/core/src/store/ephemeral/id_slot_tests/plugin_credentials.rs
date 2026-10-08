@@ -35,11 +35,11 @@ impl Model {
     }
 
     async fn create(self, store: &EphemeralStore, input: FieldMap) -> AuthResult<FieldMap> {
-        match self {
-            Self::ApiKey => store.create_api_key_record(input).await,
-            Self::Passkey => store.create_passkey_record(input).await,
-            Self::TwoFactor => store.create_two_factor_record(input).await,
-        }
+        required(match self {
+            Self::ApiKey => store.create_api_key_record(input).await?,
+            Self::Passkey => store.create_passkey_record(input).await?,
+            Self::TwoFactor => store.create_two_factor_record(input).await?,
+        })
     }
 
     async fn read(self, store: &EphemeralStore, id: Value) -> AuthResult<Option<FieldMap>> {

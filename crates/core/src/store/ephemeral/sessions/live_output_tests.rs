@@ -13,9 +13,9 @@ const ROWS: [(&str, &str, &str); 2] = [
 
 #[derive(Clone)]
 struct GeneratedSession {
-    token: String,
-    created_at: crate::FieldDate,
-    updated_at: crate::FieldDate,
+    token: crate::SchemaValue<String>,
+    created_at: crate::SchemaValue<crate::FieldDate>,
+    updated_at: crate::SchemaValue<crate::FieldDate>,
 }
 
 #[derive(Default)]
@@ -68,10 +68,10 @@ fn observe_session(row: &SessionView, trace: &Trace) -> AuthResult<JsonValue> {
         assert_eq!(row.token, generated.token);
         assert_eq!(row.created_at, generated.created_at);
         if row.updated_at == generated.updated_at {
-            row.updated_at = date(CREATED_AT)?;
+            row.updated_at = date(CREATED_AT)?.into();
         }
         row.token = "live-session-desk".into();
-        row.created_at = date(CREATED_AT)?;
+        row.created_at = date(CREATED_AT)?.into();
     }
     assert!(row.active);
     observe_fields(row.into())
@@ -148,98 +148,99 @@ fn reader(writer: &EphemeralStore, path: &str, trace: &Trace) -> EphemeralStore 
     let output_trace = trace.clone();
     let create = path == "create";
     let tail_trace = trace.clone();
-    reader.session_config.additional_fields = Some(
-        [
-            (
-                "label".into(),
-                UserFieldConfig {
-                    transform: Some(FieldTransforms {
-                        input: None,
-                        output: Some(UserFieldTransform::new_async(move |value| {
-                            let writer = output_writer.clone();
-                            let trace = output_trace.clone();
-                            async move {
-                                let label = required(
-                                    value.as_str(),
-                                    "Session output must contain a label",
-                                )?;
-                                let (_, _, id) = required(
-                                    ROWS.iter().find(|(candidate, _, _)| *candidate == label),
-                                    "Session output must name a declared fixture row",
-                                )?;
-                                let stored = required(
-                                    writer.lock()?.sessions.find(|row| {
-                                        row.additional_fields.get("label").and_then(Value::as_str)
-                                            == Some(label)
-                                    })?,
-                                    "Callback writer must find the selected Session",
-                                )?;
-                                if create {
-                                    assert!(!stored.token.is_empty());
-                                    let ended = Utc::now().timestamp_millis() as f64;
-                                    assert!(
-                                        (started..=ended)
-                                            .contains(&stored.created_at.milliseconds())
-                                    );
-                                    assert!(
-                                        (started..=ended)
-                                            .contains(&stored.updated_at.milliseconds())
-                                    );
-                                    trace_lock(&trace)?.generated = Some(GeneratedSession {
-                                        token: stored.token.clone(),
-                                        created_at: stored.created_at.clone(),
-                                        updated_at: stored.updated_at.clone(),
-                                    });
+    reader.session_config.additional_fields =
+        Some(
+            [
+                (
+                    "label".into(),
+                    UserFieldConfig {
+                        transform: Some(FieldTransforms {
+                            input: None,
+                            output: Some(UserFieldTransform::new_async(move |value| {
+                                let writer = output_writer.clone();
+                                let trace = output_trace.clone();
+                                async move {
+                                    let label = required(
+                                        value.as_str(),
+                                        "Session output must contain a label",
+                                    )?;
+                                    let (_, _, id) = required(
+                                        ROWS.iter().find(|(candidate, _, _)| *candidate == label),
+                                        "Session output must name a declared fixture row",
+                                    )?;
+                                    let stored = required(
+                                        writer.lock()?.sessions.find(|row| {
+                                            row.additional_fields
+                                                .get("label")
+                                                .and_then(Value::as_str)
+                                                == Some(label)
+                                        })?,
+                                        "Callback writer must find the selected Session",
+                                    )?;
+                                    if create {
+                                        assert!(!stored.token.typed().unwrap().is_empty());
+                                        let ended = Utc::now().timestamp_millis() as f64;
+                                        assert!((started..=ended).contains(
+                                            &stored.created_at.date_milliseconds().unwrap()
+                                        ));
+                                        assert!((started..=ended).contains(
+                                            &stored.updated_at.date_milliseconds().unwrap()
+                                        ));
+                                        trace_lock(&trace)?.generated = Some(GeneratedSession {
+                                            token: stored.token.clone(),
+                                            created_at: stored.created_at.clone(),
+                                            updated_at: stored.updated_at.clone(),
+                                        });
+                                    }
+                                    trace_lock(&trace)?.events.push(json!(["label", label]));
+                                    let updated = required(
+                                        writer
+                                            .update_session_with_hooks(
+                                                stored.token.typed().unwrap(),
+                                                SessionUpdate {
+                                                    id: Some((*id).into()),
+                                                    expires_at: Some(date(CHANGED_EXPIRY)?),
+                                                    updated_at: Some(date(CHANGED_AT)?),
+                                                    additional_fields: [(
+                                                        "tail".into(),
+                                                        format!("after:{label}").into(),
+                                                    )]
+                                                    .into(),
+                                                    ..Default::default()
+                                                },
+                                            )
+                                            .await?,
+                                        "Callback writer must update the selected Session",
+                                    )?;
+                                    let observed = observe_session(&updated, &trace)?;
+                                    trace_lock(&trace)?
+                                        .events
+                                        .push(json!(["write", label, observed]));
+                                    Ok(format!("{label}:out").into())
                                 }
-                                trace_lock(&trace)?.events.push(json!(["label", label]));
-                                let updated = required(
-                                    writer
-                                        .update_session_with_hooks(
-                                            &stored.token,
-                                            SessionUpdate {
-                                                id: Some((*id).into()),
-                                                expires_at: Some(date(CHANGED_EXPIRY)?),
-                                                updated_at: Some(date(CHANGED_AT)?),
-                                                additional_fields: [(
-                                                    "tail".into(),
-                                                    format!("after:{label}").into(),
-                                                )]
-                                                .into(),
-                                                ..Default::default()
-                                            },
-                                        )
-                                        .await?,
-                                    "Callback writer must update the selected Session",
-                                )?;
-                                let observed = observe_session(&updated, &trace)?;
-                                trace_lock(&trace)?
-                                    .events
-                                    .push(json!(["write", label, observed]));
-                                Ok(format!("{label}:out").into())
-                            }
-                        })),
-                    }),
-                    ..Default::default()
-                },
-            ),
-            (
-                "tail".into(),
-                UserFieldConfig {
-                    transform: Some(FieldTransforms {
-                        input: None,
-                        output: Some(UserFieldTransform::new(move |value| {
-                            let tail =
-                                required(value.as_str(), "Session output must contain a tail")?;
-                            trace_lock(&tail_trace)?.events.push(json!(["tail", tail]));
-                            Ok(format!("{tail}:out").into())
-                        })),
-                    }),
-                    ..Default::default()
-                },
-            ),
-        ]
-        .into(),
-    );
+                            })),
+                        }),
+                        ..Default::default()
+                    },
+                ),
+                (
+                    "tail".into(),
+                    UserFieldConfig {
+                        transform: Some(FieldTransforms {
+                            input: None,
+                            output: Some(UserFieldTransform::new(move |value| {
+                                let tail =
+                                    required(value.as_str(), "Session output must contain a tail")?;
+                                trace_lock(&tail_trace)?.events.push(json!(["tail", tail]));
+                                Ok(format!("{tail}:out").into())
+                            })),
+                        }),
+                        ..Default::default()
+                    },
+                ),
+            ]
+            .into(),
+        );
     reader
 }
 
@@ -280,7 +281,7 @@ async fn capture(path: &str) -> AuthResult<JsonValue> {
             let _ = required(
                 writer
                     .update_session_with_hooks(
-                        &seeded.token,
+                        seeded.token.typed().unwrap(),
                         SessionUpdate {
                             token: Some((*token).into()),
                             created_at: Some(date(CREATED_AT)?),

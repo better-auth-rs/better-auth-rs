@@ -225,9 +225,11 @@ struct OnboardingHook {
 impl SeaOrmHooks<TestSchema> for OnboardingHook {
     async fn after_create_user(
         &self,
-        user: &better_auth_core::wire::UserView,
+        user: Option<&better_auth_core::wire::UserView>,
         ctx: &SeaOrmHookContext<'_, TestSchema>,
     ) -> AuthResult<()> {
+        let user = user
+            .ok_or_else(|| better_auth_core::AuthError::internal("Expected created fixture row"))?;
         self.service
             .provision(user, ctx)
             .await

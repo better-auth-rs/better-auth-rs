@@ -374,12 +374,24 @@ pub(super) async fn create(
     config: &ApiKeyConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     input: CreateApiKey,
-) -> AuthResult<ApiKey> {
+) -> AuthResult<Option<ApiKey>> {
     let key = if config.storage == ApiKeyStorage::Database || config.fallback_to_database {
-        ctx.database.create_api_key(input).await?
+        let created_at = now();
+        let mut fields = input.into_adapter_fields()?;
+        fields.extend([
+            ("createdAt".into(), created_at.clone().into()),
+            ("updatedAt".into(), created_at.into()),
+            ("lastRefillAt".into(), FieldValue::Null),
+            ("lastRequest".into(), FieldValue::Null),
+        ]);
+        ctx.database
+            .create_api_key_record(fields)
+            .await?
+            .map(ApiKey::from_field_values)
+            .transpose()?
     } else {
         let created_at = now();
-        ApiKey {
+        Some(ApiKey {
             additional_fields: Default::default(),
             id: ctx
                 .config
@@ -416,12 +428,15 @@ pub(super) async fn create(
                     .transpose()?
                     .unwrap_or(FieldValue::Null),
             ),
-        }
+        })
     };
     if config.storage == ApiKeyStorage::SecondaryStorage {
+        let key = key.as_ref().ok_or_else(|| {
+            AuthError::internal("Cannot read properties of null (reading 'expiresAt')")
+        })?;
         put(
             required_backend(config, ctx)?.as_ref(),
-            &key,
+            key,
             config.fallback_to_database,
         )
         .await?;

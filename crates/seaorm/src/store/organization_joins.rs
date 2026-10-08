@@ -163,6 +163,12 @@ where
         let predicate = match input.organization {
             OrganizationKey::Id(id) => O::Organization::column("id")?
                 .eq_id(id, self.config().advanced.database.generate_id())?,
+            OrganizationKey::IdValue(id) => super::value_filter::equals_id(
+                O::Organization::column("id")?,
+                id,
+                self.config().advanced.database.generate_id(),
+                self.connection().get_database_backend(),
+            )?,
             OrganizationKey::Slug(slug) => O::Organization::column("slug")?.eq(slug),
         };
         let query = Entity::<O::Organization>::find().filter(predicate).limit(1);

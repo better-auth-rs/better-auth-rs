@@ -237,7 +237,7 @@ record!(crate::wire::VerificationView, [
     expires_at => "expiresAt",
     created_at => "createdAt",
     updated_at => "updatedAt",
-], additional_fields);
+], additional_fields; order: field_order);
 
 #[cfg(test)]
 mod tests {

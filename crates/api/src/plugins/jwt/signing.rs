@@ -150,13 +150,12 @@ impl JwtPlugin {
                     })
                 })
                 .ok_or_else(|| AuthError::config("Requested JWT algorithm is not configured"))?;
-            selected = Some(
-                self.create_key_pair_in_endpoint(parameters, endpoint)
-                    .await?,
-            );
+            selected = self
+                .create_key_pair_in_endpoint(parameters, endpoint)
+                .await?;
         }
         let key = match selected {
-            Some(key) if !keys::expires_before(&key, Utc::now().timestamp_millis())? => key,
+            Some(key) if !keys::expires_before(&key, Utc::now().timestamp_millis())? => Some(key),
             _ => {
                 if options.key_id.is_some() || options.algorithm.is_some() {
                     return Err(AuthError::config(
@@ -166,6 +165,9 @@ impl JwtPlugin {
                 self.create_key(endpoint).await?
             }
         };
+        let key = key.ok_or_else(|| {
+            AuthError::internal("Cannot read properties of null (reading 'privateKey')")
+        })?;
         let private = if self.config.disable_private_key_encryption {
             key.private_key.field_value()
         } else {

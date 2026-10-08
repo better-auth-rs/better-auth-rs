@@ -177,7 +177,7 @@ pub struct OrganizationInvitationDraft {
     pub additional_fields: better_auth_core::FieldMap,
 
     pub id: Option<String>,
-    pub organization_id: String,
+    pub organization_id: better_auth_core::SchemaValue<String>,
     pub email: String,
     pub role: String,
     pub inviter_id: String,
@@ -448,7 +448,7 @@ pub struct OrganizationSession<'a> {
 #[derive(Clone, Copy)]
 pub struct OrganizationTeamLimit<'a> {
     /// Organization whose teams will be counted.
-    pub organization_id: &'a str,
+    pub organization_id: &'a better_auth_core::FieldValue,
     /// Current session, absent for trusted server-side team creation.
     pub session: Option<OrganizationSession<'a>>,
 }
@@ -457,9 +457,9 @@ pub struct OrganizationTeamLimit<'a> {
 #[derive(Clone, Copy)]
 pub struct OrganizationTeamMemberLimit<'a> {
     /// Organization containing the destination team.
-    pub organization_id: &'a str,
+    pub organization_id: &'a better_auth_core::FieldValue,
     /// Destination team identifier.
-    pub team_id: &'a str,
+    pub team_id: &'a better_auth_core::FieldValue,
     /// Authenticated actor's session.
     pub session: OrganizationSession<'a>,
 }
@@ -497,7 +497,7 @@ pub trait OrganizationPolicy: Send + Sync {
     /// Resolve the maximum number of stored dynamic roles.
     async fn maximum_roles_per_organization(
         &self,
-        _organization_id: &str,
+        _organization_id: &better_auth_core::FieldValue,
     ) -> AuthResult<Option<usize>> {
         Ok(None)
     }

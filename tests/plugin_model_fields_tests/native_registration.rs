@@ -66,10 +66,13 @@ impl Model {
         if matches!(self, Self::Passkey) {
             let _ = input.insert("userId".into(), 7.25.into());
         }
-        match self {
-            Self::ApiKey => store.create_api_key_record(input).await,
-            Self::Passkey => store.create_passkey_record(input).await,
-        }
+        required(
+            match self {
+                Self::ApiKey => store.create_api_key_record(input).await?,
+                Self::Passkey => store.create_passkey_record(input).await?,
+            },
+            "Expected created native registration row",
+        )
     }
 
     async fn update(self, store: &dyn AuthStore<StatelessSchema>) -> AuthResult<FieldMap> {

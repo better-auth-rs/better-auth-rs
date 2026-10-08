@@ -51,6 +51,7 @@ impl<
         }
         models::insert::<O::Team, _>(
             self.connection(),
+            super::create_readback::ReadbackScope::Direct(self.connection()),
             core,
             input.additional_fields,
             &self.organization_fields()?.team,
@@ -179,10 +180,20 @@ impl<
         tx.commit().await.map_err(map_db_err)
     }
     async fn list_organization_teams(&self, organization_id: &str) -> AuthResult<Vec<Team>> {
+        self.list_organization_teams_value(&organization_id.into())
+            .await
+    }
+
+    async fn list_organization_teams_value(
+        &self,
+        organization_id: &better_auth_core::FieldValue,
+    ) -> AuthResult<Vec<Team>> {
         let rows = Entity::<O::Team>::find()
-            .filter(O::Team::column("organization_id")?.eq_id(
+            .filter(super::value_filter::equals_id(
+                O::Team::column("organization_id")?,
                 organization_id,
                 self.config().advanced.database.generate_id(),
+                self.connection().get_database_backend(),
             )?)
             .limit(super::pagination::default_limit(
                 self.config(),
@@ -199,10 +210,20 @@ impl<
         .await
     }
     async fn count_organization_teams(&self, organization_id: &str) -> AuthResult<u64> {
+        self.count_organization_teams_value(&organization_id.into())
+            .await
+    }
+
+    async fn count_organization_teams_value(
+        &self,
+        organization_id: &better_auth_core::FieldValue,
+    ) -> AuthResult<u64> {
         Entity::<O::Team>::find()
-            .filter(O::Team::column("organization_id")?.eq_id(
+            .filter(super::value_filter::equals_id(
+                O::Team::column("organization_id")?,
                 organization_id,
                 self.config().advanced.database.generate_id(),
+                self.connection().get_database_backend(),
             )?)
             .count(self.connection())
             .await
@@ -261,15 +282,28 @@ impl<
         team_id: &str,
         user_id: &str,
     ) -> AuthResult<Option<TeamMember>> {
+        self.get_team_member_value(&team_id.into(), &user_id.into())
+            .await
+    }
+
+    async fn get_team_member_value(
+        &self,
+        team_id: &better_auth_core::FieldValue,
+        user_id: &better_auth_core::FieldValue,
+    ) -> AuthResult<Option<TeamMember>> {
         let row = Entity::<O::TeamMember>::find()
-            .filter(
-                O::TeamMember::column("team_id")?
-                    .eq_id(team_id, self.config().advanced.database.generate_id())?,
-            )
-            .filter(
-                O::TeamMember::column("user_id")?
-                    .eq_id(user_id, self.config().advanced.database.generate_id())?,
-            )
+            .filter(super::value_filter::equals_id(
+                O::TeamMember::column("team_id")?,
+                team_id,
+                self.config().advanced.database.generate_id(),
+                self.connection().get_database_backend(),
+            )?)
+            .filter(super::value_filter::equals_id(
+                O::TeamMember::column("user_id")?,
+                user_id,
+                self.config().advanced.database.generate_id(),
+                self.connection().get_database_backend(),
+            )?)
             .one(self.connection())
             .await
             .map_err(map_db_err)?;
@@ -285,11 +319,20 @@ impl<
         }
     }
     async fn list_team_members(&self, team_id: &str) -> AuthResult<Vec<TeamMember>> {
+        self.list_team_members_value(&team_id.into()).await
+    }
+
+    async fn list_team_members_value(
+        &self,
+        team_id: &better_auth_core::FieldValue,
+    ) -> AuthResult<Vec<TeamMember>> {
         let rows = Entity::<O::TeamMember>::find()
-            .filter(
-                O::TeamMember::column("team_id")?
-                    .eq_id(team_id, self.config().advanced.database.generate_id())?,
-            )
+            .filter(super::value_filter::equals_id(
+                O::TeamMember::column("team_id")?,
+                team_id,
+                self.config().advanced.database.generate_id(),
+                self.connection().get_database_backend(),
+            )?)
             .limit(super::pagination::default_limit(
                 self.config(),
                 self.connection().get_database_backend(),
@@ -462,6 +505,7 @@ impl<
         }
         let member = models::insert::<O::TeamMember, _>(
             db,
+            super::create_readback::ReadbackScope::Transaction,
             self.create_fields(
                 "teamMember",
                 None,

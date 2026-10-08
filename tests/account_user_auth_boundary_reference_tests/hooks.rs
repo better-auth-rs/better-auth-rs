@@ -68,9 +68,11 @@ impl<S: AuthSchema> DatabaseHooks<S> for Hooks {
     }
     async fn after_create_user(
         &self,
-        data: &UserView,
+        data: Option<&UserView>,
         _: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
+        let data = data
+            .ok_or_else(|| better_auth_core::AuthError::internal("Expected created fixture row"))?;
         self.unexpected("user", "create", "after", &data)?;
         Ok(())
     }
@@ -123,9 +125,11 @@ impl<S: AuthSchema> DatabaseHooks<S> for Hooks {
     }
     async fn after_create_account(
         &self,
-        data: &AccountView,
+        data: Option<&AccountView>,
         _: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
+        let data = data
+            .ok_or_else(|| better_auth_core::AuthError::internal("Expected created fixture row"))?;
         self.unexpected("account", "create", "after", &data)?;
         Ok(())
     }
@@ -178,9 +182,11 @@ impl<S: AuthSchema> DatabaseHooks<S> for Hooks {
     }
     async fn after_create_session(
         &self,
-        data: &SessionView,
+        data: Option<&SessionView>,
         _: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
+        let data = data
+            .ok_or_else(|| better_auth_core::AuthError::internal("Expected created fixture row"))?;
         self.record(
             "session",
             "create",
@@ -249,9 +255,11 @@ impl<S: AuthSchema> DatabaseHooks<S> for Hooks {
     }
     async fn after_create_verification(
         &self,
-        data: &VerificationView,
+        data: Option<&VerificationView>,
         _: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
+        let data = data
+            .ok_or_else(|| better_auth_core::AuthError::internal("Expected created fixture row"))?;
         self.unexpected("verification", "create", "after", &data)?;
         Ok(())
     }

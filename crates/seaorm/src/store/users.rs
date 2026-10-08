@@ -404,22 +404,35 @@ where
         let user = database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
             self.config(),
             "create",
-            async { super::user_values::insert::<S::User>(db, model, name, image, fields).await },
+            async {
+                super::user_values::insert::<S::User>(
+                    db,
+                    model,
+                    name,
+                    image,
+                    fields,
+                    super::create_readback::CreateReadback {
+                        schema: &self.config().user.user_field_schema(),
+                        policy: self.config().advanced.database.generate_id(),
+                        scope: self.readback_scope(tx),
+                        column: S::User::field_column,
+                    },
+                )
+                .await
+            },
         )
         .await?;
-        let user = self.output_user(&user, db).await?;
-        if tx.is_none() {
-            for hook in self.hooks() {
-                better_auth_core::observability::database::with_database_hook(
-                    hook_context.config,
-                    hook.hook_metadata(),
-                    better_auth_core::observability::database::DatabaseHook::AfterCreateUser,
-                    hook.after_create_user(&user, &hook_context),
-                )
-                .await?;
-            }
-        }
-        Ok(Some(user))
+        let user = match user {
+            Some(user) => Some(self.output_user(&user, db).await?),
+            None => None,
+        };
+        self.after_creation(
+            tx,
+            super::transaction_hooks::Effect::UserCreated(user.clone()),
+            hook_context.request.clone(),
+        )
+        .await?;
+        Ok(user)
     }
 
     pub(super) async fn update_user_with_connection(
@@ -602,7 +615,7 @@ where
     ) -> AuthResult<better_auth_core::wire::UserView> {
         self.create_user_with_connection(tx.0, Some(tx), create_user)
             .await?
-            .ok_or_else(|| cancelled_by_hook("user creation"))
+            .ok_or_else(|| AuthError::internal("User creation returned no record"))
     }
 }
 
@@ -649,7 +662,7 @@ where
     ) -> AuthResult<better_auth_core::wire::UserView> {
         self.create_user_optional(create_user)
             .await?
-            .ok_or_else(|| cancelled_by_hook("user creation"))
+            .ok_or_else(|| AuthError::internal("User creation returned no record"))
     }
 
     async fn create_user_optional(

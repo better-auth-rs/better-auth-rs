@@ -279,7 +279,9 @@ async fn check<S: AuthSchema>(
                     ]),
                 })
                 .await?
-                .token,
+                .token
+                .typed()?
+                .clone(),
         );
         let _ = store
             .create_verification(CreateVerification {
@@ -328,8 +330,8 @@ async fn check<S: AuthSchema>(
     let sessions = pair(&sessions)?;
     let token_pair = pair(&tokens)?;
     let names = [
-        original_name(&sessions[0].token, token_pair)?,
-        original_name(&sessions[1].token, token_pair)?,
+        original_name(sessions[0].token.typed()?, token_pair)?,
+        original_name(sessions[1].token.typed()?, token_pair)?,
     ];
     assert_ne!(names[0], names[1]);
     assert_eq!(
@@ -356,8 +358,8 @@ async fn check<S: AuthSchema>(
     let snapshots = pair(&snapshots)?;
     let tokens = pair(&tokens)?;
     let names = [
-        original_name(&snapshots[0].0.token, tokens)?,
-        original_name(&snapshots[1].0.token, tokens)?,
+        original_name(snapshots[0].0.token.typed()?, tokens)?,
+        original_name(snapshots[1].0.token.typed()?, tokens)?,
     ];
     assert_ne!(names[0], names[1]);
     let mut expected = vec![

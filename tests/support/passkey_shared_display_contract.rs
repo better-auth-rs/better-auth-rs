@@ -186,7 +186,7 @@ pub(crate) async fn run<S: AuthSchema>(
         .await?;
     let cookie = format!(
         "better-auth.session_token={}",
-        sign_cookie_value(session.token(), auth.config().signing_secret())
+        sign_cookie_value(session.token().typed()?, auth.config().signing_secret())
     );
     assert!(take(&events).is_empty());
     let check = Check {

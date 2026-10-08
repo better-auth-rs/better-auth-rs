@@ -4,9 +4,10 @@ use crate::{FieldValue, FromFieldMap, SchemaValue, WalletAddress};
 
 #[async_trait]
 impl crate::store::WalletStore for EphemeralStore {
-    async fn create_wallet_address_record(&self, input: FieldMap) -> AuthResult<FieldMap> {
+    async fn create_wallet_address_record(&self, input: FieldMap) -> AuthResult<Option<FieldMap>> {
         self.create_plugin_record(EntityRole::WalletAddress, input, Default::default())
             .await
+            .map(Some)
     }
 
     async fn get_wallet_address_record(

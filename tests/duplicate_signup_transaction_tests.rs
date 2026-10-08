@@ -50,7 +50,7 @@ impl DatabaseHooks<BundledSchema> for Events {
     }
     async fn after_create_verification(
         &self,
-        _: &VerificationView,
+        _: Option<&VerificationView>,
         _: &DatabaseHookContext<'_, BundledSchema>,
     ) -> AuthResult<()> {
         self.push("verification:after");

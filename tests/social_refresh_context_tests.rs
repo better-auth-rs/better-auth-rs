@@ -176,7 +176,7 @@ async fn observe(mode: Mode) -> Result<Case, Box<dyn Error>> {
         .await?;
     let cookie = format!(
         "better-auth.session_token={}",
-        sign_cookie_value(&login.token, SECRET)
+        sign_cookie_value(login.token.typed()?, SECRET)
     );
     handler.cookie.set(cookie.clone()).unwrap();
     let account = auth

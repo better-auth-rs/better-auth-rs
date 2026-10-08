@@ -2,12 +2,13 @@ use better_auth_core::{AuthResult, SchemaValue};
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, ConnectionTrait, DbBackend, EntityTrait, Iden, Iterable,
     QueryFilter,
-    sea_query::{ExprTrait, Query, Value},
+    sea_query::{ExprTrait, Value},
 };
 
 use super::{
-    map_db_err,
+    create_readback::CreateReadback,
     record_bindings::{self, Binding},
+    record_write::RecordWrite,
 };
 use crate::SeaOrmUserModel;
 
@@ -74,8 +75,15 @@ fn fields<M: SeaOrmUserModel>(
             continue;
         }
         let column = M::field_column(&name)?;
-        fields.retain(|(stored, _)| stored.to_string() != column.to_string());
-        fields.push((column, Binding::for_column(column, value)));
+        let value = Binding::for_column(column, value);
+        if let Some((_, stored)) = fields
+            .iter_mut()
+            .find(|(stored, _)| stored.to_string() == column.to_string())
+        {
+            *stored = value;
+        } else {
+            fields.push((column, value));
+        }
     }
     Ok(fields)
 }
@@ -86,45 +94,13 @@ pub(super) async fn insert<M: SeaOrmUserModel>(
     name: SchemaValue<Option<String>>,
     image: SchemaValue<Option<String>>,
     extra: better_auth_core::FieldMap,
-) -> AuthResult<M> {
+    readback: CreateReadback<'_, M::Entity>,
+) -> AuthResult<Option<M>> {
     let backend = db.get_database_backend();
     let fields = fields::<M>(backend, active, name, image, extra)?;
-    let (columns, bindings): (Vec<_>, Vec<_>) = fields.into_iter().unzip();
-    let values = record_bindings::bind(backend, bindings)?;
-    let id = columns
-        .iter()
-        .position(|column| column.to_string() == M::id_column().to_string())
-        .and_then(|index| values.get(index))
-        .cloned();
-    let mut query = Query::insert();
-    let _ = query
-        .into_table(M::Entity::default())
-        .columns(columns)
-        .values_panic(values);
-    if db.support_returning() {
-        let _ = query.returning(Query::returning().all());
-        return M::find_by_statement(backend.build(&query))
-            .one(db)
-            .await
-            .map_err(map_db_err)?
-            .ok_or_else(|| {
-                better_auth_core::AuthError::internal("User insert returned no record")
-            });
-    }
-    let result = db
-        .execute_raw(backend.build(&query))
+    RecordWrite::<M::Entity>::from_bindings(fields)
+        .insert(db, readback)
         .await
-        .map_err(map_db_err)?;
-    M::Entity::find()
-        .filter(
-            M::id_column()
-                .into_expr()
-                .eq(M::id_column().save_as(id.unwrap_or_else(|| result.last_insert_id().into()))),
-        )
-        .one(db)
-        .await
-        .map_err(map_db_err)?
-        .ok_or_else(|| better_auth_core::AuthError::internal("User insert returned no record"))
 }
 
 pub(super) async fn update<M: SeaOrmUserModel>(

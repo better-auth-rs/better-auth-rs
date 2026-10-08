@@ -173,7 +173,7 @@ impl<'a, S: AuthSchema> JwtApi<'a, S> {
     }
 
     /// Provision a key using the registered storage callbacks and encryption policy.
-    pub async fn create_key_pair(&self, parameters: JwtKeyPairConfig) -> AuthResult<Jwk> {
+    pub async fn create_key_pair(&self, parameters: JwtKeyPairConfig) -> AuthResult<Option<Jwk>> {
         self.context
             .with_native_context(self.source, |resolved| async move {
                 self.plugin

@@ -348,7 +348,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
     async fn create_user(&self, input: CreateUser) -> AuthResult<UserView> {
         self.create_user_optional(input)
             .await?
-            .ok_or_else(|| AuthError::forbidden("user creation cancelled by database hook"))
+            .ok_or_else(|| AuthError::forbidden("user creation returned no record"))
     }
     async fn create_user_optional(
         &self,
@@ -509,7 +509,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
         )
         .await?;
         let user = self.output_user(user).await?;
-        self.after(CommittedWrite::UserCreated(user.clone()))
+        self.after(CommittedWrite::UserCreated(Some(user.clone())))
             .await?;
         Ok(Some(user))
     }

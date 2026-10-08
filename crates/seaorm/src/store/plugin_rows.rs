@@ -14,26 +14,32 @@ pub(super) fn record<M: SeaOrmPluginModel>(
     fields: &UserConfig,
     backend: DbBackend,
 ) -> AuthResult<AdapterRecord> {
+    record_from_columns::<M::Entity>(row, fields, backend, M::column("id")?, M::column)
+}
+
+pub(super) fn record_from_columns<E: sea_orm::EntityTrait>(
+    row: &QueryResult,
+    fields: &UserConfig,
+    backend: DbBackend,
+    primary: E::Column,
+    column: impl Fn(&str) -> AuthResult<E::Column>,
+) -> AuthResult<AdapterRecord> {
     let mut core = FieldMap::new();
     let mut storage = FieldMap::new();
-    for column in M::Column::iter() {
-        if M::core_field_name(&column) == Some("id") {
-            let raw = value(row, column.as_str())?;
-            let value = if !raw.is_null() && !raw.is_undefined() {
-                raw.display_utf16()?.into()
-            } else {
-                raw
-            };
-            let _ = core.insert("id".into(), value);
-        }
-    }
+    let raw = value(row, primary.as_str())?;
+    let id = if !raw.is_null() && !raw.is_undefined() {
+        raw.display_utf16()?.into()
+    } else {
+        raw
+    };
+    let _ = core.insert("id".into(), id);
     for (name, field) in fields.fields() {
         if name == "id" {
             continue;
         }
         let name =
             better_auth_core::store::schema::resolve_field_name(field.field_name.as_deref(), name);
-        let column = M::column(name)?;
+        let column = column(name)?;
         let _ = storage.insert(name.into(), value(row, column.as_str())?);
     }
     let mut record = AdapterRecord::new(core, storage);

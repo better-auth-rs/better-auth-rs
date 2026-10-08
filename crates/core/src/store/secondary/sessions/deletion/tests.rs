@@ -66,7 +66,7 @@ impl DatabaseHooks<StatelessSchema> for Hooks {
         session: &crate::wire::SessionView,
         _: &DatabaseHookContext<'_, StatelessSchema>,
     ) -> AuthResult<DatabaseHookControl> {
-        record(&self.0, "before-delete", &session.token.as_str().into())?;
+        record(&self.0, "before-delete", &session.token.field_value())?;
         Ok(DatabaseHookControl::Continue)
     }
 
@@ -75,7 +75,7 @@ impl DatabaseHooks<StatelessSchema> for Hooks {
         session: &crate::wire::SessionView,
         _: &DatabaseHookContext<'_, StatelessSchema>,
     ) -> AuthResult<()> {
-        record(&self.0, "after-delete", &session.token.as_str().into())
+        record(&self.0, "after-delete", &session.token.field_value())
     }
 }
 
@@ -220,7 +220,7 @@ async fn deletion_preserves_native_references_and_stops_before_later_mutations_o
                 stored
                     .ok_or(AuthError::SessionNotFound)?
                     .expires_at
-                    .milliseconds()
+                    .date_milliseconds()?
                     <= Utc::now().timestamp_millis() as f64
             );
         } else if mode == "cache-only" {
@@ -228,7 +228,7 @@ async fn deletion_preserves_native_references_and_stops_before_later_mutations_o
                 stored
                     .ok_or(AuthError::SessionNotFound)?
                     .expires_at
-                    .milliseconds(),
+                    .date_milliseconds()?,
                 late as f64
             );
         }

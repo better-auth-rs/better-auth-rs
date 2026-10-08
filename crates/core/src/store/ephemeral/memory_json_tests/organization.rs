@@ -131,7 +131,7 @@ async fn snapshots(
         .store
         .create_organization_role(CreateOrganizationRole {
             additional_fields: input("role", false),
-            organization_id: organization_a.id.typed()?.clone(),
+            organization_id: organization_a.id.clone(),
             role: "viewer".into(),
             permission: FieldMap::default().into(),
         })
@@ -245,7 +245,7 @@ pub(super) async fn groups(
     let (members, total) = fixture
         .store
         .query_organization_members(&ListOrganizationMembersParams {
-            organization_id: records.organization_a.id.typed()?.clone(),
+            organization_id: records.organization_a.id.clone(),
             limit: Some(10.0),
             offset: Some(0.0),
             filter_field: Some("settings".into()),

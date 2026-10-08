@@ -504,7 +504,7 @@ impl DatabaseHooks<S> for Hooks {
     }
     async fn after_create_session(
         &self,
-        _: &core::wire::SessionView,
+        _: Option<&core::wire::SessionView>,
         _: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
         Err(AuthError::internal("must not invoke hook"))
@@ -518,7 +518,7 @@ impl DatabaseHooks<S> for Hooks {
     }
     async fn after_create_verification(
         &self,
-        _: &core::wire::VerificationView,
+        _: Option<&core::wire::VerificationView>,
         _: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
         Err(AuthError::internal("must not invoke hook"))

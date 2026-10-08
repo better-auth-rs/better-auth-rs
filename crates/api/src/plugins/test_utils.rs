@@ -61,9 +61,12 @@ struct CaptureHook(Arc<OtpCapture>);
 impl<S: AuthSchema> DatabaseHooks<S> for CaptureHook {
     async fn after_create_verification(
         &self,
-        verification: &VerificationView,
+        verification: Option<&VerificationView>,
         _: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
+        let Some(verification) = verification else {
+            return Ok(());
+        };
         let value = verification.value.field_value();
         if !value.is_truthy() {
             return Ok(());
@@ -154,7 +157,7 @@ pub struct TestLogin {
     /// Browser cookie values and attributes for the same session.
     pub cookies: Vec<TestCookie>,
     /// Unsigned session token.
-    pub token: String,
+    pub token: better_auth_core::SchemaValue<String>,
 }
 
 /// Native helpers bound to one initialized authentication instance.
@@ -272,8 +275,8 @@ impl<'a, S: AuthSchema> TestUtilsApi<'a, S> {
         let session = self.create_session(options).await?;
         let token = session.token.clone();
         Ok(TestLogin {
-            headers: cookies::headers(self.auth, &token),
-            cookies: cookies::cookies(self.auth, &token, None),
+            headers: cookies::headers(self.auth, &token.field_value())?,
+            cookies: cookies::cookies(self.auth, &token.field_value(), None)?,
             token,
             session,
             user,
@@ -285,7 +288,7 @@ impl<'a, S: AuthSchema> TestUtilsApi<'a, S> {
         options: TestAuthOptions,
     ) -> AuthResult<HashMap<String, String>> {
         let session = self.create_session(options).await?;
-        Ok(cookies::headers(self.auth, &session.token))
+        cookies::headers(self.auth, &session.token.field_value())
     }
     /// Create a fresh session and browser-cookie attributes without a user lookup.
     pub async fn get_cookies(
@@ -294,7 +297,7 @@ impl<'a, S: AuthSchema> TestUtilsApi<'a, S> {
         domain: Option<&str>,
     ) -> AuthResult<Vec<TestCookie>> {
         let session = self.create_session(options).await?;
-        Ok(cookies::cookies(self.auth, &session.token, domain))
+        cookies::cookies(self.auth, &session.token.field_value(), domain)
     }
     fn generate_id(&self, model: &str) -> AuthResult<String> {
         Ok(self

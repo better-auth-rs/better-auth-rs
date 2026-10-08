@@ -49,9 +49,15 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
 impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> JwksStore
     for SeaOrmStore<S, O, P>
 {
-    async fn create_jwk_record(&self, input: FieldMap) -> AuthResult<FieldMap> {
-        self.create_plugin_record::<P::Jwk>(self.connection(), EntityRole::Jwk, "jwks", input)
-            .await
+    async fn create_jwk_record(&self, input: FieldMap) -> AuthResult<Option<FieldMap>> {
+        self.create_plugin_record::<P::Jwk>(
+            self.connection(),
+            super::create_readback::ReadbackScope::Direct(self.connection()),
+            EntityRole::Jwk,
+            "jwks",
+            input,
+        )
+        .await
     }
 
     async fn get_jwk_record(&self, id: &SchemaValue<String>) -> AuthResult<Option<FieldMap>> {
@@ -83,9 +89,15 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
 impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> JwksStore
     for super::SeaOrmTransaction<S, O, P>
 {
-    async fn create_jwk_record(&self, input: FieldMap) -> AuthResult<FieldMap> {
+    async fn create_jwk_record(&self, input: FieldMap) -> AuthResult<Option<FieldMap>> {
         self.store
-            .create_plugin_record::<P::Jwk>(&self.tx, EntityRole::Jwk, "jwks", input)
+            .create_plugin_record::<P::Jwk>(
+                &self.tx,
+                super::create_readback::ReadbackScope::Transaction,
+                EntityRole::Jwk,
+                "jwks",
+                input,
+            )
             .await
     }
 

@@ -17,6 +17,11 @@ impl ModelFields {
     pub fn plugin_native_fields(role: EntityRole) -> UserConfig {
         use UserFieldType::{Boolean, Date, Number, String};
         let declarations = match role {
+            EntityRole::RateLimit => vec![
+                ("key", String, true),
+                ("count", Number, true),
+                ("lastRequest", Number, true),
+            ],
             EntityRole::ApiKey => vec![
                 ("configId", String, true),
                 ("name", String, false),
@@ -109,7 +114,17 @@ impl ModelFields {
                     .collect(),
             ),
         };
-        if role == EntityRole::ApiKey {
+        if role == EntityRole::RateLimit {
+            if let Some(field) = fields.fields_mut().get_mut("key") {
+                field.unique = Some(true);
+            }
+            if let Some(field) = fields.fields_mut().get_mut("lastRequest") {
+                field.bigint = Some(true);
+                field.default_value_fn = Some(Arc::new(|| {
+                    Ok(chrono::Utc::now().timestamp_millis().into())
+                }));
+            }
+        } else if role == EntityRole::ApiKey {
             for (name, value) in [
                 ("configId", Value::from("default")),
                 ("enabled", Value::Bool(true)),

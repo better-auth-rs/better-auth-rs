@@ -42,6 +42,22 @@ field!(bool, Bool);
 field!(f64, Number);
 field!(FieldDate, Date);
 
+impl SchemaField for chrono::DateTime<chrono::Utc> {
+    fn from_field(value: FieldValue) -> Result<Self, FieldValue> {
+        match &value {
+            FieldValue::Date(date) => match date.to_datetime() {
+                Ok(Some(date)) => Ok(date),
+                Ok(None) | Err(_) => Err(value),
+            },
+            _ => Err(value),
+        }
+    }
+
+    fn into_field(self) -> FieldValue {
+        FieldValue::Date(self.into())
+    }
+}
+
 impl SchemaField for crate::Utf16String {
     fn from_field(value: FieldValue) -> Result<Self, FieldValue> {
         match value {
@@ -151,5 +167,50 @@ impl<T: SchemaField> SchemaField for &T {
 
     fn into_field(self) -> FieldValue {
         (*self).clone().into_field()
+    }
+}
+
+impl SchemaField for serde_json::Value {
+    fn from_field(value: FieldValue) -> Result<Self, FieldValue> {
+        match value.json() {
+            Ok(Some(json)) if FieldValue::from(json.clone()) == value => Ok(json),
+            _ => Err(value),
+        }
+    }
+
+    fn into_field(self) -> FieldValue {
+        self.into()
+    }
+}
+
+#[cfg(test)]
+mod json_tests {
+    use super::*;
+
+    #[test]
+    fn json_import_preserves_negative_zero_extremes_and_nested_fields() -> crate::AuthResult<()> {
+        let source: serde_json::Value = serde_json::from_str(
+            "{\"values\":[-0.0,1.7976931348623157e308,-1.7976931348623157e308],\"nested\":{\"value\":false}}",
+        )?;
+        let value = FieldValue::from(source.clone());
+        let values = value.as_object().unwrap()["values"].as_array().unwrap();
+        assert!(values[0].as_f64().unwrap().is_sign_negative());
+        assert_eq!(values[1].as_f64(), Some(f64::MAX));
+        assert_eq!(values[2].as_f64(), Some(-f64::MAX));
+        assert_eq!(source.clone().into_field(), value);
+        assert_eq!(
+            <serde_json::Value as SchemaField>::from_field(value),
+            Ok(source)
+        );
+        for native in [
+            FieldValue::Undefined,
+            f64::NAN.into(),
+            f64::INFINITY.into(),
+            f64::NEG_INFINITY.into(),
+            FieldDate::invalid().into(),
+        ] {
+            assert!(<serde_json::Value as SchemaField>::from_field(native).is_err());
+        }
+        Ok(())
     }
 }

@@ -114,7 +114,11 @@ pub(crate) struct SignInRequest {
 
 #[derive(Debug, Serialize)]
 pub(crate) struct SignUpResponse {
-    token: Option<String>,
+    #[serde(
+        with = "better_auth_core::field_value::serde::value",
+        skip_serializing_if = "better_auth_core::FieldValue::is_undefined"
+    )]
+    token: better_auth_core::FieldValue,
     #[serde(with = "better_auth_core::field_value::serde::map")]
     user: better_auth_core::FieldMap,
 }
@@ -122,7 +126,8 @@ pub(crate) struct SignUpResponse {
 #[derive(Debug, Serialize)]
 pub(crate) struct SignInResponse<U: Serialize> {
     redirect: bool,
-    token: String,
+    #[serde(skip_serializing_if = "better_auth_core::SchemaValue::is_undefined")]
+    token: better_auth_core::SchemaValue<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     url: Option<String>,
     user: U,
@@ -328,7 +333,7 @@ async fn finalize_sign_in_with_user_core(
     )
     .await
     .map_err(SessionIssueError::into_auth_error)?;
-    let token = issued.session.token().to_string();
+    let token = issued.session.token().into_owned();
     let manager = ctx.session_manager();
     manager
         .set_native_session_cookie(req, issued, Some(remember_me == Some(false)))

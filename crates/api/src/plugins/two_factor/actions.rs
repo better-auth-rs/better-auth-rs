@@ -363,7 +363,7 @@ pub(super) async fn send_otp_core<S: better_auth_core::AuthSchema>(
 
     _ = ctx
         .database
-        .create_verification(CreateVerification {
+        .create_verification_optional(CreateVerification {
             identifier: (identifier).into(),
             value: SchemaValue::from_field(better_auth_core::query::field_add(
                 &stored_otp.display_utf16()?.into(),
@@ -454,7 +454,7 @@ pub(super) async fn verify_otp_core(
         let expires_at = verification.expires_at.clone();
         _ = ctx
             .database
-            .create_verification(CreateVerification {
+            .create_verification_optional(CreateVerification {
                 identifier: (identifier).into(),
                 value: SchemaValue::from_field(next_value),
                 expires_at,

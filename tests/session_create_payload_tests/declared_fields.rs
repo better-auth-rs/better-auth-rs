@@ -48,9 +48,11 @@ impl DatabaseHooks<StatelessSchema> for DeclaredHooks {
 
     async fn after_create_session(
         &self,
-        session: &SessionView,
+        session: Option<&SessionView>,
         _: &DatabaseHookContext<'_, StatelessSchema>,
     ) -> AuthResult<()> {
+        let session = session
+            .ok_or_else(|| better_auth_core::AuthError::internal("Expected created fixture row"))?;
         emit(&self.events, Event::After(1, session.clone().into()))
     }
 }
@@ -329,26 +331,23 @@ async fn memory_native_declarations_preserve_storage_and_public_values() -> Test
         expected_events.push(Event::Generate("session".into(), None));
         assert_eq!(FieldMap::from(created.clone()), expected, "{scenario:?}");
         if scenario == Scenario::OutputNativeValues {
-            assert_eq!(created.token, initial_token);
-            assert_eq!(&created.created_at, created_at);
-            assert_eq!(created.additional_fields.get("token"), Some(&7.into()));
-            assert_eq!(
-                created.additional_fields.get("createdAt"),
-                Some(&FieldValue::Null)
-            );
+            assert_eq!(created.token.field_value(), 7.into());
+            assert_eq!(created.created_at.field_value(), FieldValue::Null);
+            assert!(!created.additional_fields.contains_key("token"));
+            assert!(!created.additional_fields.contains_key("createdAt"));
         } else {
             assert_eq!(
                 expected.get("token").and_then(FieldValue::as_str),
-                Some(created.token.as_str())
+                created.token.as_str()
             );
             assert_eq!(
                 expected.get("createdAt").and_then(FieldValue::as_date),
-                Some(&created.created_at)
+                Some(created.created_at.typed()?)
             );
         }
         assert_eq!(
             expected.get("updatedAt").and_then(FieldValue::as_date),
-            Some(&created.updated_at)
+            Some(created.updated_at.typed()?)
         );
         if mode == Mode::Mirrored {
             let ttl = observed
@@ -389,7 +388,10 @@ async fn memory_native_declarations_preserve_storage_and_public_values() -> Test
                 assert_eq!(value, expected);
             }
             if created.token != initial_token {
-                assert_eq!(cache.inner.get(&created.token).await?, None);
+                assert_eq!(
+                    cache.inner.get_native(&created.token.field_value()).await?,
+                    None
+                );
             }
         }
         expected_events.push(Event::After(1, expected.clone()));
@@ -406,7 +408,9 @@ async fn memory_native_declarations_preserve_storage_and_public_values() -> Test
             Scenario::DeletedToken | Scenario::NativeCollision => {
                 assert_eq!(raw.get_session(initial_token).await?, None);
             }
-            Scenario::OutputToken => assert_eq!(raw.get_session(&created.token).await?, None),
+            Scenario::OutputToken => {
+                assert_eq!(raw.get_session(created.token.typed()?).await?, None)
+            }
             Scenario::OutputNativeValues => {
                 assert_eq!(raw.get_session("7").await?, None);
                 assert_eq!(cache.inner.get("7").await?, None);

@@ -23,7 +23,7 @@ let auth = BetterAuth::stateless(
 let test = auth.test()?;
 let draft = test.create_user(CreateUser::new().with_email("test@example.com"))?;
 let Some(user) = test.save_user(draft).await? else {
-    return Ok(()); // A database before hook cancelled creation.
+    return Ok(()); // Creation can be cancelled or complete without a returned record.
 };
 let login = test.login(TestAuthOptions::new(user.id.typed()?.clone())).await?;
 assert_eq!(login.session.token, login.token);
@@ -32,9 +32,9 @@ test.delete_user(user.id.typed()?).await?;
 # }
 ```
 
-`create_user` generates a draft without writing to storage. The configured ID generator runs even when the draft has an explicit ID. Supplied creation and update dates are retained. `save_user` applies admission and database hooks, lowercases the email address, and returns `None` when a before hook cancels creation. An after-hook error propagates after the record is committed.
+`create_user` generates a draft without writing to storage. The configured ID generator runs even when the draft has an explicit ID. Supplied creation and update dates are retained. `save_user` applies admission and database hooks, lowercases the email address, and returns `None` when a before hook cancels creation or the adapter completes creation without a returned record. An after-hook error propagates after the record is committed.
 
-`login` checks that the user exists and creates one session. The result contains the session, user, raw signed Cookie request header, browser-cookie data, and token. `get_auth_headers` and `get_cookies` each create a separate session without first checking the user. `TestAuthOptions.session` accepts a `FieldMap` for plugin and application fields, preserving native values through field callbacks. Standard session fields such as ID, token, dates, and IP address are ignored.
+`login` checks that the user exists and creates one session. The result contains the session, user, raw signed Cookie request header, browser-cookie data, and token. `TestLogin.token` uses `SchemaValue<String>` and retains native output replacements through cookie signing. `get_auth_headers` and `get_cookies` each create a separate session without first checking the user. `TestAuthOptions.session` accepts a `FieldMap` for plugin and application fields, preserving native values through field callbacks. Standard session fields such as ID, token, dates, and IP address are ignored.
 
 Browser-cookie data uses the configured session cookie name and attributes. Its domain comes from the supplied override or the initialized base URL hostname; the cookie attribute `domain` is not used. Cookie values are raw HMAC signatures suitable for request headers or browser cookie APIs, without HTTP response percent encoding.
 

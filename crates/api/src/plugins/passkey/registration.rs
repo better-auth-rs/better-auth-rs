@@ -41,7 +41,7 @@ pub(super) async fn registration_session<S: AuthSchema>(
         return optional_session(ctx, req).await;
     }
     let (user, session) = ctx.require_session(req).await?;
-    if !crate::plugins::helpers::session_is_fresh(&session, &ctx.config) {
+    if !crate::plugins::helpers::session_is_fresh(&session, &ctx.config)? {
         return Err(AuthError::Upstream {
             status: 403,
             code: "SESSION_NOT_FRESH",
@@ -274,8 +274,12 @@ pub(super) async fn verify_registration_core<S: AuthSchema>(
         } else {
             registration.persist(None).await?
         };
-        let mut result = PasskeyView::from(&passkey).field_values()?;
+        let mut result = passkey
+            .as_ref()
+            .map(|passkey| PasskeyView::from(passkey).field_values())
+            .transpose()?;
         let token = if let Some((user, session)) = session {
+            let result = result.get_or_insert_with(FieldMap::new);
             let _ = result.insert(
                 "session".into(),
                 FieldMap::from(ctx.session_view(&session).await?).into(),
@@ -288,7 +292,10 @@ pub(super) async fn verify_registration_core<S: AuthSchema>(
         } else {
             None
         };
-        Ok((result.into(), token))
+        Ok((
+            result.map(FieldValue::from).unwrap_or(FieldValue::Null),
+            token,
+        ))
     }
     .await
     .map_err(|error| verification_error(error, true))?;
@@ -310,7 +317,7 @@ impl<S: AuthSchema> Registration<S> {
         mut self,
         transaction: Option<&dyn AuthTransaction<S>>,
     ) -> AuthResult<(
-        better_auth_core::Passkey,
+        Option<better_auth_core::Passkey>,
         Option<(
             better_auth_core::wire::UserView,
             better_auth_core::wire::SessionView,
@@ -375,8 +382,13 @@ impl<S: AuthSchema> Registration<S> {
         };
         let user_id = self.input.user_id.clone().into();
         let passkey = match transaction {
-            Some(tx) => tx.create_passkey(self.input).await?,
-            None => self.ctx.database.create_passkey(self.input).await?,
+            Some(tx) => tx.create_passkey_optional(self.input).await?,
+            None => {
+                self.ctx
+                    .database
+                    .create_passkey_optional(self.input)
+                    .await?
+            }
         };
         let session = if let Some(user) = user {
             crate::plugins::helpers::admit_session_for_id(&self.ctx, &user_id, transaction)

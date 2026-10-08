@@ -117,7 +117,7 @@ impl OrganizationPolicy for State {
         data: OrganizationTeamLimit<'_>,
         _: OrganizationEndpoint<'_>,
     ) -> AuthResult<Option<usize>> {
-        self.record(json!({"phase":"limit","organizationId":data.organization_id,"user":data.session.map(|session| &session.user.id)}))?;
+        self.record(json!({"phase":"limit","organizationId":data.organization_id.json()?,"user":data.session.map(|session| &session.user.id)}))?;
         Ok(Some(100))
     }
 }
@@ -232,7 +232,7 @@ async fn scenario<S: AuthSchema>(
             format!(
                 "better-auth.session_token={}",
                 better_auth_core::utils::cookie_utils::sign_cookie_value(
-                    &session.token,
+                    session.token.typed()?,
                     auth.config().signing_secret()
                 )
             ),

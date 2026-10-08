@@ -11,7 +11,9 @@ use chrono::{Duration, Utc};
 use rand::Rng;
 use serde_json::{Value, json};
 
-use super::helpers::{SessionIssueError, get_credential_account, issue_user_session_with_lifetime};
+use super::helpers::{
+    SessionIssueError, get_credential_account, issue_selected_user_session_optional,
+};
 
 mod callbacks;
 mod native;
@@ -183,7 +185,7 @@ impl PhoneNumberPlugin {
             .collect();
         let _ = ctx
             .database
-            .create_verification(CreateVerification {
+            .create_verification_optional(CreateVerification {
                 identifier: (identifier).into(),
                 value: (if with_attempts {
                     format!("{code}:0")
@@ -260,8 +262,8 @@ impl PhoneNumberPlugin {
                 ..Default::default()
             };
             let _ = match endpoint.transaction {
-                Some(transaction) => transaction.create_verification(input).await?,
-                None => ctx.database.create_verification(input).await?,
+                Some(transaction) => transaction.create_verification_optional(input).await?,
+                None => ctx.database.create_verification_optional(input).await?,
             };
             return Err(error(400, "INVALID_OTP", "Invalid OTP"));
         }
@@ -402,7 +404,7 @@ impl PhoneNumberPlugin {
                 ));
             }
             ctx.database
-                .update_user(
+                .update_user_optional(
                     user.id.typed()?,
                     UpdateUser {
                         phone_number: Some(Some(phone.to_owned())),
@@ -411,9 +413,10 @@ impl PhoneNumberPlugin {
                     },
                 )
                 .await?
+                .ok_or_else(|| error(500, "FAILED_TO_UPDATE_USER", "Failed to update user"))?
         } else if let Some(user) = found {
             ctx.database
-                .update_user(
+                .update_user_optional(
                     user.id().typed()?,
                     UpdateUser {
                         phone_number_verified: Some(true),
@@ -421,6 +424,7 @@ impl PhoneNumberPlugin {
                     },
                 )
                 .await?
+                .ok_or_else(|| error(500, "FAILED_TO_UPDATE_USER", "Failed to update user"))?
         } else if let Some(email) = &self.temp_email {
             let mut create = CreateUser::new().with_email(email(phone)).with_name(
                 self.temp_name
@@ -441,7 +445,9 @@ impl PhoneNumberPlugin {
             create.phone_number = Some(phone.to_owned());
             create.phone_number_verified = Some(true);
 
-            super::user_admission::create_user(create, "phone-number", &endpoint).await?
+            super::user_admission::create_user_optional(create, "phone-number", &endpoint)
+                .await?
+                .ok_or_else(|| error(500, "FAILED_TO_CREATE_USER", "Failed to create user"))?
         } else {
             return Err(error(500, "FAILED_TO_UPDATE_USER", "Failed to update user"));
         };
@@ -455,10 +461,18 @@ impl PhoneNumberPlugin {
         )
         .await?;
         if let Some((_, session)) = existing_session {
-            return Ok(AuthResponse::json(
+            return Ok(AuthResponse::native(
                 200,
-                &json!({"status":true,"token":session.token,"user":ctx.user_view(&user).await?}),
-            )?);
+                better_auth_core::FieldMap::from([
+                    ("status".into(), true.into()),
+                    ("token".into(), session.token.field_value()),
+                    (
+                        "user".into(),
+                        better_auth_core::FieldMap::from(ctx.user_view(&user).await?).into(),
+                    ),
+                ])
+                .into(),
+            ));
         }
         if body.get("disableSession") == Some(&Value::Bool(true)) {
             return Ok(AuthResponse::json(
@@ -553,34 +567,39 @@ impl PhoneNumberPlugin {
         } else {
             ctx.config.session.expires_in()
         };
-        let issued = issue_user_session_with_lifetime(
+        let issued = issue_selected_user_session_optional(
             ctx,
-            user.id().typed()?,
-            meta.ip_address,
-            meta.user_agent,
+            better_auth_core::FieldMap::from(ctx.internal_user_view(user).await?).into(),
+            &meta,
             lifetime,
         )
         .await
-        .map_err(SessionIssueError::into_auth_error)?;
-        let mut output = serde_json::Map::from_iter([
-            (String::from("token"), json!(issued.session.token())),
+        .map_err(SessionIssueError::into_auth_error)?
+        .ok_or_else(|| {
+            if !status {
+                ctx.config.logger.error("Failed to create session", &[]);
+            }
+            error(
+                if status { 500 } else { 401 },
+                "FAILED_TO_CREATE_SESSION",
+                "Failed to create session",
+            )
+        })?;
+        let mut output = better_auth_core::FieldMap::from([
+            ("token".into(), issued.session.token().field_value()),
             (
-                String::from("user"),
-                json!(ctx.user_view(&issued.user).await?),
+                "user".into(),
+                better_auth_core::FieldMap::from(ctx.user_view(user).await?).into(),
             ),
         ]);
         if status {
-            let _ = output.insert("status".into(), json!(true));
+            let _ = output.insert("status".into(), true.into());
         }
         let manager = ctx.session_manager();
         manager
-            .set_session_cookie(
-                req,
-                manager.internal_data(&issued.user, &issued.session).await?,
-                Some(dont_remember),
-            )
+            .set_native_session_cookie(req, issued, Some(dont_remember))
             .await?;
-        Ok(AuthResponse::json(200, &output)?)
+        Ok(AuthResponse::native(200, output.into()))
     }
     async fn request_reset(
         &self,
@@ -663,7 +682,7 @@ impl PhoneNumberPlugin {
         } else {
             let _ = ctx
                 .database
-                .create_account(CreateAccount {
+                .create_account_optional(CreateAccount {
                     user_id: user.id().into_owned(),
                     account_id: user.id().into_owned(),
                     provider_id: "credential".into(),

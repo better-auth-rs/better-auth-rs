@@ -30,13 +30,24 @@ where
     }
 
     async fn create_passkey(&self, input: CreatePasskey) -> AuthResult<Passkey> {
-        self.create_passkey_with_connection(self.connection(), input)
-            .await
+        self.create_passkey_optional(input)
+            .await?
+            .ok_or_else(|| AuthError::internal("Passkey creation returned no record"))
     }
 
-    async fn create_passkey_record(&self, input: FieldMap) -> AuthResult<FieldMap> {
+    async fn create_passkey_optional(&self, input: CreatePasskey) -> AuthResult<Option<Passkey>> {
+        self.create_passkey_with_connection(
+            self.connection(),
+            super::create_readback::ReadbackScope::Direct(self.connection()),
+            input,
+        )
+        .await
+    }
+
+    async fn create_passkey_record(&self, input: FieldMap) -> AuthResult<Option<FieldMap>> {
         self.create_plugin_record::<P::Passkey>(
             self.connection(),
+            super::create_readback::ReadbackScope::Direct(self.connection()),
             EntityRole::Passkey,
             "passkey",
             input,
@@ -213,7 +224,10 @@ where
             .update_passkey_patch(filter, patch)
             .await?
             .ok_or_else(|| AuthError::not_found("Passkey not found"))?;
-        Ok(self.project_passkey_models(vec![row]).await?.remove(0))
+        self.project_passkey_models(row.into_iter().collect())
+            .await?
+            .pop()
+            .ok_or_else(|| AuthError::internal("Passkey creation returned no record"))
     }
     async fn delete_passkey(&self, id: &str) -> AuthResult<()> {
         self.delete_plugin_record::<P::Passkey>(
@@ -346,8 +360,9 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
     pub(super) async fn create_passkey_with_connection(
         &self,
         connection: &impl sea_orm::ConnectionTrait,
+        scope: super::create_readback::ReadbackScope<'_>,
         mut input: CreatePasskey,
-    ) -> AuthResult<Passkey> {
+    ) -> AuthResult<Option<Passkey>> {
         let legacy = match (P::Passkey::passkey_storage(), &input.credential) {
             (PasskeyStorage::Native, PasskeyCredentialState::Native) => false,
             (PasskeyStorage::Legacy, PasskeyCredentialState::Legacy(_)) => true,
@@ -371,17 +386,31 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
             );
         }
         let active = self.prepare_passkey_fields(fields, extras, true).await?;
-        let row = self.insert_passkey(connection, active).await?;
-        Ok(self.project_passkey_models(vec![row]).await?.remove(0))
+        let row = self.insert_passkey(connection, scope, active).await?;
+        Ok(self
+            .project_passkey_models(row.into_iter().collect())
+            .await?
+            .pop())
     }
 
     async fn insert_passkey(
         &self,
         connection: &impl sea_orm::ConnectionTrait,
+        scope: super::create_readback::ReadbackScope<'_>,
         active: super::plugin_models::Write<P::Passkey>,
-    ) -> AuthResult<sea_orm::QueryResult> {
+    ) -> AuthResult<Option<sea_orm::QueryResult>> {
         database_operation::<Entity<P::Passkey>, _>(self.config(), "create", async {
-            active.insert_raw(connection).await
+            active
+                .insert_raw(
+                    connection,
+                    super::create_readback::CreateReadback {
+                        schema: &self.model_fields.plugin_fields(EntityRole::Passkey),
+                        policy: self.config().advanced.database.generate_id(),
+                        scope,
+                        column: P::Passkey::column,
+                    },
+                )
+                .await
         })
         .await
     }

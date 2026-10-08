@@ -41,12 +41,17 @@ where
                 better_auth_core::FieldValue::Date((now).into()),
             ),
         ]);
-        ApiKey::from_field_values(self.create_api_key_record(fields).await?)
+        ApiKey::from_field_values(
+            self.create_api_key_record(fields)
+                .await?
+                .ok_or_else(|| AuthError::internal("API key creation returned no record"))?,
+        )
     }
 
-    async fn create_api_key_record(&self, input: FieldMap) -> AuthResult<FieldMap> {
+    async fn create_api_key_record(&self, input: FieldMap) -> AuthResult<Option<FieldMap>> {
         self.create_plugin_record::<P::ApiKey>(
             self.connection(),
+            super::create_readback::ReadbackScope::Direct(self.connection()),
             EntityRole::ApiKey,
             "apikey",
             input,

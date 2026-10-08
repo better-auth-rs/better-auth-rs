@@ -37,6 +37,7 @@ impl EphemeralStore {
     ) -> AuthResult<Option<OrganizationDetails>> {
         let (field, value) = match query.organization {
             OrganizationKey::Id(id) => ("id", Value::from(id)),
+            OrganizationKey::IdValue(id) => ("id", id.clone()),
             OrganizationKey::Slug(slug) => ("slug", Value::from(slug)),
         };
         let value = self.organization_query(EntityRole::Organization, field, value)?;
@@ -48,7 +49,7 @@ impl EphemeralStore {
             let organization = state
                 .organizations
                 .first_ref(|row| match query.organization {
-                    OrganizationKey::Id(_) => row.id == value,
+                    OrganizationKey::Id(_) | OrganizationKey::IdValue(_) => row.id == value,
                     OrganizationKey::Slug(_) => {
                         row.slug.field_value().strict_equals(&value.field_value())
                     }

@@ -225,15 +225,15 @@ impl OrganizationPolicy for OrganizationCallbacks {
         data: OrganizationTeamLimit<'_>,
         ctx: OrganizationEndpoint<'_>,
     ) -> AuthResult<Option<usize>> {
-        self.limit("maximumTeams", json!({"organizationId":data.organization_id,"session":data.session.map(|session| json!({"user":session.user,"session":session.session}))}), Some(ctx.request.is_some())).await.map(Some)
+        self.limit("maximumTeams", json!({"organizationId":data.organization_id.json()?,"session":data.session.map(|session| json!({"user":session.user,"session":session.session}))}), Some(ctx.request.is_some())).await.map(Some)
     }
     async fn maximum_roles_per_organization(
         &self,
-        organization_id: &str,
+        organization_id: &better_auth_core::FieldValue,
     ) -> AuthResult<Option<usize>> {
         self.limit(
             "maximumRoles",
-            json!({"organizationId":organization_id}),
+            json!({"organizationId":organization_id.json()?}),
             None,
         )
         .await
@@ -608,7 +608,7 @@ impl TeamMemberLimitPolicy for OrganizationCallbacks {
         &self,
         data: OrganizationTeamMemberLimit<'_>,
     ) -> AuthResult<usize> {
-        self.limit("maximumMembersPerTeam", json!({"organizationId":data.organization_id,"teamId":data.team_id,"session":{"user":data.session.user,"session":data.session.session}}), None).await
+        self.limit("maximumMembersPerTeam", json!({"organizationId":data.organization_id.json()?,"teamId":data.team_id.json()?,"session":{"user":data.session.user,"session":data.session.session}}), None).await
     }
 }
 

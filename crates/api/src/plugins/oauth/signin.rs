@@ -466,7 +466,7 @@ pub(super) async fn process_oauth_sign_in(
         let mut linked_user = existing_user;
         let created_account = ctx
             .database
-            .create_account(CreateAccount {
+            .create_account_optional(CreateAccount {
                 user_id: linked_user.id().into_owned(),
                 account_id: (user_info.id.clone()).into(),
                 provider_id: (provider_name.to_string()).into(),
@@ -496,7 +496,8 @@ pub(super) async fn process_oauth_sign_in(
                 ..Default::default()
             })
             .await
-            .map_err(|_| "unable to link account".to_string())?;
+            .map_err(|_| "unable to link account".to_string())?
+            .ok_or_else(|| "unable to link account".to_string())?;
 
         if email_verified
             && !linked_user.email_verified()
@@ -636,9 +637,11 @@ pub(super) async fn process_oauth_sign_in(
                     return Err(error.into_auth_error());
                 }
                 apply_default_role(&context, &mut create_user);
-                let user = tx.create_user(create_user).await?;
+                let user = tx.create_user_optional(create_user).await?.ok_or_else(|| {
+                    AuthError::internal("Cannot read properties of null (reading 'id')")
+                })?;
                 let account = tx
-                    .create_account(CreateAccount {
+                    .create_account_optional(CreateAccount {
                         user_id: user.id().into_owned(),
                         ..account
                     })
@@ -652,6 +655,12 @@ pub(super) async fn process_oauth_sign_in(
             _ => OAuthSignInError::Generic("unable to create user".to_owned()),
         })?;
         let (created_user, created_account) = outcome;
+
+        if created_account.is_none() && ctx.config.account.store_account_cookie() {
+            return Err(OAuthSignInError::Generic(
+                "unable to create user".to_owned(),
+            ));
+        }
 
         options
             .check_email_verification(provider, Some(&created_user), true, ctx)
@@ -668,7 +677,8 @@ pub(super) async fn process_oauth_sign_in(
             .config
             .account
             .store_account_cookie()
-            .then(|| created_account.clone());
+            .then_some(created_account)
+            .flatten();
 
         finish_oauth_user(issued, true, account_cookie, ctx).await
     }
@@ -764,10 +774,17 @@ pub(crate) async fn sign_in_verified_profile(
     ctx.session_manager()
         .set_native_session_cookie(req, outcome.issued, None)
         .await?;
-    Ok(AuthResponse::json(
+    Ok(AuthResponse::native(
         200,
-        &serde_json::json!({"token": outcome.session.token(), "user": outcome.user}),
-    )?)
+        better_auth_core::FieldMap::from([
+            ("token".into(), outcome.session.token().field_value()),
+            (
+                "user".into(),
+                better_auth_core::FieldValue::from_json(outcome.user)?,
+            ),
+        ])
+        .into(),
+    ))
 }
 
 pub(super) async fn validate_provider_user<S: better_auth_core::AuthSchema>(

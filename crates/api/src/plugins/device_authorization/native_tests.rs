@@ -62,9 +62,11 @@ impl DatabaseHooks<StatelessSchema> for Trace {
 
     async fn after_create_session(
         &self,
-        session: &SessionView,
+        session: Option<&SessionView>,
         _: &DatabaseHookContext<'_, StatelessSchema>,
     ) -> AuthResult<()> {
+        let session = session
+            .ok_or_else(|| better_auth_core::AuthError::internal("Expected created fixture row"))?;
         self.after.lock().unwrap().push(session.clone());
         Ok(())
     }

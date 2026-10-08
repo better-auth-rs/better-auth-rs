@@ -119,7 +119,7 @@ async fn check_organization_reference(ctx: AuthContext<impl better_auth_core::Au
     let request = create_auth_request(
         HttpMethod::Get,
         "/api-key/get",
-        Some(&session.token),
+        Some(session.token.typed().unwrap()),
         None,
         Some(HashMap::from([(
             "id".into(),

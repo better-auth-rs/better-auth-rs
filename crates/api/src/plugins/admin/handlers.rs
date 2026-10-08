@@ -249,7 +249,14 @@ pub(crate) async fn create_user_core(
     );
     endpoint.path = Some("/admin/create-user");
     endpoint.session = session;
-    let user = crate::plugins::user_admission::create_user(create_user, "admin", &endpoint).await?;
+    let user =
+        crate::plugins::user_admission::create_user_optional(create_user, "admin", &endpoint)
+            .await?
+            .ok_or(AuthError::Upstream {
+                status: 500,
+                code: "FAILED_TO_CREATE_USER",
+                message: "Failed to create user",
+            })?;
 
     if let Some(password) = body
         .password
@@ -260,7 +267,7 @@ pub(crate) async fn create_user_core(
             better_auth_core::hash_password(ctx.password_policy.hasher.as_ref(), password).await?;
         let _ = ctx
             .database
-            .create_account(CreateAccount {
+            .create_account_optional(CreateAccount {
                 user_id: user.id().into_owned(),
                 account_id: user.id().into_owned(),
                 provider_id: ("credential".to_string()).into(),
@@ -659,14 +666,14 @@ pub(crate) async fn stop_impersonating_core(
     SessionUserResponse<SessionView, UserView>,
     better_auth_core::session::SessionData,
 )> {
-    let admin_id = session
-        .impersonated_by()
-        .ok_or_else(|| AuthError::bad_request(MESSAGE_NOT_IMPERSONATING))?
-        .to_string();
+    let admin_id = session.impersonated_by().field_value();
+    if !admin_id.is_truthy() {
+        return Err(AuthError::bad_request(MESSAGE_NOT_IMPERSONATING));
+    }
 
     let admin_user = ctx
         .database
-        .get_user_by_id(&admin_id)
+        .get_user_by_id_value(&admin_id)
         .await?
         .ok_or_else(|| AuthError::internal(MESSAGE_FAILED_TO_FIND_USER))?;
 
@@ -687,8 +694,8 @@ pub(crate) async fn stop_impersonating_core(
         ),
         None => None,
     };
-    ctx.session_manager()
-        .delete_session(session.token())
+    ctx.database
+        .delete_session_by_token_value(&session.token().field_value())
         .await?;
 
     let data = if let Some(data) = snapshot {
@@ -793,7 +800,7 @@ pub(crate) async fn set_user_password_core(
     } else {
         let _ = ctx
             .database
-            .create_account(CreateAccount {
+            .create_account_optional(CreateAccount {
                 user_id: body.user_id.clone().into(),
                 account_id: user.id.clone(),
                 provider_id: "credential".into(),

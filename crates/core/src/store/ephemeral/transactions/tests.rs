@@ -12,7 +12,7 @@ struct AfterCreate {
 impl DatabaseHooks<StatelessSchema> for AfterCreate {
     async fn after_create_user(
         &self,
-        _user: &UserView,
+        _user: Option<&UserView>,
         context: &DatabaseHookContext<'_, StatelessSchema>,
     ) -> AuthResult<()> {
         assert!(context.transaction.is_none());

@@ -85,7 +85,7 @@ impl SeaOrmHooks<BundledSchema> for PatchHook {
     }
     async fn before_update_session(
         &self,
-        _: &str,
+        _: &better_auth_core::FieldValue,
         update: &SessionUpdate,
         _: &SeaOrmHookContext<'_, BundledSchema>,
     ) -> AuthResult<DatabaseHookUpdate<SessionUpdate>> {
@@ -274,13 +274,25 @@ async fn updates_merge_independent_patches_and_dispatch_missing_rows_to_after_ho
         Some("first-scope")
     );
     let updated = store
-        .update_session_active_organization(session.token(), Some("requested"))
+        .update_session_active_organization(session.token().typed().unwrap(), Some("requested"))
         .await
         .unwrap();
-    assert_eq!(updated.token(), "rotated-by-hook");
-    assert_eq!(updated.user_agent(), Some("first-agent"));
-    assert_eq!(updated.active_organization_id(), None);
-    assert!(store.get_session(session.token()).await.unwrap().is_none());
+    assert_eq!(updated.token().typed().unwrap(), "rotated-by-hook");
+    assert_eq!(
+        updated.user_agent().typed().unwrap().as_deref(),
+        Some("first-agent")
+    );
+    assert_eq!(
+        updated.active_organization_id().field_value(),
+        better_auth::FieldValue::Null
+    );
+    assert!(
+        store
+            .get_session(session.token().typed().unwrap())
+            .await
+            .unwrap()
+            .is_none()
+    );
     store
         .update_verification_by_identifier("original", Some("requested".into()), None)
         .await
@@ -365,9 +377,11 @@ impl SeaOrmHooks<BundledSchema> for CommitHook {
     }
     async fn after_create_user(
         &self,
-        user: &better_auth_core::wire::UserView,
+        user: Option<&better_auth_core::wire::UserView>,
         ctx: &SeaOrmHookContext<'_, BundledSchema>,
     ) -> AuthResult<()> {
+        let user = user
+            .ok_or_else(|| better_auth_core::AuthError::internal("Expected created fixture row"))?;
         assert!(ctx.tx.is_none());
         let fresh = SeaOrmStore::<BundledSchema>::new(ctx.config.clone(), ctx.db.clone());
         assert_eq!(

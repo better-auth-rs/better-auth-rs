@@ -109,8 +109,8 @@ impl OrganizationPlugin {
             .or_else(|| {
                 session
                     .as_ref()
-                    .and_then(|(_, session)| session.active_organization_id())
-                    .map(better_auth_core::FieldValue::from)
+                    .map(|(_, session)| session.active_organization_id().field_value())
+                    .filter(FieldValue::is_truthy)
             })
             .ok_or(AuthError::Upstream {
                 status: 400,
@@ -219,8 +219,8 @@ impl OrganizationPlugin {
                     let session_view = ctx.session_view(session).await?;
                     self.config
                         .team_member_limit(OrganizationTeamMemberLimit {
-                            team_id: &team_id,
-                            organization_id: org_id,
+                            team_id: &team_id.as_str().into(),
+                            organization_id: &org_id.into(),
                             session: OrganizationSession {
                                 user: &user_view,
                                 session: &session_view,

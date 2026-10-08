@@ -103,7 +103,7 @@ impl<S: AuthSchema> SeaOrmHooks<S> for PluginHook<S> {
 
     async fn after_create_user(
         &self,
-        _data: &better_auth_core::wire::UserView,
+        _data: Option<&better_auth_core::wire::UserView>,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()> {
         let context = DatabaseHookContext {
@@ -188,7 +188,7 @@ impl<S: AuthSchema> SeaOrmHooks<S> for PluginHook<S> {
 
     async fn after_create_account(
         &self,
-        _data: &better_auth_core::wire::AccountView,
+        _data: Option<&better_auth_core::wire::AccountView>,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()> {
         let context = DatabaseHookContext {
@@ -270,7 +270,7 @@ impl<S: AuthSchema> SeaOrmHooks<S> for PluginHook<S> {
 
     async fn after_create_session(
         &self,
-        _data: &better_auth_core::wire::SessionView,
+        _data: Option<&better_auth_core::wire::SessionView>,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()> {
         let context = DatabaseHookContext {
@@ -283,7 +283,7 @@ impl<S: AuthSchema> SeaOrmHooks<S> for PluginHook<S> {
 
     async fn before_update_session(
         &self,
-        _id: &str,
+        _id: &better_auth_core::FieldValue,
         _data: &SessionUpdate,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<DatabaseHookUpdate<SessionUpdate>> {
@@ -357,7 +357,7 @@ impl<S: AuthSchema> SeaOrmHooks<S> for PluginHook<S> {
 
     async fn after_create_verification(
         &self,
-        _data: &better_auth_core::wire::VerificationView,
+        _data: Option<&better_auth_core::wire::VerificationView>,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()> {
         let context = DatabaseHookContext {

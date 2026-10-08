@@ -92,9 +92,11 @@ impl<S: AuthSchema> DatabaseHooks<S> for Plugin {
 
     async fn after_create_session(
         &self,
-        session: &SessionView,
+        session: Option<&SessionView>,
         _: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
+        let session = session
+            .ok_or_else(|| better_auth_core::AuthError::internal("Expected created fixture row"))?;
         record(
             &self.events,
             FieldEvent::After(session.additional_fields.clone()),
@@ -263,7 +265,7 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> TestResult {
                 assert_eq!(created.additional_fields, output);
                 let stored = auth
                     .store()
-                    .get_session(&created.token)
+                    .get_session(created.token.typed()?)
                     .await?
                     .ok_or("Session readback is missing")?;
                 assert_eq!(stored.additional_fields.json()?, output.json()?);
@@ -273,7 +275,7 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> TestResult {
                 if pure {
                     assert!(raw.get_user_sessions(owner.id.typed()?).await?.is_empty());
                     let cached = cache
-                        .get(&created.token)
+                        .get(created.token.typed()?)
                         .await?
                         .ok_or("Session cache is missing")?;
                     let cached: JsonValue =

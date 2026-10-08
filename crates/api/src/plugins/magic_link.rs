@@ -159,7 +159,7 @@ impl MagicLinkPlugin {
         };
         let _ = ctx
             .database
-            .create_verification(CreateVerification {
+            .create_verification_optional(CreateVerification {
                 identifier: (stored).into(),
                 value: (serde_json::to_string(&Proof {
                     email: body.email.clone(),
@@ -289,7 +289,10 @@ impl MagicLinkPlugin {
                     return Ok(redirect(target));
                 }
                 apply_default_role(ctx, &mut user);
-                ctx.database.create_user(user).await?
+                let Some(user) = ctx.database.create_user_optional(user).await? else {
+                    return Ok(error_redirect(error_callback, "failed_to_create_user"));
+                };
+                user
             }
         };
         let user = if user.email_verified() {
@@ -309,10 +312,22 @@ impl MagicLinkPlugin {
             .await
             .map_err(SessionIssueError::into_auth_error)?;
         let response = if req.query_string("callbackURL")?.is_none_or(str::is_empty) {
-            AuthResponse::json(
+            AuthResponse::native(
                 200,
-                &serde_json::json!({ "token": issued.session.token(), "session": ctx.session_view(&issued.session).await?, "user": ctx.user_view(&issued.user).await? }),
-            )?
+                better_auth_core::FieldMap::from([
+                    ("token".into(), issued.session.token().field_value()),
+                    (
+                        "session".into(),
+                        better_auth_core::FieldMap::from(ctx.session_view(&issued.session).await?)
+                            .into(),
+                    ),
+                    (
+                        "user".into(),
+                        better_auth_core::FieldMap::from(ctx.user_view(&issued.user).await?).into(),
+                    ),
+                ])
+                .into(),
+            )
         } else {
             redirect(if is_new_user {
                 new_user_callback

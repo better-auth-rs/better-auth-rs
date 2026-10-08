@@ -37,25 +37,42 @@ where
         verification: CreateVerification,
     ) -> AuthResult<bool> {
         let reservation_id = self.parse_id(id, S::Verification::parse_id)?;
-        let result: AuthResult<()> = async {
-            let active = self
-                .new_verification_active(
-                    self.connection(),
-                    Some(reservation_id.clone()),
-                    verification.with_timestamps(Utc::now().into()),
-                )
+        let result: AuthResult<()> =
+            async {
+                let active = self
+                    .new_verification_active(
+                        self.connection(),
+                        Some(reservation_id.clone()),
+                        verification.with_timestamps(Utc::now().into()),
+                    )
+                    .await?;
+                let row = database_operation::<
+                    <S::Verification as SeaOrmVerificationModel>::Entity,
+                    _,
+                >(self.config(), "create", async {
+                    active
+                        .insert_raw(
+                            self.connection(),
+                            super::create_readback::CreateReadback {
+                                schema: &self.config().verification.field_schema(),
+                                policy: self.config().advanced.database.generate_id(),
+                                scope: super::create_readback::ReadbackScope::Direct(
+                                    self.connection(),
+                                ),
+                                column: S::Verification::field_column,
+                            },
+                        )
+                        .await
+                })
                 .await?;
-            let row =
-                database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(
-                    self.config(),
-                    "create",
-                    async { active.insert(self.connection()).await },
-                )
-                .await?;
-            let _ = self.output_verification(&row, self.connection()).await?;
-            Ok(())
-        }
-        .await;
+                if let Some(row) = row {
+                    let _ = self
+                        .output_verification_raw(&row, self.connection())
+                        .await?;
+                }
+                Ok(())
+            }
+            .await;
         match result {
             Ok(()) => Ok(true),
             Err(cause) => {
@@ -131,6 +148,15 @@ where
         &self,
         verification: CreateVerification,
     ) -> AuthResult<VerificationView> {
+        self.create_verification_optional(verification)
+            .await?
+            .ok_or_else(|| super::AuthError::internal("Verification creation returned no record"))
+    }
+
+    async fn create_verification_optional(
+        &self,
+        verification: CreateVerification,
+    ) -> AuthResult<Option<VerificationView>> {
         self.create_verification_with_writer(verification, None)
             .await
     }
@@ -139,19 +165,17 @@ where
         &self,
         verification: CreateVerification,
         writer: Option<VerificationCreateWriter>,
-    ) -> AuthResult<VerificationView> {
-        let verification = self
-            .create_verification_with_connection(self.connection(), None, verification)
-            .await?;
-        if let Some(writer) = writer {
-            writer(verification.clone()).await?;
-        }
-        self.after_create_runtime_verification(
-            &verification,
-            crate::hooks::current_request_hook_context(),
-        )
-        .await?;
-        Ok(verification)
+    ) -> AuthResult<Option<VerificationView>> {
+        self.create_verification_with_connection(self.connection(), None, verification, writer)
+            .await
+    }
+
+    async fn before_create_runtime_verification_optional(
+        &self,
+        verification: &mut CreateVerification,
+    ) -> AuthResult<bool> {
+        self.before_runtime_verification_optional_in_tx(verification, None)
+            .await
     }
 
     async fn before_create_runtime_verification(
@@ -164,21 +188,15 @@ where
 
     async fn after_create_runtime_verification(
         &self,
-        verification: &VerificationView,
+        verification: Option<&VerificationView>,
         request: Option<better_auth_core::hooks::RequestHookContext>,
     ) -> AuthResult<()> {
-        let mut hook_context = self.hook_context(None);
-        hook_context.request = request;
-        for hook in self.hooks() {
-            better_auth_core::observability::database::with_database_hook(
-                hook_context.config,
-                hook.hook_metadata(),
-                better_auth_core::observability::database::DatabaseHook::AfterCreateVerification,
-                hook.after_create_verification(verification, &hook_context),
-            )
-            .await?;
-        }
-        Ok(())
+        self.after_creation(
+            None,
+            super::transaction_hooks::Effect::Created(verification.cloned().map(Box::new)),
+            request,
+        )
+        .await
     }
 
     async fn get_verification(
@@ -431,6 +449,39 @@ where
             .collect())
     }
 
+    async fn output_verification_raw(
+        &self,
+        row: &sea_orm::QueryResult,
+        db: &impl ConnectionTrait,
+    ) -> AuthResult<VerificationView> {
+        let fields = self
+            .config()
+            .verification
+            .field_schema()
+            .adapter_fields(&[]);
+        let backend = db.get_database_backend();
+        let record = super::plugin_rows::record_from_columns::<
+            <S::Verification as SeaOrmVerificationModel>::Entity,
+        >(
+            row,
+            &fields,
+            backend,
+            S::Verification::id_column(),
+            S::Verification::field_column,
+        )?;
+        let projected = fields
+            .project_adapter_records_with_capabilities(
+                vec![record],
+                super::field_output::capabilities(backend),
+                backend != sea_orm::DbBackend::Sqlite,
+            )
+            .await?
+            .remove(0);
+        Ok(VerificationView::from_adapter_fields(
+            projected.in_field_order(&fields.fields().keys().cloned().collect::<Vec<_>>()),
+        ))
+    }
+
     pub(super) async fn output_verification(
         &self,
         row: &S::Verification,
@@ -470,6 +521,7 @@ where
         let mut active = super::record_write::RecordWrite::from_active(
             S::Verification::new_active(id.clone(), &input)?,
         );
+        active.not_set(S::Verification::id_column());
         active.apply_fields(input, S::Verification::field_column)?;
         if let Some(id) = id {
             active.set(S::Verification::id_column(), id.into());
@@ -537,13 +589,11 @@ where
                 self.config(),
                 "update",
                 async {
-                    super::updates::update_record_returning_one::<
-                        <S::Verification as SeaOrmVerificationModel>::Entity,
-                        _,
-                    >(
+                    super::updates::execute_update_returning_raw(
                         db,
-                        active,
-                        S::Verification::identifier_column().eq(identifier),
+                        active
+                            .update(backend)?
+                            .filter(S::Verification::identifier_column().eq(identifier)),
                         reselect,
                     )
                     .await
@@ -552,7 +602,7 @@ where
             .await?
             .as_ref()
             {
-                Some(row) => self.output_verification(row, db).await.map(Some),
+                Some(row) => self.output_verification_raw(row, db).await.map(Some),
                 None => Ok(None),
             }?;
         let updated = row.clone();
@@ -651,6 +701,21 @@ where
         verification: &mut CreateVerification,
         tx: Option<super::HookTransaction<'_, S>>,
     ) -> AuthResult<()> {
+        if self
+            .before_runtime_verification_optional_in_tx(verification, tx)
+            .await?
+        {
+            Ok(())
+        } else {
+            Err(cancelled_by_hook("verification creation"))
+        }
+    }
+
+    pub(super) async fn before_runtime_verification_optional_in_tx(
+        &self,
+        verification: &mut CreateVerification,
+        tx: Option<super::HookTransaction<'_, S>>,
+    ) -> AuthResult<bool> {
         let context = self.hook_context(tx);
         for hook in self.hooks() {
             if better_auth_core::observability::database::with_database_hook(
@@ -662,10 +727,10 @@ where
             .await?
             .is_cancelled()
             {
-                return Err(cancelled_by_hook("verification creation"));
+                return Ok(false);
             }
         }
-        Ok(())
+        Ok(true)
     }
 
     pub(super) async fn create_verification_with_connection<C: ConnectionTrait>(
@@ -673,10 +738,17 @@ where
         connection: &C,
         tx: Option<super::HookTransaction<'_, S>>,
         mut verification: CreateVerification,
-    ) -> AuthResult<VerificationView> {
+        writer: Option<VerificationCreateWriter>,
+    ) -> AuthResult<Option<VerificationView>> {
+        let request = crate::hooks::current_request_hook_context();
         verification = verification.with_timestamps(Utc::now().into());
-        self.before_runtime_verification_in_tx(&mut verification, tx)
-            .await?;
+        if !self
+            .before_runtime_verification_optional_in_tx(&mut verification, tx)
+            .await?
+        {
+            return Ok(None);
+        }
+        let actual = verification.fields()?;
         let id = self.generated_id(
             "verification",
             verification.id.field_value().as_str().map(str::to_owned),
@@ -691,10 +763,42 @@ where
         let row = database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(
             self.config(),
             "create",
-            async { active.insert(connection).await },
+            async {
+                active
+                    .insert_raw(
+                        connection,
+                        super::create_readback::CreateReadback {
+                            schema: &self.config().verification.field_schema(),
+                            policy: self.config().advanced.database.generate_id(),
+                            scope: self.readback_scope(tx),
+                            column: S::Verification::field_column,
+                        },
+                    )
+                    .await
+            },
         )
         .await?;
-        self.output_verification(&row, connection).await
+        let mut result = match row {
+            Some(row) => Some(self.output_verification_raw(&row, connection).await?),
+            None => None,
+        };
+        if let Some(writer) = writer {
+            let fields = match &result {
+                Some(record) => record.fields()?,
+                None => actual,
+            };
+            writer(fields.clone()).await?;
+            if result.is_none() {
+                result = Some(VerificationView::from_adapter_fields(fields));
+            }
+        }
+        self.after_creation(
+            tx,
+            super::transaction_hooks::Effect::Created(result.clone().map(Box::new)),
+            request,
+        )
+        .await?;
+        Ok(result)
     }
 
     pub(super) async fn find_verification_with_connection<C: ConnectionTrait>(

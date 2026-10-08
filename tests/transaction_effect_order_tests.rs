@@ -59,7 +59,7 @@ impl SeaOrmHooks<BundledSchema> for OrderedHooks {
 
     async fn after_create_account(
         &self,
-        _: &better_auth_core::wire::AccountView,
+        _: Option<&better_auth_core::wire::AccountView>,
         _: &SeaOrmHookContext<'_, BundledSchema>,
     ) -> AuthResult<()> {
         self.after_account()
@@ -78,7 +78,7 @@ impl DatabaseHooks<StatelessSchema> for OrderedHooks {
 
     async fn after_create_account(
         &self,
-        _: &AccountView,
+        _: Option<&AccountView>,
         _: &DatabaseHookContext<'_, StatelessSchema>,
     ) -> AuthResult<()> {
         self.after_account()
@@ -198,7 +198,11 @@ async fn check_order<S: AuthSchema>(
             .is_empty(),
         rollback
     );
-    let encoded = cache.get(session.token()).await.unwrap().unwrap();
+    let encoded = cache
+        .get(session.token().typed().unwrap())
+        .await
+        .unwrap()
+        .unwrap();
     let cached: serde_json::Value = serde_json::from_str(encoded.as_str().unwrap()).unwrap();
     assert_eq!(
         cached

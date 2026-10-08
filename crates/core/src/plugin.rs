@@ -842,7 +842,7 @@ mod tests {
             format!(
                 "better-auth.session_token={}",
                 crate::utils::cookie_utils::sign_cookie_value(
-                    &session.token,
+                    session.token.typed().unwrap(),
                     config.signing_secret()
                 )
             ),

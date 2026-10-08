@@ -699,35 +699,55 @@ fn gen_session(
     let user_id_type = identity::field_type(fields, "user_id")?;
     let id_view = identity::string_view(id_type, "id");
     let user_id_view = identity::string_view(user_id_type, "user_id");
-    let updates = ["token", "expires_at", "created_at", "updated_at", "ip_address", "user_agent", "impersonated_by", "active_organization_id", "active_team_id"]
-        .into_iter().filter(|name| has(name)).map(|name| {
+    let decode = |name: &str, value: TokenStream| -> syn::Result<TokenStream> {
+        let decode = adapter_record::decode_type(identity::field_type(fields, name)?, seaorm_root);
+        Ok(quote!({
+            let value = #core_root::SchemaField::into_field(#value);
+            #decode
+        }))
+    };
+    let native_fields = [
+        "token",
+        "expires_at",
+        "created_at",
+        "updated_at",
+        "ip_address",
+        "user_agent",
+        "impersonated_by",
+        "active_organization_id",
+        "active_team_id",
+    ];
+    let updates = native_fields
+        .into_iter()
+        .filter(|name| has(name))
+        .map(|name| {
             let field = format_ident!("{name}");
-            if matches!(name, "expires_at" | "created_at" | "updated_at") {
-                quote! { if let Some(value) = update.#field { active.#field = #seaorm_root::sea_orm::ActiveValue::Set(#seaorm_root::__private_field_decode(#core_root::FieldValue::Date(value))?); } }
-            } else {
-                quote! { if let Some(value) = update.#field { active.#field = #seaorm_root::sea_orm::ActiveValue::Set(value); } }
-            }
-        });
+            let value = decode(name, quote!(value))?;
+            Ok(quote! {
+                if let Some(value) = update.#field {
+                    active.#field = #seaorm_root::sea_orm::ActiveValue::Set(#value);
+                }
+            })
+        })
+        .collect::<syn::Result<Vec<_>>>()?;
+    let getters = native_fields.into_iter().map(|name| {
+        let field = format_ident!("{name}");
+        let ty = match name {
+            "expires_at" | "created_at" | "updated_at" => quote!(#core_root::FieldDate),
+            "token" => quote!(::std::borrow::Cow<'_, str>),
+            _ => quote!(Option<::std::borrow::Cow<'_, str>>),
+        };
+        let value = if has(name) {
+            quote!(#core_root::SchemaValue::from_field(#core_root::SchemaField::into_field(&self.#field)))
+        } else {
+            quote!(#core_root::SchemaValue::Typed(None))
+        };
+        quote! { fn #field(&self) -> #core_root::SchemaValue<#ty> { #value } }
+    });
     let plugin_fields: Vec<_> = registry::plugin_field_names(EntityRole::Session)
         .into_iter()
         .filter(|name| has(name))
         .collect();
-
-    let impersonated_by_impl = if has("impersonated_by") {
-        quote! { fn impersonated_by(&self) -> Option<&str> { self.impersonated_by.as_deref() } }
-    } else {
-        quote! { fn impersonated_by(&self) -> Option<&str> { None } }
-    };
-    let active_org_impl = if has("active_organization_id") {
-        quote! { fn active_organization_id(&self) -> Option<&str> { self.active_organization_id.as_deref() } }
-    } else {
-        quote! { fn active_organization_id(&self) -> Option<&str> { None } }
-    };
-    let active_team_impl = if has("active_team_id") {
-        quote! { fn active_team_id(&self) -> Option<&str> { self.active_team_id.as_deref() } }
-    } else {
-        quote! { fn active_team_id(&self) -> Option<&str> { None } }
-    };
 
     let active_value = if has("active") {
         quote!(self.active)
@@ -741,72 +761,58 @@ fn gen_session(
     };
     let active_insert =
         has("active").then(|| quote!(active: #seaorm_root::sea_orm::ActiveValue::Set(true),));
-    let mut plugin_new_active = Vec::new();
-    if has("impersonated_by") {
-        plugin_new_active.push(quote! { impersonated_by: #seaorm_root::sea_orm::ActiveValue::Set(create_session.impersonated_by) });
-    }
-    if has("active_organization_id") {
-        plugin_new_active.push(quote! { active_organization_id: #seaorm_root::sea_orm::ActiveValue::Set(create_session.active_organization_id) });
-    }
-
-    if has("active_team_id") {
-        plugin_new_active
-            .push(quote! { active_team_id: #seaorm_root::sea_orm::ActiveValue::Set(None) });
-    }
-    let set_active_org = if has("active_organization_id") {
-        quote! {
-            fn set_active_organization_id(
-                active: &mut Self::ActiveModel,
-                organization_id: ::std::option::Option<::std::string::String>,
-            ) {
-                active.active_organization_id = #seaorm_root::sea_orm::ActiveValue::Set(organization_id);
+    let initial_fields = native_fields
+        .into_iter()
+        .filter(|name| has(name) && *name != "expires_at")
+        .map(|name| {
+            let field = format_ident!("{name}");
+            let input = match name {
+                "token" => quote!(token),
+                "created_at" | "updated_at" => quote!(now),
+                "active_team_id" => quote!(None::<String>),
+                _ => quote!(create_session.#field),
+            };
+            let value = decode(name, input)?;
+            Ok(quote!(#field: #seaorm_root::sea_orm::ActiveValue::Set(#value)))
+        })
+        .collect::<syn::Result<Vec<_>>>()?;
+    let setters = [
+        "expires_at",
+        "updated_at",
+        "active_organization_id",
+        "active_team_id",
+    ]
+    .into_iter()
+    .map(|name| {
+        let field = format_ident!("{name}");
+        let method = format_ident!("set_{name}");
+        let ty = if matches!(name, "expires_at" | "updated_at") {
+            quote!(#seaorm_root::sea_orm::entity::prelude::DateTimeUtc)
+        } else {
+            quote!(Option<String>)
+        };
+        let body = if has(name) {
+            let value = decode(name, quote!(value))?;
+            quote!(active.#field = #seaorm_root::sea_orm::ActiveValue::Set(#value);)
+        } else {
+            quote!(let _ = (active, value);)
+        };
+        Ok(quote! {
+            fn #method(active: &mut Self::ActiveModel, value: #ty) -> #core_root::AuthResult<()> {
+                #body
+                Ok(())
             }
-        }
-    } else {
-        quote! {
-            fn set_active_organization_id(
-                _active: &mut Self::ActiveModel,
-                _organization_id: ::std::option::Option<::std::string::String>,
-            ) {
-                // organization plugin not enabled — no-op
-            }
-        }
-    };
-    let set_active_team = if has("active_team_id") {
-        quote! {
-            fn set_active_team_id(
-                active: &mut Self::ActiveModel,
-                team_id: ::std::option::Option<::std::string::String>,
-            ) {
-                active.active_team_id = #seaorm_root::sea_orm::ActiveValue::Set(team_id);
-            }
-        }
-    } else {
-        quote! {
-            fn set_active_team_id(
-                _active: &mut Self::ActiveModel,
-                _team_id: ::std::option::Option<::std::string::String>,
-            ) {
-                // organization plugin not enabled — no-op
-            }
-        }
-    };
+        })
+    })
+    .collect::<syn::Result<Vec<_>>>()?;
 
     Ok(quote! {
         impl #core_root::entity::AuthSession for #ident {
             #aliases
             const PLUGIN_FIELDS: &'static [&'static str] = &[#(#plugin_fields),*];
             fn id(&self) -> #core_root::SchemaValue<::std::borrow::Cow<'_, str>> { #core_root::SchemaValue::Typed(#id_view) }
-            fn expires_at(&self) -> #core_root::FieldDate { self.expires_at.into() }
-            fn token(&self) -> &str { &self.token }
-            fn created_at(&self) -> #core_root::FieldDate { self.created_at.into() }
-            fn updated_at(&self) -> #core_root::FieldDate { self.updated_at.into() }
-            fn ip_address(&self) -> Option<&str> { self.ip_address.as_deref() }
-            fn user_agent(&self) -> Option<&str> { self.user_agent.as_deref() }
+            #(#getters)*
             fn user_id(&self) -> #core_root::SchemaValue<::std::borrow::Cow<'_, str>> { #core_root::SchemaValue::Typed(#user_id_view) }
-            #impersonated_by_impl
-            #active_org_impl
-            #active_team_impl
             fn active(&self) -> bool { #active_value }
         }
 
@@ -860,35 +866,26 @@ fn gen_session(
             ) -> #core_root::AuthResult<Self::ActiveModel> {
                 Ok(Self::ActiveModel {
                     id: id.map_or(#seaorm_root::sea_orm::ActiveValue::NotSet, #seaorm_root::sea_orm::ActiveValue::Set),
-                    user_id: match create_session.user_id { #core_root::SchemaValue::Typed(id) => #seaorm_root::sea_orm::ActiveValue::Set(Self::parse_user_id(&id).expect("the store validates session user IDs before constructing a model")), _ => #seaorm_root::sea_orm::ActiveValue::NotSet },
-                    token: #seaorm_root::sea_orm::ActiveValue::Set(token),
+                    user_id: match create_session.user_id { #core_root::SchemaValue::Typed(id) => #seaorm_root::sea_orm::ActiveValue::Set(Self::parse_user_id(&id)?), _ => #seaorm_root::sea_orm::ActiveValue::NotSet },
                     expires_at: #seaorm_root::sea_orm::ActiveValue::NotSet,
-                    created_at: #seaorm_root::sea_orm::ActiveValue::Set(now),
-                    updated_at: #seaorm_root::sea_orm::ActiveValue::Set(now),
-                    ip_address: #seaorm_root::sea_orm::ActiveValue::Set(create_session.ip_address),
-                    user_agent: #seaorm_root::sea_orm::ActiveValue::Set(create_session.user_agent),
+                    #(#initial_fields,)*
                     #active_insert
-                    #(#plugin_new_active,)*
                     #(#extras,)*
                 })
             }
 
-            fn set_expires_at(
-                active: &mut Self::ActiveModel,
-                expires_at: #seaorm_root::sea_orm::entity::prelude::DateTimeUtc,
-            ) {
-                active.expires_at = #seaorm_root::sea_orm::ActiveValue::Set(expires_at);
+            fn new_active_from_fields(
+                id: Option<Self::Id>,
+                _fields: &#core_root::FieldMap,
+            ) -> #core_root::AuthResult<Self::ActiveModel> {
+                Ok(Self::ActiveModel {
+                    id: id.map_or(#seaorm_root::sea_orm::ActiveValue::NotSet, #seaorm_root::sea_orm::ActiveValue::Set),
+                    #active_insert
+                    ..Default::default()
+                })
             }
 
-            fn set_updated_at(
-                active: &mut Self::ActiveModel,
-                updated_at: #seaorm_root::sea_orm::entity::prelude::DateTimeUtc,
-            ) {
-                active.updated_at = #seaorm_root::sea_orm::ActiveValue::Set(updated_at);
-            }
-
-            #set_active_org
-            #set_active_team
+            #(#setters)*
         }
     })
 }

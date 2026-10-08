@@ -127,6 +127,13 @@ impl<S: AuthSchema> OrganizationStore for SecondaryStore<S> {
     ) -> AuthResult<Organization> {
         self.inner.update_organization(id, update).await
     }
+    async fn update_organization_value(
+        &self,
+        id: &crate::FieldValue,
+        update: UpdateOrganization,
+    ) -> AuthResult<Organization> {
+        self.inner.update_organization_value(id, update).await
+    }
     async fn delete_organization(&self, id: &str) -> AuthResult<()> {
         self.inner.delete_organization(id).await
     }
@@ -198,6 +205,12 @@ impl<S: AuthSchema> MemberStore for SecondaryStore<S> {
     async fn list_organization_members(&self, org_id: &str) -> AuthResult<Vec<Member>> {
         self.inner.list_organization_members(org_id).await
     }
+    async fn list_organization_members_value(
+        &self,
+        org_id: &crate::FieldValue,
+    ) -> AuthResult<Vec<Member>> {
+        self.inner.list_organization_members_value(org_id).await
+    }
     async fn query_organization_members(
         &self,
         params: &ListOrganizationMembersParams,
@@ -250,10 +263,31 @@ impl<S: AuthSchema> InvitationStore for SecondaryStore<S> {
     async fn list_organization_invitations(&self, org_id: &str) -> AuthResult<Vec<Invitation>> {
         self.inner.list_organization_invitations(org_id).await
     }
+    async fn list_organization_invitations_value(
+        &self,
+        org_id: &crate::FieldValue,
+    ) -> AuthResult<Vec<Invitation>> {
+        self.inner.list_organization_invitations_value(org_id).await
+    }
     async fn count_pending_organization_invitations(&self, org_id: &str) -> AuthResult<i64> {
         self.inner
             .count_pending_organization_invitations(org_id)
             .await
+    }
+    async fn count_pending_organization_invitations_value(
+        &self,
+        org_id: &crate::FieldValue,
+    ) -> AuthResult<i64> {
+        self.inner
+            .count_pending_organization_invitations_value(org_id)
+            .await
+    }
+    async fn get_pending_invitation_value(
+        &self,
+        org_id: &crate::FieldValue,
+        email: &str,
+    ) -> AuthResult<Option<Invitation>> {
+        self.inner.get_pending_invitation_value(org_id, email).await
     }
     async fn list_user_invitations(
         &self,
@@ -268,7 +302,7 @@ impl<S: AuthSchema> TwoFactorStore for SecondaryStore<S> {
     async fn create_two_factor_record(
         &self,
         input: crate::FieldMap,
-    ) -> AuthResult<crate::FieldMap> {
+    ) -> AuthResult<Option<crate::FieldMap>> {
         self.inner.create_two_factor_record(input).await
     }
     async fn get_two_factor_record(
@@ -355,7 +389,10 @@ impl<S: AuthSchema> TwoFactorStore for SecondaryStore<S> {
 
 #[async_trait]
 impl<S: AuthSchema> ApiKeyStore for SecondaryStore<S> {
-    async fn create_api_key_record(&self, input: crate::FieldMap) -> AuthResult<crate::FieldMap> {
+    async fn create_api_key_record(
+        &self,
+        input: crate::FieldMap,
+    ) -> AuthResult<Option<crate::FieldMap>> {
         self.inner.create_api_key_record(input).await
     }
     async fn get_api_key_record(
@@ -429,7 +466,10 @@ impl<S: AuthSchema> ApiKeyStore for SecondaryStore<S> {
 
 #[async_trait]
 impl<S: AuthSchema> PasskeyStore for SecondaryStore<S> {
-    async fn create_passkey_record(&self, input: crate::FieldMap) -> AuthResult<crate::FieldMap> {
+    async fn create_passkey_record(
+        &self,
+        input: crate::FieldMap,
+    ) -> AuthResult<Option<crate::FieldMap>> {
         self.inner.create_passkey_record(input).await
     }
     async fn get_passkey_record(
@@ -448,6 +488,13 @@ impl<S: AuthSchema> PasskeyStore for SecondaryStore<S> {
     fn passkey_storage(&self) -> crate::PasskeyStorage {
         self.inner.passkey_storage()
     }
+    async fn create_passkey_optional(
+        &self,
+        input: crate::CreatePasskey,
+    ) -> AuthResult<Option<crate::Passkey>> {
+        self.inner.create_passkey_optional(input).await
+    }
+
     async fn create_passkey(&self, input: CreatePasskey) -> AuthResult<Passkey> {
         self.inner.create_passkey(input).await
     }
@@ -490,7 +537,7 @@ impl<S: AuthSchema> DeviceCodeStore for SecondaryStore<S> {
     async fn create_device_code_record(
         &self,
         fields: crate::FieldMap,
-    ) -> AuthResult<crate::FieldMap> {
+    ) -> AuthResult<Option<crate::FieldMap>> {
         self.inner.create_device_code_record(fields).await
     }
     async fn get_device_code_record(
@@ -570,7 +617,7 @@ impl<S: AuthSchema> WalletStore for SecondaryStore<S> {
     async fn create_wallet_address_record(
         &self,
         input: crate::FieldMap,
-    ) -> AuthResult<crate::FieldMap> {
+    ) -> AuthResult<Option<crate::FieldMap>> {
         self.inner.create_wallet_address_record(input).await
     }
     async fn get_wallet_address_record(
@@ -621,8 +668,24 @@ impl<S: AuthSchema> TeamStore for SecondaryStore<S> {
     async fn count_organization_teams(&self, organization_id: &str) -> AuthResult<u64> {
         self.inner.count_organization_teams(organization_id).await
     }
+    async fn count_organization_teams_value(
+        &self,
+        organization_id: &crate::FieldValue,
+    ) -> AuthResult<u64> {
+        self.inner
+            .count_organization_teams_value(organization_id)
+            .await
+    }
     async fn list_organization_teams(&self, organization_id: &str) -> AuthResult<Vec<crate::Team>> {
         self.inner.list_organization_teams(organization_id).await
+    }
+    async fn list_organization_teams_value(
+        &self,
+        organization_id: &crate::FieldValue,
+    ) -> AuthResult<Vec<crate::Team>> {
+        self.inner
+            .list_organization_teams_value(organization_id)
+            .await
     }
     async fn list_user_teams(&self, user_id: &str) -> AuthResult<Vec<crate::Team>> {
         self.inner.list_user_teams(user_id).await
@@ -634,11 +697,24 @@ impl<S: AuthSchema> TeamStore for SecondaryStore<S> {
     ) -> AuthResult<Option<crate::TeamMember>> {
         self.inner.get_team_member(team_id, user_id).await
     }
+    async fn get_team_member_value(
+        &self,
+        team_id: &crate::FieldValue,
+        user_id: &crate::FieldValue,
+    ) -> AuthResult<Option<crate::TeamMember>> {
+        self.inner.get_team_member_value(team_id, user_id).await
+    }
     async fn count_team_members(&self, team_id: &str) -> AuthResult<u64> {
         self.inner.count_team_members(team_id).await
     }
     async fn list_team_members(&self, team_id: &str) -> AuthResult<Vec<crate::TeamMember>> {
         self.inner.list_team_members(team_id).await
+    }
+    async fn list_team_members_value(
+        &self,
+        team_id: &crate::FieldValue,
+    ) -> AuthResult<Vec<crate::TeamMember>> {
+        self.inner.list_team_members_value(team_id).await
     }
     async fn add_team_member(
         &self,
@@ -673,6 +749,15 @@ impl<S: AuthSchema> OrganizationRoleStore for SecondaryStore<S> {
             .find_organization_role(organization_id, key)
             .await
     }
+    async fn find_organization_role_value(
+        &self,
+        organization_id: &crate::FieldValue,
+        key: super::super::OrganizationRoleKey<'_>,
+    ) -> AuthResult<Option<crate::OrganizationRole>> {
+        self.inner
+            .find_organization_role_value(organization_id, key)
+            .await
+    }
     async fn query_organization_roles(
         &self,
         organization_id: &str,
@@ -682,8 +767,25 @@ impl<S: AuthSchema> OrganizationRoleStore for SecondaryStore<S> {
             .query_organization_roles(organization_id, names)
             .await
     }
+    async fn query_organization_roles_value(
+        &self,
+        organization_id: &crate::FieldValue,
+        names: &[String],
+    ) -> AuthResult<Vec<crate::OrganizationRole>> {
+        self.inner
+            .query_organization_roles_value(organization_id, names)
+            .await
+    }
     async fn count_organization_roles(&self, organization_id: &str) -> AuthResult<u64> {
         self.inner.count_organization_roles(organization_id).await
+    }
+    async fn count_organization_roles_value(
+        &self,
+        organization_id: &crate::FieldValue,
+    ) -> AuthResult<u64> {
+        self.inner
+            .count_organization_roles_value(organization_id)
+            .await
     }
     async fn list_organization_roles(
         &self,
@@ -713,7 +815,10 @@ impl<S: AuthSchema> OrganizationRoleStore for SecondaryStore<S> {
 
 #[async_trait]
 impl<S: AuthSchema> JwksStore for SecondaryStore<S> {
-    async fn create_jwk_record(&self, input: crate::FieldMap) -> AuthResult<crate::FieldMap> {
+    async fn create_jwk_record(
+        &self,
+        input: crate::FieldMap,
+    ) -> AuthResult<Option<crate::FieldMap>> {
         self.inner.create_jwk_record(input).await
     }
     async fn get_jwk_record(

@@ -108,15 +108,17 @@ async fn check_creates(database: &DatabaseConnection) -> TestResult {
         }
         let stored = session::Model {
             id: expected_id.into(),
-            token: created.token.clone(),
+            token: created.token.typed()?.clone(),
             user_id: "owner".into(),
             expires_at: "2031-01-02T03:04:05Z".parse()?,
             created_at: created
                 .created_at
+                .typed()?
                 .to_datetime()?
                 .ok_or("Created session date is invalid")?,
             updated_at: created
                 .updated_at
+                .typed()?
                 .to_datetime()?
                 .ok_or("Updated session date is invalid")?,
             ip_address: Some(String::new()),
@@ -127,7 +129,10 @@ async fn check_creates(database: &DatabaseConnection) -> TestResult {
             active: true,
         };
         assert_eq!(session::Entity::find().all(database).await?, [stored]);
-        assert_eq!(store.get_session(&created.token).await?, Some(created));
+        assert_eq!(
+            store.get_session(created.token.typed()?).await?,
+            Some(created)
+        );
         assert_eq!(
             *events
                 .lock()

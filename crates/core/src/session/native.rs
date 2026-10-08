@@ -193,7 +193,7 @@ mod tests {
             .with_name("Selected owner");
         user.image = Some(session.id.typed()?.clone()).into();
         let user = manager.database.create_user(user).await?;
-        assert!(manager.needs_refresh(&session));
+        assert!(manager.needs_refresh(&session).unwrap());
         let mut request = AuthRequest::new(HttpMethod::Get, "/get-session");
         let _ = request.headers.insert(
             "cookie".into(),
@@ -201,7 +201,7 @@ mod tests {
                 "{}={}",
                 config.auth_cookie("session_token", Default::default()).name,
                 crate::utils::cookie_utils::sign_cookie_value(
-                    &session.token,
+                    session.token.typed().unwrap(),
                     config.signing_secret()
                 ),
             ),
@@ -220,7 +220,7 @@ mod tests {
         );
         let stored = manager
             .database
-            .get_session(&session.token)
+            .get_session(session.token.typed().unwrap())
             .await?
             .ok_or_else(|| AuthError::internal("Selected Session must remain stored"))?;
         assert_eq!(stored.expires_at, session.expires_at);
@@ -339,7 +339,7 @@ mod tests {
             .create_session_for_id(Default::default(), None, None)
             .await?;
         assert!(session.user_id.is_undefined());
-        let token = session.token.clone();
+        let token = session.token.typed()?.clone();
         let data = NativeSessionData {
             session,
             user: user.clone(),

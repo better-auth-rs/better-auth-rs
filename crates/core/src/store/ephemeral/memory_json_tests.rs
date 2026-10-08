@@ -320,7 +320,10 @@ async fn sessions(fixture: &Fixture, user: &UserView) -> AuthResult<JsonValue> {
     )?;
     let updated = fixture
         .store
-        .update_session_fields(&session_a.token, input("session-a-updated", true))
+        .update_session_fields(
+            session_a.token.typed().unwrap(),
+            input("session-a-updated", true),
+        )
         .await?
         .ok_or_else(|| AuthError::internal("Expected the updated display session"))?;
     fixture.point(

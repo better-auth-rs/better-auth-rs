@@ -117,6 +117,10 @@ pub trait AuthUser:
 pub trait AuthSession:
     AuthRecordFields + Clone + Send + Sync + Serialize + std::fmt::Debug + 'static
 {
+    /// Preserve the source property order for native runtime records.
+    fn field_order(&self) -> Option<&[String]> {
+        None
+    }
     /// Optional field presence for runtime records; database models expose every mapped column.
     fn field_presence(&self) -> Option<&std::collections::BTreeSet<String>> {
         None
@@ -142,18 +146,18 @@ pub trait AuthSession:
     }
 
     fn id(&self) -> SchemaValue<Cow<'_, str>>;
-    fn expires_at(&self) -> crate::FieldDate;
-    fn token(&self) -> &str;
-    fn created_at(&self) -> crate::FieldDate;
-    fn updated_at(&self) -> crate::FieldDate;
-    fn ip_address(&self) -> Option<&str>;
-    fn user_agent(&self) -> Option<&str>;
+    fn expires_at(&self) -> SchemaValue<crate::FieldDate>;
+    fn token(&self) -> SchemaValue<Cow<'_, str>>;
+    fn created_at(&self) -> SchemaValue<crate::FieldDate>;
+    fn updated_at(&self) -> SchemaValue<crate::FieldDate>;
+    fn ip_address(&self) -> SchemaValue<Option<Cow<'_, str>>>;
+    fn user_agent(&self) -> SchemaValue<Option<Cow<'_, str>>>;
     fn user_id(&self) -> SchemaValue<Cow<'_, str>>;
-    fn impersonated_by(&self) -> Option<&str>;
-    fn active_organization_id(&self) -> Option<&str>;
+    fn impersonated_by(&self) -> SchemaValue<Option<Cow<'_, str>>>;
+    fn active_organization_id(&self) -> SchemaValue<Option<Cow<'_, str>>>;
     /// Active team selected for this session.
-    fn active_team_id(&self) -> Option<&str> {
-        None
+    fn active_team_id(&self) -> SchemaValue<Option<Cow<'_, str>>> {
+        SchemaValue::Typed(None)
     }
     fn active(&self) -> bool;
 }

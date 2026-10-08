@@ -305,6 +305,7 @@ where
             id.clone(),
             &input,
         )?);
+        active.not_set(S::Account::id_column());
         active.apply_fields(input, S::Account::field_column)?;
         if let Some(id) = id {
             active.set(S::Account::id_column(), id.into());
@@ -314,22 +315,32 @@ where
         let account = database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(
             self.config(),
             "create",
-            async { active.insert(db).await },
+            async {
+                active
+                    .insert(
+                        db,
+                        super::create_readback::CreateReadback {
+                            schema: &fields,
+                            policy: self.config().advanced.database.generate_id(),
+                            scope: self.readback_scope(tx),
+                            column: S::Account::field_column,
+                        },
+                    )
+                    .await
+            },
         )
         .await?;
-        let account = self.output_account(&account, db).await?;
-        if tx.is_none() {
-            for hook in self.hooks() {
-                better_auth_core::observability::database::with_database_hook(
-                    hook_context.config,
-                    hook.hook_metadata(),
-                    better_auth_core::observability::database::DatabaseHook::AfterCreateAccount,
-                    hook.after_create_account(&account, &hook_context),
-                )
-                .await?;
-            }
-        }
-        Ok(Some(account))
+        let account = match account {
+            Some(account) => Some(self.output_account(&account, db).await?),
+            None => None,
+        };
+        self.after_creation(
+            tx,
+            super::transaction_hooks::Effect::AccountCreated(account.clone().map(Box::new)),
+            hook_context.request.clone(),
+        )
+        .await?;
+        Ok(account)
     }
 
     pub(crate) async fn create_account_in_tx(
@@ -339,7 +350,7 @@ where
     ) -> AuthResult<AccountView> {
         self.create_account_with_connection(tx.0, Some(tx), create_account)
             .await?
-            .ok_or_else(|| cancelled_by_hook("account creation"))
+            .ok_or_else(|| AuthError::internal("Account creation returned no record"))
     }
 }
 
@@ -356,7 +367,7 @@ where
     async fn create_account(&self, create_account: CreateAccount) -> AuthResult<AccountView> {
         self.create_account_optional(create_account)
             .await?
-            .ok_or_else(|| cancelled_by_hook("account creation"))
+            .ok_or_else(|| AuthError::internal("Account creation returned no record"))
     }
 
     async fn create_account_optional(

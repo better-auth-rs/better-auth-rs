@@ -195,7 +195,7 @@ async fn permission_runtime_properties_control_verification_before_consuming_usa
         let (id, key) = create_key_with_server_fields(
             &plugin,
             &ctx,
-            &session.token,
+            session.token.typed().unwrap(),
             json!({"name":"Permissions"}),
             UpdateApiKey {
                 remaining: Some(3.0),

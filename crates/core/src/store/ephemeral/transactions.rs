@@ -102,6 +102,14 @@ impl AuthTransaction<StatelessSchema> for EphemeralTransaction {
         Ok(())
     }
 
+    async fn before_create_runtime_verification_optional(
+        &self,
+        input: &mut CreateVerification,
+    ) -> AuthResult<bool> {
+        self.store
+            .before_create_runtime_verification_optional(input)
+            .await
+    }
     async fn before_create_runtime_verification(
         &self,
         input: &mut CreateVerification,
@@ -114,6 +122,12 @@ impl AuthTransaction<StatelessSchema> for EphemeralTransaction {
     ) -> AuthResult<()> {
         self.store.before_create_runtime_session(input).await
     }
+    async fn create_verification_optional(
+        &self,
+        input: CreateVerification,
+    ) -> AuthResult<Option<VerificationView>> {
+        self.store.create_verification_optional(input).await
+    }
     async fn create_verification(&self, input: CreateVerification) -> AuthResult<VerificationView> {
         self.store.create_verification(input).await
     }
@@ -121,7 +135,7 @@ impl AuthTransaction<StatelessSchema> for EphemeralTransaction {
         &self,
         input: CreateVerification,
         writer: Option<crate::store::VerificationCreateWriter>,
-    ) -> AuthResult<VerificationView> {
+    ) -> AuthResult<Option<VerificationView>> {
         self.store
             .create_verification_with_writer(input, writer)
             .await
@@ -205,11 +219,24 @@ impl AuthTransaction<StatelessSchema> for EphemeralTransaction {
     fn passkey_storage(&self) -> crate::PasskeyStorage {
         self.store.passkey_storage()
     }
+    async fn create_passkey_optional(
+        &self,
+        input: crate::CreatePasskey,
+    ) -> AuthResult<Option<crate::Passkey>> {
+        self.store.create_passkey_optional(input).await
+    }
+
     async fn create_passkey(&self, input: CreatePasskey) -> AuthResult<Passkey> {
         self.store.create_passkey(input).await
     }
     async fn create_user(&self, input: CreateUser) -> AuthResult<UserView> {
         self.store.create_user(input).await
+    }
+    async fn create_account_optional(
+        &self,
+        input: CreateAccount,
+    ) -> AuthResult<Option<crate::wire::AccountView>> {
+        self.store.create_account_optional(input).await
     }
     async fn create_account(&self, input: CreateAccount) -> AuthResult<AccountView> {
         self.store.create_account(input).await
@@ -386,7 +413,10 @@ mod tests;
 
 #[async_trait]
 impl crate::store::JwksStore for EphemeralTransaction {
-    async fn create_jwk_record(&self, input: crate::FieldMap) -> AuthResult<crate::FieldMap> {
+    async fn create_jwk_record(
+        &self,
+        input: crate::FieldMap,
+    ) -> AuthResult<Option<crate::FieldMap>> {
         self.store.create_jwk_record(input).await
     }
     async fn get_jwk_record(
@@ -415,7 +445,7 @@ impl crate::store::WalletStore for EphemeralTransaction {
     async fn create_wallet_address_record(
         &self,
         input: crate::FieldMap,
-    ) -> AuthResult<crate::FieldMap> {
+    ) -> AuthResult<Option<crate::FieldMap>> {
         self.store.create_wallet_address_record(input).await
     }
     async fn get_wallet_address_record(

@@ -48,9 +48,10 @@ impl EphemeralStore {
 
 #[async_trait]
 impl TwoFactorStore for EphemeralStore {
-    async fn create_two_factor_record(&self, input: FieldMap) -> AuthResult<FieldMap> {
+    async fn create_two_factor_record(&self, input: FieldMap) -> AuthResult<Option<FieldMap>> {
         self.create_plugin_record(EntityRole::TwoFactor, input, Default::default())
             .await
+            .map(Some)
     }
 
     async fn get_two_factor_record(
@@ -72,7 +73,8 @@ impl TwoFactorStore for EphemeralStore {
     async fn create_two_factor(&self, input: CreateTwoFactor) -> AuthResult<TwoFactor> {
         TwoFactor::from_field_values(
             self.create_two_factor_record(input.into_adapter_fields()?)
-                .await?,
+                .await?
+                .ok_or_else(|| AuthError::internal("TwoFactor creation returned no record"))?,
         )
     }
 

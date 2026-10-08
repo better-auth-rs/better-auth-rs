@@ -63,7 +63,7 @@ async fn serial_session_update_ids_reach_the_numeric_column_after_conversion() -
         }
         let updated = store
             .update_session_with_writer(
-                &created.token,
+                created.token.typed()?,
                 SessionUpdate {
                     id: Some(input.into()),
                     ip_address: Some(Some(format!("input:{input}"))),
@@ -115,7 +115,7 @@ async fn create_graph(tx: &dyn AuthTransaction<LegacySchema>, label: &str) -> Au
     Ok(Graph {
         user: id,
         session: session.id.typed()?.clone(),
-        token: session.token,
+        token: session.token.typed()?.clone(),
         account: account.id.typed()?.clone(),
         verification: verification.id.typed()?.clone(),
     })
@@ -251,7 +251,7 @@ async fn verify_mode(database: DatabaseConnection, mode: IdGeneration) -> TestRe
     );
     assert!(
         auth.store()
-            .get_session(&rolled_back.token)
+            .get_session(rolled_back.token.typed()?)
             .await?
             .is_none()
     );

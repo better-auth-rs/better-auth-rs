@@ -241,7 +241,13 @@ pub(super) async fn create_key_for_user(
         ),
         enabled: true.into(),
     };
-    let api_key = super::storage::create(config, ctx, input).await?;
+    let api_key = super::storage::create(config, ctx, input)
+        .await?
+        .ok_or_else(|| {
+            better_auth_core::AuthError::internal(
+                "Cannot read properties of null (reading 'permissions')",
+            )
+        })?;
     let mut api_key = ApiKeyView::from(&api_key);
     // Upstream returns supplied falsy metadata at creation, but stores null.
     api_key.metadata = better_auth_core::FieldValue::from_json(

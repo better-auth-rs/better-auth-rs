@@ -1033,6 +1033,7 @@ mod tests {
         assert!(req.virtual_user_id().is_none());
         let now = Utc::now();
         req.set_virtual_session(crate::wire::SessionView {
+            field_order: Default::default(),
             visible_fields: None,
             id: "key-123".into(),
             token: "key-token".into(),
@@ -1040,11 +1041,11 @@ mod tests {
             created_at: now.into(),
             updated_at: now.into(),
             expires_at: now.into(),
-            ip_address: None,
-            user_agent: None,
-            impersonated_by: None,
-            active_organization_id: None,
-            active_team_id: None,
+            ip_address: None.into(),
+            user_agent: None.into(),
+            impersonated_by: None.into(),
+            active_organization_id: None.into(),
+            active_team_id: None.into(),
             active: true,
             additional_fields: Default::default(),
         });

@@ -124,6 +124,26 @@ pub enum ReferenceId {
     Boolean(bool),
 }
 
+impl better_auth_core::SchemaField for ReferenceId {
+    fn from_field(value: FieldValue) -> Result<Self, FieldValue> {
+        match value {
+            FieldValue::String(value) => Ok(Self::Text(value)),
+            FieldValue::Number(value) => Ok(Self::Real(value)),
+            FieldValue::Bool(value) => Ok(Self::Boolean(value)),
+            value => Err(value),
+        }
+    }
+
+    fn into_field(self) -> FieldValue {
+        match self {
+            Self::Text(value) => value.into(),
+            Self::Integer(value) => value.into(),
+            Self::Real(value) => value.into(),
+            Self::Boolean(value) => value.into(),
+        }
+    }
+}
+
 impl std::str::FromStr for ReferenceId {
     type Err = std::convert::Infallible;
 

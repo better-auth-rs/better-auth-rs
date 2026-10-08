@@ -149,7 +149,7 @@ async fn options_consume_native_descriptors_without_utf16_loss_or_stricter_base6
             let req = test_helpers::create_auth_request_no_query(
                 HttpMethod::Get,
                 path,
-                Some(&session.token),
+                Some(session.token.typed().unwrap()),
                 None,
             );
             let response = if property == "excludeCredentials" {

@@ -8,7 +8,7 @@ pub type JwtAdapterFuture<'a, T> = Pin<Box<dyn Future<Output = AuthResult<T>> + 
 type Get<S> = dyn for<'a> Fn(&'a EndpointContext<'_, S>) -> JwtAdapterFuture<'a, Option<Vec<Jwk>>>
     + Send
     + Sync;
-type Create<S> = dyn for<'a> Fn(CreateJwk, &'a EndpointContext<'_, S>) -> JwtAdapterFuture<'a, Jwk>
+type Create<S> = dyn for<'a> Fn(CreateJwk, &'a EndpointContext<'_, S>) -> JwtAdapterFuture<'a, Option<Jwk>>
     + Send
     + Sync;
 
@@ -40,10 +40,10 @@ impl<S: AuthSchema> JwtCallbacks<S> {
         self
     }
 
-    /// Persist generated key material and return the stored key, including its identifier.
+    /// Persist generated key material and return the nullable adapter readback.
     pub fn create_jwk<F>(mut self, callback: F) -> Self
     where
-        F: for<'a> Fn(CreateJwk, &'a EndpointContext<'_, S>) -> JwtAdapterFuture<'a, Jwk>
+        F: for<'a> Fn(CreateJwk, &'a EndpointContext<'_, S>) -> JwtAdapterFuture<'a, Option<Jwk>>
             + Send
             + Sync
             + 'static,

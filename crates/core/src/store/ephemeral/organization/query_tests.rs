@@ -75,7 +75,7 @@ async fn native_json_policies_transform_raw_text_without_reencoding_reads() -> A
     assert_eq!(updated.metadata.json()?, Some(json!("null")));
     let role = store
         .create_organization_role(crate::CreateOrganizationRole {
-            organization_id: organization.id.typed().unwrap().clone(),
+            organization_id: organization.id.clone(),
             role: "native".into(),
             permission: Value::from_json(json!({"ignored":["original"]}))?,
             additional_fields: [("permission".into(), Value::from(r#"{"source":["read"]}"#))]

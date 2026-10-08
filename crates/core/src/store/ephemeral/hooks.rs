@@ -5,16 +5,16 @@ use crate::hooks::{RequestHookContext, current_request_hook_context};
 use crate::store::database_hooks::DatabaseHookContext;
 
 pub(super) enum CommittedWrite {
-    UserCreated(UserView),
+    UserCreated(Option<UserView>),
     UserUpdated(Option<UserView>),
     UserDeleted(UserView),
-    AccountCreated(AccountView),
+    AccountCreated(Option<AccountView>),
     AccountUpdated(Option<AccountView>),
     AccountDeleted(AccountView),
-    SessionCreated(SessionView),
+    SessionCreated(Option<SessionView>),
     SessionUpdated(Option<SessionView>),
     SessionDeleted(SessionView),
-    VerificationCreated(VerificationView),
+    VerificationCreated(Option<VerificationView>),
     VerificationUpdated(Option<VerificationView>),
     VerificationDeleted(VerificationView),
 }
@@ -92,7 +92,7 @@ impl EphemeralStore {
                         context.config,
                         hook.hook_metadata(),
                         crate::observability::database::DatabaseHook::AfterCreateUser,
-                        hook.after_create_user(row, &context),
+                        hook.after_create_user(row.as_ref(), &context),
                     )
                     .await?
                 }
@@ -119,7 +119,7 @@ impl EphemeralStore {
                         context.config,
                         hook.hook_metadata(),
                         crate::observability::database::DatabaseHook::AfterCreateAccount,
-                        hook.after_create_account(row, &context),
+                        hook.after_create_account(row.as_ref(), &context),
                     )
                     .await?
                 }
@@ -146,7 +146,7 @@ impl EphemeralStore {
                         context.config,
                         hook.hook_metadata(),
                         crate::observability::database::DatabaseHook::AfterCreateSession,
-                        hook.after_create_session(row, &context),
+                        hook.after_create_session(row.as_ref(), &context),
                     )
                     .await?
                 }
@@ -173,7 +173,7 @@ impl EphemeralStore {
                         context.config,
                         hook.hook_metadata(),
                         crate::observability::database::DatabaseHook::AfterCreateVerification,
-                        hook.after_create_verification(row, &context),
+                        hook.after_create_verification(row.as_ref(), &context),
                     )
                     .await?
                 }

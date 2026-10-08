@@ -674,7 +674,7 @@ impl DatabaseHooks<S> for Lifecycle {
     }
     async fn after_create_user(
         &self,
-        _: &better_auth::wire::UserView,
+        _: Option<&better_auth::wire::UserView>,
         _: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
         Ok(())

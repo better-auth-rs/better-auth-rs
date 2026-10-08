@@ -28,9 +28,11 @@ impl DatabaseHooks<StatelessSchema> for AdmissionTrace {
 
     async fn after_create_session(
         &self,
-        session: &SessionView,
+        session: Option<&SessionView>,
         _: &DatabaseHookContext<'_, StatelessSchema>,
     ) -> AuthResult<()> {
+        let session = session
+            .ok_or_else(|| better_auth_core::AuthError::internal("Expected created fixture row"))?;
         self.events.lock().unwrap().push("session:after".into());
         self.sessions.lock().unwrap().push(session.clone());
         Ok(())

@@ -149,7 +149,11 @@ pub(super) async fn finish_attempt(
         };
         // Upstream keeps the credential failure if rearming fails. The missing
         // counter invalidates the challenge on the next request.
-        if let Err(error) = ctx.database.create_verification(verification).await {
+        if let Err(error) = ctx
+            .database
+            .create_verification_optional(verification)
+            .await
+        {
             better_auth_core::observability::logger::current().warn(
                 "Failed to rearm two-factor challenge",
                 &[better_auth_core::observability::LogArgument::Error(&error)],

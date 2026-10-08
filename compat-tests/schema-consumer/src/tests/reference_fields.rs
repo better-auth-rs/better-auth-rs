@@ -169,7 +169,7 @@ async fn user_and_session_references_keep_aliases_bindings_and_single_output_tra
         .unwrap();
     let updated_session = store
         .update_session_fields(
-            &session.token,
+            session.token.typed().unwrap(),
             [("owner".into(), 1e20.into())].into_iter().collect(),
         )
         .await
@@ -210,8 +210,14 @@ async fn user_and_session_references_keep_aliases_bindings_and_single_output_tra
     assert_eq!(calls.load(Ordering::SeqCst), 4);
     let refreshed = store
         .update_session_expiry(
-            &session.token,
-            session.expires_at.to_datetime().unwrap().unwrap(),
+            session.token.typed().unwrap(),
+            session
+                .expires_at
+                .typed()
+                .unwrap()
+                .to_datetime()
+                .unwrap()
+                .unwrap(),
         )
         .await
         .unwrap();

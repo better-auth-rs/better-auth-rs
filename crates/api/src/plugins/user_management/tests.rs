@@ -55,7 +55,7 @@ async fn test_change_email_success() {
     let req = test_helpers::create_auth_request(
         HttpMethod::Post,
         "/change-email",
-        Some(&session.token),
+        Some(session.token.typed().unwrap()),
         Some(body.to_string().into_bytes()),
         HashMap::new(),
     );
@@ -81,7 +81,7 @@ async fn test_change_email_same_email() {
     let req = test_helpers::create_auth_request(
         HttpMethod::Post,
         "/change-email",
-        Some(&session.token),
+        Some(session.token.typed().unwrap()),
         Some(body.to_string().into_bytes()),
         HashMap::new(),
     );
@@ -136,7 +136,7 @@ async fn test_change_email_immediate_when_update_without_verification() {
     let req = test_helpers::create_auth_request(
         HttpMethod::Post,
         "/change-email",
-        Some(&session.token),
+        Some(session.token.typed().unwrap()),
         Some(body.to_string().into_bytes()),
         HashMap::new(),
     );
@@ -185,7 +185,7 @@ async fn test_delete_user_immediate() {
     let req = test_helpers::create_auth_request(
         HttpMethod::Post,
         "/delete-user",
-        Some(&session.token),
+        Some(session.token.typed().unwrap()),
         Some(b"{}".to_vec()),
         HashMap::new(),
     );
@@ -224,7 +224,7 @@ async fn test_delete_user_immediate_clears_account_cookie_when_enabled() {
     let req = test_helpers::create_auth_request(
         HttpMethod::Post,
         "/delete-user",
-        Some(&session.token),
+        Some(session.token.typed().unwrap()),
         Some(b"{}".to_vec()),
         HashMap::new(),
     );
@@ -259,7 +259,7 @@ async fn test_delete_user_with_verification() {
     let req = test_helpers::create_auth_request(
         HttpMethod::Post,
         "/delete-user",
-        Some(&session.token),
+        Some(session.token.typed().unwrap()),
         Some(b"{}".to_vec()),
         HashMap::new(),
     );
@@ -292,7 +292,7 @@ async fn test_delete_user_with_verification() {
     let req = test_helpers::create_auth_request(
         HttpMethod::Get,
         "/delete-user/callback",
-        Some(&session.token),
+        Some(session.token.typed().unwrap()),
         None,
         query,
     );
@@ -352,7 +352,7 @@ async fn test_delete_user_callback_clears_account_cookie_when_enabled() {
     let req = test_helpers::create_auth_request(
         HttpMethod::Get,
         "/delete-user/callback",
-        Some(&session.token),
+        Some(session.token.typed().unwrap()),
         None,
         query,
     );
@@ -415,7 +415,7 @@ async fn test_delete_user_verify_invalid_token() {
     let req = test_helpers::create_auth_request(
         HttpMethod::Get,
         "/delete-user/callback",
-        Some(&_session.token),
+        Some(_session.token.typed().unwrap()),
         None,
         query,
     );
@@ -476,7 +476,7 @@ async fn test_delete_user_before_hook_abort() {
     let req = test_helpers::create_auth_request(
         HttpMethod::Post,
         "/delete-user",
-        Some(&session.token),
+        Some(session.token.typed().unwrap()),
         Some(b"{}".to_vec()),
         HashMap::new(),
     );
@@ -546,7 +546,7 @@ async fn test_on_request_disabled_change_email_rejects_after_authentication() {
     let req = test_helpers::create_auth_request(
         HttpMethod::Post,
         "/change-email",
-        Some(&session.token),
+        Some(session.token.typed().unwrap()),
         Some(body.to_string().into_bytes()),
         HashMap::new(),
     );

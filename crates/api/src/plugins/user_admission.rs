@@ -249,11 +249,11 @@ pub(crate) async fn validate_create<S: AuthSchema>(
     validate(UserValidationData { user, source }, endpoint).await
 }
 
-pub(crate) async fn create_user<S: AuthSchema>(
+pub(crate) async fn create_user_optional<S: AuthSchema>(
     mut input: CreateUser,
     method: &str,
     endpoint: &EndpointContext<'_, S>,
-) -> AuthResult<better_auth_core::wire::UserView> {
+) -> AuthResult<Option<better_auth_core::wire::UserView>> {
     validate_create(
         &input,
         UserValidationSource::new(method, UserValidationAction::CreateUser),
@@ -262,5 +262,8 @@ pub(crate) async fn create_user<S: AuthSchema>(
     .await
     .map_err(UserValidationRejection::into_auth_error)?;
     super::helpers::apply_default_role(endpoint.auth, &mut input);
-    endpoint.auth.database.create_user(input).await
+    match endpoint.transaction {
+        Some(transaction) => transaction.create_user_optional(input).await,
+        None => endpoint.auth.database.create_user_optional(input).await,
+    }
 }

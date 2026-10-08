@@ -159,7 +159,7 @@ async fn memory_reference_fields_match_pinned_conversion_and_callback_values() {
                     .await
                     .unwrap();
                 let updated = store
-                    .update_session_fields(&row.token, patch)
+                    .update_session_fields(row.token.typed().unwrap(), patch)
                     .await
                     .unwrap()
                     .unwrap();

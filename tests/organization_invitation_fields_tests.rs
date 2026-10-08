@@ -186,7 +186,7 @@ async fn failed_acceptance_compensates_invitation_updates_without_committing_mem
             .accept_invitation_with_teams(
                 &id,
                 "recipient",
-                Some(session.token()),
+                Some(session.token().typed().unwrap()),
                 teams_enabled,
                 Some(0).into(),
             )
@@ -214,11 +214,13 @@ async fn failed_acceptance_compensates_invitation_updates_without_committing_mem
         assert!(store.list_team_members(&team).await.unwrap().is_empty());
         assert!(
             store
-                .get_session(session.token())
+                .get_session(session.token().typed().unwrap())
                 .await
                 .unwrap()
                 .unwrap()
                 .active_organization_id()
+                .typed()
+                .unwrap()
                 .is_none()
         );
     }
@@ -287,7 +289,7 @@ async fn claim_output_and_compensation_errors_preserve_the_upstream_failure_stag
             .accept_invitation_with_teams(
                 &id,
                 "recipient",
-                Some(session.token()),
+                Some(session.token().typed().unwrap()),
                 true,
                 Some(0).into(),
             )

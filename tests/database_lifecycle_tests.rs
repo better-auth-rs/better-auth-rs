@@ -113,17 +113,29 @@ async fn check_projected_snapshots<S: AuthSchema>(
         .create_session(session(user.id().typed().unwrap()))
         .await
         .unwrap();
-    store.delete_session(first.token()).await.unwrap();
+    store
+        .delete_session(first.token().typed().unwrap())
+        .await
+        .unwrap();
     assert_eq!(
         *hooks.0.lock().unwrap(),
         vec![serde_json::json!("raw:out"), serde_json::json!("raw:out")]
     );
     hooks.0.lock().unwrap().clear();
     reject.store(true, Ordering::SeqCst);
-    store.delete_session(second.token()).await.unwrap();
+    store
+        .delete_session(second.token().typed().unwrap())
+        .await
+        .unwrap();
     assert!(hooks.0.lock().unwrap().is_empty());
     reject.store(false, Ordering::SeqCst);
-    assert!(store.get_session(second.token()).await.unwrap().is_some());
+    assert!(
+        store
+            .get_session(second.token().typed().unwrap())
+            .await
+            .unwrap()
+            .is_some()
+    );
     reject.store(true, Ordering::SeqCst);
     assert_eq!(
         store
@@ -134,7 +146,13 @@ async fn check_projected_snapshots<S: AuthSchema>(
     );
     assert!(hooks.0.lock().unwrap().is_empty());
     reject.store(false, Ordering::SeqCst);
-    assert!(store.get_session(second.token()).await.unwrap().is_none());
+    assert!(
+        store
+            .get_session(second.token().typed().unwrap())
+            .await
+            .unwrap()
+            .is_none()
+    );
 }
 
 #[tokio::test]
@@ -449,7 +467,7 @@ async fn check_transaction<S: AuthSchema>(
         .create_session(session(user_id.typed().unwrap()))
         .await
         .unwrap();
-    let token = session.token().to_owned();
+    let token = session.token().typed().unwrap().to_string();
     hooks.events.lock().unwrap().clear();
     let tx_id = user_id.clone();
     let tx_token = token.clone();
@@ -572,9 +590,18 @@ async fn ephemeral_delete_snapshot_projection_error_does_not_cancel_the_batch_wr
         .await
         .unwrap();
     reject.store(true, Ordering::SeqCst);
-    store.delete_session(session.token()).await.unwrap();
+    store
+        .delete_session(session.token().typed().unwrap())
+        .await
+        .unwrap();
     reject.store(false, Ordering::SeqCst);
-    assert!(store.get_session(session.token()).await.unwrap().is_some());
+    assert!(
+        store
+            .get_session(session.token().typed().unwrap())
+            .await
+            .unwrap()
+            .is_some()
+    );
     assert!(hooks.events.lock().unwrap().is_empty());
     reject.store(true, Ordering::SeqCst);
     assert_eq!(
@@ -586,7 +613,13 @@ async fn ephemeral_delete_snapshot_projection_error_does_not_cancel_the_batch_wr
     );
     assert!(hooks.events.lock().unwrap().is_empty());
     reject.store(false, Ordering::SeqCst);
-    assert!(store.get_session(session.token()).await.unwrap().is_none());
+    assert!(
+        store
+            .get_session(session.token().typed().unwrap())
+            .await
+            .unwrap()
+            .is_none()
+    );
 }
 
 async fn check_token_batch<S: AuthSchema>(
@@ -615,9 +648,9 @@ async fn check_token_batch<S: AuthSchema>(
         .await
         .unwrap();
     let tokens = vec![
-        first.token().to_owned(),
-        first.token().to_owned(),
-        second.token().to_owned(),
+        first.token().typed().unwrap().to_string(),
+        first.token().typed().unwrap().to_string(),
+        second.token().typed().unwrap().to_string(),
         "missing-token".into(),
     ];
     hooks.events.lock().unwrap().clear();
@@ -628,7 +661,7 @@ async fn check_token_batch<S: AuthSchema>(
     };
     assert!(
         store
-            .get_session(untouched.token())
+            .get_session(untouched.token().typed().unwrap())
             .await
             .unwrap()
             .is_some()
@@ -639,19 +672,31 @@ async fn check_token_batch<S: AuthSchema>(
             *hooks.events.lock().unwrap(),
             ["session.before", "session.before"]
         );
-        assert!(store.get_session(first.token()).await.unwrap().is_some());
-        assert!(store.get_session(second.token()).await.unwrap().is_some());
+        assert!(
+            store
+                .get_session(first.token().typed().unwrap())
+                .await
+                .unwrap()
+                .is_some()
+        );
+        assert!(
+            store
+                .get_session(second.token().typed().unwrap())
+                .await
+                .unwrap()
+                .is_some()
+        );
     } else {
         assert!(matches!(result, Err(AuthError::Internal(message)) if message == "session.after"));
         assert_eq!(
             *hooks.events.lock().unwrap(),
             ["session.before", "session.before", "session.after"]
         );
-        for token in [first.token(), second.token()] {
-            let row = store.get_session(token).await.unwrap();
+        for token in [first.token.clone(), second.token.clone()] {
+            let row = store.get_session(token.typed().unwrap()).await.unwrap();
             if preserve {
                 assert!(
-                    row.is_none_or(|row| row.expires_at().milliseconds()
+                    row.is_none_or(|row| row.expires_at().date_milliseconds().unwrap()
                         <= Utc::now().timestamp_millis() as f64)
                 );
             } else {

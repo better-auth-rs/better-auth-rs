@@ -110,7 +110,10 @@ async fn usage_null_guards_distinguish_json_null_from_sql_null() -> AuthResult<(
                 ("lastRequest".into(), FieldValue::Null),
             ]);
         }
-        let created = store.create_api_key_record(input).await?;
+        let created = store
+            .create_api_key_record(input)
+            .await?
+            .ok_or_else(|| AuthError::internal("Expected the nullable-counter API Key"))?;
         assert_eq!(created.get("lastRefillAt"), Some(&FieldValue::Null));
         assert_eq!(created.get("lastRequest"), Some(&FieldValue::Null));
         let id = "json-null-guard".to_owned().into();
@@ -304,7 +307,8 @@ async fn nested_create_without_id_leaves_an_unforced_uuid_policy() -> AuthResult
             ]
             .into(),
         )
-        .await?;
+        .await?
+        .ok_or_else(|| AuthError::internal("Expected the outer API Key record"))?;
     assert_eq!(created.get("id"), Some(&"not-a-uuid".into()));
     assert_eq!(
         calls.lock().unwrap().as_slice(),

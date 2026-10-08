@@ -142,7 +142,7 @@ async fn generated_user_and_session_fields_preserve_storage_and_projection() {
     );
     let updated = store
         .update_session_fields(
-            &session.token,
+            session.token.typed().unwrap(),
             [
                 ("label".into(), "edit".into()),
                 ("rating".into(), 2.25.into()),
@@ -162,7 +162,11 @@ async fn generated_user_and_session_fields_preserve_storage_and_projection() {
             "pinned": false,
         })
     );
-    let found = store.get_session(&session.token).await.unwrap().unwrap();
+    let found = store
+        .get_session(session.token.typed().unwrap())
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(found.additional_fields, updated.additional_fields);
     let found = store
         .get_user_by_id(user.id.typed().unwrap())

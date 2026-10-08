@@ -378,7 +378,7 @@ async fn test_change_password_success() {
     let req = test_helpers::create_auth_request_no_query(
         HttpMethod::Post,
         "/change-password",
-        Some(&session.token),
+        Some(session.token.typed().unwrap()),
         Some(body.to_string().into_bytes()),
     );
 
@@ -420,7 +420,7 @@ async fn test_change_password_with_session_revocation() {
     let req = test_helpers::create_auth_request_no_query(
         HttpMethod::Post,
         "/change-password",
-        Some(&session.token),
+        Some(session.token.typed().unwrap()),
         Some(body.to_string().into_bytes()),
     );
 
@@ -447,7 +447,7 @@ async fn test_change_password_sets_cookie_on_session_revocation() {
     let req = test_helpers::create_auth_request_no_query(
         HttpMethod::Post,
         "/change-password",
-        Some(&session.token),
+        Some(session.token.typed().unwrap()),
         Some(body.to_string().into_bytes()),
     );
 
@@ -502,7 +502,7 @@ async fn test_change_password_no_cookie_without_revocation() {
     let req = test_helpers::create_auth_request_no_query(
         HttpMethod::Post,
         "/change-password",
-        Some(&session.token),
+        Some(session.token.typed().unwrap()),
         Some(body.to_string().into_bytes()),
     );
 
@@ -533,7 +533,7 @@ async fn test_change_password_revoke_with_boolean() {
     let req = test_helpers::create_auth_request_no_query(
         HttpMethod::Post,
         "/change-password",
-        Some(&session.token),
+        Some(session.token.typed().unwrap()),
         Some(body.to_string().into_bytes()),
     );
 
@@ -562,7 +562,7 @@ async fn test_change_password_wrong_current_password() {
     let req = test_helpers::create_auth_request_no_query(
         HttpMethod::Post,
         "/change-password",
-        Some(&session.token),
+        Some(session.token.typed().unwrap()),
         Some(body.to_string().into_bytes()),
     );
 
@@ -606,7 +606,7 @@ async fn test_verify_password_success() {
     let req = test_helpers::create_auth_request_no_query(
         HttpMethod::Post,
         "/verify-password",
-        Some(&session.token),
+        Some(session.token.typed().unwrap()),
         Some(body.to_string().into_bytes()),
     );
 
@@ -632,7 +632,7 @@ async fn test_verify_password_invalid_password() {
     let req = test_helpers::create_auth_request_no_query(
         HttpMethod::Post,
         "/verify-password",
-        Some(&session.token),
+        Some(session.token.typed().unwrap()),
         Some(body.to_string().into_bytes()),
     );
 
@@ -655,7 +655,7 @@ async fn test_verify_password_oauth_only_user_returns_invalid_password() {
     let req = test_helpers::create_auth_request_no_query(
         HttpMethod::Post,
         "/verify-password",
-        Some(&session.token),
+        Some(session.token.typed().unwrap()),
         Some(body.to_string().into_bytes()),
     );
 
@@ -914,7 +914,7 @@ async fn test_plugin_on_request_routing() {
     let req = test_helpers::create_auth_request_no_query(
         HttpMethod::Post,
         "/change-password",
-        Some(&session.token),
+        Some(session.token.typed().unwrap()),
         Some(body.to_string().into_bytes()),
     );
     let response = plugin.on_request(&req, &ctx).await.unwrap();

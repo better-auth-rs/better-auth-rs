@@ -505,14 +505,17 @@ async fn test_device_approve_flow_creates_session_and_returns_oauth_token_respon
     let user_code = create_body["user_code"].as_str().unwrap().to_string();
 
     plugin
-        .handle_device_verify(&device_claim_request(&user_code, &session.token), &ctx)
+        .handle_device_verify(
+            &device_claim_request(&user_code, session.token.typed().unwrap()),
+            &ctx,
+        )
         .await
         .unwrap();
 
     let approve_request = test_helpers::create_auth_json_request_no_query(
         HttpMethod::Post,
         "/device/approve",
-        Some(&session.token),
+        Some(session.token.typed().unwrap()),
         Some(serde_json::json!({ "userCode": user_code })),
     );
     let approve_response = plugin
@@ -583,7 +586,7 @@ async fn test_device_approve_rejects_unclaimed_code() {
     let approve_request = test_helpers::create_auth_json_request_no_query(
         HttpMethod::Post,
         "/device/approve",
-        Some(&session.token),
+        Some(session.token.typed().unwrap()),
         Some(serde_json::json!({ "userCode": user_code })),
     );
     let approve_response = plugin
@@ -627,14 +630,17 @@ async fn test_device_deny_flow_returns_access_denied_and_deletes_record() {
     let user_code = create_body["user_code"].as_str().unwrap().to_string();
 
     plugin
-        .handle_device_verify(&device_claim_request(&user_code, &session.token), &ctx)
+        .handle_device_verify(
+            &device_claim_request(&user_code, session.token.typed().unwrap()),
+            &ctx,
+        )
         .await
         .unwrap();
 
     let deny_request = test_helpers::create_auth_json_request_no_query(
         HttpMethod::Post,
         "/device/deny",
-        Some(&session.token),
+        Some(session.token.typed().unwrap()),
         Some(serde_json::json!({ "userCode": user_code })),
     );
     let deny_response = plugin
@@ -681,7 +687,10 @@ async fn test_device_approve_requires_authentication_and_blocks_double_processin
     let user_code = create_body["user_code"].as_str().unwrap().to_string();
 
     plugin
-        .handle_device_verify(&device_claim_request(&user_code, &session.token), &ctx)
+        .handle_device_verify(
+            &device_claim_request(&user_code, session.token.typed().unwrap()),
+            &ctx,
+        )
         .await
         .unwrap();
 
@@ -706,7 +715,7 @@ async fn test_device_approve_requires_authentication_and_blocks_double_processin
     let approve_request = test_helpers::create_auth_json_request_no_query(
         HttpMethod::Post,
         "/device/approve",
-        Some(&session.token),
+        Some(session.token.typed().unwrap()),
         Some(serde_json::json!({ "userCode": user_code.clone() })),
     );
     let first_response = plugin
@@ -749,20 +758,23 @@ async fn test_device_approve_allows_only_one_concurrent_decision() {
     let user_code = create_body["user_code"].as_str().unwrap().to_string();
 
     plugin
-        .handle_device_verify(&device_claim_request(&user_code, &session.token), &ctx)
+        .handle_device_verify(
+            &device_claim_request(&user_code, session.token.typed().unwrap()),
+            &ctx,
+        )
         .await
         .unwrap();
 
     let first_request = test_helpers::create_auth_json_request_no_query(
         HttpMethod::Post,
         "/device/approve",
-        Some(&session.token),
+        Some(session.token.typed().unwrap()),
         Some(serde_json::json!({ "userCode": user_code.clone() })),
     );
     let second_request = test_helpers::create_auth_json_request_no_query(
         HttpMethod::Post,
         "/device/approve",
-        Some(&session.token),
+        Some(session.token.typed().unwrap()),
         Some(serde_json::json!({ "userCode": user_code })),
     );
 
@@ -844,14 +856,17 @@ async fn test_device_token_allows_only_one_concurrent_redemption() {
     let user_code = create_body["user_code"].as_str().unwrap().to_string();
 
     plugin
-        .handle_device_verify(&device_claim_request(&user_code, &session.token), &ctx)
+        .handle_device_verify(
+            &device_claim_request(&user_code, session.token.typed().unwrap()),
+            &ctx,
+        )
         .await
         .unwrap();
 
     let approve_request = test_helpers::create_auth_json_request_no_query(
         HttpMethod::Post,
         "/device/approve",
-        Some(&session.token),
+        Some(session.token.typed().unwrap()),
         Some(serde_json::json!({ "userCode": user_code })),
     );
     let approve_response = plugin

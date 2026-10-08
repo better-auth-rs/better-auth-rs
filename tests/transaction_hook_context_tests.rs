@@ -43,7 +43,7 @@ impl Hooks {
 impl<S: AuthSchema> DatabaseHooks<S> for Hooks {
     async fn after_create_verification(
         &self,
-        _: &VerificationView,
+        _: Option<&VerificationView>,
         ctx: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
         self.capture("create", ctx.request.as_ref());
@@ -99,7 +99,7 @@ impl<S: AuthSchema> DatabaseHooks<S> for Hooks {
     }
     async fn after_create_session(
         &self,
-        _: &SessionView,
+        _: Option<&SessionView>,
         ctx: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
         self.capture("session-create", ctx.request.as_ref());

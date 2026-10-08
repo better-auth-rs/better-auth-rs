@@ -17,7 +17,7 @@ mod lifecycle;
 mod input_tests;
 
 use crate::plugins::organization::request::{from_fields, object, take};
-use better_auth_core::{FieldMap, FromFieldMap};
+use better_auth_core::{FieldMap, FieldValue, FromFieldMap};
 
 from_fields!(CreateBody { name: "name", organization_id: "organizationId" }; additional_fields);
 from_fields!(UpdateData { name: "name", organization_id: "organizationId" }; additional_fields);
@@ -140,21 +140,25 @@ pub(in crate::plugins::organization) struct ActiveBody {
 }
 
 pub(crate) async fn find_team(
-    team_id: &str,
-    organization_id: &str,
+    team_id: &FieldValue,
+    organization_id: &FieldValue,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<Team> {
     ctx.database
-        .get_team(team_id)
+        .get_team_value(team_id)
         .await?
-        .filter(|team| team.organization_id == organization_id)
+        .filter(|team| {
+            team.organization_id
+                .field_value()
+                .strict_equals(organization_id)
+        })
         .map(|team| crate::plugins::organization::fields::team(team, ctx))
         .ok_or_else(|| AuthError::bad_request("Team not found"))
 }
 
 async fn authorize(
     member: &better_auth_core::Member,
-    org_id: &str,
+    org_id: &FieldValue,
     permission: (&str, &str),
     message: &'static str,
     config: &OrganizationConfig,
@@ -212,7 +216,7 @@ pub(crate) async fn handle_team_request(
                 resolve_organization_id(organization_id.as_deref(), None, &session, ctx).await?;
             let member = ctx
                 .database
-                .get_member_with_user(&org, user.id().typed()?)
+                .get_member_with_user_value(&org, &user.id().field_value())
                 .await?
                 .ok_or_else(|| AuthError::forbidden("You are not allowed to update this team"))?;
             authorize(
@@ -224,10 +228,10 @@ pub(crate) async fn handle_team_request(
                 ctx,
             )
             .await?;
-            let team = find_team(&body.team_id, &org, ctx).await?;
+            let team = find_team(&body.team_id.as_str().into(), &org, ctx).await?;
             let organization = ctx
                 .database
-                .get_organization_by_id(&org)
+                .get_organization_by_id_value(&org)
                 .await?
                 .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
             let organization_view =
@@ -263,7 +267,7 @@ pub(crate) async fn handle_team_request(
                     .await?;
             if ctx
                 .database
-                .get_member_with_user(&org, user.id().typed()?)
+                .get_member_with_user_value(&org, &user.id().field_value())
                 .await?
                 .is_none()
             {
@@ -271,19 +275,25 @@ pub(crate) async fn handle_team_request(
                     "You are not allowed to access this organization as an owner",
                 ));
             }
-            AuthResponse::json(200, &ctx.database.list_organization_teams(&org).await?)?
+            AuthResponse::json(
+                200,
+                &ctx.database.list_organization_teams_value(&org).await?,
+            )?
         }
         (HttpMethod::Post, "/organization/set-active-team") => {
             use crate::plugins::organization::types::NullableStringField;
             let body = body!(ActiveBody);
             let team_id = match body.team_id {
                 NullableStringField::Null => {
-                    if session.active_team_id().is_none() {
+                    if !session.active_team_id().field_value().is_truthy() {
                         return Ok(Some(AuthResponse::json(200, &serde_json::Value::Null)?));
                     }
                     let updated = ctx
                         .database
-                        .update_session_active_team(session.token(), None)
+                        .update_session_active_team_by_token_value(
+                            &session.token().field_value(),
+                            None,
+                        )
                         .await?;
                     let manager = ctx.session_manager();
                     manager
@@ -295,17 +305,17 @@ pub(crate) async fn handle_team_request(
                         .await?;
                     return Ok(Some(AuthResponse::json(200, &serde_json::Value::Null)?));
                 }
-                NullableStringField::Value(id) if !id.is_empty() => Some(id),
-                _ => session.active_team_id().map(str::to_owned),
+                NullableStringField::Value(id) if !id.is_empty() => FieldValue::from(id),
+                _ => session.active_team_id().field_value(),
             };
-            let Some(team_id) = team_id else {
+            if !team_id.is_truthy() {
                 return Ok(Some(AuthResponse::json(200, &serde_json::Value::Null)?));
-            };
+            }
             let org = resolve_organization_id(None, None, &session, ctx).await?;
             let team = find_team(&team_id, &org, ctx).await?;
             if ctx
                 .database
-                .get_team_member(&team_id, user.id().typed()?)
+                .get_team_member_value(&team_id, &user.id().field_value())
                 .await?
                 .is_none()
             {
@@ -313,7 +323,10 @@ pub(crate) async fn handle_team_request(
             }
             let updated = ctx
                 .database
-                .update_session_active_team(session.token(), Some(&team_id))
+                .update_session_active_team_by_token_value(
+                    &session.token().field_value(),
+                    Some(&team.id.field_value()),
+                )
                 .await?;
             let manager = ctx.session_manager();
             manager
@@ -329,12 +342,16 @@ pub(crate) async fn handle_team_request(
             let explicit_org = req
                 .query_string("organizationId")?
                 .filter(|id| !id.is_empty());
-            let org = explicit_org.or(session.active_organization_id());
+            let org = explicit_org
+                .map(FieldValue::from)
+                .unwrap_or_else(|| session.active_organization_id().field_value());
             if user.id != target || explicit_org.is_some() {
-                let org = org.ok_or_else(|| AuthError::bad_request("No active organization"))?;
+                if !org.is_truthy() {
+                    return Err(AuthError::bad_request("No active organization"));
+                }
                 let member = ctx
                     .database
-                    .get_member_with_user(org, user.id().typed()?)
+                    .get_member_with_user_value(&org, &user.id().field_value())
                     .await?
                     .ok_or_else(|| {
                         AuthError::forbidden("You are not a member of this organization")
@@ -342,7 +359,7 @@ pub(crate) async fn handle_team_request(
                 if user.id != target {
                     authorize(
                         &member.member,
-                        org,
+                        &org,
                         ("member", "update"),
                         "You are not allowed to update this member",
                         config,
@@ -351,7 +368,7 @@ pub(crate) async fn handle_team_request(
                     .await?;
                     if ctx
                         .database
-                        .get_member_with_user(org, target)
+                        .get_member_with_user_value(&org, &target.into())
                         .await?
                         .is_none()
                     {
@@ -365,7 +382,7 @@ pub(crate) async fn handle_team_request(
                     .list_user_teams(target)
                     .await?
                     .into_iter()
-                    .filter(|team| team.organization_id == org)
+                    .filter(|team| team.organization_id.field_value().strict_equals(&org))
                     .collect::<Vec<_>>();
                 AuthResponse::json(200, &teams)?
             } else {
@@ -387,27 +404,33 @@ pub(crate) async fn handle_team_request(
             let team_id = req
                 .query_string("teamId")?
                 .filter(|id| !id.is_empty())
-                .or(session.active_team_id())
-                .ok_or_else(|| AuthError::bad_request("You do not have an active team"))?;
+                .map(FieldValue::from)
+                .unwrap_or_else(|| session.active_team_id().field_value());
+            if !team_id.is_truthy() {
+                return Err(AuthError::bad_request("You do not have an active team"));
+            }
             let team = ctx
                 .database
-                .get_team(team_id)
+                .get_team_value(&team_id)
                 .await?
                 .ok_or_else(|| AuthError::bad_request("Team not found"))?;
             if ctx
                 .database
-                .get_member(team.organization_id.typed()?, user.id().typed()?)
+                .get_member_value(
+                    &team.organization_id.field_value(),
+                    &user.id().field_value(),
+                )
                 .await?
                 .is_none()
                 || ctx
                     .database
-                    .get_team_member(team_id, user.id().typed()?)
+                    .get_team_member_value(&team_id, &user.id().field_value())
                     .await?
                     .is_none()
             {
                 return Err(AuthError::bad_request("User is not a member of the team"));
             }
-            AuthResponse::json(200, &ctx.database.list_team_members(team_id).await?)?
+            AuthResponse::json(200, &ctx.database.list_team_members_value(&team_id).await?)?
         }
         (
             HttpMethod::Post,
@@ -418,7 +441,7 @@ pub(crate) async fn handle_team_request(
                 .await?;
             let member = ctx
                 .database
-                .get_member_with_user(&org, user.id().typed()?)
+                .get_member_with_user_value(&org, &user.id().field_value())
                 .await?
                 .ok_or_else(|| {
                     AuthError::bad_request("User is not a member of the organization")
@@ -439,7 +462,7 @@ pub(crate) async fn handle_team_request(
             .await?;
             if ctx
                 .database
-                .get_member_with_user(&org, &body.user_id)
+                .get_member_with_user_value(&org, &body.user_id.as_str().into())
                 .await?
                 .is_none()
             {
@@ -447,10 +470,10 @@ pub(crate) async fn handle_team_request(
                     "User is not a member of the organization",
                 ));
             }
-            let team = find_team(&body.team_id, &org, ctx).await?;
+            let team = find_team(&body.team_id.as_str().into(), &org, ctx).await?;
             let organization = ctx
                 .database
-                .get_organization_by_id(&org)
+                .get_organization_by_id_value(&org)
                 .await?
                 .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
             let organization_view =
@@ -472,7 +495,7 @@ pub(crate) async fn handle_team_request(
                 }
                 let maximum = config
                     .team_member_limit(OrganizationTeamMemberLimit {
-                        team_id: team.id.typed()?,
+                        team_id: &team.id.field_value(),
                         organization_id: &org,
                         session: actor,
                     })
@@ -558,7 +581,10 @@ mod tests {
             .await
             .unwrap();
         ctx.database
-            .update_session_active_organization(&session.token, Some(org.id.typed().unwrap()))
+            .update_session_active_organization(
+                session.token.typed().unwrap(),
+                Some(org.id.typed().unwrap()),
+            )
             .await
             .unwrap();
         let config = OrganizationConfig {
@@ -582,7 +608,7 @@ mod tests {
         let add = create_auth_json_request_no_query(
             HttpMethod::Post,
             "/organization/add-team-member",
-            Some(&session.token),
+            Some(session.token.typed().unwrap()),
             Some(serde_json::json!({"teamId":team.id,"userId":user.id})),
         );
         let first = handle_team_request(&add, &ctx, &config)
@@ -644,7 +670,7 @@ mod tests {
         let active = create_auth_json_request_no_query(
             HttpMethod::Post,
             "/organization/set-active-team",
-            Some(&session.token),
+            Some(session.token.typed().unwrap()),
             Some(serde_json::json!({"teamId":foreign.id})),
         );
         assert_eq!(
@@ -657,7 +683,7 @@ mod tests {
         let active = create_auth_json_request_no_query(
             HttpMethod::Post,
             "/organization/set-active-team",
-            Some(&session.token),
+            Some(session.token.typed().unwrap()),
             Some(serde_json::json!({"teamId":team.id})),
         );
         let active_response = handle_team_request(&active, &ctx, &config)
@@ -675,7 +701,7 @@ mod tests {
         let remove = create_auth_json_request_no_query(
             HttpMethod::Post,
             "/organization/remove-team",
-            Some(&session.token),
+            Some(session.token.typed().unwrap()),
             Some(serde_json::json!({"teamId":team.id})),
         );
         assert_eq!(

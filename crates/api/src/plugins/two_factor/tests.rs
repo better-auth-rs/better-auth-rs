@@ -120,7 +120,7 @@ async fn test_sign_in_after_hook_sets_pending_cookie_and_preserves_remember_choi
     assert!(req.new_session().unwrap().is_none());
     assert!(
         ctx.database
-            .get_session(&session.token)
+            .get_session(session.token.typed().unwrap())
             .await
             .unwrap()
             .is_none()
@@ -264,7 +264,7 @@ async fn test_verify_existing_session_factor_enables_two_factor_and_reissues_ses
     assert_eq!(set_cookie_headers.len(), 1);
     assert!(
         ctx.database
-            .get_session(&session.token)
+            .get_session(session.token.typed().unwrap())
             .await
             .unwrap()
             .is_none(),

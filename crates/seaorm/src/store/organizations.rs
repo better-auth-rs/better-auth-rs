@@ -74,8 +74,17 @@ where
             self.config().advanced.database.generate_id(),
         )
         .await?
-        .insert(self.connection())
+        .insert(
+            self.connection(),
+            super::create_readback::CreateReadback {
+                schema: &config,
+                policy: self.config().advanced.database.generate_id(),
+                scope: super::create_readback::ReadbackScope::Direct(self.connection()),
+                column: O::Organization::column,
+            },
+        )
         .await?
+        .ok_or_else(|| AuthError::internal("Organization creation returned no record"))?
         .record(&config, self.connection().get_database_backend())
         .await
     }
@@ -156,8 +165,17 @@ where
         )
         .await?;
         active
-            .insert(self.connection())
+            .insert(
+                self.connection(),
+                super::create_readback::CreateReadback {
+                    schema: &config,
+                    policy: self.config().advanced.database.generate_id(),
+                    scope: super::create_readback::ReadbackScope::Direct(self.connection()),
+                    column: O::Organization::column,
+                },
+            )
             .await?
+            .ok_or_else(|| AuthError::internal("Organization creation returned no record"))?
             .record(&config, self.connection().get_database_backend())
             .await
     }
@@ -236,6 +254,14 @@ where
         id: &str,
         update: UpdateOrganization,
     ) -> AuthResult<Organization> {
+        self.update_organization_value(&id.into(), update).await
+    }
+
+    async fn update_organization_value(
+        &self,
+        id: &better_auth_core::FieldValue,
+        update: UpdateOrganization,
+    ) -> AuthResult<Organization> {
         let config = self.organization_fields()?.organization;
         let mut core = values([("auth_updated_at", FieldValue::Date((Utc::now()).into()))]);
         for (name, value) in [
@@ -268,14 +294,20 @@ where
         .await?;
         let _ = active
             .update(self.connection().get_database_backend())?
-            .filter(
-                O::Organization::column("id")?
-                    .eq_id(id, self.config().advanced.database.generate_id())?,
-            )
+            .filter(super::value_filter::equals_id(
+                O::Organization::column("id")?,
+                id,
+                self.config().advanced.database.generate_id(),
+                self.connection().get_database_backend(),
+            )?)
             .exec(self.connection())
             .await
             .map_err(map_db_err)?;
-        self.get_organization_by_id(update.id.as_deref().unwrap_or(id))
+        let updated_id = update
+            .id
+            .map(FieldValue::from)
+            .unwrap_or_else(|| id.clone());
+        self.get_organization_by_id_value(&updated_id)
             .await?
             .ok_or_else(|| AuthError::not_found("Organization not found"))
     }

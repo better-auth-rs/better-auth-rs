@@ -12,6 +12,18 @@ use sea_orm::{ColIdx, DbErr, QueryResult, TryGetError, TryGetable};
 #[serde(transparent)]
 pub struct SqlNumber(pub f64);
 
+impl better_auth_core::SchemaField for SqlNumber {
+    fn from_field(
+        value: better_auth_core::FieldValue,
+    ) -> Result<Self, better_auth_core::FieldValue> {
+        <f64 as better_auth_core::SchemaField>::from_field(value).map(Self)
+    }
+
+    fn into_field(self) -> better_auth_core::FieldValue {
+        self.0.into()
+    }
+}
+
 impl From<f64> for SqlNumber {
     fn from(value: f64) -> Self {
         Self(value)

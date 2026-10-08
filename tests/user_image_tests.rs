@@ -58,9 +58,11 @@ impl<S: AuthSchema> DatabaseHooks<S> for ImageHooks {
 
     async fn after_create_user(
         &self,
-        row: &better_auth_core::wire::UserView,
+        row: Option<&better_auth_core::wire::UserView>,
         _: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
+        let row = row
+            .ok_or_else(|| better_auth_core::AuthError::internal("Expected created fixture row"))?;
         self.record("create.after", UserView::from(row));
         Ok(())
     }

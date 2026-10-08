@@ -183,10 +183,10 @@ impl Fixture {
             .session_manager()
             .create_session(&user, None, None)
             .await?;
-        let signed = sign_cookie_value(&session.token, SECRET);
+        let signed = sign_cookie_value(session.token.typed().unwrap(), SECRET);
         let cookies = format!(
             "better-auth.session_token={signed}; better-auth.session_token_multi-{}={signed}",
-            session.token.to_lowercase(),
+            session.token.typed()?.to_lowercase(),
         );
         Ok(Self {
             auth,

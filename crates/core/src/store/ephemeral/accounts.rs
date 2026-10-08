@@ -101,7 +101,7 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
     async fn create_account(&self, input: CreateAccount) -> AuthResult<AccountView> {
         self.create_account_optional(input)
             .await?
-            .ok_or_else(|| AuthError::forbidden("account creation cancelled by database hook"))
+            .ok_or_else(|| AuthError::forbidden("account creation returned no record"))
     }
 
     async fn create_account_optional(
@@ -152,7 +152,7 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
         .await?;
         // The input is durable before output transformation; output errors suppress only later after hooks.
         let account = self.output_account(&fields).await?;
-        self.after(CommittedWrite::AccountCreated(account.clone()))
+        self.after(CommittedWrite::AccountCreated(Some(account.clone())))
             .await?;
         Ok(Some(account))
     }

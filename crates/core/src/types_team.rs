@@ -88,7 +88,7 @@ pub struct OrganizationRole {
 pub struct CreateOrganizationRole {
     /// Validated application input before adapter transforms.
     pub additional_fields: crate::FieldMap,
-    pub organization_id: String,
+    pub organization_id: crate::SchemaValue<String>,
     pub role: String,
     pub permission: crate::FieldValue,
 }

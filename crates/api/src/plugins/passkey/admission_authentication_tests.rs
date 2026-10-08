@@ -65,7 +65,7 @@ impl MemoryFixture {
                 &ctx,
                 &request(
                     "/passkey/generate-register-options",
-                    Some(&session.token),
+                    Some(session.token.typed().unwrap()),
                     None,
                     None,
                 ),
@@ -82,7 +82,7 @@ impl MemoryFixture {
             &ctx,
             &request(
                 "/passkey/verify-registration",
-                Some(&session.token),
+                Some(session.token.typed().unwrap()),
                 Some(json!({"response": signed, "name": "Admission authenticator"})),
                 Some(&cookie),
             ),
@@ -95,7 +95,7 @@ impl MemoryFixture {
             .ok_or("Missing registered credential")?;
         assert_eq!(passkey.counter, 0);
         assert_eq!(passkey.user_id, *owner.id.typed()?);
-        raw.delete_session(&session.token).await?;
+        raw.delete_session(session.token.typed().unwrap()).await?;
         assert!(raw.get_user_sessions(owner.id.typed()?).await?.is_empty());
         Ok(Self {
             ctx,
@@ -220,7 +220,7 @@ impl MemoryFixture {
         assert_eq!(created.len(), 1);
         let stored = self
             .raw
-            .get_session(&created[0].token)
+            .get_session(created[0].token.typed().unwrap())
             .await?
             .ok_or("Missing issued Session")?;
         assert_eq!(

@@ -19,29 +19,32 @@ fn expected_session(
     id: Option<&str>,
     label: &str,
 ) -> AuthResult<SessionView> {
-    assert_eq!(observed.token.len(), 32);
+    assert_eq!(observed.token.typed().unwrap().len(), 32);
     assert!(
         observed
             .token
+            .typed()
+            .unwrap()
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric())
     );
     Ok(SessionView {
+        field_order: Default::default(),
         visible_fields: Some(Default::default()),
         id: id
             .map(str::to_owned)
             .map(crate::SchemaValue::Typed)
             .unwrap_or_default(),
-        expires_at: date(EXPIRES_AT)?,
+        expires_at: date(EXPIRES_AT)?.into(),
         token: observed.token.clone(),
         created_at: observed.created_at.clone(),
         updated_at: observed.updated_at.clone(),
-        ip_address: Some("198.51.100.4".into()),
-        user_agent: Some("id-slot-test".into()),
+        ip_address: Some("198.51.100.4".into()).into(),
+        user_agent: Some("id-slot-test".into()).into(),
         user_id: "ordinary-owner".into(),
-        impersonated_by: None,
-        active_organization_id: None,
-        active_team_id: None,
+        impersonated_by: None.into(),
+        active_organization_id: None.into(),
+        active_team_id: None.into(),
         active: true,
         additional_fields: [("label".into(), label.into())].into(),
     })
@@ -111,10 +114,10 @@ async fn memory_session_id_slot_nested_create_preserves_complete_runtime_records
         let inner = required(inner_result.get())?;
         let ended = Utc::now().timestamp_millis() as f64;
         // Session creation reads the clock separately for createdAt and updatedAt.
-        assert!((started..=ended).contains(&outer.created_at.milliseconds()));
-        assert!((started..=ended).contains(&inner.created_at.milliseconds()));
-        assert!((started..=ended).contains(&outer.updated_at.milliseconds()));
-        assert!((started..=ended).contains(&inner.updated_at.milliseconds()));
+        assert!((started..=ended).contains(&outer.created_at.date_milliseconds().unwrap()));
+        assert!((started..=ended).contains(&inner.created_at.date_milliseconds().unwrap()));
+        assert!((started..=ended).contains(&outer.updated_at.date_milliseconds().unwrap()));
+        assert!((started..=ended).contains(&inner.updated_at.date_milliseconds().unwrap()));
         assert_ne!(outer.token, inner.token);
         let inner_id = if slot == "before-label" {
             "session-generated-2"
@@ -195,18 +198,19 @@ async fn memory_session_id_slot_live_writer_preserves_read_and_stored_records() 
         owner.additional_fields.clear();
         let _ = writer.create_user(owner).await?;
         writer.lock()?.sessions.push(SessionView {
+            field_order: Default::default(),
             visible_fields: Some(Default::default()),
             id: crate::SchemaValue::from_field(Value::Number(1.0)),
-            expires_at: date(EXPIRES_AT)?,
+            expires_at: date(EXPIRES_AT)?.into(),
             token: "slot-selected".into(),
-            created_at: date(CREATED_AT)?,
-            updated_at: date(CREATED_AT)?,
-            ip_address: None,
-            user_agent: None,
+            created_at: date(CREATED_AT)?.into(),
+            updated_at: date(CREATED_AT)?.into(),
+            ip_address: None.into(),
+            user_agent: None.into(),
             user_id: crate::SchemaValue::from_field(Value::Number(1.0)),
-            impersonated_by: None,
-            active_organization_id: None,
-            active_team_id: None,
+            impersonated_by: None.into(),
+            active_organization_id: None.into(),
+            active_team_id: None.into(),
             active: true,
             additional_fields: [("label".into(), "selected".into())].into(),
         });

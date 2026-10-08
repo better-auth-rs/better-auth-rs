@@ -322,7 +322,7 @@ async fn check_case<S: AuthSchema, T: AuthStore<S> + Clone + 'static>(
             })
             .await
             .unwrap();
-        tokens.push(session.token);
+        tokens.push(session.token.typed()?.clone());
         let mut invitation = CreateInvitation::new(
             organization.id.typed().unwrap(),
             "guest@ordinary-fallback.test",

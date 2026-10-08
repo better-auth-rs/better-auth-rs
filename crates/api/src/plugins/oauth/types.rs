@@ -65,8 +65,11 @@ pub(crate) struct SocialSignInResponse {
     pub redirect: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub token: Option<String>,
+    #[serde(
+        with = "better_auth_core::field_value::serde::value",
+        skip_serializing_if = "better_auth_core::FieldValue::is_undefined"
+    )]
+    pub token: better_auth_core::FieldValue,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub user: Option<serde_json::Value>,
 }

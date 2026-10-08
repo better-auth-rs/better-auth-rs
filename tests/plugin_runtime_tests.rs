@@ -194,9 +194,11 @@ impl DatabaseHooks<Schema> for NestedHook {
     }
     async fn after_create_user(
         &self,
-        user: &better_auth_core::wire::UserView,
+        user: Option<&better_auth_core::wire::UserView>,
         context: &DatabaseHookContext<'_, Schema>,
     ) -> AuthResult<()> {
+        let user = user
+            .ok_or_else(|| better_auth_core::AuthError::internal("Expected created fixture row"))?;
         assert!(context.transaction.is_none());
         self.0
             .lock()
@@ -233,9 +235,11 @@ impl better_auth_seaorm::hooks::SeaOrmHooks<Schema> for ApplicationHook {
     }
     async fn after_create_user(
         &self,
-        user: &better_auth_core::wire::UserView,
+        user: Option<&better_auth_core::wire::UserView>,
         context: &better_auth_seaorm::hooks::SeaOrmHookContext<'_, Schema>,
     ) -> AuthResult<()> {
+        let user = user
+            .ok_or_else(|| better_auth_core::AuthError::internal("Expected created fixture row"))?;
         assert!(context.tx.is_none());
         self.0
             .lock()

@@ -403,7 +403,7 @@ async fn serial_invitation_cookie_projects_ids_without_changing_session_update_o
             .accept_invitation_with_teams(
                 "001",
                 "001",
-                Some(&session.token),
+                Some(session.token.typed().unwrap()),
                 true,
                 TeamMemberLimits::Fixed(Some(1)),
             )
@@ -420,8 +420,11 @@ async fn serial_invitation_cookie_projects_ids_without_changing_session_update_o
                 Value::from("1")
             }
         );
-        assert_eq!(cookie.active_organization_id.as_deref(), Some("42"));
-        assert_eq!(cookie.active_team_id.as_deref(), Some("1"));
+        assert_eq!(
+            cookie.active_organization_id.typed().unwrap().as_deref(),
+            Some("42")
+        );
+        assert_eq!(cookie.active_team_id.typed().unwrap().as_deref(), Some("1"));
         let state = store.lock()?;
         let raw = required(state.sessions.find(|row| row.token == session.token)?)?;
         assert_eq!(raw.id.field_value(), Value::Number(1.0));
@@ -429,8 +432,11 @@ async fn serial_invitation_cookie_projects_ids_without_changing_session_update_o
             raw.user_id.field_value(),
             Value::Number(if override_user_id { 7.0 } else { 1.0 })
         );
-        assert_eq!(raw.active_organization_id.as_deref(), Some("1"));
-        assert_eq!(raw.active_team_id.as_deref(), Some("1"));
+        assert_eq!(
+            raw.active_organization_id.typed().unwrap().as_deref(),
+            Some("1")
+        );
+        assert_eq!(raw.active_team_id.typed().unwrap().as_deref(), Some("1"));
         assert_eq!(
             required(state.members.snapshot()?.first())?
                 .id

@@ -135,7 +135,7 @@ async fn admin_configuration_preserves_fractional_ban_and_impersonation_lifetime
             .unwrap();
         let signed_cookie = format!(
             "better-auth.session_token={}",
-            sign_cookie_value(&actor.token, auth.config().signing_secret())
+            sign_cookie_value(actor.token.typed().unwrap(), auth.config().signing_secret())
         );
         let mut body = json!({"userId":"ordinary"});
         if operation == "ban" {

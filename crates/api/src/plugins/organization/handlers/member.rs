@@ -32,13 +32,14 @@ pub(crate) async fn get_active_member_core(
     session: &impl AuthSession,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<MemberResponse> {
-    let org_id = session
-        .active_organization_id()
-        .ok_or_else(|| AuthError::bad_request("No active organization"))?;
+    let org_id = session.active_organization_id().field_value();
+    if !org_id.is_truthy() {
+        return Err(AuthError::bad_request("No active organization"));
+    }
 
     let joined = ctx
         .database
-        .get_member_with_user(org_id, user.id().typed()?)
+        .get_member_with_user_value(&org_id, &user.id().field_value())
         .await?
         .ok_or_else(|| AuthError::bad_request("Member not found"))?;
 
@@ -61,19 +62,19 @@ pub(crate) async fn list_members_core(
             .get_organization_by_slug(slug)
             .await?
             .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
-        organization.id().typed()?.to_string()
+        organization.id().field_value()
     } else {
         resolve_organization_id(query.organization_id.as_deref(), None, session, ctx).await?
     };
 
     let _ = ctx
         .database
-        .get_member_with_user(&org_id, user.id().typed()?)
+        .get_member_with_user_value(&org_id, &user.id().field_value())
         .await?
         .ok_or_else(|| AuthError::forbidden("You are not a member of this organization"))?;
 
     let member_params = ListOrganizationMembersParams {
-        organization_id: org_id,
+        organization_id: better_auth_core::SchemaValue::from_field(org_id),
         limit: query
             .limit
             .filter(|limit| *limit != 0.0 && !limit.is_nan())
@@ -130,14 +131,14 @@ pub(crate) async fn get_active_member_role_core(
             .get_organization_by_slug(slug)
             .await?
             .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
-        organization.id().typed()?.to_string()
+        organization.id().field_value()
     } else {
         resolve_organization_id(query.organization_id.as_deref(), None, session, ctx).await?
     };
 
     let requester_member = ctx
         .database
-        .get_member_with_user(&org_id, user.id().typed()?)
+        .get_member_with_user_value(&org_id, &user.id().field_value())
         .await?
         .map(|joined| joined.member)
         .ok_or_else(|| AuthError::forbidden("You are not a member of this organization"))?;
@@ -145,7 +146,7 @@ pub(crate) async fn get_active_member_role_core(
     if let Some(user_id) = query.user_id.as_deref() {
         let target_member = ctx
             .database
-            .get_member_with_user(&org_id, user_id)
+            .get_member_with_user_value(&org_id, &user_id.into())
             .await?
             .map(|joined| joined.member)
             .ok_or_else(|| AuthError::forbidden("You are not a member of this organization"))?;
@@ -171,7 +172,7 @@ pub(crate) async fn remove_member_core(
 
     let requester_member = ctx
         .database
-        .get_member_with_user(&org_id, user.id().typed()?)
+        .get_member_with_user_value(&org_id, &user.id().field_value())
         .await?
         .map(|joined| joined.member)
         .ok_or_else(|| AuthError::bad_request("Member not found"))?;
@@ -183,7 +184,7 @@ pub(crate) async fn remove_member_core(
             .await?
             .ok_or_else(|| AuthError::bad_request("Member not found"))?;
         ctx.database
-            .get_member(&org_id, target_user.id().typed()?)
+            .get_member_value(&org_id, &target_user.id().field_value())
             .await?
             .ok_or_else(|| AuthError::bad_request("Member not found"))?
     } else {
@@ -201,7 +202,10 @@ pub(crate) async fn remove_member_core(
                 "You cannot leave the organization as the only owner",
             ));
         }
-        let all_members = ctx.database.list_organization_members(&org_id).await?;
+        let all_members = ctx
+            .database
+            .list_organization_members_value(&org_id)
+            .await?;
         let owner_count =
             all_members
                 .iter()
@@ -232,12 +236,16 @@ pub(crate) async fn remove_member_core(
             message: "You are not allowed to delete this member",
         });
     }
-    if target_member.organization_id != org_id {
+    if !target_member
+        .organization_id
+        .field_value()
+        .strict_equals(&org_id)
+    {
         return Err(AuthError::bad_request("Member not found"));
     }
     let organization = ctx
         .database
-        .get_organization_by_id(&org_id)
+        .get_organization_by_id_value(&org_id)
         .await?
         .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
     let organization_view = crate::plugins::organization::fields::organization(&organization, ctx);
@@ -269,10 +277,15 @@ pub(crate) async fn remove_member_core(
         .delete_member(target_member.id().typed()?)
         .await?;
 
-    if is_self_removal && session.active_organization_id() == Some(&org_id) {
+    if is_self_removal
+        && session
+            .active_organization_id()
+            .field_value()
+            .strict_equals(&target_member.organization_id.field_value())
+    {
         let _ = ctx
             .database
-            .update_session_active_organization(session.token(), None)
+            .update_session_active_organization_by_token_value(&session.token().field_value(), None)
             .await?;
     }
 
@@ -294,7 +307,7 @@ pub(crate) async fn update_member_role_core(
 
     let requester_member = ctx
         .database
-        .get_member_with_user(&org_id, user.id().typed()?)
+        .get_member_with_user_value(&org_id, &user.id().field_value())
         .await?
         .map(|joined| joined.member)
         .ok_or_else(|| AuthError::bad_request("Member not found"))?;
@@ -325,7 +338,11 @@ pub(crate) async fn update_member_role_core(
             .ok_or_else(|| AuthError::bad_request("Member not found"))?
     };
 
-    if target_member.organization_id().typed()? != &org_id {
+    if !target_member
+        .organization_id()
+        .field_value()
+        .strict_equals(&org_id)
+    {
         return Err(AuthError::forbidden(
             "You are not allowed to update this member",
         ));
@@ -346,7 +363,10 @@ pub(crate) async fn update_member_role_core(
     }
 
     if target_is_owner && requester_member.id() == target_member.id() && !new_role_contains_owner {
-        let all_members = ctx.database.list_organization_members(&org_id).await?;
+        let all_members = ctx
+            .database
+            .list_organization_members_value(&org_id)
+            .await?;
         let owner_count =
             all_members
                 .iter()
@@ -363,7 +383,7 @@ pub(crate) async fn update_member_role_core(
 
     let dynamic_roles = if config.dynamic_access_control {
         ctx.database
-            .query_organization_roles(
+            .query_organization_roles_value(
                 &org_id,
                 &body
                     .role
@@ -398,7 +418,7 @@ pub(crate) async fn update_member_role_core(
 
     let organization = ctx
         .database
-        .get_organization_by_id(&org_id)
+        .get_organization_by_id_value(&org_id)
         .await?
         .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
     let organization_view = crate::plugins::organization::fields::organization(&organization, ctx);

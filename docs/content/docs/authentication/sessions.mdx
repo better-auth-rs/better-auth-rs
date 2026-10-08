@@ -98,6 +98,14 @@ config.advanced.default_cookie_attributes.same_site = Some(SameSite::Lax);
 
 A `disableRefresh=true` query parameter prevents refresh for the request. Sessions created with `rememberMe: false` expire in the database after 24 hours. These sessions use browser-session cookies and a signed `dont_remember` marker; requests with this marker do not refresh the session automatically. Remembered sessions use the configured `expires_in` lifetime. `/get-session` responses include `Cache-Control: no-store` and `Pragma: no-cache`.
 
+## Native runtime fields
+
+`SessionView` retains tokens, dates, and optional native strings through `SchemaValue<T>`. `token` uses `SchemaValue<String>`; dates use `SchemaValue<FieldDate>`; optional strings use `SchemaValue<Option<String>>`. Use `.typed()?` when application code requires the default type and `.field_value()` when consuming a configured replacement. An absent field remains distinct from an explicit null. Record serialization reads the current values and retains the source property order.
+
+`AuthSession` getters expose the same wrappers, borrowing ordinary strings through `Cow`. `AuthEntity` derives these getters through `SchemaField`; handwritten models must update their getter signatures. Date and active-organization/team setters return `AuthResult<()>` so incompatible typed entity fields propagate conversion errors. `SeaOrmSessionModel::new_active_from_fields` provides the creation boundary for ordered native fields. The default implementation calls the existing handwritten constructor; the derive applies converted database fields without first narrowing them to the default Rust types.
+
+Session record updates merge native and application values before defaults, update factories, transforms, and physical mapping. Native Store methods ending in `_by_token_value` retain replacement tokens through lookup, update, and deletion. The string convenience methods use the same implementations. Organization and team selectors retain their native values until adapter query conversion. `is_session_fresh` returns `AuthResult<bool>` because a replaced date can fail the upstream date-method operation; callers must propagate that error.
+
 ## Secondary Storage
 
 `BetterAuth::secondary_storage` installs a backend for server-side session and user snapshots. Sessions use that backend by default. Set `session.store_session_in_database = Some(true)` to retain database rows and permit fallback on a missing cache entry. Set `session.preserve_session_in_database = Some(true)` to keep expired audit rows after revocation and disable that fallback. Malformed cached JSON never restores a session through database fallback.

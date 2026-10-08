@@ -21,10 +21,12 @@ struct AuditHook;
 impl SeaOrmHooks<AppAuthSchema> for AuditHook {
     async fn after_create_user(
         &self,
-        user: &better_auth::wire::UserView,
+        user: Option<&better_auth::wire::UserView>,
         _ctx: &SeaOrmHookContext<'_, AppAuthSchema>,
     ) -> better_auth::AuthResult<()> {
-        println!("User created: {:?}", user.email);
+        if let Some(user) = user {
+            println!("User created: {:?}", user.email);
+        }
         Ok(())
     }
 }
@@ -57,7 +59,7 @@ pub trait SeaOrmHooks<S: AuthSchema>: Send + Sync {
 
     async fn after_create_user(
         &self,
-        user: &better_auth::wire::UserView,
+        user: Option<&better_auth::wire::UserView>,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()>;
 
@@ -94,11 +96,15 @@ pub trait SeaOrmHooks<S: AuthSchema>: Send + Sync {
 
     async fn after_create_session(
         &self,
-        session: &better_auth::wire::SessionView,
+        session: Option<&better_auth::wire::SessionView>,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()>;
 }
 ```
+
+Creation-after hooks receive `Option<&View>` for User, Account, Session, and Verification. A successful database insert can return `None` when MySQL cannot identify the inserted row. The after hooks still run. A before hook that cancels creation does not insert a row or run the writer or after hooks. An output-transform error also skips after hooks; a direct insert remains committed, while an enclosing transaction retains its rollback boundary.
+
+`SeaOrmHooks::before_update_session` receives the native token as `&FieldValue`. Runtime database hooks continue to receive the update object. Use the native token without a string conversion when the Session schema replaces its type.
 
 ## Rejecting Operations
 
@@ -175,9 +181,10 @@ struct ProvisionWorkspaceHook;
 impl SeaOrmHooks<AppAuthSchema> for ProvisionWorkspaceHook {
     async fn after_create_user(
         &self,
-        user: &better_auth::wire::UserView,
+        user: Option<&better_auth::wire::UserView>,
         ctx: &SeaOrmHookContext<'_, AppAuthSchema>,
     ) -> AuthResult<()> {
+        let Some(user) = user else { return Ok(()) };
         let statement = Query::insert()
             .into_table(Alias::new("app_workspaces"))
             .columns([Alias::new("user_id"), Alias::new("name")])

@@ -34,16 +34,12 @@ where
 {
     async fn create(&self, fields: FieldMap) -> AuthResult<Option<FieldMap>> {
         match self.model {
-            Model::ApiKey => self.store.create_api_key_record(fields).await.map(Some),
-            Model::Passkey => self.store.create_passkey_record(fields).await.map(Some),
-            Model::DeviceCode => self.store.create_device_code_record(fields).await.map(Some),
-            Model::TwoFactor => self.store.create_two_factor_record(fields).await.map(Some),
-            Model::Jwk => self.store.create_jwk_record(fields).await.map(Some),
-            Model::WalletAddress => self
-                .store
-                .create_wallet_address_record(fields)
-                .await
-                .map(Some),
+            Model::ApiKey => self.store.create_api_key_record(fields).await,
+            Model::Passkey => self.store.create_passkey_record(fields).await,
+            Model::DeviceCode => self.store.create_device_code_record(fields).await,
+            Model::TwoFactor => self.store.create_two_factor_record(fields).await,
+            Model::Jwk => self.store.create_jwk_record(fields).await,
+            Model::WalletAddress => self.store.create_wallet_address_record(fields).await,
         }
     }
 

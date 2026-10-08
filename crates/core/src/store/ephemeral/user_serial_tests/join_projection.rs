@@ -26,9 +26,13 @@ async fn serial_array_owners_join_only_after_fallback_projection() -> AuthResult
                 .field_value(),
             raw_owner
         );
-        let single = required(store.get_session_snapshot(&session.token).await?)?;
+        let single = required(
+            store
+                .get_session_snapshot(session.token.typed().unwrap())
+                .await?,
+        )?;
         let bulk = store
-            .get_session_snapshots(std::slice::from_ref(&session.token), true)
+            .get_session_snapshots(std::slice::from_ref(session.token.typed().unwrap()), true)
             .await?;
         assert_eq!(single.0.user_id, "1");
         assert_eq!(bulk.len(), 1);

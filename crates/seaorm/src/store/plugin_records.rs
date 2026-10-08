@@ -11,21 +11,32 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPluginSchema> SeaOrmSt
     pub(super) async fn create_plugin_record<M: SeaOrmPluginModel>(
         &self,
         connection: &impl ConnectionTrait,
+        scope: super::create_readback::ReadbackScope<'_>,
         role: EntityRole,
         model: &str,
         input: FieldMap,
-    ) -> AuthResult<FieldMap> {
+    ) -> AuthResult<Option<FieldMap>> {
         let active = self
             .prepare_plugin_fields::<M>(role, model, input, true)
             .await?;
         let row = database_operation::<Entity<M>, _>(self.config(), "create", async {
-            active.insert_raw(connection).await
+            active
+                .insert_raw(
+                    connection,
+                    super::create_readback::CreateReadback {
+                        schema: &self.model_fields.plugin_fields(role),
+                        policy: self.config().advanced.database.generate_id(),
+                        scope,
+                        column: M::column,
+                    },
+                )
+                .await
         })
         .await?;
         Ok(self
-            .project_plugin_rows::<M, FieldMap>(role, vec![row])
+            .project_plugin_rows::<M, FieldMap>(role, row.into_iter().collect())
             .await?
-            .remove(0))
+            .pop())
     }
 
     pub(super) async fn get_plugin_record<M: SeaOrmPluginModel>(

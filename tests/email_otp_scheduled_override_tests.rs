@@ -63,7 +63,7 @@ impl DatabaseHooks<BundledSchema> for Hooks {
     }
     async fn after_create_verification(
         &self,
-        _: &VerificationView,
+        _: Option<&VerificationView>,
         context: &DatabaseHookContext<'_, BundledSchema>,
     ) -> AuthResult<()> {
         assert!(context.transaction.is_none());

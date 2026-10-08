@@ -76,7 +76,10 @@ async fn consumption_uses_original_storage_and_rejects_changed_public_bindings()
             ("status".into(), status.into()),
             ("clientId".into(), "original-client".into()),
         ]);
-        let created = store.create_device_code_record(input).await?;
+        let created = store
+            .create_device_code_record(input)
+            .await?
+            .ok_or_else(|| AuthError::internal("Expected the created Device code"))?;
         let record = store
             .get_device_code_by_device_code(status)
             .await?

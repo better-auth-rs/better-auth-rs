@@ -51,6 +51,7 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
         }
         models::insert::<O::OrganizationRole, _>(
             self.connection(),
+            super::create_readback::ReadbackScope::Direct(self.connection()),
             core,
             input.additional_fields,
             &config,
@@ -111,10 +112,21 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
         organization_id: &str,
         names: &[String],
     ) -> AuthResult<Vec<OrganizationRole>> {
+        self.query_organization_roles_value(&organization_id.into(), names)
+            .await
+    }
+
+    async fn query_organization_roles_value(
+        &self,
+        organization_id: &better_auth_core::FieldValue,
+        names: &[String],
+    ) -> AuthResult<Vec<OrganizationRole>> {
         let rows = Entity::<O::OrganizationRole>::find()
-            .filter(O::OrganizationRole::column("organization_id")?.eq_id(
+            .filter(super::value_filter::equals_id(
+                O::OrganizationRole::column("organization_id")?,
                 organization_id,
                 self.config().advanced.database.generate_id(),
+                self.connection().get_database_backend(),
             )?)
             .filter(O::OrganizationRole::column("role")?.is_in(names.iter().cloned()))
             .limit(super::pagination::default_limit(
@@ -136,6 +148,15 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
         organization_id: &str,
         key: better_auth_core::store::OrganizationRoleKey<'_>,
     ) -> AuthResult<Option<OrganizationRole>> {
+        self.find_organization_role_value(&organization_id.into(), key)
+            .await
+    }
+
+    async fn find_organization_role_value(
+        &self,
+        organization_id: &better_auth_core::FieldValue,
+        key: better_auth_core::store::OrganizationRoleKey<'_>,
+    ) -> AuthResult<Option<OrganizationRole>> {
         use better_auth_core::store::OrganizationRoleKey;
         let condition = match key {
             OrganizationRoleKey::Id(id) => O::OrganizationRole::column("id")?
@@ -143,9 +164,11 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
             OrganizationRoleKey::Name(name) => O::OrganizationRole::column("role")?.eq(name),
         };
         let row = Entity::<O::OrganizationRole>::find()
-            .filter(O::OrganizationRole::column("organization_id")?.eq_id(
+            .filter(super::value_filter::equals_id(
+                O::OrganizationRole::column("organization_id")?,
                 organization_id,
                 self.config().advanced.database.generate_id(),
+                self.connection().get_database_backend(),
             )?)
             .filter(condition)
             .one(self.connection())
@@ -163,10 +186,20 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
         }
     }
     async fn count_organization_roles(&self, organization_id: &str) -> AuthResult<u64> {
+        self.count_organization_roles_value(&organization_id.into())
+            .await
+    }
+
+    async fn count_organization_roles_value(
+        &self,
+        organization_id: &better_auth_core::FieldValue,
+    ) -> AuthResult<u64> {
         Entity::<O::OrganizationRole>::find()
-            .filter(O::OrganizationRole::column("organization_id")?.eq_id(
+            .filter(super::value_filter::equals_id(
+                O::OrganizationRole::column("organization_id")?,
                 organization_id,
                 self.config().advanced.database.generate_id(),
+                self.connection().get_database_backend(),
             )?)
             .count(self.connection())
             .await

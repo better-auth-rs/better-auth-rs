@@ -8,7 +8,7 @@ use better_auth_core::{
 use rand::distributions::{Alphanumeric, DistString};
 use validator::ValidateEmail;
 
-use crate::plugins::helpers::{SessionIssueError, issue_user_session};
+use crate::plugins::helpers::{SessionIssueError, issue_selected_user_session_optional};
 
 mod callbacks;
 pub use callbacks::{AnonymousCallbackFuture, AnonymousCallbacks};
@@ -171,23 +171,42 @@ impl AnonymousPlugin {
         create.is_anonymous = Some(true);
         create.email_verified = Some(false);
 
-        let user = super::user_admission::create_user(create, "anonymous", &endpoint).await?;
+        let user = super::user_admission::create_user_optional(create, "anonymous", &endpoint)
+            .await?
+            .ok_or(AuthError::Upstream {
+                status: 500,
+                code: "FAILED_TO_CREATE_USER",
+                message: "Failed to create user",
+            })?;
         let meta = RequestMeta::from_request_with_config(req, &ctx.config.advanced.ip_address);
-        let issued = issue_user_session(ctx, user.id().typed()?, meta.ip_address, meta.user_agent)
-            .await
-            .map_err(SessionIssueError::into_auth_error)?;
+        let issued = issue_selected_user_session_optional(
+            ctx,
+            better_auth_core::FieldMap::from(ctx.internal_user_view(&user).await?).into(),
+            &meta,
+            ctx.config.session.expires_in(),
+        )
+        .await
+        .map_err(SessionIssueError::into_auth_error)?
+        .ok_or(AuthError::Upstream {
+            status: 400,
+            code: "COULD_NOT_CREATE_SESSION",
+            message: "Could not create session",
+        })?;
         let manager = ctx.session_manager();
         manager
-            .set_session_cookie(
-                req,
-                manager.internal_data(&issued.user, &issued.session).await?,
-                None,
-            )
+            .set_native_session_cookie(req, issued.clone(), None)
             .await?;
-        Ok(AuthResponse::json(
+        Ok(AuthResponse::native(
             200,
-            &serde_json::json!({"token": issued.session.token(),"user":ctx.user_view(&issued.user).await?}),
-        )?)
+            better_auth_core::FieldMap::from([
+                ("token".into(), issued.session.token().field_value()),
+                (
+                    "user".into(),
+                    better_auth_core::FieldMap::from(ctx.user_view(&user).await?).into(),
+                ),
+            ])
+            .into(),
+        ))
     }
     async fn delete(
         &self,
@@ -317,15 +336,13 @@ impl AnonymousPlugin {
                         .await?
                         .filter(|user| user.is_anonymous() == Some(true))
                     {
-                        let session = ctx
-                            .database
-                            .get_user_session_snapshots(&user_id)
-                            .await?
-                            .into_iter()
-                            .find(|(session, _)| {
-                                session.expires_at().milliseconds()
-                                    > chrono::Utc::now().timestamp_millis() as f64
-                            });
+                        let mut session = None;
+                        for candidate in ctx.database.get_user_session_snapshots(&user_id).await? {
+                            if candidate.0.expires_at().is_after(chrono::Utc::now())? {
+                                session = Some(candidate);
+                                break;
+                            }
+                        }
                         if let Some((session, snapshot)) = session {
                             Some(better_auth_core::session::SessionData {
                                 user: ctx.internal_user_view(&user).await?,

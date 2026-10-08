@@ -136,9 +136,11 @@ impl<S: AuthSchema> DatabaseHooks<S> for Hooks {
 
     async fn after_create_session(
         &self,
-        session: &SessionView,
+        session: Option<&SessionView>,
         _: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
+        let session = session
+            .ok_or_else(|| better_auth_core::AuthError::internal("Expected created fixture row"))?;
         emit(
             &self.events,
             Event::After(session.id.field_value(), session.additional_fields.clone()),
@@ -410,13 +412,13 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, run: Run) -> TestRe
         assert_eq!(created.additional_fields, *fields);
         assert_eq!(created.user_id, "owner");
         assert_eq!(created.expires_at, input(run.case)?.expires_at);
-        assert_eq!(created.ip_address.as_deref(), Some(""));
-        assert_eq!(created.user_agent.as_deref(), Some(""));
-        assert!((started..=ended).contains(&created.created_at.milliseconds()));
-        assert!((started..=ended).contains(&created.updated_at.milliseconds()));
+        assert_eq!(created.ip_address.typed()?.as_deref(), Some(""));
+        assert_eq!(created.user_agent.typed()?.as_deref(), Some(""));
+        assert!((started..=ended).contains(&created.created_at.date_milliseconds()?));
+        assert!((started..=ended).contains(&created.updated_at.date_milliseconds()?));
         if run.pure {
             let cached = cache
-                .get(&created.token)
+                .get(created.token.typed()?)
                 .await?
                 .ok_or("Session cache is missing")?;
             let cached: JsonValue =
@@ -444,11 +446,11 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, run: Run) -> TestRe
             )?;
             assert_eq!(
                 references,
-                json!([{"token":created.token, "expiresAt":created.expires_at.milliseconds() as i64}])
+                json!([{"token":created.token, "expiresAt":created.expires_at.date_milliseconds()? as i64}])
             );
         } else {
             assert_eq!(
-                raw.get_session(&created.token).await?,
+                raw.get_session(created.token.typed()?).await?,
                 Some(created.clone())
             );
             assert_eq!(raw.get_user_sessions("owner").await?, [created]);

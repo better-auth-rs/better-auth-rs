@@ -62,7 +62,7 @@ async fn check<S: AuthSchema>(
     let cookie = format!(
         "better-auth.session_token={}",
         better_auth_core::utils::cookie_utils::sign_cookie_value(
-            &session.token,
+            session.token.typed()?,
             &auth.config().secret
         )
     );

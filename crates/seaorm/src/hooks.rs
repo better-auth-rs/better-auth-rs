@@ -54,7 +54,7 @@ pub trait SeaOrmHooks<S: AuthSchema>: Send + Sync {
 
     async fn after_create_user(
         &self,
-        user: &better_auth_core::wire::UserView,
+        user: Option<&better_auth_core::wire::UserView>,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()> {
         let _ = (user, ctx);
@@ -111,7 +111,7 @@ pub trait SeaOrmHooks<S: AuthSchema>: Send + Sync {
 
     async fn after_create_session(
         &self,
-        session: &better_auth_core::wire::SessionView,
+        session: Option<&better_auth_core::wire::SessionView>,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()> {
         let _ = (session, ctx);
@@ -129,7 +129,7 @@ pub trait SeaOrmHooks<S: AuthSchema>: Send + Sync {
 
     async fn before_update_session(
         &self,
-        token: &str,
+        token: &better_auth_core::FieldValue,
         update: &SessionUpdate,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<DatabaseHookUpdate<SessionUpdate>> {
@@ -166,7 +166,7 @@ pub trait SeaOrmHooks<S: AuthSchema>: Send + Sync {
 
     async fn after_create_account(
         &self,
-        account: &better_auth_core::wire::AccountView,
+        account: Option<&better_auth_core::wire::AccountView>,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()> {
         let _ = (account, ctx);
@@ -221,7 +221,7 @@ pub trait SeaOrmHooks<S: AuthSchema>: Send + Sync {
 
     async fn after_create_verification(
         &self,
-        verification: &better_auth_core::wire::VerificationView,
+        verification: Option<&better_auth_core::wire::VerificationView>,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()> {
         let _ = (verification, ctx);

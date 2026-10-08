@@ -244,7 +244,7 @@ async fn exercise<S: AuthSchema>(
             active_organization_id: None,
         })
         .await?;
-    let token = session.token().to_owned();
+    let token = session.token().typed()?.to_string();
     *lock(&cache.watched)? = token.clone();
     native_missing_user(&auth, &observer, &cache, &token).await?;
     lock(&observer.events)?.clear();

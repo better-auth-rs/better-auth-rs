@@ -48,7 +48,7 @@ pub(super) async fn handle(
     }
     let Some(updated) = ctx
         .database
-        .update_session_fields(&session.token, fields)
+        .update_session_fields_by_token_value(&session.token.field_value(), fields)
         .await?
     else {
         ctx.session_manager().clear_cookies(req)?;

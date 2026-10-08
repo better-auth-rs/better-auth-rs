@@ -348,6 +348,7 @@ async fn serial_session_string_id_updates_match_upstream_id_contract() -> AuthRe
         let seed_events = take_events(&events)?;
         let token = required(store.lock()?.sessions.snapshot()?.first())?
             .token
+            .typed()?
             .clone();
         let before = Model::Session.raw_ids(&store)?;
         let updated = required(
@@ -592,7 +593,7 @@ async fn serial_session_token_deletion_preserves_duplicate_ids_after_reuse() -> 
             })
             .await?;
         assert_eq!(row.id, expected);
-        tokens.push(row.token);
+        tokens.push(row.token.typed()?.clone());
     }
     store.delete_session(required(tokens.get(1))?).await?;
     let reused = store
@@ -611,7 +612,10 @@ async fn serial_session_token_deletion_preserves_duplicate_ids_after_reuse() -> 
     assert_eq!(Model::Session.raw_ids(&store)?, json!([1, 3, 3]));
     store.delete_session(required(tokens.get(2))?).await?;
     assert!(store.get_session(required(tokens.get(2))?).await?.is_none());
-    assert_eq!(required(store.get_session(&reused.token).await?)?.id, "3");
+    assert_eq!(
+        required(store.get_session(reused.token.typed().unwrap()).await?)?.id,
+        "3"
+    );
     assert_eq!(Model::Session.raw_ids(&store)?, json!([1, 3]));
     Ok(())
 }

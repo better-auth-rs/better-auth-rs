@@ -88,18 +88,18 @@ async fn explicit_zero_session_lifetime_creates_a_persisted_seven_day_session() 
         let after = Utc::now() + Duration::days(7);
         assert!(
             (before.timestamp_millis() as f64..=after.timestamp_millis() as f64)
-                .contains(&session.expires_at.milliseconds()),
+                .contains(&session.expires_at.date_milliseconds().unwrap()),
             "{storage}: created expiry {:?}",
             session.expires_at
         );
         let persisted = auth
             .store()
-            .get_session(&session.token)
+            .get_session(session.token.typed()?)
             .await?
             .ok_or_else(|| AuthError::internal("created session missing"))?;
         assert_eq!(
-            persisted.expires_at.milliseconds(),
-            session.expires_at.milliseconds()
+            persisted.expires_at.date_milliseconds().unwrap(),
+            session.expires_at.date_milliseconds().unwrap()
         );
         assert_eq!(
             reports.config()?.pointer("/session/expiresIn"),

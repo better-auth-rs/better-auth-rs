@@ -139,7 +139,10 @@ async fn invitation_creation_and_resend_preserve_pinned_fractional_lifetimes() {
         }
         let cookie = format!(
             "better-auth.session_token={}",
-            sign_cookie_value(&session.token, auth.config().signing_secret(),)
+            sign_cookie_value(
+                session.token.typed().unwrap(),
+                auth.config().signing_secret(),
+            )
         );
         let mut body = json!({"organizationId":"org", "email":"invitee@organization-duration.test", "role":"member"});
         if operation == "resend" {

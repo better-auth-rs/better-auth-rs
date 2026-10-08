@@ -209,7 +209,7 @@ pub struct CreateInvitation {
     /// Validated application input before adapter transforms.
     pub additional_fields: crate::FieldMap,
     pub team_id: Option<String>,
-    pub organization_id: String,
+    pub organization_id: crate::SchemaValue<String>,
     pub email: String,
     pub role: String,
     pub inviter_id: String,
@@ -225,7 +225,7 @@ impl CreateInvitation {
         expires_at: crate::FieldDate,
     ) -> Self {
         Self {
-            organization_id: organization_id.into(),
+            organization_id: organization_id.into().into(),
             additional_fields: Default::default(),
             email: email.into(),
             role: role.into(),

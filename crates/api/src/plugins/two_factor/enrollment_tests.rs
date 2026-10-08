@@ -161,7 +161,7 @@ impl Fixture {
         test_helpers::create_auth_request_no_query(
             HttpMethod::Post,
             path,
-            Some(&self.session.token),
+            Some(self.session.token.typed().unwrap()),
             Some(serde_json::to_vec(&body).unwrap()),
         )
     }
@@ -230,7 +230,10 @@ async fn native_totp_completion_rotates_sessions_only_for_incomplete_enrollment(
         assert_eq!(response.status, 200);
         let body: serde_json::Value =
             serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
-        assert_eq!(body["token"], fixture.session.token);
+        assert_eq!(
+            body["token"],
+            fixture.session.token.json().unwrap().unwrap()
+        );
         assert_eq!(body["user"]["twoFactorEnabled"], false);
         let stored = fixture.record().await;
         assert_eq!(stored.verified.field_value(), true.into());
@@ -251,7 +254,7 @@ async fn native_totp_completion_rotates_sessions_only_for_incomplete_enrollment(
             fixture
                 .ctx
                 .database
-                .get_session(&fixture.session.token)
+                .get_session(fixture.session.token.typed().unwrap())
                 .await
                 .unwrap()
                 .is_some(),
@@ -324,7 +327,10 @@ async fn native_pending_totp_accepts_null_but_rejects_explicit_false() {
             let body: serde_json::Value =
                 serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
             assert_eq!(body["user"]["twoFactorEnabled"], true);
-            assert_ne!(body["token"], fixture.session.token);
+            assert_ne!(
+                body["token"],
+                fixture.session.token.json().unwrap().unwrap()
+            );
             assert_eq!(fixture.record().await.verified.field_value(), true.into());
             assert!(
                 fixture
@@ -361,7 +367,7 @@ async fn enrollment_failure_preserves_unverified_factor_and_original_session() {
             fixture
                 .ctx
                 .database
-                .get_session(&fixture.session.token)
+                .get_session(fixture.session.token.typed().unwrap())
                 .await
                 .unwrap()
                 .is_some()

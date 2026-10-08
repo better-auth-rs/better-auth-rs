@@ -492,8 +492,6 @@ impl ApiKeyPlugin {
                 } else {
                     fallback_expiration.clone().into()
                 };
-                let mut additional_fields = better_auth_core::FieldMap::new();
-                let _ = additional_fields.insert("expiresAt".into(), expires_at);
                 let meta = endpoint.request.map(|req| {
                     better_auth_core::RequestMeta::from_request_with_config(
                         req,
@@ -503,18 +501,21 @@ impl ApiKeyPlugin {
                 let session = SessionView {
                     visible_fields: None,
                     id: view.id,
-                    token: key.to_owned(),
+                    token: key.to_owned().into(),
                     user_id: user.id().into_owned(),
                     created_at: now.into(),
                     updated_at: now.into(),
-                    expires_at: fallback_expiration,
-                    ip_address: meta.as_ref().and_then(|meta| meta.ip_address.clone()),
-                    user_agent: meta.and_then(|meta| meta.user_agent),
-                    impersonated_by: None,
-                    active_organization_id: None,
-                    active_team_id: None,
+                    expires_at: better_auth_core::SchemaValue::from_field(expires_at),
+                    ip_address: meta
+                        .as_ref()
+                        .and_then(|meta| meta.ip_address.clone())
+                        .into(),
+                    user_agent: meta.and_then(|meta| meta.user_agent).into(),
+                    impersonated_by: None.into(),
+                    active_organization_id: None.into(),
+                    active_team_id: None.into(),
                     active: true,
-                    additional_fields,
+                    ..Default::default()
                 };
                 Ok(Some((session, ctx.user_view(&user).await?)))
             },

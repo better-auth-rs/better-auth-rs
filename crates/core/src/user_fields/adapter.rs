@@ -28,14 +28,21 @@ impl UserConfig {
     /// Resolve schema order and replace the adapter-owned ID policy in its existing slot.
     #[doc(hidden)]
     pub fn adapter_fields(&self, native: &[&str]) -> Self {
-        let mut fields: indexmap::IndexMap<_, _> = self
-            .ordered_fields(native)
-            .into_iter()
-            .map(|(name, field)| (name.to_owned(), field.clone()))
-            .collect();
-        let _ = fields.insert("id".into(), UserFieldConfig::default());
+        let mut ordered = self.ordered_declarations(native);
+        let _ = ordered
+            .fields_mut()
+            .insert("id".into(), UserFieldConfig::default());
+        ordered
+    }
+
+    pub(crate) fn ordered_declarations(&self, native: &[&str]) -> Self {
         Self {
-            additional_fields: Some(fields),
+            additional_fields: Some(
+                self.ordered_fields(native)
+                    .into_iter()
+                    .map(|(name, field)| (name.to_owned(), field.clone()))
+                    .collect(),
+            ),
         }
     }
 

@@ -182,7 +182,7 @@ async fn scenario<S: AuthSchema>(
             format!(
                 "better-auth.session_token={}",
                 better_auth_core::utils::cookie_utils::sign_cookie_value(
-                    &session.token,
+                    session.token.typed().unwrap(),
                     auth.config().signing_secret()
                 )
             ),

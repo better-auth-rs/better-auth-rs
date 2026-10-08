@@ -227,7 +227,7 @@ async fn seed(store: &EphemeralStore) -> AuthResult<()> {
             .await?;
         let _ = store
             .update_session_with_writer(
-                &session.token,
+                session.token.typed().unwrap(),
                 SessionUpdate {
                     token: Some(format!("ordinary-session-{suffix}")),
                     ..Default::default()
@@ -452,7 +452,7 @@ async fn native_user_child_reads_unconfigured_image_after_name_callback() -> Aut
         trace.enabled.store(true, Ordering::SeqCst);
         let output = if path == "session" {
             store
-                .get_session_snapshot(&row.token)
+                .get_session_snapshot(row.token.typed().unwrap())
                 .await?
                 .unwrap()
                 .1

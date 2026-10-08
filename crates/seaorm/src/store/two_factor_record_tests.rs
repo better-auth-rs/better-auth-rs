@@ -119,7 +119,8 @@ async fn replaced_columns_keep_dynamic_values_and_transformed_backup_cas() -> Au
             ("verified".into(), "yes".into()),
             ("createdAt".into(), "application timestamp".into()),
         ]))
-        .await?;
+        .await?
+        .ok_or_else(|| AuthError::internal("Expected the created TwoFactor record"))?;
     assert_eq!(created.get("secret"), Some(&14.0.into()));
     assert_eq!(created.get("backupCodes"), Some(&14.0.into()));
     assert!(!created.contains_key("updatedAt"));

@@ -10,9 +10,10 @@ use sea_orm::{ConnectionTrait, EntityTrait, QueryFilter, QueryTrait};
 impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> WalletStore
     for SeaOrmStore<S, O, P>
 {
-    async fn create_wallet_address_record(&self, input: FieldMap) -> AuthResult<FieldMap> {
+    async fn create_wallet_address_record(&self, input: FieldMap) -> AuthResult<Option<FieldMap>> {
         self.create_plugin_record::<P::WalletAddress>(
             self.connection(),
+            super::create_readback::ReadbackScope::Direct(self.connection()),
             EntityRole::WalletAddress,
             "walletAddress",
             input,
@@ -66,10 +67,11 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
 impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> WalletStore
     for super::SeaOrmTransaction<S, O, P>
 {
-    async fn create_wallet_address_record(&self, input: FieldMap) -> AuthResult<FieldMap> {
+    async fn create_wallet_address_record(&self, input: FieldMap) -> AuthResult<Option<FieldMap>> {
         self.store
             .create_plugin_record::<P::WalletAddress>(
                 &self.tx,
+                super::create_readback::ReadbackScope::Transaction,
                 EntityRole::WalletAddress,
                 "walletAddress",
                 input,

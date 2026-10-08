@@ -60,7 +60,7 @@ async fn test_generate_register_options_sets_cookie_and_uses_query_name() {
     let req = test_helpers::create_auth_request(
         HttpMethod::Get,
         "/passkey/generate-register-options",
-        Some(&session.token),
+        Some(session.token.typed().unwrap()),
         None,
         HashMap::from([
             ("name".to_string(), "Custom Account Label".to_string()),
@@ -146,7 +146,7 @@ async fn test_generate_authenticate_options_with_auth_lists_allow_credentials() 
     let req = test_helpers::create_auth_request_no_query(
         HttpMethod::Get,
         "/passkey/generate-authenticate-options",
-        Some(&session.token),
+        Some(session.token.typed().unwrap()),
         None,
     );
 
@@ -189,7 +189,7 @@ async fn test_verify_registration_without_challenge_cookie_returns_challenge_not
     let mut req = test_helpers::create_auth_json_request_no_query(
         HttpMethod::Post,
         "/passkey/verify-registration",
-        Some(&session.token),
+        Some(session.token.typed().unwrap()),
         Some(body),
     );
     req.headers
@@ -269,7 +269,7 @@ async fn test_list_user_passkeys_matches_upstream_optional_fields() {
     let req = test_helpers::create_auth_request_no_query(
         HttpMethod::Get,
         "/passkey/list-user-passkeys",
-        Some(&session.token),
+        Some(session.token.typed().unwrap()),
         None,
     );
     let response = plugin.handle_list_user_passkeys(&req, &ctx).await.unwrap();
@@ -320,7 +320,7 @@ async fn test_delete_passkey_non_owner_is_forbidden() {
     let req = test_helpers::create_auth_json_request_no_query(
         HttpMethod::Post,
         "/passkey/delete-passkey",
-        Some(&session.token),
+        Some(session.token.typed().unwrap()),
         Some(serde_json::json!({ "id": passkey.id })),
     );
 
@@ -368,7 +368,7 @@ async fn test_update_passkey_non_owner_uses_ts_error_message() {
     let req = test_helpers::create_auth_json_request_no_query(
         HttpMethod::Post,
         "/passkey/update-passkey",
-        Some(&session.token),
+        Some(session.token.typed().unwrap()),
         Some(serde_json::json!({
             "id": passkey.id,
             "name": "Hijacked",

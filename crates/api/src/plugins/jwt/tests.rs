@@ -115,6 +115,7 @@ async fn concurrent_signing_retains_verifiable_keys_and_pins_never_replace_expir
         .rotation_interval(Duration::seconds(-1))
         .create_key_pair(JwtKeyPairConfig::new(JwtAlgorithm::EdDsa), &ctx)
         .await
+        .unwrap()
         .unwrap();
     let count = ctx.database.list_jwks().await.unwrap().len();
     assert!(
@@ -202,7 +203,7 @@ async fn cookie_signer_resolves_keys_before_rejecting_missing_subject() -> AuthR
                     Box::pin(async move {
                         let key = endpoint.auth.database.create_jwk(key).await?;
                         events.lock().unwrap().push("create");
-                        Ok(key)
+                        Ok(Some(key))
                     })
                 }),
         );
@@ -395,7 +396,7 @@ async fn cookie_signer_is_purpose_bound_and_cache_survives_store_revocation() {
         );
     }
     ctx.database
-        .delete_session(&data.session.token)
+        .delete_session(data.session.token.typed().unwrap())
         .await
         .unwrap();
     let mut cached = AuthRequest::new(HttpMethod::Get, "/get-session");
@@ -407,7 +408,7 @@ async fn cookie_signer_is_purpose_bound_and_cache_survives_store_revocation() {
                 .auth_cookie("session_token", Default::default())
                 .name,
             better_auth_core::utils::cookie_utils::sign_cookie_value(
-                &data.session.token,
+                data.session.token.typed().unwrap(),
                 &ctx.config.secret
             )
         ),
@@ -590,7 +591,7 @@ async fn cookie_signer_preserves_fractional_lifetime_through_normal_cache_read()
         format!(
             "better-auth.session_token={}; {cookie}",
             better_auth_core::utils::cookie_utils::sign_cookie_value(
-                &data.session.token,
+                data.session.token.typed().unwrap(),
                 &ctx.config.secret
             )
         ),
@@ -604,4 +605,64 @@ async fn cookie_signer_preserves_fractional_lifetime_through_normal_cache_read()
     assert_eq!(cached.session.id, data.session.id);
     assert_eq!(cached.user.id, data.user.id);
     assert!(read.take_response_headers().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn nullable_key_readback_preserves_write_and_endpoint_consumption_order() {
+    use better_auth_seaorm::store::__private_test_support::bundled_schema::BundledSchema;
+    use std::sync::Mutex;
+
+    for operation in ["jwks", "sign", "explicit-algorithm"] {
+        for encrypted in [false, true] {
+            let mut ctx = create_test_context().await;
+            let events = Arc::new(Mutex::new(Vec::new()));
+            let reads = events.clone();
+            let writes = events.clone();
+            ctx.extensions.insert(Arc::new(
+                JwtCallbacks::<BundledSchema>::default()
+                    .get_jwks(move |endpoint| {
+                        let events = reads.clone();
+                        Box::pin(async move {
+                            events.lock().unwrap().push("read");
+                            endpoint.auth.database.list_jwks().await.map(Some)
+                        })
+                    })
+                    .create_jwk(move |input, endpoint| {
+                        let events = writes.clone();
+                        Box::pin(async move {
+                            let _ = endpoint.auth.database.create_jwk(input).await?;
+                            events.lock().unwrap().push("write-null");
+                            Ok(None)
+                        })
+                    }),
+            ));
+            let plugin = JwtPlugin::new().disable_private_key_encryption(!encrypted);
+            let endpoint = EndpointContext::new(None, FieldValue::Null, &ctx);
+            if operation == "jwks" {
+                let response = plugin.jwks(&endpoint).await.unwrap();
+                let body: Value = serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
+                let keys = body["keys"].as_array().unwrap();
+                assert_eq!(keys.len(), 1);
+                assert_eq!(keys[0]["alg"], "EdDSA");
+                assert!(keys[0].get("d").is_none());
+                assert_eq!(*events.lock().unwrap(), ["read", "write-null", "read"]);
+            } else {
+                let options = JwtSigningOptions {
+                    algorithm: (operation == "explicit-algorithm").then_some(JwtAlgorithm::EdDsa),
+                    ..Default::default()
+                };
+                let result = plugin.sign_with_options(Map::new(), &options, &ctx).await;
+                if operation == "sign" {
+                    assert!(matches!(result, Err(AuthError::Internal(message))
+                        if message == "Cannot read properties of null (reading 'privateKey')"));
+                    assert_eq!(*events.lock().unwrap(), ["read", "read", "write-null"]);
+                } else {
+                    assert!(matches!(result, Err(AuthError::Config(message))
+                        if message.contains("requested signing key is expired")));
+                    assert_eq!(*events.lock().unwrap(), ["read", "write-null"]);
+                }
+            }
+            assert_eq!(ctx.database.list_jwks().await.unwrap().len(), 1);
+        }
+    }
 }

@@ -16,9 +16,13 @@ fn now() -> FieldDate {
 
 #[async_trait]
 impl ApiKeyStore for EphemeralStore {
-    async fn create_api_key_record(&self, input: crate::FieldMap) -> AuthResult<crate::FieldMap> {
+    async fn create_api_key_record(
+        &self,
+        input: crate::FieldMap,
+    ) -> AuthResult<Option<crate::FieldMap>> {
         self.create_plugin_record(EntityRole::ApiKey, input, Default::default())
             .await
+            .map(Some)
     }
 
     async fn get_api_key_record(
@@ -46,7 +50,11 @@ impl ApiKeyStore for EphemeralStore {
             ("lastRefillAt".into(), FieldValue::Null),
             ("lastRequest".into(), FieldValue::Null),
         ]);
-        ApiKey::from_field_values(self.create_api_key_record(fields).await?)
+        ApiKey::from_field_values(
+            self.create_api_key_record(fields)
+                .await?
+                .ok_or_else(|| AuthError::internal("API Key creation returned no record"))?,
+        )
     }
 
     async fn get_api_key_by_id(&self, id: &str) -> AuthResult<Option<ApiKey>> {

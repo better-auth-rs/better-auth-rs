@@ -79,6 +79,47 @@ fn timestamp(default: bool, update: bool) -> UserFieldConfig {
     }
 }
 
+impl UserConfig {
+    /// Compose the complete User declaration before replacing adapter-owned ID policies.
+    #[doc(hidden)]
+    pub fn user_field_schema(&self) -> Self {
+        let mut fields: indexmap::IndexMap<_, _> = [
+            (
+                "name".into(),
+                UserFieldConfig {
+                    sortable: Some(true),
+                    ..field(UserFieldType::String, true)
+                },
+            ),
+            (
+                "email".into(),
+                UserFieldConfig {
+                    unique: Some(true),
+                    sortable: Some(true),
+                    ..field(UserFieldType::String, true)
+                },
+            ),
+            (
+                "emailVerified".into(),
+                UserFieldConfig {
+                    default_value: Some(false.into()),
+                    input: Some(false),
+                    ..field(UserFieldType::Boolean, true)
+                },
+            ),
+            ("image".into(), field(UserFieldType::String, false)),
+            ("createdAt".into(), timestamp(true, false)),
+            ("updatedAt".into(), timestamp(true, true)),
+        ]
+        .into();
+        fields.extend(self.fields().clone());
+        Self {
+            additional_fields: Some(fields),
+        }
+        .ordered_declarations(&[])
+    }
+}
+
 impl crate::config::AccountConfig {
     /// Compose the adapter schema. A replacement field replaces all built-in attributes.
     pub fn field_schema(&self) -> UserConfig {
@@ -88,6 +129,7 @@ impl crate::config::AccountConfig {
             (
                 "userId".into(),
                 UserFieldConfig {
+                    index: Some(true),
                     references: Some(UserFieldReference {
                         model: "user".into(),
                         field: "id".into(),
@@ -148,6 +190,7 @@ impl crate::config::AccountConfig {
         UserConfig {
             additional_fields: Some(fields),
         }
+        .ordered_declarations(&[])
     }
 }
 
@@ -155,7 +198,13 @@ impl crate::config::VerificationConfig {
     /// Compose database field policies without applying them to secondary-only values.
     pub fn field_schema(&self) -> UserConfig {
         let mut fields = [
-            ("identifier".into(), field(UserFieldType::String, true)),
+            (
+                "identifier".into(),
+                UserFieldConfig {
+                    index: Some(true),
+                    ..field(UserFieldType::String, true)
+                },
+            ),
             ("value".into(), field(UserFieldType::String, true)),
             ("expiresAt".into(), field(UserFieldType::Date, true)),
             ("createdAt".into(), timestamp(true, false)),
@@ -167,6 +216,7 @@ impl crate::config::VerificationConfig {
         UserConfig {
             additional_fields: Some(fields),
         }
+        .ordered_declarations(&[])
     }
 }
 

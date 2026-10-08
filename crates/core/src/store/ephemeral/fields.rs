@@ -762,7 +762,7 @@ async fn builtin_policies_transform_typed_records_once_and_preserve_adapter_id()
     let role = store
         .create_organization_role(CreateOrganizationRole {
             additional_fields: Default::default(),
-            organization_id: organization.id.typed().unwrap().clone(),
+            organization_id: organization.id.clone(),
             role: "editor".into(),
             permission: Value::from_json(json!({"member":["read"]})).unwrap(),
         })

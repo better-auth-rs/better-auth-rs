@@ -221,11 +221,15 @@ impl TeamStore for EphemeralStore {
         Ok(())
     }
     async fn list_organization_teams(&self, organization_id: &str) -> AuthResult<Vec<Team>> {
-        let organization_id = self.organization_query(
-            EntityRole::Team,
-            "organizationId",
-            Value::from(organization_id),
-        )?;
+        self.list_organization_teams_value(&Value::from(organization_id))
+            .await
+    }
+    async fn list_organization_teams_value(
+        &self,
+        organization_id: &Value,
+    ) -> AuthResult<Vec<Team>> {
+        let organization_id =
+            self.organization_query(EntityRole::Team, "organizationId", organization_id.clone())?;
         let rows = self
             .lock()?
             .teams
@@ -245,11 +249,12 @@ impl TeamStore for EphemeralStore {
         self.output_records(EntityRole::Team, rows).await
     }
     async fn count_organization_teams(&self, organization_id: &str) -> AuthResult<u64> {
-        let organization_id = self.organization_query(
-            EntityRole::Team,
-            "organizationId",
-            Value::from(organization_id),
-        )?;
+        self.count_organization_teams_value(&Value::from(organization_id))
+            .await
+    }
+    async fn count_organization_teams_value(&self, organization_id: &Value) -> AuthResult<u64> {
+        let organization_id =
+            self.organization_query(EntityRole::Team, "organizationId", organization_id.clone())?;
         Ok(self
             .lock()?
             .teams
@@ -296,8 +301,16 @@ impl TeamStore for EphemeralStore {
         team_id: &str,
         user_id: &str,
     ) -> AuthResult<Option<TeamMember>> {
-        let user_id = self.memory_primary_id_query(&Value::from(user_id))?;
-        let team_id = self.organization_query(EntityRole::Team, "id", Value::from(team_id))?;
+        self.get_team_member_value(&Value::from(team_id), &Value::from(user_id))
+            .await
+    }
+    async fn get_team_member_value(
+        &self,
+        team_id: &Value,
+        user_id: &Value,
+    ) -> AuthResult<Option<TeamMember>> {
+        let user_id = self.memory_primary_id_query(user_id)?;
+        let team_id = self.organization_query(EntityRole::Team, "id", team_id.clone())?;
         self.lock()?
             .team_members
             .snapshot()?
@@ -310,7 +323,10 @@ impl TeamStore for EphemeralStore {
             .transpose()
     }
     async fn list_team_members(&self, team_id: &str) -> AuthResult<Vec<TeamMember>> {
-        let team_id = self.organization_query(EntityRole::Team, "id", Value::from(team_id))?;
+        self.list_team_members_value(&Value::from(team_id)).await
+    }
+    async fn list_team_members_value(&self, team_id: &Value) -> AuthResult<Vec<TeamMember>> {
+        let team_id = self.organization_query(EntityRole::Team, "id", team_id.clone())?;
         let rows = self
             .lock()?
             .team_members
@@ -485,7 +501,7 @@ impl OrganizationRoleStore for EphemeralStore {
         let organization_id = self.organization_query(
             EntityRole::OrganizationRole,
             "organizationId",
-            Value::from(input.organization_id.clone()),
+            input.organization_id.field_value(),
         )?;
         let role_name = self.organization_query(
             EntityRole::OrganizationRole,
@@ -520,7 +536,7 @@ impl OrganizationRoleStore for EphemeralStore {
                 .generated_id("organizationRole", None, count)?
                 .map(crate::SchemaValue::Typed)
                 .unwrap_or_default(),
-            organization_id: (input.organization_id).into(),
+            organization_id: input.organization_id,
             role: (input.role).into(),
             permission,
             created_at: (Utc::now()).into(),
@@ -617,6 +633,14 @@ impl OrganizationRoleStore for EphemeralStore {
         organization_id: &str,
         names: &[String],
     ) -> AuthResult<Vec<OrganizationRole>> {
+        self.query_organization_roles_value(&Value::from(organization_id), names)
+            .await
+    }
+    async fn query_organization_roles_value(
+        &self,
+        organization_id: &Value,
+        names: &[String],
+    ) -> AuthResult<Vec<OrganizationRole>> {
         let names = names
             .iter()
             .map(|name| {
@@ -630,7 +654,7 @@ impl OrganizationRoleStore for EphemeralStore {
         let organization_id = self.organization_query(
             EntityRole::OrganizationRole,
             "organizationId",
-            Value::from(organization_id),
+            organization_id.clone(),
         )?;
         let rows = self
             .lock()?
@@ -659,6 +683,14 @@ impl OrganizationRoleStore for EphemeralStore {
         organization_id: &str,
         key: crate::store::OrganizationRoleKey<'_>,
     ) -> AuthResult<Option<OrganizationRole>> {
+        self.find_organization_role_value(&Value::from(organization_id), key)
+            .await
+    }
+    async fn find_organization_role_value(
+        &self,
+        organization_id: &Value,
+        key: crate::store::OrganizationRoleKey<'_>,
+    ) -> AuthResult<Option<OrganizationRole>> {
         let (key_field, key_value) = match key {
             crate::store::OrganizationRoleKey::Id(id) => ("id", Value::from(id)),
             crate::store::OrganizationRoleKey::Name(name) => ("role", Value::from(name)),
@@ -668,7 +700,7 @@ impl OrganizationRoleStore for EphemeralStore {
         let organization_id = self.organization_query(
             EntityRole::OrganizationRole,
             "organizationId",
-            Value::from(organization_id),
+            organization_id.clone(),
         )?;
         let rows = self.lock()?.organization_roles.snapshot()?;
         let row = rows.into_iter().find(|row| {
@@ -689,10 +721,14 @@ impl OrganizationRoleStore for EphemeralStore {
         }
     }
     async fn count_organization_roles(&self, organization_id: &str) -> AuthResult<u64> {
+        self.count_organization_roles_value(&Value::from(organization_id))
+            .await
+    }
+    async fn count_organization_roles_value(&self, organization_id: &Value) -> AuthResult<u64> {
         let organization_id = self.organization_query(
             EntityRole::OrganizationRole,
             "organizationId",
-            Value::from(organization_id),
+            organization_id.clone(),
         )?;
         Ok(self
             .lock()?
@@ -802,7 +838,7 @@ async fn memory_organization_deletion_cleans_teams_and_roles() {
     let role = store
         .create_organization_role(CreateOrganizationRole {
             additional_fields: Default::default(),
-            organization_id: org.id.typed().unwrap().clone(),
+            organization_id: org.id.clone(),
             role: "editor".into(),
             permission: Value::from_json(serde_json::json!({"team":["create"]})).unwrap(),
         })

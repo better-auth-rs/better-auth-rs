@@ -95,7 +95,7 @@ impl<S: AuthSchema> SecondaryStore<S> {
         &self,
         mut input: CreateVerification,
         transaction: Option<&dyn crate::store::AuthTransaction<S>>,
-    ) -> AuthResult<VerificationView> {
+    ) -> AuthResult<Option<VerificationView>> {
         let request = crate::hooks::current_request_hook_context();
         input = input.with_timestamps(Utc::now().into());
         input.identifier = self
@@ -122,28 +122,31 @@ impl<S: AuthSchema> SecondaryStore<S> {
                 }
             };
         }
-        match transaction {
+        let proceed = match transaction {
             Some(transaction) => {
                 transaction
-                    .before_create_runtime_verification(&mut input)
+                    .before_create_runtime_verification_optional(&mut input)
                     .await?
             }
             None => {
                 self.inner
-                    .before_create_runtime_verification(&mut input)
+                    .before_create_runtime_verification_optional(&mut input)
                     .await?
             }
+        };
+        if !proceed {
+            return Ok(None);
         }
         // Secondary-only creation keeps the hook input: no generated ID or adapter field policies.
         let verification = VerificationView::from_fields(input.fields()?)?;
         self.cache_verification(&identifier, &verification).await?;
         if transaction.is_none() {
             self.inner
-                .after_create_runtime_verification(&verification, request)
+                .after_create_runtime_verification(Some(&verification), request)
                 .await?;
         }
 
-        Ok(verification)
+        Ok(Some(verification))
     }
 
     pub(super) async fn find_verification_in_transaction(
@@ -191,7 +194,7 @@ impl<S: AuthSchema> SecondaryStore<S> {
         let _ = self.storage.as_ref()?;
         let runtime = self.clone();
         Some(Box::new(move |record| {
-            Box::pin(async move { runtime.cache_verification(&identifier, &record).await })
+            Box::pin(async move { runtime.cache_verification_fields(&identifier, record).await })
         }))
     }
 
@@ -249,15 +252,33 @@ impl<S: AuthSchema> SecondaryStore<S> {
         identifier: &str,
         verification: &VerificationView,
     ) -> AuthResult<()> {
+        self.cache_verification_fields(identifier, verification.fields()?)
+            .await
+    }
+
+    async fn cache_verification_fields(
+        &self,
+        identifier: &str,
+        fields: crate::FieldMap,
+    ) -> AuthResult<()> {
         let Some(storage) = &self.storage else {
             return Ok(());
         };
-        let seconds = verification.expires_at.cache_ttl(Utc::now())?;
+        let seconds = crate::SchemaValue::<crate::FieldDate>::from_field(
+            fields.get("expiresAt").cloned().unwrap_or_default(),
+        )
+        .cache_ttl(Utc::now())?;
         if seconds > 0.0 {
             storage
                 .set_native(
                     &format!("verification:{identifier}").into(),
-                    &serde_json::to_string(verification)?,
+                    &crate::FieldValue::from(fields)
+                        .stringify()?
+                        .ok_or_else(|| {
+                            AuthError::internal(
+                                "Verification cache serialization omitted the record",
+                            )
+                        })?,
                     Some(seconds),
                 )
                 .await?;
@@ -339,6 +360,15 @@ impl<S: AuthSchema> VerificationStore<S> for SecondaryStore<S> {
     }
 
     async fn create_verification(&self, input: CreateVerification) -> AuthResult<VerificationView> {
+        self.create_verification_optional(input)
+            .await?
+            .ok_or_else(|| AuthError::internal("Verification creation returned no record"))
+    }
+
+    async fn create_verification_optional(
+        &self,
+        input: CreateVerification,
+    ) -> AuthResult<Option<VerificationView>> {
         self.create_verification_in_transaction(input, None).await
     }
 
@@ -346,7 +376,7 @@ impl<S: AuthSchema> VerificationStore<S> for SecondaryStore<S> {
         &self,
         input: CreateVerification,
         writer: Option<VerificationCreateWriter>,
-    ) -> AuthResult<VerificationView> {
+    ) -> AuthResult<Option<VerificationView>> {
         self.inner
             .create_verification_with_writer(input, writer)
             .await

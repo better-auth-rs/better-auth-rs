@@ -220,8 +220,11 @@ impl MemberStore for EphemeralStore {
         .await
     }
     async fn list_organization_members(&self, org: &str) -> AuthResult<Vec<Member>> {
-        let org =
-            self.organization_query(EntityRole::Member, "organizationId", Value::from(org))?;
+        self.list_organization_members_value(&Value::from(org))
+            .await
+    }
+    async fn list_organization_members_value(&self, org: &Value) -> AuthResult<Vec<Member>> {
+        let org = self.organization_query(EntityRole::Member, "organizationId", org.clone())?;
         let rows = self
             .lock()?
             .members
@@ -244,7 +247,7 @@ impl MemberStore for EphemeralStore {
         let organization_id = self.organization_query(
             EntityRole::Member,
             "organizationId",
-            Value::from(params.organization_id.clone()),
+            params.organization_id.field_value(),
         )?;
         let mut members: Vec<_> = self
             .lock()?

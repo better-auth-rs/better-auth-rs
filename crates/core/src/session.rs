@@ -333,13 +333,11 @@ impl<S: AuthSchema> SessionManager<S> {
         let Some(session) = self.database.get_session(token).await? else {
             return Ok(None);
         };
-        if session.expires_at().milliseconds() < Utc::now().timestamp_millis() as f64
-            || !session.active()
-        {
+        if session.expires_at().is_before(Utc::now())? || !session.active() {
             self.database.delete_session(token).await?;
             return Ok(None);
         }
-        if self.needs_refresh(&session) {
+        if self.needs_refresh(&session)? {
             let new_expires_at = Utc::now() + self.config.session.expires_in();
             return self
                 .database
@@ -350,12 +348,20 @@ impl<S: AuthSchema> SessionManager<S> {
         Ok(Some(session))
     }
 
-    fn needs_refresh(&self, session: &impl AuthSession) -> bool {
-        !self.config.session.disable_session_refresh()
-            && session.expires_at().milliseconds()
-                - self.config.session.expires_in().num_milliseconds() as f64
-                + self.config.session.update_age().num_milliseconds() as f64
-                <= Utc::now().timestamp_millis() as f64
+    fn needs_refresh(&self, session: &impl AuthSession) -> AuthResult<bool> {
+        if self.config.session.disable_session_refresh() {
+            return Ok(false);
+        }
+        let expiry = session.expires_at().field_value();
+        if expiry.is_null() || expiry.is_undefined() {
+            return Err(AuthError::internal(
+                "Cannot read properties of null or undefined (reading 'valueOf')",
+            ));
+        }
+        Ok(crate::query::field_number(&expiry)?
+            - self.config.session.expires_in().num_milliseconds() as f64
+            + self.config.session.update_age().num_milliseconds() as f64
+            <= Utc::now().timestamp_millis() as f64)
     }
 
     /// Resolve an HTTP session and queue any cookie updates on the request.
@@ -492,8 +498,13 @@ impl<S: AuthSchema> SessionManager<S> {
                     &payload.version
                 }) == cache.version.resolve(&payload.data.clone().into()).await?
                 && expires >= Utc::now().timestamp_millis()
-                && payload.data.session.expires_at.milliseconds()
-                    >= Utc::now().timestamp_millis() as f64
+                && payload
+                    .data
+                    .session
+                    .expires_at
+                    .clone()
+                    .converted_date()?
+                    .is_after_or_equal(Utc::now())?
             {
                 if !self.capabilities.server_sessions()
                     && let Some(update_age) = cache.refresh_age()
@@ -504,8 +515,8 @@ impl<S: AuthSchema> SessionManager<S> {
                         .then_some(self.config.session.expires_in().as_seconds_f64());
                     req.append_response_header(
                         "Set-Cookie",
-                        crate::utils::cookie_utils::create_session_cookie_with_max_age(
-                            Some(&payload.data.session.token),
+                        crate::utils::cookie_utils::create_session_cookie_with_native_value(
+                            &payload.data.session.token.field_value(),
                             max_age,
                             &self.config,
                         )?,
@@ -566,9 +577,7 @@ impl<S: AuthSchema> SessionManager<S> {
             }
         };
         req.set_session_snapshot(Some(data.clone()))?;
-        if session.expires_at().milliseconds() < Utc::now().timestamp_millis() as f64
-            || !session.active()
-        {
+        if session.expires_at().is_before(Utc::now())? || !session.active() {
             self.clear_cookies(req)?;
             if !self.config.session.defer_session_refresh || is_post {
                 self.database.delete_session(&token).await?;
@@ -582,7 +591,7 @@ impl<S: AuthSchema> SessionManager<S> {
                 needs_refresh: None,
             });
         }
-        let needs_refresh = self.needs_refresh(&session);
+        let needs_refresh = self.needs_refresh(&session)?;
         if self.config.session.defer_session_refresh && !is_post {
             self.write_cache_with_response(req, &data.clone().into(), false, None, None)
                 .await?;
@@ -705,15 +714,12 @@ impl<S: AuthSchema> SessionManager<S> {
         let sessions = self.database.get_user_sessions(user_id.as_ref()).await?;
         let now = Utc::now();
 
-        // Filter out expired sessions
-        let active_sessions = sessions
-            .into_iter()
-            .filter(|session| {
-                session.expires_at().milliseconds() > now.timestamp_millis() as f64
-                    && session.active()
-            })
-            .collect();
-
+        let mut active_sessions = Vec::new();
+        for session in sessions {
+            if session.expires_at().is_after(now)? && session.active() {
+                active_sessions.push(session);
+            }
+        }
         Ok(active_sessions)
     }
 
@@ -727,10 +733,10 @@ impl<S: AuthSchema> SessionManager<S> {
             .get_user_session_snapshots(user_id.as_ref())
             .await?;
         let mut views = Vec::new();
-        for (session, cached) in snapshots.into_iter().filter(|(session, _)| {
-            session.expires_at().milliseconds() > Utc::now().timestamp_millis() as f64
-                && session.active()
-        }) {
+        for (session, cached) in snapshots {
+            if !session.expires_at().is_after(Utc::now())? || !session.active() {
+                continue;
+            }
             let view = if let Some(mut view) = cached {
                 view.filter_returned_fields(&self.config.session);
                 view
@@ -781,8 +787,14 @@ impl<S: AuthSchema> SessionManager<S> {
         let mut count = 0;
 
         for session in sessions {
-            if session.token() != current_token {
-                self.delete_session(session.token()).await?;
+            if !session
+                .token()
+                .field_value()
+                .strict_equals(&current_token.into())
+            {
+                self.database
+                    .delete_session_by_token_value(&session.token().field_value())
+                    .await?;
                 count += 1;
             }
         }
@@ -796,20 +808,21 @@ impl<S: AuthSchema> SessionManager<S> {
         Ok(count)
     }
 
-    /// Check whether a session is "fresh" (created recently enough for
-    /// sensitive operations like password change or account deletion).
-    ///
-    /// Returns `true` when `fresh_age` is set and
-    /// `session.created_at() + fresh_age > now`.
-    /// If `fresh_age` is `None`, the session is never considered fresh.
-    pub fn is_session_fresh(&self, session: &impl AuthSession) -> bool {
-        match self.config.session.fresh_age {
-            Some(fresh_age) => {
-                session.created_at().milliseconds() + fresh_age.num_milliseconds() as f64
-                    > Utc::now().timestamp_millis() as f64
-            }
-            None => false,
+    /// Apply the freshness guard after converting the projected creation value with the Date constructor.
+    /// An invalid Date does not satisfy the rejection comparison. `None` disables this Rust helper.
+    pub fn is_session_fresh(&self, session: &impl AuthSession) -> AuthResult<bool> {
+        let Some(fresh_age) = self.config.session.fresh_age else {
+            return Ok(false);
+        };
+        if fresh_age.is_zero() {
+            return Ok(true);
         }
+        let elapsed = Utc::now().timestamp_millis() as f64
+            - session.created_at().converted_date()?.date_milliseconds()?;
+        Ok(!matches!(
+            elapsed.partial_cmp(&(fresh_age.num_milliseconds() as f64)),
+            Some(std::cmp::Ordering::Equal | std::cmp::Ordering::Greater)
+        ))
     }
 
     /// Validate session token format
@@ -985,22 +998,23 @@ mod tests {
 
         // A session created "now" is fresh within a 10-minute window.
         let session = SessionView {
+            field_order: Default::default(),
             visible_fields: None,
             id: "s1".into(),
             expires_at: (Utc::now() + Duration::hours(1)).into(),
             token: "tok".into(),
             created_at: Utc::now().into(),
             updated_at: Utc::now().into(),
-            ip_address: None,
-            user_agent: None,
+            ip_address: None.into(),
+            user_agent: None.into(),
             user_id: "u1".into(),
-            impersonated_by: None,
-            active_organization_id: None,
-            active_team_id: None,
+            impersonated_by: None.into(),
+            active_organization_id: None.into(),
+            active_team_id: None.into(),
             active: true,
             additional_fields: Default::default(),
         };
-        assert!(mgr.is_session_fresh(&session));
+        assert!(mgr.is_session_fresh(&session).unwrap());
     }
 
     // Rust-specific surface: `SessionManager` and its token/session helper APIs are public Rust APIs with no direct TS analogue.
@@ -1012,22 +1026,23 @@ mod tests {
         let mgr = SessionManager::new(Arc::new(config), runtime.block_on(test_database()));
 
         let session = SessionView {
+            field_order: Default::default(),
             visible_fields: None,
             id: "s1".into(),
             expires_at: (Utc::now() + Duration::hours(1)).into(),
             token: "tok".into(),
             created_at: (Utc::now() - Duration::minutes(20)).into(),
             updated_at: Utc::now().into(),
-            ip_address: None,
-            user_agent: None,
+            ip_address: None.into(),
+            user_agent: None.into(),
             user_id: "u1".into(),
-            impersonated_by: None,
-            active_organization_id: None,
-            active_team_id: None,
+            impersonated_by: None.into(),
+            active_organization_id: None.into(),
+            active_team_id: None.into(),
             active: true,
             additional_fields: Default::default(),
         };
-        assert!(!mgr.is_session_fresh(&session));
+        assert!(!mgr.is_session_fresh(&session).unwrap());
     }
 
     // Rust-specific surface: `SessionManager` and its token/session helper APIs are public Rust APIs with no direct TS analogue.
@@ -1035,22 +1050,23 @@ mod tests {
     fn session_never_fresh_when_no_fresh_age() {
         let mgr = test_manager(); // default: fresh_age = None
         let session = SessionView {
+            field_order: Default::default(),
             visible_fields: None,
             id: "s1".into(),
             expires_at: (Utc::now() + Duration::hours(1)).into(),
             token: "tok".into(),
             created_at: Utc::now().into(),
             updated_at: Utc::now().into(),
-            ip_address: None,
-            user_agent: None,
+            ip_address: None.into(),
+            user_agent: None.into(),
             user_id: "u1".into(),
-            impersonated_by: None,
-            active_organization_id: None,
-            active_team_id: None,
+            impersonated_by: None.into(),
+            active_organization_id: None.into(),
+            active_team_id: None.into(),
             active: true,
             additional_fields: Default::default(),
         };
-        assert!(!mgr.is_session_fresh(&session));
+        assert!(!mgr.is_session_fresh(&session).unwrap());
     }
 
     // ── async operations ────────────────────────────────────────────────
@@ -1068,7 +1084,7 @@ mod tests {
             .unwrap();
 
         let session = mgr.create_session(&user, None, None).await.unwrap();
-        let token = session.token().to_string();
+        let token = session.token.typed().unwrap().to_string();
 
         let retrieved = mgr.get_session(&token).await.unwrap();
         assert!(retrieved.is_some());
@@ -1088,10 +1104,17 @@ mod tests {
             .await
             .unwrap();
         let session = mgr.create_session(&user, None, None).await.unwrap();
-        let token = session.token().to_string();
+        let token = session.token.typed().unwrap().to_string();
 
         // Move the stored expiry back so the refresh is observable.
-        let stale = session.expires_at().to_datetime().unwrap().unwrap() - Duration::minutes(30);
+        let stale = session
+            .expires_at()
+            .typed()
+            .unwrap()
+            .to_datetime()
+            .unwrap()
+            .unwrap()
+            - Duration::minutes(30);
         let _ = db.update_session_expiry(&token, stale).await.unwrap();
 
         let returned = mgr
@@ -1106,7 +1129,7 @@ mod tests {
             .expect("session should still be stored");
 
         assert!(
-            returned.expires_at().milliseconds() > stale.timestamp_millis() as f64,
+            returned.expires_at().date_milliseconds().unwrap() > stale.timestamp_millis() as f64,
             "refresh should have extended the expiry"
         );
         assert_eq!(
@@ -1128,8 +1151,8 @@ mod tests {
             .unwrap();
 
         let session = mgr.create_session(&user, None, None).await.unwrap();
-        assert_eq!(session.ip_address.as_deref(), Some(""));
-        assert_eq!(session.user_agent.as_deref(), Some(""));
+        assert_eq!(session.ip_address.typed().unwrap().as_deref(), Some(""));
+        assert_eq!(session.user_agent.typed().unwrap().as_deref(), Some(""));
     }
 
     // Rust-specific surface: `SessionManager` and its token/session helper APIs are public Rust APIs with no direct TS analogue.
@@ -1144,7 +1167,7 @@ mod tests {
             .unwrap();
 
         let session = mgr.create_session(&user, None, None).await.unwrap();
-        let token = session.token().to_string();
+        let token = session.token.typed().unwrap().to_string();
 
         mgr.delete_session(&token).await.unwrap();
         let retrieved = mgr.get_session(&token).await.unwrap();
@@ -1163,7 +1186,10 @@ mod tests {
             .unwrap();
 
         let session = mgr.create_session(&user, None, None).await.unwrap();
-        let result = mgr.revoke_session(session.token()).await.unwrap();
+        let result = mgr
+            .revoke_session(session.token.typed().unwrap())
+            .await
+            .unwrap();
         assert!(result);
     }
 
@@ -1240,7 +1266,7 @@ mod tests {
         let _ = mgr.create_session(&user, None, None).await.unwrap();
 
         let count = mgr
-            .revoke_other_user_sessions(user.id().typed().unwrap(), current.token())
+            .revoke_other_user_sessions(user.id().typed().unwrap(), current.token.typed().unwrap())
             .await
             .unwrap();
         assert_eq!(count, 2);
@@ -1250,6 +1276,6 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(remaining.len(), 1);
-        assert_eq!(remaining[0].token(), current.token());
+        assert_eq!(remaining[0].token, current.token);
     }
 }

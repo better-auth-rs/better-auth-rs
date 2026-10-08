@@ -30,7 +30,7 @@ pub(super) async fn token<S: AuthSchema>(auth: &BetterAuth<S>, owner: &str) -> A
             additional_fields: Default::default(),
         })
         .await?;
-    Ok(session.token().to_owned())
+    Ok(session.token().typed()?.to_string())
 }
 
 pub(super) async fn read<S: AuthSchema>(

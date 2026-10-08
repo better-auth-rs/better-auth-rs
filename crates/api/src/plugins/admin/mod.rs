@@ -306,7 +306,7 @@ impl AdminPlugin {
         let admin_cookie = create_admin_session_cookie_value(
             ctx.config.signing_secret(),
             &AdminSessionCookiePayload {
-                session_token: session.token.clone(),
+                session_token: session.token.display_string()?,
                 dont_remember,
             },
             ctx.config.session.expires_in(),
@@ -342,7 +342,7 @@ impl AdminPlugin {
             .data
             .ok_or_else(|| AuthError::from(AuthResponse::new(401)))?
             .session;
-        if session.impersonated_by.is_none() {
+        if !session.impersonated_by.field_value().is_truthy() {
             return Err(AuthError::bad_request("You are not impersonating anyone"));
         }
 

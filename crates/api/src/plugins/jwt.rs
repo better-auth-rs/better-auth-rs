@@ -307,7 +307,7 @@ impl JwtPlugin {
     async fn create_key<S: AuthSchema>(
         &self,
         endpoint: &EndpointContext<'_, S>,
-    ) -> AuthResult<better_auth_core::Jwk> {
+    ) -> AuthResult<Option<better_auth_core::Jwk>> {
         self.create_key_pair_in_endpoint(
             JwtKeyPairConfig {
                 algorithm: self.config.primary_algorithm(),
@@ -323,7 +323,7 @@ impl JwtPlugin {
         &self,
         parameters: JwtKeyPairConfig,
         ctx: &AuthContext<S>,
-    ) -> AuthResult<better_auth_core::Jwk> {
+    ) -> AuthResult<Option<better_auth_core::Jwk>> {
         ctx.with_native_context(Default::default(), |resolved| async move {
             let mut endpoint =
                 EndpointContext::new(None, better_auth_core::FieldValue::Null, &resolved);
@@ -339,7 +339,7 @@ impl JwtPlugin {
         &self,
         parameters: JwtKeyPairConfig,
         endpoint: &EndpointContext<'_, S>,
-    ) -> AuthResult<better_auth_core::Jwk> {
+    ) -> AuthResult<Option<better_auth_core::Jwk>> {
         if matches!(
             parameters.algorithm,
             JwtAlgorithm::Rs256 | JwtAlgorithm::Ps256

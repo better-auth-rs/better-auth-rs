@@ -399,7 +399,7 @@ async fn invitation_member_output_failure_compensates_without_member_seat_or_ses
         .accept_invitation_with_teams(
             invitation.id.typed()?,
             "member",
-            Some(&session.token),
+            Some(session.token.typed().unwrap()),
             true,
             crate::store::TeamMemberLimits::Fixed(Some(1)),
         )

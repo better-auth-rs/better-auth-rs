@@ -31,7 +31,7 @@ impl<S: AuthSchema> DatabaseHooks<S> for DatabaseObserver {
 
     async fn after_create_user(
         &self,
-        _: &UserView,
+        _: Option<&UserView>,
         _: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
         self.record("user", "create", "after")
@@ -82,7 +82,7 @@ impl<S: AuthSchema> DatabaseHooks<S> for DatabaseObserver {
 
     async fn after_create_account(
         &self,
-        _: &AccountView,
+        _: Option<&AccountView>,
         _: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
         self.record("account", "create", "after")
@@ -133,7 +133,7 @@ impl<S: AuthSchema> DatabaseHooks<S> for DatabaseObserver {
 
     async fn after_create_session(
         &self,
-        _: &SessionView,
+        _: Option<&SessionView>,
         _: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
         self.record("session", "create", "after")
@@ -184,7 +184,7 @@ impl<S: AuthSchema> DatabaseHooks<S> for DatabaseObserver {
 
     async fn after_create_verification(
         &self,
-        _: &VerificationView,
+        _: Option<&VerificationView>,
         _: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
         self.record("verification", "create", "after")

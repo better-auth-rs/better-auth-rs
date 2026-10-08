@@ -40,9 +40,8 @@ pub(crate) async fn invite_member_core(
         .is_truthy()
         .then_some(org_value)
         .or_else(|| {
-            session
-                .active_organization_id()
-                .map(better_auth_core::FieldValue::from)
+            let id = session.active_organization_id().field_value();
+            id.is_truthy().then_some(id)
         })
         .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
     let email = crate::plugins::organization::input::string_operation(
@@ -62,7 +61,7 @@ pub(crate) async fn invite_member_core(
         .map(|joined| joined.member)
         .ok_or_else(|| AuthError::bad_request("Member not found"))?;
 
-    let org_id = member.organization_id.typed()?.clone();
+    let org_id = org_value;
 
     if !check_permission(
         member.role().typed()?,
@@ -90,7 +89,7 @@ pub(crate) async fn invite_member_core(
 
     let dynamic_roles = if config.dynamic_access_control {
         ctx.database
-            .query_organization_roles(
+            .query_organization_roles_value(
                 &org_id,
                 &roles
                     .iter()
@@ -146,7 +145,7 @@ pub(crate) async fn invite_member_core(
     if let Some(existing_user) = ctx.database.get_user_by_email(&email).await?
         && ctx
             .database
-            .get_member(&org_id, existing_user.id().typed()?)
+            .get_member_value(&org_id, &existing_user.id().field_value())
             .await?
             .is_some()
     {
@@ -155,7 +154,10 @@ pub(crate) async fn invite_member_core(
         ));
     }
 
-    let existing = ctx.database.get_pending_invitation(&org_id, &email).await?;
+    let existing = ctx
+        .database
+        .get_pending_invitation_value(&org_id, &email)
+        .await?;
     if existing.is_some() && !resend && !config.cancel_pending_invitations_on_re_invite {
         return Err(AuthError::bad_request(
             "User is already invited to this organization",
@@ -163,7 +165,7 @@ pub(crate) async fn invite_member_core(
     }
     let organization = ctx
         .database
-        .get_organization_by_id(&org_id)
+        .get_organization_by_id_value(&org_id)
         .await?
         .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
     let organization_view = crate::plugins::organization::fields::organization(&organization, ctx);
@@ -199,7 +201,7 @@ pub(crate) async fn invite_member_core(
                 .await?;
             let count = ctx
                 .database
-                .count_pending_organization_invitations(&org_id)
+                .count_pending_organization_invitations_value(&org_id)
                 .await? as usize;
             if count >= limit {
                 return Err(AuthError::forbidden("Invitation limit reached"));
@@ -233,7 +235,7 @@ pub(crate) async fn invite_member_core(
                     .database
                     .get_team_value(team_id)
                     .await?
-                    .filter(|team| team.organization_id == org_id)
+                    .filter(|team| team.organization_id.field_value().strict_equals(&org_id))
                     .ok_or_else(|| AuthError::bad_request("Team not found"))?;
                 teams.push(team);
             }
@@ -242,7 +244,7 @@ pub(crate) async fn invite_member_core(
                 let limit = config
                     .team_member_limit(OrganizationTeamMemberLimit {
                         organization_id: &org_id,
-                        team_id,
+                        team_id: &team_id.as_str().into(),
                         session: OrganizationSession {
                             user: &user_view,
                             session: &session_view,
@@ -276,7 +278,7 @@ pub(crate) async fn invite_member_core(
                 .cloned()
                 .map(better_auth_core::SchemaValue::Dynamic)
                 .unwrap_or_default(),
-            organization_id: org_id,
+            organization_id: better_auth_core::SchemaValue::from_field(org_id),
             email: email.clone(),
             role: normalized_roles(&role_input),
             inviter_id: user.id().typed()?.to_string(),
@@ -410,11 +412,14 @@ pub(crate) async fn list_invitations_core(
 
     let _ = ctx
         .database
-        .get_member_with_user(&org_id, user.id().typed()?)
+        .get_member_with_user_value(&org_id, &user.id().field_value())
         .await?
         .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;
 
-    let invitations = ctx.database.list_organization_invitations(&org_id).await?;
+    let invitations = ctx
+        .database
+        .list_organization_invitations_value(&org_id)
+        .await?;
     Ok(invitations.iter().map(InvitationView::from).collect())
 }
 
@@ -530,10 +535,10 @@ pub(crate) async fn accept_invitation_core(
     };
     let (member, accepted, snapshot) = ctx
         .database
-        .accept_invitation_with_teams(
+        .accept_invitation_with_teams_by_token_value(
             invitation.id().typed()?,
             user.id().typed()?,
-            Some(session.token()),
+            Some(&session.token().field_value()),
             config.teams.enabled,
             better_auth_core::store::TeamMemberLimits::Resolver(&resolver),
         )
@@ -650,7 +655,7 @@ pub(crate) async fn cancel_invitation_core(
 
     if !check_permission(
         member.role().typed()?,
-        invitation.organization_id().typed()?.as_str(),
+        &invitation.organization_id().field_value(),
         "invitation",
         &["cancel"],
         config,
@@ -905,8 +910,8 @@ impl better_auth_core::store::TeamMemberLimitResolver for InvitationTeamLimits<'
     async fn maximum(&self, team_id: &str) -> AuthResult<Option<usize>> {
         self.config
             .team_member_limit(OrganizationTeamMemberLimit {
-                organization_id: self.organization_id,
-                team_id,
+                organization_id: &self.organization_id.into(),
+                team_id: &team_id.into(),
                 session: self.session,
             })
             .await

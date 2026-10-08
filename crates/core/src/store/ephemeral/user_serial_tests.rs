@@ -170,10 +170,14 @@ async fn serial_user_joins_keep_numeric_bindings_in_both_modes() -> AuthResult<(
                 active_organization_id: None,
             })
             .await?;
-        let (_, snapshot) = required(store.get_session_snapshot(&session.token).await?)?;
+        let (_, snapshot) = required(
+            store
+                .get_session_snapshot(session.token.typed().unwrap())
+                .await?,
+        )?;
         assert_eq!(required(required(snapshot)?.into_typed()?)?.user.id, "1");
         let snapshots = store
-            .get_session_snapshots(std::slice::from_ref(&session.token), true)
+            .get_session_snapshots(std::slice::from_ref(session.token.typed().unwrap()), true)
             .await?;
         assert_eq!(snapshots.len(), 1);
         assert_eq!(
@@ -315,7 +319,7 @@ async fn non_serial_session_owner_projection_preserves_lone_utf16() -> AuthResul
         .await?;
     assert_eq!(session.user_id.field_value(), owner);
     assert_eq!(
-        required(store.get_session(&session.token).await?)?
+        required(store.get_session(session.token.typed().unwrap()).await?)?
             .user_id
             .field_value(),
         owner

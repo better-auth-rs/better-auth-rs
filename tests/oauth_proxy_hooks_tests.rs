@@ -220,7 +220,7 @@ async fn proxy_before_api_key_preserves_real_session_emulation() {
         .await
         .expect("create real session");
     let cookie = better_auth_core::utils::cookie_utils::create_session_cookie(
-        session.token(),
+        session.token().typed().expect("Expected fixture token"),
         auth.config(),
     )
     .expect("serialize session cookie");

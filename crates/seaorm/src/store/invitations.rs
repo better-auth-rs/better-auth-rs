@@ -59,6 +59,7 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> I
         }
         models::insert::<O::Invitation, _>(
             self.connection(),
+            super::create_readback::ReadbackScope::Direct(self.connection()),
             core,
             input.additional_fields,
             &config,
@@ -87,14 +88,25 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> I
         organization_id: &str,
         email: &str,
     ) -> AuthResult<Option<Invitation>> {
+        self.get_pending_invitation_value(&organization_id.into(), email)
+            .await
+    }
+
+    async fn get_pending_invitation_value(
+        &self,
+        organization_id: &better_auth_core::FieldValue,
+        email: &str,
+    ) -> AuthResult<Option<Invitation>> {
         let config = self.organization_fields()?.invitation;
         let now = super::record_bindings::Binding::Date(Utc::now().into())
             .bind(self.connection().get_database_backend())?;
         let expires_at = O::Invitation::column("expires_at")?;
         let row = Entity::<O::Invitation>::find()
-            .filter(O::Invitation::column("organization_id")?.eq_id(
+            .filter(super::value_filter::equals_id(
+                O::Invitation::column("organization_id")?,
                 organization_id,
                 self.config().advanced.database.generate_id(),
+                self.connection().get_database_backend(),
             )?)
             .filter(O::Invitation::column("email")?.eq(email.to_lowercase()))
             .filter(O::Invitation::column("status")?.eq("pending"))
@@ -144,10 +156,20 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> I
         &self,
         organization_id: &str,
     ) -> AuthResult<Vec<Invitation>> {
+        self.list_organization_invitations_value(&organization_id.into())
+            .await
+    }
+
+    async fn list_organization_invitations_value(
+        &self,
+        organization_id: &better_auth_core::FieldValue,
+    ) -> AuthResult<Vec<Invitation>> {
         let rows = Entity::<O::Invitation>::find()
-            .filter(O::Invitation::column("organization_id")?.eq_id(
+            .filter(super::value_filter::equals_id(
+                O::Invitation::column("organization_id")?,
                 organization_id,
                 self.config().advanced.database.generate_id(),
+                self.connection().get_database_backend(),
             )?)
             .limit(super::pagination::default_limit(
                 self.config(),
@@ -167,13 +189,23 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> I
         &self,
         organization_id: &str,
     ) -> AuthResult<i64> {
+        self.count_pending_organization_invitations_value(&organization_id.into())
+            .await
+    }
+
+    async fn count_pending_organization_invitations_value(
+        &self,
+        organization_id: &better_auth_core::FieldValue,
+    ) -> AuthResult<i64> {
         let now = super::record_bindings::Binding::Date(Utc::now().into())
             .bind(self.connection().get_database_backend())?;
         let expires_at = O::Invitation::column("expires_at")?;
         Entity::<O::Invitation>::find()
-            .filter(O::Invitation::column("organization_id")?.eq_id(
+            .filter(super::value_filter::equals_id(
+                O::Invitation::column("organization_id")?,
                 organization_id,
                 self.config().advanced.database.generate_id(),
+                self.connection().get_database_backend(),
             )?)
             .filter(O::Invitation::column("status")?.eq("pending"))
             .filter(expires_at.into_expr().gt(expires_at.save_as(now)))

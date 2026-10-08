@@ -402,7 +402,7 @@ async fn optional_runtime_fields_preserve_absence_then_explicit_null() {
     }
     store
         .update_session_with_writer(
-            &session.token,
+            session.token.typed().unwrap(),
             SessionUpdate {
                 impersonated_by: Some(Some("administrator".into())),
                 active_organization_id: Some(Some("organization".into())),
@@ -416,7 +416,7 @@ async fn optional_runtime_fields_preserve_absence_then_explicit_null() {
         .unwrap();
     store
         .update_session_with_writer(
-            &session.token,
+            session.token.typed().unwrap(),
             SessionUpdate {
                 impersonated_by: Some(None),
                 active_organization_id: Some(None),
@@ -428,9 +428,148 @@ async fn optional_runtime_fields_preserve_absence_then_explicit_null() {
         .await
         .unwrap()
         .unwrap();
-    let session = store.get_session(&session.token).await.unwrap().unwrap();
+    let session = store
+        .get_session(session.token.typed().unwrap())
+        .await
+        .unwrap()
+        .unwrap();
     let raw = serde_json::to_value(SessionView::from(&session)).unwrap();
     for field in ["impersonatedBy", "activeOrganizationId", "activeTeamId"] {
         assert_eq!(raw.get(field), Some(&serde_json::Value::Null));
     }
+}
+
+struct VerificationCreateHooks {
+    cancel: bool,
+    after: Arc<AtomicUsize>,
+}
+
+#[crate::database_hooks()]
+impl DatabaseHooks<StatelessSchema> for VerificationCreateHooks {
+    async fn before_create_verification(
+        &self,
+        input: &mut CreateVerification,
+        _: &DatabaseHookContext<'_, StatelessSchema>,
+    ) -> AuthResult<DatabaseHookControl> {
+        assert_eq!(
+            input
+                .fields()?
+                .keys()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+            ["createdAt", "updatedAt", "identifier", "value", "expiresAt"]
+        );
+        Ok(if self.cancel {
+            DatabaseHookControl::Cancel
+        } else {
+            DatabaseHookControl::Continue
+        })
+    }
+
+    async fn after_create_verification(
+        &self,
+        verification: Option<&VerificationView>,
+        _: &DatabaseHookContext<'_, StatelessSchema>,
+    ) -> AuthResult<()> {
+        assert!(verification.is_some());
+        let _ = self.after.fetch_add(1, Ordering::SeqCst);
+        Ok(())
+    }
+}
+
+#[tokio::test]
+async fn verification_creation_cancellation_skips_writer_storage_and_after_hooks() -> AuthResult<()>
+{
+    for cancel in [false, true] {
+        let after = Arc::new(AtomicUsize::new(0));
+        let writes = Arc::new(AtomicUsize::new(0));
+        let store = EphemeralStore::default().with_hooks(vec![Arc::new(VerificationCreateHooks {
+            cancel,
+            after: after.clone(),
+        })]);
+        let writer_calls = writes.clone();
+        let created = store
+            .create_verification_with_writer(
+                CreateVerification {
+                    identifier: "nullable-create".into(),
+                    value: "proof".into(),
+                    expires_at: (Utc::now() + chrono::Duration::minutes(1)).into(),
+                    ..Default::default()
+                },
+                Some(Box::new(move |fields| {
+                    Box::pin(async move {
+                        assert_eq!(fields.get("value"), Some(&"proof".into()));
+                        let _ = writer_calls.fetch_add(1, Ordering::SeqCst);
+                        Ok(())
+                    })
+                })),
+            )
+            .await?;
+        assert_eq!(created.is_none(), cancel);
+        assert_eq!(store.lock()?.verifications.len(), usize::from(!cancel));
+        assert_eq!(writes.load(Ordering::SeqCst), usize::from(!cancel));
+        assert_eq!(after.load(Ordering::SeqCst), usize::from(!cancel));
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn native_session_updates_transform_values_before_matching_and_projection() -> AuthResult<()>
+{
+    use crate::user_fields::{FieldTransforms, UserFieldConfig, UserFieldTransform, UserFieldType};
+    let mut config = AuthConfig::default();
+    let _ = config.session.fields_mut().insert(
+        "token".into(),
+        UserFieldConfig {
+            field_type: UserFieldType::Number,
+            ..Default::default()
+        },
+    );
+    let _ = config.session.fields_mut().insert(
+        "activeTeamId".into(),
+        UserFieldConfig {
+            field_type: UserFieldType::Number,
+            transform: Some(FieldTransforms {
+                input: Some(UserFieldTransform::new(|value| {
+                    Ok((crate::query::field_number(&value)? + 1.0).into())
+                })),
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+    );
+    let store = EphemeralStore::new(Arc::new(config));
+    let session = store
+        .create_session(CreateSession {
+            user_id: "owner".into(),
+            expires_at: (Utc::now() + chrono::Duration::hours(1)).into(),
+            ip_address: None,
+            user_agent: None,
+            impersonated_by: None,
+            active_organization_id: None,
+            inherited_fields: Default::default(),
+            additional_fields: [("token".into(), 7.into())].into(),
+        })
+        .await?;
+    assert_eq!(session.token.field_value(), 7.into());
+    let updated = store
+        .update_session_active_team_by_token_value(&7.into(), Some(&3.into()))
+        .await?;
+    assert_eq!(updated.active_team_id.field_value(), 4.into());
+    let fetched = store
+        .get_session_by_token_value(&7.into())
+        .await?
+        .ok_or(AuthError::SessionNotFound)?;
+    assert_eq!(fetched.active_team_id.field_value(), 4.into());
+    assert!(
+        store
+            .update_session_fields_by_token_value(
+                &8.into(),
+                [("activeTeamId".into(), 5.into())].into()
+            )
+            .await?
+            .is_none()
+    );
+    assert_eq!(store.lock()?.sessions.len(), 1);
+    Ok(())
 }

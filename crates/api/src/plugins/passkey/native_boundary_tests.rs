@@ -115,7 +115,7 @@ impl DatabaseHooks<BundledSchema> for SessionTrace {
 
     async fn after_create_session(
         &self,
-        _: &SessionView,
+        _: Option<&SessionView>,
         _: &DatabaseHookContext<'_, BundledSchema>,
     ) -> AuthResult<()> {
         self.events.lock().unwrap().push("session:after".into());
@@ -259,7 +259,7 @@ async fn registration_and_authentication_preserve_utf16_response_fields() -> Tes
         fixture
             .route(&request(
                 "/passkey/generate-register-options",
-                Some(&session.token),
+                Some(session.token.typed().unwrap()),
                 None,
                 None,
             ))
@@ -289,7 +289,7 @@ async fn registration_and_authentication_preserve_utf16_response_fields() -> Tes
     let response = fixture
         .route(&request(
             "/passkey/verify-registration",
-            Some(&session.token),
+            Some(session.token.typed().unwrap()),
             Some(json!({"response":signed,"name":"Stored authenticator","createSession":true})),
             Some(&cookie),
         ))

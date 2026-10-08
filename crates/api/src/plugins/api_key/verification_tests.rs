@@ -20,7 +20,7 @@ async fn cached_json_null_uses_database_fallback_or_rejects_without_consuming_us
         let (id, key) = create_key_and_get_raw(
             &plugin,
             &ctx,
-            &session.token,
+            session.token.typed().unwrap(),
             serde_json::json!({"name":"null-cache"}),
         )
         .await;
@@ -102,7 +102,7 @@ async fn cached_dynamic_enabled_values_control_verification_before_consuming_usa
     let (id, key) = create_key_and_get_raw(
         &plugin,
         &ctx,
-        &session.token,
+        session.token.typed().unwrap(),
         serde_json::json!({"name":"dynamic-enabled"}),
     )
     .await;
@@ -181,7 +181,7 @@ async fn scoped_verification_uses_the_configuration_hashing_and_rejects_other_co
     let (id, key) = create_key_and_get_raw(
         &plugin,
         &ctx,
-        &session.token,
+        session.token.typed().unwrap(),
         serde_json::json!({ "configId": "machines", "name": "machine" }),
     )
     .await;
@@ -241,7 +241,7 @@ async fn unscoped_verification_uses_the_issuing_configuration_limits() {
     let (id, key) = create_key_and_get_raw(
         &plugin,
         &ctx,
-        &session.token,
+        session.token.typed().unwrap(),
         serde_json::json!({ "configId": "machines" }),
     )
     .await;
@@ -300,7 +300,7 @@ async fn permissions_failure_preserves_usage_and_rate_limit_reports_retry_time()
     let (id, key) = create_key_with_server_fields(
         &plugin,
         &ctx,
-        &session.token,
+        session.token.typed().unwrap(),
         serde_json::json!({}),
         UpdateApiKey {
             remaining: Some(3.0),
@@ -375,7 +375,7 @@ async fn session_header_selects_a_named_config_without_a_default() {
     let (_, key) = create_key_and_get_raw(
         &plugin,
         &ctx,
-        &session.token,
+        session.token.typed().unwrap(),
         serde_json::json!({ "configId": "machines" }),
     )
     .await;
@@ -415,7 +415,7 @@ async fn session_header_cannot_authenticate_a_different_configuration() {
     let (id, key) = create_key_and_get_raw(
         &plugin,
         &ctx,
-        &session.token,
+        session.token.typed().unwrap(),
         serde_json::json!({ "configId": "machines" }),
     )
     .await;
@@ -558,8 +558,13 @@ async fn verified_session_authenticates_a_protected_plugin_route_without_a_datab
         .enable_session_for_api_keys(true)
         .build();
     let (ctx, user, session) = create_test_context_with_user().await;
-    let (id, key) =
-        create_key_and_get_raw(&plugin, &ctx, &session.token, serde_json::json!({})).await;
+    let (id, key) = create_key_and_get_raw(
+        &plugin,
+        &ctx,
+        session.token.typed().unwrap(),
+        serde_json::json!({}),
+    )
+    .await;
     let mut request = create_auth_request(HttpMethod::Get, "/api-key/list", None, None, None);
     request.headers.insert("x-api-key".to_owned(), key.clone());
     let action = plugin
@@ -596,8 +601,13 @@ async fn secondary_usage_retains_dynamic_counter_arithmetic_and_strict_rate_limi
         ..Default::default()
     });
     let (ctx, _, session) = create_test_context_with_user().await;
-    let (_, raw_key) =
-        create_key_and_get_raw(&plugin, &ctx, &session.token, serde_json::json!({})).await;
+    let (_, raw_key) = create_key_and_get_raw(
+        &plugin,
+        &ctx,
+        session.token.typed().unwrap(),
+        serde_json::json!({}),
+    )
+    .await;
     let config = plugin.resolve_configuration(None).unwrap();
     let seed = storage::get_by_hash(config, &ctx, &ApiKeyPlugin::hash_key(&raw_key))
         .await

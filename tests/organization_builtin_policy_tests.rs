@@ -258,7 +258,7 @@ async fn builtin_policies_update_typed_fields_once_and_preserve_storage_mappings
     assert_eq!(team.updated_at, Some(default_date.clone()));
     let role = store
         .create_organization_role(CreateOrganizationRole {
-            organization_id: organization.id.typed().unwrap().clone(),
+            organization_id: organization.id.clone(),
             role: "editor".into(),
             permission: Value::from_json(json!({"project":["read"]})).unwrap(),
             additional_fields: Default::default(),

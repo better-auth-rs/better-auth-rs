@@ -23,7 +23,10 @@ async fn refreshed_request() -> (SessionManager<BundledSchema>, AuthRequest, Ses
     let session = manager.create_session(&user, None, None).await.unwrap();
     let _ = manager
         .database
-        .update_session_expiry(session.token(), Utc::now() + Duration::hours(1))
+        .update_session_expiry(
+            session.token.typed().unwrap(),
+            Utc::now() + Duration::hours(1),
+        )
         .await
         .unwrap();
     let mut req = AuthRequest::new(HttpMethod::Post, "/two-factor/enable");
@@ -31,7 +34,7 @@ async fn refreshed_request() -> (SessionManager<BundledSchema>, AuthRequest, Ses
         "cookie".into(),
         format!(
             "better-auth.session_token={}",
-            sign_cookie_value(session.token(), &manager.config.secret)
+            sign_cookie_value(session.token.typed().unwrap(), &manager.config.secret)
         ),
     );
     let data = manager
@@ -55,7 +58,7 @@ async fn rotation_preserves_order_and_the_browser_uses_the_last_token_and_cache(
     let next = manager.create_session(&user, None, None).await.unwrap();
     manager
         .database
-        .delete_session(&old.session.token)
+        .delete_session(old.session.token.typed().unwrap())
         .await
         .unwrap();
     let issued = manager.internal_data(&user, &next).await.unwrap();
@@ -79,7 +82,7 @@ async fn rotation_preserves_order_and_the_browser_uses_the_last_token_and_cache(
     browser.headers.insert("cookie".into(), cookies);
     assert_eq!(
         manager.extract_session_token(&browser).as_deref(),
-        Some(next.token())
+        Some(next.token.typed().unwrap().as_str())
     );
     let cache = cookie_cache::read(&browser, "better-auth.session_data").unwrap();
     let payload = cookie_cache::decode(
@@ -89,14 +92,14 @@ async fn rotation_preserves_order_and_the_browser_uses_the_last_token_and_cache(
     )
     .unwrap()
     .0;
-    assert_eq!(payload.data.session.token, next.token());
+    assert_eq!(payload.data.session.token, next.token);
     assert_eq!(
         verify_cookie_value(
             response.headers.get("set-auth-token").unwrap(),
             &manager.config.secret
         )
         .as_deref(),
-        Some(next.token())
+        Some(next.token.typed().unwrap().as_str())
     );
     assert_eq!(
         response
@@ -144,8 +147,12 @@ async fn explicit_remember_marker_expiration_survives_browser_session_cookie() {
     let mut response = AuthResponse::new(200)
         .with_appended_header(
             "Set-Cookie",
-            create_session_cookie_with_max_age(Some(&data.session.token), None, &manager.config)
-                .unwrap(),
+            create_session_cookie_with_max_age(
+                Some(data.session.token.typed().unwrap()),
+                None,
+                &manager.config,
+            )
+            .unwrap(),
         )
         .with_appended_header(
             "Set-Cookie",

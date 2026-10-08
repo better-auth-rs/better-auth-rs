@@ -134,7 +134,7 @@ async fn test_custom_admin_role_can_use_permission_engine() {
     let req = make_request(
         HttpMethod::Get,
         "/admin/list-users",
-        &admin_session.token,
+        admin_session.token.typed().unwrap(),
         None,
     );
 
@@ -158,7 +158,7 @@ async fn test_ban_revokes_user_sessions() {
     let req = make_request(
         HttpMethod::Post,
         "/admin/ban-user",
-        &admin_session.token,
+        admin_session.token.typed().unwrap(),
         Some(serde_json::json!({
             "userId": user.id,
             "banReason": "bad behavior"
@@ -184,7 +184,7 @@ async fn test_unban_clears_ban_reason_and_expires() {
     let req = make_request(
         HttpMethod::Post,
         "/admin/ban-user",
-        &admin_session.token,
+        admin_session.token.typed().unwrap(),
         Some(serde_json::json!({
             "userId": user.id,
             "banReason": "spam",
@@ -197,7 +197,7 @@ async fn test_unban_clears_ban_reason_and_expires() {
     let req = make_request(
         HttpMethod::Post,
         "/admin/unban-user",
-        &admin_session.token,
+        admin_session.token.typed().unwrap(),
         Some(serde_json::json!({
             "userId": user.id,
         })),
@@ -225,7 +225,7 @@ async fn test_impersonation_session_tracks_admin_id() {
     let req = make_request(
         HttpMethod::Post,
         "/admin/impersonate-user",
-        &admin_session.token,
+        admin_session.token.typed().unwrap(),
         Some(serde_json::json!({
             "userId": user.id,
         })),
@@ -245,7 +245,12 @@ async fn test_impersonation_session_tracks_admin_id() {
     let session = ctx.database.get_session(&token).await.unwrap().unwrap();
 
     assert_eq!(
-        session.impersonated_by().unwrap(),
+        session
+            .impersonated_by()
+            .typed()
+            .unwrap()
+            .as_deref()
+            .unwrap(),
         admin.id.typed().unwrap()
     );
 }
@@ -258,7 +263,7 @@ async fn test_stop_impersonating_restores_admin_session() {
     let req = make_request(
         HttpMethod::Post,
         "/admin/impersonate-user",
-        &admin_session.token,
+        admin_session.token.typed().unwrap(),
         Some(serde_json::json!({
             "userId": user.id,
         })),
@@ -299,7 +304,7 @@ async fn test_stop_impersonating_restores_admin_session() {
         .unwrap()
         .unwrap();
     assert_eq!(restored_session.user_id, admin.id);
-    assert!(restored_session.impersonated_by.is_none());
+    assert!(restored_session.impersonated_by.typed().unwrap().is_none());
     assert!(
         ctx.database
             .get_session(&impersonation_token)
@@ -326,7 +331,7 @@ async fn test_list_user_sessions_missing_user_returns_empty_array() {
     let req = make_request(
         HttpMethod::Post,
         "/admin/list-user-sessions",
-        &admin_session.token,
+        admin_session.token.typed().unwrap(),
         Some(serde_json::json!({
             "userId": "missing-user",
         })),
@@ -345,7 +350,7 @@ async fn test_revoke_user_sessions_missing_user_still_succeeds() {
     let req = make_request(
         HttpMethod::Post,
         "/admin/revoke-user-sessions",
-        &admin_session.token,
+        admin_session.token.typed().unwrap(),
         Some(serde_json::json!({
             "userId": "missing-user",
         })),
@@ -364,7 +369,7 @@ async fn test_stop_impersonating_without_impersonated_session_returns_bad_reques
     let req = make_request(
         HttpMethod::Post,
         "/admin/stop-impersonating",
-        &admin_session.token,
+        admin_session.token.typed().unwrap(),
         None,
     );
     let err = plugin.on_request(&req, &ctx).await.unwrap_err();
@@ -388,7 +393,7 @@ async fn test_remove_user_cleans_up_sessions_and_accounts() {
     let req = make_request(
         HttpMethod::Post,
         "/admin/create-user",
-        &admin_session.token,
+        admin_session.token.typed().unwrap(),
         Some(serde_json::json!({
             "email": "tobedeleted@example.com",
             "password": "securepassword123",
@@ -404,7 +409,7 @@ async fn test_remove_user_cleans_up_sessions_and_accounts() {
     let req = make_request(
         HttpMethod::Post,
         "/admin/remove-user",
-        &admin_session.token,
+        admin_session.token.typed().unwrap(),
         Some(serde_json::json!({
             "userId": user_id,
         })),
@@ -436,7 +441,7 @@ async fn test_set_user_password_updates_credential_account() {
     let req = make_request(
         HttpMethod::Post,
         "/admin/create-user",
-        &admin_session.token,
+        admin_session.token.typed().unwrap(),
         Some(serde_json::json!({
             "email": "pwuser@example.com",
             "password": "oldpassword123",
@@ -458,7 +463,7 @@ async fn test_set_user_password_updates_credential_account() {
     let req = make_request(
         HttpMethod::Post,
         "/admin/set-user-password",
-        &admin_session.token,
+        admin_session.token.typed().unwrap(),
         Some(serde_json::json!({
             "userId": user_id,
             "newPassword": "newpassword456"
@@ -480,7 +485,7 @@ async fn test_set_user_password_creates_missing_credential_account() {
     let req = make_request(
         HttpMethod::Post,
         "/admin/create-user",
-        &admin_session.token,
+        admin_session.token.typed().unwrap(),
         Some(serde_json::json!({
             "email": "passwordless@example.com",
             "name": "Passwordless User"
@@ -500,7 +505,7 @@ async fn test_set_user_password_creates_missing_credential_account() {
     let req = make_request(
         HttpMethod::Post,
         "/admin/set-user-password",
-        &admin_session.token,
+        admin_session.token.typed().unwrap(),
         Some(serde_json::json!({
             "userId": user_id,
             "newPassword": "newpassword456"

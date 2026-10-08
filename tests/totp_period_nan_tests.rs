@@ -204,15 +204,15 @@ impl Runtime {
             .await?;
         assert_eq!(session.token, TOKEN);
         assert_eq!(
-            session.created_at.milliseconds(),
+            session.created_at.date_milliseconds().unwrap(),
             now.timestamp_millis() as f64
         );
         assert_eq!(
-            session.updated_at.milliseconds(),
+            session.updated_at.date_milliseconds().unwrap(),
             now.timestamp_millis() as f64
         );
         assert_eq!(
-            session.expires_at.milliseconds(),
+            session.expires_at.date_milliseconds().unwrap(),
             expiry.timestamp_millis() as f64
         );
         let captured = DateTime::from_timestamp_millis(

@@ -153,7 +153,7 @@ pub trait DatabaseHooks<S: AuthSchema>: Send + Sync {
     /// Observe a committed user creation.
     async fn after_create_user(
         &self,
-        _data: &crate::wire::UserView,
+        _data: Option<&crate::wire::UserView>,
         _ctx: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
         Ok(())
@@ -202,7 +202,7 @@ pub trait DatabaseHooks<S: AuthSchema>: Send + Sync {
     /// Observe a committed account creation.
     async fn after_create_account(
         &self,
-        _data: &crate::wire::AccountView,
+        _data: Option<&crate::wire::AccountView>,
         _ctx: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
         Ok(())
@@ -252,7 +252,7 @@ pub trait DatabaseHooks<S: AuthSchema>: Send + Sync {
     /// Observe a committed session creation.
     async fn after_create_session(
         &self,
-        _data: &crate::wire::SessionView,
+        _data: Option<&crate::wire::SessionView>,
         _ctx: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
         Ok(())
@@ -301,7 +301,7 @@ pub trait DatabaseHooks<S: AuthSchema>: Send + Sync {
     /// Observe a committed verification creation.
     async fn after_create_verification(
         &self,
-        _data: &crate::wire::VerificationView,
+        _data: Option<&crate::wire::VerificationView>,
         _ctx: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
         Ok(())

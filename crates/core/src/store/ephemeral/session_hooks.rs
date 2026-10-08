@@ -1,54 +1,9 @@
 use super::hooks::CommittedWrite;
 use super::sessions::SessionSource;
+use super::sessions::session_token_matches;
 use super::*;
 use crate::store::database_hooks::{DatabaseHookControl, DatabaseHookUpdate, SessionUpdate};
 use crate::store::schema::EntityRole;
-
-impl SessionUpdate {
-    fn apply(
-        self,
-        session: &mut SessionView,
-        id: Option<crate::SchemaValue<String>>,
-        user_id: Option<crate::SchemaValue<String>>,
-    ) {
-        if let Some(fields) = &mut session.visible_fields {
-            for (name, supplied) in [
-                ("impersonatedBy", self.impersonated_by.is_some()),
-                (
-                    "activeOrganizationId",
-                    self.active_organization_id.is_some(),
-                ),
-                ("activeTeamId", self.active_team_id.is_some()),
-            ] {
-                if supplied {
-                    let _ = fields.insert(name.into());
-                }
-            }
-        }
-        macro_rules! fields {
-            ($($field:ident),* $(,)?) => {$(if let Some(value) = self.$field { session.$field = value; })*};
-        }
-        if let Some(id) = id {
-            session.id = id;
-            let _ = session.additional_fields.remove("id");
-        }
-        if let Some(user_id) = user_id {
-            session.user_id = user_id;
-        }
-        fields!(
-            token,
-            expires_at,
-            created_at,
-            ip_address,
-            user_agent,
-            impersonated_by,
-            active_organization_id,
-            active_team_id
-        );
-        session.updated_at = self.updated_at.unwrap_or_else(|| Utc::now().into());
-        session.additional_fields.extend(self.additional_fields);
-    }
-}
 
 impl EphemeralStore {
     pub(super) async fn update_session_with_hooks(
@@ -62,6 +17,16 @@ impl EphemeralStore {
     pub(super) async fn update_session_with_writer(
         &self,
         token: &str,
+        update: SessionUpdate,
+        secondary: Option<crate::store::SessionUpdateWriter>,
+    ) -> AuthResult<Option<SessionView>> {
+        self.update_session_with_writer_by_token_value(&token.into(), update, secondary)
+            .await
+    }
+
+    pub(super) async fn update_session_with_writer_by_token_value(
+        &self,
+        token: &crate::FieldValue,
         mut update: SessionUpdate,
         secondary: Option<crate::store::SessionUpdateWriter>,
     ) -> AuthResult<Option<SessionView>> {
@@ -104,30 +69,41 @@ impl EphemeralStore {
 
     async fn write_session_update(
         &self,
-        token: &str,
-        mut update: SessionUpdate,
+        token: &crate::FieldValue,
+        update: SessionUpdate,
     ) -> AuthResult<Option<SessionView>> {
-        let schema = self.session_config.adapter_schema();
-        let configured_user_id = schema.fields().contains_key("userId");
-        let mut user_id = if configured_user_id {
-            if let Some(user_id) = update.user_id.take() {
-                let _ = update
-                    .additional_fields
-                    .insert("userId".into(), user_id.into());
-            }
-            None
-        } else {
-            update
-                .user_id
-                .take()
-                .map(|user_id| self.memory_reference_id_input(user_id.into()))
-                .transpose()?
-        };
+        let fields = self
+            .bind_session_update_fields(update.into_public_fields()?)
+            .await?;
+        let (column, token) = self.memory_session_token_query(token.clone())?;
+        let session = self
+            .raw("session", "update", |state| {
+                let Some(source) = state
+                    .sessions
+                    .first_ref(|row| session_token_matches(row, &column, &token))?
+                else {
+                    return Ok(None);
+                };
+                source.write(|session| {
+                    self.apply_session_storage_fields(session, &fields);
+                    Ok(())
+                })?;
+                Ok(Some(SessionSource::Live(source)))
+            })
+            .await?;
+        futures_util::future::OptionFuture::from(session.map(|row| self.output_session(row)))
+            .await
+            .transpose()
+    }
+
+    pub(super) async fn bind_session_update_fields(
+        &self,
+        mut input: FieldMap,
+    ) -> AuthResult<FieldMap> {
+        let schema = crate::store::session_create_schema(&self.session_config, &input);
         self.model_fields
             .begin_id_input(EntityRole::Session, crate::id::AdapterIdInput::default())?;
-        let mut input = std::mem::take(&mut update.additional_fields);
-        let typed_id = update.id.take().map(Value::from);
-        let mut supplied_id = input.remove("id").or(typed_id);
+        let mut supplied_id = input.remove("id");
         let fields = schema
             .update_adapter_storage_fields(
                 input,
@@ -148,55 +124,65 @@ impl EphemeralStore {
                 |_, field, value| self.memory_plugin_field_input(field, value),
             )
             .await?;
-        let id = fields
-            .get("id")
-            .cloned()
-            .map(crate::SchemaValue::from_field);
-        update.additional_fields = fields;
-        if configured_user_id {
-            user_id = update
-                .additional_fields
-                .get(schema.record_storage_key("userId"))
-                .cloned()
-                .map(crate::SchemaValue::from_field);
+        Ok(fields)
+    }
+
+    pub(super) fn apply_session_storage_fields(
+        &self,
+        session: &mut SessionView,
+        fields: &FieldMap,
+    ) {
+        let schema = self.session_config.adapter_schema();
+        macro_rules! apply {
+            ($($field:ident => $name:literal),* $(,)?) => {$(
+                if let Some(value) = fields.get(schema.record_storage_key($name)) {
+                    session.$field = crate::SchemaValue::from_field(value.clone());
+                    if let Some(present) = &mut session.visible_fields
+                        && matches!($name, "impersonatedBy" | "activeTeamId" | "activeOrganizationId") {
+                        let _ = present.insert($name.into());
+                    }
+                }
+            )*};
         }
-        let _ = update.additional_fields.remove("id");
-        let session = self
-            .raw("session", "update", |state| {
-                let Some(source) = state.sessions.first_ref(|row| row.token == token)? else {
-                    return Ok(None);
-                };
-                source.write(|session| {
-                    update.apply(session, id, user_id);
-                    Ok(())
-                })?;
-                Ok(Some(SessionSource::Live(source)))
-            })
-            .await?;
-        let session =
-            futures_util::future::OptionFuture::from(session.map(|row| self.output_session(row)))
-                .await
-                .transpose()?;
-        Ok(session)
+        apply!(id => "id", token => "token", user_id => "userId", expires_at => "expiresAt",
+            created_at => "createdAt", updated_at => "updatedAt", ip_address => "ipAddress",
+            user_agent => "userAgent", impersonated_by => "impersonatedBy",
+            active_organization_id => "activeOrganizationId", active_team_id => "activeTeamId");
+        session.additional_fields.extend(fields.clone());
+        for name in [
+            "id",
+            "token",
+            "userId",
+            "expiresAt",
+            "createdAt",
+            "updatedAt",
+            "ipAddress",
+            "userAgent",
+            "impersonatedBy",
+            "activeOrganizationId",
+            "activeTeamId",
+        ] {
+            if schema.record_storage_key(name) == name {
+                let _ = session.additional_fields.remove(name);
+            }
+        }
     }
 
     pub(super) async fn delete_sessions_with_hooks(
         &self,
-        predicate: impl Fn(&SessionView) -> bool + Send + Sync,
+        predicate: impl Fn(&SessionView) -> AuthResult<bool> + Send + Sync,
         preserve: bool,
     ) -> AuthResult<Option<usize>> {
         let now = Utc::now();
         self.model_fields.begin_id_query(EntityRole::Session)?;
-        let matches = |row: &SessionView| {
-            predicate(row)
-                && (!preserve || row.expires_at.milliseconds() > now.timestamp_millis() as f64)
-        };
+        let matches =
+            |row: &SessionView| Ok(predicate(row)? && (!preserve || row.expires_at.is_after(now)?));
         let sessions: Vec<_> = self
             .raw("session", "findMany", |state| {
                 Ok(crate::query::paginate_memory(
                     state
                         .sessions
-                        .select_refs(matches)?
+                        .try_select_refs(matches)?
                         .into_iter()
                         .map(SessionSource::Live)
                         .collect(),
@@ -228,32 +214,20 @@ impl EphemeralStore {
         }
         let count = if preserve {
             let expires_at = Utc::now();
-            let schema = self.session_config.adapter_schema();
-            self.model_fields
-                .begin_id_input(EntityRole::Session, crate::id::AdapterIdInput::default())?;
-            let fields = schema
-                .storage_fields_with_binding(Default::default(), false, |_, field, value| {
-                    self.memory_plugin_field_input(field, value)
-                })
+            let fields = self
+                .bind_session_update_fields(
+                    [
+                        ("expiresAt".into(), expires_at.into()),
+                        ("updatedAt".into(), expires_at.into()),
+                    ]
+                    .into(),
+                )
                 .await?;
-            let user_id = if schema.fields().contains_key("userId") {
-                fields
-                    .get(schema.record_storage_key("userId"))
-                    .cloned()
-                    .map(crate::SchemaValue::from_field)
-            } else {
-                None
-            };
             self.raw("session", "updateMany", |state| {
                 let mut count = 0;
                 state.sessions.update_each(|session| {
-                    if matches(session) {
-                        session.expires_at = expires_at.into();
-                        session.updated_at = expires_at.into();
-                        if let Some(user_id) = &user_id {
-                            session.user_id = user_id.clone();
-                        }
-                        session.additional_fields.extend(fields.clone());
+                    if matches(session)? {
+                        self.apply_session_storage_fields(session, &fields);
                         count += 1;
                     }
                     Ok(())
@@ -265,7 +239,9 @@ impl EphemeralStore {
             self.model_fields.begin_id_query(EntityRole::Session)?;
             self.raw("session", "deleteMany", |state| {
                 let before = state.sessions.len();
-                state.sessions.retain(|row| !matches(row))?;
+                state
+                    .sessions
+                    .try_retain(|row| matches(row).map(|matches| !matches))?;
                 Ok(before - state.sessions.len())
             })
             .await?

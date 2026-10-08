@@ -136,7 +136,7 @@ impl OneTimeTokenPlugin {
         let stored = self.config.store_token.encode(&token).await?;
         let _ = ctx
             .database
-            .create_verification(CreateVerification {
+            .create_verification_optional(CreateVerification {
                 identifier: (format!("one-time-token:{stored}")).into(),
                 value: (session_token).into(),
                 expires_at: expires_at.into(),
@@ -182,7 +182,7 @@ impl OneTimeTokenPlugin {
         let Some((session, user)) = find_session(ctx, verification.value.typed()?).await? else {
             return message_error("Session not found");
         };
-        let response = if session.expires_at.milliseconds() < Utc::now().timestamp_millis() as f64 {
+        let response = if session.expires_at.is_before(Utc::now())? {
             message_error("Session expired")?
         } else {
             AuthResponse::json(

@@ -5,18 +5,19 @@ use crate::user_fields::UserFieldType;
 
 pub(super) fn seed() -> AuthResult<SessionView> {
     Ok(SessionView {
+        field_order: Default::default(),
         visible_fields: Some(Default::default()),
         id: crate::SchemaValue::from_field(Value::Number(1.0)),
-        expires_at: date(EXPIRES_AT)?,
+        expires_at: date(EXPIRES_AT)?.into(),
         token: "id-update-token".into(),
-        created_at: date(CREATED_AT)?,
-        updated_at: date(CREATED_AT)?,
-        ip_address: Some("198.51.100.4".into()),
-        user_agent: Some("id-update-test".into()),
+        created_at: date(CREATED_AT)?.into(),
+        updated_at: date(CREATED_AT)?.into(),
+        ip_address: Some("198.51.100.4".into()).into(),
+        user_agent: Some("id-update-test".into()).into(),
         user_id: crate::SchemaValue::from_field(Value::Number(1.0)),
-        impersonated_by: None,
-        active_organization_id: None,
-        active_team_id: None,
+        impersonated_by: None.into(),
+        active_organization_id: None.into(),
+        active_team_id: None.into(),
         active: true,
         additional_fields: Default::default(),
     })
@@ -46,7 +47,7 @@ async fn memory_session_updates_bind_native_id_values_at_the_adapter_slot() -> A
         let result = required(
             store
                 .update_session_with_writer(
-                    &stored.token,
+                    stored.token.typed().unwrap(),
                     SessionUpdate {
                         id: Some("300".into()),
                         updated_at: Some(updated_at.clone()),
@@ -60,12 +61,15 @@ async fn memory_session_updates_bind_native_id_values_at_the_adapter_slot() -> A
                 .await?,
         )?;
         stored.id = crate::SchemaValue::from_field(Value::Number(expected_id));
-        stored.updated_at = updated_at;
+        stored.updated_at = updated_at.into();
         assert_eq!(store.lock()?.sessions.snapshot()?, [stored.clone()]);
         stored.id = public_id.into();
         stored.user_id = "1".into();
         assert_eq!(result, stored);
-        assert_eq!(required(store.get_session(&stored.token).await?)?, stored);
+        assert_eq!(
+            required(store.get_session(stored.token.typed().unwrap()).await?)?,
+            stored
+        );
     }
     Ok(())
 }
@@ -139,7 +143,7 @@ async fn memory_session_id_alias_updates_preserve_storage_order_and_output() -> 
         let result = required(
             store
                 .update_session_with_writer(
-                    &stored.token,
+                    stored.token.typed().unwrap(),
                     SessionUpdate {
                         id: Some("300".into()),
                         updated_at: Some(updated_at.clone()),
@@ -152,7 +156,7 @@ async fn memory_session_id_alias_updates_preserve_storage_order_and_output() -> 
                 .await?,
         )?;
         stored.id = crate::SchemaValue::from_field(stored_id.clone());
-        stored.updated_at = updated_at;
+        stored.updated_at = updated_at.into();
         stored.additional_fields.clear();
         assert_eq!(store.lock()?.sessions.snapshot()?, [stored.clone()]);
         stored.id = public_id.into();
@@ -161,7 +165,10 @@ async fn memory_session_id_alias_updates_preserve_storage_order_and_output() -> 
         assert_eq!(result, stored);
         let expected_event = json!(["alias-output", required(stored_id.json()?)?]);
         assert_eq!(events(&trace)?, [expected_event.clone()]);
-        assert_eq!(required(store.get_session(&stored.token).await?)?, stored);
+        assert_eq!(
+            required(store.get_session(stored.token.typed().unwrap()).await?)?,
+            stored
+        );
         assert_eq!(events(&trace)?, [expected_event.clone(), expected_event]);
     }
     Ok(())
@@ -202,7 +209,11 @@ async fn memory_session_secondary_updates_share_the_supplied_id_precedence() -> 
         let mut cached = json!({"session":cached_session, "user":user});
         let cache = Arc::new(MemoryCacheAdapter::new());
         cache
-            .set(&stored.token, &serde_json::to_string(&cached)?, None)
+            .set(
+                stored.token.typed().unwrap(),
+                &serde_json::to_string(&cached)?,
+                None,
+            )
             .await?;
         let runtime = SecondaryStore::<StatelessSchema>::new(
             inner.clone(),
@@ -212,26 +223,29 @@ async fn memory_session_secondary_updates_share_the_supplied_id_precedence() -> 
         )?;
         let result = required(
             runtime
-                .update_session_fields(&stored.token, [("id".into(), "2".into())].into())
+                .update_session_fields(
+                    stored.token.typed().unwrap(),
+                    [("id".into(), "2".into())].into(),
+                )
                 .await?,
         )?;
         let updated_at = date("2031-01-02T03:04:05.000Z")?;
         cached_session.id = "2".into();
-        cached_session.updated_at = updated_at.clone();
+        cached_session.updated_at = updated_at.clone().into();
         assert_eq!(result, cached_session);
         assert_eq!(
-            required(runtime.get_session(&stored.token).await?)?,
+            required(runtime.get_session(stored.token.typed().unwrap()).await?)?,
             cached_session
         );
         cached["session"] = serde_json::to_value(&cached_session)?;
-        let actual = required(cache.get(&stored.token).await?)?;
+        let actual = required(cache.get(stored.token.typed().unwrap()).await?)?;
         assert_eq!(
             serde_json::from_str::<JsonValue>(required(actual.as_str())?)?,
             cached
         );
         if write_database {
             stored.id = crate::SchemaValue::from_field(Value::Number(2.0));
-            stored.updated_at = updated_at;
+            stored.updated_at = updated_at.into();
         }
         assert_eq!(inner.lock()?.sessions.snapshot()?, [stored]);
     }

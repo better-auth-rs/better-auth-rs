@@ -181,7 +181,7 @@ async fn seed<S: AuthSchema>(auth: &BetterAuth<S>) -> AuthResult<HashMap<String,
         let cookie = format!(
             "better-auth.session_token={}",
             better_auth_core::utils::cookie_utils::sign_cookie_value(
-                &session.token,
+                session.token.typed()?,
                 auth.config().signing_secret()
             )
         );

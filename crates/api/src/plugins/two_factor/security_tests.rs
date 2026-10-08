@@ -174,7 +174,7 @@ async fn otp_enrollment_rotates_session_and_does_not_enroll_an_authenticator() {
     );
     assert!(
         ctx.database
-            .get_session(&session.token)
+            .get_session(session.token.typed().unwrap())
             .await
             .unwrap()
             .is_none()
@@ -260,7 +260,7 @@ async fn authenticator_enrollment_can_restart_only_until_verified() {
     let request = test_helpers::create_auth_request_no_query(
         HttpMethod::Post,
         "/two-factor/verify-totp",
-        Some(&session.token),
+        Some(session.token.typed().unwrap()),
         None,
     );
     let _ = verify_totp_core(

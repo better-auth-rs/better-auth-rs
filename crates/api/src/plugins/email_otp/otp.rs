@@ -178,8 +178,8 @@ impl EmailOtpPlugin {
             ..Default::default()
         };
         let _ = match endpoint.transaction {
-            Some(transaction) => transaction.create_verification(input).await?,
-            None => ctx.database.create_verification(input).await?,
+            Some(transaction) => transaction.create_verification_optional(input).await?,
+            None => ctx.database.create_verification_optional(input).await?,
         };
         Ok(otp)
     }
@@ -276,7 +276,7 @@ impl EmailOtpPlugin {
             if consume {
                 let _ = ctx
                     .database
-                    .create_verification(CreateVerification {
+                    .create_verification_optional(CreateVerification {
                         identifier: (identifier.to_owned()).into(),
                         value: (value).into(),
                         expires_at: record.expires_at.clone(),

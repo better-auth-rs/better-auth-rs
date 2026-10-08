@@ -114,7 +114,7 @@ async fn run<S: AuthSchema>(
         let token = format!("{name}-session");
         let _ = store
             .update_session_with_writer(
-                &session.token,
+                session.token.typed()?,
                 better_auth_core::store::database_hooks::SessionUpdate {
                     token: Some(token.clone()),
                     ..Default::default()
@@ -311,7 +311,7 @@ async fn ephemeral_session_projection_preserves_core_aliases_and_stored_override
     assert!(value.get("stored_label").is_none());
     let updated = store
         .update_session_fields(
-            &session.token,
+            session.token.typed()?,
             [
                 ("userAgent".into(), "updated".into()),
                 ("label".into(), "home".into()),
@@ -324,7 +324,7 @@ async fn ephemeral_session_projection_preserves_core_aliases_and_stored_override
     let value = serde_json::to_value(updated)?;
     assert_eq!(value.get("userAgent"), Some(&json!({"observed":"updated"})));
     assert_eq!(value.get("label"), Some(&json!("home:out")));
-    let value = serde_json::to_value(store.get_session(&session.token).await?)?;
+    let value = serde_json::to_value(store.get_session(session.token.typed()?).await?)?;
     assert_eq!(value.get("userAgent"), Some(&json!({"observed":"updated"})));
     assert_eq!(value.get("label"), Some(&json!("home:out")));
     Ok(())

@@ -9,7 +9,7 @@ impl InvitationStore for EphemeralStore {
                 .generated_id("invitation", input.id, self.lock()?.invitations.len())?
                 .map(crate::SchemaValue::Typed)
                 .unwrap_or_default(),
-            organization_id: (input.organization_id).into(),
+            organization_id: input.organization_id,
             email: (input.email).into(),
             role: input.role.into(),
             status: (input.status.unwrap_or_default()).into(),
@@ -60,9 +60,15 @@ impl InvitationStore for EphemeralStore {
         org: &str,
         email: &str,
     ) -> AuthResult<Option<Invitation>> {
+        self.get_pending_invitation_value(&org.into(), email).await
+    }
+    async fn get_pending_invitation_value(
+        &self,
+        org: &Value,
+        email: &str,
+    ) -> AuthResult<Option<Invitation>> {
         let email = self.organization_query(EntityRole::Invitation, "email", Value::from(email))?;
-        let org =
-            self.organization_query(EntityRole::Invitation, "organizationId", Value::from(org))?;
+        let org = self.organization_query(EntityRole::Invitation, "organizationId", org.clone())?;
         let rows = self.lock()?.invitations.snapshot()?;
         for invitation in rows.into_iter().filter(|row| {
             row.organization_id
@@ -136,8 +142,14 @@ impl InvitationStore for EphemeralStore {
         self.output_invitation(result).await
     }
     async fn list_organization_invitations(&self, org: &str) -> AuthResult<Vec<Invitation>> {
-        let org =
-            self.organization_query(EntityRole::Invitation, "organizationId", Value::from(org))?;
+        self.list_organization_invitations_value(&Value::from(org))
+            .await
+    }
+    async fn list_organization_invitations_value(
+        &self,
+        org: &Value,
+    ) -> AuthResult<Vec<Invitation>> {
+        let org = self.organization_query(EntityRole::Invitation, "organizationId", org.clone())?;
         let rows = self
             .lock()?
             .invitations
@@ -157,8 +169,11 @@ impl InvitationStore for EphemeralStore {
         self.output_records(EntityRole::Invitation, rows).await
     }
     async fn count_pending_organization_invitations(&self, org: &str) -> AuthResult<i64> {
-        let org =
-            self.organization_query(EntityRole::Invitation, "organizationId", Value::from(org))?;
+        self.count_pending_organization_invitations_value(&org.into())
+            .await
+    }
+    async fn count_pending_organization_invitations_value(&self, org: &Value) -> AuthResult<i64> {
+        let org = self.organization_query(EntityRole::Invitation, "organizationId", org.clone())?;
         self.lock()?
             .invitations
             .snapshot()?

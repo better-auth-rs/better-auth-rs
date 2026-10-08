@@ -142,7 +142,13 @@ async fn core_writes<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPlugin
         .unwrap();
     assert!(!verification.id.typed().unwrap().is_empty());
     assert!(store.get_user_by_id(id).await.unwrap().is_some());
-    assert!(store.get_session(&session.token).await.unwrap().is_some());
+    assert!(
+        store
+            .get_session(session.token.typed().unwrap())
+            .await
+            .unwrap()
+            .is_some()
+    );
     let backend = database.get_database_backend();
     let type_function = if backend == DbBackend::Postgres {
         "pg_typeof"

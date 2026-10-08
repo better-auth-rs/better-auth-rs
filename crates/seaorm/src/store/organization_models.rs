@@ -108,6 +108,7 @@ pub(super) async fn active<M: SeaOrmOrganizationModel>(
 
 pub(super) async fn insert<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
     conn: &C,
+    scope: super::create_readback::ReadbackScope<'_>,
     core: FieldMap,
     input: FieldMap,
     config: &UserConfig,
@@ -122,8 +123,17 @@ pub(super) async fn insert<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
         policy,
     )
     .await?
-    .insert(conn)
+    .insert(
+        conn,
+        super::create_readback::CreateReadback {
+            schema: config,
+            policy,
+            scope,
+            column: M::column,
+        },
+    )
     .await?
+    .ok_or_else(|| AuthError::internal("Organization record creation returned no record"))?
     .record(config, conn.get_database_backend())
     .await
 }

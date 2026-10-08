@@ -61,9 +61,10 @@ impl EphemeralStore {
 
 #[async_trait]
 impl PasskeyStore for EphemeralStore {
-    async fn create_passkey_record(&self, input: FieldMap) -> AuthResult<FieldMap> {
+    async fn create_passkey_record(&self, input: FieldMap) -> AuthResult<Option<FieldMap>> {
         self.create_plugin_record(EntityRole::Passkey, input, Default::default())
             .await
+            .map(Some)
     }
 
     async fn get_passkey_record(&self, id: &SchemaValue<String>) -> AuthResult<Option<FieldMap>> {
@@ -79,7 +80,16 @@ impl PasskeyStore for EphemeralStore {
             .await
     }
 
-    async fn create_passkey(&self, mut input: CreatePasskey) -> AuthResult<Passkey> {
+    async fn create_passkey(&self, input: CreatePasskey) -> AuthResult<Passkey> {
+        self.create_passkey_optional(input)
+            .await?
+            .ok_or_else(|| AuthError::internal("Passkey creation returned no record"))
+    }
+
+    async fn create_passkey_optional(
+        &self,
+        mut input: CreatePasskey,
+    ) -> AuthResult<Option<Passkey>> {
         let extras = std::mem::take(&mut input.additional_fields);
         let mut native = input.into_adapter_fields()?;
         let now: crate::FieldDate = Utc::now().into();
@@ -97,7 +107,7 @@ impl PasskeyStore for EphemeralStore {
             .create_plugin_record(EntityRole::Passkey, fields, internal.clone())
             .await?;
         projected.extend(internal);
-        Passkey::from_field_values(projected)
+        Passkey::from_field_values(projected).map(Some)
     }
 
     async fn get_passkey_by_id(&self, id: &str) -> AuthResult<Option<Passkey>> {

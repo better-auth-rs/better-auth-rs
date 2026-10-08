@@ -115,7 +115,7 @@ async fn custom_organization_tables_preserve_fields_and_atomic_invitation_defaul
         .accept_invitation_with_teams(
             invitation.id.typed()?,
             "recipient",
-            Some(session.token()),
+            Some(session.token().typed()?),
             true,
             Some(1).into(),
         )
@@ -136,6 +136,7 @@ async fn custom_organization_tables_preserve_fields_and_atomic_invitation_defaul
         snapshot
             .ok_or("Accepted invitation must return a session snapshot")?
             .active_team_id
+            .typed()?
             .as_deref(),
         team.id.as_str()
     );
@@ -206,7 +207,7 @@ async fn custom_organization_tables_preserve_fields_and_atomic_invitation_defaul
     assert_eq!(updated.metadata.field_value(), FieldValue::from("null"));
     assert_http_metadata(
         &auth,
-        owner_session.token(),
+        owner_session.token().typed()?,
         organization.id.typed()?,
         json!(null),
     )
@@ -231,7 +232,7 @@ async fn custom_organization_tables_preserve_fields_and_atomic_invitation_defaul
     assert_eq!(updated.metadata.field_value(), FieldValue::from("{}"));
     assert_http_metadata(
         &auth,
-        owner_session.token(),
+        owner_session.token().typed()?,
         organization.id.typed()?,
         json!({}),
     )
