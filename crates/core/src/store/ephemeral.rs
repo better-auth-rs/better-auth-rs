@@ -17,7 +17,7 @@ use crate::store::{
     UserStore, VerificationStore,
 };
 use crate::types::{
-    ApiKey, CreateAccount, CreateDeviceCode, CreateInvitation, CreateMember, CreateOrganization,
+    CreateAccount, CreateDeviceCode, CreateInvitation, CreateMember, CreateOrganization,
     CreatePasskey, CreateSession, CreateTwoFactor, CreateUser, CreateVerification, DeviceCode,
     Invitation, InvitationStatus, ListUsersParams, Member, Organization, Passkey, TwoFactor,
     UpdateAccount, UpdateDeviceCode, UpdateOrganization, UpdateUser,
