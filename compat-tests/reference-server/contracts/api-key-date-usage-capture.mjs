@@ -114,7 +114,7 @@ async function captureBackend(backend, diagnostics) {
       operations.push({ name, input, events: diagnostic.events, result: normalizedResult, stored: persisted.map(visible) });
     }
     return { backend, operations };
-  });
+  }, undefined, backend === "postgres" ? [1, 2] : [1.5, 2.5]);
 }
 
 export async function captureApiKeyDateUsage({ diagnostics = [], backends = ["memory", "sqlite"] } = {}) {

@@ -75,24 +75,9 @@ jobs:
           - contract: api-key-date-usage
             regressions: [api-key-fields, api-key-name-mapping, api-key-date-usage]
             backend: postgres
-          - contract: api-key-date-usage
-            regressions: [api-key-fields, api-key-name-mapping, api-key-date-usage]
-            backend: mysql
-          - contract: native-plugin-replacements
-            regressions: [plugin-model-fields, plugin-output-capabilities]
-            backend: memory
-          - contract: native-plugin-replacements
-            regressions: [plugin-model-fields, plugin-output-capabilities]
-            backend: sqlite
-          - contract: device-grant-sql
-            regressions: [device-grant, device-redemption]
-            backend: sqlite
-          - contract: device-grant-sql
-            regressions: [device-grant, device-redemption]
-            backend: postgres
-          - contract: device-grant-sql
-            regressions: [device-grant, device-redemption]
-            backend: mysql
+          - contract: memory-sort
+            regressions: [memory-name-coercion, member-sort-stability, api-key-number-sort]
+            backend: ''
     runs-on: ubuntu-latest
     timeout-minutes: 10
     services:

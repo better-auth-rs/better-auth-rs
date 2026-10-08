@@ -14,6 +14,9 @@ const table = "ordinary_memory_sort";
 const column = "stored_name";
 const date = "2030-01-02T03:04:05.000Z";
 function observe(input) {
+  if (typeof input === "string" && !input.isWellFormed()) {
+    return { type: "utf16", value: Array.from({ length: input.length }, (_, index) => input.charCodeAt(index)) };
+  }
   if (Object.is(input, -0)) return { type: "number", value: "-0" };
   if (Array.isArray(input)) return input.map(observe);
   if (input !== null && typeof input === "object" && !(input instanceof Date)) {
@@ -25,6 +28,10 @@ const value = (name, input) => ({ name, present: true, value: () => input });
 export const memorySortStrings = [
   "z", "Z", "a", "A", "a-2", "a_2", "a 2", "a.2", "a2", "a10", "02", "2", "10", "",
   "é", "e\u0301", "e", "É", "ä", "å", "ö", "ß", "ss", "I", "i", "İ", "ı", "中", "文", "😀", "🦀",
+];
+export const memorySortUtf16Strings = [
+  "\ud800", "\udbff", "\udc00", "\udfff", "\ufffd", "\ue000", "😀",
+  "\ud800x", "x\udc00", "\ud800\ud800", "\udc00\ud800", "a\0b", "a", "",
 ];
 const mixed = () => [
   value("number-two", 2), value("string-ten", "10"), value("false", false),
@@ -56,6 +63,7 @@ export const memorySortCases = [
   ] },
   { name: "nonconvertible-single", declaration: "string", values: () => [value("object", { toString: null })] },
   { name: "nonconvertible-pair", declaration: "string", values: () => [value("object", { toString: null }), value("word", "desk")] },
+  { name: "utf16-strings", declaration: "string", values: () => memorySortUtf16Strings.map((input, index) => value(`utf16-${index}`, input)) },
 ];
 export const memorySortOperations = ["unsorted", "ascending", "descending", "ascending-page", "descending-page"];
 
@@ -130,6 +138,10 @@ export async function captureMemorySort() {
     stringComparisons: {
       values: memorySortStrings,
       signs: memorySortStrings.map(left => memorySortStrings.map(right => Math.sign(left.localeCompare(right)))),
+    },
+    rawUtf16Comparisons: {
+      values: memorySortUtf16Strings.map(observe),
+      signs: memorySortUtf16Strings.map(left => memorySortUtf16Strings.map(right => Math.sign(left.localeCompare(right)))),
     },
     cases,
   };

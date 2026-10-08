@@ -14,7 +14,7 @@ const updatedAt = "2030-01-02T04:04:05.123Z";
 const times = Array.from({ length: 6 }, (_, i) => `2031-02-03T04:05:0${i}.000Z`);
 const json = value => JSON.parse(JSON.stringify(value));
 const callbackValue = value => value === undefined ? { type: "undefined" } : json(value);
-const policies = nameMapping => ({
+const policies = (nameMapping, revisionDefaults) => ({
   ...(nameMapping === undefined ? {} : { name: {
     type: "string", required: false,
     ...(nameMapping === "default" ? {} : { fieldName: nameMapping === "empty" ? "" : "stored_name" }),
@@ -22,7 +22,7 @@ const policies = nameMapping => ({
   label: { type: "string", fieldName: "stored_label", required: false, defaultValue: " Default " },
   activatedAt: { type: "date", fieldName: "stored_activation", required: false },
   details: { type: "json", fieldName: "stored_details", required: false },
-  revision: { type: "number", fieldName: "stored_revision", required: false, defaultValue: 1.5 },
+  revision: { type: "number", fieldName: "stored_revision", required: false, defaultValue: revisionDefaults[0] },
 });
 const nativeFields = [
   "id", "name", "start", "prefix", "key", "referenceId", "configId", "refillInterval", "refillAmount",
@@ -53,20 +53,20 @@ const configuration = fields => ({
   } }],
 });
 
-async function runFixture(database, physicalRows, sqlite, run, nameMapping) {
+async function runFixture(database, physicalRows, sqlite, run, nameMapping, revisionDefaults) {
   const options = fields => ({ database, ...configuration(fields) });
-  const reader = (await betterAuth(options(policies(nameMapping))).$context).adapter;
+  const reader = (await betterAuth(options(policies(nameMapping, revisionDefaults))).$context).adapter;
   const events = [];
   const errors = { input: new Error("ordinary API Key input error"), output: new Error("ordinary API Key output error") };
   let failure;
-  const fields = Object.fromEntries(Object.entries(policies(nameMapping)).map(([name, field]) => [name, {
+  const fields = Object.fromEntries(Object.entries(policies(nameMapping, revisionDefaults)).map(([name, field]) => [name, {
     ...field,
     ...(name === "name" ? {
       onUpdate() { events.push(["onUpdate", name]); return " Renewed "; },
     } : {}),
     ...(name === "revision" ? {
-      defaultValue() { events.push(["default", name]); return 1.5; },
-      onUpdate() { events.push(["onUpdate", name]); return 2.5; },
+      defaultValue() { events.push(["default", name]); return revisionDefaults[0]; },
+      onUpdate() { events.push(["onUpdate", name]); return revisionDefaults[1]; },
     } : {}),
     transform: {
       input(value) {
@@ -86,7 +86,7 @@ async function runFixture(database, physicalRows, sqlite, run, nameMapping) {
   let expectedUpdatedAt = createdAt;
   const visible = row => {
     if (row === null) return null;
-    assert.deepEqual(Object.keys(row).sort(), [...new Set([...nativeFields, ...Object.keys(policies(nameMapping))])].sort());
+    assert.deepEqual(Object.keys(row).sort(), [...new Set([...nativeFields, ...Object.keys(policies(nameMapping, revisionDefaults))])].sort());
     assert.equal(typeof row.id, "string");
     assert.ok(row.id.length > 0);
     if (identity === undefined) identity = row.id;
@@ -171,24 +171,24 @@ async function runFixture(database, physicalRows, sqlite, run, nameMapping) {
   });
 }
 
-export async function withFixture(backend, run, nameMapping) {
+export async function withFixture(backend, run, nameMapping, revisionDefaults = [1.5, 2.5]) {
   assert.ok(["memory", "sqlite", "postgres", "mysql"].includes(backend));
   assert.ok(nameMapping === undefined || ["default", "empty", "renamed"].includes(nameMapping));
   if (backend === "memory") {
     const memory = { user: [], session: [], account: [], verification: [], ordinary_api_key_fields: [] };
-    return await runFixture(memoryAdapter(memory), () => memory.ordinary_api_key_fields, undefined, run, nameMapping);
+    return await runFixture(memoryAdapter(memory), () => memory.ordinary_api_key_fields, undefined, run, nameMapping, revisionDefaults);
   }
   if (backend === "sqlite") {
     const database = new Database(":memory:");
     try {
-      await (await getMigrations({ database, ...configuration(policies(nameMapping)) })).runMigrations();
-      return await runFixture(database, () => database.query("SELECT * FROM ordinary_api_key_fields").all(), database, run, nameMapping);
+      await (await getMigrations({ database, ...configuration(policies(nameMapping, revisionDefaults)) })).runMigrations();
+      return await runFixture(database, () => database.query("SELECT * FROM ordinary_api_key_fields").all(), database, run, nameMapping, revisionDefaults);
     } finally {
       database.close();
     }
   }
-  const captured = await captureFreshServerCatalog(backend, ["ordinary_api_key_fields"], configuration(policies(nameMapping)), context =>
-    runFixture(context.options.database, () => context.query("SELECT * FROM ordinary_api_key_fields ORDER BY id", []), undefined, run, nameMapping));
+  const captured = await captureFreshServerCatalog(backend, ["ordinary_api_key_fields"], configuration(policies(nameMapping, revisionDefaults)), context =>
+    runFixture(context.options.database, () => context.query("SELECT * FROM ordinary_api_key_fields ORDER BY id", []), undefined, run, nameMapping, revisionDefaults));
   return captured.observation;
 }
 
