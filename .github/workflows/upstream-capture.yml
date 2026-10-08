@@ -54,6 +54,8 @@ on:
       - compat-tests/reference-server/contracts/api-key-date-usage-capture.mjs
       - compat-tests/reference-server/contracts/api-key-fields-capture.mjs
       - compat-tests/reference-server/contracts/native-plugin-replacements-capture.mjs
+      - compat-tests/reference-server/contracts/mysql-create-readback-capture.mjs
+      - compat-tests/reference-server/contracts/mysql-create-lifecycle-capture.mjs
       - compat-tests/reference-server/contracts/device-grant-capture.mjs
       - compat-tests/reference-server/contracts/device-grant-database.mjs
       - compat-tests/reference-server/contracts/device-grant-failures.mjs
@@ -72,12 +74,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - contract: api-key-date-usage
-            regressions: [api-key-fields, api-key-name-mapping, api-key-date-usage]
-            backend: postgres
-          - contract: memory-sort
-            regressions: [memory-name-coercion, member-sort-stability, api-key-number-sort]
-            backend: ''
+          - contract: create-readback
+            script: compat-tests/reference-server/contracts/mysql-create-readback-capture.mjs
+            regressions: [native-plugin-replacements, native-atomic-update]
+            backend: mysql
     runs-on: ubuntu-latest
     timeout-minutes: 10
     services:
