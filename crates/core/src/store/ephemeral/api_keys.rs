@@ -205,6 +205,15 @@ impl ApiKeyStore for EphemeralStore {
             self.prepare_plugin_fields(EntityRole::ApiKey, write.set_fields(), false)
                 .await?
         };
+        if write.operation() == "incrementOne" {
+            crate::store::validate_increment_one_update(
+                matches!(
+                    &write,
+                    ApiKeyUsageWrite::Decrement | ApiKeyUsageWrite::IncrementWindow { .. }
+                ),
+                !fields.is_empty(),
+            )?;
+        }
         let row = self
             .raw("apikey", write.operation(), |state| {
                 let matches = state.api_keys.try_select_refs(|key| {

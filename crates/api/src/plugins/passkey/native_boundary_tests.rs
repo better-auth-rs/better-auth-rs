@@ -327,3 +327,6 @@ async fn registration_and_authentication_preserve_utf16_response_fields() -> Tes
 
 #[path = "public_key_authentication_tests.rs"]
 mod public_key_authentication_tests;
+
+#[path = "credential_id_authentication_tests.rs"]
+mod credential_id_authentication_tests;

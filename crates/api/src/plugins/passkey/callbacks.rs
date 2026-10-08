@@ -3,7 +3,7 @@
 use async_trait::async_trait;
 use better_auth_core::{
     AuthConfig, AuthContext, AuthRequest, AuthResult, AuthSchema, CreateUser, RuntimeExtensions,
-    plugin::MetadataMap, store::AuthTransaction, wire::UserView,
+    SchemaValue, plugin::MetadataMap, store::AuthTransaction, wire::UserView,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -147,8 +147,12 @@ pub struct PasskeyRegistrationVerification {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PasskeyAuthenticationInfo {
-    #[serde(rename = "credentialID")]
-    pub credential_id: String,
+    /// The selected credential ID after adapter output projection.
+    #[serde(
+        rename = "credentialID",
+        skip_serializing_if = "SchemaValue::is_undefined"
+    )]
+    pub credential_id: SchemaValue<String>,
     pub new_counter: u64,
     pub user_verified: bool,
     pub credential_device_type: &'static str,

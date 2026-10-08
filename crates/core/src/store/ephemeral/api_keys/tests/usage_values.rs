@@ -1,5 +1,7 @@
 use super::*;
-use crate::user_fields::{UserConfig, UserFieldConfig, UserFieldType};
+use crate::user_fields::{
+    FieldTransforms, UserConfig, UserFieldConfig, UserFieldTransform, UserFieldType,
+};
 use crate::{FieldMap, SchemaValue};
 use std::sync::Arc;
 
@@ -8,6 +10,69 @@ fn only_row(store: &EphemeralStore) -> AuthResult<FieldMap> {
     assert_eq!(rows.len(), 1);
     rows.pop()
         .ok_or_else(|| AuthError::internal("Missing usage row"))
+}
+
+#[tokio::test]
+async fn atomic_setters_reject_transformed_empty_updates_but_plain_updates_remain_valid()
+-> AuthResult<()> {
+    let mut store = EphemeralStore::default();
+    let key = store.create_api_key(input()).await?;
+    let stored = only_row(&store)?;
+    store.model_fields.register(
+        EntityRole::ApiKey,
+        UserConfig {
+            additional_fields: Some(
+                [
+                    ("remaining", UserFieldType::Number),
+                    ("lastRefillAt", UserFieldType::Date),
+                    ("requestCount", UserFieldType::Number),
+                    ("lastRequest", UserFieldType::Date),
+                ]
+                .into_iter()
+                .map(|(name, field_type)| {
+                    (
+                        name.into(),
+                        UserFieldConfig {
+                            field_type,
+                            transform: Some(FieldTransforms {
+                                input: Some(UserFieldTransform::new(|_| Ok(FieldValue::Undefined))),
+                                ..Default::default()
+                            }),
+                            ..Default::default()
+                        },
+                    )
+                })
+                .collect(),
+            ),
+        },
+    )?;
+    let at = Utc::now();
+    for write in [
+        ApiKeyUsageWrite::Refill {
+            previous: FieldValue::Null,
+            remaining: 7.0,
+            at,
+        },
+        ApiKeyUsageWrite::StartWindow {
+            previous_before: None,
+            at,
+        },
+    ] {
+        let result = store.write_api_key_usage(&key.id, write).await;
+        assert!(
+            matches!(result, Err(AuthError::Internal(message)) if message
+            == "incrementOne resolved to an empty update: every increment/set field was unknown to the schema or transformed away.")
+        );
+        assert_eq!(only_row(&store)?, stored);
+    }
+    assert!(
+        store
+            .write_api_key_usage(&key.id, ApiKeyUsageWrite::LastRequest(at))
+            .await?
+            .is_some()
+    );
+    assert_eq!(only_row(&store)?, stored);
+    Ok(())
 }
 
 // Memory incrementOne checks typeof number before adding; cache arithmetic has a different contract.

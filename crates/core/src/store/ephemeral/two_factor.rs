@@ -157,6 +157,7 @@ impl TwoFactorStore for EphemeralStore {
                 false,
             )
             .await?;
+        crate::store::validate_increment_one_update(false, !patch.is_empty())?;
         let schema = self.model_fields.plugin_fields(EntityRole::TwoFactor);
         let column = schema.record_storage_key("backupCodes");
         self.write_two_factor_row(
@@ -226,6 +227,7 @@ impl TwoFactorStore for EphemeralStore {
                     false,
                 )
                 .await?;
+            crate::store::validate_increment_one_update(false, !patch.is_empty())?;
             let _ = self
                 .write_two_factor_row(
                     "incrementOne",
@@ -268,6 +270,9 @@ impl TwoFactorStore for EphemeralStore {
                 false,
             )
             .await?;
+        if cutoff.is_some() {
+            crate::store::validate_increment_one_update(false, !patch.is_empty())?;
+        }
         let _ = self
             .write_two_factor_row(
                 if cutoff.is_some() {

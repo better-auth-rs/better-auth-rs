@@ -95,6 +95,8 @@ The callback types are exported from `better_auth::plugins::passkey`:
 
 Each callback receives a `PasskeyEndpoint` with the request, parsed body, global configuration, application extensions, plugin metadata and a typed user adapter. The user adapter supports lookup by ID or email, creation, update and deletion. These methods use the active transaction during registration. The callback interface does not expose the upstream arbitrary-model adapter.
 
+`PasskeyAuthenticationInfo.credential_id` uses `SchemaValue<String>` to preserve the selected record's output-projected `credentialID`, including null, omission, and replacement types. Use `.typed()?` for ordinary string callers or `.field_value()` for the complete value. Native authentication uses the request credential ID for record lookup and verifier input. A transformed record ID does not change signature verification or replace the selected owner.
+
 Application API errors retain their status and body. Ordinary errors in registration verification become `FAILED_TO_VERIFY_REGISTRATION`; ordinary authentication-hook errors become `AUTHENTICATION_FAILED`.
 
 ### Passkey-first registration

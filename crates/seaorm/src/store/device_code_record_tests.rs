@@ -1,12 +1,15 @@
 use super::*;
 use crate::store::{bundled_schema::BundledSchema, migrator::run_migrations};
-use better_auth_core::store::UserStore;
+use better_auth_core::store::{UserStore, transaction};
 use better_auth_core::user_fields::{
     FieldTransforms, UserConfig, UserFieldConfig, UserFieldTransform,
 };
 use better_auth_core::{AuthConfig, AuthInitContext, CreateUser, DeviceCodeOwnership, FieldValue};
 use sea_orm::Database;
-use std::sync::Arc;
+use std::sync::{
+    Arc,
+    atomic::{AtomicUsize, Ordering},
+};
 
 #[tokio::test]
 async fn consumption_uses_original_storage_and_rejects_changed_public_bindings() -> AuthResult<()> {
@@ -147,5 +150,85 @@ async fn consumption_uses_original_storage_and_rejects_changed_public_bindings()
         );
         assert!(reader.get_device_code_record(&record.id).await?.is_none());
     }
+    Ok(())
+}
+
+#[tokio::test]
+async fn claim_rejects_discarded_owner_in_direct_and_explicit_transactions() -> AuthResult<()> {
+    let database = Database::connect("sqlite::memory:")
+        .await
+        .map_err(map_db_err)?;
+    run_migrations(&database).await.map_err(map_db_err)?;
+    let mut store = SeaOrmStore::<BundledSchema>::new(
+        AuthConfig::new("a-secret-that-is-at-least-32-characters"),
+        database,
+    );
+    let id: SchemaValue<String> = "empty-owner".into();
+    let _ = store
+        .create_device_code_record(FieldMap::from([
+            ("id".into(), id.field_value()),
+            ("deviceCode".into(), "empty-owner-device".into()),
+            ("userCode".into(), "empty-owner-user".into()),
+            ("userId".into(), FieldValue::Null),
+            ("expiresAt".into(), chrono::Utc::now().into()),
+            ("status".into(), "pending".into()),
+        ]))
+        .await?;
+    let reader = store.clone();
+    let before = reader.get_device_code_record(&id).await?;
+    let inputs = Arc::new(AtomicUsize::new(0));
+    let outputs = Arc::new(AtomicUsize::new(0));
+    let mut init = AuthInitContext::new(store.config.clone(), Arc::new(store.clone()));
+    init.register_model_fields(
+        EntityRole::DeviceCode,
+        UserConfig {
+            additional_fields: Some(
+                [(
+                    "userId".into(),
+                    UserFieldConfig {
+                        required: Some(false),
+                        transform: Some(FieldTransforms {
+                            input: Some(UserFieldTransform::new({
+                                let inputs = inputs.clone();
+                                move |value| {
+                                    assert_eq!(value, FieldValue::from("owner"));
+                                    let _ = inputs.fetch_add(1, Ordering::SeqCst);
+                                    Ok(FieldValue::Undefined)
+                                }
+                            })),
+                            output: Some(UserFieldTransform::new({
+                                let outputs = outputs.clone();
+                                move |value| {
+                                    let _ = outputs.fetch_add(1, Ordering::SeqCst);
+                                    Ok(value)
+                                }
+                            })),
+                        }),
+                        ..Default::default()
+                    },
+                )]
+                .into(),
+            ),
+        },
+    )?;
+    store.model_fields = init.into_parts().plugin_fields;
+    for transactional in [false, true] {
+        let result = if transactional {
+            let id = id.clone();
+            transaction(&store, move |tx| {
+                Box::pin(async move { tx.claim_device_code(&id, &"owner".into()).await })
+            })
+            .await
+        } else {
+            store.claim_device_code(&id, &"owner".into()).await
+        };
+        assert!(
+            matches!(result, Err(AuthError::Internal(message)) if message
+            == "incrementOne resolved to an empty update: every increment/set field was unknown to the schema or transformed away.")
+        );
+        assert_eq!(outputs.load(Ordering::SeqCst), 0);
+        assert_eq!(reader.get_device_code_record(&id).await?, before);
+    }
+    assert_eq!(inputs.load(Ordering::SeqCst), 2);
     Ok(())
 }

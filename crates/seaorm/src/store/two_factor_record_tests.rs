@@ -298,3 +298,124 @@ async fn failure_increment_skips_input_and_checks_raw_count_before_locking() -> 
     assert_eq!(reset.secret, "updated by factory");
     Ok(())
 }
+
+#[tokio::test]
+async fn atomic_setters_reject_discarded_fields_before_legacy_timestamps() -> AuthResult<()> {
+    let database = Database::connect("sqlite::memory:")
+        .await
+        .map_err(map_db_err)?;
+    run_migrations(&database).await.map_err(map_db_err)?;
+    let mut store = SeaOrmStore::<BundledSchema>::new(
+        AuthConfig::new("a-secret-that-is-at-least-32-characters"),
+        database,
+    );
+    let owner = store
+        .create_user(
+            CreateUser::new()
+                .with_name("Empty setter owner")
+                .with_email("empty-setter@example.test"),
+        )
+        .await?;
+    let factor = store
+        .create_two_factor(CreateTwoFactor {
+            additional_fields: Default::default(),
+            user_id: owner.id.typed()?.clone(),
+            secret: "secret".into(),
+            backup_codes: "codes".into(),
+            verified: true,
+        })
+        .await?;
+    let before = entities::two_factor::Entity::find_by_id(factor.id.typed()?.clone())
+        .one(store.connection())
+        .await
+        .map_err(map_db_err)?
+        .ok_or_else(|| AuthError::internal("Expected the original TwoFactor"))?;
+    let outputs = Arc::new(AtomicUsize::new(0));
+    let mut init = AuthInitContext::new(store.config.clone(), Arc::new(store.clone()));
+    init.register_model_fields(
+        EntityRole::TwoFactor,
+        UserConfig {
+            additional_fields: Some(
+                ["backupCodes", "failedVerificationCount", "lockedUntil"]
+                    .into_iter()
+                    .map(|name| {
+                        let outputs = outputs.clone();
+                        (
+                            name.into(),
+                            UserFieldConfig {
+                                field_type: match name {
+                                    "failedVerificationCount" => UserFieldType::Number,
+                                    "lockedUntil" => UserFieldType::Date,
+                                    _ => UserFieldType::String,
+                                },
+                                transform: Some(FieldTransforms {
+                                    input: Some(UserFieldTransform::new(|_| {
+                                        Ok(FieldValue::Undefined)
+                                    })),
+                                    output: Some(UserFieldTransform::new(move |value| {
+                                        let _ = outputs.fetch_add(1, Ordering::SeqCst);
+                                        Ok(value)
+                                    })),
+                                }),
+                                ..Default::default()
+                            },
+                        )
+                    })
+                    .collect(),
+            ),
+        },
+    )?;
+    store.model_fields = init.into_parts().plugin_fields;
+    let assert_empty = |error: AuthError| {
+        assert!(matches!(error, AuthError::Internal(message) if message
+            == "incrementOne resolved to an empty update: every increment/set field was unknown to the schema or transformed away."));
+    };
+    for previous in ["codes", "stale-codes"] {
+        assert_empty(
+            store
+                .compare_exchange_two_factor_backup_codes(
+                    &factor.id,
+                    &previous.into(),
+                    "replacement".into(),
+                )
+                .await
+                .unwrap_err(),
+        );
+    }
+    assert_empty(
+        store
+            .reset_two_factor_failures(&factor.id, Some(chrono::Utc::now().into()))
+            .await
+            .unwrap_err(),
+    );
+    assert_eq!(outputs.load(Ordering::SeqCst), 0);
+    assert_eq!(
+        entities::two_factor::Entity::find_by_id(factor.id.typed()?.clone())
+            .one(store.connection())
+            .await
+            .map_err(map_db_err)?,
+        Some(before.clone())
+    );
+
+    assert_empty(
+        store
+            .record_two_factor_failure(&factor.id, 1, &|| Ok(chrono::Utc::now().into()))
+            .await
+            .unwrap_err(),
+    );
+    let mut incremented = before;
+    incremented.failed_verification_count = 1;
+    assert_eq!(
+        entities::two_factor::Entity::find_by_id(factor.id.typed()?.clone())
+            .one(store.connection())
+            .await
+            .map_err(map_db_err)?,
+        Some(incremented)
+    );
+    assert_eq!(outputs.load(Ordering::SeqCst), 3);
+    let ordinary = store
+        .update_two_factor_backup_codes(owner.id.typed()?, "replacement")
+        .await?;
+    assert_eq!(ordinary.backup_codes, "codes");
+    Ok(())
+}

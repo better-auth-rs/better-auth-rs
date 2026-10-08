@@ -34,6 +34,17 @@ use crate::types::{
 
 pub use cache::{CacheAdapter, MemoryCacheAdapter, SecondaryStorage};
 
+/// Reject atomic updates after field conversion removes every assignment.
+#[doc(hidden)]
+pub fn validate_increment_one_update(has_increment: bool, has_set: bool) -> AuthResult<()> {
+    if !has_increment && !has_set {
+        return Err(AuthError::internal(
+            "incrementOne resolved to an empty update: every increment/set field was unknown to the schema or transformed away.",
+        ));
+    }
+    Ok(())
+}
+
 #[cfg(feature = "redis-cache")]
 pub use cache::RedisAdapter;
 

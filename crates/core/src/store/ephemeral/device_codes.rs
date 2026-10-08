@@ -2,6 +2,9 @@ use super::rows::{RowRef, Rows};
 use super::*;
 use crate::store::schema::{EntityRole, resolve_field_name};
 
+#[cfg(test)]
+#[path = "device_claim_tests.rs"]
+mod claim_tests;
 #[path = "device_query.rs"]
 mod query;
 
@@ -156,6 +159,9 @@ impl EphemeralStore {
         let patch = self
             .prepare_plugin_fields(EntityRole::DeviceCode, input, false)
             .await?;
+        if unclaimed {
+            crate::store::validate_increment_one_update(false, !patch.is_empty())?;
+        }
         let status_column = self.device_column("status");
         let owner_column = self.device_column("userId");
         let selected = self

@@ -132,6 +132,135 @@ async fn increment_overrides_set_policies_for_the_same_physical_column() -> Auth
     Ok(())
 }
 
+#[tokio::test]
+async fn atomic_usage_rejects_empty_setters_but_keeps_counter_expressions() -> AuthResult<()> {
+    use better_auth_core::AuthInitContext;
+    use better_auth_core::user_fields::{
+        FieldTransforms, UserConfig, UserFieldConfig, UserFieldTransform, UserFieldType,
+    };
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    let database = Database::connect("sqlite::memory:")
+        .await
+        .map_err(map_db_err)?;
+    run_migrations(&database).await.map_err(map_db_err)?;
+    let mut store = SeaOrmStore::<BundledSchema>::new(
+        AuthConfig::new("a-secret-that-is-at-least-32-characters"),
+        database,
+    );
+    let at = Utc::now();
+    let _ = store
+        .create_api_key_record(FieldMap::from([
+            ("id".into(), "empty-setter".into()),
+            ("referenceId".into(), "owner".into()),
+            ("key".into(), "empty-setter-key".into()),
+            ("createdAt".into(), at.into()),
+            ("updatedAt".into(), at.into()),
+            ("remaining".into(), 5.0.into()),
+            ("lastRefillAt".into(), FieldValue::Null),
+            ("requestCount".into(), 2.0.into()),
+            ("lastRequest".into(), at.into()),
+        ]))
+        .await?;
+    let reader = store.clone();
+    let id = "empty-setter".to_owned().into();
+    let before = reader.get_api_key_record(&id).await?;
+    let outputs = Arc::new(AtomicUsize::new(0));
+    let mut init = AuthInitContext::new(store.config.clone(), Arc::new(store.clone()));
+    init.register_model_fields(
+        EntityRole::ApiKey,
+        UserConfig {
+            additional_fields: Some(
+                ["remaining", "lastRefillAt", "requestCount", "lastRequest"]
+                    .into_iter()
+                    .map(|name| {
+                        let outputs = outputs.clone();
+                        (
+                            name.into(),
+                            UserFieldConfig {
+                                field_type: if matches!(name, "remaining" | "requestCount") {
+                                    UserFieldType::Number
+                                } else {
+                                    UserFieldType::Date
+                                },
+                                transform: Some(FieldTransforms {
+                                    input: Some(UserFieldTransform::new(|_| {
+                                        Ok(FieldValue::Undefined)
+                                    })),
+                                    output: Some(UserFieldTransform::new(move |value| {
+                                        let _ = outputs.fetch_add(1, Ordering::SeqCst);
+                                        Ok(value)
+                                    })),
+                                }),
+                                ..Default::default()
+                            },
+                        )
+                    })
+                    .collect(),
+            ),
+        },
+    )?;
+    store.model_fields = init.into_parts().plugin_fields;
+    for write in [
+        ApiKeyUsageWrite::Refill {
+            previous: FieldValue::Null,
+            remaining: 10.0,
+            at,
+        },
+        ApiKeyUsageWrite::Refill {
+            previous: at.into(),
+            remaining: 10.0,
+            at,
+        },
+        ApiKeyUsageWrite::StartWindow {
+            previous_before: None,
+            at,
+        },
+        ApiKeyUsageWrite::StartWindow {
+            previous_before: Some((at + chrono::Duration::seconds(1)).into()),
+            at,
+        },
+    ] {
+        let result = store.write_api_key_usage(&id, write).await;
+        assert!(
+            matches!(result, Err(AuthError::Internal(message)) if message
+            == "incrementOne resolved to an empty update: every increment/set field was unknown to the schema or transformed away.")
+        );
+        assert_eq!(outputs.load(Ordering::SeqCst), 0);
+        assert_eq!(reader.get_api_key_record(&id).await?, before);
+    }
+    assert!(
+        store
+            .write_api_key_usage(&id, ApiKeyUsageWrite::Decrement)
+            .await?
+            .is_some()
+    );
+    assert!(
+        store
+            .write_api_key_usage(
+                &id,
+                ApiKeyUsageWrite::IncrementWindow {
+                    previous_after: (at - chrono::Duration::seconds(1)).into(),
+                    maximum: 10.0.into(),
+                    at: at + chrono::Duration::seconds(1),
+                },
+            )
+            .await?
+            .is_some()
+    );
+    let persisted = reader
+        .get_api_key_record(&id)
+        .await?
+        .ok_or_else(|| AuthError::internal("Expected the incremented API Key"))?;
+    assert_eq!(persisted.get("remaining"), Some(&4.0.into()));
+    assert_eq!(persisted.get("requestCount"), Some(&3.0.into()));
+    assert_eq!(
+        persisted.get("lastRequest"),
+        before.as_ref().and_then(|row| row.get("lastRequest"))
+    );
+    Ok(())
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn file_sqlite_connections_consume_quota_without_lock_upgrade_errors()
 -> Result<(), Box<dyn std::error::Error>> {

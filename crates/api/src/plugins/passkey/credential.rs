@@ -34,6 +34,7 @@ impl WebAuthnCredential {
     pub(super) fn from_record(
         passkey: &impl AuthPasskey,
         storage: PasskeyStorage,
+        credential_id: &str,
     ) -> AuthResult<Self> {
         let cred = match storage {
             PasskeyStorage::Legacy => {
@@ -54,7 +55,8 @@ impl WebAuthnCredential {
                     AuthError::internal(format!("Invalid passkey public key: {error}"))
                 })?;
                 Credential {
-                    cred_id: decode_credential_id(passkey.credential_id().typed()?)?,
+                    // The adapter selected this key by the request ID; projected IDs are callback metadata.
+                    cred_id: decode_credential_id(credential_id)?,
                     cred: key,
                     // The endpoint applies the upstream relational check to the original runtime value.
                     // The engine receives only counters that its fixed integer representation can retain.

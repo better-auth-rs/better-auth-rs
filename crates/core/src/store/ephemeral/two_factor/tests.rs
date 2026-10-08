@@ -188,3 +188,69 @@ async fn backup_cas_applies_input_mapping_and_retains_commit_after_output_error(
     );
     Ok(())
 }
+
+#[tokio::test]
+async fn backup_cas_rejects_transformed_empty_set_before_storage_or_output() -> AuthResult<()> {
+    for asynchronous in [false, true] {
+        for matches_guard in [false, true] {
+            let mut store = EphemeralStore::default();
+            let factor = store.create_two_factor(settings()).await?;
+            let stored = store.plugin_storage_rows(EntityRole::TwoFactor)?;
+            let inputs = Arc::new(AtomicUsize::new(0));
+            let outputs = Arc::new(AtomicUsize::new(0));
+            let observed_input = inputs.clone();
+            let discard = move |value: FieldValue| {
+                assert_eq!(value, FieldValue::from("replacement-codes"));
+                let _ = observed_input.fetch_add(1, Ordering::SeqCst);
+                Ok(FieldValue::Undefined)
+            };
+            let input = if asynchronous {
+                UserFieldTransform::new_async(move |value| std::future::ready(discard(value)))
+            } else {
+                UserFieldTransform::new(discard)
+            };
+            let observed_output = outputs.clone();
+            store.model_fields.register(
+                EntityRole::TwoFactor,
+                UserConfig {
+                    additional_fields: Some(
+                        [(
+                            "backupCodes".into(),
+                            UserFieldConfig {
+                                transform: Some(FieldTransforms {
+                                    input: Some(input),
+                                    output: Some(UserFieldTransform::new(move |value| {
+                                        let _ = observed_output.fetch_add(1, Ordering::SeqCst);
+                                        Ok(value)
+                                    })),
+                                }),
+                                ..Default::default()
+                            },
+                        )]
+                        .into(),
+                    ),
+                },
+            )?;
+            let previous = if matches_guard {
+                factor.backup_codes.field_value()
+            } else {
+                "stale-codes".into()
+            };
+            let result = store
+                .compare_exchange_two_factor_backup_codes(
+                    &factor.id,
+                    &previous,
+                    "replacement-codes".into(),
+                )
+                .await;
+            assert!(
+                matches!(result, Err(AuthError::Internal(message)) if message
+                == "incrementOne resolved to an empty update: every increment/set field was unknown to the schema or transformed away.")
+            );
+            assert_eq!(store.plugin_storage_rows(EntityRole::TwoFactor)?, stored);
+            assert_eq!(inputs.load(Ordering::SeqCst), 1);
+            assert_eq!(outputs.load(Ordering::SeqCst), 0);
+        }
+    }
+    Ok(())
+}

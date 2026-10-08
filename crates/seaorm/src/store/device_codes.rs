@@ -7,7 +7,7 @@ use sea_orm::{
     TransactionTrait, sea_query::SimpleExpr,
 };
 
-use better_auth_core::store::{DeviceCodeStore, schema::EntityRole};
+use better_auth_core::store::{DeviceCodeStore, schema::EntityRole, validate_increment_one_update};
 
 use crate::error::{AuthError, AuthResult};
 use crate::schema::AuthSchema;
@@ -378,6 +378,7 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
                 ..Default::default()
             })
             .await?;
+        validate_increment_one_update(false, !active.is_empty())?;
         let column = self.plugin_column::<P::DeviceCode>(EntityRole::DeviceCode, "userId")?;
         let reselect = self.plugin_id_filter::<P::DeviceCode>(EntityRole::DeviceCode, id)?;
         let guard = reselect

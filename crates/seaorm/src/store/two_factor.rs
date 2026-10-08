@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use better_auth_core::{
     AuthError, AuthResult, CreateTwoFactor, FieldDate, FieldMap, FieldValue, FromFieldMap,
     SchemaValue, TwoFactor, TwoFactorStorage, UpdateTwoFactor,
-    store::{TwoFactorStore, schema::EntityRole},
+    store::{TwoFactorStore, schema::EntityRole, validate_increment_one_update},
 };
 use sea_orm::{
     ColumnTrait, ConnectionTrait, EntityTrait, ExprTrait, IdenStatic, QueryFilter, QueryResult,
@@ -17,6 +17,12 @@ use sea_orm::{
 #[cfg(test)]
 #[path = "two_factor_record_tests.rs"]
 mod record_tests;
+
+enum WriteOperation {
+    Create,
+    Update,
+    Increment,
+}
 
 impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema>
     SeaOrmStore<S, O, P>
@@ -47,7 +53,7 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
     async fn prepare_two_factor_fields(
         &self,
         mut input: FieldMap,
-        create: bool,
+        operation: WriteOperation,
     ) -> AuthResult<super::plugin_models::Write<P::TwoFactor>> {
         let schema = self.model_fields.plugin_fields(EntityRole::TwoFactor);
         let mut legacy = FieldMap::new();
@@ -65,9 +71,13 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
                 EntityRole::TwoFactor,
                 "twoFactor",
                 input,
-                create,
+                matches!(operation, WriteOperation::Create),
             )
             .await?;
+        if matches!(operation, WriteOperation::Increment) {
+            // Legacy timestamps must not make an empty declared SET valid.
+            validate_increment_one_update(false, !active.is_empty())?;
+        }
         super::plugin_models::apply::<P::TwoFactor>(
             &mut active,
             legacy,
@@ -113,7 +123,9 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
 
     async fn insert_two_factor(&self, mut input: FieldMap) -> AuthResult<QueryResult> {
         self.two_factor_timestamps(&mut input, true);
-        let active = self.prepare_two_factor_fields(input, true).await?;
+        let active = self
+            .prepare_two_factor_fields(input, WriteOperation::Create)
+            .await?;
         database_operation::<Entity<P::TwoFactor>, _>(self.config(), "create", async {
             active.insert_raw(self.connection()).await
         })
@@ -140,7 +152,9 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         mut input: FieldMap,
     ) -> AuthResult<Option<QueryResult>> {
         self.two_factor_timestamps(&mut input, false);
-        let active = self.prepare_two_factor_fields(input, false).await?;
+        let active = self
+            .prepare_two_factor_fields(input, WriteOperation::Update)
+            .await?;
         database_operation::<Entity<P::TwoFactor>, _>(self.config(), "update", async {
             super::updates::execute_update_returning_raw::<Entity<P::TwoFactor>, _>(
                 self.connection(),
@@ -286,7 +300,9 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         )?);
         let mut input = FieldMap::from([("backupCodes".into(), replacement)]);
         self.two_factor_timestamps(&mut input, false);
-        let active = self.prepare_two_factor_fields(input, false).await?;
+        let active = self
+            .prepare_two_factor_fields(input, WriteOperation::Increment)
+            .await?;
         let row =
             database_operation::<Entity<P::TwoFactor>, _>(self.config(), "incrementOne", async {
                 super::updates::increment_returning_raw::<Entity<P::TwoFactor>>(
@@ -354,7 +370,7 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
             let active = self
                 .prepare_two_factor_fields(
                     FieldMap::from([("lockedUntil".into(), until.into())]),
-                    false,
+                    WriteOperation::Increment,
                 )
                 .await?;
             let row = database_operation::<Entity<P::TwoFactor>, _>(
@@ -403,7 +419,11 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
                     ("failedVerificationCount".into(), 0.0.into()),
                     ("lockedUntil".into(), FieldValue::Null),
                 ]),
-                false,
+                if guarded {
+                    WriteOperation::Increment
+                } else {
+                    WriteOperation::Update
+                },
             )
             .await?;
         let row = database_operation::<Entity<P::TwoFactor>, _>(

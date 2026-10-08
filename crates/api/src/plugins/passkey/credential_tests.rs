@@ -196,7 +196,8 @@ fn standard_columns_and_legacy_envelope_authenticate_registered_key() -> TestRes
                 credential,
             };
             for counter in [1_u32, 2] {
-                let stored = WebAuthnCredential::from_record(&row, storage)?;
+                let stored =
+                    WebAuthnCredential::from_record(&row, storage, row.credential_id.typed()?)?;
                 assert_eq!(stored.cred.cred_id, registered.cred.cred_id);
                 let expected_transports = match (storage, transports) {
                     (PasskeyStorage::Native, Some(_)) => Some(vec![

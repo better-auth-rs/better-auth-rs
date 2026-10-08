@@ -10,7 +10,9 @@ use sea_orm::{
     QueryOrder, QuerySelect, QueryTrait, sea_query::Expr,
 };
 
-use better_auth_core::store::{ApiKeyStore, ApiKeyUsageWrite, schema::EntityRole};
+use better_auth_core::store::{
+    ApiKeyStore, ApiKeyUsageWrite, schema::EntityRole, validate_increment_one_update,
+};
 
 use crate::error::{AuthError, AuthResult};
 use crate::schema::AuthSchema;
@@ -252,6 +254,9 @@ where
         } else {
             Default::default()
         };
+        if operation == "incrementOne" {
+            validate_increment_one_update(increment.is_some(), !fields.is_empty())?;
+        }
         if let Some((column, _)) = &increment {
             // Kysely evaluates set policies, then replaces colliding assignments with increments.
             fields.not_set(*column);

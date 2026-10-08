@@ -266,11 +266,14 @@ pub(super) async fn verify_authentication_core(
         return passkey_not_found();
     };
 
-    let stored_passkey =
-        match WebAuthnCredential::from_record(&passkey, ctx.database.passkey_storage()) {
-            Ok(passkey) => passkey,
-            Err(_) => return passkey_authentication_failure(),
-        };
+    let stored_passkey = match WebAuthnCredential::from_record(
+        &passkey,
+        ctx.database.passkey_storage(),
+        &credential_id,
+    ) {
+        Ok(passkey) => passkey,
+        Err(_) => return passkey_authentication_failure(),
+    };
     let webauthn = match build_webauthn(config, &ctx.config, &origin) {
         Ok(webauthn) => webauthn,
         Err(_) => return passkey_authentication_failure(),
@@ -312,7 +315,7 @@ pub(super) async fn verify_authentication_core(
         let verification = super::PasskeyAuthenticationVerification {
             verified: true,
             authentication_info: super::PasskeyAuthenticationInfo {
-                credential_id: credential_id.clone(),
+                credential_id: passkey.credential_id().clone(),
                 new_counter: counter,
                 user_verified: authentication_result.user_verified(),
                 credential_device_type: if authentication_result.backup_eligible() {

@@ -20,6 +20,10 @@ impl<E: EntityTrait> Default for RecordWrite<E> {
 }
 
 impl<E: EntityTrait> RecordWrite<E> {
+    pub(super) fn is_empty(&self) -> bool {
+        self.fields.is_empty()
+    }
+
     pub(super) fn from_active(active: impl ActiveModelTrait<Entity = E>) -> Self {
         let mut write = Self::default();
         for column in E::Column::iter() {
