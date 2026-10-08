@@ -325,7 +325,7 @@ async fn raw_utf16_cache_json_preserves_records_and_reference_mutation() {
         ]
     );
     assert_eq!(
-        serde_json::to_string(response).unwrap(),
+        serde_json::to_string(&response).unwrap(),
         r#"{"apiKeys":[{"id":"\ud800","referenceId":"owner","createdAt":"2026-10-01T00:00:00.000Z","updatedAt":"2026-10-01T00:00:00.000Z","expiresAt":null,"lastRefillAt":null,"lastRequest":null,"metadata":null,"permissions":null}],"total":1}"#
     );
     assert_eq!(
@@ -498,7 +498,7 @@ async fn raw_length_objects_reach_complete_responses_without_cache_date_revival(
         ]
     );
     assert_eq!(
-        serde_json::to_string(response).unwrap(),
+        serde_json::to_string(&response).unwrap(),
         r#"{"apiKeys":[{"id":"raw-id","referenceId":"owner","configId":"default","name":"\ud800","createdAt":"raw-date","updatedAt":null,"expiresAt":"still-raw","lastRefillAt":0,"metadata":{"native":true},"permissions":{"resource":["read"]},"extra":[1,{"nested":true}]}],"total":1}"#
     );
     assert_eq!(*cache.reads.lock().unwrap(), vec![FieldValue::from(INDEX)]);
@@ -561,7 +561,11 @@ async fn array_constructor_errors_and_fallback_branch_follow_native_length_guard
             cache.reads.lock().unwrap().clear();
             let before = cache.values.lock().unwrap().clone();
             let error = list(&config, &ctx, "owner", None).await.unwrap_err();
-            assert!(error.to_string().contains("Invalid array length"));
+            assert!(
+                error
+                    .to_string()
+                    .contains("Array length must be a positive integer of safe magnitude.")
+            );
             assert_eq!(*cache.reads.lock().unwrap(), vec![FieldValue::from(INDEX)]);
             assert_eq!(*cache.values.lock().unwrap(), before);
             assert!(cache.writes.lock().unwrap().is_empty());
@@ -589,7 +593,7 @@ async fn array_constructor_errors_and_fallback_branch_follow_native_length_guard
                 result
                     .unwrap_err()
                     .to_string()
-                    .contains("Invalid array length")
+                    .contains("Array length must be a positive integer of safe magnitude.")
             );
         }
     }

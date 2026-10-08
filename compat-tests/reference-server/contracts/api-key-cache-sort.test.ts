@@ -203,7 +203,7 @@ test("array-like lengths preserve native constructor errors and fallback guards"
   const stored = structuredClone(memory);
   for (const source of ['{"length":1.5}', '{"length":1e999}', '{"length":4294967296}']) {
    cache.values.set(rawIndex, source); cache.reads.length = 0;
-   await expect(auth.api.listApiKeys({ headers })).rejects.toThrow("Invalid array length");
+   await expect(auth.api.listApiKeys({ headers })).rejects.toThrow("Array length must be a positive integer of safe magnitude.");
    expect(cache.reads).toStrictEqual([rawIndex]);
    expect([...cache.values]).toStrictEqual([[rawIndex, source]]);
    expect(cache.writes).toStrictEqual([]);
@@ -218,7 +218,7 @@ test("array-like lengths preserve native constructor errors and fallback guards"
   }
   cache.values.set(rawIndex, '{"length":-1}');
   if (fallbackToDatabase) expect(JSON.parse(JSON.stringify(await auth.api.listApiKeys({ headers })))).toStrictEqual({ apiKeys: [], total: 0 });
-  else await expect(auth.api.listApiKeys({ headers })).rejects.toThrow("Invalid array length");
+  else await expect(auth.api.listApiKeys({ headers })).rejects.toThrow("Array length must be a positive integer of safe magnitude.");
   expect(cache.writes).toStrictEqual([]);
   expect(memory).toStrictEqual(stored);
  }

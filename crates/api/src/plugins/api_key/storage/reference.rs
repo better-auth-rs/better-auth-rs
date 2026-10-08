@@ -78,7 +78,9 @@ pub(super) fn items(value: &FieldValue) -> AuthResult<Items> {
     if length.is_number()
         && (!count.is_finite() || count < 0.0 || count.fract() != 0.0 || count > u32::MAX as f64)
     {
-        return Err(AuthError::internal("Invalid array length"));
+        return Err(AuthError::internal(
+            "Array length must be a positive integer of safe magnitude.",
+        ));
     }
     if length.is_number() && count == 0.0 {
         return Ok(Items::Complete(Vec::new()));
