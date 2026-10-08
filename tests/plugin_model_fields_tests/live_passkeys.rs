@@ -55,7 +55,7 @@ fn visible(row: &Passkey, stored: &[Passkey], owner: &str, path: &str) -> AuthRe
     assert_eq!(row.public_key, "ordinary-public-key");
     assert_eq!(row.counter, u64::from(path == "update-auth"));
     assert_eq!(row.device_type, "singleDevice");
-    assert!(!row.backed_up);
+    assert!(!*row.backed_up.typed()?);
     assert_eq!(row.transports, None);
     assert_eq!(row.credential.typed()?, "ordinary-private-record");
     assert!(row.created_at.typed()?.is_some());
@@ -211,7 +211,7 @@ async fn observe<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, case: &Value) -> Aut
             .map(|row| vec![row.expect("selected Passkey exists")]),
         "get-credential" => reader
             .store()
-            .get_passkey_by_credential_id(&first_seed()?.credential_id)
+            .get_passkey_by_credential_id(first_seed()?.credential_id.typed()?)
             .await
             .map(|row| vec![row.expect("selected Passkey exists")]),
         "list" => reader.store().list_passkeys_by_user(&owner).await,
@@ -227,8 +227,8 @@ async fn observe<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, case: &Value) -> Aut
                 UpdatePasskeyAuthentication::Legacy {
                     credential: first_seed()?.credential.typed()?.clone(),
                     counter: 1,
-                    backed_up: first_seed()?.backed_up,
-                    device_type: first_seed()?.device_type.clone(),
+                    backed_up: *first_seed()?.backed_up.typed()?,
+                    device_type: first_seed()?.device_type.typed()?.clone(),
                 },
             )
             .await
@@ -247,8 +247,8 @@ async fn observe<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, case: &Value) -> Aut
     assert_eq!(
         stored
             .iter()
-            .map(|row| row.credential_id.clone())
-            .collect::<Vec<_>>(),
+            .map(|row| row.credential_id.typed().cloned())
+            .collect::<AuthResult<Vec<_>>>()?,
         selected
             .iter()
             .map(|(key, _, _)| format!("credential:{key}"))

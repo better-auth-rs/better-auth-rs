@@ -1,11 +1,15 @@
-use std::collections::{BTreeMap, HashMap, HashSet};
+#[cfg(test)]
+use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock, Weak};
 
 use better_auth_core::store::SecondaryStorage;
+#[cfg(test)]
 use better_auth_core::wire::ApiKeyView;
 use better_auth_core::{
-    ApiKey, AuthContext, AuthError, AuthResult, CreateApiKey, FieldValue, UpdateApiKey,
+    ApiKey, AuthContext, AuthError, AuthRecordFields, AuthResult, CreateApiKey, FieldMap,
+    FieldValue, FromFieldMap, UpdateApiKey,
 };
 use chrono::Utc;
 use futures_util::{StreamExt, TryFutureExt, future, stream};
@@ -66,29 +70,49 @@ pub(super) fn now() -> better_auth_core::FieldDate {
     Utc::now().into()
 }
 
-fn ttl(key: &ApiKey) -> Option<u64> {
-    key.expires_at.as_ref().and_then(|expires| {
-        let seconds =
-            ((expires.milliseconds() - Utc::now().timestamp_millis() as f64) / 1000.0).floor();
-        (seconds > 0.0).then_some(seconds as u64)
-    })
+fn ttl(key: &ApiKey) -> AuthResult<Option<u64>> {
+    let expires = key.expires_at.field_value();
+    if !expires.is_truthy() {
+        return Ok(None);
+    }
+    let seconds = ((better_auth_core::query::field_date(&expires)?.milliseconds()
+        - Utc::now().timestamp_millis() as f64)
+        / 1000.0)
+        .floor();
+    Ok((seconds > 0.0).then_some(seconds as u64))
 }
 
 fn serialize(key: &ApiKey) -> AuthResult<String> {
-    let mut value: BTreeMap<String, Box<serde_json::value::RawValue>> =
-        serde_json::from_str(&serde_json::to_string(key)?)?;
-    // Upstream stores metadata as JSON, but the typed database boundary uses JSON text.
-    let metadata = key
-        .metadata
-        .as_deref()
-        .map(serde_json::from_str)
-        .transpose()?
-        .unwrap_or(Value::Null);
-    let _ = value.insert(
-        "metadata".into(),
-        serde_json::value::to_raw_value(&metadata)?,
-    );
-    Ok(serde_json::to_string(&value)?)
+    let mut fields = key.field_values()?;
+    for (name, optional) in [
+        ("createdAt", false),
+        ("updatedAt", false),
+        ("expiresAt", true),
+        ("lastRefillAt", true),
+        ("lastRequest", true),
+    ] {
+        let value = fields.get(name).cloned().unwrap_or_default();
+        let value = if optional && (value.is_null() || value.is_undefined()) {
+            FieldValue::Null
+        } else if let FieldValue::Date(date) = &value {
+            if !date.milliseconds().is_finite() {
+                return Err(AuthError::internal("Invalid time value"));
+            }
+            value
+                .json()?
+                .map(FieldValue::from_json)
+                .transpose()?
+                .unwrap_or_default()
+        } else {
+            return Err(AuthError::internal(format!(
+                "{name}.toISOString is not a function"
+            )));
+        };
+        let _ = fields.insert(name.into(), value);
+    }
+    FieldValue::from(fields)
+        .stringify()?
+        .ok_or_else(|| AuthError::internal("API key cache serialization omitted the record"))
 }
 
 fn deserialize(value: Option<Value>) -> Option<ApiKey> {
@@ -96,21 +120,53 @@ fn deserialize(value: Option<Value>) -> Option<ApiKey> {
         return None;
     };
     // Upstream treats malformed serialized cache entries as a cache miss.
-    let mut object: BTreeMap<String, Box<serde_json::value::RawValue>> =
-        serde_json::from_str(&value).ok()?;
-    if let Some(metadata) = object.get_mut("metadata") {
-        let decoded: Value = serde_json::from_str(metadata.get()).ok()?;
-        if !decoded.is_null() {
-            *metadata = serde_json::value::to_raw_value(&decoded.to_string()).ok()?;
-        }
+    let parsed = FieldValue::parse_json(&value).ok()?;
+    let mut fields = match parsed {
+        FieldValue::Object(fields) => fields.as_ref().clone(),
+        FieldValue::Array(values) => values
+            .iter()
+            .enumerate()
+            .map(|(index, value)| (index.to_string(), value.clone()))
+            .collect(),
+        FieldValue::String(text) => text
+            .encode_utf16()
+            .enumerate()
+            .map(|(index, unit)| {
+                (
+                    index.to_string(),
+                    better_auth_core::Utf16String::from_units(vec![unit]).into(),
+                )
+            })
+            .collect(),
+        FieldValue::Utf16String(text) => text
+            .as_utf16()
+            .iter()
+            .enumerate()
+            .map(|(index, unit)| {
+                (
+                    index.to_string(),
+                    better_auth_core::Utf16String::from_units(vec![*unit]).into(),
+                )
+            })
+            .collect(),
+        _ => FieldMap::new(),
+    };
+    for (name, optional) in [
+        ("createdAt", false),
+        ("updatedAt", false),
+        ("expiresAt", true),
+        ("lastRefillAt", true),
+        ("lastRequest", true),
+    ] {
+        let value = fields.get(name).cloned().unwrap_or_default();
+        let value = if optional && !value.is_truthy() {
+            FieldValue::Null
+        } else {
+            better_auth_core::query::field_date(&value).ok()?.into()
+        };
+        let _ = fields.insert(name.into(), value);
     }
-    if object
-        .get("configId")
-        .is_none_or(|value| value.get() == "null")
-    {
-        let _ = object.insert("configId".into(), serde_json::value::to_raw_value("").ok()?);
-    }
-    serde_json::from_str(&serde_json::to_string(&object).ok()?).ok()
+    ApiKey::from_field_values(fields).ok()
 }
 
 async fn cached(storage: &dyn SecondaryStorage, key: &str) -> AuthResult<Option<ApiKey>> {
@@ -134,7 +190,7 @@ async fn modify_reference(
 ) -> AuthResult<()> {
     // The upstream reference-list lock only coordinates writers in this process.
     // Cache-only quota remains non-atomic; database fallback provides guarded quota.
-    let index = format!("api-key:by-ref:{}", key.reference_id);
+    let index = format!("api-key:by-ref:{}", key.reference_id.display_string()?);
     static LOCKS: OnceLock<std::sync::Mutex<HashMap<String, Weak<Mutex<()>>>>> = OnceLock::new();
     let lock = {
         let mut locks = LOCKS
@@ -184,10 +240,10 @@ async fn put_with_failure_flag(
     failed: Option<&AtomicBool>,
 ) -> AuthResult<()> {
     let value = serialize(key)?;
-    let ttl = ttl(key);
-    let hashed = format!("api-key:{}", key.key_hash);
+    let ttl = ttl(key)?;
+    let hashed = format!("api-key:{}", key.key_hash.display_string()?);
     let id = format!("api-key:by-id:{}", key.id.display_string()?);
-    let reference = format!("api-key:by-ref:{}", key.reference_id);
+    let reference = format!("api-key:by-ref:{}", key.reference_id.display_string()?);
     if fallback {
         // Stop a list refill when an IO fails, even while another write for this key is pending.
         let stop_batch = |_: &AuthError| {
@@ -219,9 +275,9 @@ async fn remove_cached(
     key: &ApiKey,
     fallback: bool,
 ) -> AuthResult<()> {
-    let hashed = format!("api-key:{}", key.key_hash);
+    let hashed = format!("api-key:{}", key.key_hash.display_string()?);
     let id = format!("api-key:by-id:{}", key.id.display_string()?);
-    let reference = format!("api-key:by-ref:{}", key.reference_id);
+    let reference = format!("api-key:by-ref:{}", key.reference_id.display_string()?);
     if fallback {
         let (hashed, id, reference) = tokio::join!(
             storage.delete(&hashed),
@@ -313,26 +369,33 @@ pub(super) async fn create(
                 .unwrap_or_else(|| better_auth_core::id::random_id(None))
                 .into(),
             name: input.name,
-            start: input.start,
-            prefix: input.prefix,
-            key_hash: input.key_hash,
-            reference_id: input.reference_id,
-            config_id: input.config_id,
-            refill_interval: input.refill_interval,
-            refill_amount: input.refill_amount,
-            last_refill_at: None,
-            enabled: input.enabled.into(),
+            start: (input.start).into(),
+            prefix: (input.prefix).into(),
+            key_hash: (input.key_hash).into(),
+            reference_id: (input.reference_id).into(),
+            config_id: (input.config_id).into(),
+            refill_interval: (input.refill_interval).into(),
+            refill_amount: (input.refill_amount).into(),
+            last_refill_at: (None).into(),
+            enabled: input.enabled,
             rate_limit_enabled: input.rate_limit_enabled.into(),
-            rate_limit_time_window: input.rate_limit_time_window,
-            rate_limit_max: input.rate_limit_max,
-            request_count: Some(0.0),
-            remaining: input.remaining,
-            last_request: None,
-            expires_at: input.expires_at,
-            created_at: created_at.clone(),
-            updated_at: created_at,
-            permissions: input.permissions,
-            metadata: input.metadata,
+            rate_limit_time_window: (input.rate_limit_time_window).into(),
+            rate_limit_max: (input.rate_limit_max).into(),
+            request_count: (Some(0.0)).into(),
+            remaining: (input.remaining).into(),
+            last_request: (None).into(),
+            expires_at: (input.expires_at).into(),
+            created_at: (created_at.clone()).into(),
+            updated_at: (created_at).into(),
+            permissions: (input.permissions).into(),
+            metadata: better_auth_core::SchemaValue::from_field(
+                input
+                    .metadata
+                    .as_deref()
+                    .map(FieldValue::parse_json)
+                    .transpose()?
+                    .unwrap_or(FieldValue::Null),
+            ),
         }
     };
     if config.storage == ApiKeyStorage::SecondaryStorage {
@@ -346,11 +409,11 @@ pub(super) async fn create(
     Ok(key)
 }
 
-pub(super) fn apply_update(key: &mut ApiKey, update: UpdateApiKey) {
+pub(super) fn apply_update(key: &mut ApiKey, update: UpdateApiKey) -> AuthResult<()> {
     if let Some(name) = update.name {
         key.name = name;
     }
-    macro_rules! optional { ($($field:ident),* $(,)?) => { $(if let Some(value) = update.$field { key.$field = Some(value); })* }; }
+    macro_rules! optional { ($($field:ident),* $(,)?) => { $(if let Some(value) = update.$field { key.$field = Some(value).into(); })* }; }
     optional!(
         remaining,
         rate_limit_time_window,
@@ -358,25 +421,28 @@ pub(super) fn apply_update(key: &mut ApiKey, update: UpdateApiKey) {
         refill_interval,
         refill_amount,
         permissions,
-        metadata,
         request_count
     );
+    if let Some(value) = update.metadata {
+        key.metadata = better_auth_core::SchemaValue::from_field(FieldValue::parse_json(&value)?);
+    }
     if let Some(value) = update.enabled {
-        key.enabled = value.into();
+        key.enabled = value;
     }
     if let Some(value) = update.rate_limit_enabled {
         key.rate_limit_enabled = value.into();
     }
     if let Some(value) = update.expires_at {
-        key.expires_at = value;
+        key.expires_at = value.into();
     }
     if let Some(value) = update.last_request {
-        key.last_request = value;
+        key.last_request = value.into();
     }
     if let Some(value) = update.last_refill_at {
-        key.last_refill_at = value;
+        key.last_refill_at = value.into();
     }
-    key.updated_at = now();
+    key.updated_at = now().into();
+    Ok(())
 }
 
 pub(super) async fn update(
@@ -393,7 +459,7 @@ pub(super) async fn update(
             Err(error) => return Err(error),
         };
     } else {
-        apply_update(&mut key, update);
+        apply_update(&mut key, update)?;
     }
     if config.storage == ApiKeyStorage::SecondaryStorage {
         put(
@@ -504,19 +570,7 @@ pub(super) async fn list(
                 results.sort_unstable_by_key(|(index, _)| *index);
                 let mut keys: Vec<_> = results.into_iter().filter_map(|(_, key)| key).collect();
                 if let Some((field, direction)) = sort {
-                    let mut views: Vec<_> = keys
-                        .iter()
-                        .map(better_auth_core::wire::ApiKeyView::from)
-                        .collect();
-                    sort_views(&mut views, field, Some(direction))?;
-                    let mut by_id: std::collections::HashMap<_, _> = keys
-                        .into_iter()
-                        .map(|key| (key.id.as_str().map(str::to_owned), key))
-                        .collect();
-                    keys = views
-                        .into_iter()
-                        .filter_map(|view| by_id.remove(&view.id.as_str().map(str::to_owned)))
-                        .collect();
+                    sort_keys(&mut keys, field, Some(direction))?;
                 }
                 return Ok(keys);
             }
@@ -570,94 +624,27 @@ pub(super) async fn list(
     Ok(keys)
 }
 
-fn compare_numbers(left: Option<f64>, right: Option<f64>) -> std::cmp::Ordering {
-    match (left, right) {
-        (Some(left), Some(right)) => left
-            .partial_cmp(&right)
-            .unwrap_or(std::cmp::Ordering::Equal),
-        (None, None) => std::cmp::Ordering::Equal,
-        (None, Some(_)) => std::cmp::Ordering::Less,
-        (Some(_), None) => std::cmp::Ordering::Greater,
-    }
-}
-
-fn compare_strings(left: Option<&str>, right: Option<&str>) -> std::cmp::Ordering {
-    match (left, right) {
-        (Some(left), Some(right)) => left.encode_utf16().cmp(right.encode_utf16()),
-        _ => left.cmp(&right),
-    }
-}
-
-fn sort_views(views: &mut [ApiKeyView], sort_by: &str, direction: Option<&str>) -> AuthResult<()> {
+fn sort_keys(keys: &mut [ApiKey], sort_by: &str, direction: Option<&str>) -> AuthResult<()> {
     use std::cmp::Ordering::{Equal, Greater, Less};
-
-    let compare = |a: &ApiKeyView, b: &ApiKeyView| -> AuthResult<std::cmp::Ordering> {
-        let ordering = match sort_by {
-            "name" | "enabled" | "rateLimitEnabled" => {
-                let (left, right) = match sort_by {
-                    "enabled" => (a.enabled.field_value(), b.enabled.field_value()),
-                    "rateLimitEnabled" => (
-                        a.rate_limit_enabled.field_value(),
-                        b.rate_limit_enabled.field_value(),
-                    ),
-                    _ => (a.name.field_value(), b.name.field_value()),
-                };
-                match (&left, &right) {
-                    (
-                        FieldValue::Null | FieldValue::Undefined,
-                        FieldValue::Null | FieldValue::Undefined,
-                    ) => Equal,
-                    (FieldValue::Null | FieldValue::Undefined, _) => Less,
-                    (_, FieldValue::Null | FieldValue::Undefined) => Greater,
-                    _ => better_auth_core::query::field_compare(&left, &right)?.unwrap_or(Equal),
-                }
-            }
-            "id" => compare_strings(a.id.as_str(), b.id.as_str()),
-            "start" => a.start.cmp(&b.start),
-            "prefix" => compare_strings(a.prefix.as_deref(), b.prefix.as_deref()),
-            "referenceId" => compare_strings(Some(&a.reference_id), Some(&b.reference_id)),
-            "configId" => compare_strings(Some(&a.config_id), Some(&b.config_id)),
-            "createdAt" => compare_numbers(
-                Some(a.created_at.milliseconds()),
-                Some(b.created_at.milliseconds()),
-            ),
-            "updatedAt" => compare_numbers(
-                Some(a.updated_at.milliseconds()),
-                Some(b.updated_at.milliseconds()),
-            ),
-            "expiresAt" => compare_numbers(
-                a.expires_at
-                    .as_ref()
-                    .map(better_auth_core::FieldDate::milliseconds),
-                b.expires_at
-                    .as_ref()
-                    .map(better_auth_core::FieldDate::milliseconds),
-            ),
-            "lastRequest" => compare_numbers(
-                a.last_request
-                    .as_ref()
-                    .map(better_auth_core::FieldDate::milliseconds),
-                b.last_request
-                    .as_ref()
-                    .map(better_auth_core::FieldDate::milliseconds),
-            ),
-            "lastRefillAt" => compare_numbers(
-                a.last_refill_at
-                    .as_ref()
-                    .map(better_auth_core::FieldDate::milliseconds),
-                b.last_refill_at
-                    .as_ref()
-                    .map(better_auth_core::FieldDate::milliseconds),
-            ),
-            "remaining" => compare_numbers(a.remaining, b.remaining),
-            "requestCount" => compare_numbers(a.request_count, b.request_count),
-            "rateLimitMax" => compare_numbers(a.rate_limit_max, b.rate_limit_max),
-            "rateLimitTimeWindow" => {
-                compare_numbers(a.rate_limit_time_window, b.rate_limit_time_window)
-            }
-            "refillAmount" => compare_numbers(a.refill_amount, b.refill_amount),
-            "refillInterval" => compare_numbers(a.refill_interval, b.refill_interval),
-            _ => Equal,
+    let mut values = keys
+        .iter()
+        .map(|key| {
+            Ok(key
+                .field_values()?
+                .get(sort_by)
+                .cloned()
+                .unwrap_or_default())
+        })
+        .collect::<AuthResult<Vec<_>>>()?;
+    let compare = |left: &FieldValue, right: &FieldValue| -> AuthResult<std::cmp::Ordering> {
+        let ordering = match (left, right) {
+            (
+                FieldValue::Null | FieldValue::Undefined,
+                FieldValue::Null | FieldValue::Undefined,
+            ) => Equal,
+            (FieldValue::Null | FieldValue::Undefined, _) => Less,
+            (_, FieldValue::Null | FieldValue::Undefined) => Greater,
+            _ => better_auth_core::query::field_compare(left, right)?.unwrap_or(Equal),
         };
         Ok(if direction == Some("desc") {
             ordering.reverse()
@@ -666,15 +653,15 @@ fn sort_views(views: &mut [ApiKeyView], sort_by: &str, direction: Option<&str>) 
         })
     };
     // Mixed values and invalid dates can violate sort_by's total-order requirement.
-    // ponytail: O(n²); use a subquadratic sort that accepts unordered comparisons if large cache lists become costly.
     #[expect(
         clippy::indexing_slicing,
         reason = "The outer range bounds current; current only decreases while positive"
     )]
-    for index in 1..views.len() {
+    for index in 1..keys.len() {
         let mut current = index;
-        while current > 0 && compare(&views[current], &views[current - 1])? == Less {
-            views.swap(current - 1, current);
+        while current > 0 && compare(&values[current], &values[current - 1])? == Less {
+            keys.swap(current - 1, current);
+            values.swap(current - 1, current);
             current -= 1;
         }
     }
@@ -682,8 +669,18 @@ fn sort_views(views: &mut [ApiKeyView], sort_by: &str, direction: Option<&str>) 
 }
 
 pub(super) fn deduplicate(keys: &mut Vec<ApiKey>) {
-    let mut ids = HashSet::new();
-    keys.retain(|key| ids.insert(key.id.as_str().map(str::to_owned)));
+    let mut ids = Vec::new();
+    keys.retain(|key| {
+        let id = key.id.field_value();
+        if ids
+            .iter()
+            .any(|seen: &FieldValue| seen.same_value_zero(&id))
+        {
+            return false;
+        }
+        ids.push(id);
+        true
+    });
 }
 
 #[cfg(test)]
@@ -733,9 +730,15 @@ mod tests {
     fn cache_codec_preserves_unpaired_start_and_structured_metadata() {
         let cached = r#"{"id":"key-id","key":"hash","referenceId":"owner","configId":null,"start":"\ud83d","enabled":true,"rateLimitEnabled":false,"createdAt":"2026-10-01T00:00:00.000Z","updatedAt":"2026-10-01T00:00:00.000Z","metadata":{"purpose":"device"}}"#;
         let key = deserialize(Some(Value::String(cached.into()))).unwrap();
-        assert_eq!(key.start.as_ref().unwrap().as_utf16(), &[0xd83d]);
-        assert_eq!(key.config_id, "");
-        assert_eq!(key.metadata.as_deref(), Some(r#"{"purpose":"device"}"#));
+        assert_eq!(
+            key.start.typed().unwrap().as_ref().unwrap().as_utf16(),
+            &[0xd83d]
+        );
+        assert_eq!(key.config_id.field_value(), FieldValue::Null);
+        assert_eq!(
+            key.metadata.json().unwrap(),
+            Some(serde_json::json!({"purpose":"device"}))
+        );
         let serialized = serialize(&key).unwrap();
         let fields: BTreeMap<String, Box<serde_json::value::RawValue>> =
             serde_json::from_str(&serialized).unwrap();

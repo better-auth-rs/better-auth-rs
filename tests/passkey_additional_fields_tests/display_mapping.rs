@@ -237,7 +237,7 @@ impl<'a, S: AuthSchema> Fixture<'a, S> {
         assert_eq!(row.credential_id, "ordinary-credential");
         assert_eq!(row.public_key, "ordinary-public-key");
         assert_eq!(row.device_type, "singleDevice");
-        assert!(!row.backed_up);
+        assert!(!*row.backed_up.typed()?);
         assert_eq!(row.transports, None);
         assert!(row.created_at.typed()?.is_some());
         let created = serde_json::to_value(&row.created_at)?;
@@ -298,7 +298,7 @@ impl<'a, S: AuthSchema> Fixture<'a, S> {
                     stored
                         .try_get::<i64>("", "counter")
                         .map_err(|error| AuthError::internal(error.to_string()))?,
-                    i64::try_from(row.counter).expect("fixture counter fits SQL")
+                    i64::try_from(*row.counter.typed()?).expect("fixture counter fits SQL")
                 );
             }
         }
@@ -328,7 +328,7 @@ impl<'a, S: AuthSchema> Fixture<'a, S> {
                 .collect(),
             "get-credential" => self
                 .store
-                .get_passkey_by_credential_id(&seed.credential_id)
+                .get_passkey_by_credential_id(seed.credential_id.typed()?)
                 .await?
                 .into_iter()
                 .collect(),
@@ -345,8 +345,8 @@ impl<'a, S: AuthSchema> Fixture<'a, S> {
                             PasskeyStorage::Legacy => UpdatePasskeyAuthentication::Legacy {
                                 credential: seed.credential.typed()?.clone(),
                                 counter: 1,
-                                backed_up: seed.backed_up,
-                                device_type: seed.device_type.clone(),
+                                backed_up: *seed.backed_up.typed()?,
+                                device_type: seed.device_type.typed()?.clone(),
                             },
                         },
                     )

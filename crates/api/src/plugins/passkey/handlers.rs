@@ -67,7 +67,12 @@ pub(super) async fn generate_register_options_core(
     let existing_passkeys = ctx.database.list_passkeys_by_user(&user.id).await?;
     let exclude_credentials = existing_passkeys
         .iter()
-        .filter_map(|passkey| decode_credential_id(passkey.credential_id()).ok())
+        .filter_map(|passkey| {
+            passkey
+                .credential_id()
+                .as_str()
+                .and_then(|id| decode_credential_id(id).ok())
+        })
         .collect::<Vec<_>>();
     let exclude_credentials_json = existing_passkeys
         .iter()
@@ -76,14 +81,14 @@ pub(super) async fn generate_register_options_core(
                 "id": passkey.credential_id(),
                 "type": "public-key",
             });
-            if let Some(transports) = parse_transports_csv(passkey.transports())
+            if let Some(transports) = parse_transports_csv(passkey.transports())?
                 && let Some(object) = descriptor.as_object_mut()
             {
                 let _ = object.insert("transports".to_string(), json!(transports));
             }
-            descriptor
+            Ok(descriptor)
         })
-        .collect::<Vec<_>>();
+        .collect::<AuthResult<Vec<_>>>()?;
 
     let user_name = passkey_name
         .filter(|name| !name.is_empty())
@@ -180,14 +185,14 @@ pub(super) async fn generate_authenticate_options_core<U: AuthUser>(
                 "id": passkey.credential_id(),
                 "type": "public-key",
             });
-            if let Some(transports) = parse_transports_csv(passkey.transports())
+            if let Some(transports) = parse_transports_csv(passkey.transports())?
                 && let Some(object) = descriptor.as_object_mut()
             {
                 let _ = object.insert("transports".to_string(), json!(transports));
             }
-            descriptor
+            Ok(descriptor)
         })
-        .collect::<Vec<_>>();
+        .collect::<AuthResult<Vec<_>>>()?;
 
     let users = super::callbacks::Users {
         ctx,
@@ -326,7 +331,12 @@ pub(super) async fn verify_authentication_core(
     }
     // Another challenge can advance the counter after this challenge captures its credentials.
     let counter = u64::from(authentication_result.counter());
-    if (counter > 0 || passkey.counter() > 0) && counter <= passkey.counter() {
+    let stored_counter =
+        match better_auth_core::query::field_number(&passkey.counter().field_value()) {
+            Ok(counter) => counter,
+            Err(_) => return passkey_authentication_failure(),
+        };
+    if (counter > 0 || stored_counter > 0.0) && counter as f64 <= stored_counter {
         return passkey_authentication_failure();
     }
     if let Some(hook) = &config.authentication.after_verification {
@@ -371,7 +381,7 @@ pub(super) async fn verify_authentication_core(
         Ok(update) => update,
         Err(_) => return passkey_authentication_failure(),
     };
-    let updated_passkey = match ctx
+    let _updated_passkey = match ctx
         .database
         .update_passkey_authentication(&passkey.id().into_owned(), update)
         .await
@@ -382,7 +392,7 @@ pub(super) async fn verify_authentication_core(
 
     let Some(user) = ctx
         .database
-        .get_user_by_id_field(&updated_passkey.user_id().into_owned())
+        .get_user_by_id_field(&passkey.user_id().into_owned())
         .await?
     else {
         return response_message(500, "User not found");

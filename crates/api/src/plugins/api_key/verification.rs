@@ -217,7 +217,7 @@ impl ApiKeyPlugin {
             .validate_api_key(input, ctx, endpoint, input.config_id.is_none())
             .await?;
         let config = self
-            .resolve_configuration(Some(&key.config_id))
+            .resolve_configuration(key.config_id.as_str())
             .map_err(ApiKeyVerificationError::Endpoint)?;
         super::metadata::single(key, config, ctx)
             .await
@@ -250,7 +250,7 @@ impl ApiKeyPlugin {
             return Err(ApiKeyErrorCode::InvalidApiKey.into());
         }
         let config = self
-            .resolve_configuration(Some(&api_key.config_id))
+            .resolve_configuration(api_key.config_id.as_str())
             .map_err(|_| ApiKeyErrorCode::NoDefaultConfiguration)?;
 
         if run_custom_validator && let Some(validator) = &config.custom_api_key_validator {
@@ -267,26 +267,28 @@ impl ApiKeyPlugin {
             }
         }
 
-        if !api_key.enabled.is_truthy()? {
+        if api_key.enabled.field_value().strict_equals(&false.into()) {
             return Err(ApiKeyErrorCode::KeyDisabled.into());
         }
-        if let Some(expires_at) = &api_key.expires_at
-            && chrono::Utc::now().timestamp_millis() as f64 > expires_at.milliseconds()
+        if api_key.expires_at.is_truthy()?
+            && chrono::Utc::now().timestamp_millis() as f64
+                > better_auth_core::query::field_date(&api_key.expires_at.field_value())?
+                    .milliseconds()
         {
             super::storage::delete_for_verification(config, ctx, &api_key).await?;
             return Err(ApiKeyErrorCode::KeyExpired.into());
         }
 
         if let Some(required) = input.permissions {
-            let permitted = api_key.permissions.as_deref().is_some_and(|permissions| {
-                super::handlers::check_permissions(permissions, required)
-            });
+            let permissions = api_key.permissions.field_value();
+            let permitted = permissions.is_truthy()
+                && super::handlers::check_permissions(&permissions, required)?;
             if !permitted {
                 return Err(ApiKeyErrorCode::KeyNotFound.into());
             }
         }
 
-        let updated = match super::storage::consume(config, ctx, &api_key).await? {
+        let updated = match super::storage::consume(config, ctx, &api_key, &hashed).await? {
             ConsumeApiKeyResult::Allowed(key) => key,
             ConsumeApiKeyResult::RateLimited { try_again_in } => {
                 let mut error = ApiKeyValidationError::new(ApiKeyErrorCode::RateLimited);
@@ -343,22 +345,28 @@ impl ApiKeyPlugin {
         };
         // Upstream answers this path in its hook before the route method gate.
         if req.path() == "/get-session" {
-            return Ok(Some(BeforeRequestAction::Respond(AuthResponse::json(
+            let mut fields = better_auth_core::FieldMap::from(session);
+            fields.retain(|name, _| {
+                [
+                    "id",
+                    "token",
+                    "userId",
+                    "userAgent",
+                    "ipAddress",
+                    "createdAt",
+                    "updatedAt",
+                    "expiresAt",
+                ]
+                .contains(&name.as_str())
+            });
+            return Ok(Some(BeforeRequestAction::Respond(AuthResponse::native(
                 200,
-                &serde_json::json!({
-                    "user": user,
-                    "session": {
-                        "id": session.id,
-                        "token": session.token,
-                        "userId": session.user_id,
-                        "userAgent": session.user_agent,
-                        "ipAddress": session.ip_address,
-                        "createdAt": better_auth_core::FieldValue::from(session.created_at.clone()).json()?,
-                        "updatedAt": better_auth_core::FieldValue::from(session.updated_at.clone()).json()?,
-                        "expiresAt": better_auth_core::FieldValue::from(session.expires_at.clone()).json()?,
-                    },
-                }),
-            )?)));
+                better_auth_core::FieldMap::from([
+                    ("user".into(), better_auth_core::FieldMap::from(user).into()),
+                    ("session".into(), fields.into()),
+                ])
+                .into(),
+            ))));
         }
         Ok(Some(BeforeRequestAction::InjectSession {
             session: Box::new(session),
@@ -460,7 +468,11 @@ impl ApiKeyPlugin {
                     .response()?
                     .into());
                 }
-                let Some(user) = ctx.database.get_user_by_id(&view.reference_id).await? else {
+                let Some(user) = ctx
+                    .database
+                    .get_user_by_id_field(&view.reference_id)
+                    .await?
+                else {
                     return Err(ApiKeyValidationError::new(
                         ApiKeyErrorCode::InvalidReferenceIdFromApiKey,
                     )
@@ -469,15 +481,19 @@ impl ApiKeyPlugin {
                 };
 
                 let now = chrono::Utc::now();
-                let expires_at = match view.expires_at {
-                    Some(value) => value,
-                    // Upstream passes its session lifetime in seconds to getDate(..., "ms").
-                    None => (now
-                        + chrono::Duration::milliseconds(
-                            ctx.config.session.expires_in().num_seconds(),
-                        ))
-                    .into(),
+                let fallback_expiration = better_auth_core::FieldDate::from(
+                    now + chrono::Duration::milliseconds(
+                        ctx.config.session.expires_in().num_seconds(),
+                    ),
+                );
+                let expires_at = view.expires_at.field_value();
+                let expires_at = if expires_at.is_truthy() {
+                    expires_at
+                } else {
+                    fallback_expiration.clone().into()
                 };
+                let mut additional_fields = better_auth_core::FieldMap::new();
+                let _ = additional_fields.insert("expiresAt".into(), expires_at);
                 let meta = endpoint.request.map(|req| {
                     better_auth_core::RequestMeta::from_request_with_config(
                         req,
@@ -491,14 +507,14 @@ impl ApiKeyPlugin {
                     user_id: user.id().into_owned(),
                     created_at: now.into(),
                     updated_at: now.into(),
-                    expires_at,
+                    expires_at: fallback_expiration,
                     ip_address: meta.as_ref().and_then(|meta| meta.ip_address.clone()),
                     user_agent: meta.and_then(|meta| meta.user_agent),
                     impersonated_by: None,
                     active_organization_id: None,
                     active_team_id: None,
                     active: true,
-                    additional_fields: Default::default(),
+                    additional_fields,
                 };
                 Ok(Some((session, ctx.user_view(&user).await?)))
             },

@@ -245,7 +245,7 @@ async fn passkey_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResu
     );
     assert_eq!(
         auth.store()
-            .get_passkey_by_credential_id(&created.credential_id)
+            .get_passkey_by_credential_id(created.credential_id.typed()?)
             .await?
             .ok_or_else(|| AuthError::internal("Expected the stored model record"))?
             .name
@@ -259,9 +259,9 @@ async fn passkey_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResu
             &created.id,
             UpdatePasskeyAuthentication::Legacy {
                 credential: created.credential.typed()?.clone(),
-                counter: created.counter,
-                backed_up: created.backed_up,
-                device_type: created.device_type.clone(),
+                counter: *created.counter.typed()?,
+                backed_up: *created.backed_up.typed()?,
+                device_type: created.device_type.typed()?.clone(),
             },
         )
         .await?;

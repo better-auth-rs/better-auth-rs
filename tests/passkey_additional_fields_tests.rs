@@ -66,7 +66,8 @@ async fn secondary_passkey_fields_forward_policies_and_extra_values() -> AuthRes
 }
 
 #[tokio::test]
-async fn passkey_additional_fields_cannot_replace_native_identity_or_credential_columns() {
+async fn passkey_additional_fields_accept_complete_declarations_for_existing_columns()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     for (name, column) in [
         ("credential", None),
         ("credentialID", None),
@@ -81,7 +82,7 @@ async fn passkey_additional_fields_cannot_replace_native_identity_or_credential_
         ("name", Some("aaguid")),
         ("aaguid", Some("name")),
     ] {
-        let (store, _) = fixture::sqlite(contract::config()).await;
+        let (store, database) = fixture::sqlite(contract::config()).await;
         let fields = UserConfig {
             additional_fields: Some(
                 [(
@@ -100,9 +101,15 @@ async fn passkey_additional_fields_cannot_replace_native_identity_or_credential_
             .plugin(contract::Fields(fields))
             .build()
             .await;
-        assert!(
-            matches!(result, Err(AuthError::Config(_))),
-            "{name}/{column:?}"
-        );
+        if name == "credential" || column == Some("credential") {
+            assert!(
+                matches!(result, Err(AuthError::Config(ref message)) if message.contains("credential")),
+                "The native Passkey schema has no legacy credential column: {name}/{column:?}"
+            );
+        } else {
+            assert!(result.is_ok(), "{name}/{column:?}: {:?}", result.err());
+        }
+        database.close().await?;
     }
+    Ok(())
 }

@@ -252,7 +252,10 @@ async fn native_sqlite_credential_authenticates_after_reopen() -> TestResult {
     let initial = fixture.stored().await?;
     assert_eq!(initial.user_id, *owner.id.typed()?);
     assert_eq!(initial.counter, 0);
-    assert_eq!(STANDARD.decode(&initial.public_key)?, authenticator.cose);
+    assert_eq!(
+        STANDARD.decode(initial.public_key.typed()?)?,
+        authenticator.cose
+    );
     assert!(initial.credential.is_undefined());
     assert!(initial.updated_at.is_undefined());
 
@@ -284,7 +287,7 @@ async fn native_sqlite_credential_authenticates_after_reopen() -> TestResult {
         owner.id.typed()?,
     )?;
     let mut advanced = initial;
-    advanced.counter = 1;
+    advanced.counter = 1.into();
     assert_eq!(fixture.stored().await?, advanced);
     for (path, body, message) in [
         (
@@ -348,7 +351,7 @@ async fn native_sqlite_credential_authenticates_after_reopen() -> TestResult {
             assert_error(login, "AUTHENTICATION_FAILED")?;
         } else {
             assert_login(login, owner.id.typed()?)?;
-            advanced.counter = 2;
+            advanced.counter = 2.into();
         }
         assert_eq!(fixture.stored().await?, advanced);
     }
@@ -356,6 +359,126 @@ async fn native_sqlite_credential_authenticates_after_reopen() -> TestResult {
 
     let fixture = Fixture::open(&path).await?;
     assert_eq!(fixture.stored().await?, advanced);
+    fixture.close().await?;
+    std::fs::remove_file(path)?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn native_authentication_uses_projected_counter_relational_semantics() -> TestResult {
+    use better_auth_core::{
+        AuthInitContext, CreatePasskey, FieldValue, PasskeyCredentialState,
+        UpdatePasskeyAuthentication,
+        store::schema::EntityRole,
+        user_fields::{FieldTransforms, UserConfig, UserFieldConfig, UserFieldTransform},
+    };
+    let path = std::env::temp_dir().join(format!(
+        "better-auth-passkey-counter-{}.sqlite",
+        uuid::Uuid::new_v4()
+    ));
+    drop(std::fs::File::create_new(&path)?);
+    let mut fixture = Fixture::create(&path).await?;
+    let raw = fixture.ctx.database.clone();
+    let owner = raw
+        .create_user(
+            CreateUser::new()
+                .with_name("Counter owner")
+                .with_email("counter@passkey.example"),
+        )
+        .await?;
+    let authenticator = Authenticator::new()?;
+    let passkey = raw
+        .create_passkey(CreatePasskey {
+            additional_fields: Default::default(),
+            user_id: owner.id.typed()?.clone(),
+            name: None.into(),
+            public_key: STANDARD.encode(&authenticator.cose),
+            credential_id: URL_SAFE_NO_PAD.encode(CREDENTIAL_ID),
+            counter: 5,
+            device_type: "singleDevice".into(),
+            backed_up: false,
+            transports: Some("internal,hybrid".into()),
+            credential: PasskeyCredentialState::Native,
+            aaguid: None.into(),
+        })
+        .await?;
+    for (stored_counter, counter, allowed) in [
+        (FieldValue::from("5"), 5, false),
+        ("5".into(), 6, true),
+        (FieldValue::Null, 0, true),
+        (FieldValue::Undefined, 0, true),
+        (false.into(), 0, true),
+        (true.into(), 0, false),
+        ((-1.0).into(), 0, true),
+        (f64::NAN.into(), 0, true),
+    ] {
+        raw.update_passkey_authentication(
+            &passkey.id,
+            UpdatePasskeyAuthentication::Native { counter: 5 },
+        )
+        .await?;
+        let mut init = AuthInitContext::new(fixture.ctx.config.clone(), raw.clone());
+        init.register_model_fields(
+            EntityRole::Passkey,
+            UserConfig {
+                additional_fields: Some(
+                    [(
+                        "counter".into(),
+                        UserFieldConfig {
+                            required: Some(false),
+                            transform: Some(FieldTransforms {
+                                input: None,
+                                output: Some(UserFieldTransform::new(move |_| {
+                                    Ok(stored_counter.clone())
+                                })),
+                            }),
+                            ..Default::default()
+                        },
+                    )]
+                    .into(),
+                ),
+            },
+        )?;
+        fixture.ctx.database = raw.with_runtime(
+            fixture.ctx.config.clone(),
+            Vec::new(),
+            init.into_parts().plugin_fields,
+        )?;
+        let (options, cookie) = options(
+            fixture
+                .route(&request(
+                    "/passkey/generate-authenticate-options",
+                    None,
+                    None,
+                    None,
+                ))
+                .await?,
+        )?;
+        let response = authenticator.authenticate(
+            &challenge(&options)?,
+            counter,
+            owner.id.typed()?.as_bytes(),
+        )?;
+        let response = fixture
+            .route(&request(
+                "/passkey/verify-authentication",
+                None,
+                Some(json!({"response":response})),
+                Some(&cookie),
+            ))
+            .await?;
+        if allowed {
+            assert_login(response, owner.id.typed()?)?;
+        } else {
+            assert_error(response, "AUTHENTICATION_FAILED")?;
+        }
+        let stored = raw
+            .get_passkey_by_id(passkey.id.typed()?)
+            .await?
+            .ok_or("Passkey disappeared")?;
+        assert_eq!(stored.counter, if allowed { u64::from(counter) } else { 5 });
+    }
+    drop(raw);
     fixture.close().await?;
     std::fs::remove_file(path)?;
     Ok(())

@@ -1,12 +1,161 @@
 use crate::SeaOrmPluginModel;
 use better_auth_core::store::schema::{EntityRole, core_fields, resolve_field_name};
 use better_auth_core::{AuthError, AuthResult, id::IdGeneration, user_fields::UserConfig};
-use better_auth_core::{FieldMap, SchemaField};
-use sea_orm::{ColumnTrait, DbBackend, IdenStatic};
+use better_auth_core::{FieldMap, FromFieldMap, SchemaField};
+use sea_orm::{ColumnTrait, ConnectionTrait, DbBackend, ExprTrait, IdenStatic, QueryResult};
 
 pub(super) type Write<M> = super::record_write::RecordWrite<Entity<M>>;
 
 pub(super) type Entity<M> = <M as SeaOrmPluginModel>::Entity;
+
+impl<S: crate::AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema>
+    super::SeaOrmStore<S, O, P>
+{
+    pub(super) fn plugin_column<M: SeaOrmPluginModel>(
+        &self,
+        role: EntityRole,
+        name: &str,
+    ) -> AuthResult<M::Column> {
+        let fields = self.model_fields.plugin_fields(role);
+        let storage = fields.fields().get(name).map_or(name, |field| {
+            resolve_field_name(field.field_name.as_deref(), name)
+        });
+        M::column(storage)
+    }
+
+    pub(super) fn validate_plugin_fields<M: SeaOrmPluginModel>(
+        &self,
+        role: EntityRole,
+    ) -> AuthResult<()> {
+        for name in self.model_fields.plugin_fields(role).fields().keys() {
+            let _ = self.plugin_column::<M>(role, name)?;
+        }
+        let _ = M::column("id")?;
+        Ok(())
+    }
+
+    pub(super) fn plugin_parameter(
+        &self,
+        role: EntityRole,
+        name: &str,
+        value: better_auth_core::FieldValue,
+    ) -> AuthResult<sea_orm::sea_query::SimpleExpr> {
+        self.model_fields.begin_id_query(role)?;
+        let fields = self.model_fields.plugin_fields(role);
+        let backend = self.connection().get_database_backend();
+        let field = fields
+            .fields()
+            .get(name)
+            .ok_or_else(|| AuthError::config(format!("Unknown plugin field {role:?}.{name}")))?;
+        let original = value.clone();
+        let value = if name == "id" || field.references_id() {
+            self.config()
+                .advanced
+                .database
+                .generate_id()
+                .adapter_id_query(value)?
+        } else {
+            value
+        };
+        let value = better_auth_core::user_query::bind_filter(field, &value)?;
+        let converted = super::value_filter::adapter_query_value(value, &original, field, backend)?;
+        super::record_bindings::parameter(converted, backend)
+    }
+
+    pub(super) fn plugin_equals<M: SeaOrmPluginModel>(
+        &self,
+        role: EntityRole,
+        name: &str,
+        value: better_auth_core::FieldValue,
+    ) -> AuthResult<sea_orm::sea_query::SimpleExpr> {
+        let column = self.plugin_column::<M>(role, name)?;
+        if value.is_null() || value.is_undefined() {
+            self.model_fields.begin_id_query(role)?;
+            return Ok(column.is_null());
+        }
+        Ok(column
+            .into_expr()
+            .eq(column.save_as(self.plugin_parameter(role, name, value)?)))
+    }
+
+    pub(super) fn plugin_id_filter<M: SeaOrmPluginModel>(
+        &self,
+        role: EntityRole,
+        id: &better_auth_core::SchemaValue<String>,
+    ) -> AuthResult<sea_orm::sea_query::SimpleExpr> {
+        self.model_fields.begin_id_query(role)?;
+        let policy = self.config().advanced.database.generate_id();
+        super::value_filter::equals_id(
+            M::column("id")?,
+            &policy.adapter_id_query(id.field_value())?,
+            policy,
+            self.connection().get_database_backend(),
+        )
+    }
+
+    pub(super) async fn prepare_plugin_fields<M: SeaOrmPluginModel>(
+        &self,
+        role: EntityRole,
+        model: &str,
+        input: FieldMap,
+        create: bool,
+    ) -> AuthResult<Write<M>> {
+        let fields = self.model_fields.plugin_fields(role);
+        let backend = self.connection().get_database_backend();
+        let policy = self.config().advanced.database.generate_id();
+        let id_policy = better_auth_core::id::AdapterIdInput {
+            force_allow_id: create,
+            supports_native_uuid: backend == DbBackend::Postgres,
+        };
+        self.model_fields.begin_id_input(role, id_policy)?;
+        let mut supplied_id = input.get("id").cloned();
+        let stored = fields
+            .storage_fields_with_bound_id(
+                input,
+                create,
+                || {
+                    let supplied = supplied_id.take();
+                    let Some(current) = self.model_fields.id_input_policy(role)? else {
+                        return Ok(supplied.filter(|value| !value.is_undefined()));
+                    };
+                    if create {
+                        policy.adapter_create_id_input(model, supplied, current)
+                    } else {
+                        supplied
+                            .map(|value| policy.adapter_id_input(value, current))
+                            .transpose()
+                            .map(Option::flatten)
+                    }
+                },
+                |name, field, value| {
+                    additional_field_input::<M>(name, field, value, policy, backend)
+                },
+            )
+            .await?;
+        Write::<M>::from_fields(stored, M::column)
+    }
+
+    pub(super) async fn project_plugin_rows<M: SeaOrmPluginModel, T: FromFieldMap>(
+        &self,
+        role: EntityRole,
+        rows: Vec<QueryResult>,
+    ) -> AuthResult<Vec<T>> {
+        let backend = self.connection().get_database_backend();
+        let fields = self.model_fields.plugin_fields(role);
+        let records = rows
+            .iter()
+            .map(|row| super::plugin_rows::record::<M>(row, &fields, backend))
+            .collect::<AuthResult<Vec<_>>>()?;
+        self.model_fields
+            .project_plugin_records(
+                role,
+                records,
+                super::field_output::capabilities(backend),
+                backend != DbBackend::Sqlite,
+            )
+            .await
+    }
+}
 
 pub(super) fn record_fields<M: SeaOrmPluginModel>(
     model: &M,

@@ -1,7 +1,7 @@
 use super::{contract, display_fixture};
 use better_auth::{
     __private_core::{
-        AuthError, AuthSchema, AuthStore,
+        AuthSchema, AuthStore,
         store::EphemeralStore,
         user_fields::{FieldTransforms, UserConfig, UserFieldConfig, UserFieldTransform},
     },
@@ -32,7 +32,7 @@ fn field(column: Option<&str>, calls: &Arc<AtomicUsize>) -> UserFieldConfig {
     }
 }
 
-async fn reject_conflicts<S: AuthSchema>(store: Arc<dyn AuthStore<S>>) {
+async fn accept_shared_columns<S: AuthSchema>(store: Arc<dyn AuthStore<S>>) {
     for (native, other) in [("name", "aaguid"), ("aaguid", "name")] {
         let column = format!("stored_{native}");
         for (name, storage) in [
@@ -64,18 +64,11 @@ async fn reject_conflicts<S: AuthSchema>(store: Arc<dyn AuthStore<S>>) {
                         }));
                     }
                     let result = auth.build().await;
-                    if name == other {
-                        assert!(
-                            result.is_ok(),
-                            "shared displays {native}/{name}/{storage:?}, reversed={reversed}, split={split}: {:?}",
-                            result.err()
-                        );
-                    } else {
-                        assert!(
-                            matches!(result, Err(AuthError::Config(ref message)) if message.contains(" storage column ")),
-                            "{native}/{name}/{storage:?}, reversed={reversed}, split={split}"
-                        );
-                    }
+                    assert!(
+                        result.is_ok(),
+                        "shared columns {native}/{name}/{storage:?}, reversed={reversed}, split={split}: {:?}",
+                        result.err()
+                    );
                     assert_eq!(calls.load(Ordering::SeqCst), 0);
                 }
             }
@@ -84,16 +77,16 @@ async fn reject_conflicts<S: AuthSchema>(store: Arc<dyn AuthStore<S>>) {
 }
 
 #[tokio::test]
-async fn memory_rejects_display_mapping_collisions_before_callbacks() {
-    reject_conflicts(Arc::new(EphemeralStore::new(Arc::new(contract::config())))).await;
+async fn memory_accepts_display_shared_columns_without_invoking_callbacks() {
+    accept_shared_columns(Arc::new(EphemeralStore::new(Arc::new(contract::config())))).await;
 }
 
 #[tokio::test]
-async fn sqlite_rejects_display_mapping_collisions_before_callbacks()
+async fn sqlite_accepts_display_shared_columns_without_invoking_callbacks()
 -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let (store, database) =
         display_fixture::sqlite::<display_fixture::renamed::Model>(contract::config()).await;
-    reject_conflicts(Arc::new(store)).await;
+    accept_shared_columns(Arc::new(store)).await;
     database.close().await?;
     Ok(())
 }

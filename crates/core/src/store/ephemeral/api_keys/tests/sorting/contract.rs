@@ -24,7 +24,7 @@ fn text(value: &Value) -> AuthResult<&str> {
         .ok_or_else(|| AuthError::internal("Expected sort fixture text"))
 }
 
-fn field(value: &Value) -> AuthResult<FieldValue> {
+pub(super) fn field(value: &Value) -> AuthResult<FieldValue> {
     match value {
         Value::Object(object) => match object.get("type").and_then(Value::as_str) {
             Some("undefined") => Ok(FieldValue::Undefined),
@@ -62,7 +62,7 @@ fn field(value: &Value) -> AuthResult<FieldValue> {
     }
 }
 
-fn observe(value: &FieldValue) -> AuthResult<Value> {
+pub(super) fn observe(value: &FieldValue) -> AuthResult<Value> {
     Ok(match value {
         FieldValue::Undefined => json!({"type":"undefined"}),
         FieldValue::Utf16String(value) => match value.to_utf8() {
@@ -98,15 +98,28 @@ fn observe(value: &FieldValue) -> AuthResult<Value> {
     })
 }
 
-fn rows(values: &[ApiKey], raw: bool) -> AuthResult<Value> {
+fn rows(values: &[ApiKey]) -> AuthResult<Value> {
     values
         .iter()
         .map(|row| {
             Ok(json!({
                 "id":row.id,
-                // Projection visits every declared field; raw storage omits undefined values.
-                "present":!raw || !row.name.is_undefined(),
+                "present":true,
                 "value":observe(&row.name.field_value())?,
+            }))
+        })
+        .collect::<AuthResult<Vec<_>>>()
+        .map(Value::Array)
+}
+
+fn raw_rows(values: &[FieldMap]) -> AuthResult<Value> {
+    values
+        .iter()
+        .map(|row| {
+            Ok(json!({
+                "id":row.get("id").cloned().unwrap_or_default().json()?,
+                "present":row.contains_key("stored_name"),
+                "value":observe(&row.get("stored_name").cloned().unwrap_or_default())?,
             }))
         })
         .collect::<AuthResult<Vec<_>>>()
@@ -200,12 +213,12 @@ async fn query(store: &EphemeralStore, operation: &str) -> AuthResult<Vec<ApiKey
         let mut selected = store
             .lock()?
             .api_keys
-            .select_refs(|row| row.reference_id == "owner")?
+            .select_refs(|row| row.get("referenceId") == Some(&FieldValue::from("owner")))?
             .into_iter()
             .map(|source| Ok((source.read(|row| Ok(row.clone()))?, source)))
             .collect::<AuthResult<Vec<_>>>()?;
         crate::memory_sort::sort(&mut selected, direction == Some("desc"), |(row, _)| {
-            Ok(row.name.field_value())
+            Ok(row.get("stored_name").cloned().unwrap_or_default())
         })?;
         crate::query::paginate_memory(selected, Some(2.0), Some(1.0))
     };
@@ -279,14 +292,14 @@ async fn all_name_sort_cases_match_rows_errors_callbacks_and_storage() -> AuthRe
                 })
                 .await?;
             assert_eq!(
-                rows(&[row], false)?,
+                rows(&[row])?,
                 json!([seed["result"]]),
                 "{name}: seed result"
             );
             assert_eq!(take_events(&events)?, seed["events"], "{name}: seed events");
         }
         assert_eq!(
-            rows(&store.lock()?.api_keys.snapshot()?, true)?,
+            raw_rows(&store.lock()?.api_keys.snapshot()?)?,
             case["stored"],
             "{name}: raw seeds"
         );
@@ -310,7 +323,7 @@ async fn all_name_sort_cases_match_rows_errors_callbacks_and_storage() -> AuthRe
                 Ok(result) => {
                     assert_eq!(operation["returned"], true, "{name}: {operation_name}");
                     assert_eq!(
-                        rows(&result, false)?,
+                        rows(&result)?,
                         operation["rows"],
                         "{name}: {operation_name}"
                     );
@@ -333,7 +346,7 @@ async fn all_name_sort_cases_match_rows_errors_callbacks_and_storage() -> AuthRe
                 "{name}: {operation_name}: events"
             );
             assert_eq!(
-                rows(&store.lock()?.api_keys.snapshot()?, true)?,
+                raw_rows(&store.lock()?.api_keys.snapshot()?)?,
                 operation["stored"],
                 "{name}: {operation_name}: raw rows"
             );

@@ -1,8 +1,7 @@
 use better_auth_core::{
-    ApiKeyView, AuthContext, AuthResult, AuthSchema, SchemaValue, UpdateApiKey,
+    ApiKeyView, AuthContext, AuthResult, AuthSchema, FieldValue, SchemaValue, UpdateApiKey,
     background::run_or_await, observability::LogArgument,
 };
-use serde_json::Value;
 
 use super::{ApiKeyConfig, storage::ApiKeyStorage};
 
@@ -10,18 +9,22 @@ pub(super) fn uses_database(config: &ApiKeyConfig) -> bool {
     config.storage == ApiKeyStorage::Database || config.fallback_to_database
 }
 
-fn decode(key: &mut ApiKeyView) -> Option<(SchemaValue<String>, Value)> {
-    let Value::String(text) = key.metadata.as_ref()? else {
-        return None;
+fn decode(key: &mut ApiKeyView) -> Option<(SchemaValue<String>, FieldValue)> {
+    let migrate = matches!(
+        key.metadata,
+        FieldValue::String(_) | FieldValue::Utf16String(_)
+    );
+    key.metadata = match &key.metadata {
+        FieldValue::Null | FieldValue::Undefined => FieldValue::Null,
+        FieldValue::Object(_) | FieldValue::Array(_) | FieldValue::Date(_) => key.metadata.clone(),
+        value => better_auth_core::utils::json::safe_parse_field(value),
     };
-    let metadata = better_auth_core::utils::json::safe_json_parse(text);
-    key.metadata = Some(metadata.clone());
-    Some((key.id.clone(), metadata))
+    migrate.then(|| (key.id.clone(), key.metadata.clone()))
 }
 
 async fn write(
     ctx: &AuthContext<impl AuthSchema>,
-    (id, metadata): (SchemaValue<String>, Value),
+    (id, metadata): (SchemaValue<String>, FieldValue),
 ) -> AuthResult<()> {
     // The upstream migration updates only the database, including fallback mode.
     // A failed legacy repair is logged per key and does not reject verification.
@@ -30,7 +33,7 @@ async fn write(
         .update_api_key_optional(
             &id,
             UpdateApiKey {
-                metadata: Some(metadata.to_string()),
+                metadata: metadata.stringify()?,
                 ..Default::default()
             },
         )
@@ -68,10 +71,11 @@ pub(super) async fn batch(
     let migrations: Vec<_> = keys
         .iter()
         .filter_map(|key| {
-            key.metadata
-                .as_ref()?
-                .as_str()
-                .map(|text| (key.id.clone(), text.to_owned()))
+            matches!(
+                key.metadata,
+                FieldValue::String(_) | FieldValue::Utf16String(_)
+            )
+            .then(|| (key.id.clone(), key.metadata.clone()))
         })
         .collect();
     for key in keys {
@@ -90,7 +94,7 @@ pub(super) async fn batch(
                     async move {
                         write(
                             context,
-                            (id, better_auth_core::utils::json::safe_json_parse(&text)),
+                            (id, better_auth_core::utils::json::safe_parse_field(&text)),
                         )
                         .await
                     }

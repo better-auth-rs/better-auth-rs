@@ -581,10 +581,17 @@ impl OrganizationRoleStore for EphemeralStore {
         &self,
         organization_id: &str,
     ) -> AuthResult<Vec<OrganizationRole>> {
+        self.list_organization_roles_value(&Value::from(organization_id))
+            .await
+    }
+    async fn list_organization_roles_value(
+        &self,
+        organization_id: &Value,
+    ) -> AuthResult<Vec<OrganizationRole>> {
         let organization_id = self.organization_query(
             EntityRole::OrganizationRole,
             "organizationId",
-            Value::from(organization_id),
+            organization_id.clone(),
         )?;
         let rows = self
             .lock()?

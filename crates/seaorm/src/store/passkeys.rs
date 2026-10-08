@@ -1,11 +1,10 @@
-use super::id_filter::IdColumn;
 use super::instrumentation::database_operation;
 use super::plugin_models::Entity;
 use crate::SeaOrmPluginModel;
 use async_trait::async_trait;
-use better_auth_core::{FieldMap, SchemaField};
+use better_auth_core::{FieldMap, FromFieldMap, SchemaField};
 use chrono::Utc;
-use sea_orm::{ColumnTrait, DbBackend, EntityTrait, QueryFilter, QuerySelect};
+use sea_orm::{ConnectionTrait, EntityTrait, QueryFilter, QuerySelect, QueryTrait};
 
 use better_auth_core::store::{PasskeyStore, schema::EntityRole};
 use better_auth_core::{PasskeyCredentialState, PasskeyStorage, UpdatePasskey};
@@ -31,22 +30,55 @@ where
             .await
     }
 
-    async fn get_passkey_by_id(&self, id: &str) -> AuthResult<Option<Passkey>> {
-        let model = database_operation::<Entity<P::Passkey>, _>(self.config(), "findOne", async {
-            Entity::<P::Passkey>::find()
-                .filter(
-                    P::Passkey::column("id")?
-                        .eq_id(id, self.config().advanced.database.generate_id())?,
+    async fn create_passkey_record(&self, input: FieldMap) -> AuthResult<FieldMap> {
+        let active = self
+            .prepare_plugin_fields::<P::Passkey>(EntityRole::Passkey, "passkey", input, true)
+            .await?;
+        self.insert_passkey(self.connection(), active).await
+    }
+
+    async fn update_passkey_record(
+        &self,
+        id: &better_auth_core::SchemaValue<String>,
+        input: FieldMap,
+    ) -> AuthResult<Option<FieldMap>> {
+        let filter = self.plugin_id_filter::<P::Passkey>(EntityRole::Passkey, id)?;
+        let patch = self
+            .prepare_plugin_fields::<P::Passkey>(EntityRole::Passkey, "passkey", input, false)
+            .await?;
+        self.update_passkey_patch(filter, patch).await
+    }
+
+    async fn get_passkey_record(
+        &self,
+        id: &better_auth_core::SchemaValue<String>,
+    ) -> AuthResult<Option<FieldMap>> {
+        let filter = self.plugin_id_filter::<P::Passkey>(EntityRole::Passkey, id)?;
+        let row = database_operation::<Entity<P::Passkey>, _>(self.config(), "findOne", async {
+            self.connection()
+                .query_one_raw(
+                    Entity::<P::Passkey>::find()
+                        .filter(filter)
+                        .build(self.connection().get_database_backend()),
                 )
-                .one(self.connection())
                 .await
                 .map_err(map_db_err)
         })
         .await?;
         Ok(self
-            .project_passkey_models(model.into_iter().collect())
+            .project_plugin_rows::<P::Passkey, FieldMap>(
+                EntityRole::Passkey,
+                row.into_iter().collect(),
+            )
             .await?
             .pop())
+    }
+
+    async fn get_passkey_by_id(&self, id: &str) -> AuthResult<Option<Passkey>> {
+        self.get_passkey_record(&id.to_owned().into())
+            .await?
+            .map(|fields| self.typed_passkey(fields))
+            .transpose()
     }
 
     async fn get_passkey_by_credential_id(
@@ -54,9 +86,16 @@ where
         credential_id: &str,
     ) -> AuthResult<Option<Passkey>> {
         let model = database_operation::<Entity<P::Passkey>, _>(self.config(), "findOne", async {
-            Entity::<P::Passkey>::find()
-                .filter(P::Passkey::column("credential_id")?.eq(credential_id))
-                .one(self.connection())
+            self.connection()
+                .query_one_raw(
+                    Entity::<P::Passkey>::find()
+                        .filter(self.plugin_equals::<P::Passkey>(
+                            EntityRole::Passkey,
+                            "credentialID",
+                            credential_id.into(),
+                        )?)
+                        .build(self.connection().get_database_backend()),
+                )
                 .await
                 .map_err(map_db_err)
         })
@@ -70,16 +109,20 @@ where
     async fn list_passkeys_by_user(&self, user_id: &str) -> AuthResult<Vec<Passkey>> {
         let models =
             database_operation::<Entity<P::Passkey>, _>(self.config(), "findMany", async {
-                Entity::<P::Passkey>::find()
-                    .filter(
-                        P::Passkey::column("user_id")?
-                            .eq_id(user_id, self.config().advanced.database.generate_id())?,
+                self.connection()
+                    .query_all_raw(
+                        Entity::<P::Passkey>::find()
+                            .filter(self.plugin_equals::<P::Passkey>(
+                                EntityRole::Passkey,
+                                "userId",
+                                user_id.into(),
+                            )?)
+                            .limit(super::pagination::default_limit(
+                                self.config(),
+                                self.connection().get_database_backend(),
+                            )?)
+                            .build(self.connection().get_database_backend()),
                     )
-                    .limit(super::pagination::default_limit(
-                        self.config(),
-                        self.connection().get_database_backend(),
-                    )?)
-                    .all(self.connection())
                     .await
                     .map_err(map_db_err)
             })
@@ -92,8 +135,7 @@ where
         id: &better_auth_core::SchemaValue<String>,
         update: UpdatePasskeyAuthentication,
     ) -> AuthResult<Passkey> {
-        let id = id.typed()?;
-        let (counter, fields) = match (P::Passkey::passkey_storage(), update) {
+        let (counter, mut fields) = match (P::Passkey::passkey_storage(), update) {
             (PasskeyStorage::Native, UpdatePasskeyAuthentication::Native { counter }) => {
                 (counter, FieldMap::new())
             }
@@ -108,11 +150,11 @@ where
             ) => (
                 counter,
                 FieldMap::from_iter([
-                    ("backed_up".into(), (backed_up).into_field()),
-                    ("device_type".into(), (device_type).into_field()),
+                    ("backedUp".into(), (backed_up).into_field()),
+                    ("deviceType".into(), (device_type).into_field()),
                     ("credential".into(), credential.to_owned().into_field()),
                     (
-                        "updated_at".into(),
+                        "updatedAt".into(),
                         better_auth_core::FieldValue::Date((Utc::now()).into()),
                     ),
                 ]),
@@ -123,36 +165,29 @@ where
                 ));
             }
         };
+        let _ = fields.insert("counter".into(), counter.into_field());
+        let filter = self.plugin_id_filter::<P::Passkey>(EntityRole::Passkey, id)?;
         let patch = self
             .prepare_passkey_fields(fields, FieldMap::new(), false)
             .await?;
         let model = database_operation::<Entity<P::Passkey>, _>(self.config(), "update", async {
-            let Some(_model) = Entity::<P::Passkey>::find()
-                .filter(
-                    P::Passkey::column("id")?
-                        .eq_id(id, self.config().advanced.database.generate_id())?,
+            let Some(_model) = self
+                .connection()
+                .query_one_raw(
+                    Entity::<P::Passkey>::find()
+                        .filter(filter.clone())
+                        .build(self.connection().get_database_backend()),
                 )
-                .one(self.connection())
                 .await
                 .map_err(map_db_err)?
             else {
                 return Ok(None);
             };
-            let counter = i64::try_from(counter)
-                .map_err(|_| AuthError::bad_request("Passkey counter exceeds i64 range"))?;
-            let mut active = patch;
-            super::plugin_models::set::<P::Passkey>(
-                &mut active,
-                "counter",
-                counter,
-                self.config().advanced.database.generate_id(),
-            )?;
-            let filter = P::Passkey::column("id")?
-                .eq_id(id, self.config().advanced.database.generate_id())?;
-            super::updates::update_record_returning_one(
+            super::updates::execute_update_returning_raw(
                 self.connection(),
-                active,
-                filter.clone(),
+                patch
+                    .update(self.connection().get_database_backend())?
+                    .filter(filter.clone()),
                 filter,
             )
             .await
@@ -164,69 +199,30 @@ where
     async fn update_passkey(
         &self,
         id: &better_auth_core::SchemaValue<String>,
-        update: UpdatePasskey,
+        mut update: UpdatePasskey,
     ) -> AuthResult<Passkey> {
-        let mut fields = FieldMap::new();
-        for (name, value) in [("name", update.name), ("aaguid", update.aaguid)] {
-            if !value.is_undefined() {
-                let _ = fields.insert(name.into(), value.into_field_value());
-            }
-        }
+        let filter = self.plugin_id_filter::<P::Passkey>(EntityRole::Passkey, id)?;
+        let extras = std::mem::take(&mut update.additional_fields);
+        let mut fields = update.into_adapter_fields()?;
         if P::Passkey::passkey_storage() == PasskeyStorage::Legacy {
             let _ = fields.insert(
-                "updated_at".into(),
+                "updatedAt".into(),
                 better_auth_core::FieldValue::Date((Utc::now()).into()),
             );
         }
-        let patch = self
-            .prepare_passkey_fields(fields, update.additional_fields, false)
-            .await?;
-        let model = database_operation::<Entity<P::Passkey>, _>(self.config(), "update", async {
-            let policy = self.config().advanced.database.generate_id();
-            let filter = super::value_filter::equals_id(
-                P::Passkey::column("id")?,
-                &policy.adapter_id_query(id.field_value())?,
-                policy,
-                self.connection().get_database_backend(),
-            )?;
-            let Some(_model) = Entity::<P::Passkey>::find()
-                .filter(filter.clone())
-                .one(self.connection())
-                .await
-                .map_err(map_db_err)?
-            else {
-                return Ok(None);
-            };
-            let mut active = patch;
-            if let Some(counter) = update.counter {
-                let counter = i64::try_from(counter)
-                    .map_err(|_| AuthError::bad_request("Passkey counter exceeds i64 range"))?;
-                super::plugin_models::set::<P::Passkey>(
-                    &mut active,
-                    "counter",
-                    counter,
-                    self.config().advanced.database.generate_id(),
-                )?;
-            }
-            super::updates::update_record_returning_one(
-                self.connection(),
-                active,
-                filter.clone(),
-                filter,
-            )
-            .await
-        })
-        .await?
-        .ok_or_else(|| AuthError::not_found("Passkey not found"))?;
-        Ok(self.project_passkey_models(vec![model]).await?.remove(0))
+        let patch = self.prepare_passkey_fields(fields, extras, false).await?;
+        self.update_passkey_patch(filter, patch)
+            .await?
+            .map(|fields| self.typed_passkey(fields))
+            .transpose()?
+            .ok_or_else(|| AuthError::not_found("Passkey not found"))
     }
     async fn delete_passkey(&self, id: &str) -> AuthResult<()> {
+        let filter =
+            self.plugin_id_filter::<P::Passkey>(EntityRole::Passkey, &id.to_owned().into())?;
         database_operation::<Entity<P::Passkey>, _>(self.config(), "delete", async {
             Entity::<P::Passkey>::delete_many()
-                .filter(
-                    P::Passkey::column("id")?
-                        .eq_id(id, self.config().advanced.database.generate_id())?,
-                )
+                .filter(filter)
                 .exec(self.connection())
                 .await
                 .map(|_| ())
@@ -239,74 +235,76 @@ where
 impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema>
     SeaOrmStore<S, O, P>
 {
-    pub(super) fn validate_passkey_fields(&self) -> AuthResult<()> {
-        let fields = self.model_fields.fields(EntityRole::Passkey);
-        let storage = |name: &str| {
-            fields.fields().get(name).map(|field| {
-                better_auth_core::store::schema::resolve_field_name(
-                    field.field_name.as_deref(),
-                    name,
+    async fn update_passkey_patch(
+        &self,
+        filter: sea_orm::sea_query::SimpleExpr,
+        patch: super::plugin_models::Write<P::Passkey>,
+    ) -> AuthResult<Option<FieldMap>> {
+        let model = database_operation::<Entity<P::Passkey>, _>(self.config(), "update", async {
+            let Some(_model) = self
+                .connection()
+                .query_one_raw(
+                    Entity::<P::Passkey>::find()
+                        .filter(filter.clone())
+                        .build(self.connection().get_database_backend()),
                 )
-                .to_owned()
-            })
-        };
-        let name = storage("name");
-        let aaguid = storage("aaguid");
-        if let Some(column) = name.filter(|name| Some(name) == aaguid.as_ref()) {
-            let column = P::Passkey::column(&column)?;
-            if P::Passkey::core_field_name(&column)
-                .is_some_and(|name| !matches!(name, "name" | "aaguid"))
-            {
-                return Err(AuthError::config(
-                    "Passkey shared display fields cannot replace an identity or credential column",
-                ));
-            }
-        } else {
-            // Missing typed display slots are valid only when both policies resolve one physical column.
-            for name in ["name", "aaguid"] {
-                let _ = P::Passkey::column(name)?;
-            }
-            super::plugin_models::validate_field_columns(
-                "Passkey schema",
-                fields,
-                P::Passkey::column,
-                P::Passkey::core_field_name,
-            )?;
-        }
-        let mut extras = fields.clone();
-        extras
-            .fields_mut()
-            .retain(|name, _| !matches!(name.as_str(), "name" | "aaguid"));
-        super::plugin_models::validate_additional_field_columns::<P::Passkey>(
-            EntityRole::Passkey,
-            &extras,
-        )
-    }
-
-    async fn project_passkey_models(&self, models: Vec<P::Passkey>) -> AuthResult<Vec<Passkey>> {
-        let fields = self.model_fields.fields(EntityRole::Passkey);
-        let records = models
-            .iter()
-            .map(|model| {
-                super::plugin_models::record_fields(
-                    model,
-                    fields,
-                    self.connection().get_database_backend(),
-                )
-            })
-            .collect::<AuthResult<Vec<_>>>()?;
-        let rows = models
-            .iter()
-            .map(SeaOrmPluginModel::record)
-            .collect::<AuthResult<Vec<_>>>()?;
-        self.model_fields
-            .project_passkey_records(
-                rows,
-                records,
-                super::field_output::capabilities(self.connection().get_database_backend()),
-                self.connection().get_database_backend() != DbBackend::Sqlite,
+                .await
+                .map_err(map_db_err)?
+            else {
+                return Ok(None);
+            };
+            super::updates::execute_update_returning_raw(
+                self.connection(),
+                patch
+                    .update(self.connection().get_database_backend())?
+                    .filter(filter.clone()),
+                filter,
             )
             .await
+        })
+        .await?;
+        Ok(self
+            .project_plugin_rows::<P::Passkey, FieldMap>(
+                EntityRole::Passkey,
+                model.into_iter().collect(),
+            )
+            .await?
+            .pop())
+    }
+}
+
+impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema>
+    SeaOrmStore<S, O, P>
+{
+    pub(super) fn validate_passkey_fields(&self) -> AuthResult<()> {
+        self.validate_plugin_fields::<P::Passkey>(EntityRole::Passkey)
+    }
+
+    async fn project_passkey_models(
+        &self,
+        rows: Vec<sea_orm::QueryResult>,
+    ) -> AuthResult<Vec<Passkey>> {
+        self.project_plugin_rows::<P::Passkey, FieldMap>(EntityRole::Passkey, rows)
+            .await?
+            .into_iter()
+            .map(|fields| self.typed_passkey(fields))
+            .collect()
+    }
+
+    fn typed_passkey(&self, mut fields: FieldMap) -> AuthResult<Passkey> {
+        if P::Passkey::passkey_storage() == PasskeyStorage::Legacy
+            && !self
+                .model_fields
+                .fields(EntityRole::Passkey)
+                .fields()
+                .contains_key("updatedAt")
+            && let Some(value @ better_auth_core::FieldValue::String(_)) =
+                fields.get_mut("updatedAt")
+        {
+            // Legacy Rust models retain their typed timestamp without adding an upstream field policy.
+            *value = better_auth_core::query::field_date(value)?.into();
+        }
+        Passkey::from_field_values(fields)
     }
 
     async fn prepare_passkey_fields(
@@ -315,22 +313,12 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         mut extras: FieldMap,
         create: bool,
     ) -> AuthResult<super::plugin_models::Write<P::Passkey>> {
-        let fields = self.model_fields.fields(EntityRole::Passkey);
-        let _ = extras.remove("name");
-        let _ = extras.remove("aaguid");
+        let fields = self.model_fields.plugin_fields(EntityRole::Passkey);
         extras.extend(native.clone());
-        let mut active = super::plugin_models::additional_fields::<P::Passkey>(
-            fields,
-            extras,
-            self.config().advanced.database.generate_id(),
-            self.connection().get_database_backend(),
-            create,
-        )
-        .await?;
+        let mut active = self
+            .prepare_plugin_fields::<P::Passkey>(EntityRole::Passkey, "passkey", extras, create)
+            .await?;
         native.retain(|name, _| !fields.fields().contains_key(name));
-        if create {
-            native = self.create_fields("passkey", None, native)?;
-        }
         super::plugin_models::apply::<P::Passkey>(
             &mut active,
             native,
@@ -342,13 +330,11 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
     pub(super) async fn create_passkey_with_connection(
         &self,
         connection: &impl sea_orm::ConnectionTrait,
-        input: CreatePasskey,
+        mut input: CreatePasskey,
     ) -> AuthResult<Passkey> {
-        let counter = i64::try_from(input.counter)
-            .map_err(|_| AuthError::bad_request("Passkey counter exceeds i64 range"))?;
-        let credential = match (P::Passkey::passkey_storage(), input.credential) {
-            (PasskeyStorage::Native, PasskeyCredentialState::Native) => None,
-            (PasskeyStorage::Legacy, PasskeyCredentialState::Legacy(value)) => Some(value),
+        let legacy = match (P::Passkey::passkey_storage(), &input.credential) {
+            (PasskeyStorage::Native, PasskeyCredentialState::Native) => false,
+            (PasskeyStorage::Legacy, PasskeyCredentialState::Legacy(_)) => true,
             _ => {
                 return Err(AuthError::config(
                     "Passkey creation does not match the model storage mode",
@@ -356,45 +342,34 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
             }
         };
 
-        let mut fields = FieldMap::from_iter([
-            ("public_key".to_owned(), (input.public_key).into_field()),
-            ("user_id".to_owned(), (input.user_id).into_field()),
-            (
-                "credential_id".to_owned(),
-                (input.credential_id).into_field(),
-            ),
-            ("counter".to_owned(), (counter).into_field()),
-            ("device_type".to_owned(), (input.device_type).into_field()),
-            ("backed_up".to_owned(), (input.backed_up).into_field()),
-            ("transports".to_owned(), (input.transports).into_field()),
-        ]);
-        if let Some(credential) = &credential {
-            let _ = fields.insert("credential".into(), credential.to_owned().into_field());
-        }
+        let extras = std::mem::take(&mut input.additional_fields);
+        let mut fields = input.into_adapter_fields()?;
         let _ = fields.insert(
-            "created_at".into(),
+            "createdAt".into(),
             better_auth_core::FieldValue::Date((Utc::now()).into()),
         );
-        if credential.is_some() {
+        if legacy {
             let _ = fields.insert(
-                "updated_at".into(),
+                "updatedAt".into(),
                 better_auth_core::FieldValue::Date((Utc::now()).into()),
             );
         }
-        for (name, value) in [("name", input.name), ("aaguid", input.aaguid)] {
-            if let Some(value) =
-                Some(value.into_field_value()).filter(|value| !value.is_undefined())
-            {
-                let _ = fields.insert(name.into(), value);
-            }
-        }
-        let active = self
-            .prepare_passkey_fields(fields, input.additional_fields, true)
-            .await?;
+        let active = self.prepare_passkey_fields(fields, extras, true).await?;
+        self.typed_passkey(self.insert_passkey(connection, active).await?)
+    }
+
+    async fn insert_passkey(
+        &self,
+        connection: &impl sea_orm::ConnectionTrait,
+        active: super::plugin_models::Write<P::Passkey>,
+    ) -> AuthResult<FieldMap> {
         let model = database_operation::<Entity<P::Passkey>, _>(self.config(), "create", async {
-            active.insert(connection).await
+            active.insert_raw(connection).await
         })
         .await?;
-        Ok(self.project_passkey_models(vec![model]).await?.remove(0))
+        Ok(self
+            .project_plugin_rows::<P::Passkey, FieldMap>(EntityRole::Passkey, vec![model])
+            .await?
+            .remove(0))
     }
 }

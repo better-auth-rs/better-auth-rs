@@ -72,7 +72,13 @@ pub async fn get_owned_api_key(
             }
         }
         ApiKeyReferences::Organization => {
-            require_org_api_key_permission(ctx, user_id, &api_key.reference_id, action).await?;
+            require_org_api_key_permission_value(
+                ctx,
+                user_id,
+                &api_key.reference_id.field_value(),
+                action,
+            )
+            .await?;
         }
     }
 
@@ -87,8 +93,17 @@ pub async fn require_org_api_key_permission(
     organization_id: &str,
     action: &str,
 ) -> AuthResult<()> {
+    require_org_api_key_permission_value(ctx, user_id, &organization_id.into(), action).await
+}
+
+async fn require_org_api_key_permission_value(
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+    user_id: &str,
+    organization_id: &better_auth_core::FieldValue,
+    action: &str,
+) -> AuthResult<()> {
     use crate::plugins::api_key::{ApiKeyErrorCode, api_key_error};
-    use crate::plugins::organization::rbac::check_permission;
+    use crate::plugins::organization::rbac::check_api_key_permission;
     use crate::plugins::organization::{
         METADATA_AC, METADATA_CREATOR_ROLE, METADATA_DYNAMIC_ACCESS_CONTROL, METADATA_ENABLED,
         METADATA_ROLES, OrganizationConfig, RolePermissions,
@@ -105,27 +120,18 @@ pub async fn require_org_api_key_permission(
         return Err(api_key_error(ApiKeyErrorCode::OrganizationPluginRequired));
     }
 
-    let Some(member) = ctx.database.get_member(organization_id, user_id).await? else {
+    let Some(member) = ctx
+        .database
+        .get_member_value(organization_id, &user_id.into())
+        .await?
+    else {
         return Err(api_key_error(ApiKeyErrorCode::UserNotMemberOfOrganization));
     };
 
-    // Upstream passes `allowCreatorAllPermissions`, so the creator role clears
-    // every action without consulting the statements. Roles are composite
-    // (comma-separated), so holding it alongside others still counts.
     let creator_role = ctx
         .get_metadata(METADATA_CREATOR_ROLE)
         .and_then(|value| value.as_str().map(str::to_string))
         .unwrap_or_else(|| "owner".to_string());
-    if member
-        .role
-        .typed()?
-        .split(',')
-        .map(str::trim)
-        .any(|role| role == creator_role)
-    {
-        return Ok(());
-    }
-
     let custom_roles: Option<HashMap<String, RolePermissions>> = ctx
         .get_metadata(METADATA_ROLES)
         .map(|value| serde_json::from_value(value.clone()))
@@ -133,6 +139,7 @@ pub async fn require_org_api_key_permission(
         .flatten();
 
     let config = OrganizationConfig {
+        creator_role,
         roles: custom_roles,
         dynamic_access_control: ctx
             .get_metadata(METADATA_DYNAMIC_ACCESS_CONTROL)
@@ -145,15 +152,10 @@ pub async fn require_org_api_key_permission(
             .flatten(),
         ..Default::default()
     };
-    let allowed = check_permission(
-        member.role.typed()?,
-        organization_id,
-        "apikey",
-        &[action],
-        &config,
-        ctx,
-    )
-    .await?;
+    // The upstream API key boundary denies permission when the organization checker throws.
+    let allowed = check_api_key_permission(&member.role, organization_id, action, &config, ctx)
+        .await
+        .unwrap_or(false);
 
     if allowed {
         Ok(())

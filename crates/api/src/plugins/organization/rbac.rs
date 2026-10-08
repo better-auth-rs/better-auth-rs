@@ -205,7 +205,7 @@ fn role_statements(
                 ("organization", &role.organization),
                 ("member", &role.member),
                 ("invitation", &role.invitation),
-                ("apikey", &role.api_key),
+                ("apiKey", &role.api_key),
                 ("team", &role.team),
                 ("ac", &role.ac),
             ] {
@@ -223,7 +223,7 @@ impl Resource {
             Self::Organization => "organization",
             Self::Member => "member",
             Self::Invitation => "invitation",
-            Self::ApiKey => "apikey",
+            Self::ApiKey => "apiKey",
             Self::Team => "team",
             Self::AccessControl => "ac",
         }
@@ -277,11 +277,20 @@ pub(crate) async fn check_permissions(
     config: &super::OrganizationConfig,
     ctx: &better_auth_core::AuthContext<impl better_auth_core::AuthSchema>,
 ) -> better_auth_core::AuthResult<bool> {
+    let roles = permission_roles(&organization_id.into(), config, ctx).await?;
+    Ok(permissions.is_some_and(|permissions| authorize(role, permissions, &roles)))
+}
+
+async fn permission_roles(
+    organization_id: &better_auth_core::FieldValue,
+    config: &super::OrganizationConfig,
+    ctx: &better_auth_core::AuthContext<impl better_auth_core::AuthSchema>,
+) -> better_auth_core::AuthResult<HashMap<String, Statements>> {
     let mut roles = role_statements(config.roles.as_ref());
-    if config.dynamic_access_control && config.ac.is_some() {
+    if organization_id.is_truthy() && config.dynamic_access_control && config.ac.is_some() {
         for row in ctx
             .database
-            .list_organization_roles(organization_id)
+            .list_organization_roles_value(organization_id)
             .await?
         {
             let role = row.role.display_string()?;
@@ -313,7 +322,7 @@ pub(crate) async fn check_permissions(
             }
         }
     }
-    Ok(permissions.is_some_and(|permissions| authorize(role, permissions, &roles)))
+    Ok(roles)
 }
 
 /// Authorize one resource through the organization's configured and persisted roles.
@@ -336,6 +345,28 @@ pub(crate) async fn check_permission(
         ctx,
     )
     .await
+}
+
+pub(crate) async fn check_api_key_permission(
+    role: &better_auth_core::SchemaValue<String>,
+    organization_id: &better_auth_core::FieldValue,
+    action: &str,
+    config: &super::OrganizationConfig,
+    ctx: &better_auth_core::AuthContext<impl better_auth_core::AuthSchema>,
+) -> better_auth_core::AuthResult<bool> {
+    let roles = permission_roles(organization_id, config, ctx).await?;
+    let role = role.typed()?;
+    let creator_role = if config.creator_role.is_empty() {
+        "owner"
+    } else {
+        &config.creator_role
+    };
+    Ok(role.split(',').any(|role| role == creator_role)
+        || authorize(
+            role,
+            &HashMap::from([("apiKey".into(), vec![action.into()])]),
+            &roles,
+        ))
 }
 
 /// Handle composite roles (comma-separated)

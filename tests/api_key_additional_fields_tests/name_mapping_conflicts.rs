@@ -1,7 +1,7 @@
 use super::{contract, fixture};
 use better_auth::{
     __private_core::{
-        AuthError, AuthSchema, AuthStore,
+        AuthSchema, AuthStore,
         store::EphemeralStore,
         user_fields::{FieldTransforms, UserConfig, UserFieldConfig, UserFieldTransform},
     },
@@ -32,7 +32,7 @@ fn field(column: Option<&str>, calls: &Arc<AtomicUsize>) -> UserFieldConfig {
     }
 }
 
-async fn reject<S: AuthSchema>(store: Arc<dyn AuthStore<S>>, physical_columns: &[&str]) {
+async fn accept<S: AuthSchema>(store: Arc<dyn AuthStore<S>>, physical_columns: &[&str]) {
     for (name, storage) in [
         ("label", Some("stored_name")),
         ("stored_name", None),
@@ -62,8 +62,9 @@ async fn reject<S: AuthSchema>(store: Arc<dyn AuthStore<S>>, physical_columns: &
                 }
                 let result = auth.build().await;
                 assert!(
-                    matches!(result, Err(AuthError::Config(ref message)) if message.contains(" storage column ")),
-                    "{name}/{storage:?}, reversed={reversed}, split={split}"
+                    result.is_ok(),
+                    "{name}/{storage:?}, reversed={reversed}, split={split}: {:?}",
+                    result.err()
                 );
                 assert_eq!(calls.load(Ordering::SeqCst), 0);
             }
@@ -88,25 +89,26 @@ async fn reject<S: AuthSchema>(store: Arc<dyn AuthStore<S>>, physical_columns: &
             .build()
             .await;
         assert!(
-            matches!(result, Err(AuthError::Config(_))),
-            "name cannot alias {column}"
+            result.is_ok(),
+            "name can alias {column}: {:?}",
+            result.err()
         );
         assert_eq!(calls.load(Ordering::SeqCst), 0);
     }
 }
 
 #[tokio::test]
-async fn memory_rejects_api_key_name_mapping_collisions_before_callbacks() {
+async fn memory_accepts_api_key_shared_columns_without_invoking_callbacks() {
     let store = Arc::new(EphemeralStore::new(Arc::new(contract::config())));
-    reject(store, &[]).await;
+    accept(store, &[]).await;
 }
 
 #[tokio::test]
-async fn sqlite_rejects_api_key_name_mapping_collisions_before_callbacks()
+async fn sqlite_accepts_api_key_shared_columns_without_invoking_callbacks()
 -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let (store, database) =
         fixture::sqlite_for::<fixture::renamed::Model>(contract::config()).await;
-    reject(
+    accept(
         Arc::new(store),
         &["stored_key", "stored_owner", "stored_count"],
     )

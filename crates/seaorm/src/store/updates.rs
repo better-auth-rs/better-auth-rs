@@ -1,4 +1,8 @@
-use sea_orm::{ConnectionTrait, EntityTrait, QueryFilter, sea_query::SimpleExpr};
+use sea_orm::{
+    ColumnTrait, ConnectionTrait, EntityTrait, FromQueryResult, Iterable, QueryFilter, QueryResult,
+    QueryTrait,
+    sea_query::{Query, SimpleExpr},
+};
 
 use super::map_db_err;
 use crate::error::AuthResult;
@@ -26,18 +30,39 @@ where
     E: EntityTrait,
     C: ConnectionTrait,
 {
+    execute_update_returning_raw(db, query, reselect)
+        .await?
+        .map(|row| E::Model::from_query_result(&row, "").map_err(map_db_err))
+        .transpose()
+}
+
+pub(super) async fn execute_update_returning_raw<E, C>(
+    db: &C,
+    query: sea_orm::UpdateMany<E>,
+    reselect: SimpleExpr,
+) -> AuthResult<Option<QueryResult>>
+where
+    E: EntityTrait,
+    C: ConnectionTrait,
+{
     if db.support_returning() {
-        return query
-            .exec_with_returning(db)
+        let backend = db.get_database_backend();
+        let mut query = query.into_query();
+        let _ = query.returning(Query::returning().exprs(
+            E::Column::iter().map(|column| column.select_as(column.into_returning_expr(backend))),
+        ));
+        return db
+            .query_one_raw(backend.build(&query))
             .await
-            .map(|rows| rows.into_iter().next())
             .map_err(map_db_err);
     }
     if query.exec(db).await.map_err(map_db_err)?.rows_affected == 0 {
         return Ok(None);
     }
     // MySQL has no UPDATE RETURNING. Select with the updated key, as the upstream adapter does.
-    E::find().filter(reselect).one(db).await.map_err(map_db_err)
+    db.query_one_raw(E::find().filter(reselect).build(db.get_database_backend()))
+        .await
+        .map_err(map_db_err)
 }
 
 pub(super) async fn increment_returning_one<E>(
@@ -49,23 +74,41 @@ pub(super) async fn increment_returning_one<E>(
 where
     E: EntityTrait,
 {
+    increment_returning_raw(db, query, filter, reselect)
+        .await?
+        .map(|row| E::Model::from_query_result(&row, "").map_err(map_db_err))
+        .transpose()
+}
+
+pub(super) async fn increment_returning_raw<E>(
+    db: &sea_orm::DbConn,
+    query: sea_orm::UpdateMany<E>,
+    filter: SimpleExpr,
+    reselect: SimpleExpr,
+) -> AuthResult<Option<QueryResult>>
+where
+    E: EntityTrait,
+{
     use sea_orm::{QuerySelect, TransactionTrait};
     if db.get_database_backend() != sea_orm::DbBackend::MySql {
-        return execute_update_returning_one(db, query, reselect).await;
+        return execute_update_returning_raw(db, query, reselect).await;
     }
     let tx = db.begin().await.map_err(map_db_err)?;
     let result = async {
-        if E::find()
-            .filter(filter.clone())
-            .lock_exclusive()
-            .one(&tx)
+        if tx
+            .query_one_raw(
+                E::find()
+                    .filter(filter.clone())
+                    .lock_exclusive()
+                    .build(db.get_database_backend()),
+            )
             .await
             .map_err(map_db_err)?
             .is_none()
         {
             return Ok(None);
         }
-        execute_update_returning_one(&tx, query, reselect).await
+        execute_update_returning_raw(&tx, query, reselect).await
     }
     .await;
     if result.is_ok() {

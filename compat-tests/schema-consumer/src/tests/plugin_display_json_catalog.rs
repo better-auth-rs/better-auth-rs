@@ -67,7 +67,7 @@ fn input() -> CreateApiKey {
         key_hash: "shared-native-key".into(),
         refill_interval: None,
         refill_amount: None,
-        enabled: true,
+        enabled: true.into(),
         rate_limit_enabled: true,
         rate_limit_time_window: None,
         rate_limit_max: None,

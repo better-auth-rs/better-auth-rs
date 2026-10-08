@@ -54,6 +54,7 @@ pub struct RolePermissions {
     /// Actions this role may perform on organization-owned API keys. Upstream's
     /// default statements define none, so only the creator role can manage them
     /// until an application grants this explicitly.
+    #[serde(rename = "apiKey", alias = "api_key")]
     pub api_key: Vec<String>,
     pub team: Vec<String>,
     pub ac: Vec<String>,

@@ -192,6 +192,54 @@ pub fn field_number(value: &FieldValue) -> AuthResult<f64> {
     }
 }
 
+/// Match Memory adapter equality, where a null filter also selects missing fields.
+pub fn field_matches_equality(actual: &FieldValue, expected: &FieldValue) -> bool {
+    if expected.is_null() {
+        actual.is_null() || actual.is_undefined()
+    } else {
+        actual.strict_equals(expected)
+    }
+}
+
+/// Apply the Date constructor while preserving invalid dates and runtime conversion failures.
+pub fn field_date(value: &FieldValue) -> AuthResult<crate::FieldDate> {
+    let primitive = match value {
+        FieldValue::Date(date) => {
+            return Ok(crate::FieldDate::from_milliseconds(date.milliseconds()));
+        }
+        FieldValue::Array(_) | FieldValue::Object(_) => FieldValue::from(value.display_utf16()?),
+        value => value.clone(),
+    };
+    Ok(match primitive {
+        FieldValue::String(text) => crate::utils::date::parse_adapter_date(&text)
+            .map(crate::FieldDate::from)
+            .unwrap_or_else(crate::FieldDate::invalid),
+        FieldValue::Utf16String(_) => crate::FieldDate::invalid(),
+        value => crate::FieldDate::from_milliseconds(field_number(&value)?),
+    })
+}
+
+/// Apply JavaScript addition, including string concatenation after primitive conversion.
+pub fn field_add(left: &FieldValue, right: &FieldValue) -> AuthResult<FieldValue> {
+    let primitive = |value: &FieldValue| -> AuthResult<FieldValue> {
+        match value {
+            FieldValue::Date(_) | FieldValue::Array(_) | FieldValue::Object(_) => {
+                Ok(value.display_utf16()?.into())
+            }
+            value => Ok(value.clone()),
+        }
+    };
+    let left = primitive(left)?;
+    let right = primitive(right)?;
+    if field_string_units(&left).is_some() || field_string_units(&right).is_some() {
+        let mut units = left.display_utf16()?.as_utf16().to_vec();
+        units.extend_from_slice(right.display_utf16()?.as_utf16());
+        Ok(crate::Utf16String::from_units(units).into())
+    } else {
+        Ok((field_number(&left)? + field_number(&right)?).into())
+    }
+}
+
 /// Read JavaScript string code units without replacing unpaired surrogates.
 pub fn field_string_units(value: &FieldValue) -> Option<std::borrow::Cow<'_, [u16]>> {
     match value {
@@ -310,6 +358,70 @@ mod field_tests {
             field_compare(&high_surrogate, &FieldValue::from("\u{e000}"))?,
             Some(Ordering::Less)
         );
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod dynamic_value_tests {
+    use super::*;
+
+    #[test]
+    fn memory_null_query_selects_missing_without_coercing_other_values() {
+        assert!(field_matches_equality(
+            &FieldValue::Undefined,
+            &FieldValue::Null
+        ));
+        assert!(!field_matches_equality(
+            &FieldValue::Null,
+            &FieldValue::Undefined
+        ));
+        assert!(!field_matches_equality(&0.0.into(), &false.into()));
+        assert!(!field_matches_equality(&"1".into(), &1.0.into()));
+        let object = FieldValue::from(crate::FieldMap::new());
+        assert!(field_matches_equality(&object, &object));
+        assert!(!field_matches_equality(
+            &object,
+            &crate::FieldMap::new().into()
+        ));
+    }
+
+    #[test]
+    fn arithmetic_keeps_addition_and_numeric_decrement_distinct() -> AuthResult<()> {
+        let value = FieldValue::from("2");
+        assert_eq!(field_add(&value, &1.0.into())?, FieldValue::from("21"));
+        assert_eq!(field_number(&value)? - 1.0, 1.0);
+        assert_eq!(field_add(&FieldValue::Null, &1.0.into())?, 1.0.into());
+        assert!(
+            matches!(field_add(&FieldValue::Undefined, &1.0.into())?, FieldValue::Number(value) if value.is_nan())
+        );
+        assert_eq!(
+            field_add(&Vec::<FieldValue>::new().into(), &1.0.into())?,
+            "1".into()
+        );
+        assert!(
+            field_add(
+                &crate::FieldMap::from([("toString".into(), false.into())]).into(),
+                &1.0.into()
+            )
+            .is_err()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn date_constructor_preserves_nan_and_applies_array_primitive_conversion() -> AuthResult<()> {
+        assert!(field_date(&FieldValue::Undefined)?.milliseconds().is_nan());
+        assert_eq!(field_date(&FieldValue::Null)?.milliseconds(), 0.0);
+        assert_eq!(field_date(&true.into())?.milliseconds(), 1.0);
+        assert_eq!(
+            field_date(&vec![FieldValue::from("2026-01-02T03:04:05Z")].into())?.milliseconds(),
+            1_767_323_045_000.0
+        );
+        let date = crate::FieldDate::from_milliseconds(123.0);
+        let converted = field_date(&date.clone().into())?;
+        assert_eq!(converted, date);
+        assert!(!converted.same_object(&date));
         Ok(())
     }
 }

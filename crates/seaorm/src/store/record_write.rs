@@ -2,8 +2,8 @@
 
 use better_auth_core::{AuthError, AuthResult, FieldValue};
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, Iden, Iterable,
-    PrimaryKeyToColumn, QueryFilter,
+    ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, FromQueryResult, Iden, Iterable,
+    PrimaryKeyToColumn, QueryFilter, QueryResult, QueryTrait,
     sea_query::{ExprTrait, Query, Value},
 };
 
@@ -120,6 +120,11 @@ impl<E: EntityTrait> RecordWrite<E> {
     }
 
     pub(super) async fn insert(self, db: &impl ConnectionTrait) -> AuthResult<E::Model> {
+        let row = self.insert_raw(db).await?;
+        E::Model::from_query_result(&row, "").map_err(map_db_err)
+    }
+
+    pub(super) async fn insert_raw(self, db: &impl ConnectionTrait) -> AuthResult<QueryResult> {
         let backend = db.get_database_backend();
         let primary = E::PrimaryKey::iter()
             .next()
@@ -148,9 +153,8 @@ impl<E: EntityTrait> RecordWrite<E> {
                         .map(|column| column.select_as(column.into_returning_expr(backend))),
                 ),
             );
-            return E::find()
-                .from_raw_sql(backend.build(&query))
-                .one(db)
+            return db
+                .query_one_raw(backend.build(&query))
                 .await
                 .map_err(map_db_err)?
                 .ok_or_else(|| AuthError::internal("SQL insert returned no record"));
@@ -159,13 +163,12 @@ impl<E: EntityTrait> RecordWrite<E> {
             .execute_raw(backend.build(&query))
             .await
             .map_err(map_db_err)?;
-        E::find()
-            .filter(
-                primary
-                    .into_expr()
-                    .eq(primary.save_as(id.unwrap_or_else(|| result.last_insert_id().into()))),
-            )
-            .one(db)
+        let select = E::find().filter(
+            primary
+                .into_expr()
+                .eq(primary.save_as(id.unwrap_or_else(|| result.last_insert_id().into()))),
+        );
+        db.query_one_raw(select.build(backend))
             .await
             .map_err(map_db_err)?
             .ok_or_else(|| AuthError::internal("SQL insert returned no record"))

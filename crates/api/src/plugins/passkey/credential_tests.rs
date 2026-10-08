@@ -174,16 +174,19 @@ fn standard_columns_and_legacy_envelope_authenticate_registered_key() -> TestRes
                 id: "passkey-row".to_owned().into(),
                 user_id: String::from_utf8(OWNER.to_vec())?.into(),
                 name: Some("Personal key".to_owned()).into(),
-                public_key: metadata.public_key.clone(),
-                credential_id: URL_SAFE_NO_PAD.encode(registered.cred.cred_id.as_ref()),
-                counter: u64::from(registered.cred.counter),
-                device_type: registered.device_type().to_owned(),
-                backed_up: registered.cred.backup_state,
+                public_key: metadata.public_key.clone().into(),
+                credential_id: URL_SAFE_NO_PAD
+                    .encode(registered.cred.cred_id.as_ref())
+                    .into(),
+                counter: u64::from(registered.cred.counter).into(),
+                device_type: registered.device_type().to_owned().into(),
+                backed_up: registered.cred.backup_state.into(),
                 transports: Some(
                     transports
                         .map(|values| values.join(","))
                         .unwrap_or_default(),
-                ),
+                )
+                .into(),
                 created_at: Some(chrono::Utc::now().into()).into(),
                 updated_at: match storage {
                     PasskeyStorage::Native => SchemaValue::Undefined,
@@ -217,7 +220,7 @@ fn standard_columns_and_legacy_envelope_authenticate_registered_key() -> TestRes
                 let result = webauthn.authenticate_credential(&authentication, &state)?;
                 assert_eq!(result.cred_id(), &stored.cred.cred_id);
                 assert_eq!(result.counter(), counter);
-                assert!(u64::from(result.counter()) > row.counter);
+                assert!(u64::from(result.counter()) > *row.counter.typed()?);
                 assert!(result.user_verified());
                 assert_eq!(row.user_id.typed()?.as_bytes(), OWNER);
                 match stored.authentication_update(result.counter())? {
@@ -225,7 +228,7 @@ fn standard_columns_and_legacy_envelope_authenticate_registered_key() -> TestRes
                         assert_eq!(storage, PasskeyStorage::Native);
                         assert!(row.credential.is_undefined());
                         assert!(row.updated_at.is_undefined());
-                        row.counter = counter;
+                        row.counter = counter.into();
                     }
                     UpdatePasskeyAuthentication::Legacy {
                         credential,
@@ -240,10 +243,10 @@ fn standard_columns_and_legacy_envelope_authenticate_registered_key() -> TestRes
                             serde_json::from_str::<serde_json::Value>(&credential)?,
                             expected
                         );
-                        assert_eq!(backed_up, row.backed_up);
-                        assert_eq!(device_type, row.device_type);
+                        assert_eq!(row.backed_up, backed_up);
+                        assert_eq!(row.device_type, device_type);
                         row.credential = credential.into();
-                        row.counter = counter;
+                        row.counter = counter.into();
                     }
                 }
             }

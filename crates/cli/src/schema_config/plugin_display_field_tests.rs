@@ -211,9 +211,9 @@ fn plugin_display_fields_generate_declared_storage_types_and_aliases() {
 #[test]
 #[expect(
     clippy::expect_used,
-    reason = "The negative configurations must deserialize before generation rejects unsafe native replacements."
+    reason = "Each declaration must deserialize before generated replacement fields are inspected."
 )]
-fn plugin_display_fields_validate_types_references_and_native_aliases() {
+fn plugin_native_fields_accept_complete_replacement_declarations() {
     for (model, display, native, immutable) in [
         ("apikey", "name", "key", "key"),
         ("passkey", "name", "credentialID", "credentialID"),
@@ -232,10 +232,10 @@ fn plugin_display_fields_validate_types_references_and_native_aliases() {
             let config: SchemaConfig = serde_json::from_value(json!({
                 (model): { "additionalFields": { (display): field } }
             }))
-            .expect("unsupported display-field configuration");
+            .expect("replacement field configuration");
             assert_eq!(
                 generate(&config, Database::Sqlite).is_ok(),
-                model == "apikey" && field.get("type") == Some(&json!("number")),
+                field.get("type") != Some(&json!([])),
                 "unexpected initialization result for {model}.{display}: {field}"
             );
         }
@@ -247,7 +247,24 @@ fn plugin_display_fields_validate_types_references_and_native_aliases() {
                 (model): { "additionalFields": { (immutable): field } }
             }))
             .expect("native replacement configuration");
-            assert!(generate(&config, Database::Sqlite).is_err());
+            let source = generate(&config, Database::Sqlite).expect("native replacement generates");
+            let module = if model == "apikey" { "api_key" } else { model };
+            let fields = model_fields(&source, module);
+            let name = match immutable {
+                "key" => "key_hash",
+                "credentialID" => "credential_id",
+                name => name,
+            };
+            let generated = fields.get(name).expect("replacement retains native slot");
+            let expected = if field["type"] == "json" {
+                quote::quote!(better_auth::seaorm::SqlText)
+            } else {
+                quote::quote!(String)
+            };
+            assert_eq!(
+                generated.ty.to_token_stream().to_string(),
+                expected.to_string()
+            );
         }
         let config: SchemaConfig = serde_json::from_value(json!({
             (model): { "additionalFields": {
@@ -255,18 +272,31 @@ fn plugin_display_fields_validate_types_references_and_native_aliases() {
             } }
         }))
         .expect("additional field occupying a native display column");
-        assert!(generate(&config, Database::Sqlite).is_err());
+        let source = generate(&config, Database::Sqlite).expect("shared native column generates");
+        let module = if model == "apikey" { "api_key" } else { model };
+        let fields = model_fields(&source, module);
+        assert!(!fields.contains_key("nickname"));
+        assert_eq!(
+            fields
+                .get(display)
+                .expect("first physical slot remains")
+                .ty
+                .to_token_stream()
+                .to_string(),
+            quote::quote!(String).to_string()
+        );
     }
 }
 
 #[test]
 #[expect(
     clippy::expect_used,
-    reason = "Each ordered declaration must deserialize before the shared storage-column conflict is checked."
+    reason = "Each ordered declaration must deserialize before physical-column replacement is checked."
 )]
-fn plugin_display_field_column_conflicts_do_not_depend_on_declaration_order() {
+fn plugin_native_columns_keep_first_position_and_last_declaration() {
     for (model, display) in [
         ("apikey", "name"),
+        ("apikey", "enabled"),
         ("passkey", "name"),
         ("passkey", "aaguid"),
     ] {
@@ -296,7 +326,21 @@ fn plugin_display_field_column_conflicts_do_not_depend_on_declaration_order() {
                         ..Default::default()
                     },
                 )]));
-                assert!(generate(&config, Database::Sqlite).is_err());
+                let source =
+                    generate(&config, Database::Sqlite).expect("physical column aliases generate");
+                let module = if model == "apikey" { "api_key" } else { model };
+                let fields = model_fields(&source, module);
+                let field = fields.get(display).expect("native position remains");
+                let expected = if extra_column == "stored_display" {
+                    quote::quote!(String)
+                } else {
+                    quote::quote!(better_auth::seaorm::SqlText)
+                };
+                assert_eq!(field.ty.to_token_stream().to_string(), expected.to_string());
+                assert_eq!(
+                    fields.contains_key(extra_name),
+                    extra_column != "stored_display"
+                );
             }
         }
     }

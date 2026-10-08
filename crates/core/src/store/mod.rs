@@ -1122,6 +1122,34 @@ pub trait TwoFactorStore: Send + Sync {
 
 #[async_trait]
 pub trait ApiKeyStore: Send + Sync {
+    /// Create a complete adapter record before field policies and storage conversion.
+    async fn create_api_key_record(&self, _input: crate::FieldMap) -> AuthResult<crate::FieldMap> {
+        Err(AuthError::config(
+            "The store must support API Key record writes",
+        ))
+    }
+
+    /// Read complete projected adapter fields before constructing a typed record.
+    async fn get_api_key_record(
+        &self,
+        _id: &crate::SchemaValue<String>,
+    ) -> AuthResult<Option<crate::FieldMap>> {
+        Err(AuthError::config(
+            "The store must support ApiKey record reads",
+        ))
+    }
+
+    /// Update declared fields without narrowing replacement values to the ordinary input types.
+    async fn update_api_key_record(
+        &self,
+        _id: &crate::SchemaValue<String>,
+        _input: crate::FieldMap,
+    ) -> AuthResult<Option<crate::FieldMap>> {
+        Err(AuthError::config(
+            "The store must support API Key record writes",
+        ))
+    }
+
     async fn create_api_key(&self, input: CreateApiKey) -> AuthResult<ApiKey>;
     async fn get_api_key_by_id(&self, id: &str) -> AuthResult<Option<ApiKey>>;
     /// Read an internal API key ID without replacing an omitted Memory adapter ID.
@@ -1196,6 +1224,34 @@ pub enum ConsumeApiKeyResult {
 
 #[async_trait]
 pub trait PasskeyStore: Send + Sync {
+    /// Create a complete adapter record before field policies and storage conversion.
+    async fn create_passkey_record(&self, _input: crate::FieldMap) -> AuthResult<crate::FieldMap> {
+        Err(AuthError::config(
+            "The store must support Passkey record writes",
+        ))
+    }
+
+    /// Read complete projected adapter fields before constructing a typed record.
+    async fn get_passkey_record(
+        &self,
+        _id: &crate::SchemaValue<String>,
+    ) -> AuthResult<Option<crate::FieldMap>> {
+        Err(AuthError::config(
+            "The store must support Passkey record reads",
+        ))
+    }
+
+    /// Update declared fields without narrowing replacement values to the ordinary input types.
+    async fn update_passkey_record(
+        &self,
+        _id: &crate::SchemaValue<String>,
+        _input: crate::FieldMap,
+    ) -> AuthResult<Option<crate::FieldMap>> {
+        Err(AuthError::config(
+            "The store must support Passkey record writes",
+        ))
+    }
+
     /// Select the representation accepted by passkey creation and authentication updates.
     fn passkey_storage(&self) -> crate::PasskeyStorage {
         crate::PasskeyStorage::Legacy
@@ -1387,6 +1443,18 @@ pub trait OrganizationRoleStore: Send + Sync {
         &self,
         organization_id: &str,
     ) -> AuthResult<Vec<crate::OrganizationRole>>;
+    /// Query organization roles with a runtime reference from a replacement schema.
+    async fn list_organization_roles_value(
+        &self,
+        organization_id: &crate::FieldValue,
+    ) -> AuthResult<Vec<crate::OrganizationRole>> {
+        let organization_id = organization_id.as_str().ok_or_else(|| {
+            crate::AuthError::config(
+                "The store must support dynamic organization role reference queries for this schema",
+            )
+        })?;
+        self.list_organization_roles(organization_id).await
+    }
     async fn update_organization_role(
         &self,
         id: &str,

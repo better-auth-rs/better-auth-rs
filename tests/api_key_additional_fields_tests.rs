@@ -5,6 +5,8 @@ mod ordinary_field_policies;
 
 #[path = "support/api_key_field_contract.rs"]
 mod contract;
+#[path = "api_key_additional_fields_tests/enabled_boundary.rs"]
+mod enabled_boundary;
 #[path = "support/api_key_fields.rs"]
 mod fixture;
 #[path = "support/api_key_live_fields.rs"]
@@ -15,10 +17,12 @@ mod name_mapping;
 mod name_mapping_conflicts;
 #[path = "support/api_key_name_mapping_contract.rs"]
 mod name_mapping_contract;
+#[path = "api_key_additional_fields_tests/native_replacements.rs"]
+mod native_replacements;
 
 use better_auth::{
     __private_core::{
-        AuthError, AuthResult,
+        AuthResult,
         store::{EphemeralStore, MemoryCacheAdapter},
         user_fields::{UserConfig, UserFieldConfig},
     },
@@ -109,7 +113,8 @@ async fn secondary_api_key_fields_forward_policies_and_extra_values() -> AuthRes
 }
 
 #[tokio::test]
-async fn api_key_additional_fields_cannot_replace_identity_hash_or_usage_columns() {
+async fn api_key_additional_fields_accept_complete_native_and_alias_declarations()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     for (name, column) in [
         ("key", None),
         ("keyHash", None),
@@ -122,7 +127,7 @@ async fn api_key_additional_fields_cannot_replace_identity_hash_or_usage_columns
         ("label", Some("stored_owner")),
         ("label", Some("stored_count")),
     ] {
-        let (store, _) = fixture::sqlite(contract::config()).await;
+        let (store, database) = fixture::sqlite(contract::config()).await;
         let fields = UserConfig {
             additional_fields: Some(
                 [(
@@ -141,9 +146,8 @@ async fn api_key_additional_fields_cannot_replace_identity_hash_or_usage_columns
             .plugin(contract::Fields(fields))
             .build()
             .await;
-        assert!(
-            matches!(result, Err(AuthError::Config(_))),
-            "{name}/{column:?}"
-        );
+        assert!(result.is_ok(), "{name}/{column:?}: {:?}", result.err());
+        database.close().await?;
     }
+    Ok(())
 }

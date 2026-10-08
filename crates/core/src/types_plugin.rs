@@ -112,18 +112,24 @@ pub struct Passkey {
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub name: SchemaValue<Option<String>>,
     #[serde(rename = "publicKey")]
-    pub public_key: String,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub public_key: SchemaValue<String>,
     #[serde(rename = "userId")]
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub user_id: SchemaValue<String>,
     #[serde(rename = "credentialID")]
-    pub credential_id: String,
-    pub counter: u64,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub credential_id: SchemaValue<String>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub counter: SchemaValue<u64>,
     #[serde(rename = "deviceType")]
-    pub device_type: String,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub device_type: SchemaValue<String>,
     #[serde(rename = "backedUp")]
-    pub backed_up: bool,
-    pub transports: Option<String>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub backed_up: SchemaValue<bool>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub transports: SchemaValue<Option<String>>,
     #[serde(rename = "createdAt")]
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     #[serde(with = "crate::field_value::serde::optional_schema_date")]
@@ -367,48 +373,66 @@ pub struct ApiKey {
     pub id: SchemaValue<String>,
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub name: SchemaValue<Option<String>>,
-    pub start: Option<crate::ApiKeyStart>,
-    pub prefix: Option<String>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub start: SchemaValue<Option<crate::ApiKeyStart>>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub prefix: SchemaValue<Option<String>>,
     /// SHA-256 hash of the key (column name: `key` in SQL)
     #[serde(rename = "key")]
-    pub key_hash: String,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub key_hash: SchemaValue<String>,
     #[serde(rename = "referenceId")]
-    pub reference_id: String,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub reference_id: SchemaValue<String>,
     #[serde(rename = "configId")]
-    pub config_id: String,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub config_id: SchemaValue<String>,
     #[serde(rename = "refillInterval")]
-    pub refill_interval: Option<f64>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub refill_interval: SchemaValue<Option<f64>>,
     #[serde(rename = "refillAmount")]
-    pub refill_amount: Option<f64>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub refill_amount: SchemaValue<Option<f64>>,
     #[serde(rename = "lastRefillAt")]
-    #[serde(with = "crate::field_value::serde::optional_date", default)]
-    pub last_refill_at: Option<crate::FieldDate>,
+    #[serde(with = "crate::field_value::serde::optional_schema_date")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub last_refill_at: SchemaValue<Option<crate::FieldDate>>,
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub enabled: SchemaValue<bool>,
     #[serde(rename = "rateLimitEnabled")]
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub rate_limit_enabled: SchemaValue<bool>,
     #[serde(rename = "rateLimitTimeWindow")]
-    pub rate_limit_time_window: Option<f64>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub rate_limit_time_window: SchemaValue<Option<f64>>,
     #[serde(rename = "rateLimitMax")]
-    pub rate_limit_max: Option<f64>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub rate_limit_max: SchemaValue<Option<f64>>,
     #[serde(rename = "requestCount")]
-    pub request_count: Option<f64>,
-    pub remaining: Option<f64>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub request_count: SchemaValue<Option<f64>>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub remaining: SchemaValue<Option<f64>>,
     #[serde(rename = "lastRequest")]
-    #[serde(with = "crate::field_value::serde::optional_date", default)]
-    pub last_request: Option<crate::FieldDate>,
+    #[serde(with = "crate::field_value::serde::optional_schema_date")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub last_request: SchemaValue<Option<crate::FieldDate>>,
     #[serde(rename = "expiresAt")]
-    #[serde(with = "crate::field_value::serde::optional_date", default)]
-    pub expires_at: Option<crate::FieldDate>,
+    #[serde(with = "crate::field_value::serde::optional_schema_date")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub expires_at: SchemaValue<Option<crate::FieldDate>>,
     #[serde(rename = "createdAt")]
-    #[serde(with = "crate::field_value::serde::date")]
-    pub created_at: crate::FieldDate,
+    #[serde(with = "crate::field_value::serde::schema_date")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub created_at: SchemaValue<crate::FieldDate>,
     #[serde(rename = "updatedAt")]
-    #[serde(with = "crate::field_value::serde::date")]
-    pub updated_at: crate::FieldDate,
-    pub permissions: Option<String>,
-    pub metadata: Option<String>,
+    #[serde(with = "crate::field_value::serde::schema_date")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub updated_at: SchemaValue<crate::FieldDate>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub permissions: SchemaValue<Option<String>>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub metadata: SchemaValue<Option<String>>,
 }
 
 /// API key creation data.
@@ -435,7 +459,8 @@ pub struct CreateApiKey {
     pub refill_amount: Option<f64>,
     pub permissions: Option<String>,
     pub metadata: Option<String>,
-    pub enabled: bool,
+    /// Enabled value before adapter policies, including replacement types or omission.
+    pub enabled: SchemaValue<bool>,
 }
 
 /// API key update data.
@@ -444,7 +469,7 @@ pub struct UpdateApiKey {
     /// Declared application field patch before adapter input policies.
     pub additional_fields: crate::FieldMap,
     pub name: Option<SchemaValue<Option<String>>>,
-    pub enabled: Option<bool>,
+    pub enabled: Option<SchemaValue<bool>>,
     pub remaining: Option<f64>,
     pub rate_limit_enabled: Option<bool>,
     pub rate_limit_time_window: Option<f64>,
@@ -524,29 +549,29 @@ impl AuthApiKey for ApiKey {
     fn name(&self) -> &SchemaValue<Option<String>> {
         &self.name
     }
-    fn start(&self) -> Option<Cow<'_, crate::ApiKeyStart>> {
-        self.start.as_ref().map(Cow::Borrowed)
+    fn start(&self) -> &SchemaValue<Option<crate::ApiKeyStart>> {
+        &self.start
     }
-    fn prefix(&self) -> Option<&str> {
-        self.prefix.as_deref()
+    fn prefix(&self) -> &SchemaValue<Option<String>> {
+        &self.prefix
     }
-    fn key_hash(&self) -> &str {
+    fn key_hash(&self) -> &SchemaValue<String> {
         &self.key_hash
     }
-    fn reference_id(&self) -> Cow<'_, str> {
-        Cow::Borrowed(&self.reference_id)
+    fn reference_id(&self) -> &SchemaValue<String> {
+        &self.reference_id
     }
-    fn config_id(&self) -> Cow<'_, str> {
-        Cow::Borrowed(&self.config_id)
+    fn config_id(&self) -> &SchemaValue<String> {
+        &self.config_id
     }
-    fn refill_interval(&self) -> Option<f64> {
-        self.refill_interval
+    fn refill_interval(&self) -> &SchemaValue<Option<f64>> {
+        &self.refill_interval
     }
-    fn refill_amount(&self) -> Option<f64> {
-        self.refill_amount
+    fn refill_amount(&self) -> &SchemaValue<Option<f64>> {
+        &self.refill_amount
     }
-    fn last_refill_at(&self) -> Option<crate::FieldDate> {
-        self.last_refill_at.clone()
+    fn last_refill_at(&self) -> &SchemaValue<Option<crate::FieldDate>> {
+        &self.last_refill_at
     }
     fn enabled(&self) -> &SchemaValue<bool> {
         &self.enabled
@@ -554,35 +579,35 @@ impl AuthApiKey for ApiKey {
     fn rate_limit_enabled(&self) -> &SchemaValue<bool> {
         &self.rate_limit_enabled
     }
-    fn rate_limit_time_window(&self) -> Option<f64> {
-        self.rate_limit_time_window
+    fn rate_limit_time_window(&self) -> &SchemaValue<Option<f64>> {
+        &self.rate_limit_time_window
     }
-    fn rate_limit_max(&self) -> Option<f64> {
-        self.rate_limit_max
+    fn rate_limit_max(&self) -> &SchemaValue<Option<f64>> {
+        &self.rate_limit_max
     }
-    fn request_count(&self) -> Option<f64> {
-        self.request_count
+    fn request_count(&self) -> &SchemaValue<Option<f64>> {
+        &self.request_count
     }
-    fn remaining(&self) -> Option<f64> {
-        self.remaining
+    fn remaining(&self) -> &SchemaValue<Option<f64>> {
+        &self.remaining
     }
-    fn last_request(&self) -> Option<crate::FieldDate> {
-        self.last_request.clone()
+    fn last_request(&self) -> &SchemaValue<Option<crate::FieldDate>> {
+        &self.last_request
     }
-    fn expires_at(&self) -> Option<crate::FieldDate> {
-        self.expires_at.clone()
+    fn expires_at(&self) -> &SchemaValue<Option<crate::FieldDate>> {
+        &self.expires_at
     }
-    fn created_at(&self) -> crate::FieldDate {
-        self.created_at.clone()
+    fn created_at(&self) -> &SchemaValue<crate::FieldDate> {
+        &self.created_at
     }
-    fn updated_at(&self) -> crate::FieldDate {
-        self.updated_at.clone()
+    fn updated_at(&self) -> &SchemaValue<crate::FieldDate> {
+        &self.updated_at
     }
-    fn permissions(&self) -> Option<&str> {
-        self.permissions.as_deref()
+    fn permissions(&self) -> &SchemaValue<Option<String>> {
+        &self.permissions
     }
-    fn metadata(&self) -> Option<&str> {
-        self.metadata.as_deref()
+    fn metadata(&self) -> &SchemaValue<Option<String>> {
+        &self.metadata
     }
 }
 
@@ -592,26 +617,26 @@ impl<T: AuthApiKey> From<&T> for ApiKey {
             additional_fields: api_key.additional_fields().cloned().unwrap_or_default(),
             id: api_key.id().into_owned(),
             name: api_key.name().clone(),
-            start: api_key.start().map(Cow::into_owned),
-            prefix: api_key.prefix().map(str::to_owned),
-            key_hash: api_key.key_hash().to_owned(),
-            reference_id: api_key.reference_id().into_owned(),
-            config_id: api_key.config_id().into_owned(),
-            refill_interval: api_key.refill_interval(),
-            refill_amount: api_key.refill_amount(),
-            last_refill_at: api_key.last_refill_at(),
+            start: api_key.start().clone(),
+            prefix: api_key.prefix().clone(),
+            key_hash: api_key.key_hash().clone(),
+            reference_id: api_key.reference_id().clone(),
+            config_id: api_key.config_id().clone(),
+            refill_interval: api_key.refill_interval().clone(),
+            refill_amount: api_key.refill_amount().clone(),
+            last_refill_at: api_key.last_refill_at().clone(),
             enabled: api_key.enabled().clone(),
             rate_limit_enabled: api_key.rate_limit_enabled().clone(),
-            rate_limit_time_window: api_key.rate_limit_time_window(),
-            rate_limit_max: api_key.rate_limit_max(),
-            request_count: api_key.request_count(),
-            remaining: api_key.remaining(),
-            last_request: api_key.last_request(),
-            expires_at: api_key.expires_at(),
-            created_at: api_key.created_at().to_owned(),
-            updated_at: api_key.updated_at().to_owned(),
-            permissions: api_key.permissions().map(str::to_owned),
-            metadata: api_key.metadata().map(str::to_owned),
+            rate_limit_time_window: api_key.rate_limit_time_window().clone(),
+            rate_limit_max: api_key.rate_limit_max().clone(),
+            request_count: api_key.request_count().clone(),
+            remaining: api_key.remaining().clone(),
+            last_request: api_key.last_request().clone(),
+            expires_at: api_key.expires_at().clone(),
+            created_at: api_key.created_at().clone(),
+            updated_at: api_key.updated_at().clone(),
+            permissions: api_key.permissions().clone(),
+            metadata: api_key.metadata().clone(),
         }
     }
 }
@@ -626,26 +651,26 @@ impl AuthPasskey for Passkey {
     fn name(&self) -> &SchemaValue<Option<String>> {
         &self.name
     }
-    fn public_key(&self) -> &str {
+    fn public_key(&self) -> &SchemaValue<String> {
         &self.public_key
     }
     fn user_id(&self) -> SchemaValue<Cow<'_, str>> {
         self.user_id.as_ref().map(|id| Cow::Borrowed(id.as_str()))
     }
-    fn credential_id(&self) -> &str {
+    fn credential_id(&self) -> &SchemaValue<String> {
         &self.credential_id
     }
-    fn counter(&self) -> u64 {
-        self.counter
+    fn counter(&self) -> &SchemaValue<u64> {
+        &self.counter
     }
-    fn device_type(&self) -> &str {
+    fn device_type(&self) -> &SchemaValue<String> {
         &self.device_type
     }
-    fn backed_up(&self) -> bool {
-        self.backed_up
+    fn backed_up(&self) -> &SchemaValue<bool> {
+        &self.backed_up
     }
-    fn transports(&self) -> Option<&str> {
-        self.transports.as_deref()
+    fn transports(&self) -> &SchemaValue<Option<String>> {
+        &self.transports
     }
     fn created_at(&self) -> &SchemaValue<Option<crate::FieldDate>> {
         &self.created_at
@@ -667,17 +692,17 @@ impl<T: AuthPasskey> From<&T> for Passkey {
             additional_fields: passkey.additional_fields().cloned().unwrap_or_default(),
             id: passkey.id().into_owned(),
             name: passkey.name().clone(),
-            public_key: passkey.public_key().to_owned(),
+            public_key: passkey.public_key().clone(),
             user_id: passkey.user_id().into_owned(),
-            credential_id: passkey.credential_id().to_owned(),
-            counter: passkey.counter(),
-            device_type: passkey.device_type().to_owned(),
-            backed_up: passkey.backed_up(),
-            transports: passkey.transports().map(str::to_owned),
+            credential_id: passkey.credential_id().clone(),
+            counter: passkey.counter().clone(),
+            device_type: passkey.device_type().clone(),
+            backed_up: passkey.backed_up().clone(),
+            transports: passkey.transports().clone(),
             created_at: passkey.created_at().clone(),
             updated_at: passkey.updated_at().clone(),
             aaguid: passkey.aaguid().clone(),
-            credential: passkey.credential().to_owned(),
+            credential: passkey.credential().clone(),
         }
     }
 }

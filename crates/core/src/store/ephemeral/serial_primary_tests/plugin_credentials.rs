@@ -20,7 +20,7 @@ fn api_key(label: &str) -> CreateApiKey {
         refill_amount: None,
         permissions: None,
         metadata: None,
-        enabled: true,
+        enabled: true.into(),
     }
 }
 
@@ -63,7 +63,7 @@ async fn serial_api_key_ids_bind_queries_sort_numerically_and_reuse_row_count() 
             .api_keys
             .snapshot()?
             .iter()
-            .map(|row| row.id.field_value())
+            .map(|row| row.get("id").cloned().unwrap_or_default())
             .collect::<Vec<_>>(),
         (1..=12)
             .map(|id| Value::Number(f64::from(id)))
@@ -151,9 +151,9 @@ async fn serial_api_key_quota_is_atomic_and_expiration_uses_raw_ids() -> AuthRes
     {
         let mut state = store.lock()?;
         let mut shadow = required(state.api_keys.snapshot()?.first()).cloned()?;
-        shadow.id = "001".to_owned().into();
-        shadow.key_hash = "expired-string".into();
-        shadow.expires_at = Some(past);
+        let _ = shadow.insert("id".into(), "001".into());
+        let _ = shadow.insert("key".into(), "expired-string".into());
+        let _ = shadow.insert("expiresAt".into(), past.into());
         state.api_keys.push(shadow);
     }
     assert_eq!(store.delete_expired_api_keys().await?, 2);
@@ -175,11 +175,12 @@ async fn api_key_numeric_id_sort_keeps_unordered_subtractions_equal() -> AuthRes
         let _ = store.create_api_key(api_key("first")).await?;
         let _ = store.create_api_key(api_key("second")).await?;
         store.lock()?.api_keys.update_each(|row| {
-            row.id = crate::SchemaValue::from_field(Value::Number(if row.key_hash == "first" {
+            let id = Value::Number(if row.get("key") == Some(&Value::from("first")) {
                 left
             } else {
                 right
-            }));
+            });
+            let _ = row.insert("id".into(), id);
             Ok(())
         })?;
         for direction in ["asc", "desc"] {
@@ -188,8 +189,8 @@ async fn api_key_numeric_id_sort_keeps_unordered_subtractions_equal() -> AuthRes
                 .await?;
             assert_eq!(
                 rows.iter()
-                    .map(|row| row.key_hash.as_str())
-                    .collect::<Vec<_>>(),
+                    .map(|row| row.key_hash.typed().map(String::as_str))
+                    .collect::<AuthResult<Vec<_>>>()?,
                 ["first", "second"]
             );
         }
@@ -211,7 +212,10 @@ async fn serial_passkey_ids_bind_updates_and_delete_only_the_first_reused_id() -
             .passkeys
             .snapshot()?
             .iter()
-            .map(|row| (row.id.field_value(), row.user_id.field_value()))
+            .map(|row| (
+                row.get("id").cloned().unwrap_or_default(),
+                row.get("userId").cloned().unwrap_or_default(),
+            ))
             .collect::<Vec<_>>(),
         [
             (Value::Number(1.0), Value::Number(1.0)),

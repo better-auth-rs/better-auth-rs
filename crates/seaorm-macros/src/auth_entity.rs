@@ -92,7 +92,6 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
     let EntityOptions {
         role,
         row_presence,
-        native_passkey,
         native_two_factor,
         ..
     } = options;
@@ -125,9 +124,8 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
 
     // Validate core fields are present
     if let Some(missing) = core.iter().find(|required| {
-        !(row_presence && **required == "active"
-            || native_passkey && matches!(**required, "credential" | "updated_at")
-            || role == EntityRole::Passkey && matches!(**required, "name" | "aaguid")
+        !(matches!(role, EntityRole::ApiKey | EntityRole::Passkey) && **required != "id"
+            || row_presence && **required == "active"
             || native_two_factor && matches!(**required, "created_at" | "updated_at"))
             && !idents.iter().any(|ident| ident == *required)
     }) {
@@ -186,16 +184,6 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
                 return Err(syn::Error::new_spanned(
                     field,
                     "row_presence session models cannot expose an active field",
-                ));
-            }
-            if native_passkey
-                && column_aliases.iter().any(|alias| {
-                    matches!(alias.as_str(), "credential" | "updated_at" | "updatedAt")
-                })
-            {
-                return Err(syn::Error::new_spanned(
-                    field,
-                    "native_passkey models cannot expose credential or updatedAt fields",
                 ));
             }
             if native_two_factor

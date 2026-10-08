@@ -78,10 +78,19 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
         &self,
         organization_id: &str,
     ) -> AuthResult<Vec<OrganizationRole>> {
+        self.list_organization_roles_value(&organization_id.into())
+            .await
+    }
+    async fn list_organization_roles_value(
+        &self,
+        organization_id: &better_auth_core::FieldValue,
+    ) -> AuthResult<Vec<OrganizationRole>> {
         let rows = Entity::<O::OrganizationRole>::find()
-            .filter(O::OrganizationRole::column("organization_id")?.eq_id(
+            .filter(super::value_filter::equals_id(
+                O::OrganizationRole::column("organization_id")?,
                 organization_id,
                 self.config().advanced.database.generate_id(),
+                self.connection().get_database_backend(),
             )?)
             .limit(super::pagination::default_limit(
                 self.config(),

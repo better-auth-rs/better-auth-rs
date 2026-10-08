@@ -302,30 +302,30 @@ pub trait AuthApiKey:
     }
     fn id(&self) -> SchemaValue<Cow<'_, str>>;
     fn name(&self) -> &SchemaValue<Option<String>>;
-    fn start(&self) -> Option<Cow<'_, crate::ApiKeyStart>>;
-    fn prefix(&self) -> Option<&str>;
-    fn key_hash(&self) -> &str;
+    fn start(&self) -> &SchemaValue<Option<crate::ApiKeyStart>>;
+    fn prefix(&self) -> &SchemaValue<Option<String>>;
+    fn key_hash(&self) -> &SchemaValue<String>;
     /// Owner of the key — a user id, or an organization id when the key's
     /// configuration references organizations.
-    fn reference_id(&self) -> Cow<'_, str>;
+    fn reference_id(&self) -> &SchemaValue<String>;
     /// Name of the API-key configuration this key belongs to (`"default"`
     /// unless the application registers named configurations).
-    fn config_id(&self) -> Cow<'_, str>;
-    fn refill_interval(&self) -> Option<f64>;
-    fn refill_amount(&self) -> Option<f64>;
-    fn last_refill_at(&self) -> Option<crate::FieldDate>;
+    fn config_id(&self) -> &SchemaValue<String>;
+    fn refill_interval(&self) -> &SchemaValue<Option<f64>>;
+    fn refill_amount(&self) -> &SchemaValue<Option<f64>>;
+    fn last_refill_at(&self) -> &SchemaValue<Option<crate::FieldDate>>;
     fn enabled(&self) -> &SchemaValue<bool>;
     fn rate_limit_enabled(&self) -> &SchemaValue<bool>;
-    fn rate_limit_time_window(&self) -> Option<f64>;
-    fn rate_limit_max(&self) -> Option<f64>;
-    fn request_count(&self) -> Option<f64>;
-    fn remaining(&self) -> Option<f64>;
-    fn last_request(&self) -> Option<crate::FieldDate>;
-    fn expires_at(&self) -> Option<crate::FieldDate>;
-    fn created_at(&self) -> crate::FieldDate;
-    fn updated_at(&self) -> crate::FieldDate;
-    fn permissions(&self) -> Option<&str>;
-    fn metadata(&self) -> Option<&str>;
+    fn rate_limit_time_window(&self) -> &SchemaValue<Option<f64>>;
+    fn rate_limit_max(&self) -> &SchemaValue<Option<f64>>;
+    fn request_count(&self) -> &SchemaValue<Option<f64>>;
+    fn remaining(&self) -> &SchemaValue<Option<f64>>;
+    fn last_request(&self) -> &SchemaValue<Option<crate::FieldDate>>;
+    fn expires_at(&self) -> &SchemaValue<Option<crate::FieldDate>>;
+    fn created_at(&self) -> &SchemaValue<crate::FieldDate>;
+    fn updated_at(&self) -> &SchemaValue<crate::FieldDate>;
+    fn permissions(&self) -> &SchemaValue<Option<String>>;
+    fn metadata(&self) -> &SchemaValue<Option<String>>;
 }
 
 /// Trait representing a passkey entity.
@@ -338,13 +338,13 @@ pub trait AuthPasskey:
     }
     fn id(&self) -> SchemaValue<Cow<'_, str>>;
     fn name(&self) -> &SchemaValue<Option<String>>;
-    fn public_key(&self) -> &str;
+    fn public_key(&self) -> &SchemaValue<String>;
     fn user_id(&self) -> SchemaValue<Cow<'_, str>>;
-    fn credential_id(&self) -> &str;
-    fn counter(&self) -> u64;
-    fn device_type(&self) -> &str;
-    fn backed_up(&self) -> bool;
-    fn transports(&self) -> Option<&str>;
+    fn credential_id(&self) -> &SchemaValue<String>;
+    fn counter(&self) -> &SchemaValue<u64>;
+    fn device_type(&self) -> &SchemaValue<String>;
+    fn backed_up(&self) -> &SchemaValue<bool>;
+    fn transports(&self) -> &SchemaValue<Option<String>>;
     fn created_at(&self) -> &SchemaValue<Option<crate::FieldDate>>;
     fn updated_at(&self) -> &SchemaValue<crate::FieldDate>;
     fn aaguid(&self) -> &SchemaValue<Option<String>>;

@@ -1,5 +1,5 @@
 use super::*;
-use crate::{FieldMap, SchemaValue};
+use crate::{AuthRecordFields, FieldMap, SchemaValue};
 use serde_json::{Value, json};
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
@@ -52,7 +52,7 @@ async fn name_sort_skips_conversion_when_only_nullish_names_can_be_compared() ->
                         .api_keys
                         .snapshot()?
                         .iter()
-                        .map(|row| row.name.field_value())
+                        .map(|row| row.get("name").cloned().unwrap_or_default())
                         .collect::<Vec<_>>(),
                     names
                 );
@@ -111,20 +111,45 @@ fn typed_fixture_name(value: &Value) -> AuthResult<FieldValue> {
 fn observe_typed_names(rows: &[ApiKey]) -> AuthResult<Value> {
     rows.iter()
         .map(|row| {
-            let value = match row.name.field_value() {
-                FieldValue::Bool(value) => json!(value),
-                FieldValue::Date(value) => {
-                    let date = value
-                        .to_datetime()?
-                        .ok_or_else(|| AuthError::internal("Expected a valid fixture Date"))?;
-                    json!({"type": "date", "value": date.to_rfc3339_opts(chrono::SecondsFormat::Millis, true)})
-                }
-                _ => return Err(AuthError::internal("Expected a Date or Boolean stored name")),
-            };
-            Ok(json!({"id": row.id, "present": !row.name.is_undefined(), "value": value}))
+            observe_name(
+                row.id.field_value(),
+                row.name.field_value(),
+                !row.name.is_undefined(),
+            )
         })
         .collect::<AuthResult<Vec<_>>>()
         .map(Value::Array)
+}
+
+fn observe_stored_names(rows: &[FieldMap]) -> AuthResult<Value> {
+    rows.iter()
+        .map(|row| {
+            observe_name(
+                row.get("id").cloned().unwrap_or_default(),
+                row.get("name").cloned().unwrap_or_default(),
+                row.contains_key("name"),
+            )
+        })
+        .collect::<AuthResult<Vec<_>>>()
+        .map(Value::Array)
+}
+
+fn observe_name(id: FieldValue, name: FieldValue, present: bool) -> AuthResult<Value> {
+    let value = match name {
+        FieldValue::Bool(value) => json!(value),
+        FieldValue::Date(value) => {
+            let date = value
+                .to_datetime()?
+                .ok_or_else(|| AuthError::internal("Expected a valid fixture Date"))?;
+            json!({"type": "date", "value": date.to_rfc3339_opts(chrono::SecondsFormat::Millis, true)})
+        }
+        _ => {
+            return Err(AuthError::internal(
+                "Expected a Date or Boolean stored name",
+            ));
+        }
+    };
+    Ok(json!({"id": id.json()?, "present": present, "value": value}))
 }
 
 #[tokio::test]
@@ -175,7 +200,7 @@ async fn date_and_boolean_name_sorts_match_pinned_unpaginated_rows() -> AuthResu
             assert_eq!(observe_typed_names(&[row])?, json!([seed["result"]]));
         }
         let stored = store.lock()?.api_keys.snapshot()?;
-        assert_eq!(observe_typed_names(&stored)?, case["stored"]);
+        assert_eq!(observe_stored_names(&stored)?, case["stored"]);
         let operations = case["operations"]
             .as_array()
             .ok_or_else(|| AuthError::internal("Expected Memory sorting operations"))?;
@@ -225,50 +250,26 @@ async fn date_name_sort_does_not_require_chrono_string_conversion() -> AuthResul
     Ok(())
 }
 
-fn number_sort_rows(value: &Value) -> AuthResult<Vec<ApiKey>> {
+fn number_sort_rows(value: &Value) -> AuthResult<Vec<FieldMap>> {
     value
         .as_array()
         .ok_or_else(|| AuthError::internal("Expected API Key number sort rows"))?
         .iter()
         .map(|value| {
-            let remaining = if value["remaining"]["type"] == "number" {
-                match value["remaining"]["value"].as_str() {
-                    Some("-0") => -0.0,
-                    Some("NaN") => f64::NAN,
-                    Some("Infinity") => f64::INFINITY,
-                    Some("-Infinity") => f64::NEG_INFINITY,
-                    _ => return Err(AuthError::internal("Unexpected number sort fixture tag")),
-                }
-            } else {
-                value["remaining"]
-                    .as_f64()
-                    .ok_or_else(|| AuthError::internal("Expected number sort fixture value"))?
-            };
-            let mut row = value.clone();
-            row["remaining"] = Value::Null;
-            for field in ["createdAt", "updatedAt"] {
-                assert_eq!(row[field]["type"], "date");
-                row[field] = row[field]["value"].clone();
-            }
-            let mut row: ApiKey = serde_json::from_value(row)?;
-            row.remaining = Some(remaining);
-            Ok(row)
+            contract::field(value)?
+                .as_object()
+                .cloned()
+                .ok_or_else(|| AuthError::internal("Expected a number sort record"))
         })
         .collect()
 }
 
-fn assert_number_sort_rows(actual: &[ApiKey], expected: &Value) -> AuthResult<()> {
-    let expected = number_sort_rows(expected)?;
-    // Record equality rejects NaN and cannot distinguish signed zeros in the quota.
-    let with_remaining_bits = |row: &ApiKey| {
-        let mut row = row.clone();
-        let remaining = row.remaining.take().map(f64::to_bits);
-        (row, remaining)
-    };
-    assert_eq!(
-        actual.iter().map(with_remaining_bits).collect::<Vec<_>>(),
-        expected.iter().map(with_remaining_bits).collect::<Vec<_>>()
-    );
+fn assert_number_sort_rows(actual: &[FieldMap], expected: &Value) -> AuthResult<()> {
+    let actual = actual
+        .iter()
+        .map(|row| contract::observe(&FieldValue::from(row.clone())))
+        .collect::<AuthResult<Vec<_>>>()?;
+    assert_eq!(json!(actual), *expected);
     Ok(())
 }
 
@@ -311,7 +312,13 @@ async fn number_sort_preserves_signed_zero_nan_and_infinity_ties_from_pinned_row
                 let rows = store
                     .find_api_keys_by_reference("number-sort-owner", Some(("remaining", direction)))
                     .await?;
-                assert_number_sort_rows(&rows, &operation["rows"])?;
+                assert_number_sort_rows(
+                    &rows
+                        .iter()
+                        .map(AuthRecordFields::field_values)
+                        .collect::<AuthResult<Vec<_>>>()?,
+                    &operation["rows"],
+                )?;
                 assert_eq!(json!(rows.len()), operation["total"]);
                 assert_number_sort_rows(&store.lock()?.api_keys.snapshot()?, &operation["stored"])?;
             }

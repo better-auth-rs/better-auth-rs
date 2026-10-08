@@ -44,7 +44,7 @@ fn api_key(name: Value) -> CreateApiKey {
         refill_amount: None,
         permissions: None,
         metadata: None,
-        enabled: true,
+        enabled: true.into(),
     }
 }
 
@@ -93,10 +93,11 @@ async fn json_api_key_name_projects_after_reading_raw_storage() -> AuthResult<()
             store
                 .lock()?
                 .api_keys
-                .get(&key.id)?
+                .find(|row| row.get("id") == Some(&key.id.field_value()))?
                 .unwrap()
-                .name
-                .field_value(),
+                .get("stored_name")
+                .cloned()
+                .unwrap_or_default(),
             stored
         );
         let read = store.get_api_key_by_id_value(&key.id).await?.unwrap();
@@ -139,10 +140,11 @@ async fn json_api_key_name_distinguishes_omission_from_explicit_null() -> AuthRe
         store
             .lock()?
             .api_keys
-            .get(&explicit_null.id)?
+            .find(|row| row.get("id") == Some(&explicit_null.id.field_value()))?
             .unwrap()
-            .name
-            .field_value(),
+            .get("name")
+            .cloned()
+            .unwrap_or_default(),
         Value::from("null")
     );
     Ok(())
@@ -184,8 +186,8 @@ async fn json_api_key_name_failures_preserve_the_write_boundary() -> AuthResult<
         } else {
             assert_eq!(stored.len(), 1);
             assert_eq!(
-                stored.first().unwrap().name.field_value(),
-                Value::from("null")
+                stored.first().unwrap().get("name"),
+                Some(&Value::from("null"))
             );
         }
     }
@@ -219,13 +221,17 @@ async fn json_api_key_name_callback_omission_does_not_become_null() -> AuthResul
         )?;
         let key = store.create_api_key(api_key(Value::Null)).await?;
         assert!(key.name.is_undefined());
-        let raw = store.lock()?.api_keys.get(&key.id)?.unwrap();
+        let raw = store
+            .lock()?
+            .api_keys
+            .find(|row| row.get("id") == Some(&key.id.field_value()))?
+            .unwrap();
         assert_eq!(
-            raw.name.field_value(),
+            raw.get("name").cloned(),
             if omit_input {
-                Value::Undefined
+                None
             } else {
-                Value::from("null")
+                Some(Value::from("null"))
             }
         );
     }
@@ -305,17 +311,21 @@ async fn json_passkey_display_updates_preserve_credential_state() -> AuthResult<
     assert_eq!(authenticated.user_id.typed()?, "owner");
     assert_eq!(authenticated.credential_id, "credential-id");
     assert_eq!(authenticated.public_key, "public-key");
-    let stored = store.lock()?.passkeys.get(&key.id)?.unwrap();
+    let stored = store
+        .lock()?
+        .passkeys
+        .find(|row| row.get("id") == Some(&key.id.field_value()))?
+        .unwrap();
     assert_eq!(
-        stored.name.field_value(),
-        Value::from(r#"{"label":"updated"}"#)
+        stored.get("stored_name"),
+        Some(&Value::from(r#"{"label":"updated"}"#))
     );
-    assert_eq!(stored.aaguid.field_value(), Value::from("[2,3]"));
+    assert_eq!(stored.get("stored_aaguid"), Some(&Value::from("[2,3]")));
     Ok(())
 }
 
 #[test]
-fn json_display_declarations_reject_references_and_native_column_collisions() {
+fn json_display_declarations_accept_references_and_shared_columns() {
     for (role, name, reserved) in [
         (EntityRole::ApiKey, "name", "referenceId"),
         (EntityRole::Passkey, "name", "credentialID"),
@@ -329,16 +339,12 @@ fn json_display_declarations_reject_references_and_native_column_collisions() {
             }),
             ..json_field()
         };
-        assert!(models.register(role, fields([(name, referenced)])).is_err());
+        assert!(models.register(role, fields([(name, referenced)])).is_ok());
         let replacement = UserFieldConfig {
             field_name: Some(reserved.into()),
             ..json_field()
         };
-        assert!(
-            models
-                .register(role, fields([(name, replacement)]))
-                .is_err()
-        );
+        assert!(models.register(role, fields([(name, replacement)])).is_ok());
         let mapped = UserFieldConfig {
             field_name: Some("stored_display".into()),
             ..json_field()
@@ -348,6 +354,6 @@ fn json_display_declarations_reject_references_and_native_column_collisions() {
                 .register(role, fields([(name, mapped.clone())]))
                 .is_ok()
         );
-        assert!(models.register(role, fields([("other", mapped)])).is_err());
+        assert!(models.register(role, fields([("other", mapped)])).is_ok());
     }
 }

@@ -9,14 +9,11 @@ use better_auth::{
     seaorm::{
         Database, DatabaseConnection, SeaOrmAccountModel, SeaOrmPluginModel, SeaOrmPluginSchema,
         SeaOrmSessionModel, SeaOrmStore, SeaOrmUserModel, SeaOrmVerificationModel,
-        sea_orm::{
-            ActiveModelTrait, ConnectionTrait, DbBackend, EntityName, EntityTrait, Iden, Iterable,
-            Statement,
-        },
+        sea_orm::{ConnectionTrait, DbBackend, EntityName, Statement},
     },
 };
 use contract::Target;
-use serde_json::{Map, Value, json};
+use serde_json::{Value, json};
 use std::sync::Arc;
 
 mod sqlite_api_key_name {
@@ -71,28 +68,7 @@ async fn stored<M: SeaOrmPluginModel>(
     let table = M::Entity::default().table_name().to_owned();
     assert_eq!(table, target.table());
     let mut observations = Vec::new();
-    for model in M::Entity::find().all(database).await? {
-        let model = model.into_active_model();
-        let mut row = Map::new();
-        for column in M::Column::iter() {
-            let name = column.to_string();
-            let value = model
-                .get(column)
-                .into_value()
-                .ok_or("Missing physical column in the stored model")?;
-            let mut value = better_auth::seaorm::__private_field_value(value)?;
-            if backend != DbBackend::Postgres
-                && let FieldValue::Bool(boolean) = value
-            {
-                value = f64::from(u8::from(boolean)).into();
-            }
-            row.insert(
-                name,
-                value
-                    .json()?
-                    .ok_or("SQL columns cannot contain Undefined")?,
-            );
-        }
+    for row in super::plugin_catalog_rows::stored::<M>(database).await? {
         let keys = row.keys().cloned().collect::<Vec<_>>();
         let column = quote(backend, "stored_display");
         let cast = if backend == DbBackend::MySql {

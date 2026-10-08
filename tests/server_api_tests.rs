@@ -230,8 +230,11 @@ async fn updates_preserve_replace_and_clear_nullable_fields()
         )
         .await?;
     assert_ne!(replaced.expires_at, preserved.expires_at);
-    assert_eq!(replaced.permissions, Some(json!({"nodes": ["heartbeat"]})));
-    assert_eq!(replaced.metadata, Some(json!({"region": "two"})));
+    assert_eq!(
+        replaced.permissions.json()?,
+        Some(json!({"nodes": ["heartbeat"]}))
+    );
+    assert_eq!(replaced.metadata.json()?, Some(json!({"region": "two"})));
     assert_eq!(replaced.remaining, Some(4.5));
 
     let cleared = api_keys
@@ -247,8 +250,8 @@ async fn updates_preserve_replace_and_clear_nullable_fields()
         )
         .await?;
     assert_eq!(cleared.expires_at, None);
-    assert_eq!(cleared.permissions, Some(serde_json::Value::Null));
-    assert_eq!(cleared.metadata, Some(serde_json::Value::Null));
+    assert_eq!(cleared.permissions.json()?, Some(serde_json::Value::Null));
+    assert_eq!(cleared.metadata.json()?, Some(serde_json::Value::Null));
     Ok(())
 }
 

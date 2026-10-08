@@ -58,19 +58,9 @@ impl SchemaValue<FieldDate> {
 
     /// Apply the Date constructor used when consuming a secondary verification snapshot.
     pub fn converted_date(self) -> AuthResult<Self> {
-        let value = self.into_field_value();
-        let date = match value {
-            FieldValue::Date(date) => date,
-            FieldValue::String(text) => crate::utils::date::parse_adapter_date(&text)
-                .map(FieldDate::from)
-                .unwrap_or_else(FieldDate::invalid),
-            FieldValue::Utf16String(_)
-            | FieldValue::Array(_)
-            | FieldValue::Object(_)
-            | FieldValue::Undefined => FieldDate::invalid(),
-            value => FieldDate::from_milliseconds(crate::query::field_number(&value)?),
-        };
-        Ok(Self::Typed(date))
+        Ok(Self::Typed(crate::query::field_date(
+            &self.into_field_value(),
+        )?))
     }
 }
 

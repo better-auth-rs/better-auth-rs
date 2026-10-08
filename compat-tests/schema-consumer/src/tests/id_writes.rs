@@ -295,7 +295,7 @@ pub(super) async fn reference_writes<
             refill_amount: None,
             permissions: None,
             metadata: None,
-            enabled: true,
+            enabled: true.into(),
         })
         .await
         .unwrap();

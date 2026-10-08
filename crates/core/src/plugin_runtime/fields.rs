@@ -1,8 +1,9 @@
-mod api_key;
+mod declarations;
 mod device;
+mod input;
 mod jwk;
 mod models;
-mod passkey;
+mod record;
 mod two_factor;
 mod wallet;
 
@@ -174,18 +175,9 @@ impl ModelFields {
 
     pub(crate) fn register(&mut self, role: EntityRole, fields: UserConfig) -> AuthResult<()> {
         match role {
-            EntityRole::ApiKey => {
-                let mut combined = self.fields(role).clone();
-                combined.fields_mut().extend(fields.fields().clone());
-                api_key::validate_fields(&combined)?;
-            }
+            EntityRole::ApiKey | EntityRole::Passkey => {}
             EntityRole::DeviceCode => device::validate_fields(&fields)?,
             EntityRole::Jwk => jwk::validate_fields(&fields)?,
-            EntityRole::Passkey => {
-                let mut combined = self.fields(role).clone();
-                combined.fields_mut().extend(fields.fields().clone());
-                passkey::validate_fields(&combined)?;
-            }
             EntityRole::TwoFactor => two_factor::validate_fields(&fields)?,
             EntityRole::WalletAddress => wallet::validate_fields(&fields)?,
             EntityRole::User
@@ -201,21 +193,6 @@ impl ModelFields {
             }
         }
         self.extend(role, fields);
-        if role == EntityRole::Passkey
-            && let Some(fields) = self.models.get_mut(&role)
-        {
-            // Replacing an upstream field policy retains the field's schema position.
-            fields.fields_mut().sort_by(|left, _, right, _| {
-                passkey::field_order(left).cmp(&passkey::field_order(right))
-            });
-        }
-        if role == EntityRole::ApiKey
-            && let Some(fields) = self.models.get_mut(&role)
-        {
-            fields
-                .fields_mut()
-                .sort_by(|left, _, right, _| (left != "name").cmp(&(right != "name")));
-        }
         Ok(())
     }
 

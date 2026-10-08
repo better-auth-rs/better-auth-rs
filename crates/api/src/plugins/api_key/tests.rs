@@ -411,7 +411,7 @@ async fn test_verify_disabled_key() {
     .await;
 
     let update = UpdateApiKey {
-        enabled: Some(false),
+        enabled: Some(false.into()),
         ..Default::default()
     };
     ctx.database
@@ -745,6 +745,9 @@ mod verification_tests;
 
 #[path = "list_tests.rs"]
 mod list_tests;
+
+#[path = "native_boundary_tests.rs"]
+mod native_boundary_tests;
 
 #[tokio::test]
 async fn native_schema_rejects_nonfinite_numbers_before_storage() {

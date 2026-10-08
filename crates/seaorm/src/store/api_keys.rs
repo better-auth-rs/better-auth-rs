@@ -1,16 +1,13 @@
-use better_auth_core::{FieldMap, FieldValue, SchemaField};
+use better_auth_core::{FieldMap, FieldValue, FromFieldMap};
 mod fields;
 
-use super::id_filter::IdColumn;
 use super::instrumentation::database_operation;
-use super::plugin_models::{Entity, set};
-use super::record_bindings::Binding;
-use crate::SeaOrmPluginModel;
+use super::plugin_models::Entity;
 use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{
-    ColumnTrait, DbBackend, EntityTrait, ExprTrait, Order, PaginatorTrait, QueryFilter, QueryOrder,
-    QuerySelect, sea_query::Expr,
+    ColumnTrait, ConnectionTrait, EntityTrait, ExprTrait, Order, PaginatorTrait, QueryFilter,
+    QueryOrder, QuerySelect, QueryTrait, sea_query::Expr,
 };
 
 use better_auth_core::store::{ApiKeyStore, ApiKeyUsageWrite, schema::EntityRole};
@@ -21,75 +18,6 @@ use crate::types::{ApiKey, CreateApiKey, UpdateApiKey};
 
 use super::{SeaOrmStore, map_db_err};
 
-/// Apply `UpdateApiKey` fields to a SeaORM active model.
-fn apply_update_fields<M: SeaOrmPluginModel>(
-    mut active: super::plugin_models::Write<M>,
-    update: UpdateApiKey,
-    policy: &better_auth_core::id::IdGeneration,
-) -> AuthResult<super::plugin_models::Write<M>> {
-    if let Some(enabled) = update.enabled {
-        set::<M>(&mut active, "enabled", enabled, policy)?;
-    }
-    if let Some(remaining) = update.remaining {
-        set::<M>(&mut active, "remaining", Some(remaining), policy)?;
-    }
-    if let Some(rate_limit_enabled) = update.rate_limit_enabled {
-        set::<M>(
-            &mut active,
-            "rate_limit_enabled",
-            rate_limit_enabled,
-            policy,
-        )?;
-    }
-    if let Some(rate_limit_time_window) = update.rate_limit_time_window {
-        set::<M>(
-            &mut active,
-            "rate_limit_time_window",
-            Some(rate_limit_time_window),
-            policy,
-        )?;
-    }
-    if let Some(rate_limit_max) = update.rate_limit_max {
-        set::<M>(&mut active, "rate_limit_max", Some(rate_limit_max), policy)?;
-    }
-    if let Some(refill_interval) = update.refill_interval {
-        set::<M>(
-            &mut active,
-            "refill_interval",
-            Some(refill_interval),
-            policy,
-        )?;
-    }
-    if let Some(refill_amount) = update.refill_amount {
-        set::<M>(&mut active, "refill_amount", Some(refill_amount), policy)?;
-    }
-    if let Some(permissions) = update.permissions {
-        set::<M>(&mut active, "permissions", Some(permissions), policy)?;
-    }
-    if let Some(metadata) = update.metadata {
-        set::<M>(&mut active, "metadata", Some(metadata), policy)?;
-    }
-    if let Some(expires_at) = update.expires_at {
-        set::<M>(&mut active, "expires_at", expires_at, policy)?;
-    }
-    if let Some(last_request) = update.last_request {
-        set::<M>(&mut active, "last_request", last_request, policy)?;
-    }
-    if let Some(request_count) = update.request_count {
-        set::<M>(&mut active, "request_count", Some(request_count), policy)?;
-    }
-    if let Some(last_refill_at) = update.last_refill_at {
-        set::<M>(&mut active, "last_refill_at", last_refill_at, policy)?;
-    }
-    set::<M>(
-        &mut active,
-        "updated_at",
-        better_auth_core::FieldDate::from(Utc::now()),
-        policy,
-    )?;
-    Ok(active)
-}
-
 #[async_trait]
 impl<S, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> ApiKeyStore
     for SeaOrmStore<S, O, P>
@@ -98,88 +26,80 @@ where
 {
     async fn create_api_key(&self, input: CreateApiKey) -> AuthResult<ApiKey> {
         let now = Utc::now();
-        let fields = FieldMap::from_iter([
-            ("start".to_owned(), input.start.into_field()),
-            ("prefix".to_owned(), (input.prefix).into_field()),
-            ("key_hash".to_owned(), (input.key_hash).into_field()),
-            ("reference_id".to_owned(), (input.reference_id).into_field()),
-            ("config_id".to_owned(), (input.config_id).into_field()),
+        let mut fields = input.into_adapter_fields()?;
+        fields.extend([
+            ("lastRefillAt".to_owned(), FieldValue::Null),
+            ("lastRequest".to_owned(), FieldValue::Null),
             (
-                "refill_interval".to_owned(),
-                (input.refill_interval).into_field(),
-            ),
-            (
-                "refill_amount".to_owned(),
-                (input.refill_amount).into_field(),
-            ),
-            ("last_refill_at".to_owned(), FieldValue::Null),
-            ("enabled".to_owned(), (input.enabled).into_field()),
-            (
-                "rate_limit_enabled".to_owned(),
-                (input.rate_limit_enabled).into_field(),
-            ),
-            (
-                "rate_limit_time_window".to_owned(),
-                (input.rate_limit_time_window).into_field(),
-            ),
-            (
-                "rate_limit_max".to_owned(),
-                (input.rate_limit_max).into_field(),
-            ),
-            ("request_count".to_owned(), (Some(0.0)).into_field()),
-            ("remaining".to_owned(), (input.remaining).into_field()),
-            ("last_request".to_owned(), FieldValue::Null),
-            ("expires_at".to_owned(), (input.expires_at).into_field()),
-            (
-                "created_at".to_owned(),
+                "createdAt".to_owned(),
                 better_auth_core::FieldValue::Date((now).into()),
             ),
             (
-                "updated_at".to_owned(),
+                "updatedAt".to_owned(),
                 better_auth_core::FieldValue::Date((now).into()),
             ),
-            ("permissions".to_owned(), (input.permissions).into_field()),
-            ("metadata".to_owned(), (input.metadata).into_field()),
         ]);
-        let mut active = self
-            .prepare_api_key_fields(Some(input.name), input.additional_fields, true)
-            .await?;
-        let fields = self.create_fields("apikey", None, fields)?;
-        super::plugin_models::apply::<P::ApiKey>(
-            &mut active,
-            fields,
-            self.config().advanced.database.generate_id(),
-        )?;
-        let model = database_operation::<Entity<P::ApiKey>, _>(self.config(), "create", async {
-            active.insert(self.connection()).await
-        })
-        .await?;
-        Ok(self.project_api_key_models(vec![model]).await?.remove(0))
+        ApiKey::from_field_values(self.create_api_key_record(fields).await?)
     }
 
-    async fn get_api_key_by_id(&self, id: &str) -> AuthResult<Option<ApiKey>> {
-        let model = database_operation::<Entity<P::ApiKey>, _>(self.config(), "findOne", async {
-            Entity::<P::ApiKey>::find()
-                .filter(
-                    P::ApiKey::column("id")?
-                        .eq_id(id, self.config().advanced.database.generate_id())?,
+    async fn create_api_key_record(&self, input: FieldMap) -> AuthResult<FieldMap> {
+        let active = self
+            .prepare_plugin_fields::<P::ApiKey>(EntityRole::ApiKey, "apikey", input, true)
+            .await?;
+        let model = database_operation::<Entity<P::ApiKey>, _>(self.config(), "create", async {
+            active.insert_raw(self.connection()).await
+        })
+        .await?;
+        Ok(self
+            .project_plugin_rows::<P::ApiKey, FieldMap>(EntityRole::ApiKey, vec![model])
+            .await?
+            .remove(0))
+    }
+
+    async fn get_api_key_record(
+        &self,
+        id: &better_auth_core::SchemaValue<String>,
+    ) -> AuthResult<Option<FieldMap>> {
+        let filter = self.plugin_id_filter::<P::ApiKey>(EntityRole::ApiKey, id)?;
+        let row = database_operation::<Entity<P::ApiKey>, _>(self.config(), "findOne", async {
+            self.connection()
+                .query_one_raw(
+                    Entity::<P::ApiKey>::find()
+                        .filter(filter)
+                        .build(self.connection().get_database_backend()),
                 )
-                .one(self.connection())
                 .await
                 .map_err(map_db_err)
         })
         .await?;
         Ok(self
-            .project_api_key_models(model.into_iter().collect())
+            .project_plugin_rows::<P::ApiKey, FieldMap>(
+                EntityRole::ApiKey,
+                row.into_iter().collect(),
+            )
             .await?
             .pop())
     }
 
+    async fn get_api_key_by_id(&self, id: &str) -> AuthResult<Option<ApiKey>> {
+        self.get_api_key_record(&id.to_owned().into())
+            .await?
+            .map(ApiKey::from_field_values)
+            .transpose()
+    }
+
     async fn get_api_key_by_hash(&self, hash: &str) -> AuthResult<Option<ApiKey>> {
         let model = database_operation::<Entity<P::ApiKey>, _>(self.config(), "findOne", async {
-            Entity::<P::ApiKey>::find()
-                .filter(P::ApiKey::column("key_hash")?.eq(hash))
-                .one(self.connection())
+            self.connection()
+                .query_one_raw(
+                    Entity::<P::ApiKey>::find()
+                        .filter(self.plugin_equals::<P::ApiKey>(
+                            EntityRole::ApiKey,
+                            "key",
+                            hash.into(),
+                        )?)
+                        .build(self.connection().get_database_backend()),
+                )
                 .await
                 .map_err(map_db_err)
         })
@@ -196,11 +116,14 @@ where
         sort: Option<(&str, &str)>,
     ) -> AuthResult<Vec<ApiKey>> {
         let models = database_operation::<Entity<P::ApiKey>, _>(self.config(), "findMany", async {
-            let mut query = Entity::<P::ApiKey>::find()
-                .filter(P::ApiKey::column("reference_id")?.eq(reference_id));
+            let mut query = Entity::<P::ApiKey>::find().filter(self.plugin_equals::<P::ApiKey>(
+                EntityRole::ApiKey,
+                "referenceId",
+                reference_id.into(),
+            )?);
             if let Some((field, direction)) = sort {
                 query = query.order_by(
-                    P::ApiKey::column(field)?,
+                    self.plugin_column::<P::ApiKey>(EntityRole::ApiKey, field)?,
                     if direction == "desc" {
                         Order::Desc
                     } else {
@@ -208,12 +131,15 @@ where
                     },
                 );
             }
-            query
-                .limit(super::pagination::default_limit(
-                    self.config(),
-                    self.connection().get_database_backend(),
-                )?)
-                .all(self.connection())
+            self.connection()
+                .query_all_raw(
+                    query
+                        .limit(super::pagination::default_limit(
+                            self.config(),
+                            self.connection().get_database_backend(),
+                        )?)
+                        .build(self.connection().get_database_backend()),
+                )
                 .await
                 .map_err(map_db_err)
         })
@@ -224,7 +150,11 @@ where
     async fn count_api_keys_by_reference(&self, reference_id: &str) -> AuthResult<u64> {
         database_operation::<Entity<P::ApiKey>, _>(self.config(), "count", async {
             Entity::<P::ApiKey>::find()
-                .filter(P::ApiKey::column("reference_id")?.eq(reference_id))
+                .filter(self.plugin_equals::<P::ApiKey>(
+                    EntityRole::ApiKey,
+                    "referenceId",
+                    reference_id.into(),
+                )?)
                 .count(self.connection())
                 .await
                 .map_err(map_db_err)
@@ -245,35 +175,41 @@ where
     async fn update_api_key_optional(
         &self,
         id: &better_auth_core::SchemaValue<String>,
-        mut update: UpdateApiKey,
+        update: UpdateApiKey,
     ) -> AuthResult<Option<ApiKey>> {
-        let id = id.typed()?;
+        let mut fields = update.into_adapter_fields()?;
+        let _ = fields.insert("updatedAt".into(), Utc::now().into());
+        self.update_api_key_record(id, fields)
+            .await?
+            .map(ApiKey::from_field_values)
+            .transpose()
+    }
+
+    async fn update_api_key_record(
+        &self,
+        id: &better_auth_core::SchemaValue<String>,
+        input: FieldMap,
+    ) -> AuthResult<Option<FieldMap>> {
+        let filter = self.plugin_id_filter::<P::ApiKey>(EntityRole::ApiKey, id)?;
         let active = self
-            .prepare_api_key_fields(
-                update.name.take(),
-                std::mem::take(&mut update.additional_fields),
-                false,
-            )
+            .prepare_plugin_fields::<P::ApiKey>(EntityRole::ApiKey, "apikey", input, false)
             .await?;
-        let active = apply_update_fields::<P::ApiKey>(
-            active,
-            update,
-            self.config().advanced.database.generate_id(),
-        )?;
-        let filter =
-            P::ApiKey::column("id")?.eq_id(id, self.config().advanced.database.generate_id())?;
         let model = database_operation::<Entity<P::ApiKey>, _>(self.config(), "update", async {
-            super::updates::update_record_returning_one::<Entity<P::ApiKey>, _>(
+            super::updates::execute_update_returning_raw::<Entity<P::ApiKey>, _>(
                 self.connection(),
-                active,
-                filter.clone(),
+                active
+                    .update(self.connection().get_database_backend())?
+                    .filter(filter.clone()),
                 filter,
             )
             .await
         })
         .await?;
         Ok(self
-            .project_api_key_models(model.into_iter().collect())
+            .project_plugin_rows::<P::ApiKey, FieldMap>(
+                EntityRole::ApiKey,
+                model.into_iter().collect(),
+            )
             .await?
             .pop())
     }
@@ -283,91 +219,78 @@ where
         id: &better_auth_core::SchemaValue<String>,
         write: ApiKeyUsageWrite,
     ) -> AuthResult<Option<ApiKey>> {
-        let id = id.typed()?;
         // Upstream does not run update policies for an increment without a set patch.
-        let fields = if matches!(&write, ApiKeyUsageWrite::Decrement) {
-            Default::default()
-        } else {
-            self.prepare_api_key_fields(None, FieldMap::new(), false)
-                .await?
-        };
+        let set = write.set_fields();
+        let has_set = !matches!(&write, ApiKeyUsageWrite::Decrement);
         let operation = write.operation();
         let backend = self.connection().get_database_backend();
-        let reselect =
-            P::ApiKey::column("id")?.eq_id(id, self.config().advanced.database.generate_id())?;
+        let reselect = self.plugin_id_filter::<P::ApiKey>(EntityRole::ApiKey, id)?;
         let mut guard = reselect.clone();
         let mut query = Entity::<P::ApiKey>::update_many();
         match write {
-            ApiKeyUsageWrite::Refill {
-                previous,
-                remaining,
-                at,
-            } => {
-                let last = P::ApiKey::column("last_refill_at")?;
-                guard = guard.and(match previous {
-                    Some(previous) => last
-                        .into_expr()
-                        .eq(last.save_as(Binding::Date(previous).bind(backend)?)),
-                    None => last.is_null(),
+            ApiKeyUsageWrite::Refill { previous, .. } => {
+                let last = self.plugin_column::<P::ApiKey>(EntityRole::ApiKey, "lastRefillAt")?;
+                guard = guard.and(if previous.is_null() || previous.is_undefined() {
+                    last.is_null()
+                } else {
+                    last.into_expr().eq(last.save_as(self.plugin_parameter(
+                        EntityRole::ApiKey,
+                        "lastRefillAt",
+                        previous,
+                    )?))
                 });
-                query = query
-                    .col_expr(P::ApiKey::column("remaining")?, Expr::value(remaining))
-                    .col_expr(last, last.save_as(Binding::Date(at.into()).bind(backend)?));
             }
             ApiKeyUsageWrite::Decrement => {
-                let remaining = P::ApiKey::column("remaining")?;
+                let remaining = self.plugin_column::<P::ApiKey>(EntityRole::ApiKey, "remaining")?;
                 guard = guard.and(remaining.gt(0));
                 query = query.col_expr(remaining, Expr::col(remaining).sub(1.0));
             }
             ApiKeyUsageWrite::StartWindow {
-                previous_before,
-                at,
+                previous_before, ..
             } => {
-                let last = P::ApiKey::column("last_request")?;
+                let last = self.plugin_column::<P::ApiKey>(EntityRole::ApiKey, "lastRequest")?;
                 guard = guard.and(match previous_before {
-                    Some(previous) => last
-                        .into_expr()
-                        .lte(last.save_as(Binding::Date(previous.into()).bind(backend)?)),
+                    Some(previous) => last.into_expr().lte(last.save_as(self.plugin_parameter(
+                        EntityRole::ApiKey,
+                        "lastRequest",
+                        previous.into(),
+                    )?)),
                     None => last.is_null(),
                 });
-                query = query
-                    .col_expr(P::ApiKey::column("request_count")?, Expr::value(1.0))
-                    .col_expr(last, last.save_as(Binding::Date(at.into()).bind(backend)?));
             }
             ApiKeyUsageWrite::IncrementWindow {
                 previous_after,
                 maximum,
-                at,
+                ..
             } => {
-                let last = P::ApiKey::column("last_request")?;
-                let count = P::ApiKey::column("request_count")?;
+                let last = self.plugin_column::<P::ApiKey>(EntityRole::ApiKey, "lastRequest")?;
+                let count = self.plugin_column::<P::ApiKey>(EntityRole::ApiKey, "requestCount")?;
                 guard = guard
-                    .and(
-                        last.into_expr()
-                            .gt(last.save_as(Binding::Date(previous_after.into()).bind(backend)?)),
-                    )
-                    .and(count.lt(maximum));
-                query = query
-                    .col_expr(count, Expr::col(count).add(1.0))
-                    .col_expr(last, last.save_as(Binding::Date(at.into()).bind(backend)?));
+                    .and(last.into_expr().gt(last.save_as(self.plugin_parameter(
+                        EntityRole::ApiKey,
+                        "lastRequest",
+                        previous_after.into(),
+                    )?)))
+                    .and(count.into_expr().lt(count.save_as(self.plugin_parameter(
+                        EntityRole::ApiKey,
+                        "requestCount",
+                        maximum,
+                    )?)));
+                query = query.col_expr(count, Expr::col(count).add(1.0));
             }
-            ApiKeyUsageWrite::LastRequest(at) => {
-                let last = P::ApiKey::column("last_request")?;
-                query = query.col_expr(last, last.save_as(Binding::Date(at.into()).bind(backend)?));
-            }
-            ApiKeyUsageWrite::UpdatedAt(at) => {
-                let updated = P::ApiKey::column("updated_at")?;
-                query = query.col_expr(
-                    updated,
-                    updated.save_as(Binding::Date(at.into()).bind(backend)?),
-                );
-            }
+            ApiKeyUsageWrite::LastRequest(_) | ApiKeyUsageWrite::UpdatedAt(_) => {}
         }
+        let fields = if has_set {
+            self.prepare_plugin_fields::<P::ApiKey>(EntityRole::ApiKey, "apikey", set, false)
+                .await?
+        } else {
+            Default::default()
+        };
         query = fields.apply_to(query, backend)?;
         let query = query.filter(guard.clone());
         let model = database_operation::<Entity<P::ApiKey>, _>(self.config(), operation, async {
             if operation == "incrementOne" {
-                super::updates::increment_returning_one::<Entity<P::ApiKey>>(
+                super::updates::increment_returning_raw::<Entity<P::ApiKey>>(
                     self.connection(),
                     query,
                     guard,
@@ -375,7 +298,7 @@ where
                 )
                 .await
             } else {
-                super::updates::execute_update_returning_one::<Entity<P::ApiKey>, _>(
+                super::updates::execute_update_returning_raw::<Entity<P::ApiKey>, _>(
                     self.connection(),
                     query,
                     reselect,
@@ -391,13 +314,10 @@ where
     }
 
     async fn delete_api_key(&self, id: &better_auth_core::SchemaValue<String>) -> AuthResult<()> {
-        let id = id.typed()?;
+        let filter = self.plugin_id_filter::<P::ApiKey>(EntityRole::ApiKey, id)?;
         database_operation::<Entity<P::ApiKey>, _>(self.config(), "delete", async {
             Entity::<P::ApiKey>::delete_many()
-                .filter(
-                    P::ApiKey::column("id")?
-                        .eq_id(id, self.config().advanced.database.generate_id())?,
-                )
+                .filter(filter)
                 .exec(self.connection())
                 .await
                 .map(|_| ())
@@ -408,9 +328,8 @@ where
 
     async fn delete_expired_api_keys(&self) -> AuthResult<usize> {
         database_operation::<Entity<P::ApiKey>, _>(self.config(), "deleteMany", async {
-            let now = super::record_bindings::Binding::Date(Utc::now().into())
-                .bind(self.connection().get_database_backend())?;
-            let expires_at = P::ApiKey::column("expires_at")?;
+            let now = self.plugin_parameter(EntityRole::ApiKey, "expiresAt", Utc::now().into())?;
+            let expires_at = self.plugin_column::<P::ApiKey>(EntityRole::ApiKey, "expiresAt")?;
             Entity::<P::ApiKey>::delete_many()
                 .filter(expires_at.is_not_null())
                 .filter(expires_at.into_expr().lt(expires_at.save_as(now)))
@@ -432,6 +351,7 @@ mod start_tests {
     use super::super::record_bindings::utf16_string;
     use super::*;
     use better_auth_core::ApiKeyStart;
+    use sea_orm::DbBackend;
 
     #[test]
     fn database_text_conversion_preserves_backend_boundaries() {

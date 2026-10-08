@@ -246,11 +246,15 @@ pub(super) fn is_default_config_id(config_id: &str) -> bool {
 }
 
 /// Whether a stored key belongs to the addressed configuration.
-pub(super) fn config_id_matches(key_config_id: &str, expected: &str) -> bool {
-    if is_default_config_id(key_config_id) && is_default_config_id(expected) {
+pub(super) fn config_id_matches(
+    key_config_id: &better_auth_core::SchemaValue<String>,
+    expected: &str,
+) -> bool {
+    let value = key_config_id.field_value();
+    if (!value.is_truthy() || key_config_id == "default") && is_default_config_id(expected) {
         return true;
     }
-    key_config_id == expected
+    key_config_id.field_value().strict_equals(&expected.into())
 }
 
 /// Configuration for the API Key plugin, aligned with the TypeScript `ApiKeyOptions`.
@@ -865,7 +869,7 @@ better_auth_core::impl_auth_plugin! {
             Ok(metadata)
         }
 
-        async fn on_init(&self, _ctx: &mut better_auth_core::AuthInitContext<S>) -> AuthResult<()> {
+        async fn on_init(&self, ctx: &mut better_auth_core::AuthInitContext<S>) -> AuthResult<()> {
             if self.configurations.len() > 1 {
                 let mut ids = std::collections::HashSet::new();
                 for config in &self.configurations {
@@ -877,6 +881,20 @@ better_auth_core::impl_auth_plugin! {
                     }
                 }
             }
+            let mut fields = better_auth_core::plugin_runtime::ModelFields::plugin_native_fields(
+                better_auth_core::store::schema::EntityRole::ApiKey,
+            );
+            if let [config] = self.configurations.as_slice() {
+                for (name, value) in [
+                    ("rateLimitMax", config.rate_limit.max_requests),
+                    ("rateLimitTimeWindow", config.rate_limit.time_window),
+                ] {
+                    if let Some(field) = fields.fields_mut().get_mut(name) {
+                        field.default_value = Some(value.into());
+                    }
+                }
+            }
+            ctx.register_model_fields(better_auth_core::store::schema::EntityRole::ApiKey, fields)?;
             Ok(())
         }
 

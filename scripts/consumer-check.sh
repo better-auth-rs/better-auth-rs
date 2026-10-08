@@ -42,6 +42,34 @@ for required in required optional; do
   "$consumer_cli" generate --plugins api-key --database sqlite --schema-config "compat-tests/schema-consumer/api-key-number-name-${required}-schema.json" --output "$schema"
   export "BETTER_AUTH_API_KEY_NUMBER_NAME_${required^^}_SCHEMA=$schema"
 done
+python3 - "$schema_dir" <<'PY_REPLACEMENTS'
+import json
+from pathlib import Path
+import sys
+
+fixture = json.loads(Path("tests/fixtures/native-plugin-replacements-sqlite-1.7.6.json").read_text())
+for target in fixture["targets"]:
+    if target["model"] not in ("apikey", "passkey"):
+        continue
+    fields = {
+        target["field"]: {"type": target["type"], "required": False, "fieldName": target["column"]},
+        "marker": {"type": "string", "required": False, "fieldName": "stored_marker"},
+    }
+    config = {target["model"]: {"modelName": target["table"], "additionalFields": fields}}
+    (Path(sys.argv[1]) / ("native_replacement_" + target["name"] + ".json")).write_text(json.dumps(config))
+PY_REPLACEMENTS
+for configuration in "$schema_dir"/native_replacement_*.json; do
+  target="${configuration##*/native_replacement_}"
+  target="${target%.json}"
+  plugin=api-key
+  if [[ "$target" == passkey-* ]]; then
+    plugin=passkey
+  fi
+  schema="$schema_dir/native_replacement_${target}.rs"
+  "$consumer_cli" generate --plugins "$plugin" --database sqlite --schema-config "$configuration" --output "$schema"
+  variable="BETTER_AUTH_NATIVE_REPLACEMENT_${target^^}_SCHEMA"
+  export "${variable//-/_}=$schema"
+done
 for order in forward reversed; do
   schema="$schema_dir/passkey_shared_display_${order}.rs"
   "$consumer_cli" generate --plugins passkey --database sqlite --schema-config "compat-tests/schema-consumer/passkey-shared-display-${order}-schema.json" --output "$schema"

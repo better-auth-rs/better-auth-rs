@@ -146,9 +146,10 @@ run_stage() {
         ./compat-tests/reference-server/contracts/api-key-cache-batch.test.ts \
         ./compat-tests/reference-server/api-key-metadata.test.ts \
         ./compat-tests/reference-server/api-key-metadata-pages.test.ts
-      cargo clippy --locked -p better-auth-core -p better-auth-api -p better-auth-seaorm -- -D warnings
+      cargo clippy --locked -p better-auth-core -p better-auth-api -p better-auth-seaorm -p better-auth-cli -- -D warnings
       cargo clippy --locked --features axum,seaorm2,redis-cache --test plugin_output_capabilities_tests --test api_key_additional_fields_tests --test device_grant_tests --test organization_member_json_filter_reference_tests --test auth_entity_plugin_alias_tests --test plugin_model_fields_tests -- -D warnings
-      cargo test --locked -p better-auth-core -p better-auth-api -p better-auth-seaorm --lib -- api_key jwt user_fields::record::tests:: ordinary_object_primitive_conversion_checks_only_the_selected_method member_queries_use_typed_storage_before_output_transforms
+      cargo test --locked -p better-auth-cli schema_config
+      cargo test --locked -p better-auth-core -p better-auth-api -p better-auth-seaorm --lib -- api_key passkey id_slot_tests::plugin_credentials query::dynamic_value_tests utils::json::runtime jwt user_fields::record::tests:: ordinary_object_primitive_conversion_checks_only_the_selected_method member_queries_use_typed_storage_before_output_transforms
       cargo test --locked --features axum,seaorm2,redis-cache \
         --test api_key_additional_fields_tests --test passkey_additional_fields_tests \
         --test device_grant_tests \
@@ -159,7 +160,7 @@ run_stage() {
         --test plugin_output_capabilities_tests --test sql_user_extra_output_tests \
         --test api_key_metadata_tests --test api_key_metadata_timing_tests --test jwt_transaction_tests
       cargo test --locked --features axum,seaorm2,redis-cache --test plugin_model_fields_tests -- api_key:: api_key_cache:: device_ownership:: device_redemption:: presence:: presence_cache:: core::unsupported_model_fields_fail_during_initialization
-      ./scripts/consumer-check.sh --test generated_plugin_catalog -- --include-ignored api_key_additional_fields device_grant
+      ./scripts/consumer-check.sh --test generated_plugin_catalog -- --include-ignored api_key_additional_fields native_plugin_replacements device_grant
       ;;
     runtime-values)
       bun --no-install test \

@@ -95,7 +95,7 @@ fn api_input(name: FieldValue) -> CreateApiKey {
         key_hash: "ordinary-display-key".into(),
         refill_interval: None,
         refill_amount: None,
-        enabled: true,
+        enabled: true.into(),
         rate_limit_enabled: true,
         rate_limit_time_window: Some(60_000.0),
         rate_limit_max: Some(3.0),

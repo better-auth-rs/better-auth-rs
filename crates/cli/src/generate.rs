@@ -252,12 +252,13 @@ fn gen_entity(entity: &Entity, generation: IdGeneration, config: &SchemaConfig) 
             .then(|| quote! { #[sea_orm(primary_key, auto_increment = #auto_increment)] });
         let number_storage = if entity.role == Some(EntityRole::RateLimit) && name == "count" {
             Some(quote!(#[sea_orm(column_type = "Integer")]))
-        } else if (entity.role == Some(EntityRole::DeviceCode) && name == "polling_interval")
-            || entity.api_key_native_schema
-                && field
-                    .registry_column
-                    .and_then(|column| entity.catalog_field(column))
-                    .is_some_and(|definition| definition.ty == "Option<f64>")
+        } else if field.attributes.is_none()
+            && ((entity.role == Some(EntityRole::DeviceCode) && name == "polling_interval")
+                || entity.api_key_native_schema
+                    && field
+                        .registry_column
+                        .and_then(|column| entity.catalog_field(column))
+                        .is_some_and(|definition| definition.ty == "Option<f64>"))
         {
             Some(quote!(#[sea_orm(column_type = "Integer", nullable)]))
         } else {
@@ -340,7 +341,7 @@ fn gen_table(
             entity
                 .fields
                 .iter()
-                .find(|field| field.registry_column == Some(entry.0))
+                .find(|field| Some(field.column.as_str()) == entity.column(entry.0))
                 .is_none_or(|field| {
                     field.attributes.is_none() && field.references_id(entity.registry_table)
                 })
@@ -382,10 +383,8 @@ fn gen_table(
             .find(|entity| model_name(entity.name) == reference.model)
             .and_then(|entity| {
                 entity
-                    .fields
-                    .iter()
-                    .find(|field| field.logical_name == reference.field)
-                    .map(|field| (entity.table.as_str(), field.column.as_str()))
+                    .logical_column(&reference.field)
+                    .map(|column| (entity.table.as_str(), column))
             })
             .unwrap_or((&reference.model, &reference.field));
         let column = &field.column;
@@ -728,6 +727,14 @@ fn gen_indexes(entity: &Entity, database: Database) -> Vec<TokenStream> {
     let table = &entity.table;
     let mut indexes: Vec<_> = registry::entity_indexes(entity.registry_table)
         .iter()
+        .filter(|index| {
+            index.columns.iter().all(|column| {
+                entity
+                    .fields
+                    .iter()
+                    .any(|field| field.registry_column == Some(*column))
+            })
+        })
         .filter(|index| !(entity.session_row_presence && index.columns == ["expires_at"]))
         .filter(|index| {
             !(entity.device_code_native_schema

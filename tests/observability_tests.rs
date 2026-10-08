@@ -1082,7 +1082,10 @@ mod sqlite {
                 stored.request_count,
                 Some(if field == "updated_at" { 1.0 } else { 0.0 })
             );
-            assert_eq!(stored.last_request.is_none(), field != "updated_at");
+            assert_eq!(
+                stored.last_request.typed()?.is_none(),
+                field != "updated_at"
+            );
             assert_eq!(stored.updated_at, key.updated_at);
         }
         Ok(())
@@ -1663,7 +1666,7 @@ fn api_key_input() -> better_auth_core::CreateApiKey {
         start: None,
         expires_at: None,
         remaining: Some(3.0),
-        enabled: true,
+        enabled: true.into(),
         rate_limit_enabled: true,
         rate_limit_time_window: Some(60_000.0),
         rate_limit_max: Some(1.0),

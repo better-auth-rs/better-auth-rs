@@ -52,6 +52,7 @@ mod organization_parent_tests;
 mod passkeys;
 #[cfg(test)]
 mod plugin_display_json_tests;
+mod plugin_records;
 mod rate_limits;
 mod rows;
 mod runtime;

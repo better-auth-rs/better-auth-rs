@@ -84,7 +84,7 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
         )?;
         stored.name = Some(name.to_string()).into();
         stored.aaguid = Some(aaguid.to_string()).into();
-        stored.counter = counter;
+        stored.counter = counter.into();
         stored.updated_at = persisted.updated_at.clone();
         assert_eq!(persisted, stored);
 

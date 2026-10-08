@@ -127,7 +127,11 @@ pub(crate) async fn contract<S: AuthSchema>(
                                 .get_api_key_by_id(seed.id.typed()?)
                                 .await?
                                 .expect("persisted API Key");
-                            let previous = readback.last_refill_at.expect("persisted refill Date");
+                            let previous = readback
+                                .last_refill_at
+                                .typed()?
+                                .clone()
+                                .expect("persisted refill Date");
                             let observed = FieldValue::Date(previous.clone())
                                 .json()?
                                 .expect("persisted refill Date JSON");
@@ -140,7 +144,7 @@ pub(crate) async fn contract<S: AuthSchema>(
                             timestamp(&input, "previous")?.into()
                         };
                         ApiKeyUsageWrite::Refill {
-                            previous: Some(previous),
+                            previous: FieldValue::Date(previous),
                             remaining: input
                                 .get("remaining")
                                 .and_then(Value::as_f64)
@@ -149,16 +153,17 @@ pub(crate) async fn contract<S: AuthSchema>(
                         }
                     }
                     "start-window-equal" => ApiKeyUsageWrite::StartWindow {
-                        previous_before: Some(timestamp(&input, "previousBefore")?),
+                        previous_before: Some(timestamp(&input, "previousBefore")?.into()),
                         at,
                     },
                     "increment-window-equal-miss" | "increment-window-after" => {
                         ApiKeyUsageWrite::IncrementWindow {
-                            previous_after: timestamp(&input, "previousAfter")?,
+                            previous_after: timestamp(&input, "previousAfter")?.into(),
                             maximum: input
                                 .get("maximum")
                                 .and_then(Value::as_f64)
-                                .expect("window maximum"),
+                                .expect("window maximum")
+                                .into(),
                             at,
                         }
                     }
@@ -180,12 +185,14 @@ pub(crate) async fn contract<S: AuthSchema>(
         if name == "create" {
             let created = rows.first().expect("created API Key").clone();
             assert_eq!(created.updated_at, created.created_at);
-            updated = Some(created.updated_at.clone());
+            updated = Some(created.updated_at.typed()?.clone());
             seed = Some(created);
         } else if name == "seed-dates" {
             let row = rows.first().expect("updated API Key");
-            assert!(row.updated_at.milliseconds() >= row.created_at.milliseconds());
-            updated = Some(row.updated_at.clone());
+            assert!(
+                row.updated_at.typed()?.milliseconds() >= row.created_at.typed()?.milliseconds()
+            );
+            updated = Some(row.updated_at.typed()?.clone());
             updated_label = Some("<ordinary-updated-at>");
         }
         let seed = seed.as_ref().expect("created API Key");

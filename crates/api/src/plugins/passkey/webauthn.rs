@@ -353,8 +353,17 @@ pub(super) fn extract_registration_metadata(
     })
 }
 
-pub(super) fn parse_transports_csv(transports: Option<&str>) -> Option<Vec<String>> {
-    transports.map(|transports| transports.split(',').map(str::to_string).collect())
+pub(super) fn parse_transports_csv(
+    transports: &better_auth_core::SchemaValue<Option<String>>,
+) -> AuthResult<Option<Vec<String>>> {
+    let value = transports.field_value();
+    match value {
+        better_auth_core::FieldValue::Null | better_auth_core::FieldValue::Undefined => Ok(None),
+        better_auth_core::FieldValue::String(value) => {
+            Ok(Some(value.split(',').map(str::to_owned).collect()))
+        }
+        _ => Err(AuthError::internal("transports.split is not a function")),
+    }
 }
 
 pub(super) fn credential_id_from_authentication(

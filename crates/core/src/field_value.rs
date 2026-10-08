@@ -360,6 +360,11 @@ impl FieldValue {
         }))
     }
 
+    /// Parse JSON without discarding lone UTF-16 surrogates or nested field ordering.
+    pub fn parse_json(text: &str) -> AuthResult<Self> {
+        crate::utils::json::parse_field_json(text)
+    }
+
     /// Serialize with JavaScript property ordering, numeric formatting, and JSON value conversion.
     pub fn stringify(&self) -> AuthResult<Option<String>> {
         if self.is_undefined() {

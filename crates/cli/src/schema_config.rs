@@ -1,4 +1,4 @@
-use better_auth_schema_registry::resolve_field_name;
+use better_auth_schema_registry::{canonical_field_name, resolve_field_name};
 use std::collections::{BTreeMap, BTreeSet};
 
 use better_auth_schema_registry::{EntityRole, ExtraEntitySchema, FieldDef};
@@ -167,11 +167,8 @@ pub(crate) enum FieldType {
     Enum(Vec<String>),
 }
 
-fn native_display_field(role: EntityRole, name: &str) -> bool {
-    matches!(
-        (role, name),
-        (EntityRole::ApiKey, "name") | (EntityRole::Passkey, "name" | "aaguid")
-    )
+fn native_policy_role(role: EntityRole) -> bool {
+    matches!(role, EntityRole::ApiKey | EntityRole::Passkey)
 }
 
 impl FieldType {
@@ -204,6 +201,8 @@ pub(crate) struct Entity {
     pub table: String,
     pub role: Option<EntityRole>,
     pub fields: Vec<Field>,
+    registry_columns: BTreeMap<&'static str, String>,
+    logical_columns: BTreeMap<String, String>,
     pub session_row_presence: bool,
     pub api_key_native_schema: bool,
     pub device_code_native_schema: bool,
@@ -347,6 +346,13 @@ impl Entity {
                 _ => 7,
             });
         }
+        if passkey_native_schema {
+            fields.sort_by_key(|field| match field.name {
+                "created_at" => 1,
+                "aaguid" => 2,
+                _ => 0,
+            });
+        }
         let native_catalog = sqlite_native_catalog(database, definition.role)
             || session_row_presence
             || api_key_native_schema
@@ -384,14 +390,15 @@ impl Entity {
             device_code_native_schema,
             passkey_native_schema,
             two_factor_native_schema,
+            registry_columns: BTreeMap::new(),
+            logical_columns: BTreeMap::new(),
             fields: fields
                 .iter()
                 .map(|field| {
-                    let logical_name = match (definition.mod_name, field.name) {
-                        ("api_key", "key_hash") => "key".to_owned(),
-                        ("passkey", "credential_id") => "credentialID".to_owned(),
-                        _ => field.name.to_lower_camel_case(),
-                    };
+                    let logical_name = definition.role.map_or_else(
+                        || field.name.to_lower_camel_case(),
+                        |role| canonical_field_name(role, field.name),
+                    );
                     Ok(Field {
                         ident: syn::parse_str(field.name)
                             .map_err(|error| format!("invalid field name: {error}"))?,
@@ -499,9 +506,7 @@ impl Entity {
             }
             for (name, field) in &config.additional_fields {
                 if let Some(
-                    role @ (EntityRole::ApiKey
-                    | EntityRole::DeviceCode
-                    | EntityRole::Passkey
+                    role @ (EntityRole::DeviceCode
                     | EntityRole::Jwk
                     | EntityRole::WalletAddress
                     | EntityRole::TwoFactor),
@@ -516,35 +521,9 @@ impl Entity {
                         }
                     } else {
                         let storage = resolve_field_name(field.field_name.as_deref(), name);
-                        let display = native_display_field(role, name);
-                        if display {
-                            let supported = match &field.field_type {
-                                FieldType::Name(kind) => {
-                                    matches!(kind.as_str(), "string" | "json")
-                                        || role == EntityRole::ApiKey && kind == "number"
-                                }
-                                FieldType::Enum(_) => true,
-                            };
-                            if !supported || field.references.is_some() {
-                                let types = if role == EntityRole::ApiKey {
-                                    "string, number, enum, or JSON"
-                                } else {
-                                    "string, enum, or JSON"
-                                };
-                                return Err(format!(
-                                    "{role:?} {name} requires a {types} declaration without a reference"
-                                ));
-                            }
-                        }
-                        if role == EntityRole::ApiKey && [name.as_str(), storage].contains(&"key")
-                            || role == EntityRole::Passkey
-                                && [name.as_str(), storage].contains(&"credentialID")
-                            || matches!(
-                                role,
-                                EntityRole::ApiKey | EntityRole::TwoFactor | EntityRole::Passkey
-                            ) && better_auth_schema_registry::core_field_names(role)
+                        if role == EntityRole::TwoFactor
+                            && better_auth_schema_registry::core_field_names(role)
                                 .iter()
-                                .filter(|core| !display || **core != name.as_str())
                                 .any(|core| {
                                     [name.as_str(), storage].into_iter().any(|name| {
                                         name == *core || name == core.to_lower_camel_case()
@@ -553,16 +532,7 @@ impl Entity {
                             || entity
                                 .fields
                                 .iter()
-                                .filter(|core| {
-                                    core.registry_column.is_some()
-                                        && !(display
-                                            && (core.logical_name == *name
-                                                || role == EntityRole::Passkey
-                                                    && native_display_field(
-                                                        role,
-                                                        &core.logical_name,
-                                                    )))
-                                })
+                                .filter(|core| core.registry_column.is_some())
                                 .any(|core| {
                                     let rust = core.ident.to_string();
                                     [name.as_str(), storage].into_iter().any(|name| {
@@ -576,32 +546,12 @@ impl Entity {
                                 "{role:?} additional field {name} cannot replace native field {storage}"
                             ));
                         }
-                        for native in ["name", "aaguid"]
-                            .into_iter()
-                            .filter(|native| native_display_field(role, native))
-                        {
-                            let column = resolve_field_name(
-                                config
-                                    .additional_fields
-                                    .get(native)
-                                    .and_then(|field| field.field_name.as_deref()),
-                                native,
-                            );
-                            if name != native
-                                && (name == column || storage == column)
-                                && !(role == EntityRole::Passkey && display)
-                            {
-                                return Err(format!(
-                                    "{role:?} field {name} conflicts with {native} storage column {column}"
-                                ));
-                            }
-                        }
                     }
                 }
                 if let Some((definition, existing)) = fields
                     .iter()
                     .zip(&mut entity.fields)
-                    .find(|(definition, _)| definition.name.to_lower_camel_case() == *name)
+                    .find(|(_, existing)| existing.logical_name == *name)
                 {
                     existing.apply_builtin_override(definition, field, entity.role, database)?;
                     continue;
@@ -635,24 +585,44 @@ impl Entity {
                 });
             }
         }
-        if entity.role == Some(EntityRole::Passkey)
-            && let Some(column) = entity.column("name").map(str::to_owned)
-            && let Some(position) = entity
-                .fields
-                .iter()
-                .position(|field| field.registry_column == Some("aaguid") && field.column == column)
-        {
-            let aaguid = entity.fields.remove(position);
-            if let Some(name) = entity
-                .fields
-                .iter_mut()
-                .find(|field| field.registry_column == Some("name"))
-            {
-                // Upstream preserves the first column position and the last declaration's attributes.
-                name.ty = aaguid.ty;
-                name.unique = aaguid.unique;
-                name.attributes = aaguid.attributes;
+        entity.registry_columns = entity
+            .fields
+            .iter()
+            .filter_map(|field| {
+                field
+                    .registry_column
+                    .map(|name| (name, field.column.clone()))
+            })
+            .collect();
+        entity.logical_columns = entity
+            .fields
+            .iter()
+            .map(|field| (field.logical_name.clone(), field.column.clone()))
+            .collect();
+        if entity.role.is_some_and(native_policy_role) {
+            let mut columns = Vec::<Field>::new();
+            for field in entity.fields {
+                if let Some(existing) = columns
+                    .iter_mut()
+                    .find(|existing| existing.column == field.column)
+                {
+                    if existing.primary_key || field.primary_key {
+                        return Err(format!(
+                            "model `{}` maps a field to the primary key column `{}`",
+                            entity.name, field.column
+                        ));
+                    }
+                    // Upstream keeps the first physical position and the last declaration's attributes.
+                    let ident = existing.ident.clone();
+                    let reference = field.references_id(entity.registry_table);
+                    *existing = field;
+                    existing.ident = ident;
+                    existing.reference_override = Some(reference);
+                } else {
+                    columns.push(field);
+                }
             }
+            entity.fields = columns;
         }
         if entity.table.is_empty() {
             return Err(format!("model `{}` has an empty table name", entity.name));
@@ -697,23 +667,31 @@ impl Entity {
                     _ => 6,
                 });
         }
-        if passkey_native_schema {
-            entity
-                .fields
-                .sort_by_key(|field| match field.registry_column {
-                    Some("created_at") => 1,
-                    Some("aaguid") => 2,
-                    _ => 0,
-                });
-        }
         Ok(entity)
     }
 
     pub(crate) fn column(&self, registry_column: &str) -> Option<&str> {
-        self.fields
-            .iter()
-            .find(|field| field.registry_column == Some(registry_column))
-            .map(|field| field.column.as_str())
+        if self.role.is_some_and(native_policy_role) {
+            self.registry_columns
+                .get(registry_column)
+                .map(String::as_str)
+        } else {
+            self.fields
+                .iter()
+                .find(|field| field.registry_column == Some(registry_column))
+                .map(|field| field.column.as_str())
+        }
+    }
+
+    pub(crate) fn logical_column(&self, name: &str) -> Option<&str> {
+        if self.role.is_some_and(native_policy_role) {
+            self.logical_columns.get(name).map(String::as_str)
+        } else {
+            self.fields
+                .iter()
+                .find(|field| field.logical_name == name)
+                .map(|field| field.column.as_str())
+        }
     }
 
     pub(crate) fn catalog_field(&self, column: &str) -> Option<&'static FieldDef> {
@@ -758,7 +736,7 @@ impl Field {
         if definition.is_primary_key {
             return Ok(());
         }
-        let kind = if role.is_some_and(|role| native_display_field(role, definition.name)) {
+        let kind = if role.is_some_and(native_policy_role) {
             config.storage_type(database)?
         } else {
             config.rust_type()?
@@ -772,7 +750,11 @@ impl Field {
             .map_err(|error| format!("invalid built-in field type: {error}"))?;
         self.column = resolve_field_name(
             config.field_name.as_deref(),
-            definition.column_name.unwrap_or(definition.name),
+            if role.is_some_and(native_policy_role) {
+                &self.logical_name
+            } else {
+                definition.column_name.unwrap_or(definition.name)
+            },
         )
         .to_owned();
         self.serialized = Some(self.column.clone());

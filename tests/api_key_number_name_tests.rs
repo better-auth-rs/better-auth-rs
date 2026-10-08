@@ -21,7 +21,7 @@ async fn stored(store: &EphemeralStore) -> TestResult<Value> {
             .json()?
             .ok_or("API Key must serialize")?;
         let fields = value.as_object_mut().ok_or("Expected an API Key object")?;
-        assert!(row.permissions.is_none());
+        assert!(row.permissions.typed()?.is_none());
         assert_eq!(fields.remove("permissions"), Some(Value::Null));
         for field in ["createdAt", "updatedAt"] {
             let date = fields.get_mut(field).ok_or("Missing API Key date")?;

@@ -32,6 +32,31 @@ pub enum EntityRole {
     RateLimit,
 }
 
+/// Resolve a native Rust field name to the upstream logical field name.
+/// Preserve names that already use the upstream spelling.
+pub fn canonical_field_name(role: EntityRole, name: &str) -> String {
+    match (role, name) {
+        (EntityRole::ApiKey, "key_hash" | "keyHash") => return "key".into(),
+        (EntityRole::Passkey, "credential_id" | "credentialId") => return "credentialID".into(),
+        _ => {}
+    }
+    let mut output = String::with_capacity(name.len());
+    let mut uppercase = false;
+    for character in name.chars() {
+        if character == '_' {
+            uppercase = true;
+        } else {
+            output.push(if uppercase {
+                character.to_ascii_uppercase()
+            } else {
+                character
+            });
+            uppercase = false;
+        }
+    }
+    output
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct FieldDef {
     pub name: &'static str,

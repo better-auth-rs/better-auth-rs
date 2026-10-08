@@ -126,7 +126,7 @@ pub(super) async fn create<S: AuthSchema>(
                     refill_amount: Some(10.0),
                     permissions: None,
                     metadata: None,
-                    enabled: true,
+                    enabled: true.into(),
                     additional_fields: input(),
                 })
                 .await?,

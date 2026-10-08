@@ -36,11 +36,14 @@ pub(super) fn generate(
         })
         .transpose()?;
     let mut columns = Vec::new();
+    let mut column_aliases = std::collections::BTreeSet::new();
     let mut core_columns = Vec::new();
     let mut values = Vec::new();
     let mut references = Vec::new();
     let mut assignments = Vec::new();
     let mut output = Vec::new();
+    let mut raw_output = Vec::new();
+    let dynamic_record = matches!(role, EntityRole::ApiKey | EntityRole::Passkey);
     for field in &fields.named {
         let Some(ident) = &field.ident else { continue };
         let name = ident.to_string();
@@ -62,7 +65,10 @@ pub(super) fn generate(
         }
         aliases.sort();
         aliases.dedup();
-        columns.push(quote!(#(#aliases)|* => Ok(Column::#column),));
+        aliases.retain(|alias| column_aliases.insert(alias.clone()));
+        if !aliases.is_empty() {
+            columns.push(quote!(#(#aliases)|* => Ok(Column::#column),));
+        }
         let reference = identity::is_reference(role, field)?;
         references.push(quote!(Column::#column => #reference,));
         let decoded = if name == "id" || reference {
@@ -70,15 +76,19 @@ pub(super) fn generate(
         } else {
             adapter_record::decode_field(field, seaorm_root)
         };
-        assignments.push(quote!(#(#aliases)|* => active.#ident = #seaorm_root::sea_orm::ActiveValue::Set(#decoded),));
+        assignments.push(quote!(Column::#column => active.#ident = #seaorm_root::sea_orm::ActiveValue::Set(#decoded),));
         let stored_value = adapter_record::field_value(ident, seaorm_root);
         values.push(quote!(Column::#column => #stored_value,));
         if !core.contains(&name.as_str()) {
             core_columns.push(quote!(Column::#column => None,));
             continue;
         }
-        let logical = serde_rename_rule::RenameRule::CamelCase.apply_to_field(&name);
+        let logical = registry::canonical_field_name(role, &name);
         core_columns.push(quote!(Column::#column => Some(#logical),));
+        raw_output.push(quote!((#logical.to_owned(), #stored_value),));
+        if dynamic_record {
+            continue;
+        }
         let value = if name == "id" {
             quote!(#core_root::SchemaValue::Typed(self.#ident.to_string()))
         } else if reference {
@@ -115,47 +125,6 @@ pub(super) fn generate(
             && matches!(name.as_str(), "created_at" | "updated_at")
         {
             quote!(#core_root::SchemaValue::Typed(self.#ident.into()))
-        } else if role == EntityRole::Passkey && name == "created_at" {
-            if identity::optional_inner(&field.ty).is_some() {
-                quote!(#core_root::SchemaValue::Typed(self.#ident.map(Into::into)))
-            } else {
-                quote!(#core_root::SchemaValue::Typed(Some(self.#ident.into())))
-            }
-        } else if role == EntityRole::ApiKey
-            && matches!(name.as_str(), "name" | "enabled" | "rate_limit_enabled")
-            || role == EntityRole::Passkey && matches!(name.as_str(), "name" | "aaguid")
-        {
-            quote!(#core_root::SchemaValue::from_field(#stored_value))
-        } else if role == EntityRole::Passkey && name == "credential" {
-            quote!(#core_root::SchemaValue::Typed(self.#ident.to_owned()))
-        } else if role == EntityRole::Passkey && name == "updated_at" {
-            quote!(#core_root::SchemaValue::Typed(self.#ident.into()))
-        } else if role == EntityRole::ApiKey && name == "start" {
-            quote!(self.#ident.clone().map(#core_root::ApiKeyStart::from))
-        } else if role == EntityRole::ApiKey
-            && matches!(
-                name.as_str(),
-                "refill_interval"
-                    | "refill_amount"
-                    | "rate_limit_time_window"
-                    | "rate_limit_max"
-                    | "request_count"
-                    | "remaining"
-            )
-        {
-            quote!(self.#ident.map(f64::from))
-        } else if role == EntityRole::ApiKey && matches!(name.as_str(), "created_at" | "updated_at")
-        {
-            quote!(self.#ident.into())
-        } else if role == EntityRole::ApiKey
-            && matches!(
-                name.as_str(),
-                "expires_at" | "last_request" | "last_refill_at"
-            )
-        {
-            quote!(self.#ident.map(Into::into))
-        } else if role == EntityRole::Passkey && name == "counter" {
-            quote!(u64::try_from(self.#ident).map_err(|error| #core_root::AuthError::config(format!("Invalid stored passkey counter: {error}")))?)
         } else if matches!(
             name.as_str(),
             "expires_at" | "last_polled_at" | "locked_until" | "created_at" | "updated_at"
@@ -168,10 +137,8 @@ pub(super) fn generate(
         } else {
             quote!(self.#ident.to_owned())
         };
-        let value = if matches!(
-            role,
-            EntityRole::WalletAddress | EntityRole::Passkey | EntityRole::TwoFactor
-        ) && name == "user_id"
+        let value = if matches!(role, EntityRole::WalletAddress | EntityRole::TwoFactor)
+            && name == "user_id"
         {
             quote!(#core_root::SchemaValue::from_field(#core_root::SchemaField::into_field(#value)))
         } else {
@@ -179,22 +146,7 @@ pub(super) fn generate(
         };
         output.push(quote!(#ident: #value,));
     }
-    if role == EntityRole::Passkey {
-        for name in ["name", "aaguid"] {
-            if !fields
-                .named
-                .iter()
-                .any(|field| field.ident.as_ref().is_some_and(|ident| ident == name))
-            {
-                let ident = format_ident!("{name}");
-                // Runtime validation requires an explicit shared-column mapping for an absent display slot.
-                output.push(quote!(#ident: #core_root::SchemaValue::Undefined,));
-            }
-        }
-    }
     let passkey_storage = options.native_passkey.then(|| {
-        output.push(quote!(credential: #core_root::SchemaValue::Undefined,));
-        output.push(quote!(updated_at: #core_root::SchemaValue::Undefined,));
         quote! {
             fn passkey_storage() -> #core_root::PasskeyStorage {
                 #core_root::PasskeyStorage::Native
@@ -233,6 +185,16 @@ pub(super) fn generate(
         }
     });
     let ident = &input.ident;
+    let logical = if dynamic_record {
+        quote!(#core_root::FieldMap::from_iter([#(#raw_output)*]))
+    } else {
+        quote!(Default::default())
+    };
+    let record_body = if dynamic_record {
+        quote!(<#record as #core_root::FromFieldMap>::from_field_values(#core_root::FieldMap::from_iter([#(#raw_output)*])))
+    } else {
+        quote!(Ok(#record { #(#output)* }))
+    };
     Ok(quote! {
         impl #seaorm_root::SeaOrmPluginModel for #ident {
             type Record = #record;
@@ -243,6 +205,11 @@ pub(super) fn generate(
             #passkey_storage
             #two_factor_storage
             fn column(name: &str) -> #core_root::AuthResult<Column> {
+                if let Some(column) = <Column as #seaorm_root::sea_orm::Iterable>::iter()
+                    .find(|column| #seaorm_root::sea_orm::IdenStatic::as_str(column) == name)
+                {
+                    return Ok(column);
+                }
                 match name { #(#columns)* _ => Err(#core_root::AuthError::config(format!("Unknown plugin model column: {name}"))) }
             }
             fn core_field_name(column: &Column) -> Option<&'static str> {
@@ -255,17 +222,17 @@ pub(super) fn generate(
                     let value = match Self::column(name)? { #(#values)* };
                     let _ = storage.insert(name.to_owned(), value);
                 }
-                Ok(#core_root::user_fields::AdapterRecord::new(Default::default(), storage))
+                Ok(#core_root::user_fields::AdapterRecord::new(#logical, storage))
             }
             fn record(&self) -> #core_root::AuthResult<Self::Record> {
-                Ok(#record { #(#output)* })
+                #record_body
             }
             fn is_id_reference(column: &Column) -> bool {
                 match column { #(#references)* }
             }
             fn apply_fields(active: &mut ActiveModel, fields: #core_root::FieldMap) -> #core_root::AuthResult<()> {
                 for (name, value) in fields {
-                    match name.as_str() { #(#assignments)* _ => return Err(#core_root::AuthError::config(format!("Unknown plugin model field: {name}"))) }
+                    match Self::column(&name)? { #(#assignments)* }
                 }
                 Ok(())
             }

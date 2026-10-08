@@ -521,10 +521,10 @@ async fn test_resolve_configuration_without_default_is_an_error() {
 // configId as the default, for keys written before the column existed.
 #[tokio::test]
 async fn test_config_id_matches_treats_missing_as_default() {
-    assert!(super::config_id_matches("", "default"));
-    assert!(super::config_id_matches("default", ""));
-    assert!(super::config_id_matches("billing", "billing"));
-    assert!(!super::config_id_matches("billing", "default"));
+    assert!(super::config_id_matches(&"".into(), "default"));
+    assert!(super::config_id_matches(&"default".into(), ""));
+    assert!(super::config_id_matches(&"billing".into(), "billing"));
+    assert!(!super::config_id_matches(&"billing".into(), "default"));
 }
 
 // Upstream reference: @better-auth/api-key :: create with `references:

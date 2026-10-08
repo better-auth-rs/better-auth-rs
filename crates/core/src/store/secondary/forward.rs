@@ -323,6 +323,22 @@ impl<S: AuthSchema> TwoFactorStore for SecondaryStore<S> {
 
 #[async_trait]
 impl<S: AuthSchema> ApiKeyStore for SecondaryStore<S> {
+    async fn create_api_key_record(&self, input: crate::FieldMap) -> AuthResult<crate::FieldMap> {
+        self.inner.create_api_key_record(input).await
+    }
+    async fn get_api_key_record(
+        &self,
+        id: &crate::SchemaValue<String>,
+    ) -> AuthResult<Option<crate::FieldMap>> {
+        self.inner.get_api_key_record(id).await
+    }
+    async fn update_api_key_record(
+        &self,
+        id: &crate::SchemaValue<String>,
+        input: crate::FieldMap,
+    ) -> AuthResult<Option<crate::FieldMap>> {
+        self.inner.update_api_key_record(id, input).await
+    }
     async fn create_api_key(&self, input: CreateApiKey) -> AuthResult<ApiKey> {
         self.inner.create_api_key(input).await
     }
@@ -381,6 +397,22 @@ impl<S: AuthSchema> ApiKeyStore for SecondaryStore<S> {
 
 #[async_trait]
 impl<S: AuthSchema> PasskeyStore for SecondaryStore<S> {
+    async fn create_passkey_record(&self, input: crate::FieldMap) -> AuthResult<crate::FieldMap> {
+        self.inner.create_passkey_record(input).await
+    }
+    async fn get_passkey_record(
+        &self,
+        id: &crate::SchemaValue<String>,
+    ) -> AuthResult<Option<crate::FieldMap>> {
+        self.inner.get_passkey_record(id).await
+    }
+    async fn update_passkey_record(
+        &self,
+        id: &crate::SchemaValue<String>,
+        input: crate::FieldMap,
+    ) -> AuthResult<Option<crate::FieldMap>> {
+        self.inner.update_passkey_record(id, input).await
+    }
     fn passkey_storage(&self) -> crate::PasskeyStorage {
         self.inner.passkey_storage()
     }
@@ -587,6 +619,14 @@ impl<S: AuthSchema> OrganizationRoleStore for SecondaryStore<S> {
         organization_id: &str,
     ) -> AuthResult<Vec<crate::OrganizationRole>> {
         self.inner.list_organization_roles(organization_id).await
+    }
+    async fn list_organization_roles_value(
+        &self,
+        organization_id: &crate::FieldValue,
+    ) -> AuthResult<Vec<crate::OrganizationRole>> {
+        self.inner
+            .list_organization_roles_value(organization_id)
+            .await
     }
     async fn update_organization_role(
         &self,

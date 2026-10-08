@@ -62,12 +62,12 @@ where
         id: created.id.clone(),
         user_id: input.user_id.into(),
         name: input.name,
-        public_key: input.public_key,
-        credential_id: input.credential_id,
-        counter: input.counter,
-        device_type: input.device_type,
-        backed_up: input.backed_up,
-        transports: input.transports,
+        public_key: input.public_key.into(),
+        credential_id: input.credential_id.into(),
+        counter: input.counter.into(),
+        device_type: input.device_type.into(),
+        backed_up: input.backed_up.into(),
+        transports: input.transports.into(),
         created_at: created.created_at.clone(),
         updated_at: Default::default(),
         aaguid: input.aaguid,
@@ -77,7 +77,7 @@ where
     assert_eq!(store.get_passkey_by_id(&id).await?, Some(expected.clone()));
     assert_eq!(
         store
-            .get_passkey_by_credential_id(&expected.credential_id)
+            .get_passkey_by_credential_id(expected.credential_id.typed()?)
             .await?,
         Some(expected.clone())
     );
@@ -91,7 +91,7 @@ where
             UpdatePasskeyAuthentication::Native { counter: 9 },
         )
         .await?;
-    expected.counter = 9;
+    expected.counter = 9.into();
     assert_eq!(updated, expected);
     assert_eq!(store.get_passkey_by_id(&id).await?, Some(expected.clone()));
     let renamed = store.update_passkey_name(&id, "Renamed key").await?;
@@ -115,7 +115,7 @@ where
     assert_eq!(store.get_passkey_by_id(&id).await?, Some(expected.clone()));
     assert_eq!(
         store
-            .get_passkey_by_credential_id(&expected.credential_id)
+            .get_passkey_by_credential_id(expected.credential_id.typed()?)
             .await?,
         Some(expected.clone())
     );

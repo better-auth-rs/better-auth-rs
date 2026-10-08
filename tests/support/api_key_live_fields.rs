@@ -80,7 +80,7 @@ async fn observe<S: AuthSchema>(
                         assert_eq!(row.updated_at, FieldDate::from(updated_at));
                         events.lock().expect("trace lock").push(json!(["write", {
                             "label":label.json()?, "revision":revision.json()?,
-                            "updatedAt":FieldValue::from(row.updated_at.clone()).json()?,
+                            "updatedAt":row.updated_at.field_value().json()?,
                         }]));
                         Ok(format!("{name}:out").into())
                     }

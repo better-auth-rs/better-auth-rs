@@ -2,6 +2,7 @@ use crate::store::schema::resolve_field_name;
 use crate::{AuthRecordFields, FromFieldMap, SchemaField};
 use crate::{AuthResult, entity::AuthUser, plugin::MetadataMap, wire::UserView};
 use crate::{FieldMap, FieldValue as Value};
+use futures_util::future::BoxFuture;
 
 const PLUGIN_FIELDS: &[(&str, &[&str])] = &[
     ("anonymous.enabled", &["isAnonymous"]),
@@ -170,7 +171,7 @@ impl UserView {
             metadata,
             false,
             super::FieldOutputCapabilities::json_only(supports_native_json),
-            |_, _, _| Ok(None),
+            &|_, _, _| Ok(None),
         )
         .await
     }
@@ -186,7 +187,7 @@ impl UserView {
         capabilities: super::FieldOutputCapabilities,
         read_extra: impl Fn(&T, &str, &super::UserFieldConfig) -> AuthResult<Option<Value>> + Sync,
     ) -> AuthResult<Vec<Self>> {
-        Self::project_many(users, config, metadata, false, capabilities, read_extra).await
+        Self::project_many(users, config, metadata, false, capabilities, &read_extra).await
     }
 
     async fn project<T: AuthUser>(
@@ -203,151 +204,158 @@ impl UserView {
             metadata,
             public,
             super::FieldOutputCapabilities::json_only(supports_native_json),
-            |_, _, _| Ok(None),
+            &|_, _, _| Ok(None),
         )
         .await?
         .remove(0))
     }
 
-    async fn project_many<T: AuthUser>(
-        users: &[T],
-        config: &super::UserConfig,
-        metadata: &MetadataMap,
+    fn project_many<'a, T: AuthUser>(
+        users: &'a [T],
+        config: &'a super::UserConfig,
+        metadata: &'a MetadataMap,
         public: bool,
         capabilities: super::FieldOutputCapabilities,
-        read_extra: impl Fn(&T, &str, &super::UserFieldConfig) -> AuthResult<Option<Value>> + Sync,
-    ) -> AuthResult<Vec<Self>> {
-        let mut rows = users
-            .iter()
-            .map(|user| {
-                let mut view = Self::from_model(user)?;
-                view.visible_fields = Some(
-                    Self::active_plugin_fields(metadata)
-                        .filter(|name| {
-                            user.field_presence()
-                                .is_none_or(|fields| fields.contains(*name))
-                        })
-                        .map(str::to_owned)
-                        .chain(
-                            ["name", "email", "image"]
-                                .into_iter()
-                                .filter(|name| {
-                                    user.field_presence()
-                                        .is_none_or(|fields| fields.contains(*name))
-                                })
-                                .map(str::to_owned),
-                        )
-                        .collect(),
-                );
-                view.additional_fields.clear();
-                let model = if !config.fields().is_empty() && user.projected_fields().is_none() {
-                    Some(user.field_values()?)
-                } else {
-                    None
-                };
-                Ok((user, view, model))
-            })
-            .collect::<AuthResult<Vec<_>>>()?;
-        let read_extra = &read_extra;
-        super::batch::project_fields(
-            &mut rows,
-            config.fields(),
-            |(user, view, model), name, field| {
-                Box::pin(async move {
-                    let value = if let Some(projected) = user.projected_fields() {
-                        match name {
-                            "id" => Some(view.id.field_value()),
-                            "name" => Some(view.name.field_value()),
-                            "image" => Some(view.image.field_value()),
-                            _ => projected.get(name).cloned(),
-                        }
-                        .unwrap_or_default()
-                    } else {
-                        let storage_name = resolve_field_name(field.field_name.as_deref(), name);
-                        let value = if Self::NATIVE_FIELDS.contains(&name) {
-                            None
-                        } else {
-                            read_extra(user, name, field)?
-                        };
-                        let raw_extra = value.is_some() && field.references.is_none();
-                        let value = value
-                            .or_else(|| {
-                                model
-                                    .as_ref()
-                                    .and_then(|model| model.get(storage_name))
-                                    .cloned()
+        read_extra: &'a (impl Fn(&T, &str, &super::UserFieldConfig) -> AuthResult<Option<Value>> + Sync),
+    ) -> BoxFuture<'a, AuthResult<Vec<Self>>> {
+        // Erase the projection future so request callers do not expand its nested Send obligations.
+        Box::pin(async move {
+            let mut rows = users
+                .iter()
+                .map(|user| {
+                    let mut view = Self::from_model(user)?;
+                    view.visible_fields = Some(
+                        Self::active_plugin_fields(metadata)
+                            .filter(|name| {
+                                user.field_presence()
+                                    .is_none_or(|fields| fields.contains(*name))
                             })
-                            .or_else(|| match (name, storage_name == name) {
-                                ("username", true) => {
-                                    Some(user.username().map(str::to_owned).into_field())
-                                }
-                                ("displayUsername", true) => {
-                                    Some(user.display_username().map(str::to_owned).into_field())
-                                }
-                                _ => None,
-                            });
-                        if raw_extra {
-                            field
-                                .adapter_output_from_raw(value.unwrap_or_default(), capabilities)
-                                .await?
-                        } else {
-                            field
-                                .adapter_output(
-                                    value.unwrap_or_default(),
-                                    capabilities.supports_native_json,
-                                )
-                                .await?
-                        }
+                            .map(str::to_owned)
+                            .chain(
+                                ["name", "email", "image"]
+                                    .into_iter()
+                                    .filter(|name| {
+                                        user.field_presence()
+                                            .is_none_or(|fields| fields.contains(*name))
+                                    })
+                                    .map(str::to_owned),
+                            )
+                            .collect(),
+                    );
+                    view.additional_fields.clear();
+                    let model = if !config.fields().is_empty() && user.projected_fields().is_none()
+                    {
+                        Some(user.field_values()?)
+                    } else {
+                        None
                     };
-                    if name == "username" || name == "displayUsername" {
-                        if let Some(fields) = &mut view.visible_fields {
-                            if !public || field.returned() {
-                                let _ = fields.insert(name.to_owned());
+                    Ok((user, view, model))
+                })
+                .collect::<AuthResult<Vec<_>>>()?;
+            super::batch::project_fields(
+                &mut rows,
+                config.fields(),
+                |(user, view, model), name, field| {
+                    Box::pin(async move {
+                        let value = if let Some(projected) = user.projected_fields() {
+                            match name {
+                                "id" => Some(view.id.field_value()),
+                                "name" => Some(view.name.field_value()),
+                                "image" => Some(view.image.field_value()),
+                                _ => projected.get(name).cloned(),
+                            }
+                            .unwrap_or_default()
+                        } else {
+                            let storage_name =
+                                resolve_field_name(field.field_name.as_deref(), name);
+                            let value = if Self::NATIVE_FIELDS.contains(&name) {
+                                None
                             } else {
-                                let _ = fields.remove(name);
+                                read_extra(user, name, field)?
+                            };
+                            let raw_extra = value.is_some() && field.references.is_none();
+                            let value = value
+                                .or_else(|| {
+                                    model
+                                        .as_ref()
+                                        .and_then(|model| model.get(storage_name))
+                                        .cloned()
+                                })
+                                .or_else(|| match (name, storage_name == name) {
+                                    ("username", true) => {
+                                        Some(user.username().map(str::to_owned).into_field())
+                                    }
+                                    ("displayUsername", true) => Some(
+                                        user.display_username().map(str::to_owned).into_field(),
+                                    ),
+                                    _ => None,
+                                });
+                            if raw_extra {
+                                field
+                                    .adapter_output_from_raw(
+                                        value.unwrap_or_default(),
+                                        capabilities,
+                                    )
+                                    .await?
+                            } else {
+                                field
+                                    .adapter_output(
+                                        value.unwrap_or_default(),
+                                        capabilities.supports_native_json,
+                                    )
+                                    .await?
+                            }
+                        };
+                        if name == "username" || name == "displayUsername" {
+                            if let Some(fields) = &mut view.visible_fields {
+                                if !public || field.returned() {
+                                    let _ = fields.insert(name.to_owned());
+                                } else {
+                                    let _ = fields.remove(name);
+                                }
+                            }
+                            let typed = if !public || field.returned() {
+                                value.decode()?
+                            } else {
+                                None
+                            };
+                            if name == "username" {
+                                view.username = typed;
+                            } else {
+                                view.display_username = typed;
                             }
                         }
-                        let typed = if !public || field.returned() {
-                            value.decode()?
-                        } else {
-                            None
-                        };
-                        if name == "username" {
-                            view.username = typed;
-                        } else {
-                            view.display_username = typed;
+                        if name == "name" || name == "image" {
+                            let target = if name == "name" {
+                                &mut view.name
+                            } else {
+                                &mut view.image
+                            };
+                            *target = crate::SchemaValue::from_field(value);
+                            if public
+                                && !field.returned()
+                                && let Some(fields) = &mut view.visible_fields
+                            {
+                                let _ = fields.remove(name);
+                            }
+                            return Ok(());
                         }
-                    }
-                    if name == "name" || name == "image" {
-                        let target = if name == "name" {
-                            &mut view.name
-                        } else {
-                            &mut view.image
-                        };
-                        *target = crate::SchemaValue::from_field(value);
-                        if public
-                            && !field.returned()
-                            && let Some(fields) = &mut view.visible_fields
                         {
-                            let _ = fields.remove(name);
+                            let mut value = value;
+                            if !field.uses_id_output() {
+                                field.normalize_date(&mut value)?;
+                            }
+                            if !public || field.returned() {
+                                let _ = view.additional_fields.insert(name.to_owned(), value);
+                            }
                         }
-                        return Ok(());
-                    }
-                    {
-                        let mut value = value;
-                        if !field.uses_id_output() {
-                            field.normalize_date(&mut value)?;
-                        }
-                        if !public || field.returned() {
-                            let _ = view.additional_fields.insert(name.to_owned(), value);
-                        }
-                    }
-                    Ok(())
-                })
-            },
-        )
-        .await?;
-        Ok(rows.into_iter().map(|(_, view, _)| view).collect())
+                        Ok(())
+                    })
+                },
+            )
+            .await?;
+            Ok(rows.into_iter().map(|(_, view, _)| view).collect())
+        })
     }
 }
 

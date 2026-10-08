@@ -150,7 +150,7 @@ impl<S: AuthSchema> Fixture<S> {
         assert_eq!(row.credential_id, "ordinary-credential");
         assert_eq!(row.public_key, "ordinary-public-key");
         assert_eq!(row.device_type, "singleDevice");
-        assert!(!row.backed_up);
+        assert!(!*row.backed_up.typed()?);
         assert_eq!(row.transports, None);
         assert_eq!(
             row.aaguid.typed()?.as_deref(),
@@ -237,7 +237,7 @@ impl<S: AuthSchema> Fixture<S> {
             "get-id" => self.store.get_passkey_by_id(seeded.id.typed()?).await?,
             "get-credential" => {
                 self.store
-                    .get_passkey_by_credential_id(&seeded.credential_id)
+                    .get_passkey_by_credential_id(seeded.credential_id.typed()?)
                     .await?
             }
             "list" => return self.store.list_passkeys_by_user(&self.owner).await,
@@ -252,8 +252,8 @@ impl<S: AuthSchema> Fixture<S> {
                     PasskeyStorage::Legacy => UpdatePasskeyAuthentication::Legacy {
                         credential: seeded.credential.typed()?.clone(),
                         counter: 1,
-                        backed_up: seeded.backed_up,
-                        device_type: seeded.device_type.clone(),
+                        backed_up: *seeded.backed_up.typed()?,
+                        device_type: seeded.device_type.typed()?.clone(),
                     },
                 };
                 Some(

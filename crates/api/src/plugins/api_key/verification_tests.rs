@@ -1,6 +1,95 @@
 use super::*;
 
 #[tokio::test]
+async fn cached_dynamic_enabled_values_control_verification_before_consuming_usage() {
+    use better_auth_core::{
+        FieldValue, SchemaValue,
+        store::{MemoryCacheAdapter, SecondaryStorage},
+    };
+    let cache = Arc::new(MemoryCacheAdapter::new());
+    let plugin = ApiKeyPlugin::with_config(ApiKeyConfig {
+        storage: ApiKeyStorage::SecondaryStorage,
+        custom_storage: Some(cache.clone()),
+        defer_updates: false,
+        rate_limit: RateLimitDefaults {
+            enabled: false,
+            ..Default::default()
+        },
+        ..Default::default()
+    });
+    let (ctx, _, session) = create_test_context_with_user().await;
+    let (id, key) = create_key_and_get_raw(
+        &plugin,
+        &ctx,
+        &session.token,
+        serde_json::json!({"name":"dynamic-enabled"}),
+    )
+    .await;
+    let configuration = plugin.resolve_configuration(None).unwrap();
+    let seed = storage::get_by_hash(configuration, &ctx, &ApiKeyPlugin::hash_key(&key))
+        .await
+        .unwrap()
+        .unwrap();
+    let cache_key = format!("api-key:{}", seed.key_hash.display_string().unwrap());
+    for (value, enabled) in [
+        (FieldValue::Undefined, true),
+        (FieldValue::Null, true),
+        (false.into(), false),
+        (true.into(), true),
+        (0.0.into(), true),
+        (5.25.into(), true),
+        ("".into(), true),
+        ("0".into(), true),
+        (FieldValue::from_json(serde_json::json!({})).unwrap(), true),
+        (FieldValue::from_json(serde_json::json!([])).unwrap(), true),
+    ] {
+        let mut row = seed.clone();
+        row.enabled = SchemaValue::from_field(value.clone());
+        row.remaining = Some(2.0).into();
+        storage::put(cache.as_ref(), &row, false).await.unwrap();
+        let before = cache.get(&cache_key).await.unwrap();
+        let result = plugin
+            .verify_api_key(
+                &VerifyApiKey {
+                    key: &key,
+                    config_id: None,
+                    permissions: None,
+                },
+                &ctx,
+            )
+            .await;
+        if enabled {
+            let verified = result.unwrap();
+            assert_eq!(verified.enabled.field_value(), value);
+            assert_eq!(verified.remaining, Some(1.0));
+        } else {
+            assert!(matches!(
+                result,
+                Err(ApiKeyVerificationError::Validation(ApiKeyValidationError {
+                    code: ApiKeyErrorCode::KeyDisabled,
+                    ..
+                }))
+            ));
+            assert_eq!(
+                cache.get(&cache_key).await.unwrap(),
+                before,
+                "Disabled keys must not consume quota or change cache state"
+            );
+        }
+        let restored = storage::get_by_hash(configuration, &ctx, seed.key_hash.typed().unwrap())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(restored.enabled.field_value(), value);
+        assert_eq!(restored.remaining, Some(if enabled { 1.0 } else { 2.0 }));
+        let encoded = cache.get(&cache_key).await.unwrap().unwrap();
+        let encoded: serde_json::Value = serde_json::from_str(encoded.as_str().unwrap()).unwrap();
+        assert_eq!(encoded.get("enabled"), value.json().unwrap().as_ref());
+    }
+    assert!(ctx.database.get_api_key_by_id(&id).await.unwrap().is_none());
+}
+
+#[tokio::test]
 async fn scoped_verification_uses_the_configuration_hashing_and_rejects_other_configs() {
     let plugin = ApiKeyPlugin::builder().build().configuration(ApiKeyConfig {
         config_id: "machines".to_owned(),
@@ -292,7 +381,7 @@ async fn organization_key_verifies_without_emulating_a_user_session() {
             config_id: "default".to_owned(),
             key_hash,
             start: Some(start),
-            enabled: true,
+            enabled: true.into(),
             name: None.into(),
             prefix: None,
             expires_at: None,
@@ -413,4 +502,84 @@ async fn verified_session_authenticates_a_protected_plugin_route_without_a_datab
             .len(),
         1
     );
+}
+
+#[tokio::test]
+async fn secondary_usage_retains_dynamic_counter_arithmetic_and_strict_rate_limit_flags() {
+    use better_auth_core::{FieldValue, SchemaValue, store::MemoryCacheAdapter};
+    let cache = Arc::new(MemoryCacheAdapter::new());
+    let plugin = ApiKeyPlugin::with_config(ApiKeyConfig {
+        storage: ApiKeyStorage::SecondaryStorage,
+        custom_storage: Some(cache.clone()),
+        defer_updates: false,
+        ..Default::default()
+    });
+    let (ctx, _, session) = create_test_context_with_user().await;
+    let (_, raw_key) =
+        create_key_and_get_raw(&plugin, &ctx, &session.token, serde_json::json!({})).await;
+    let config = plugin.resolve_configuration(None).unwrap();
+    let seed = storage::get_by_hash(config, &ctx, &ApiKeyPlugin::hash_key(&raw_key))
+        .await
+        .unwrap()
+        .unwrap();
+    for (flag, limited) in [
+        (FieldValue::Bool(false), false),
+        (FieldValue::Null, true),
+        (FieldValue::Undefined, true),
+        (0.0.into(), true),
+    ] {
+        let mut key = seed.clone();
+        key.rate_limit_enabled = SchemaValue::from_field(flag);
+        key.remaining = SchemaValue::from_field("2".into());
+        key.request_count = SchemaValue::from_field("1".into());
+        key.rate_limit_max = SchemaValue::from_field("0".into());
+        key.rate_limit_time_window = Some(1_000_000.0).into();
+        key.last_request = Some(chrono::Utc::now().into()).into();
+        storage::put(cache.as_ref(), &key, false).await.unwrap();
+        let input = VerifyApiKey {
+            key: &raw_key,
+            config_id: None,
+            permissions: None,
+        };
+        let result = plugin.verify_api_key(&input, &ctx).await;
+        if limited {
+            assert!(matches!(
+                result,
+                Err(ApiKeyVerificationError::Validation(ApiKeyValidationError {
+                    code: ApiKeyErrorCode::RateLimited,
+                    ..
+                }))
+            ));
+            let stored = storage::get_by_hash(config, &ctx, seed.key_hash.typed().unwrap())
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(stored.remaining.field_value(), "2".into());
+        } else {
+            let verified = result.unwrap();
+            assert_eq!(verified.remaining, Some(1.0));
+            assert_eq!(verified.request_count.field_value(), "1".into());
+        }
+    }
+    let mut key = seed;
+    key.rate_limit_enabled = SchemaValue::from_field(FieldValue::Null);
+    key.remaining = SchemaValue::from_field("2".into());
+    key.request_count = SchemaValue::from_field("1".into());
+    key.rate_limit_max = SchemaValue::from_field("3".into());
+    key.rate_limit_time_window = Some(1_000_000.0).into();
+    key.last_request = Some(chrono::Utc::now().into()).into();
+    storage::put(cache.as_ref(), &key, false).await.unwrap();
+    let verified = plugin
+        .verify_api_key(
+            &VerifyApiKey {
+                key: &raw_key,
+                config_id: None,
+                permissions: None,
+            },
+            &ctx,
+        )
+        .await
+        .unwrap();
+    assert_eq!(verified.remaining, Some(1.0));
+    assert_eq!(verified.request_count.field_value(), "11".into());
 }

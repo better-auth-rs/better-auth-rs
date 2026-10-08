@@ -17,7 +17,7 @@ async fn check_list_default_limit(ctx: &AuthContext<impl better_auth_core::AuthS
                 start: None,
                 expires_at: None,
                 remaining: None,
-                enabled: true,
+                enabled: true.into(),
                 rate_limit_enabled: false,
                 rate_limit_time_window: None,
                 rate_limit_max: None,
@@ -115,7 +115,7 @@ async fn check_list_default_limit(ctx: &AuthContext<impl better_auth_core::AuthS
         .zip([Some(0.0), Some(-0.0), Some(1.0), Some(-1.0), None])
     {
         key.name = name.map(str::to_owned).into();
-        key.remaining = remaining;
+        key.remaining = remaining.into();
         storage::put(cache.as_ref(), &key, false).await.unwrap();
     }
     let plugin = ApiKeyPlugin::with_config(ApiKeyConfig {
@@ -254,7 +254,7 @@ async fn check_list_default_limit(ctx: &AuthContext<impl better_auth_core::AuthS
         for (index, name) in names.iter().enumerate() {
             let mut key = keys[0].clone();
             key.id = format!("dynamic-{index}").into();
-            key.key_hash = format!("dynamic-secret-{index}");
+            key.key_hash = format!("dynamic-secret-{index}").into();
             key.name = better_auth_core::SchemaValue::from_json(name.clone()).unwrap();
             storage::put(cache.as_ref(), &key, false).await.unwrap();
         }
@@ -306,7 +306,7 @@ async fn check_list_default_limit(ctx: &AuthContext<impl better_auth_core::AuthS
         for (index, date) in dates.iter().enumerate() {
             let mut key = keys[0].clone();
             key.id = format!("date-{index}").into();
-            key.key_hash = format!("date-secret-{index}");
+            key.key_hash = format!("date-secret-{index}").into();
             storage::put(cache.as_ref(), &key, false).await.unwrap();
             let mut row = serde_json::to_value(&key).unwrap();
             row[field] = json!(date);
@@ -380,7 +380,7 @@ async fn check_cached_object_conversion_errors(
             for (index, name) in names.iter().enumerate() {
                 let mut key = template.clone();
                 key.id = format!("object-{index}").into();
-                key.key_hash = format!("object-secret-{index}");
+                key.key_hash = format!("object-secret-{index}").into();
                 key.name = better_auth_core::SchemaValue::from_json(Some(name.clone())).unwrap();
                 storage::put(cache.as_ref(), &key, false).await.unwrap();
             }

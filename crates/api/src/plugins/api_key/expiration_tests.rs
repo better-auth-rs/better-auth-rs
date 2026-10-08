@@ -103,7 +103,7 @@ async fn expiration_config_preserves_fractional_defaults_and_day_bounds_in_sqlit
             case.name
         );
         check_date(
-            created.expires_at.as_ref(),
+            created.expires_at.typed()?.as_ref(),
             &case.created,
             before_create,
             after_create,
@@ -119,7 +119,7 @@ async fn expiration_config_preserves_fractional_defaults_and_day_bounds_in_sqlit
         );
         assert_eq!(stored.expires_at, created.expires_at);
         check_date(
-            stored.expires_at.as_ref(),
+            stored.expires_at.typed()?.as_ref(),
             &case.stored_created,
             before_create,
             after_create,
@@ -149,7 +149,12 @@ async fn expiration_config_preserves_fractional_defaults_and_day_bounds_in_sqlit
             updated.name.typed()?.as_deref(),
             Some(case.updated.name.as_str())
         );
-        check_date(updated.expires_at.as_ref(), &case.updated, before, after);
+        check_date(
+            updated.expires_at.typed()?.as_ref(),
+            &case.updated,
+            before,
+            after,
+        );
         let stored_updated = ctx
             .database
             .get_api_key_by_id(created.id.typed()?)
@@ -161,7 +166,7 @@ async fn expiration_config_preserves_fractional_defaults_and_day_bounds_in_sqlit
         );
         assert_eq!(stored_updated.expires_at, updated.expires_at);
         check_date(
-            stored_updated.expires_at.as_ref(),
+            stored_updated.expires_at.typed()?.as_ref(),
             &case.stored_updated,
             before,
             after,

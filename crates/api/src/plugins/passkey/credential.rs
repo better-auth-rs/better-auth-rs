@@ -42,9 +42,14 @@ impl WebAuthnCredential {
                 stored.cred
             }
             PasskeyStorage::Native => {
-                let public_key = STANDARD.decode(passkey.public_key()).map_err(|error| {
-                    AuthError::internal(format!("Invalid passkey public key encoding: {error}"))
-                })?;
+                let public_key =
+                    STANDARD
+                        .decode(passkey.public_key().typed()?)
+                        .map_err(|error| {
+                            AuthError::internal(format!(
+                                "Invalid passkey public key encoding: {error}"
+                            ))
+                        })?;
                 let public_key: serde_cbor_2::Value = serde_cbor_2::from_slice(&public_key)
                     .map_err(|error| {
                         AuthError::internal(format!("Invalid passkey public key CBOR: {error}"))
@@ -53,19 +58,28 @@ impl WebAuthnCredential {
                     AuthError::internal(format!("Invalid passkey public key: {error}"))
                 })?;
                 Credential {
-                    cred_id: decode_credential_id(passkey.credential_id())?,
+                    cred_id: decode_credential_id(passkey.credential_id().typed()?)?,
                     cred: key,
-                    counter: u32::try_from(passkey.counter()).map_err(|error| {
-                        AuthError::internal(format!("Invalid passkey counter: {error}"))
-                    })?,
-                    transports: parse_transports_csv(passkey.transports())
+                    // The endpoint applies the upstream relational check to the original runtime value.
+                    // The engine receives only counters that its fixed integer representation can retain.
+                    counter: match passkey.counter().field_value() {
+                        better_auth_core::FieldValue::Number(value)
+                            if value >= 0.0
+                                && value <= f64::from(u32::MAX)
+                                && value.fract() == 0.0 =>
+                        {
+                            value as u32
+                        }
+                        _ => 0,
+                    },
+                    transports: parse_transports_csv(passkey.transports())?
                         .map(|values| serde_json::from_value(serde_json::to_value(values)?))
                         .transpose()?,
                     // Native storage has no historical UV or attestation metadata. Authentication
                     // uses the same explicit policy as Legacy and verifies the current assertion.
                     user_verified: false,
-                    backup_eligible: passkey.device_type() == "multiDevice",
-                    backup_state: passkey.backed_up(),
+                    backup_eligible: false,
+                    backup_state: false,
                     registration_policy: VERIFICATION_POLICY,
                     extensions: RegisteredExtensions::none(),
                     attestation: ParsedAttestation::default(),

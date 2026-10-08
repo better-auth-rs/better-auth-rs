@@ -228,7 +228,7 @@ impl Fixture {
                 .verify(key, VerifyKeyOptions::default())
                 .await
                 .unwrap();
-            return vec![key.metadata.unwrap_or(Value::Null)];
+            return vec![key.metadata.json().unwrap().unwrap_or(Value::Null)];
         }
         let (method, path, body, query) = match endpoint {
             "get" => (

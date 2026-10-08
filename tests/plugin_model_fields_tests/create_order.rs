@@ -84,7 +84,7 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
                 let row = store
                     .create_api_key(api_key::input(Some(" Desk "), "ordinary-order"))
                     .await?;
-                Ok::<_, AuthError>((row.created_at, row.name))
+                Ok::<_, AuthError>((row.created_at.typed()?.clone(), row.name))
             }
         });
         let (entered_at, reply) = required(calls.recv().await, "Expected the next field callback")?;

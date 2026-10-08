@@ -1,7 +1,10 @@
 use chrono::{DateTime, Utc};
 
 use super::{ApiKeyStore, ConsumeApiKeyResult};
-use crate::{ApiKey, AuthError, AuthResult, FieldDate};
+use crate::{
+    ApiKey, AuthError, AuthResult, FieldDate, FieldValue,
+    query::{field_compare, field_date, field_number},
+};
 
 /// A single guarded counter write or timestamp update for API key verification.
 #[derive(Debug, Clone)]
@@ -9,20 +12,20 @@ pub enum ApiKeyUsageWrite {
     Refill {
         /// Clone the observed [`ApiKey::last_refill_at`] value.
         /// Memory compares Date identity; SQL compares the persisted Date value.
-        /// `None` requires no previous refill Date.
-        previous: Option<FieldDate>,
+        /// Preserve null, omission, and replacement values in the adapter guard.
+        previous: FieldValue,
         remaining: f64,
         at: DateTime<Utc>,
     },
     Decrement,
     StartWindow {
         /// `None` requires a missing previous request; `Some` requires an expired window.
-        previous_before: Option<DateTime<Utc>>,
+        previous_before: Option<FieldDate>,
         at: DateTime<Utc>,
     },
     IncrementWindow {
-        previous_after: DateTime<Utc>,
-        maximum: f64,
+        previous_after: FieldDate,
+        maximum: FieldValue,
         at: DateTime<Utc>,
     },
     LastRequest(DateTime<Utc>),
@@ -30,6 +33,25 @@ pub enum ApiKeyUsageWrite {
 }
 
 impl ApiKeyUsageWrite {
+    /// Return setter values without evaluating the adapter's atomic increment expressions.
+    pub fn set_fields(&self) -> crate::FieldMap {
+        match self {
+            Self::Refill { remaining, at, .. } => crate::FieldMap::from([
+                ("remaining".into(), (*remaining).into()),
+                ("lastRefillAt".into(), (*at).into()),
+            ]),
+            Self::StartWindow { at, .. } => crate::FieldMap::from([
+                ("requestCount".into(), 1.0.into()),
+                ("lastRequest".into(), (*at).into()),
+            ]),
+            Self::IncrementWindow { at, .. } | Self::LastRequest(at) => {
+                crate::FieldMap::from([("lastRequest".into(), (*at).into())])
+            }
+            Self::UpdatedAt(at) => crate::FieldMap::from([("updatedAt".into(), (*at).into())]),
+            Self::Decrement => crate::FieldMap::new(),
+        }
+    }
+
     pub fn operation(&self) -> &'static str {
         match self {
             Self::LastRequest(_) | Self::UpdatedAt(_) => "update",
@@ -43,27 +65,33 @@ pub(super) async fn consume(
     snapshot: &ApiKey,
     rate_enabled: bool,
 ) -> AuthResult<ConsumeApiKeyResult> {
-    if snapshot.remaining == Some(0.0) && snapshot.refill_amount.is_none() {
+    if snapshot.remaining.field_value().strict_equals(&0.0.into())
+        && snapshot.refill_amount.field_value().is_null()
+    {
         store.delete_api_key(&snapshot.id).await?;
         return Ok(ConsumeApiKeyResult::UsageExhausted);
     }
     let mut row = snapshot.clone();
-    if snapshot.remaining.is_some() {
+    if !snapshot.remaining.field_value().is_null() {
         let now = Utc::now();
         let mut refilled = None;
-        if let (Some(interval), Some(amount)) = (snapshot.refill_interval, snapshot.refill_amount)
-            && interval != 0.0
-            && amount != 0.0
-        {
-            let previous = snapshot.last_refill_at.as_ref();
-            let last = previous.unwrap_or(&snapshot.created_at).milliseconds();
-            if now.timestamp_millis() as f64 - last > interval {
+        let interval = snapshot.refill_interval.field_value();
+        let amount = snapshot.refill_amount.field_value();
+        if interval.is_truthy() && amount.is_truthy() {
+            let previous = snapshot.last_refill_at.field_value();
+            let date_input = if previous.is_null() || previous.is_undefined() {
+                snapshot.created_at.field_value()
+            } else {
+                previous.clone()
+            };
+            let last = field_date(&date_input)?.milliseconds();
+            if now.timestamp_millis() as f64 - last > field_number(&interval)? {
                 refilled = store
                     .write_api_key_usage(
                         &snapshot.id,
                         ApiKeyUsageWrite::Refill {
-                            previous: previous.cloned(),
-                            remaining: amount - 1.0,
+                            previous,
+                            remaining: field_number(&amount)? - 1.0,
                             at: now,
                         },
                     )
@@ -86,7 +114,12 @@ pub(super) async fn consume(
 
     loop {
         let now = Utc::now();
-        if !rate_enabled || !row.rate_limit_enabled.is_truthy()? {
+        if !rate_enabled
+            || row
+                .rate_limit_enabled
+                .field_value()
+                .strict_equals(&false.into())
+        {
             if let Some(updated) = store
                 .write_api_key_usage(&row.id, ApiKeyUsageWrite::LastRequest(now))
                 .await?
@@ -95,25 +128,30 @@ pub(super) async fn consume(
             }
             break;
         }
-        let (Some(window), Some(maximum)) = (row.rate_limit_time_window, row.rate_limit_max) else {
+        let window = row.rate_limit_time_window.field_value();
+        let maximum = row.rate_limit_max.field_value();
+        if window.is_null() || maximum.is_null() {
             break;
-        };
-        let elapsed = row
-            .last_request
-            .as_ref()
-            .map(|last| now.timestamp_millis() as f64 - last.milliseconds());
-        let mutation = if let Some(elapsed) = elapsed {
-            // Date truncates fractional milliseconds toward zero.
-            let cutoff = DateTime::from_timestamp_millis(
-                (now.timestamp_millis() as f64 - window).trunc() as i64,
-            )
-            .ok_or_else(|| AuthError::internal("Invalid API key rate-limit window"))?;
+        }
+        let last_request = row.last_request.field_value();
+        let mutation = if last_request.is_null() {
+            ApiKeyUsageWrite::StartWindow {
+                previous_before: None,
+                at: now,
+            }
+        } else {
+            let elapsed = now.timestamp_millis() as f64 - field_date(&last_request)?.milliseconds();
+            let window = field_number(&window)?;
+            let cutoff = FieldDate::from_milliseconds(now.timestamp_millis() as f64 - window);
             if elapsed > window {
                 ApiKeyUsageWrite::StartWindow {
                     previous_before: Some(cutoff),
                     at: now,
                 }
-            } else if row.request_count.unwrap_or(0.0) >= maximum {
+            } else if matches!(
+                field_compare(&row.request_count.field_value(), &maximum)?,
+                Some(std::cmp::Ordering::Equal | std::cmp::Ordering::Greater)
+            ) {
                 return Ok(ConsumeApiKeyResult::RateLimited {
                     try_again_in: (window - elapsed).ceil(),
                 });
@@ -123,11 +161,6 @@ pub(super) async fn consume(
                     maximum,
                     at: now,
                 }
-            }
-        } else {
-            ApiKeyUsageWrite::StartWindow {
-                previous_before: None,
-                at: now,
             }
         };
         if let Some(updated) = store.write_api_key_usage(&row.id, mutation).await? {

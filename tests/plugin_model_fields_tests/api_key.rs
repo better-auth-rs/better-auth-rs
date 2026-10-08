@@ -63,7 +63,7 @@ pub(super) fn input(name: Option<&str>, hash: &str) -> CreateApiKey {
         refill_amount: None,
         permissions: None,
         metadata: None,
-        enabled: true,
+        enabled: true.into(),
     }
 }
 
@@ -171,8 +171,8 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
         ),
         (
             ApiKeyUsageWrite::IncrementWindow {
-                previous_after: now - chrono::Duration::seconds(1),
-                maximum: 3.0,
+                previous_after: (now - chrono::Duration::seconds(1)).into(),
+                maximum: 3.0.into(),
                 at: now,
             },
             9.0,
@@ -183,7 +183,7 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
         (ApiKeyUsageWrite::UpdatedAt(now), 9.0, 2.0, true),
         (
             ApiKeyUsageWrite::Refill {
-                previous: None,
+                previous: FieldValue::Null,
                 remaining: 8.0,
                 at: now,
             },
@@ -266,7 +266,7 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
         .ok_or_else(|| AuthError::internal("Expected the stored model record"))?;
     assert_eq!(stored.name.typed()?.as_deref(), Some("output-error"));
     assert_eq!(
-        (stored.remaining, stored.request_count),
+        (*stored.remaining.typed()?, *stored.request_count.typed()?),
         (Some(8.0), Some(2.0))
     );
     original_error(

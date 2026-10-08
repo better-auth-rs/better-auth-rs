@@ -9,7 +9,8 @@ use better_auth::seaorm::sea_orm::entity::prelude::DateTimeUtc;
 use better_auth::{
     __private_core::{
         ApiKey, AuthError, AuthResult, AuthSchema, AuthStore, CreateApiKey, FieldDate, FieldMap,
-        UpdateApiKey, store::ApiKeyUsageWrite, user_fields::UserConfig, wire::ApiKeyView,
+        FieldValue, UpdateApiKey, store::ApiKeyUsageWrite, user_fields::UserConfig,
+        wire::ApiKeyView,
     },
     BetterAuth,
 };
@@ -170,7 +171,7 @@ pub(crate) fn input() -> CreateApiKey {
         refill_amount: Some(10.0),
         permissions: None,
         metadata: None,
-        enabled: true,
+        enabled: true.into(),
         additional_fields: [
             ("activatedAt".into(), "2029-01-02T03:04:05.000Z".into()),
             (
@@ -229,17 +230,15 @@ impl<S: AuthSchema> Fixture<S> {
         assert_eq!(row.reference_id, "ordinary-owner");
         assert_eq!(row.key_hash, "ordinary-stored-hash");
         assert_eq!(row.config_id, "default");
-        let created = row
-            .created_at
+        let created_at = row.created_at.typed()?;
+        let updated_at = row.updated_at.typed()?;
+        let created = created_at
             .to_datetime()?
             .expect("stored creation timestamp");
-        let updated = row
-            .updated_at
-            .to_datetime()?
-            .expect("stored update timestamp");
+        let updated = updated_at.to_datetime()?.expect("stored update timestamp");
         let identity = self
             .identity
-            .get_or_init(|| (id.clone(), row.created_at.clone()));
+            .get_or_init(|| (id.clone(), created_at.clone()));
         assert_eq!(id, &identity.0);
         assert_eq!(row.created_at, identity.1);
         let normalized_update = match self.update_phase.load(Ordering::SeqCst) {
@@ -251,7 +250,7 @@ impl<S: AuthSchema> Fixture<S> {
                 assert!(updated >= created);
                 assert_eq!(
                     &row.updated_at,
-                    self.ordinary_update.get_or_init(|| row.updated_at.clone())
+                    self.ordinary_update.get_or_init(|| updated_at.clone())
                 );
                 "<ordinary-updated-at>"
             }
@@ -316,7 +315,11 @@ impl<S: AuthSchema> Fixture<S> {
         };
         let row = match operation {
             "get-id" => self.store.get_api_key_by_id(seed.id.typed()?).await?,
-            "get-hash" => self.store.get_api_key_by_hash(&seed.key_hash).await?,
+            "get-hash" => {
+                self.store
+                    .get_api_key_by_hash(seed.key_hash.typed()?)
+                    .await?
+            }
             "list" => {
                 return self
                     .store
@@ -356,7 +359,7 @@ impl<S: AuthSchema> Fixture<S> {
                 let write = match operation {
                     "decrement" | "decrement-input-ignored" => ApiKeyUsageWrite::Decrement,
                     "refill" | "refill-miss" => ApiKeyUsageWrite::Refill {
-                        previous: None,
+                        previous: FieldValue::Null,
                         remaining: 8.0,
                         at: date(0),
                     },
@@ -365,17 +368,18 @@ impl<S: AuthSchema> Fixture<S> {
                         at: date(1),
                     },
                     "reset-window" => ApiKeyUsageWrite::StartWindow {
-                        previous_before: Some(date(1)),
+                        previous_before: Some(date(1).into()),
                         at: date(2),
                     },
                     "increment-window" | "increment-window-miss" => {
                         ApiKeyUsageWrite::IncrementWindow {
-                            previous_after: date(0),
+                            previous_after: date(0).into(),
                             maximum: if operation.ends_with("-miss") {
                                 2.0
                             } else {
                                 3.0
-                            },
+                            }
+                            .into(),
                             at: date(3),
                         }
                     }

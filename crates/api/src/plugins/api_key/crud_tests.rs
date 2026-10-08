@@ -187,7 +187,10 @@ async fn metadata_can_be_cleared_and_disabled_metadata_is_ignored_on_update() {
         )
         .await
         .unwrap();
-    assert_eq!(key.api_key.metadata, Some(json!(["initial"])));
+    assert_eq!(
+        key.api_key.metadata.json().unwrap(),
+        Some(json!(["initial"]))
+    );
     let update = request(
         &token,
         "/api-key/update",
@@ -250,10 +253,15 @@ async fn trusted_creation_and_update_preserve_permissions_and_fractional_expirat
         .await
         .unwrap();
     assert_eq!(key.api_key.remaining, Some(3.0));
-    assert_eq!(key.api_key.permissions, Some(json!({"device":["read"]})));
+    assert_eq!(
+        key.api_key.permissions.json().unwrap(),
+        Some(json!({"device":["read"]}))
+    );
     let expires_at = key
         .api_key
         .expires_at
+        .typed()
+        .unwrap()
         .as_ref()
         .unwrap()
         .to_datetime()
@@ -276,7 +284,10 @@ async fn trusted_creation_and_update_preserve_permissions_and_fractional_expirat
         .await
         .unwrap();
     assert_eq!(updated.remaining, Some(5.0));
-    assert_eq!(updated.permissions, Some(serde_json::Value::Null));
+    assert_eq!(
+        updated.permissions.json().unwrap(),
+        Some(serde_json::Value::Null)
+    );
     assert_eq!(updated.expires_at, None);
     let stored = ctx
         .database

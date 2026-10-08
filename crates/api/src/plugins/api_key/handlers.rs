@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use better_auth_core::{AuthContext, AuthResult, CreateApiKey, UpdateApiKey};
 
 use super::ApiKeyPlugin;
@@ -16,79 +14,76 @@ use crate::plugins::helpers;
 /// Mirrors the TypeScript `role(apiKeyPermissions).authorize(permissions)`
 /// implementation. Required actions must be a subset of the API key's actions
 /// for each resource/role.
-pub(super) fn check_permissions(key_permissions_json: &str, required: &serde_json::Value) -> bool {
-    let required_map = match required.as_object() {
-        Some(m) => m,
-        None => return false,
+pub(super) fn check_permissions(
+    key_permissions: &better_auth_core::FieldValue,
+    required: &serde_json::Value,
+) -> AuthResult<bool> {
+    use better_auth_core::{AuthError, FieldValue};
+    let key_permissions = better_auth_core::utils::json::safe_parse_field(key_permissions);
+    let Some(required) = required.as_object() else {
+        return Ok(false);
     };
-
-    let key_map: HashMap<String, Vec<String>> = match serde_json::from_str(key_permissions_json) {
-        Ok(v) => v,
-        Err(_) => return false,
+    let Some(permissions) = key_permissions.as_object() else {
+        return Ok(false);
     };
-
-    for (resource, requested_actions) in required_map {
-        // Look up the allowed actions for this resource
-        let allowed_actions = match key_map.get(resource) {
-            Some(a) => a,
-            // Resource not found in key permissions -> fail (matches TS behavior)
-            None => return false,
+    for (resource, requested) in required {
+        let Some(allowed) = permissions.get(resource).filter(|value| value.is_truthy()) else {
+            return Ok(false);
         };
-
-        // The request value can be:
-        // 1. An array of action strings -> all must be allowed (AND)
-        // 2. An object { actions: [...], connector: "OR"|"AND" }
-        if let Some(actions_array) = requested_actions.as_array() {
-            // Simple array -> every requested action must exist in allowed actions
-            for action_val in actions_array {
-                let action = match action_val.as_str() {
-                    Some(s) => s,
-                    None => return false,
-                };
-                if !allowed_actions.iter().any(|a| a == action) {
-                    return false;
-                }
-            }
-        } else if let Some(obj) = requested_actions.as_object() {
-            // Object form: { actions: [...], connector: "OR" | "AND" }
-            let actions = match obj.get("actions").and_then(|v| v.as_array()) {
-                Some(a) => a,
-                None => return false,
-            };
-            let connector = obj
-                .get("connector")
-                .and_then(|v| v.as_str())
-                .unwrap_or("AND");
-
-            if connector == "OR" {
-                // At least one requested action must be allowed
-                let any_allowed = actions.iter().any(|action_val| {
-                    action_val
-                        .as_str()
-                        .is_some_and(|action| allowed_actions.iter().any(|a| a == action))
-                });
-                if !any_allowed {
-                    return false;
-                }
-            } else {
-                // AND (default): every requested action must be allowed
-                for action_val in actions {
-                    let action = match action_val.as_str() {
-                        Some(s) => s,
-                        None => return false,
-                    };
-                    if !allowed_actions.iter().any(|a| a == action) {
-                        return false;
-                    }
-                }
-            }
+        let (actions, any) = if let Some(actions) = requested.as_array() {
+            (actions.as_slice(), false)
+        } else if let Some(requested) = requested.as_object() {
+            (
+                requested
+                    .get("actions")
+                    .and_then(serde_json::Value::as_array)
+                    .map_or(&[][..], Vec::as_slice),
+                requested
+                    .get("connector")
+                    .and_then(serde_json::Value::as_str)
+                    == Some("OR"),
+            )
         } else {
-            // Invalid format
-            return false;
+            return Err(AuthError::internal("Invalid access control request"));
+        };
+        if actions.is_empty() {
+            return Ok(false);
+        }
+        let includes = |action: &serde_json::Value| -> AuthResult<bool> {
+            let Some(action) = action.as_str() else {
+                return Ok(false);
+            };
+            match allowed {
+                FieldValue::Array(values) => Ok(values
+                    .iter()
+                    .any(|value| value.same_value_zero(&action.into()))),
+                FieldValue::String(value) => Ok(value.contains(action)),
+                FieldValue::Utf16String(value) => {
+                    let action = action.encode_utf16().collect::<Vec<_>>();
+                    Ok(action.is_empty()
+                        || value
+                            .as_utf16()
+                            .windows(action.len())
+                            .any(|units| units == action))
+                }
+                _ => Err(AuthError::internal(
+                    "allowedActions.includes is not a function",
+                )),
+            }
+        };
+        let mut authorized = !any;
+        for action in actions {
+            let included = includes(action)?;
+            if included == any {
+                authorized = included;
+                break;
+            }
+        }
+        if !authorized {
+            return Ok(false);
         }
     }
-
-    true
+    Ok(!required.is_empty())
 }
 
 // ---------------------------------------------------------------------------
@@ -324,12 +319,14 @@ pub(super) async fn create_key_for_user(
                 .unwrap_or(&serde_json::Value::Null)
                 .to_string(),
         ),
-        enabled: true,
+        enabled: true.into(),
     };
     let api_key = super::storage::create(config, ctx, input).await?;
     let mut api_key = ApiKeyView::from(&api_key);
     // Upstream returns supplied falsy metadata at creation, but stores null.
-    api_key.metadata = body.metadata.clone();
+    api_key.metadata = better_auth_core::FieldValue::from_json(
+        body.metadata.clone().unwrap_or(serde_json::Value::Null),
+    )?;
     Ok(CreateKeyResponse {
         key: full_key,
         api_key,
@@ -535,7 +532,7 @@ pub(super) async fn update_key_for_user(
     }
     let update = UpdateApiKey {
         name: body.name.clone().map(|value| Some(value).into()),
-        enabled: body.enabled,
+        enabled: body.enabled.map(Into::into),
         remaining: body.remaining,
         rate_limit_enabled: body.rate_limit_enabled,
         rate_limit_time_window: body.rate_limit_time_window,

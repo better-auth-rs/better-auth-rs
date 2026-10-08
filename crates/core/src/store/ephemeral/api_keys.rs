@@ -4,8 +4,11 @@ use async_trait::async_trait;
 use chrono::Utc;
 
 use super::{EphemeralStore, rows::RowRef};
+use crate::store::schema::EntityRole;
 use crate::store::{ApiKeyStore, ApiKeyUsageWrite};
-use crate::{ApiKey, AuthError, AuthResult, CreateApiKey, FieldDate, FieldValue, UpdateApiKey};
+use crate::{
+    ApiKey, AuthError, AuthResult, CreateApiKey, FieldDate, FieldValue, FromFieldMap, UpdateApiKey,
+};
 
 fn now() -> FieldDate {
     Utc::now().into()
@@ -13,55 +16,37 @@ fn now() -> FieldDate {
 
 #[async_trait]
 impl ApiKeyStore for EphemeralStore {
+    async fn create_api_key_record(&self, input: crate::FieldMap) -> AuthResult<crate::FieldMap> {
+        self.create_plugin_record(EntityRole::ApiKey, input, Default::default())
+            .await
+    }
+
+    async fn get_api_key_record(
+        &self,
+        id: &crate::SchemaValue<String>,
+    ) -> AuthResult<Option<crate::FieldMap>> {
+        self.get_plugin_record(EntityRole::ApiKey, id).await
+    }
+
+    async fn update_api_key_record(
+        &self,
+        id: &crate::SchemaValue<String>,
+        input: crate::FieldMap,
+    ) -> AuthResult<Option<crate::FieldMap>> {
+        self.update_plugin_record(EntityRole::ApiKey, id, input, Default::default())
+            .await
+    }
+
     async fn create_api_key(&self, input: CreateApiKey) -> AuthResult<ApiKey> {
         let created_at = now();
-        let fields = self
-            .model_fields
-            .api_key_fields_for_storage(
-                Some(input.name),
-                input.additional_fields,
-                true,
-                |field, value| self.memory_plugin_field_input(field, value),
-            )
-            .await?;
-        let mut key = ApiKey {
-            additional_fields: fields.additional_fields,
-            id: self
-                .generated_id("apikey", None, self.lock()?.api_keys.len())?
-                .map(crate::SchemaValue::Typed)
-                .unwrap_or_default(),
-            name: fields.name.unwrap_or_default(),
-            start: input.start,
-            prefix: input.prefix,
-            key_hash: input.key_hash,
-            reference_id: input.reference_id,
-            config_id: input.config_id,
-            refill_interval: input.refill_interval,
-            refill_amount: input.refill_amount,
-            last_refill_at: None,
-            enabled: input.enabled.into(),
-            rate_limit_enabled: input.rate_limit_enabled.into(),
-            rate_limit_time_window: input.rate_limit_time_window,
-            rate_limit_max: input.rate_limit_max,
-            request_count: Some(0.0),
-            remaining: input.remaining,
-            last_request: None,
-            expires_at: input.expires_at,
-            created_at: created_at.clone(),
-            updated_at: created_at,
-            permissions: input.permissions,
-            metadata: input.metadata,
-        };
-        let selected = self
-            .raw("apikey", "create", |state| {
-                if let Some(id) = self.next_serial_id(state.api_keys.len()) {
-                    key.id = crate::SchemaValue::from_field(id);
-                }
-                let source = state.api_keys.push_ref(key.clone());
-                Ok((key, source))
-            })
-            .await?;
-        Ok(self.project_api_key_refs(vec![selected]).await?.remove(0))
+        let mut fields = input.into_adapter_fields()?;
+        fields.extend([
+            ("createdAt".into(), created_at.clone().into()),
+            ("updatedAt".into(), created_at.into()),
+            ("lastRefillAt".into(), FieldValue::Null),
+            ("lastRequest".into(), FieldValue::Null),
+        ]);
+        ApiKey::from_field_values(self.create_api_key_record(fields).await?)
     }
 
     async fn get_api_key_by_id(&self, id: &str) -> AuthResult<Option<ApiKey>> {
@@ -72,13 +57,21 @@ impl ApiKeyStore for EphemeralStore {
         &self,
         id: &crate::SchemaValue<String>,
     ) -> AuthResult<Option<ApiKey>> {
-        let id = self.memory_primary_id_query(&id.field_value())?;
-        self.find_api_key(|row| row.id.field_value().strict_equals(&id))
-            .await
+        self.get_api_key_record(id)
+            .await?
+            .map(ApiKey::from_field_values)
+            .transpose()
     }
 
     async fn get_api_key_by_hash(&self, hash: &str) -> AuthResult<Option<ApiKey>> {
-        self.find_api_key(|row| row.key_hash == hash).await
+        let schema = self.model_fields.plugin_fields(EntityRole::ApiKey);
+        let column = schema.record_storage_key("key");
+        let value = self.plugin_query_value(EntityRole::ApiKey, "key", hash.into())?;
+        self.find_api_key(|row| {
+            row.get(column)
+                .is_some_and(|actual| actual.strict_equals(&value))
+        })
+        .await
     }
 
     async fn find_api_keys_by_reference(
@@ -86,11 +79,21 @@ impl ApiKeyStore for EphemeralStore {
         reference_id: &str,
         sort: Option<(&str, &str)>,
     ) -> AuthResult<Vec<ApiKey>> {
+        let schema = self
+            .model_fields
+            .plugin_fields(EntityRole::ApiKey)
+            .adapter_fields(&[]);
+        let column = schema.record_storage_key("referenceId");
+        let reference =
+            self.plugin_query_value(EntityRole::ApiKey, "referenceId", reference_id.into())?;
         let rows = self
             .raw("apikey", "findMany", |state| {
                 let mut keys: Vec<_> = state
                     .api_keys
-                    .select_refs(|key| key.reference_id == reference_id)?
+                    .select_refs(|key| {
+                        key.get(column)
+                            .is_some_and(|value| value.strict_equals(&reference))
+                    })?
                     .into_iter()
                     .map(|source| {
                         let snapshot = source.read(|row| Ok(row.clone()))?;
@@ -99,7 +102,19 @@ impl ApiKeyStore for EphemeralStore {
                     .collect::<AuthResult<Vec<_>>>()?;
                 if let Some((field, direction)) = sort.filter(|_| keys.len() > 1) {
                     crate::memory_sort::sort(&mut keys, direction == "desc", |(key, _)| {
-                        sort_value(key, field)
+                        schema
+                            .fields()
+                            .get(field)
+                            .map(|_| {
+                                key.get(schema.record_storage_key(field))
+                                    .cloned()
+                                    .unwrap_or_default()
+                            })
+                            .ok_or_else(|| {
+                                AuthError::config(format!(
+                                    "Field {field} not found in model apikey"
+                                ))
+                            })
                     })?;
                 }
                 Ok(crate::query::paginate_memory(
@@ -113,12 +128,19 @@ impl ApiKeyStore for EphemeralStore {
     }
 
     async fn count_api_keys_by_reference(&self, reference_id: &str) -> AuthResult<u64> {
+        let schema = self.model_fields.plugin_fields(EntityRole::ApiKey);
+        let column = schema.record_storage_key("referenceId");
+        let reference =
+            self.plugin_query_value(EntityRole::ApiKey, "referenceId", reference_id.into())?;
         self.raw("apikey", "count", |state| {
             Ok(state
                 .api_keys
                 .snapshot()?
                 .iter()
-                .filter(|key| key.reference_id == reference_id)
+                .filter(|key| {
+                    key.get(column)
+                        .is_some_and(|value| value.strict_equals(&reference))
+                })
                 .count() as u64)
         })
         .await
@@ -137,68 +159,14 @@ impl ApiKeyStore for EphemeralStore {
     async fn update_api_key_optional(
         &self,
         id: &crate::SchemaValue<String>,
-        mut update: UpdateApiKey,
+        update: UpdateApiKey,
     ) -> AuthResult<Option<ApiKey>> {
-        let fields = self
-            .model_fields
-            .api_key_fields_for_storage(
-                update.name.take(),
-                std::mem::take(&mut update.additional_fields),
-                false,
-                |field, value| self.memory_plugin_field_input(field, value),
-            )
-            .await?;
-        let id = self.memory_primary_id_query(&id.field_value())?;
-        let row = self
-            .raw("apikey", "update", |state| {
-                let Some(source) = state
-                    .api_keys
-                    .first_ref(|key| key.id.field_value().strict_equals(&id))?
-                else {
-                    return Ok(None);
-                };
-                let snapshot = source.write(|key| {
-                    fields.apply(key);
-                    macro_rules! optional {
-            ($($field:ident),* $(,)?) => {
-                $(if let Some(value) = update.$field { key.$field = Some(value); })*
-            };
-        }
-                    optional!(
-                        remaining,
-                        rate_limit_time_window,
-                        rate_limit_max,
-                        refill_interval,
-                        refill_amount,
-                        permissions,
-                        metadata,
-                        request_count,
-                    );
-                    if let Some(value) = update.enabled {
-                        key.enabled = value.into();
-                    }
-                    if let Some(value) = update.rate_limit_enabled {
-                        key.rate_limit_enabled = value.into();
-                    }
-                    if let Some(value) = update.expires_at {
-                        key.expires_at = value;
-                    }
-                    if let Some(value) = update.last_request {
-                        key.last_request = value;
-                    }
-                    if let Some(value) = update.last_refill_at {
-                        key.last_refill_at = value;
-                    }
-                    key.updated_at = now();
-                    Ok(key.clone())
-                })?;
-                Ok(Some((snapshot, source)))
-            })
-            .await?;
-        Ok(self
-            .project_api_key_refs(row.into_iter().collect())
+        let mut fields = update.into_adapter_fields()?;
+        let _ = fields.insert("updatedAt".into(), now().into());
+        self.update_api_key_record(id, fields)
             .await?
-            .pop())
+            .map(ApiKey::from_field_values)
+            .transpose()
     }
 
     async fn write_api_key_usage(
@@ -206,128 +174,135 @@ impl ApiKeyStore for EphemeralStore {
         id: &crate::SchemaValue<String>,
         write: ApiKeyUsageWrite,
     ) -> AuthResult<Option<ApiKey>> {
-        // Upstream does not run update policies for an increment without a set patch.
+        use crate::query::{field_add, field_compare, field_number};
+        let id = self.plugin_query_value(EntityRole::ApiKey, "id", id.field_value())?;
+        let schema = self.model_fields.plugin_fields(EntityRole::ApiKey);
         let fields = if matches!(&write, ApiKeyUsageWrite::Decrement) {
-            Default::default()
+            crate::FieldMap::new()
         } else {
-            self.model_fields
-                .api_key_fields_for_storage(None, Default::default(), false, |field, value| {
-                    self.memory_plugin_field_input(field, value)
-                })
+            self.prepare_plugin_fields(EntityRole::ApiKey, write.set_fields(), false)
                 .await?
         };
-        let id = self.memory_primary_id_query(&id.field_value())?;
         let row = self
             .raw("apikey", write.operation(), |state| {
-                let Some(source) = state
-                    .api_keys
-                    .first_ref(|key| key.id.field_value().strict_equals(&id))?
+                let Some(source) = state.api_keys.first_ref(|key| {
+                    crate::query::field_matches_equality(
+                        key.get("id").unwrap_or(&FieldValue::Undefined),
+                        &id,
+                    )
+                })?
                 else {
                     return Ok(None);
                 };
-                let snapshot = source.write(|key| {
-                    match write {
-                        ApiKeyUsageWrite::Refill {
-                            previous,
-                            remaining,
-                            at,
-                        } => {
-                            let matches = match (key.last_refill_at.as_ref(), previous.as_ref()) {
-                                (None, None) => true,
-                                (Some(actual), Some(previous)) => actual.same_object(previous),
-                                _ => false,
-                            };
-                            if !matches {
-                                return Ok(None);
+                let wrote = source.write(|key| {
+                    let value = |name| {
+                        key.get(schema.record_storage_key(name))
+                            .cloned()
+                            .unwrap_or_default()
+                    };
+                    let increment = match &write {
+                        ApiKeyUsageWrite::Refill { previous, .. } => {
+                            if !value("lastRefillAt").strict_equals(previous) {
+                                return Ok(false);
                             }
-                            key.remaining = Some(remaining);
-                            key.last_refill_at = Some(at.into());
+                            None
                         }
                         ApiKeyUsageWrite::Decrement => {
-                            let Some(remaining) =
-                                key.remaining.filter(|remaining| *remaining > 0.0)
-                            else {
-                                return Ok(None);
-                            };
-                            key.remaining = Some(remaining - 1.0);
+                            let remaining = value("remaining");
+                            if !field_compare(&remaining, &0.0.into())?
+                                .is_some_and(|order| order.is_gt())
+                            {
+                                return Ok(false);
+                            }
+                            Some((
+                                "remaining",
+                                FieldValue::Number(field_number(&remaining)? - 1.0),
+                            ))
                         }
                         ApiKeyUsageWrite::StartWindow {
-                            previous_before,
-                            at,
+                            previous_before, ..
                         } => {
-                            let actual = key.last_request.as_ref().map(FieldDate::milliseconds);
+                            let actual = value("lastRequest");
                             let matches = match previous_before {
-                                None => actual.is_none(),
-                                Some(previous) => actual.is_some_and(|actual| {
-                                    actual <= previous.timestamp_millis() as f64
-                                }),
+                                None => actual.is_null() || actual.is_undefined(),
+                                Some(previous) => field_compare(&actual, &previous.clone().into())?
+                                    .is_some_and(|order| order.is_le()),
                             };
                             if !matches {
-                                return Ok(None);
+                                return Ok(false);
                             }
-                            key.request_count = Some(1.0);
-                            key.last_request = Some(at.into());
+                            None
                         }
                         ApiKeyUsageWrite::IncrementWindow {
                             previous_after,
                             maximum,
-                            at,
+                            ..
                         } => {
-                            let actual = key.last_request.as_ref().map(FieldDate::milliseconds);
-                            if !actual.is_some_and(|actual| {
-                                actual > previous_after.timestamp_millis() as f64
-                            }) || key.request_count.unwrap_or(0.0) >= maximum
+                            let count = value("requestCount");
+                            if !field_compare(
+                                &value("lastRequest"),
+                                &previous_after.clone().into(),
+                            )?
+                            .is_some_and(|order| order.is_gt())
+                                || !field_compare(&count, maximum)?
+                                    .is_some_and(|order| order.is_lt())
                             {
-                                return Ok(None);
+                                return Ok(false);
                             }
-                            key.request_count = Some(key.request_count.unwrap_or(0.0) + 1.0);
-                            key.last_request = Some(at.into());
+                            let count = if count.is_null() || count.is_undefined() {
+                                FieldValue::Number(0.0)
+                            } else {
+                                count
+                            };
+                            Some(("requestCount", field_add(&count, &1.0.into())?))
                         }
-                        ApiKeyUsageWrite::LastRequest(at) => {
-                            key.last_request = Some(at.into());
-                        }
-                        ApiKeyUsageWrite::UpdatedAt(at) => {
-                            key.updated_at = at.into();
-                        }
+                        ApiKeyUsageWrite::LastRequest(_) | ApiKeyUsageWrite::UpdatedAt(_) => None,
+                    };
+                    if let Some((name, value)) = increment {
+                        let _ = key.insert(schema.record_storage_key(name).to_owned(), value);
                     }
-                    fields.apply(key);
-                    Ok(Some(key.clone()))
+                    key.extend(fields);
+                    Ok(true)
                 })?;
-                Ok(snapshot.map(|snapshot| (snapshot, source)))
+                Ok(wrote.then_some(source))
             })
             .await?;
-        Ok(self
-            .project_api_key_refs(row.into_iter().collect())
+        self.project_plugin_refs(EntityRole::ApiKey, row.into_iter().collect())
             .await?
-            .pop())
+            .into_iter()
+            .map(ApiKey::from_field_values)
+            .next()
+            .transpose()
     }
 
     async fn delete_api_key(&self, id: &crate::SchemaValue<String>) -> AuthResult<()> {
-        let id = self.memory_primary_id_query(&id.field_value())?;
+        let id = self.plugin_query_value(EntityRole::ApiKey, "id", id.field_value())?;
         self.raw("apikey", "delete", |state| {
-            let _ = state
-                .api_keys
-                .remove_first(|key| key.id.field_value().strict_equals(&id))?;
+            let _ = state.api_keys.remove_first(|key| {
+                crate::query::field_matches_equality(
+                    key.get("id").unwrap_or(&FieldValue::Undefined),
+                    &id,
+                )
+            })?;
             Ok(())
         })
         .await
     }
 
     async fn delete_expired_api_keys(&self) -> AuthResult<usize> {
+        self.model_fields.begin_id_query(EntityRole::ApiKey)?;
+        let schema = self.model_fields.plugin_fields(EntityRole::ApiKey);
+        let column = schema.record_storage_key("expiresAt");
         self.raw("apikey", "deleteMany", |state| {
-            let current = Utc::now().timestamp_millis() as f64;
-            let mut expired = Vec::new();
-            for key in state.api_keys.snapshot()?.iter() {
-                if let Some(expires) = key.expires_at.as_ref()
-                    && expires.milliseconds() < current
-                {
-                    expired.push(key.id.clone());
-                }
-            }
-            for id in &expired {
-                let _ = state.api_keys.remove(id)?;
-            }
-            Ok(expired.len())
+            let current: FieldValue = now().into();
+            let before = state.api_keys.len();
+            state.api_keys.try_retain(|key| {
+                let value = key.get(column).cloned().unwrap_or_default();
+                Ok(value.is_null()
+                    || !crate::query::field_compare(&value, &current)?
+                        .is_some_and(|order| order.is_lt()))
+            })?;
+            Ok(before - state.api_keys.len())
         })
         .await
     }
@@ -335,6 +310,7 @@ impl ApiKeyStore for EphemeralStore {
 
 #[cfg(test)]
 mod tests {
+    mod enabled;
     mod sorting;
 
     use super::*;
@@ -370,7 +346,7 @@ mod tests {
             refill_amount: None,
             permissions: None,
             metadata: None,
-            enabled: true,
+            enabled: true.into(),
         }
     }
 
@@ -388,14 +364,14 @@ mod tests {
             .unwrap()
             .with_timezone(&Utc)
             .into();
-        store
+        let _ = store
             .lock()
             .unwrap()
             .api_keys
-            .get_mut(&key.id)
+            .find_mut(|row| row.get("id") == Some(&key.id.field_value()))
             .unwrap()
             .unwrap()
-            .updated_at = unchanged.clone();
+            .insert("updatedAt".into(), unchanged.clone().into());
         for remaining in [1.0, 0.0] {
             assert!(matches!(
                 consume(&store, &key.id, true).await.unwrap(),
@@ -417,7 +393,7 @@ mod tests {
         ));
         assert!(
             store
-                .get_api_key_by_hash(&key.key_hash)
+                .get_api_key_by_hash(key.key_hash.typed().unwrap())
                 .await
                 .unwrap()
                 .is_none()
@@ -460,11 +436,14 @@ mod tests {
             };
             assert_eq!(allowed.remaining, Some(remaining));
             assert_eq!(allowed.request_count, Some(0.0));
-            assert!(allowed.last_request.is_some());
+            assert!(allowed.last_request.typed().unwrap().is_some());
             if let Some(refill) = refill.as_ref() {
-                assert_eq!(allowed.last_refill_at.as_ref(), Some(refill));
+                assert_eq!(
+                    allowed.last_refill_at.typed().unwrap().as_ref(),
+                    Some(refill)
+                );
             } else {
-                refill = allowed.last_refill_at.clone();
+                refill = allowed.last_refill_at.typed().unwrap().clone();
             }
         }
         assert!(matches!(
@@ -500,8 +479,8 @@ mod tests {
                 .write_api_key_usage(
                     &key.id,
                     ApiKeyUsageWrite::IncrementWindow {
-                        previous_after: at - chrono::Duration::minutes(1),
-                        maximum: 1.0,
+                        previous_after: (at - chrono::Duration::minutes(1)).into(),
+                        maximum: 1.0.into(),
                         at,
                     },
                 )
@@ -515,42 +494,14 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(stored.request_count, Some(0.0));
-        assert!(stored.last_request.unwrap().same_object(&invalid));
+        assert!(
+            stored
+                .last_request
+                .typed()
+                .unwrap()
+                .as_ref()
+                .unwrap()
+                .same_object(&invalid)
+        );
     }
-}
-
-fn sort_value(key: &ApiKey, field: &str) -> AuthResult<FieldValue> {
-    fn optional<T: Into<FieldValue>>(value: Option<T>) -> FieldValue {
-        value.map_or(FieldValue::Null, Into::into)
-    }
-
-    Ok(match field {
-        "id" => key.id.field_value(),
-        "name" => key.name.field_value(),
-        "enabled" => key.enabled.field_value(),
-        "rateLimitEnabled" => key.rate_limit_enabled.field_value(),
-        "start" => optional(key.start.clone()),
-        "prefix" => optional(key.prefix.clone()),
-        "referenceId" => key.reference_id.clone().into(),
-        "configId" => key.config_id.clone().into(),
-        "createdAt" => key.created_at.clone().into(),
-        "updatedAt" => key.updated_at.clone().into(),
-        "expiresAt" => optional(key.expires_at.clone()),
-        "lastRequest" => optional(key.last_request.clone()),
-        "lastRefillAt" => optional(key.last_refill_at.clone()),
-        "permissions" => optional(key.permissions.clone()),
-        "metadata" => optional(key.metadata.clone()),
-        "key" => key.key_hash.clone().into(),
-        "remaining" => optional(key.remaining),
-        "requestCount" => optional(key.request_count),
-        "rateLimitMax" => optional(key.rate_limit_max),
-        "rateLimitTimeWindow" => optional(key.rate_limit_time_window),
-        "refillAmount" => optional(key.refill_amount),
-        "refillInterval" => optional(key.refill_interval),
-        _ => {
-            return Err(AuthError::config(format!(
-                "Field {field} not found in model apikey"
-            )));
-        }
-    })
 }

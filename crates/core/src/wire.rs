@@ -522,18 +522,24 @@ pub struct PasskeyView {
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub name: SchemaValue<Option<String>>,
     #[serde(rename = "credentialID")]
-    pub credential_id: String,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub credential_id: SchemaValue<String>,
     #[serde(rename = "userId")]
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub user_id: SchemaValue<String>,
     #[serde(rename = "publicKey")]
-    pub public_key: String,
-    pub counter: u64,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub public_key: SchemaValue<String>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub counter: SchemaValue<u64>,
     #[serde(rename = "deviceType")]
-    pub device_type: String,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub device_type: SchemaValue<String>,
     #[serde(rename = "backedUp")]
-    pub backed_up: bool,
-    pub transports: Option<String>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub backed_up: SchemaValue<bool>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub transports: SchemaValue<Option<String>>,
     #[serde(rename = "createdAt")]
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     #[serde(with = "crate::field_value::serde::optional_schema_date")]
@@ -548,13 +554,13 @@ impl<T: AuthPasskey> From<&T> for PasskeyView {
             additional_fields: pk.additional_fields().cloned().unwrap_or_default(),
             id: pk.id().into_owned(),
             name: pk.name().clone(),
-            credential_id: pk.credential_id().to_owned(),
+            credential_id: pk.credential_id().clone(),
             user_id: pk.user_id().into_owned(),
-            public_key: pk.public_key().to_owned(),
-            counter: pk.counter(),
-            device_type: pk.device_type().to_owned(),
-            backed_up: pk.backed_up(),
-            transports: pk.transports().map(str::to_owned),
+            public_key: pk.public_key().clone(),
+            counter: pk.counter().clone(),
+            device_type: pk.device_type().clone(),
+            backed_up: pk.backed_up().clone(),
+            transports: pk.transports().clone(),
             created_at: pk.created_at().clone(),
             aaguid: pk.aaguid().clone(),
         }
@@ -574,51 +580,70 @@ pub struct ApiKeyView {
     pub id: SchemaValue<String>,
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub name: SchemaValue<Option<String>>,
-    pub start: Option<crate::ApiKeyStart>,
-    pub prefix: Option<String>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub start: SchemaValue<Option<crate::ApiKeyStart>>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub prefix: SchemaValue<Option<String>>,
     #[serde(rename = "referenceId")]
-    pub reference_id: String,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub reference_id: SchemaValue<String>,
     #[serde(rename = "configId")]
-    pub config_id: String,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub config_id: SchemaValue<String>,
     #[serde(rename = "refillInterval")]
-    #[serde(serialize_with = "serialize_optional_number")]
-    pub refill_interval: Option<f64>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub refill_interval: SchemaValue<Option<f64>>,
     #[serde(rename = "refillAmount")]
-    #[serde(serialize_with = "serialize_optional_number")]
-    pub refill_amount: Option<f64>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub refill_amount: SchemaValue<Option<f64>>,
     #[serde(rename = "lastRefillAt")]
-    #[serde(default, with = "crate::field_value::serde::optional_date")]
-    pub last_refill_at: Option<crate::FieldDate>,
+    #[serde(with = "crate::field_value::serde::optional_schema_date")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub last_refill_at: SchemaValue<Option<crate::FieldDate>>,
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub enabled: SchemaValue<bool>,
     #[serde(rename = "rateLimitEnabled")]
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub rate_limit_enabled: SchemaValue<bool>,
     #[serde(rename = "rateLimitTimeWindow")]
-    #[serde(serialize_with = "serialize_optional_number")]
-    pub rate_limit_time_window: Option<f64>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub rate_limit_time_window: SchemaValue<Option<f64>>,
     #[serde(rename = "rateLimitMax")]
-    #[serde(serialize_with = "serialize_optional_number")]
-    pub rate_limit_max: Option<f64>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub rate_limit_max: SchemaValue<Option<f64>>,
     #[serde(rename = "requestCount")]
-    #[serde(serialize_with = "serialize_optional_number")]
-    pub request_count: Option<f64>,
-    #[serde(serialize_with = "serialize_optional_number")]
-    pub remaining: Option<f64>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub request_count: SchemaValue<Option<f64>>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub remaining: SchemaValue<Option<f64>>,
     #[serde(rename = "lastRequest")]
-    #[serde(default, with = "crate::field_value::serde::optional_date")]
-    pub last_request: Option<crate::FieldDate>,
+    #[serde(with = "crate::field_value::serde::optional_schema_date")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub last_request: SchemaValue<Option<crate::FieldDate>>,
     #[serde(rename = "expiresAt")]
-    #[serde(default, with = "crate::field_value::serde::optional_date")]
-    pub expires_at: Option<crate::FieldDate>,
+    #[serde(with = "crate::field_value::serde::optional_schema_date")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub expires_at: SchemaValue<Option<crate::FieldDate>>,
     #[serde(rename = "createdAt")]
-    #[serde(with = "crate::field_value::serde::date")]
-    pub created_at: crate::FieldDate,
+    #[serde(with = "crate::field_value::serde::schema_date")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub created_at: SchemaValue<crate::FieldDate>,
     #[serde(rename = "updatedAt")]
-    #[serde(with = "crate::field_value::serde::date")]
-    pub updated_at: crate::FieldDate,
-    pub permissions: Option<serde_json::Value>,
-    pub metadata: Option<serde_json::Value>,
+    #[serde(with = "crate::field_value::serde::schema_date")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub updated_at: SchemaValue<crate::FieldDate>,
+    #[serde(
+        default,
+        with = "crate::field_value::serde::value",
+        skip_serializing_if = "crate::FieldValue::is_undefined"
+    )]
+    pub permissions: crate::FieldValue,
+    #[serde(
+        default,
+        with = "crate::field_value::serde::value",
+        skip_serializing_if = "crate::FieldValue::is_undefined"
+    )]
+    pub metadata: crate::FieldValue,
 }
 
 /// Serialize optional JavaScript numbers, preserving whole-number JSON representation.
@@ -640,25 +665,29 @@ impl<T: AuthApiKey> From<&T> for ApiKeyView {
             additional_fields: ak.additional_fields().cloned().unwrap_or_default(),
             id: ak.id().into_owned(),
             name: ak.name().clone(),
-            start: ak.start().map(std::borrow::Cow::into_owned),
-            prefix: ak.prefix().map(str::to_owned),
-            reference_id: ak.reference_id().into_owned(),
-            config_id: ak.config_id().into_owned(),
-            refill_interval: ak.refill_interval(),
-            refill_amount: ak.refill_amount(),
-            last_refill_at: ak.last_refill_at(),
+            start: ak.start().clone(),
+            prefix: ak.prefix().clone(),
+            reference_id: ak.reference_id().clone(),
+            config_id: ak.config_id().clone(),
+            refill_interval: ak.refill_interval().clone(),
+            refill_amount: ak.refill_amount().clone(),
+            last_refill_at: ak.last_refill_at().clone(),
             enabled: ak.enabled().clone(),
             rate_limit_enabled: ak.rate_limit_enabled().clone(),
-            rate_limit_time_window: ak.rate_limit_time_window(),
-            rate_limit_max: ak.rate_limit_max(),
-            request_count: ak.request_count(),
-            remaining: ak.remaining(),
-            last_request: ak.last_request(),
-            expires_at: ak.expires_at(),
-            created_at: ak.created_at().to_owned(),
-            updated_at: ak.updated_at().to_owned(),
-            permissions: ak.permissions().and_then(|s| serde_json::from_str(s).ok()),
-            metadata: ak.metadata().and_then(|s| serde_json::from_str(s).ok()),
+            rate_limit_time_window: ak.rate_limit_time_window().clone(),
+            rate_limit_max: ak.rate_limit_max().clone(),
+            request_count: ak.request_count().clone(),
+            remaining: ak.remaining().clone(),
+            last_request: ak.last_request().clone(),
+            expires_at: ak.expires_at().clone(),
+            created_at: ak.created_at().clone(),
+            updated_at: ak.updated_at().clone(),
+            permissions: if ak.permissions().field_value().is_truthy() {
+                crate::utils::json::safe_parse_field(&ak.permissions().field_value())
+            } else {
+                crate::FieldValue::Null
+            },
+            metadata: ak.metadata().field_value(),
         }
     }
 }

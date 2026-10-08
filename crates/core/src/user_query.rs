@@ -283,8 +283,7 @@ fn matches_value(actual: Option<&Value>, expected: &Value, operator: &str) -> bo
 
 fn matches_memory_value(actual: &Value, expected: &Value, operator: &str) -> AuthResult<bool> {
     match operator {
-        "eq" if expected.is_null() => Ok(actual.is_null() || actual.is_undefined()),
-        "eq" => Ok(actual.strict_equals(expected)),
+        "eq" => Ok(crate::query::field_matches_equality(actual, expected)),
         "ne" => Ok(!actual.strict_equals(expected)),
         "in" | "not_in" => {
             let values = expected

@@ -123,8 +123,8 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
             UpdatePasskeyAuthentication::Legacy {
                 credential: created.credential.typed()?.clone(),
                 counter: 1,
-                backed_up: created.backed_up,
-                device_type: created.device_type.clone(),
+                backed_up: *created.backed_up.typed()?,
+                device_type: created.device_type.typed()?.clone(),
             },
         )
         .await?;
@@ -144,7 +144,7 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
             .await?
             .ok_or_else(|| AuthError::internal("Expected the stored model record"))?,
         auth.store()
-            .get_passkey_by_credential_id(&created.credential_id)
+            .get_passkey_by_credential_id(created.credential_id.typed()?)
             .await?
             .ok_or_else(|| AuthError::internal("Expected the stored model record"))?,
     ] {

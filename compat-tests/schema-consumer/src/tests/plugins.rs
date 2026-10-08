@@ -407,7 +407,7 @@ async fn renamed_plugin_tables_preserve_authentication_and_atomic_storage() {
         .unwrap()
         .unwrap();
     assert_eq!(persisted.credential.typed().unwrap(), "updated-state");
-    assert!(persisted.backed_up);
+    assert!(*persisted.backed_up.typed().unwrap());
     assert_eq!(
         auth.store()
             .list_passkeys_by_user(user_id)
