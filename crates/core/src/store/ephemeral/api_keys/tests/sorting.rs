@@ -222,3 +222,93 @@ async fn date_name_sort_does_not_require_chrono_string_conversion() -> AuthResul
     }
     Ok(())
 }
+
+fn number_sort_rows(value: &Value) -> AuthResult<Vec<ApiKey>> {
+    value
+        .as_array()
+        .ok_or_else(|| AuthError::internal("Expected API Key number sort rows"))?
+        .iter()
+        .map(|value| {
+            let remaining = if value["remaining"]["type"] == "number" {
+                match value["remaining"]["value"].as_str() {
+                    Some("-0") => -0.0,
+                    Some("Infinity") => f64::INFINITY,
+                    Some("-Infinity") => f64::NEG_INFINITY,
+                    _ => return Err(AuthError::internal("Unexpected number sort fixture tag")),
+                }
+            } else {
+                value["remaining"]
+                    .as_f64()
+                    .ok_or_else(|| AuthError::internal("Expected number sort fixture value"))?
+            };
+            let mut row = value.clone();
+            row["remaining"] = Value::Null;
+            for field in ["createdAt", "updatedAt"] {
+                assert_eq!(row[field]["type"], "date");
+                row[field] = row[field]["value"].clone();
+            }
+            let mut row: ApiKey = serde_json::from_value(row)?;
+            row.remaining = Some(remaining);
+            Ok(row)
+        })
+        .collect()
+}
+
+fn assert_number_sort_rows(actual: &[ApiKey], expected: &Value) -> AuthResult<()> {
+    let expected = number_sort_rows(expected)?;
+    assert_eq!(actual, expected.as_slice());
+    // Record equality cannot distinguish signed zeros in the quota.
+    assert_eq!(
+        actual
+            .iter()
+            .map(|row| row.remaining.map(f64::to_bits))
+            .collect::<Vec<_>>(),
+        expected
+            .iter()
+            .map(|row| row.remaining.map(f64::to_bits))
+            .collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn number_sort_preserves_signed_zero_and_infinity_ties_from_pinned_rows() -> AuthResult<()> {
+    let fixture: Value = serde_json::from_str(include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/fixtures/api-key-number-sort-1.7.6.json"
+    )))?;
+    assert_eq!(fixture["seedBoundary"], "raw-records");
+    let cases = fixture["cases"]
+        .as_array()
+        .ok_or_else(|| AuthError::internal("Expected API Key number sort cases"))?;
+    for pair in ["signed-zero", "positive-infinity", "negative-infinity"] {
+        for order in ["forward", "reverse"] {
+            let case = cases
+                .iter()
+                .find(|case| case["pair"] == pair && case["order"] == order)
+                .ok_or_else(|| AuthError::internal("Missing API Key number sort case"))?;
+            let store = EphemeralStore::default();
+            for row in number_sort_rows(&case["input"])? {
+                store.lock()?.api_keys.push(row);
+            }
+            assert_number_sort_rows(&store.lock()?.api_keys.snapshot()?, &case["stored"])?;
+            let operations = case["operations"]
+                .as_array()
+                .ok_or_else(|| AuthError::internal("Expected API Key number sort operations"))?;
+            assert_eq!(operations.len(), 2);
+            for direction in ["asc", "desc"] {
+                let operation = operations
+                    .iter()
+                    .find(|operation| operation["direction"] == direction)
+                    .ok_or_else(|| AuthError::internal("Missing API Key number sort direction"))?;
+                let rows = store
+                    .find_api_keys_by_reference("number-sort-owner", Some(("remaining", direction)))
+                    .await?;
+                assert_number_sort_rows(&rows, &operation["rows"])?;
+                assert_eq!(json!(rows.len()), operation["total"]);
+                assert_number_sort_rows(&store.lock()?.api_keys.snapshot()?, &operation["stored"])?;
+            }
+        }
+    }
+    Ok(())
+}

@@ -1,0 +1,3319 @@
+{
+  "version": "1.7.6",
+  "versions": {
+    "better-auth": "1.7.6",
+    "@better-auth/core": "1.7.6",
+    "@better-auth/api-key": "1.7.6",
+    "@better-auth/memory-adapter": "1.7.6"
+  },
+  "backend": "memory",
+  "model": "apikey",
+  "field": "remaining",
+  "seedBoundary": "raw-records",
+  "cases": [
+    {
+      "pair": "signed-zero",
+      "order": "forward",
+      "input": [
+        {
+          "id": "signed-zero-0",
+          "name": "number-0",
+          "start": null,
+          "prefix": null,
+          "key": "stored-signed-zero-0",
+          "referenceId": "number-sort-owner",
+          "configId": "default",
+          "refillInterval": null,
+          "refillAmount": null,
+          "lastRefillAt": null,
+          "enabled": true,
+          "rateLimitEnabled": true,
+          "rateLimitTimeWindow": 60000,
+          "rateLimitMax": 1,
+          "requestCount": 0,
+          "remaining": 0,
+          "lastRequest": null,
+          "expiresAt": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "permissions": null,
+          "metadata": null
+        },
+        {
+          "id": "signed-zero-1",
+          "name": "number-1",
+          "start": null,
+          "prefix": null,
+          "key": "stored-signed-zero-1",
+          "referenceId": "number-sort-owner",
+          "configId": "default",
+          "refillInterval": null,
+          "refillAmount": null,
+          "lastRefillAt": null,
+          "enabled": true,
+          "rateLimitEnabled": true,
+          "rateLimitTimeWindow": 60000,
+          "rateLimitMax": 1,
+          "requestCount": 0,
+          "remaining": {
+            "type": "number",
+            "value": "-0"
+          },
+          "lastRequest": null,
+          "expiresAt": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "permissions": null,
+          "metadata": null
+        }
+      ],
+      "stored": [
+        {
+          "id": "signed-zero-0",
+          "name": "number-0",
+          "start": null,
+          "prefix": null,
+          "key": "stored-signed-zero-0",
+          "referenceId": "number-sort-owner",
+          "configId": "default",
+          "refillInterval": null,
+          "refillAmount": null,
+          "lastRefillAt": null,
+          "enabled": true,
+          "rateLimitEnabled": true,
+          "rateLimitTimeWindow": 60000,
+          "rateLimitMax": 1,
+          "requestCount": 0,
+          "remaining": 0,
+          "lastRequest": null,
+          "expiresAt": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "permissions": null,
+          "metadata": null
+        },
+        {
+          "id": "signed-zero-1",
+          "name": "number-1",
+          "start": null,
+          "prefix": null,
+          "key": "stored-signed-zero-1",
+          "referenceId": "number-sort-owner",
+          "configId": "default",
+          "refillInterval": null,
+          "refillAmount": null,
+          "lastRefillAt": null,
+          "enabled": true,
+          "rateLimitEnabled": true,
+          "rateLimitTimeWindow": 60000,
+          "rateLimitMax": 1,
+          "requestCount": 0,
+          "remaining": {
+            "type": "number",
+            "value": "-0"
+          },
+          "lastRequest": null,
+          "expiresAt": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "permissions": null,
+          "metadata": null
+        }
+      ],
+      "operations": [
+        {
+          "direction": "asc",
+          "rows": [
+            {
+              "configId": "default",
+              "name": "number-0",
+              "start": null,
+              "referenceId": "number-sort-owner",
+              "prefix": null,
+              "key": "stored-signed-zero-0",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": 0,
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null,
+              "id": "signed-zero-0"
+            },
+            {
+              "configId": "default",
+              "name": "number-1",
+              "start": null,
+              "referenceId": "number-sort-owner",
+              "prefix": null,
+              "key": "stored-signed-zero-1",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": {
+                "type": "number",
+                "value": "-0"
+              },
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null,
+              "id": "signed-zero-1"
+            }
+          ],
+          "total": 2,
+          "stored": [
+            {
+              "id": "signed-zero-0",
+              "name": "number-0",
+              "start": null,
+              "prefix": null,
+              "key": "stored-signed-zero-0",
+              "referenceId": "number-sort-owner",
+              "configId": "default",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": 0,
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null
+            },
+            {
+              "id": "signed-zero-1",
+              "name": "number-1",
+              "start": null,
+              "prefix": null,
+              "key": "stored-signed-zero-1",
+              "referenceId": "number-sort-owner",
+              "configId": "default",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": {
+                "type": "number",
+                "value": "-0"
+              },
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null
+            }
+          ]
+        },
+        {
+          "direction": "desc",
+          "rows": [
+            {
+              "configId": "default",
+              "name": "number-0",
+              "start": null,
+              "referenceId": "number-sort-owner",
+              "prefix": null,
+              "key": "stored-signed-zero-0",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": 0,
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null,
+              "id": "signed-zero-0"
+            },
+            {
+              "configId": "default",
+              "name": "number-1",
+              "start": null,
+              "referenceId": "number-sort-owner",
+              "prefix": null,
+              "key": "stored-signed-zero-1",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": {
+                "type": "number",
+                "value": "-0"
+              },
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null,
+              "id": "signed-zero-1"
+            }
+          ],
+          "total": 2,
+          "stored": [
+            {
+              "id": "signed-zero-0",
+              "name": "number-0",
+              "start": null,
+              "prefix": null,
+              "key": "stored-signed-zero-0",
+              "referenceId": "number-sort-owner",
+              "configId": "default",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": 0,
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null
+            },
+            {
+              "id": "signed-zero-1",
+              "name": "number-1",
+              "start": null,
+              "prefix": null,
+              "key": "stored-signed-zero-1",
+              "referenceId": "number-sort-owner",
+              "configId": "default",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": {
+                "type": "number",
+                "value": "-0"
+              },
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "pair": "signed-zero",
+      "order": "reverse",
+      "input": [
+        {
+          "id": "signed-zero-1",
+          "name": "number-1",
+          "start": null,
+          "prefix": null,
+          "key": "stored-signed-zero-1",
+          "referenceId": "number-sort-owner",
+          "configId": "default",
+          "refillInterval": null,
+          "refillAmount": null,
+          "lastRefillAt": null,
+          "enabled": true,
+          "rateLimitEnabled": true,
+          "rateLimitTimeWindow": 60000,
+          "rateLimitMax": 1,
+          "requestCount": 0,
+          "remaining": {
+            "type": "number",
+            "value": "-0"
+          },
+          "lastRequest": null,
+          "expiresAt": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "permissions": null,
+          "metadata": null
+        },
+        {
+          "id": "signed-zero-0",
+          "name": "number-0",
+          "start": null,
+          "prefix": null,
+          "key": "stored-signed-zero-0",
+          "referenceId": "number-sort-owner",
+          "configId": "default",
+          "refillInterval": null,
+          "refillAmount": null,
+          "lastRefillAt": null,
+          "enabled": true,
+          "rateLimitEnabled": true,
+          "rateLimitTimeWindow": 60000,
+          "rateLimitMax": 1,
+          "requestCount": 0,
+          "remaining": 0,
+          "lastRequest": null,
+          "expiresAt": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "permissions": null,
+          "metadata": null
+        }
+      ],
+      "stored": [
+        {
+          "id": "signed-zero-1",
+          "name": "number-1",
+          "start": null,
+          "prefix": null,
+          "key": "stored-signed-zero-1",
+          "referenceId": "number-sort-owner",
+          "configId": "default",
+          "refillInterval": null,
+          "refillAmount": null,
+          "lastRefillAt": null,
+          "enabled": true,
+          "rateLimitEnabled": true,
+          "rateLimitTimeWindow": 60000,
+          "rateLimitMax": 1,
+          "requestCount": 0,
+          "remaining": {
+            "type": "number",
+            "value": "-0"
+          },
+          "lastRequest": null,
+          "expiresAt": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "permissions": null,
+          "metadata": null
+        },
+        {
+          "id": "signed-zero-0",
+          "name": "number-0",
+          "start": null,
+          "prefix": null,
+          "key": "stored-signed-zero-0",
+          "referenceId": "number-sort-owner",
+          "configId": "default",
+          "refillInterval": null,
+          "refillAmount": null,
+          "lastRefillAt": null,
+          "enabled": true,
+          "rateLimitEnabled": true,
+          "rateLimitTimeWindow": 60000,
+          "rateLimitMax": 1,
+          "requestCount": 0,
+          "remaining": 0,
+          "lastRequest": null,
+          "expiresAt": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "permissions": null,
+          "metadata": null
+        }
+      ],
+      "operations": [
+        {
+          "direction": "asc",
+          "rows": [
+            {
+              "configId": "default",
+              "name": "number-1",
+              "start": null,
+              "referenceId": "number-sort-owner",
+              "prefix": null,
+              "key": "stored-signed-zero-1",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": {
+                "type": "number",
+                "value": "-0"
+              },
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null,
+              "id": "signed-zero-1"
+            },
+            {
+              "configId": "default",
+              "name": "number-0",
+              "start": null,
+              "referenceId": "number-sort-owner",
+              "prefix": null,
+              "key": "stored-signed-zero-0",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": 0,
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null,
+              "id": "signed-zero-0"
+            }
+          ],
+          "total": 2,
+          "stored": [
+            {
+              "id": "signed-zero-1",
+              "name": "number-1",
+              "start": null,
+              "prefix": null,
+              "key": "stored-signed-zero-1",
+              "referenceId": "number-sort-owner",
+              "configId": "default",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": {
+                "type": "number",
+                "value": "-0"
+              },
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null
+            },
+            {
+              "id": "signed-zero-0",
+              "name": "number-0",
+              "start": null,
+              "prefix": null,
+              "key": "stored-signed-zero-0",
+              "referenceId": "number-sort-owner",
+              "configId": "default",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": 0,
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null
+            }
+          ]
+        },
+        {
+          "direction": "desc",
+          "rows": [
+            {
+              "configId": "default",
+              "name": "number-1",
+              "start": null,
+              "referenceId": "number-sort-owner",
+              "prefix": null,
+              "key": "stored-signed-zero-1",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": {
+                "type": "number",
+                "value": "-0"
+              },
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null,
+              "id": "signed-zero-1"
+            },
+            {
+              "configId": "default",
+              "name": "number-0",
+              "start": null,
+              "referenceId": "number-sort-owner",
+              "prefix": null,
+              "key": "stored-signed-zero-0",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": 0,
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null,
+              "id": "signed-zero-0"
+            }
+          ],
+          "total": 2,
+          "stored": [
+            {
+              "id": "signed-zero-1",
+              "name": "number-1",
+              "start": null,
+              "prefix": null,
+              "key": "stored-signed-zero-1",
+              "referenceId": "number-sort-owner",
+              "configId": "default",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": {
+                "type": "number",
+                "value": "-0"
+              },
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null
+            },
+            {
+              "id": "signed-zero-0",
+              "name": "number-0",
+              "start": null,
+              "prefix": null,
+              "key": "stored-signed-zero-0",
+              "referenceId": "number-sort-owner",
+              "configId": "default",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": 0,
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "pair": "nan-finite",
+      "order": "forward",
+      "input": [
+        {
+          "id": "nan-finite-0",
+          "name": "number-0",
+          "start": null,
+          "prefix": null,
+          "key": "stored-nan-finite-0",
+          "referenceId": "number-sort-owner",
+          "configId": "default",
+          "refillInterval": null,
+          "refillAmount": null,
+          "lastRefillAt": null,
+          "enabled": true,
+          "rateLimitEnabled": true,
+          "rateLimitTimeWindow": 60000,
+          "rateLimitMax": 1,
+          "requestCount": 0,
+          "remaining": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "lastRequest": null,
+          "expiresAt": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "permissions": null,
+          "metadata": null
+        },
+        {
+          "id": "nan-finite-1",
+          "name": "number-1",
+          "start": null,
+          "prefix": null,
+          "key": "stored-nan-finite-1",
+          "referenceId": "number-sort-owner",
+          "configId": "default",
+          "refillInterval": null,
+          "refillAmount": null,
+          "lastRefillAt": null,
+          "enabled": true,
+          "rateLimitEnabled": true,
+          "rateLimitTimeWindow": 60000,
+          "rateLimitMax": 1,
+          "requestCount": 0,
+          "remaining": 1,
+          "lastRequest": null,
+          "expiresAt": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "permissions": null,
+          "metadata": null
+        }
+      ],
+      "stored": [
+        {
+          "id": "nan-finite-0",
+          "name": "number-0",
+          "start": null,
+          "prefix": null,
+          "key": "stored-nan-finite-0",
+          "referenceId": "number-sort-owner",
+          "configId": "default",
+          "refillInterval": null,
+          "refillAmount": null,
+          "lastRefillAt": null,
+          "enabled": true,
+          "rateLimitEnabled": true,
+          "rateLimitTimeWindow": 60000,
+          "rateLimitMax": 1,
+          "requestCount": 0,
+          "remaining": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "lastRequest": null,
+          "expiresAt": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "permissions": null,
+          "metadata": null
+        },
+        {
+          "id": "nan-finite-1",
+          "name": "number-1",
+          "start": null,
+          "prefix": null,
+          "key": "stored-nan-finite-1",
+          "referenceId": "number-sort-owner",
+          "configId": "default",
+          "refillInterval": null,
+          "refillAmount": null,
+          "lastRefillAt": null,
+          "enabled": true,
+          "rateLimitEnabled": true,
+          "rateLimitTimeWindow": 60000,
+          "rateLimitMax": 1,
+          "requestCount": 0,
+          "remaining": 1,
+          "lastRequest": null,
+          "expiresAt": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "permissions": null,
+          "metadata": null
+        }
+      ],
+      "operations": [
+        {
+          "direction": "asc",
+          "rows": [
+            {
+              "configId": "default",
+              "name": "number-0",
+              "start": null,
+              "referenceId": "number-sort-owner",
+              "prefix": null,
+              "key": "stored-nan-finite-0",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": {
+                "type": "number",
+                "value": "NaN"
+              },
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null,
+              "id": "nan-finite-0"
+            },
+            {
+              "configId": "default",
+              "name": "number-1",
+              "start": null,
+              "referenceId": "number-sort-owner",
+              "prefix": null,
+              "key": "stored-nan-finite-1",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": 1,
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null,
+              "id": "nan-finite-1"
+            }
+          ],
+          "total": 2,
+          "stored": [
+            {
+              "id": "nan-finite-0",
+              "name": "number-0",
+              "start": null,
+              "prefix": null,
+              "key": "stored-nan-finite-0",
+              "referenceId": "number-sort-owner",
+              "configId": "default",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": {
+                "type": "number",
+                "value": "NaN"
+              },
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null
+            },
+            {
+              "id": "nan-finite-1",
+              "name": "number-1",
+              "start": null,
+              "prefix": null,
+              "key": "stored-nan-finite-1",
+              "referenceId": "number-sort-owner",
+              "configId": "default",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": 1,
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null
+            }
+          ]
+        },
+        {
+          "direction": "desc",
+          "rows": [
+            {
+              "configId": "default",
+              "name": "number-0",
+              "start": null,
+              "referenceId": "number-sort-owner",
+              "prefix": null,
+              "key": "stored-nan-finite-0",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": {
+                "type": "number",
+                "value": "NaN"
+              },
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null,
+              "id": "nan-finite-0"
+            },
+            {
+              "configId": "default",
+              "name": "number-1",
+              "start": null,
+              "referenceId": "number-sort-owner",
+              "prefix": null,
+              "key": "stored-nan-finite-1",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": 1,
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null,
+              "id": "nan-finite-1"
+            }
+          ],
+          "total": 2,
+          "stored": [
+            {
+              "id": "nan-finite-0",
+              "name": "number-0",
+              "start": null,
+              "prefix": null,
+              "key": "stored-nan-finite-0",
+              "referenceId": "number-sort-owner",
+              "configId": "default",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": {
+                "type": "number",
+                "value": "NaN"
+              },
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null
+            },
+            {
+              "id": "nan-finite-1",
+              "name": "number-1",
+              "start": null,
+              "prefix": null,
+              "key": "stored-nan-finite-1",
+              "referenceId": "number-sort-owner",
+              "configId": "default",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": 1,
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "pair": "nan-finite",
+      "order": "reverse",
+      "input": [
+        {
+          "id": "nan-finite-1",
+          "name": "number-1",
+          "start": null,
+          "prefix": null,
+          "key": "stored-nan-finite-1",
+          "referenceId": "number-sort-owner",
+          "configId": "default",
+          "refillInterval": null,
+          "refillAmount": null,
+          "lastRefillAt": null,
+          "enabled": true,
+          "rateLimitEnabled": true,
+          "rateLimitTimeWindow": 60000,
+          "rateLimitMax": 1,
+          "requestCount": 0,
+          "remaining": 1,
+          "lastRequest": null,
+          "expiresAt": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "permissions": null,
+          "metadata": null
+        },
+        {
+          "id": "nan-finite-0",
+          "name": "number-0",
+          "start": null,
+          "prefix": null,
+          "key": "stored-nan-finite-0",
+          "referenceId": "number-sort-owner",
+          "configId": "default",
+          "refillInterval": null,
+          "refillAmount": null,
+          "lastRefillAt": null,
+          "enabled": true,
+          "rateLimitEnabled": true,
+          "rateLimitTimeWindow": 60000,
+          "rateLimitMax": 1,
+          "requestCount": 0,
+          "remaining": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "lastRequest": null,
+          "expiresAt": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "permissions": null,
+          "metadata": null
+        }
+      ],
+      "stored": [
+        {
+          "id": "nan-finite-1",
+          "name": "number-1",
+          "start": null,
+          "prefix": null,
+          "key": "stored-nan-finite-1",
+          "referenceId": "number-sort-owner",
+          "configId": "default",
+          "refillInterval": null,
+          "refillAmount": null,
+          "lastRefillAt": null,
+          "enabled": true,
+          "rateLimitEnabled": true,
+          "rateLimitTimeWindow": 60000,
+          "rateLimitMax": 1,
+          "requestCount": 0,
+          "remaining": 1,
+          "lastRequest": null,
+          "expiresAt": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "permissions": null,
+          "metadata": null
+        },
+        {
+          "id": "nan-finite-0",
+          "name": "number-0",
+          "start": null,
+          "prefix": null,
+          "key": "stored-nan-finite-0",
+          "referenceId": "number-sort-owner",
+          "configId": "default",
+          "refillInterval": null,
+          "refillAmount": null,
+          "lastRefillAt": null,
+          "enabled": true,
+          "rateLimitEnabled": true,
+          "rateLimitTimeWindow": 60000,
+          "rateLimitMax": 1,
+          "requestCount": 0,
+          "remaining": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "lastRequest": null,
+          "expiresAt": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "permissions": null,
+          "metadata": null
+        }
+      ],
+      "operations": [
+        {
+          "direction": "asc",
+          "rows": [
+            {
+              "configId": "default",
+              "name": "number-1",
+              "start": null,
+              "referenceId": "number-sort-owner",
+              "prefix": null,
+              "key": "stored-nan-finite-1",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": 1,
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null,
+              "id": "nan-finite-1"
+            },
+            {
+              "configId": "default",
+              "name": "number-0",
+              "start": null,
+              "referenceId": "number-sort-owner",
+              "prefix": null,
+              "key": "stored-nan-finite-0",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": {
+                "type": "number",
+                "value": "NaN"
+              },
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null,
+              "id": "nan-finite-0"
+            }
+          ],
+          "total": 2,
+          "stored": [
+            {
+              "id": "nan-finite-1",
+              "name": "number-1",
+              "start": null,
+              "prefix": null,
+              "key": "stored-nan-finite-1",
+              "referenceId": "number-sort-owner",
+              "configId": "default",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": 1,
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null
+            },
+            {
+              "id": "nan-finite-0",
+              "name": "number-0",
+              "start": null,
+              "prefix": null,
+              "key": "stored-nan-finite-0",
+              "referenceId": "number-sort-owner",
+              "configId": "default",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": {
+                "type": "number",
+                "value": "NaN"
+              },
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null
+            }
+          ]
+        },
+        {
+          "direction": "desc",
+          "rows": [
+            {
+              "configId": "default",
+              "name": "number-1",
+              "start": null,
+              "referenceId": "number-sort-owner",
+              "prefix": null,
+              "key": "stored-nan-finite-1",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": 1,
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null,
+              "id": "nan-finite-1"
+            },
+            {
+              "configId": "default",
+              "name": "number-0",
+              "start": null,
+              "referenceId": "number-sort-owner",
+              "prefix": null,
+              "key": "stored-nan-finite-0",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": {
+                "type": "number",
+                "value": "NaN"
+              },
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null,
+              "id": "nan-finite-0"
+            }
+          ],
+          "total": 2,
+          "stored": [
+            {
+              "id": "nan-finite-1",
+              "name": "number-1",
+              "start": null,
+              "prefix": null,
+              "key": "stored-nan-finite-1",
+              "referenceId": "number-sort-owner",
+              "configId": "default",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": 1,
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null
+            },
+            {
+              "id": "nan-finite-0",
+              "name": "number-0",
+              "start": null,
+              "prefix": null,
+              "key": "stored-nan-finite-0",
+              "referenceId": "number-sort-owner",
+              "configId": "default",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": {
+                "type": "number",
+                "value": "NaN"
+              },
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "pair": "positive-infinity",
+      "order": "forward",
+      "input": [
+        {
+          "id": "positive-infinity-0",
+          "name": "number-0",
+          "start": null,
+          "prefix": null,
+          "key": "stored-positive-infinity-0",
+          "referenceId": "number-sort-owner",
+          "configId": "default",
+          "refillInterval": null,
+          "refillAmount": null,
+          "lastRefillAt": null,
+          "enabled": true,
+          "rateLimitEnabled": true,
+          "rateLimitTimeWindow": 60000,
+          "rateLimitMax": 1,
+          "requestCount": 0,
+          "remaining": {
+            "type": "number",
+            "value": "Infinity"
+          },
+          "lastRequest": null,
+          "expiresAt": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "permissions": null,
+          "metadata": null
+        },
+        {
+          "id": "positive-infinity-1",
+          "name": "number-1",
+          "start": null,
+          "prefix": null,
+          "key": "stored-positive-infinity-1",
+          "referenceId": "number-sort-owner",
+          "configId": "default",
+          "refillInterval": null,
+          "refillAmount": null,
+          "lastRefillAt": null,
+          "enabled": true,
+          "rateLimitEnabled": true,
+          "rateLimitTimeWindow": 60000,
+          "rateLimitMax": 1,
+          "requestCount": 0,
+          "remaining": {
+            "type": "number",
+            "value": "Infinity"
+          },
+          "lastRequest": null,
+          "expiresAt": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "permissions": null,
+          "metadata": null
+        }
+      ],
+      "stored": [
+        {
+          "id": "positive-infinity-0",
+          "name": "number-0",
+          "start": null,
+          "prefix": null,
+          "key": "stored-positive-infinity-0",
+          "referenceId": "number-sort-owner",
+          "configId": "default",
+          "refillInterval": null,
+          "refillAmount": null,
+          "lastRefillAt": null,
+          "enabled": true,
+          "rateLimitEnabled": true,
+          "rateLimitTimeWindow": 60000,
+          "rateLimitMax": 1,
+          "requestCount": 0,
+          "remaining": {
+            "type": "number",
+            "value": "Infinity"
+          },
+          "lastRequest": null,
+          "expiresAt": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "permissions": null,
+          "metadata": null
+        },
+        {
+          "id": "positive-infinity-1",
+          "name": "number-1",
+          "start": null,
+          "prefix": null,
+          "key": "stored-positive-infinity-1",
+          "referenceId": "number-sort-owner",
+          "configId": "default",
+          "refillInterval": null,
+          "refillAmount": null,
+          "lastRefillAt": null,
+          "enabled": true,
+          "rateLimitEnabled": true,
+          "rateLimitTimeWindow": 60000,
+          "rateLimitMax": 1,
+          "requestCount": 0,
+          "remaining": {
+            "type": "number",
+            "value": "Infinity"
+          },
+          "lastRequest": null,
+          "expiresAt": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "permissions": null,
+          "metadata": null
+        }
+      ],
+      "operations": [
+        {
+          "direction": "asc",
+          "rows": [
+            {
+              "configId": "default",
+              "name": "number-0",
+              "start": null,
+              "referenceId": "number-sort-owner",
+              "prefix": null,
+              "key": "stored-positive-infinity-0",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": {
+                "type": "number",
+                "value": "Infinity"
+              },
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null,
+              "id": "positive-infinity-0"
+            },
+            {
+              "configId": "default",
+              "name": "number-1",
+              "start": null,
+              "referenceId": "number-sort-owner",
+              "prefix": null,
+              "key": "stored-positive-infinity-1",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": {
+                "type": "number",
+                "value": "Infinity"
+              },
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null,
+              "id": "positive-infinity-1"
+            }
+          ],
+          "total": 2,
+          "stored": [
+            {
+              "id": "positive-infinity-0",
+              "name": "number-0",
+              "start": null,
+              "prefix": null,
+              "key": "stored-positive-infinity-0",
+              "referenceId": "number-sort-owner",
+              "configId": "default",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": {
+                "type": "number",
+                "value": "Infinity"
+              },
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null
+            },
+            {
+              "id": "positive-infinity-1",
+              "name": "number-1",
+              "start": null,
+              "prefix": null,
+              "key": "stored-positive-infinity-1",
+              "referenceId": "number-sort-owner",
+              "configId": "default",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": {
+                "type": "number",
+                "value": "Infinity"
+              },
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null
+            }
+          ]
+        },
+        {
+          "direction": "desc",
+          "rows": [
+            {
+              "configId": "default",
+              "name": "number-0",
+              "start": null,
+              "referenceId": "number-sort-owner",
+              "prefix": null,
+              "key": "stored-positive-infinity-0",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": {
+                "type": "number",
+                "value": "Infinity"
+              },
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null,
+              "id": "positive-infinity-0"
+            },
+            {
+              "configId": "default",
+              "name": "number-1",
+              "start": null,
+              "referenceId": "number-sort-owner",
+              "prefix": null,
+              "key": "stored-positive-infinity-1",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": {
+                "type": "number",
+                "value": "Infinity"
+              },
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null,
+              "id": "positive-infinity-1"
+            }
+          ],
+          "total": 2,
+          "stored": [
+            {
+              "id": "positive-infinity-0",
+              "name": "number-0",
+              "start": null,
+              "prefix": null,
+              "key": "stored-positive-infinity-0",
+              "referenceId": "number-sort-owner",
+              "configId": "default",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": {
+                "type": "number",
+                "value": "Infinity"
+              },
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null
+            },
+            {
+              "id": "positive-infinity-1",
+              "name": "number-1",
+              "start": null,
+              "prefix": null,
+              "key": "stored-positive-infinity-1",
+              "referenceId": "number-sort-owner",
+              "configId": "default",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": {
+                "type": "number",
+                "value": "Infinity"
+              },
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "pair": "positive-infinity",
+      "order": "reverse",
+      "input": [
+        {
+          "id": "positive-infinity-1",
+          "name": "number-1",
+          "start": null,
+          "prefix": null,
+          "key": "stored-positive-infinity-1",
+          "referenceId": "number-sort-owner",
+          "configId": "default",
+          "refillInterval": null,
+          "refillAmount": null,
+          "lastRefillAt": null,
+          "enabled": true,
+          "rateLimitEnabled": true,
+          "rateLimitTimeWindow": 60000,
+          "rateLimitMax": 1,
+          "requestCount": 0,
+          "remaining": {
+            "type": "number",
+            "value": "Infinity"
+          },
+          "lastRequest": null,
+          "expiresAt": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "permissions": null,
+          "metadata": null
+        },
+        {
+          "id": "positive-infinity-0",
+          "name": "number-0",
+          "start": null,
+          "prefix": null,
+          "key": "stored-positive-infinity-0",
+          "referenceId": "number-sort-owner",
+          "configId": "default",
+          "refillInterval": null,
+          "refillAmount": null,
+          "lastRefillAt": null,
+          "enabled": true,
+          "rateLimitEnabled": true,
+          "rateLimitTimeWindow": 60000,
+          "rateLimitMax": 1,
+          "requestCount": 0,
+          "remaining": {
+            "type": "number",
+            "value": "Infinity"
+          },
+          "lastRequest": null,
+          "expiresAt": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "permissions": null,
+          "metadata": null
+        }
+      ],
+      "stored": [
+        {
+          "id": "positive-infinity-1",
+          "name": "number-1",
+          "start": null,
+          "prefix": null,
+          "key": "stored-positive-infinity-1",
+          "referenceId": "number-sort-owner",
+          "configId": "default",
+          "refillInterval": null,
+          "refillAmount": null,
+          "lastRefillAt": null,
+          "enabled": true,
+          "rateLimitEnabled": true,
+          "rateLimitTimeWindow": 60000,
+          "rateLimitMax": 1,
+          "requestCount": 0,
+          "remaining": {
+            "type": "number",
+            "value": "Infinity"
+          },
+          "lastRequest": null,
+          "expiresAt": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "permissions": null,
+          "metadata": null
+        },
+        {
+          "id": "positive-infinity-0",
+          "name": "number-0",
+          "start": null,
+          "prefix": null,
+          "key": "stored-positive-infinity-0",
+          "referenceId": "number-sort-owner",
+          "configId": "default",
+          "refillInterval": null,
+          "refillAmount": null,
+          "lastRefillAt": null,
+          "enabled": true,
+          "rateLimitEnabled": true,
+          "rateLimitTimeWindow": 60000,
+          "rateLimitMax": 1,
+          "requestCount": 0,
+          "remaining": {
+            "type": "number",
+            "value": "Infinity"
+          },
+          "lastRequest": null,
+          "expiresAt": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "permissions": null,
+          "metadata": null
+        }
+      ],
+      "operations": [
+        {
+          "direction": "asc",
+          "rows": [
+            {
+              "configId": "default",
+              "name": "number-1",
+              "start": null,
+              "referenceId": "number-sort-owner",
+              "prefix": null,
+              "key": "stored-positive-infinity-1",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": {
+                "type": "number",
+                "value": "Infinity"
+              },
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null,
+              "id": "positive-infinity-1"
+            },
+            {
+              "configId": "default",
+              "name": "number-0",
+              "start": null,
+              "referenceId": "number-sort-owner",
+              "prefix": null,
+              "key": "stored-positive-infinity-0",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": {
+                "type": "number",
+                "value": "Infinity"
+              },
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null,
+              "id": "positive-infinity-0"
+            }
+          ],
+          "total": 2,
+          "stored": [
+            {
+              "id": "positive-infinity-1",
+              "name": "number-1",
+              "start": null,
+              "prefix": null,
+              "key": "stored-positive-infinity-1",
+              "referenceId": "number-sort-owner",
+              "configId": "default",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": {
+                "type": "number",
+                "value": "Infinity"
+              },
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null
+            },
+            {
+              "id": "positive-infinity-0",
+              "name": "number-0",
+              "start": null,
+              "prefix": null,
+              "key": "stored-positive-infinity-0",
+              "referenceId": "number-sort-owner",
+              "configId": "default",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": {
+                "type": "number",
+                "value": "Infinity"
+              },
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null
+            }
+          ]
+        },
+        {
+          "direction": "desc",
+          "rows": [
+            {
+              "configId": "default",
+              "name": "number-1",
+              "start": null,
+              "referenceId": "number-sort-owner",
+              "prefix": null,
+              "key": "stored-positive-infinity-1",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": {
+                "type": "number",
+                "value": "Infinity"
+              },
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null,
+              "id": "positive-infinity-1"
+            },
+            {
+              "configId": "default",
+              "name": "number-0",
+              "start": null,
+              "referenceId": "number-sort-owner",
+              "prefix": null,
+              "key": "stored-positive-infinity-0",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": {
+                "type": "number",
+                "value": "Infinity"
+              },
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null,
+              "id": "positive-infinity-0"
+            }
+          ],
+          "total": 2,
+          "stored": [
+            {
+              "id": "positive-infinity-1",
+              "name": "number-1",
+              "start": null,
+              "prefix": null,
+              "key": "stored-positive-infinity-1",
+              "referenceId": "number-sort-owner",
+              "configId": "default",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": {
+                "type": "number",
+                "value": "Infinity"
+              },
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null
+            },
+            {
+              "id": "positive-infinity-0",
+              "name": "number-0",
+              "start": null,
+              "prefix": null,
+              "key": "stored-positive-infinity-0",
+              "referenceId": "number-sort-owner",
+              "configId": "default",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": {
+                "type": "number",
+                "value": "Infinity"
+              },
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "pair": "negative-infinity",
+      "order": "forward",
+      "input": [
+        {
+          "id": "negative-infinity-0",
+          "name": "number-0",
+          "start": null,
+          "prefix": null,
+          "key": "stored-negative-infinity-0",
+          "referenceId": "number-sort-owner",
+          "configId": "default",
+          "refillInterval": null,
+          "refillAmount": null,
+          "lastRefillAt": null,
+          "enabled": true,
+          "rateLimitEnabled": true,
+          "rateLimitTimeWindow": 60000,
+          "rateLimitMax": 1,
+          "requestCount": 0,
+          "remaining": {
+            "type": "number",
+            "value": "-Infinity"
+          },
+          "lastRequest": null,
+          "expiresAt": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "permissions": null,
+          "metadata": null
+        },
+        {
+          "id": "negative-infinity-1",
+          "name": "number-1",
+          "start": null,
+          "prefix": null,
+          "key": "stored-negative-infinity-1",
+          "referenceId": "number-sort-owner",
+          "configId": "default",
+          "refillInterval": null,
+          "refillAmount": null,
+          "lastRefillAt": null,
+          "enabled": true,
+          "rateLimitEnabled": true,
+          "rateLimitTimeWindow": 60000,
+          "rateLimitMax": 1,
+          "requestCount": 0,
+          "remaining": {
+            "type": "number",
+            "value": "-Infinity"
+          },
+          "lastRequest": null,
+          "expiresAt": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "permissions": null,
+          "metadata": null
+        }
+      ],
+      "stored": [
+        {
+          "id": "negative-infinity-0",
+          "name": "number-0",
+          "start": null,
+          "prefix": null,
+          "key": "stored-negative-infinity-0",
+          "referenceId": "number-sort-owner",
+          "configId": "default",
+          "refillInterval": null,
+          "refillAmount": null,
+          "lastRefillAt": null,
+          "enabled": true,
+          "rateLimitEnabled": true,
+          "rateLimitTimeWindow": 60000,
+          "rateLimitMax": 1,
+          "requestCount": 0,
+          "remaining": {
+            "type": "number",
+            "value": "-Infinity"
+          },
+          "lastRequest": null,
+          "expiresAt": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "permissions": null,
+          "metadata": null
+        },
+        {
+          "id": "negative-infinity-1",
+          "name": "number-1",
+          "start": null,
+          "prefix": null,
+          "key": "stored-negative-infinity-1",
+          "referenceId": "number-sort-owner",
+          "configId": "default",
+          "refillInterval": null,
+          "refillAmount": null,
+          "lastRefillAt": null,
+          "enabled": true,
+          "rateLimitEnabled": true,
+          "rateLimitTimeWindow": 60000,
+          "rateLimitMax": 1,
+          "requestCount": 0,
+          "remaining": {
+            "type": "number",
+            "value": "-Infinity"
+          },
+          "lastRequest": null,
+          "expiresAt": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "permissions": null,
+          "metadata": null
+        }
+      ],
+      "operations": [
+        {
+          "direction": "asc",
+          "rows": [
+            {
+              "configId": "default",
+              "name": "number-0",
+              "start": null,
+              "referenceId": "number-sort-owner",
+              "prefix": null,
+              "key": "stored-negative-infinity-0",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": {
+                "type": "number",
+                "value": "-Infinity"
+              },
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null,
+              "id": "negative-infinity-0"
+            },
+            {
+              "configId": "default",
+              "name": "number-1",
+              "start": null,
+              "referenceId": "number-sort-owner",
+              "prefix": null,
+              "key": "stored-negative-infinity-1",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": {
+                "type": "number",
+                "value": "-Infinity"
+              },
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null,
+              "id": "negative-infinity-1"
+            }
+          ],
+          "total": 2,
+          "stored": [
+            {
+              "id": "negative-infinity-0",
+              "name": "number-0",
+              "start": null,
+              "prefix": null,
+              "key": "stored-negative-infinity-0",
+              "referenceId": "number-sort-owner",
+              "configId": "default",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": {
+                "type": "number",
+                "value": "-Infinity"
+              },
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null
+            },
+            {
+              "id": "negative-infinity-1",
+              "name": "number-1",
+              "start": null,
+              "prefix": null,
+              "key": "stored-negative-infinity-1",
+              "referenceId": "number-sort-owner",
+              "configId": "default",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": {
+                "type": "number",
+                "value": "-Infinity"
+              },
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null
+            }
+          ]
+        },
+        {
+          "direction": "desc",
+          "rows": [
+            {
+              "configId": "default",
+              "name": "number-0",
+              "start": null,
+              "referenceId": "number-sort-owner",
+              "prefix": null,
+              "key": "stored-negative-infinity-0",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": {
+                "type": "number",
+                "value": "-Infinity"
+              },
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null,
+              "id": "negative-infinity-0"
+            },
+            {
+              "configId": "default",
+              "name": "number-1",
+              "start": null,
+              "referenceId": "number-sort-owner",
+              "prefix": null,
+              "key": "stored-negative-infinity-1",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": {
+                "type": "number",
+                "value": "-Infinity"
+              },
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null,
+              "id": "negative-infinity-1"
+            }
+          ],
+          "total": 2,
+          "stored": [
+            {
+              "id": "negative-infinity-0",
+              "name": "number-0",
+              "start": null,
+              "prefix": null,
+              "key": "stored-negative-infinity-0",
+              "referenceId": "number-sort-owner",
+              "configId": "default",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": {
+                "type": "number",
+                "value": "-Infinity"
+              },
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null
+            },
+            {
+              "id": "negative-infinity-1",
+              "name": "number-1",
+              "start": null,
+              "prefix": null,
+              "key": "stored-negative-infinity-1",
+              "referenceId": "number-sort-owner",
+              "configId": "default",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": {
+                "type": "number",
+                "value": "-Infinity"
+              },
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "pair": "negative-infinity",
+      "order": "reverse",
+      "input": [
+        {
+          "id": "negative-infinity-1",
+          "name": "number-1",
+          "start": null,
+          "prefix": null,
+          "key": "stored-negative-infinity-1",
+          "referenceId": "number-sort-owner",
+          "configId": "default",
+          "refillInterval": null,
+          "refillAmount": null,
+          "lastRefillAt": null,
+          "enabled": true,
+          "rateLimitEnabled": true,
+          "rateLimitTimeWindow": 60000,
+          "rateLimitMax": 1,
+          "requestCount": 0,
+          "remaining": {
+            "type": "number",
+            "value": "-Infinity"
+          },
+          "lastRequest": null,
+          "expiresAt": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "permissions": null,
+          "metadata": null
+        },
+        {
+          "id": "negative-infinity-0",
+          "name": "number-0",
+          "start": null,
+          "prefix": null,
+          "key": "stored-negative-infinity-0",
+          "referenceId": "number-sort-owner",
+          "configId": "default",
+          "refillInterval": null,
+          "refillAmount": null,
+          "lastRefillAt": null,
+          "enabled": true,
+          "rateLimitEnabled": true,
+          "rateLimitTimeWindow": 60000,
+          "rateLimitMax": 1,
+          "requestCount": 0,
+          "remaining": {
+            "type": "number",
+            "value": "-Infinity"
+          },
+          "lastRequest": null,
+          "expiresAt": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "permissions": null,
+          "metadata": null
+        }
+      ],
+      "stored": [
+        {
+          "id": "negative-infinity-1",
+          "name": "number-1",
+          "start": null,
+          "prefix": null,
+          "key": "stored-negative-infinity-1",
+          "referenceId": "number-sort-owner",
+          "configId": "default",
+          "refillInterval": null,
+          "refillAmount": null,
+          "lastRefillAt": null,
+          "enabled": true,
+          "rateLimitEnabled": true,
+          "rateLimitTimeWindow": 60000,
+          "rateLimitMax": 1,
+          "requestCount": 0,
+          "remaining": {
+            "type": "number",
+            "value": "-Infinity"
+          },
+          "lastRequest": null,
+          "expiresAt": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "permissions": null,
+          "metadata": null
+        },
+        {
+          "id": "negative-infinity-0",
+          "name": "number-0",
+          "start": null,
+          "prefix": null,
+          "key": "stored-negative-infinity-0",
+          "referenceId": "number-sort-owner",
+          "configId": "default",
+          "refillInterval": null,
+          "refillAmount": null,
+          "lastRefillAt": null,
+          "enabled": true,
+          "rateLimitEnabled": true,
+          "rateLimitTimeWindow": 60000,
+          "rateLimitMax": 1,
+          "requestCount": 0,
+          "remaining": {
+            "type": "number",
+            "value": "-Infinity"
+          },
+          "lastRequest": null,
+          "expiresAt": null,
+          "createdAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "updatedAt": {
+            "type": "date",
+            "value": "2030-01-02T03:04:05.000Z"
+          },
+          "permissions": null,
+          "metadata": null
+        }
+      ],
+      "operations": [
+        {
+          "direction": "asc",
+          "rows": [
+            {
+              "configId": "default",
+              "name": "number-1",
+              "start": null,
+              "referenceId": "number-sort-owner",
+              "prefix": null,
+              "key": "stored-negative-infinity-1",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": {
+                "type": "number",
+                "value": "-Infinity"
+              },
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null,
+              "id": "negative-infinity-1"
+            },
+            {
+              "configId": "default",
+              "name": "number-0",
+              "start": null,
+              "referenceId": "number-sort-owner",
+              "prefix": null,
+              "key": "stored-negative-infinity-0",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": {
+                "type": "number",
+                "value": "-Infinity"
+              },
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null,
+              "id": "negative-infinity-0"
+            }
+          ],
+          "total": 2,
+          "stored": [
+            {
+              "id": "negative-infinity-1",
+              "name": "number-1",
+              "start": null,
+              "prefix": null,
+              "key": "stored-negative-infinity-1",
+              "referenceId": "number-sort-owner",
+              "configId": "default",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": {
+                "type": "number",
+                "value": "-Infinity"
+              },
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null
+            },
+            {
+              "id": "negative-infinity-0",
+              "name": "number-0",
+              "start": null,
+              "prefix": null,
+              "key": "stored-negative-infinity-0",
+              "referenceId": "number-sort-owner",
+              "configId": "default",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": {
+                "type": "number",
+                "value": "-Infinity"
+              },
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null
+            }
+          ]
+        },
+        {
+          "direction": "desc",
+          "rows": [
+            {
+              "configId": "default",
+              "name": "number-1",
+              "start": null,
+              "referenceId": "number-sort-owner",
+              "prefix": null,
+              "key": "stored-negative-infinity-1",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": {
+                "type": "number",
+                "value": "-Infinity"
+              },
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null,
+              "id": "negative-infinity-1"
+            },
+            {
+              "configId": "default",
+              "name": "number-0",
+              "start": null,
+              "referenceId": "number-sort-owner",
+              "prefix": null,
+              "key": "stored-negative-infinity-0",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": {
+                "type": "number",
+                "value": "-Infinity"
+              },
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null,
+              "id": "negative-infinity-0"
+            }
+          ],
+          "total": 2,
+          "stored": [
+            {
+              "id": "negative-infinity-1",
+              "name": "number-1",
+              "start": null,
+              "prefix": null,
+              "key": "stored-negative-infinity-1",
+              "referenceId": "number-sort-owner",
+              "configId": "default",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": {
+                "type": "number",
+                "value": "-Infinity"
+              },
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null
+            },
+            {
+              "id": "negative-infinity-0",
+              "name": "number-0",
+              "start": null,
+              "prefix": null,
+              "key": "stored-negative-infinity-0",
+              "referenceId": "number-sort-owner",
+              "configId": "default",
+              "refillInterval": null,
+              "refillAmount": null,
+              "lastRefillAt": null,
+              "enabled": true,
+              "rateLimitEnabled": true,
+              "rateLimitTimeWindow": 60000,
+              "rateLimitMax": 1,
+              "requestCount": 0,
+              "remaining": {
+                "type": "number",
+                "value": "-Infinity"
+              },
+              "lastRequest": null,
+              "expiresAt": null,
+              "createdAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "updatedAt": {
+                "type": "date",
+                "value": "2030-01-02T03:04:05.000Z"
+              },
+              "permissions": null,
+              "metadata": null
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

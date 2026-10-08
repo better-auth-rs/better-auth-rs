@@ -638,6 +638,7 @@ fn comparator(field: &str) -> AuthResult<fn(&ApiKey, &ApiKey) -> std::cmp::Order
 
 fn compare_numbers(left: Option<f64>, right: Option<f64>) -> std::cmp::Ordering {
     match (left, right) {
+        (Some(left), Some(right)) if left == right => std::cmp::Ordering::Equal,
         (Some(left), Some(right)) => left.total_cmp(&right),
         (None, None) => std::cmp::Ordering::Equal,
         (None, Some(_)) => std::cmp::Ordering::Less,

@@ -87,7 +87,8 @@ run_stage() {
       bun --no-install test \
         ./compat-tests/reference-server/contracts/memory-sort.test.ts \
         ./compat-tests/reference-server/contracts/memory-name-coercion.test.ts \
-        ./compat-tests/reference-server/contracts/member-sort-stability.test.ts
+        ./compat-tests/reference-server/contracts/member-sort-stability.test.ts \
+        ./compat-tests/reference-server/contracts/api-key-number-sort.test.ts
       ;;
     plugin-display-values)
       cargo fmt --all -- --check

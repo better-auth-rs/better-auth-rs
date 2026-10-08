@@ -13,7 +13,7 @@ The `Upstream fixture capture` workflow runs each selected capture twice and req
 
 Use `devenv shell -- ./scripts/check.sh credential-timing` for One Time Token hashing deadlines and Device polling guards. The stage runs the targeted Rust regressions and strict upstream replays. The upstream captures use a fixed clock; Rust checks actual hashing intervals and token consumption without injecting a production clock.
 
-Use `devenv shell -- ./scripts/check.sh memory-sorting` for Memory API Key ordering and stable Member ordering. Member pairing checks equal timestamps in both directions and the resulting page positions. Locale and arbitrary mixed-value ordering retain the boundaries in the alignment inventory.
+Use `devenv shell -- ./scripts/check.sh memory-sorting` for Memory API Key ordering and stable Member ordering. Member pairing checks equal timestamps in both directions and the resulting page positions. Numeric API Key pairing checks signed-zero and same-sign infinity ties in both directions. NaN observations remain outside Rust acceptance. Locale and arbitrary mixed-value ordering retain the boundaries in the alignment inventory.
 
 Full CI continues independent check stages after a check fails, provided compatibility dependency installation succeeded. Any failed stage still fails the workflow. Cancellation stops the remaining stages.
 
