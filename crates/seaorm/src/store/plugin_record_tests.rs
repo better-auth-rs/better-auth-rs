@@ -19,7 +19,7 @@ mod keys {
     #[derive(Clone, Debug, PartialEq, DeriveEntityModel, crate::AuthEntity)]
     #[auth(role = "jwk")]
     #[sea_orm(table_name = "replacement_jwks")]
-    pub(super) struct Model {
+    pub struct Model {
         #[sea_orm(primary_key, auto_increment = false)]
         pub id: String,
         pub public_key: Option<f64>,
@@ -30,7 +30,7 @@ mod keys {
     }
 
     #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-    pub(super) enum Relation {}
+    pub enum Relation {}
     impl ActiveModelBehavior for ActiveModel {}
 }
 
@@ -40,7 +40,7 @@ mod wallets {
     #[derive(Clone, Debug, PartialEq, DeriveEntityModel, crate::AuthEntity)]
     #[auth(role = "wallet_address")]
     #[sea_orm(table_name = "replacement_wallets")]
-    pub(super) struct Model {
+    pub struct Model {
         #[sea_orm(primary_key, auto_increment = false)]
         pub id: String,
         #[auth(reference = false)]
@@ -52,7 +52,7 @@ mod wallets {
     }
 
     #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-    pub(super) enum Relation {}
+    pub enum Relation {}
     impl ActiveModelBehavior for ActiveModel {}
 }
 
@@ -62,7 +62,7 @@ mod merged_api_keys {
     #[derive(Clone, Debug, PartialEq, DeriveEntityModel, crate::AuthEntity)]
     #[auth(role = "api_key")]
     #[sea_orm(table_name = "merged_apikey")]
-    pub(super) struct Model {
+    pub struct Model {
         #[sea_orm(primary_key, auto_increment = false)]
         pub id: String,
         #[sea_orm(column_name = "shared")]
@@ -70,7 +70,7 @@ mod merged_api_keys {
     }
 
     #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-    pub(super) enum Relation {}
+    pub enum Relation {}
     impl ActiveModelBehavior for ActiveModel {}
 }
 
@@ -80,7 +80,7 @@ mod merged_passkeys {
     #[derive(Clone, Debug, PartialEq, DeriveEntityModel, crate::AuthEntity)]
     #[auth(role = "passkey", native_passkey)]
     #[sea_orm(table_name = "merged_passkey")]
-    pub(super) struct Model {
+    pub struct Model {
         #[sea_orm(primary_key, auto_increment = false)]
         pub id: String,
         #[sea_orm(column_name = "shared")]
@@ -88,7 +88,7 @@ mod merged_passkeys {
     }
 
     #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-    pub(super) enum Relation {}
+    pub enum Relation {}
     impl ActiveModelBehavior for ActiveModel {}
 }
 

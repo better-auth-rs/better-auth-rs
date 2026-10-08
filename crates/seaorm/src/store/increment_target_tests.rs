@@ -9,7 +9,7 @@ mod targets {
 
     #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
     #[sea_orm(table_name = "increment_targets")]
-    pub(super) struct Model {
+    pub struct Model {
         #[sea_orm(primary_key, auto_increment = false)]
         pub id: String,
         pub remaining: i32,
@@ -17,7 +17,7 @@ mod targets {
     }
 
     #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-    pub(super) enum Relation {}
+    pub enum Relation {}
 
     impl ActiveModelBehavior for ActiveModel {}
 }

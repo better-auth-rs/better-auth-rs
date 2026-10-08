@@ -196,7 +196,7 @@ async fn permission_runtime_properties_control_verification_before_consuming_usa
             &plugin,
             &ctx,
             &session.token,
-            json!({"name":case}),
+            json!({"name":"Permissions"}),
             UpdateApiKey {
                 remaining: Some(3.0),
                 permissions: Some(permissions.to_string()),

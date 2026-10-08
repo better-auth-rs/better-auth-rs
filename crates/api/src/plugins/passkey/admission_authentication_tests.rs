@@ -114,8 +114,8 @@ impl MemoryFixture {
         admin: bool,
         owner: Option<FieldValue>,
     ) -> TestResult {
-        self.ctx.config = Arc::new(config);
-        let mut init = AuthInitContext::new(self.ctx.config.clone(), self.raw.clone());
+        let config = Arc::new(config);
+        let mut init = AuthInitContext::new(config.clone(), self.raw.clone());
         AuthPlugin::on_init(&PasskeyPlugin::new(), &mut init).await?;
         if admin {
             let trace = self.trace.clone();
@@ -148,11 +148,12 @@ impl MemoryFixture {
         }
         init.register_model_fields(EntityRole::Passkey, fields)?;
         let parts = init.into_parts();
-        self.ctx.database = self.raw.with_runtime(
-            self.ctx.config.clone(),
+        let database = self.raw.with_runtime(
+            config.clone(),
             vec![self.trace.clone()],
             parts.plugin_fields,
         )?;
+        self.ctx = AuthContext::new(config, database);
         self.ctx.metadata = parts.metadata;
         self.ctx.extensions = parts.extensions;
         Ok(())

@@ -1,7 +1,7 @@
 use super::*;
 use crate::plugins::test_helpers;
-use better_auth_core::HttpMethod;
 use better_auth_core::wire::SessionView;
+use better_auth_core::{AuthInitContext, AuthPlugin, HttpMethod};
 use better_auth_seaorm::sea_orm::{ActiveModelTrait, ConnectionTrait, Schema, Set};
 use better_auth_seaorm::store::__private_test_support::{bundled_schema::BundledSchema, migrator};
 use better_auth_seaorm::{Database, SeaOrmStore};
@@ -79,8 +79,12 @@ impl Fixture {
             store = store.hook(RejectEnrollment);
         }
         let mut ctx = AuthContext::new(config, Arc::new(store));
-        ctx.set_metadata(METADATA_ENABLED, json!(true));
-        let mut fields = better_auth_core::plugin_runtime::ModelFields::default();
+        let mut init = AuthInitContext::new(ctx.config.clone(), ctx.database.clone());
+        TwoFactorPlugin::new().on_init(&mut init).await.unwrap();
+        let parts = init.into_parts();
+        ctx.metadata = parts.metadata;
+        ctx.extensions = parts.extensions;
+        let mut fields = parts.plugin_fields;
         fields.set_schema_configuration(&better_auth_core::store::schema::SchemaConfiguration {
             config: ctx.config.clone(),
             plugins: vec!["two-factor"],
@@ -90,7 +94,7 @@ impl Fixture {
         });
         ctx.database = ctx
             .database
-            .with_runtime(ctx.config.clone(), Vec::new(), fields)
+            .with_runtime(ctx.config.clone(), parts.database_hooks, fields)
             .unwrap();
         let ctx = ctx
             .initialize_request_context()

@@ -37,6 +37,7 @@ enum SessionOutcome {
 struct Trace {
     outcome: SessionOutcome,
     users: Mutex<Vec<FieldValue>>,
+    id_transforms: Mutex<Vec<FieldValue>>,
     owners: Mutex<Vec<FieldValue>>,
     after: Mutex<Vec<SessionView>>,
 }
@@ -190,8 +191,19 @@ impl Fixture {
             output(
                 UserFieldType::String,
                 UserFieldTransform::new(move |id| {
-                    observed.users.lock().unwrap().push(id);
+                    observed.id_transforms.lock().unwrap().push(id);
                     Ok("user-b".into())
+                }),
+            ),
+        );
+        let observed = trace.clone();
+        let _ = config.user.fields_mut().insert(
+            "name".into(),
+            output(
+                UserFieldType::String,
+                UserFieldTransform::new(move |name| {
+                    observed.users.lock().unwrap().push(name.clone());
+                    Ok(name)
                 }),
             ),
         );
@@ -247,12 +259,13 @@ impl Fixture {
                 .await?
                 .is_none()
         );
-        assert!(self.raw.get_user_sessions("user-a").await?.is_empty());
-        assert_eq!(self.raw.get_user_sessions("user-b").await?.len(), sessions);
+        assert_eq!(self.raw.get_user_sessions("user-a").await?.len(), sessions);
+        assert!(self.raw.get_user_sessions("user-b").await?.is_empty());
         assert_eq!(
             *self.trace.owners.lock().unwrap(),
-            [FieldValue::from("user-b")]
+            [FieldValue::from("user-a")]
         );
+        assert!(self.trace.id_transforms.lock().unwrap().is_empty());
         assert_eq!(self.trace.after.lock().unwrap().len(), sessions);
         assert!(
             !self
@@ -319,13 +332,16 @@ async fn native_session_values_reach_publication_cache_and_response_without_coer
         fixture.assert_consumed(1).await?;
         assert_eq!(
             *fixture.trace.users.lock().unwrap(),
-            [FieldValue::from("user-a"), FieldValue::from("user-b")]
+            [
+                FieldValue::from("Selected User"),
+                FieldValue::from("Selected User")
+            ]
         );
         let published = fixture
             .request
             .new_session()?
             .ok_or("Missing published session")?;
-        assert_eq!(published.user_field("id"), &FieldValue::from("user-b"));
+        assert_eq!(published.user_field("id"), &FieldValue::from("user-a"));
         assert_eq!(
             published.user_field("name"),
             &FieldValue::from("Selected User")
@@ -422,7 +438,7 @@ async fn cancelled_session_has_device_error_while_hook_error_propagates() -> Tes
         assert!(fixture.storage.writes.lock().unwrap().is_empty());
         assert_eq!(
             *fixture.trace.users.lock().unwrap(),
-            [FieldValue::from("user-a")]
+            [FieldValue::from("Selected User")]
         );
     }
     Ok(())

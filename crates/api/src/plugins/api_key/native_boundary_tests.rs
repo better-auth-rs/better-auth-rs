@@ -2,6 +2,7 @@ use super::*;
 use better_auth_core::{
     AuthInitContext, CreateMember, CreateOrganization, CreateOrganizationRole, FieldValue,
     SchemaValue, UpdateOrganizationRole,
+    organization_fields::OrganizationFields,
     store::{EphemeralStore, schema::EntityRole},
     user_fields::{
         FieldTransforms, UserConfig, UserFieldConfig, UserFieldTransform, UserFieldType,
@@ -34,24 +35,26 @@ async fn check_organization_reference(ctx: AuthContext<impl better_auth_core::Au
         },
     )
     .unwrap();
-    for role in [EntityRole::Member, EntityRole::OrganizationRole] {
-        init.register_model_fields(
-            role,
-            UserConfig {
-                additional_fields: Some(
-                    [(
-                        "organizationId".into(),
-                        UserFieldConfig {
-                            field_type: UserFieldType::Number,
-                            ..Default::default()
-                        },
-                    )]
-                    .into(),
-                ),
-            },
-        )
-        .unwrap();
-    }
+    let organization_reference = UserConfig {
+        additional_fields: Some(
+            [(
+                "organizationId".into(),
+                UserFieldConfig {
+                    field_type: UserFieldType::Number,
+                    ..Default::default()
+                },
+            )]
+            .into(),
+        ),
+    };
+    init.register_organization_schema(
+        &OrganizationFields {
+            member: organization_reference.clone(),
+            organization_role: organization_reference,
+            ..Default::default()
+        },
+        false,
+    );
     let database = ctx
         .database
         .with_runtime(

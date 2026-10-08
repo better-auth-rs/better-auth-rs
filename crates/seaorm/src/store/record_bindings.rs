@@ -96,16 +96,11 @@ pub(super) fn parameter(value: FieldValue, backend: DbBackend) -> AuthResult<Sim
                 parameters,
             ));
         }
-        FieldValue::Number(value) if backend == DbBackend::MySql && !value.is_finite() => {
-            // mysql2 query interpolation emits JavaScript numeric tokens, including non-finite numbers.
-            let token = if value.is_nan() {
-                "NaN"
-            } else if value.is_sign_positive() {
-                "Infinity"
-            } else {
-                "-Infinity"
-            };
-            return Ok(SimpleExpr::Custom(token.into()));
+        FieldValue::Number(value) if backend == DbBackend::MySql => {
+            // mysql2 emits numeric literals; DOUBLE parameters change MySQL's integer rounding.
+            return Ok(SimpleExpr::Custom(
+                better_auth_core::schema_value::number_string(value),
+            ));
         }
         FieldValue::Number(value) => {
             crate::reference_id::binding(Value::Double(Some(value)), backend)?
@@ -194,4 +189,41 @@ pub(crate) fn sqlite_date(date: FieldDate) -> AuthResult<FieldValue> {
     Ok(FieldValue::String(
         value.to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sea_orm::sea_query::{MysqlQueryBuilder, Query};
+
+    #[test]
+    fn mysql_numbers_keep_literal_types_while_strings_remain_bound() -> AuthResult<()> {
+        for (number, literal) in [
+            (1.5, "1.5"),
+            (2.5, "2.5"),
+            (-2.5, "-2.5"),
+            (-0.0, "0"),
+            (1e-6, "0.000001"),
+            (1e-7, "1e-7"),
+            (1e20, "100000000000000000000"),
+            (1e21, "1e+21"),
+            (f64::NAN, "NaN"),
+            (f64::INFINITY, "Infinity"),
+            (f64::NEG_INFINITY, "-Infinity"),
+        ] {
+            let (sql, parameters) = Query::select()
+                .expr(parameter(number.into(), DbBackend::MySql)?)
+                .build(MysqlQueryBuilder);
+            assert_eq!(sql, format!("SELECT {literal}"));
+            assert!(parameters.0.is_empty());
+        }
+        for text in ["2.5", "NaN", "2.5); DROP TABLE users; --"] {
+            let (sql, parameters) = Query::select()
+                .expr(parameter(text.into(), DbBackend::MySql)?)
+                .build(MysqlQueryBuilder);
+            assert_eq!(sql, "SELECT ?");
+            assert_eq!(parameters.0, vec![Value::String(Some(text.into()))]);
+        }
+        Ok(())
+    }
 }

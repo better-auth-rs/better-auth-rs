@@ -7,7 +7,10 @@
 use super::*;
 use better_auth_core::{
     AuthInitContext, AuthPlugin, CreateUser, HttpMethod,
-    store::{AuthStore, EphemeralStore, StatelessSchema},
+    store::{
+        AuthStore, EphemeralStore, StatelessSchema,
+        database_hooks::{DatabaseHookContext, DatabaseHookUpdate, DatabaseHooks},
+    },
 };
 use std::sync::Mutex;
 
@@ -485,6 +488,24 @@ async fn native_cipher_receives_original_value_and_cas_keeps_concurrent_replacem
     Ok(())
 }
 
+#[derive(Default)]
+struct SessionOwners(Mutex<Vec<FieldValue>>);
+
+#[better_auth_core::database_hooks()]
+impl DatabaseHooks<StatelessSchema> for SessionOwners {
+    async fn before_create_session(
+        &self,
+        fields: &mut FieldMap,
+        _: &DatabaseHookContext<'_, StatelessSchema>,
+    ) -> AuthResult<DatabaseHookUpdate<FieldMap>> {
+        self.0
+            .lock()
+            .unwrap()
+            .push(fields.get("userId").cloned().unwrap_or_default());
+        Ok(DatabaseHookUpdate::Continue)
+    }
+}
+
 #[tokio::test]
 async fn finalization_preserves_selected_native_owner_token_and_cookie() -> TestResult {
     use better_auth_core::user_fields::{
@@ -504,11 +525,12 @@ async fn finalization_preserves_selected_native_owner_token_and_cookie() -> Test
         },
     );
     let config = Arc::new(config);
-    let store =
-        fixture
-            .ctx
-            .database
-            .with_runtime(config.clone(), Vec::new(), fixture.fields.clone())?;
+    let owners = Arc::new(SessionOwners::default());
+    let store = fixture.ctx.database.with_runtime(
+        config.clone(),
+        vec![owners.clone()],
+        fixture.fields.clone(),
+    )?;
     fixture.ctx = AuthContext::new(config, store);
     fixture
         .ctx
@@ -541,6 +563,7 @@ async fn finalization_preserves_selected_native_owner_token_and_cookie() -> Test
         &fixture.ctx,
     )
     .await?;
+    assert_eq!(*owners.0.lock().unwrap(), [FieldValue::from(17.0)]);
     assert_eq!(response.token, 42.0.into());
     assert_eq!(response.user.id.field_value(), 17.0.into());
     assert_eq!(
@@ -551,7 +574,7 @@ async fn finalization_preserves_selected_native_owner_token_and_cookie() -> Test
     assert_eq!(published.user_field("id"), &FieldValue::from(17.0));
     assert_eq!(
         published.session.field_values()?.get("userId"),
-        Some(&17.0.into())
+        Some(&FieldValue::from("17"))
     );
     assert_eq!(
         published.session.field_values()?.get("token"),

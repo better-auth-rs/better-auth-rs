@@ -17,7 +17,7 @@ mod replacement {
     #[derive(Clone, Debug, PartialEq, DeriveEntityModel, crate::AuthEntity)]
     #[auth(role = "two_factor", native_two_factor)]
     #[sea_orm(table_name = "replacement_two_factor")]
-    pub(super) struct Model {
+    pub struct Model {
         #[sea_orm(primary_key, auto_increment = false)]
         pub id: String,
         pub secret: Option<f64>,
@@ -29,7 +29,7 @@ mod replacement {
     }
 
     #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-    pub(super) enum Relation {}
+    pub enum Relation {}
 
     impl ActiveModelBehavior for ActiveModel {}
 }

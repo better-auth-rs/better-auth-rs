@@ -30,15 +30,15 @@ async fn install_fields(
     fields: UserConfig,
     hooks: Vec<Arc<dyn DatabaseHooks<BundledSchema>>>,
 ) -> TestResult {
-    fixture.ctx.config = Arc::new(config);
-    let mut init = AuthInitContext::new(fixture.ctx.config.clone(), raw.clone());
+    let config = Arc::new(config);
+    let mut init = AuthInitContext::new(config.clone(), raw.clone());
     AuthPlugin::on_init(&PasskeyPlugin::new(), &mut init).await?;
     init.register_model_fields(EntityRole::Passkey, fields)?;
-    fixture.ctx.database = raw.with_runtime(
-        fixture.ctx.config.clone(),
-        hooks,
-        init.into_parts().plugin_fields,
-    )?;
+    let parts = init.into_parts();
+    let database = raw.with_runtime(config.clone(), hooks, parts.plugin_fields)?;
+    fixture.ctx = AuthContext::new(config, database);
+    fixture.ctx.metadata = parts.metadata;
+    fixture.ctx.extensions = parts.extensions;
     Ok(())
 }
 

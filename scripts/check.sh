@@ -137,6 +137,7 @@ run_stage() {
         ./compat-tests/reference-server/consumer-contracts/api-key-date-usage.test.ts \
         ./compat-tests/reference-server/contracts/native-plugin-replacements.test.ts \
         ./compat-tests/reference-server/contracts/native-atomic-update.test.ts \
+        ./compat-tests/reference-server/contracts/passkey-projected-id.test.ts \
         ./compat-tests/reference-server/contracts/device-grant.test.ts \
         ./compat-tests/reference-server/contracts/device-redemption.test.ts \
         ./compat-tests/reference-server/consumer-contracts/device-grant-sql.test.ts \
@@ -155,7 +156,7 @@ run_stage() {
       cargo test --locked -p better-auth-cli schema_config || plugin_status=1
       cargo check --locked --manifest-path compat-tests/rust-server/Cargo.toml || plugin_status=1
       for package in better-auth-core better-auth-api better-auth-seaorm; do
-        cargo test --locked --no-fail-fast -p "$package" --lib -- api_key passkey device two_factor session_token_delete native_cookie store::session_create::tests:: store::cache::tests:: store::secondary:: utils::date::tests:: id_slot_tests::plugin_credentials query::dynamic_value_tests utils::json::runtime jwt jwk wallet siwe user_fields::record::tests:: ordinary_object_primitive_conversion_checks_only_the_selected_method member_queries_use_typed_storage_before_output_transforms store::updates:: field_value::serde::tests:: store::value_filter::tests:: schema_value::tests:: || plugin_status=1
+        cargo test --locked --no-fail-fast -p "$package" --lib -- api_key passkey device two_factor session_token_delete native_cookie store::session_create::tests:: store::cache::tests:: store::secondary:: utils::date::tests:: id_slot_tests::plugin_credentials query::dynamic_value_tests utils::json::runtime jwt jwk wallet siwe user_fields::record::tests:: ordinary_object_primitive_conversion_checks_only_the_selected_method member_queries_use_typed_storage_before_output_transforms store::updates:: store::record_bindings::tests:: field_value::serde::tests:: store::value_filter::tests:: schema_value::tests:: || plugin_status=1
       done
       cargo test --locked --no-fail-fast --features axum,seaorm2,redis-cache \
         --test async_field_transform_tests --test api_key_additional_fields_tests --test passkey_additional_fields_tests \

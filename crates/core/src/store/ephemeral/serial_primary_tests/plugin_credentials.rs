@@ -113,11 +113,23 @@ async fn serial_api_key_ids_bind_queries_sort_numerically_and_reuse_row_count() 
     store.delete_api_key(&"002".to_owned().into()).await?;
     assert!(store.get_api_key_by_hash("2").await?.is_none());
     assert_eq!(store.create_api_key(api_key("reused")).await?.id, "12");
+    let before_delete = store.lock()?.api_keys.snapshot()?;
+    assert_eq!(
+        before_delete
+            .iter()
+            .filter(|row| row.get("id") == Some(&Value::Number(12.0)))
+            .count(),
+        2
+    );
     store.delete_api_key(&"0012".to_owned().into()).await?;
     assert!(store.get_api_key_by_hash("12").await?.is_none());
+    assert!(store.get_api_key_by_hash("reused").await?.is_none());
     assert_eq!(
-        required(store.get_api_key_by_hash("reused").await?)?.id,
-        "12"
+        store.lock()?.api_keys.snapshot()?,
+        before_delete
+            .into_iter()
+            .filter(|row| row.get("id") != Some(&Value::Number(12.0)))
+            .collect::<Vec<_>>()
     );
     Ok(())
 }
@@ -199,7 +211,7 @@ async fn api_key_numeric_id_sort_keeps_unordered_subtractions_equal() -> AuthRes
 }
 
 #[tokio::test]
-async fn serial_passkey_ids_bind_updates_and_delete_only_the_first_reused_id() -> AuthResult<()> {
+async fn serial_passkey_ids_bind_updates_and_delete_all_reused_ids() -> AuthResult<()> {
     let store = serial_store();
     for label in ["first", "second", "third"] {
         let created = store.create_passkey(passkey(label)).await?;
@@ -248,18 +260,35 @@ async fn serial_passkey_ids_bind_updates_and_delete_only_the_first_reused_id() -
     );
     store.delete_passkey("002").await?;
     assert_eq!(store.create_passkey(passkey("reused")).await?.id, "3");
+    let before_delete = store.lock()?.passkeys.snapshot()?;
+    assert_eq!(
+        before_delete
+            .iter()
+            .filter(|row| row.get("id") == Some(&Value::Number(3.0)))
+            .count(),
+        2
+    );
     store.delete_passkey("003").await?;
     assert!(store.get_passkey_by_credential_id("third").await?.is_none());
+    assert!(
+        store
+            .get_passkey_by_credential_id("reused")
+            .await?
+            .is_none()
+    );
     assert_eq!(
-        required(store.get_passkey_by_credential_id("reused").await?)?.id,
-        "3"
+        store.lock()?.passkeys.snapshot()?,
+        before_delete
+            .into_iter()
+            .filter(|row| row.get("id") != Some(&Value::Number(3.0)))
+            .collect::<Vec<_>>()
     );
     let mut other = passkey("other-owner");
     other.user_id = "002".into();
     let other = store.create_passkey(other).await?;
     assert_eq!(other.user_id, "2");
     let own = store.list_passkeys_by_user("1").await?;
-    assert_eq!(own.len(), 2);
+    assert_eq!(own, vec![updated]);
     assert_eq!(store.list_passkeys_by_user("001").await?, own);
     assert!(own.iter().all(|row| row.user_id == "1"));
     assert_eq!(store.list_passkeys_by_user("002").await?, vec![other]);
