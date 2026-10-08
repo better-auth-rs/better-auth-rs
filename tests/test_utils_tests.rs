@@ -136,7 +136,7 @@ async fn contract<S: AuthSchema>(
     );
     let user = test.save_user(input).await?.unwrap();
     assert_eq!(user.id, "supplied-user");
-    assert_eq!(user.email.as_deref(), Some("test@example.com"));
+    assert_eq!(user.email.typed()?.as_deref(), Some("test@example.com"));
     assert_eq!(user.created_at, date);
     assert_eq!(user.updated_at, date);
     let start = Utc::now();

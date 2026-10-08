@@ -1,6 +1,7 @@
+use crate::store::secondary::SecondaryStore;
 use crate::store::{
-    EphemeralStore, MemoryCacheAdapter, SecondaryStorage, SecondaryStore, SessionStore,
-    StatelessSchema, UserStore, VerificationStore,
+    EphemeralStore, MemoryCacheAdapter, SecondaryStorage, SessionStore, StatelessSchema, UserStore,
+    VerificationStore,
 };
 use crate::types::{CreateSession, CreateUser, CreateVerification, UpdateUser};
 use crate::user_fields::{UserFieldConfig, UserFieldType};

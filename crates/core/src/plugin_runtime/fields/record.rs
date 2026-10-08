@@ -10,14 +10,13 @@ impl ModelFields {
         role: EntityRole,
         records: Vec<AdapterRecord>,
         capabilities: FieldOutputCapabilities,
-        supports_native_dates: bool,
     ) -> AuthResult<Vec<T>> {
         if !records.is_empty() {
             self.begin_id_output(role)?;
         }
         let schema = self.plugin_fields(role).adapter_fields(&[]);
         schema
-            .project_adapter_records_with_capabilities(records, capabilities, supports_native_dates)
+            .project_adapter_records_with_capabilities(records, capabilities)
             .await?
             .into_iter()
             .map(|mut fields| {

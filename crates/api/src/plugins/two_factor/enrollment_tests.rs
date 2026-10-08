@@ -249,7 +249,10 @@ async fn native_totp_completion_rotates_sessions_only_for_incomplete_enrollment(
             .await
             .unwrap()
             .unwrap();
-        assert_eq!(user.two_factor_enabled(), verified != Some(true));
+        assert_eq!(
+            user.two_factor_enabled().is_truthy().unwrap(),
+            verified != Some(true)
+        );
         assert_eq!(
             fixture
                 .ctx

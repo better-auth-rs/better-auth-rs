@@ -772,7 +772,10 @@ async fn test_change_email_success() {
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(user.email(), Some("newemail@test.com"));
+    assert_eq!(
+        user.email().typed().unwrap().as_deref(),
+        Some("newemail@test.com")
+    );
 }
 
 /// Existing addresses return success without changing account ownership.
@@ -828,7 +831,10 @@ async fn test_change_email_duplicate() {
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(user.email(), Some("integration@test.com"));
+    assert_eq!(
+        user.email().typed().unwrap().as_deref(),
+        Some("integration@test.com")
+    );
     let target = auth
         .store()
         .get_user_by_email("existing@test.com")

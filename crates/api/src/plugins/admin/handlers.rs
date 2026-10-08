@@ -100,10 +100,10 @@ fn require_user_permission(
     let permission = std::collections::HashMap::from([("user".into(), vec![action.into()])]);
     if has_permission(
         Some(user.id.typed()?),
-        user.role.as_deref(),
+        &user.role.field_value(),
         config,
         &permission,
-    ) {
+    )? {
         Ok(())
     } else {
         Err(AuthError::forbidden(message))
@@ -315,10 +315,10 @@ pub(crate) async fn update_user_core(
             std::collections::HashMap::from([("user".to_string(), vec!["set-role".to_string()])]);
         if !has_permission(
             acting_user.id.as_str(),
-            acting_user.role.as_deref(),
+            &acting_user.role.field_value(),
             config,
             &permissions,
-        ) {
+        )? {
             return Err(AuthError::forbidden(MESSAGE_CHANGE_ROLE));
         }
 
@@ -589,7 +589,7 @@ pub(crate) async fn impersonate_user_core(
         .ok_or_else(|| AuthError::not_found(MESSAGE_USER_NOT_FOUND))?;
 
     if !config.allow_impersonating_admins
-        && target_is_admin(Some(&body.user_id), target.role(), config)
+        && target_is_admin(Some(&body.user_id), &target.role().field_value(), config)?
     {
         require_user_permission(
             acting_user,
@@ -599,10 +599,11 @@ pub(crate) async fn impersonate_user_core(
         )?;
     }
 
-    if target.banned() {
-        if target
-            .ban_expires()
-            .is_some_and(|expires| expires.milliseconds() <= Utc::now().timestamp_millis() as f64)
+    if target.banned().is_truthy()? {
+        let expires = target.ban_expires().field_value();
+        if expires.is_truthy()
+            && better_auth_core::query::field_date(&expires)?.milliseconds()
+                < Utc::now().timestamp_millis() as f64
         {
             target = ctx
                 .database
@@ -832,6 +833,11 @@ pub(crate) fn has_permission_core(
 
     Ok(PermissionResponse {
         error: None,
-        success: has_permission(user.id.as_str(), user.role.as_deref(), config, requested),
+        success: has_permission(
+            user.id.as_str(),
+            &user.role.field_value(),
+            config,
+            requested,
+        )?,
     })
 }

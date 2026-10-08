@@ -11,8 +11,12 @@ impl EphemeralStore {
         &self,
         email: &str,
     ) -> AuthResult<Option<RowRef<UserView>>> {
-        self.user_ref(|user| user.email.as_deref() == Some(&email.to_lowercase()))
-            .await
+        self.user_ref(|user| {
+            user.email
+                .field_value()
+                .strict_equals(&Value::from(email.to_lowercase()))
+        })
+        .await
     }
 
     pub(super) async fn user_ref(
@@ -70,13 +74,13 @@ impl EphemeralStore {
             .iter_mut()
             .map(|user| {
                 let mut input = std::mem::take(&mut user.additional_fields);
-                for (name, value) in [("name", &user.name), ("image", &user.image)] {
-                    if let Some(config) = self.config.user.fields().get(name)
-                        && !value.is_undefined()
+                for (name, config) in self.config.user.fields() {
+                    if UserView::NATIVE_FIELDS.contains(&name.as_str())
+                        && let Some(value) = user.native_field_value(name)
                     {
                         let _ = input.insert(
                             resolve_field_name(config.field_name.as_deref(), name).into(),
-                            value.field_value(),
+                            value,
                         );
                     }
                 }
@@ -116,15 +120,31 @@ impl EphemeralStore {
     ) -> AuthResult<()> {
         user.id = Self::project_id(&user.id)?;
         let _ = fields.remove("id");
-        if self.config.user.fields().contains_key("name") {
-            user.name = crate::SchemaValue::from_field(fields.remove("name").unwrap_or_default());
+        for name in self.config.user.fields().keys() {
+            if name != "id" && UserView::NATIVE_FIELDS.contains(&name.as_str()) {
+                user.set_field(name, fields.remove(name).unwrap_or_default());
+            }
         }
-        if self.config.user.fields().contains_key("image") {
-            user.image = crate::SchemaValue::from_field(fields.remove("image").unwrap_or_default());
+        user.additional_fields.clear();
+        for (name, value) in fields {
+            user.set_field(&name, value);
         }
-        user.additional_fields = fields;
         Ok(())
     }
+
+    fn assign_user_storage_fields(&self, user: &mut UserView) {
+        for (name, field) in self.config.user.fields() {
+            if name != "id"
+                && UserView::NATIVE_FIELDS.contains(&name.as_str())
+                && let Some(value) = user
+                    .additional_fields
+                    .remove(resolve_field_name(field.field_name.as_deref(), name))
+            {
+                user.set_field(name, value);
+            }
+        }
+    }
+
     pub(super) async fn prepare_user_update(&self, update: UpdateUser) -> AuthResult<UpdateUser> {
         let update = self
             .prepare_user_update_optional(update)
@@ -247,7 +267,7 @@ impl EphemeralStore {
                             if let Some(fields) = &mut user.visible_fields {
                                 let _ = fields.insert("email".into());
                             }
-                            user.email = Some(email.to_lowercase());
+                            user.email = Some(email.to_lowercase()).into();
                         }
                         if !update.name.is_undefined() {
                             if let Some(fields) = &mut user.visible_fields {
@@ -262,49 +282,50 @@ impl EphemeralStore {
                             user.image = update.image;
                         }
                         if let Some(email_verified) = update.email_verified {
-                            user.email_verified = email_verified;
+                            user.email_verified = email_verified.into();
                         }
                         if let Some(value) = update.is_anonymous {
-                            user.is_anonymous = Some(value);
+                            user.is_anonymous = Some(value).into();
                         }
                         if let Some(value) = update.phone_number {
-                            user.phone_number = value;
+                            user.phone_number = value.into();
                         }
                         if let Some(value) = update.phone_number_verified {
-                            user.phone_number_verified = Some(value);
+                            user.phone_number_verified = Some(value).into();
                         }
                         if let Some(username) = update.username {
-                            user.username = username;
+                            user.username = username.into();
                         }
                         if let Some(display_username) = update.display_username {
-                            user.display_username = display_username;
+                            user.display_username = display_username.into();
                         }
                         if let Some(role) = update.role {
-                            user.role = Some(role);
+                            user.role = Some(role).into();
                         }
                         if let Some(banned) = update.banned {
-                            user.banned = banned;
+                            user.banned = banned.into();
                         }
                         if let Some(ban_reason) = update.ban_reason {
                             if let Some(fields) = &mut user.visible_fields {
                                 let _ = fields.insert("banReason".into());
                             }
-                            user.ban_reason = ban_reason;
+                            user.ban_reason = ban_reason.into();
                         }
                         if let Some(ban_expires) = update.ban_expires {
                             if let Some(fields) = &mut user.visible_fields {
                                 let _ = fields.insert("banExpires".into());
                             }
-                            user.ban_expires = ban_expires;
+                            user.ban_expires = ban_expires.into();
                         }
                         if let Some(two_factor_enabled) = update.two_factor_enabled {
-                            user.two_factor_enabled = Some(two_factor_enabled);
+                            user.two_factor_enabled = Some(two_factor_enabled).into();
                         }
                         if let Some(metadata) = update.metadata {
                             user.metadata = metadata;
                         }
                         user.updated_at = updated_at.into();
                         user.additional_fields.extend(update.additional_fields);
+                        self.assign_user_storage_fields(user);
                         Ok(())
                     })?;
                 }
@@ -468,6 +489,10 @@ impl UserStore<StatelessSchema> for EphemeralStore {
                 .map(|(name, _)| name.to_owned())
                 .chain(
                     [
+                        "id",
+                        "emailVerified",
+                        "createdAt",
+                        "updatedAt",
                         "isAnonymous",
                         "phoneNumber",
                         "phoneNumberVerified",
@@ -484,25 +509,26 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             ),
             id: id.clone(),
             name: create_user.name,
-            email: create_user.email,
-            email_verified: create_user.email_verified.unwrap_or(false),
+            email: create_user.email.into(),
+            email_verified: create_user.email_verified.unwrap_or(false).into(),
             image: create_user.image,
-            created_at: create_user.created_at.unwrap_or_else(|| now.clone()),
-            updated_at: create_user.updated_at.unwrap_or(now),
-            is_anonymous: create_user.is_anonymous,
-            phone_number: create_user.phone_number,
-            phone_number_verified: create_user.phone_number_verified,
-            username,
-            display_username,
-            two_factor_enabled: Some(false),
-            role: create_user.role,
-            banned: create_user.banned.unwrap_or(false),
-            ban_reason: create_user.ban_reason,
-            ban_expires: create_user.ban_expires,
+            created_at: create_user.created_at.unwrap_or_else(|| now.clone()).into(),
+            updated_at: create_user.updated_at.unwrap_or(now).into(),
+            is_anonymous: Some(create_user.is_anonymous.unwrap_or(false)).into(),
+            phone_number: create_user.phone_number.into(),
+            phone_number_verified: create_user.phone_number_verified.into(),
+            username: username.into(),
+            display_username: display_username.into(),
+            two_factor_enabled: Some(false).into(),
+            role: create_user.role.into(),
+            banned: create_user.banned.unwrap_or(false).into(),
+            ban_reason: create_user.ban_reason.into(),
+            ban_expires: create_user.ban_expires.into(),
             metadata: create_user
                 .metadata
                 .unwrap_or_else(|| FieldMap::new().into()),
         };
+        self.assign_user_storage_fields(&mut user);
         crate::observability::database::with_database_operation(
             &self.config,
             "user",
@@ -577,14 +603,22 @@ impl UserStore<StatelessSchema> for EphemeralStore {
 
     async fn get_user_by_username(&self, username: &str) -> AuthResult<Option<UserView>> {
         let user = self
-            .user_ref(|user| user.username.as_deref() == Some(username))
+            .user_ref(|user| {
+                user.username
+                    .field_value()
+                    .strict_equals(&Value::from(username))
+            })
             .await?;
         self.output_optional_user_ref(user).await
     }
 
     async fn get_user_by_phone_number(&self, phone_number: &str) -> AuthResult<Option<UserView>> {
         let user = self
-            .user_ref(|user| user.phone_number.as_deref() == Some(phone_number))
+            .user_ref(|user| {
+                user.phone_number
+                    .field_value()
+                    .strict_equals(&Value::from(phone_number))
+            })
             .await?;
         self.output_optional_user_ref(user).await
     }

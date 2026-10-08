@@ -124,7 +124,7 @@ async fn test_expired_ban_is_cleared_on_sign_in() {
         .await
         .unwrap()
         .unwrap();
-    assert!(!user.banned());
-    assert!(user.ban_reason().is_none());
-    assert!(user.ban_expires().is_none());
+    assert!(!user.banned().typed().copied().unwrap());
+    assert!(user.ban_reason().typed().unwrap().is_none());
+    assert!(user.ban_expires().typed().unwrap().is_none());
 }

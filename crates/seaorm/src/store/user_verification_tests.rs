@@ -68,7 +68,7 @@ scope: Default::default(),
             let _ = store.create_session(session(user_id.typed().unwrap())).await?;
             let failing = SeaOrmStore::<BundledSchema>::new(config, database.clone()).hook(FailAfterVerification);
             assert!(matches!(failing.verify_user_and_revoke_unproven_access(user_id.typed().unwrap()).await, Err(better_auth_core::AuthError::Internal(message)) if message == "verification hook failed"));
-            assert!(store.get_user_by_id(user_id.typed().unwrap()).await?.unwrap().email_verified());
+            assert!(store.get_user_by_id(user_id.typed().unwrap()).await?.unwrap().email_verified().typed().copied().unwrap());
             assert!(store.get_user_accounts(user_id.typed().unwrap()).await?.is_empty());
             assert!(store.get_user_sessions(user_id.typed().unwrap()).await?.is_empty());
             let _ = store.update_user(user_id.typed().unwrap(), UpdateUser { email_verified: Some(false), ..Default::default() }).await?;
@@ -79,7 +79,7 @@ scope: Default::default(),
                 let _ = tasks.spawn(async move {
                     let _ = barrier.wait().await;
                     let user = store.verify_user_and_revoke_unproven_access(user_id.typed().unwrap()).await?.unwrap();
-                    assert!(user.email_verified());
+                    assert!(user.email_verified().typed().copied().unwrap());
                     store.create_session(session(user_id.typed().unwrap())).await
                 });
             }

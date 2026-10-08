@@ -56,7 +56,6 @@ where
             .project_adapter_records_with_capabilities(
                 vec![record],
                 super::field_output::capabilities(backend),
-                backend != sea_orm::DbBackend::Sqlite,
             )
             .await?
             .remove(0);

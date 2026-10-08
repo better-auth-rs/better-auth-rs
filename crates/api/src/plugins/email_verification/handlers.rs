@@ -41,11 +41,11 @@ pub(super) async fn send_verification_email_core(
 
     match current_session.map(|(user, _)| user) {
         Some(user) => {
-            let session_email = user.email().unwrap_or_default();
-            if session_email != body.email {
+            let session_email = crate::plugins::helpers::user_email(user)?;
+            if session_email.to_lowercase() != body.email.to_lowercase() {
                 return Err(AuthError::bad_request("Email mismatch"));
             }
-            if user.email_verified() {
+            if user.email_verified().is_truthy()? {
                 return Err(AuthError::bad_request("Email is already verified"));
             }
 
@@ -72,7 +72,7 @@ pub(super) async fn send_verification_email_core(
                 None => return Ok(StatusResponse { status: true }),
             };
 
-            if user.email_verified() {
+            if user.email_verified().is_truthy()? {
                 let _ = create_email_verification_token(
                     ctx.config.signing_secret(),
                     &body.email,
@@ -168,7 +168,10 @@ where
 
     if let Some(update_to) = claims.update_to.as_deref() {
         if let Some((ref session_user, _)) = current_session
-            && session_user.email().unwrap_or_default() != claims.email
+            && !session_user
+                .email()
+                .field_value()
+                .strict_equals(&claims.email.clone().into())
         {
             return verification_error(query, "INVALID_USER", "Invalid user");
         }
@@ -186,7 +189,7 @@ where
                     verification_url(ctx.base_url(), &new_token, query.callback_url.as_deref());
                 if super::delivery::available(Some(config), ctx) {
                     let mut updated_user = ctx.user_view(&user).await?;
-                    updated_user.email = Some(update_to.to_string());
+                    updated_user.set_field("email", update_to.into());
                     let task = super::delivery::delivery(
                         Some(config),
                         super::VerificationEmail {
@@ -261,8 +264,8 @@ where
                     let hook_user = ctx.user_view(&updated_user).await?;
                     hook(&hook_user).await?;
                 }
-                session_user.email = Some(update_to.into());
-                session_user.email_verified = true;
+                session_user.set_field("email", update_to.into());
+                session_user.set_field("emailVerified", true.into());
                 let data = better_auth_core::session::SessionData {
                     user: session_user,
                     session,
@@ -350,8 +353,8 @@ where
                     )
                     .await;
                 }
-                session_user.email = Some(update_to.into());
-                session_user.email_verified = false;
+                session_user.set_field("email", update_to.into());
+                session_user.set_field("emailVerified", false.into());
                 let data = better_auth_core::session::SessionData {
                     user: session_user,
                     session,
@@ -376,7 +379,7 @@ where
         }
     }
 
-    if user.email_verified() {
+    if user.email_verified().is_truthy()? {
         if let Some(callback_url) = query.callback_url.as_deref() {
             return Ok(VerifyEmailResult::Redirect {
                 url: callback_url.to_owned(),
@@ -410,9 +413,11 @@ where
     }
 
     let session_data = if config.auto_sign_in_after_verification {
-        let mut data = if let Some((session_user, session)) =
-            current_session.filter(|(user, _)| user.email().unwrap_or_default() == claims.email)
-        {
+        let mut data = if let Some((session_user, session)) = current_session.filter(|(user, _)| {
+            user.email()
+                .field_value()
+                .strict_equals(&claims.email.clone().into())
+        }) {
             better_auth_core::session::SessionData {
                 user: session_user,
                 session,
@@ -438,7 +443,7 @@ where
                 .internal_data(&user, &issued.session)
                 .await?
         };
-        data.user.email_verified = true;
+        data.user.set_field("emailVerified", true.into());
         Some(data)
     } else {
         None

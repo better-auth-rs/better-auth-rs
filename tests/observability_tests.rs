@@ -1193,7 +1193,7 @@ mod sqlite {
                 ..Default::default()
             };
             if kind == "duplicate" {
-                update.email = first.email.clone();
+                update.email = first.email.typed()?.clone();
             }
             if kind == "transform" {
                 let _ = update
@@ -1251,7 +1251,7 @@ mod sqlite {
             store
                 .get_user_by_id(second.id.typed()?)
                 .await?
-                .and_then(|user| user.email),
+                .and_then(|user| user.email.typed().unwrap().clone()),
             Some("second@example.test".into())
         );
         Ok(())

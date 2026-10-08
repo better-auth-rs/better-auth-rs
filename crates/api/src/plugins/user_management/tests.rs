@@ -150,9 +150,12 @@ async fn test_change_email_immediate_when_update_without_verification() {
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(updated_user.email.as_deref(), Some("new@example.com"));
+    assert_eq!(
+        updated_user.email.typed().unwrap().as_deref(),
+        Some("new@example.com")
+    );
     // email_verified should be false (no verification was performed)
-    assert!(!updated_user.email_verified);
+    assert!(!updated_user.email_verified.is_truthy().unwrap());
 
     // No verification token should have been created
     let identifier = format!("change_email:{}:new@example.com", user.id.typed().unwrap());

@@ -43,7 +43,10 @@ struct Mailbox {
 #[async_trait]
 impl SendVerificationEmail for Mailbox {
     async fn send(&self, user: &UserView, url: &str, _: &str) -> AuthResult<()> {
-        assert_eq!(user.email(), Some("unverified@example.com"));
+        assert_eq!(
+            user.email().typed().unwrap().as_deref(),
+            Some("unverified@example.com")
+        );
         self.urls.lock().unwrap().push(url.to_owned());
         if self.fail {
             return Err(AuthError::internal("test sender rejected the message"));
@@ -285,7 +288,7 @@ async fn verified_email_change_preserves_the_user_account_and_allows_sign_in() {
         .unwrap()
         .unwrap();
     assert_eq!(updated_user.id(), original_user.id());
-    assert!(updated_user.email_verified());
+    assert!(updated_user.email_verified().is_truthy().unwrap());
     assert!(
         ctx.database
             .get_user_by_email("old@example.com")

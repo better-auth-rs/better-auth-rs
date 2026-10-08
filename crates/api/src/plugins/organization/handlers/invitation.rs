@@ -361,15 +361,12 @@ pub(crate) async fn get_invitation_core(
     }
 
     let recipient = invitation.email().typed()?;
-    if !user
-        .email()
-        .is_some_and(|email| recipient.eq_ignore_ascii_case(email))
-    {
+    if recipient.to_lowercase() != crate::plugins::helpers::user_email(user)?.to_lowercase() {
         return Err(AuthError::forbidden(
             "You are not the recipient of the invitation",
         ));
     }
-    if config.require_email_verification_on_invitation && !user.email_verified() {
+    if config.require_email_verification_on_invitation && !user.email_verified().is_truthy()? {
         return Err(AuthError::forbidden(
             "Email verification required to view or list invitations for the session email",
         ));
@@ -429,17 +426,15 @@ pub(crate) async fn list_user_invitations_core(
 ) -> AuthResult<Vec<UserInvitationResponse<InvitationView>>> {
     // Upstream refuses to list invitations for a session whose email is not
     // verified, so an unverified address cannot enumerate what it was invited to.
-    if !user.email_verified() {
+    if !user.email_verified().is_truthy()? {
         return Err(AuthError::forbidden(
             "Email verification required to view or list invitations for the session email",
         ));
     }
 
-    let user_email = user
-        .email()
-        .ok_or_else(|| AuthError::bad_request("User has no email"))?;
+    let user_email = crate::plugins::helpers::user_email(user)?;
 
-    let all_invitations = ctx.database.list_user_invitations(user_email).await?;
+    let all_invitations = ctx.database.list_user_invitations(&user_email).await?;
     let pending = all_invitations
         .into_iter()
         .filter(|row| row.invitation.status == InvitationStatus::Pending)
@@ -474,9 +469,7 @@ pub(crate) async fn accept_invitation_core(
         return Err(AuthError::bad_request("Invitation not found"));
     }
 
-    let user_email = user
-        .email()
-        .ok_or_else(|| AuthError::bad_request("User has no email"))?;
+    let user_email = crate::plugins::helpers::user_email(user)?;
 
     if invitation.email().typed()?.to_lowercase() != user_email.to_lowercase() {
         return Err(AuthError::forbidden(
@@ -484,7 +477,7 @@ pub(crate) async fn accept_invitation_core(
         ));
     }
 
-    if config.require_email_verification_on_invitation && !user.email_verified() {
+    if config.require_email_verification_on_invitation && !user.email_verified().is_truthy()? {
         return Err(AuthError::forbidden(
             "Email verification required before accepting or rejecting invitation",
         ));
@@ -581,9 +574,7 @@ pub(crate) async fn reject_invitation_core(
         .filter(|invitation| invitation.is_pending())
         .ok_or_else(|| AuthError::bad_request("Invitation not found!"))?;
 
-    let user_email = user
-        .email()
-        .ok_or_else(|| AuthError::bad_request("User has no email"))?;
+    let user_email = crate::plugins::helpers::user_email(user)?;
 
     if invitation.email().typed()?.to_lowercase() != user_email.to_lowercase() {
         return Err(AuthError::forbidden(
@@ -591,7 +582,7 @@ pub(crate) async fn reject_invitation_core(
         ));
     }
 
-    if config.require_email_verification_on_invitation && !user.email_verified() {
+    if config.require_email_verification_on_invitation && !user.email_verified().is_truthy()? {
         return Err(AuthError::forbidden(
             "Email verification required before accepting or rejecting invitation",
         ));

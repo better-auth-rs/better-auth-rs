@@ -285,23 +285,26 @@ mod tests {
             "updatedAt": "2026-10-07T00:00:00.000Z"
         }))?;
         user.visible_fields = None;
-        user.is_anonymous = None;
-        let _ = user
-            .additional_fields
-            .insert("name".into(), user.created_at.clone().into());
+        user.is_anonymous = None.into();
+        user.created_at = crate::FieldDate::from_milliseconds(123.0).into();
+        user.email = SchemaValue::from_field(user.created_at.field_value());
         let cloned = user.structured_clone(&mut crate::StructuredCloneContext::new())?;
         assert_eq!(cloned.visible_fields, None);
         assert_eq!(cloned.is_anonymous, None);
         assert_eq!(cloned.name, user.name);
-        assert!(!cloned.created_at.same_object(&user.created_at));
+        assert!(
+            !cloned
+                .created_at
+                .typed()?
+                .same_object(user.created_at.typed()?)
+        );
         assert!(
             cloned
-                .additional_fields
-                .get("name")
-                .unwrap()
+                .email
+                .field_value()
                 .as_date()
                 .unwrap()
-                .same_object(&cloned.created_at)
+                .same_object(cloned.created_at.typed()?)
         );
         Ok(())
     }

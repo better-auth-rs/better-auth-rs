@@ -61,12 +61,7 @@ impl PasswordHasher for FixtureHasher {
 
 struct Hooks(Arc<Mutex<Trace>>);
 impl Hooks {
-    fn record(
-        &self,
-        kind: &str,
-        email: Option<&str>,
-        context: &DatabaseHookContext<'_, StatelessSchema>,
-    ) {
+    fn record(&self, kind: &str, email: Value, context: &DatabaseHookContext<'_, StatelessSchema>) {
         self.0.lock().unwrap().events.push(json!({ "kind":kind, "email":email, "path": context.request.as_ref().and_then(|request| request.path.as_deref()), "http":context.request.as_ref().is_some_and(|request|request.is_http) }));
     }
 }
@@ -77,7 +72,7 @@ impl DatabaseHooks<StatelessSchema> for Hooks {
         user: &mut CreateUser,
         ctx: &DatabaseHookContext<'_, StatelessSchema>,
     ) -> AuthResult<DatabaseHookControl> {
-        self.record("user.before", user.email.as_deref(), ctx);
+        self.record("user.before", json!(user.email), ctx);
         Ok(DatabaseHookControl::Continue)
     }
     async fn after_create_user(
@@ -85,11 +80,7 @@ impl DatabaseHooks<StatelessSchema> for Hooks {
         user: Option<&UserView>,
         ctx: &DatabaseHookContext<'_, StatelessSchema>,
     ) -> AuthResult<()> {
-        self.record(
-            "user.after",
-            user.and_then(|user| user.email.as_deref()),
-            ctx,
-        );
+        self.record("user.after", json!(user.map(|user| &user.email)), ctx);
         Ok(())
     }
     async fn before_create_session(
@@ -97,7 +88,7 @@ impl DatabaseHooks<StatelessSchema> for Hooks {
         _: &mut FieldMap,
         ctx: &DatabaseHookContext<'_, StatelessSchema>,
     ) -> AuthResult<DatabaseHookUpdate<FieldMap>> {
-        self.record("session.before", None, ctx);
+        self.record("session.before", Value::Null, ctx);
         Ok(DatabaseHookUpdate::Continue)
     }
     async fn after_create_session(
@@ -105,7 +96,7 @@ impl DatabaseHooks<StatelessSchema> for Hooks {
         _: Option<&SessionView>,
         ctx: &DatabaseHookContext<'_, StatelessSchema>,
     ) -> AuthResult<()> {
-        self.record("session.after", None, ctx);
+        self.record("session.after", Value::Null, ctx);
         Ok(())
     }
 }

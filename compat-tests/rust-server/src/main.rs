@@ -322,7 +322,7 @@ struct CompatVerificationSender {
 #[async_trait::async_trait]
 impl SendVerificationEmail for CompatVerificationSender {
     async fn send(&self, user: &UserView, url: &str, token: &str) -> better_auth::AuthResult<()> {
-        if let Some(email) = user.email() {
+        if let Some(email) = user.email().typed()?.clone() {
             self.outbox.lock().await.insert(
                 email.to_string(),
                 EmailOutboxRecord {
@@ -344,7 +344,7 @@ struct CompatTwoFactorOtpSender {
 #[async_trait::async_trait]
 impl SendTwoFactorOtp for CompatTwoFactorOtpSender {
     async fn send(&self, user: &UserView, otp: &str) -> better_auth::AuthResult<()> {
-        if let Some(email) = user.email() {
+        if let Some(email) = user.email().typed()?.clone() {
             self.outbox
                 .lock()
                 .await
@@ -369,8 +369,8 @@ impl SendChangeEmailConfirmation for CompatChangeEmailSender {
         url: &str,
         token: &str,
     ) -> better_auth::AuthResult<()> {
-        if user.email_verified {
-            if let Some(email) = &user.email {
+        if user.email_verified.is_truthy()? {
+            if let Some(email) = user.email.typed()? {
                 self.outbox.lock().await.insert(
                     email.clone(),
                     ChangeEmailOutboxRecord {

@@ -563,7 +563,6 @@ impl UserConfig {
         &self,
         mut records: Vec<AdapterRecord>,
         capabilities: FieldOutputCapabilities,
-        supports_native_dates: bool,
     ) -> AuthResult<Vec<FieldMap>> {
         super::batch::project_fields(&mut records, self.fields(), |record, name, field| {
             Box::pin(project_adapter_field_with_capabilities(
@@ -571,7 +570,6 @@ impl UserConfig {
                 name,
                 field,
                 capabilities,
-                supports_native_dates,
             ))
         })
         .await?;
@@ -676,7 +674,8 @@ async fn project_organization_field(
     } else {
         field.adapter_output(value, supports_native_json).await?
     };
-    super::organization::assign_output(&mut record.output, name, field, value)
+    let _ = record.output.insert(name.to_owned(), value);
+    Ok(())
 }
 
 fn adapter_records(storage: &[FieldMap]) -> AuthResult<Vec<AdapterRecord>> {
@@ -713,8 +712,10 @@ async fn project_adapter_field(
         record,
         name,
         field,
-        FieldOutputCapabilities::json_only(supports_native_json),
-        supports_native_dates,
+        FieldOutputCapabilities {
+            supports_native_dates,
+            ..FieldOutputCapabilities::json_only(supports_native_json)
+        },
     )
     .await
 }
@@ -724,7 +725,6 @@ async fn project_adapter_field_with_capabilities(
     name: &str,
     field: &UserFieldConfig,
     capabilities: FieldOutputCapabilities,
-    supports_native_dates: bool,
 ) -> AuthResult<()> {
     if name == "id" {
         return Ok(());
@@ -741,7 +741,6 @@ async fn project_adapter_field_with_capabilities(
             .adapter_output_with_capabilities(value, capabilities)
             .await?
     };
-    let value = project_output_value(value, field, supports_native_dates);
     let _ = record.output.insert(name.to_owned(), value);
     Ok(())
 }
@@ -752,29 +751,15 @@ pub(crate) async fn project_adapter_value(
     supports_native_json: bool,
     supports_native_dates: bool,
 ) -> AuthResult<Value> {
-    let value = field.adapter_output(value, supports_native_json).await?;
-    Ok(project_output_value(value, field, supports_native_dates))
-}
-
-fn project_output_value(
-    value: Value,
-    field: &UserFieldConfig,
-    supports_native_dates: bool,
-) -> Value {
-    if !supports_native_dates
-        && !field.uses_id_output()
-        && matches!(field.field_type, UserFieldType::Date)
-    {
-        match value {
-            Value::String(text) => Value::Date(
-                crate::utils::date::parse_date_constructor(&text)
-                    .unwrap_or_else(crate::FieldDate::invalid),
-            ),
-            value => value,
-        }
-    } else {
-        value
-    }
+    field
+        .adapter_output_with_capabilities(
+            value,
+            FieldOutputCapabilities {
+                supports_native_dates,
+                ..FieldOutputCapabilities::json_only(supports_native_json)
+            },
+        )
+        .await
 }
 
 #[cfg(test)]
@@ -818,7 +803,6 @@ mod tests {
                 .project_adapter_records_with_capabilities(
                     vec![record],
                     FieldOutputCapabilities::json_only(false),
-                    true,
                 )
                 .await?;
             assert_eq!(

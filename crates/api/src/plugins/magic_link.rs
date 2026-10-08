@@ -295,7 +295,7 @@ impl MagicLinkPlugin {
                 user
             }
         };
-        let user = if user.email_verified() {
+        let user = if user.email_verified().is_truthy()? {
             user
         } else {
             let Some(user) = ctx

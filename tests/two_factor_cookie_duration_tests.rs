@@ -111,7 +111,7 @@ async fn two_factor_cookie_issuance_preserves_pinned_fractional_lifetimes() {
                 TwoFactorCallbacks::<BundledSchema>::default().send(move |user, otp, _| {
                     output.lock().unwrap().push((
                         user.id.display_string()?,
-                        user.email.clone().unwrap(),
+                        user.email.typed()?.clone().unwrap(),
                         otp.to_owned(),
                     ));
                     Ok(None)

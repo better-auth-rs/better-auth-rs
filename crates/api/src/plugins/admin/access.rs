@@ -75,15 +75,30 @@ fn configured_roles(config: &AdminConfig) -> HashMap<String, RolePermissions> {
     config.roles.clone().unwrap_or_else(default_roles)
 }
 
-fn role_names<'a>(role: Option<&'a str>, default_role: &'a str) -> Vec<&'a str> {
-    role.filter(|role| !role.is_empty())
-        .unwrap_or(if default_role.is_empty() {
-            "user"
-        } else {
-            default_role
-        })
-        .split(',')
-        .collect()
+fn role_names(
+    role: &better_auth_core::FieldValue,
+    default_role: &str,
+) -> better_auth_core::AuthResult<Vec<String>> {
+    let role = if role.is_truthy() {
+        match role {
+            better_auth_core::FieldValue::String(role) => role.clone(),
+            better_auth_core::FieldValue::Utf16String(role) => role.to_utf8().map_err(|error| {
+                better_auth_core::AuthError::internal(format!(
+                    "Cannot represent role as a Rust string: {error}"
+                ))
+            })?,
+            _ => {
+                return Err(better_auth_core::AuthError::internal(
+                    "role.split is not a function",
+                ));
+            }
+        }
+    } else if default_role.is_empty() {
+        "user".to_owned()
+    } else {
+        default_role.to_owned()
+    };
+    Ok(role.split(',').map(str::to_owned).collect())
 }
 
 pub(super) fn is_admin_user_id(user_id: Option<&str>, config: &AdminConfig) -> bool {
@@ -97,28 +112,31 @@ pub(super) fn is_admin_user_id(user_id: Option<&str>, config: &AdminConfig) -> b
 
 pub(super) fn has_permission(
     user_id: Option<&str>,
-    role: Option<&str>,
+    role: &better_auth_core::FieldValue,
     config: &AdminConfig,
     requested: &HashMap<String, Vec<String>>,
-) -> bool {
+) -> better_auth_core::AuthResult<bool> {
     if is_admin_user_id(user_id, config) {
-        return true;
+        return Ok(true);
     }
 
     let roles = configured_roles(config);
-    role_names(role, &config.default_role)
+    Ok(role_names(role, &config.default_role)?
         .into_iter()
-        .filter_map(|role| roles.get(role))
-        .any(|role| role.allows(requested))
+        .filter_map(|role| roles.get(&role))
+        .any(|role| role.allows(requested)))
 }
 
-pub(super) fn is_admin_role(role: Option<&str>, config: &AdminConfig) -> bool {
-    role_names(role, &config.default_role)
+pub(super) fn is_admin_role(
+    role: &better_auth_core::FieldValue,
+    config: &AdminConfig,
+) -> better_auth_core::AuthResult<bool> {
+    Ok(role_names(role, &config.default_role)?
         .into_iter()
         .any(|role| match &config.admin_roles {
             Some(admins) => admins.iter().any(|admin| admin.trim() == role),
             None => role == "admin",
-        })
+        }))
 }
 
 impl AdminConfig {

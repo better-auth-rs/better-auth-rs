@@ -212,9 +212,9 @@ async fn test_unban_clears_ban_reason_and_expires() {
         .await
         .unwrap()
         .unwrap();
-    assert!(!updated_user.banned);
-    assert!(updated_user.ban_reason.is_none());
-    assert!(updated_user.ban_expires.is_none());
+    assert!(!updated_user.banned.is_truthy().unwrap());
+    assert!(updated_user.ban_reason.typed().unwrap().is_none());
+    assert!(updated_user.ban_expires.typed().unwrap().is_none());
 }
 
 #[tokio::test]

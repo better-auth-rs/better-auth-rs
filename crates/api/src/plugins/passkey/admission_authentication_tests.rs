@@ -481,9 +481,9 @@ async fn signed_authentication_consumes_projected_admin_bans_after_counter_write
             .ok_or("Missing stored owner")?;
         let mut expected = fixture.owner.clone();
         if cleared {
-            expected.banned = false;
-            expected.ban_reason = None;
-            expected.ban_expires = None;
+            expected.banned = false.into();
+            expected.ban_reason = None.into();
+            expected.ban_expires = None.into();
             assert!(stored.updated_at.milliseconds() >= expected.updated_at.milliseconds());
             expected.updated_at = stored.updated_at.clone();
         }

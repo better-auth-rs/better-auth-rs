@@ -224,6 +224,7 @@ mod tests {
     use super::*;
     use crate::{SeaOrmUserModel, store::entities::user};
     use better_auth_core::{FieldDate, user_fields::UserFieldConfig};
+    use sea_orm::Iden;
 
     #[test]
     fn unique_probes_use_declaration_order_and_skip_only_null_or_undefined() -> AuthResult<()> {

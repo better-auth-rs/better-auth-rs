@@ -44,8 +44,16 @@ fn revive_dates(fields: &mut FieldMap) {
     }
 }
 
-pub(super) fn session(mut fields: FieldMap) -> AuthResult<crate::SessionView> {
-    revive_dates(&mut fields);
+fn convert_dates(fields: &mut FieldMap, dates: &[&str]) -> AuthResult<()> {
+    for name in dates {
+        let date = crate::query::field_date(fields.get(*name).unwrap_or(&FieldValue::Undefined))?;
+        let _ = fields.insert((*name).into(), date.into());
+    }
+    Ok(())
+}
+
+pub(super) fn session(mut fields: FieldMap, dates: &[&str]) -> AuthResult<crate::SessionView> {
+    convert_dates(&mut fields, dates)?;
     let mut session = crate::SessionView::from_field_values(fields)?;
     session.active = true;
     Ok(session)
@@ -53,13 +61,7 @@ pub(super) fn session(mut fields: FieldMap) -> AuthResult<crate::SessionView> {
 
 pub(super) fn user(value: &FieldValue) -> AuthResult<crate::UserView> {
     let mut fields = object(value)?;
-    for name in ["createdAt", "updatedAt", "banExpires"] {
-        if let Some(FieldValue::String(text)) = fields.get(name) {
-            let date = crate::utils::date::parse_date_constructor(text)
-                .ok_or_else(|| AuthError::internal(format!("Invalid user date field `{name}`")))?;
-            let _ = fields.insert(name.into(), date.into());
-        }
-    }
+    convert_dates(&mut fields, &["createdAt", "updatedAt"])?;
     crate::UserView::from_field_values(fields)
 }
 

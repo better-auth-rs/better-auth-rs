@@ -547,9 +547,6 @@ async fn link_with_id_token_core(
         });
     }
 
-    let current_email = current_user
-        .email()
-        .ok_or_else(|| AuthError::forbidden("User email not found"))?;
     let linking = &ctx.config.account.account_linking;
     let trusted_provider = ctx
         .trusted_providers()
@@ -563,7 +560,10 @@ async fn link_with_id_token_core(
             message: "Account not linked - linking not allowed",
         });
     }
-    if !linking.allow_different_emails && !provider_email.eq_ignore_ascii_case(current_email) {
+    if !linking.allow_different_emails
+        && provider_email.to_lowercase()
+            != crate::plugins::helpers::user_email(current_user)?.to_lowercase()
+    {
         return Err(AuthError::Upstream {
             status: 401,
             code: "LINKING_DIFFERENT_EMAILS_NOT_ALLOWED",
@@ -743,9 +743,7 @@ async fn link_social_core(
         .get_user_by_id(session.user_id().typed()?)
         .await?
         .ok_or(AuthError::UserNotFound)?;
-    let email = user
-        .email()
-        .ok_or_else(|| AuthError::bad_request("User email not found"))?;
+    let email = crate::plugins::helpers::user_email(&user)?;
 
     initiate_oauth_flow_core(
         ctx,

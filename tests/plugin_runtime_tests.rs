@@ -205,9 +205,12 @@ impl DatabaseHooks<Schema> for NestedHook {
             .map_err(|_| AuthError::internal("Plugin hook event lock poisoned"))?
             .push(format!(
                 "plugin.after:{}",
-                user.email().ok_or_else(|| AuthError::internal(
-                    "Created fixture user must have an email"
-                ))?
+                user.email()
+                    .typed()?
+                    .as_deref()
+                    .ok_or_else(|| AuthError::internal(
+                        "Created fixture user must have an email"
+                    ))?
             ));
         Ok(())
     }
@@ -246,9 +249,12 @@ impl better_auth_seaorm::hooks::SeaOrmHooks<Schema> for ApplicationHook {
             .map_err(|_| AuthError::internal("Application hook event lock poisoned"))?
             .push(format!(
                 "app.after:{}",
-                user.email().ok_or_else(|| AuthError::internal(
-                    "Created fixture user must have an email"
-                ))?
+                user.email()
+                    .typed()?
+                    .as_deref()
+                    .ok_or_else(|| AuthError::internal(
+                        "Created fixture user must have an email"
+                    ))?
             ));
         Ok(())
     }

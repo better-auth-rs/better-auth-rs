@@ -74,13 +74,7 @@ impl<T: AuthSession> SessionProjection<'_, T> {
                 .adapter_output(value.unwrap_or_default(), supports_native_json)
                 .await?
         };
-        {
-            let mut value = value;
-            if !field.references_id() {
-                field.normalize_date(&mut value)?;
-            }
-            let _ = self.view.additional_fields.insert(name.to_owned(), value);
-        }
+        let _ = self.view.additional_fields.insert(name.to_owned(), value);
         Ok(())
     }
 }

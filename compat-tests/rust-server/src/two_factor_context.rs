@@ -39,11 +39,11 @@ impl TwoFactorContextFixture {
                         "requestPath": endpoint.request.map(|request| request.path()),
                         "body": endpoint.body.json()?,
                         "header": endpoint.request.and_then(|request| request.header("x-callback-tag")),
-                        "sessionEmail": endpoint.session.as_ref().and_then(|(user, _)| user.email.as_ref()),
+                        "sessionEmail": endpoint.session.as_ref().map(|(user, _)| &user.email),
                         "hasResponse": endpoint.response.is_some(),
                         "otpLength": otp.len(),
                     }));
-                    _ = outbox.lock().await.insert(user.email.clone().expect("fixture email"), otp.to_owned());
+                    _ = outbox.lock().await.insert(user.email.typed()?.clone().expect("fixture email"), otp.to_owned());
                     if endpoint.request.and_then(|request| request.header("x-callback-fail")).map(String::as_str) == Some("send") {
                         return Err(AuthError::Upstream { status: 503, code: "DELIVERY_UNAVAILABLE", message: "Fixture delivery unavailable" });
                     }

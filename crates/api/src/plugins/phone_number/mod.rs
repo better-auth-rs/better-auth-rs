@@ -500,7 +500,7 @@ impl PhoneNumberPlugin {
             .get_user_by_phone_number(phone)
             .await?
             .ok_or_else(invalid_credentials)?;
-        if self.require_verification && user.phone_number_verified() != Some(true) {
+        if self.require_verification && !user.phone_number_verified().is_truthy()? {
             let code = self.save_otp(ctx, phone.to_owned(), false).await?;
             if self.has_sender(ctx, Delivery::Verification) {
                 let endpoint = EndpointContext::new(

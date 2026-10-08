@@ -12,7 +12,7 @@ impl EphemeralStore {
         let Some(user) = self.get_user_by_id(user_id).await? else {
             return Ok(None);
         };
-        if user.email_verified {
+        if user.email_verified.is_truthy()? {
             return Ok(Some(user));
         }
         let accounts = self.get_user_accounts(user_id).await?;

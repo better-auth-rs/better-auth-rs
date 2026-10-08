@@ -1,6 +1,6 @@
 use crate::{
-    AuthRecordFields, AuthResult, FieldDate, FieldMap, FieldValue, FromFieldMap, SchemaField,
-    SchemaValue, wire::SessionView,
+    AuthRecordFields, AuthResult, FieldMap, FieldValue, FromFieldMap, SchemaField, SchemaValue,
+    wire::SessionView,
 };
 
 impl From<SessionView> for FieldMap {
@@ -63,6 +63,7 @@ impl AuthRecordFields for SessionView {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::FieldDate;
 
     #[test]
     fn snapshots_preserve_private_fields_and_cross_field_date_aliases() -> AuthResult<()> {
@@ -151,14 +152,7 @@ impl serde::Serialize for SessionView {
 
 impl<'de> serde::Deserialize<'de> for SessionView {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let mut fields = crate::field_value::serde::map::deserialize(deserializer)?;
-        for name in ["expiresAt", "createdAt", "updatedAt"] {
-            if let Some(FieldValue::String(text)) = fields.get(name)
-                && let Some(date) = crate::utils::json::parse_json_date(text)
-            {
-                let _ = fields.insert(name.into(), FieldDate::from(date).into());
-            }
-        }
+        let fields = crate::field_value::serde::map::deserialize(deserializer)?;
         Self::from_field_values(fields).map_err(serde::de::Error::custom)
     }
 }
@@ -245,6 +239,12 @@ mod native_field_tests {
         assert_eq!(
             updated.keys().collect::<Vec<_>>(),
             source.keys().collect::<Vec<_>>()
+        );
+        let decoded: SessionView =
+            serde_json::from_str(r#"{"createdAt":"2030-01-02T03:04:05.000Z"}"#)?;
+        assert_eq!(
+            decoded.created_at.field_value(),
+            FieldValue::from("2030-01-02T03:04:05.000Z"),
         );
         Ok(())
     }

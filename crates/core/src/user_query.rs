@@ -7,32 +7,25 @@ use std::cmp::Ordering;
 use crate::store::schema::resolve_field_name;
 use crate::types::ListUsersParams;
 use crate::user_fields::{UserConfig, UserFieldConfig, UserFieldType};
-use crate::{AuthRecordFields, AuthResult, UserView, entity::AuthUser};
+use crate::{AuthRecordFields, AuthResult, UserView};
 
 fn string_field(user: &UserView, field: &str) -> Option<Value> {
-    let value = match field {
-        "id" | "_id" => Some(user.id.field_value()),
-        "email" => user.email().map(Value::from),
-        "name" => Some(user.name.field_value()),
-        "username" => user.username().map(Value::from),
-        "role" => user.role().map(Value::from),
-        _ => None,
-    };
+    let value = user.native_field_value(if field == "_id" { "id" } else { field });
     value.filter(|value| matches!(value, Value::String(_) | Value::Utf16String(_)))
 }
 
 fn bool_field(user: &UserView, field: &str) -> Option<bool> {
     match field {
-        "banned" => Some(user.banned()),
+        "banned" => user.banned.field_value().as_bool(),
         _ => None,
     }
 }
 
 fn date_field(user: &UserView, field: &str) -> Option<FieldDate> {
     match field {
-        "createdAt" => Some(user.created_at()),
-        "updatedAt" => Some(user.updated_at()),
-        "banExpires" => user.ban_expires(),
+        "createdAt" => user.created_at.field_value().as_date().cloned(),
+        "updatedAt" => user.updated_at.field_value().as_date().cloned(),
+        "banExpires" => user.ban_expires.field_value().as_date().cloned(),
         _ => None,
     }
 }
@@ -804,8 +797,10 @@ mod tests {
             .create_user(crate::CreateUser::new())
             .await?;
         let config = UserConfig::default();
-        let shared = Value::from(user.created_at.clone());
-        let distinct = Value::from(FieldDate::from_milliseconds(user.created_at.milliseconds()));
+        let shared = user.created_at.field_value();
+        let distinct = Value::from(FieldDate::from_milliseconds(
+            user.created_at.date_milliseconds()?,
+        ));
         for (expected, operator, matches) in [
             (shared.clone(), "eq", 1),
             (distinct.clone(), "eq", 0),

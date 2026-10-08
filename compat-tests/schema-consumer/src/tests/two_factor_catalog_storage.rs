@@ -143,7 +143,7 @@ where
         .await?
         .ok_or("Missing nullable owner")?;
     assert_eq!(nullable_owner.two_factor_enabled, None);
-    assert!(!nullable_owner.two_factor_enabled());
+    assert_eq!(nullable_owner.two_factor_enabled().typed()?, &None);
     let nullable_owner_value = owner_value(&nullable_owner, &owner_id).await?;
     let model = <P::TwoFactor as SeaOrmPluginModel>::Entity::find()
         .filter(P::TwoFactor::column("id")?.eq(id.clone()))
@@ -314,7 +314,7 @@ where
         )
         .await?;
     assert_eq!(updated_owner.two_factor_enabled, Some(true));
-    assert!(updated_owner.two_factor_enabled());
+    assert_eq!(updated_owner.two_factor_enabled().typed()?, &Some(true));
     assert_eq!(updated_owner.id, owner.id);
     assert_eq!(updated_owner.email, owner.email);
     assert_eq!(

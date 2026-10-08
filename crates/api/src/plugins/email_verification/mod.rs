@@ -133,10 +133,8 @@ impl EmailVerificationPlugin {
         callback_url: Option<&str>,
         endpoint: &crate::plugins::endpoint_context::EndpointContext<'_, S>,
     ) -> AuthResult<()> {
-        if self.config.send_on_sign_up.unwrap_or(required)
-            && let Some(email) = user.email()
-        {
-            self.send_verification_email_at(user, email, callback_url, endpoint)
+        if self.config.send_on_sign_up.unwrap_or(required) {
+            self.send_verification_email_at(user, callback_url, endpoint)
                 .await?;
         }
         Ok(())
@@ -230,7 +228,6 @@ impl EmailVerificationPlugin {
     async fn send_verification_email_for_user(
         &self,
         user: &impl AuthUser,
-        email: &str,
         callback_url: Option<&str>,
         request: Option<&AuthRequest>,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
@@ -245,21 +242,21 @@ impl EmailVerificationPlugin {
             better_auth_core::FieldValue::from_json(body)?,
             ctx,
         );
-        self.send_verification_email_at(user, email, callback_url, &endpoint)
+        self.send_verification_email_at(user, callback_url, &endpoint)
             .await
     }
 
     async fn send_verification_email_at<S: better_auth_core::AuthSchema>(
         &self,
         user: &impl AuthUser,
-        email: &str,
         callback_url: Option<&str>,
         endpoint: &crate::plugins::endpoint_context::EndpointContext<'_, S>,
     ) -> AuthResult<()> {
         let ctx = endpoint.auth;
+        let email = crate::plugins::helpers::user_email(user)?;
         let verification_token = token::create_email_verification_token(
             ctx.config.signing_secret(),
-            email,
+            &email,
             None,
             self.config.verification_token_expiry(),
             None,
@@ -337,14 +334,12 @@ impl EmailVerificationPlugin {
             return Ok(());
         }
 
-        if user.email_verified() {
+        if user.email_verified().is_truthy()? {
             return Ok(());
         }
 
-        if let Some(email) = user.email() {
-            self.send_verification_email_for_user(user, email, callback_url, request, ctx)
-                .await?;
-        }
+        self.send_verification_email_for_user(user, callback_url, request, ctx)
+            .await?;
 
         Ok(())
     }
@@ -364,27 +359,19 @@ impl EmailVerificationPlugin {
             require_verification && self.config.send_on_sign_in
         };
         if !should_send
-            || user.is_some_and(AuthUser::email_verified)
+            || user.is_some_and(|user| user.email_verified().field_value().is_truthy())
             || !delivery::available(Some(&self.config), ctx)
         {
             return;
         }
         let result = async {
-            let (user, email) = user
-                .and_then(|user| user.email().map(|email| (user, email)))
-                .ok_or_else(|| {
-                    AuthError::internal(
-                        "Cannot create an OAuth verification token without a user email",
-                    )
-                })?;
-            self.send_verification_email_for_user(
-                user,
-                email,
-                Some(callback_url),
-                Some(request),
-                ctx,
-            )
-            .await
+            let user = user.ok_or_else(|| {
+                AuthError::internal(
+                    "Cannot create an OAuth verification token without a user email",
+                )
+            })?;
+            self.send_verification_email_for_user(user, Some(callback_url), Some(request), ctx)
+                .await
         }
         .await;
         if let Err(error) = result {
@@ -408,7 +395,8 @@ impl EmailVerificationPlugin {
 
     /// Check if user is verified or verification is not required
     pub fn is_user_verified_or_not_required(&self, user: &impl AuthUser) -> bool {
-        user.email_verified() || !self.config.require_verification_for_signin
+        user.email_verified().field_value().is_truthy()
+            || !self.config.require_verification_for_signin
     }
 }
 

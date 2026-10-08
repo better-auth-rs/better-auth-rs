@@ -108,14 +108,11 @@ impl UserConfig {
                     let value = storage
                         .get(resolve_field_name(field.field_name.as_deref(), name))
                         .cloned();
-                    assign_output(
-                        output,
-                        name,
-                        field,
-                        field
-                            .adapter_output(value.unwrap_or_default(), supports_native_json)
-                            .await?,
-                    )
+                    let value = field
+                        .adapter_output(value.unwrap_or_default(), supports_native_json)
+                        .await?;
+                    let _ = output.insert(name.to_owned(), value);
+                    Ok(())
                 })
             },
         )
@@ -128,7 +125,6 @@ impl UserConfig {
         fields.retain(|name, _| self.fields().get(name).is_none_or(|field| field.returned()));
     }
 }
-
 impl UserFieldConfig {
     /// Validate one Organization field without applying adapter defaults or transforms.
     pub fn validate_organization_input(
@@ -444,17 +440,4 @@ mod tests {
                 .contains("[body.data.tags.1] Invalid input: expected string, received number")
         );
     }
-}
-
-pub(crate) fn assign_output(
-    output: &mut FieldMap,
-    name: &str,
-    field: &UserFieldConfig,
-    mut value: Value,
-) -> AuthResult<()> {
-    if !field.uses_id_output() {
-        field.normalize_date(&mut value)?;
-    }
-    let _ = output.insert(name.to_owned(), value);
-    Ok(())
 }

@@ -21,7 +21,10 @@ async fn store_create_user_normalizes_email_and_lookup_matches_any_case() {
 
     let user = auth.store().create_user(create_user).await.unwrap();
 
-    assert_eq!(user.email.as_deref(), Some("mixed.case@test.com"));
+    assert_eq!(
+        user.email.typed().unwrap().as_deref(),
+        Some("mixed.case@test.com")
+    );
 
     let lower = auth
         .store()
@@ -62,7 +65,10 @@ async fn store_update_user_normalizes_email_before_persisting() {
         .await
         .unwrap();
 
-    assert_eq!(updated.email.as_deref(), Some("updated.case@test.com"));
+    assert_eq!(
+        updated.email.typed().unwrap().as_deref(),
+        Some("updated.case@test.com")
+    );
 
     let fetched = auth
         .store()

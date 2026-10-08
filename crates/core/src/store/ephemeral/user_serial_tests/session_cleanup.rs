@@ -169,8 +169,12 @@ async fn serial_unproven_user_verification_cleans_access_once_through_aliases() 
     let retained = access(&store, "2", "other").await?;
     let verified = required(store.verify_user_and_revoke_unproven_access("0x1").await?)?;
     assert_eq!(verified.id, "1");
-    assert!(verified.email_verified);
-    assert!(!required(store.get_user_by_id("2").await?)?.email_verified);
+    assert!(*verified.email_verified.typed()?);
+    assert!(
+        !*required(store.get_user_by_id("2").await?)?
+            .email_verified
+            .typed()?
+    );
     assert!(
         store
             .get_session(revoked.token.typed().unwrap())
@@ -186,7 +190,11 @@ async fn serial_unproven_user_verification_cleans_access_once_through_aliases() 
         (vec![Value::Number(2.0)], vec![Value::Number(2.0)])
     );
     let proven = access(&store, "1", "proven").await?;
-    assert!(required(store.verify_user_and_revoke_unproven_access("01").await?)?.email_verified);
+    assert!(
+        *required(store.verify_user_and_revoke_unproven_access("01").await?)?
+            .email_verified
+            .typed()?
+    );
     assert_eq!(
         required(store.get_session(proven.token.typed().unwrap()).await?)?.user_id,
         "1"

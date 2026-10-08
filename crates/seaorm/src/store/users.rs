@@ -49,6 +49,7 @@ where
                 &Default::default(),
                 FieldOutputCapabilities {
                     supports_native_json: db.get_database_backend() == sea_orm::DbBackend::Postgres,
+                    supports_native_dates: !sqlite,
                     supports_arrays: !sqlite,
                     supports_booleans: !sqlite,
                 },
@@ -218,17 +219,25 @@ where
 
     pub(super) fn set_join_user_visibility(&self, user: &mut better_auth_core::UserView) {
         user.visible_fields = Some(
-            ["name", "email", "image"]
-                .into_iter()
-                .map(str::to_owned)
-                .chain(
-                    self.model_fields
-                        .user_plugin_fields()
-                        .iter()
-                        .map(|name| (*name).to_owned()),
-                )
-                .chain(self.config().user.fields().keys().cloned())
-                .collect(),
+            [
+                "id",
+                "name",
+                "email",
+                "emailVerified",
+                "image",
+                "createdAt",
+                "updatedAt",
+            ]
+            .into_iter()
+            .map(str::to_owned)
+            .chain(
+                self.model_fields
+                    .user_plugin_fields()
+                    .iter()
+                    .map(|name| (*name).to_owned()),
+            )
+            .chain(self.config().user.fields().keys().cloned())
+            .collect(),
         );
     }
 

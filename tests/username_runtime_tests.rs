@@ -131,7 +131,10 @@ async fn duplicate_in_transaction<S: AuthSchema>(auth: &BetterAuth<S>) {
                             .with_username("Mixed_User"),
                     )
                     .await?;
-                assert_eq!(first.username(), Some("mixed_user"));
+                assert_eq!(
+                    first.username().typed().unwrap().as_deref(),
+                    Some("mixed_user")
+                );
                 transaction
                     .create_user(
                         CreateUser::new()
@@ -176,7 +179,10 @@ async fn duplicate_in_transaction<S: AuthSchema>(auth: &BetterAuth<S>) {
         )
         .await
         .unwrap();
-    assert_eq!(created.username(), Some("mixed_user"));
+    assert_eq!(
+        created.username().typed().unwrap().as_deref(),
+        Some("mixed_user")
+    );
 }
 
 #[tokio::test]

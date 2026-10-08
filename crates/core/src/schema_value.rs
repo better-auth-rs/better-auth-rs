@@ -181,6 +181,13 @@ impl SchemaValue<std::borrow::Cow<'_, str>> {
     }
 }
 
+impl SchemaValue<Option<std::borrow::Cow<'_, str>>> {
+    /// Own a nullable string while retaining replacement values and omission.
+    pub fn into_owned(self) -> SchemaValue<Option<String>> {
+        self.map(|value| value.map(std::borrow::Cow::into_owned))
+    }
+}
+
 impl<T> From<T> for SchemaValue<T> {
     fn from(value: T) -> Self {
         Self::Typed(value)

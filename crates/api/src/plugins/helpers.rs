@@ -9,6 +9,21 @@ use chrono::Utc;
 mod user_input;
 pub(crate) use user_input::apply_user_create_fields;
 
+pub(crate) fn user_email(user: &impl AuthUser) -> AuthResult<String> {
+    let email = user.email().field_value();
+    match email {
+        better_auth_core::FieldValue::String(email) => Ok(email),
+        better_auth_core::FieldValue::Utf16String(email) => email.to_utf8().map_err(|error| {
+            AuthError::internal(format!(
+                "Cannot represent user email as a Rust string: {error}"
+            ))
+        }),
+        _ => Err(AuthError::internal(
+            "user.email.toLowerCase is not a function",
+        )),
+    }
+}
+
 pub(crate) fn session_is_fresh(
     session: &impl better_auth_core::AuthSession,
     config: &better_auth_core::AuthConfig,

@@ -223,7 +223,7 @@ impl<S: AuthSchema> UserStore<S> for SecondaryStore<S> {
             .inner
             .get_user_by_id(user_id)
             .await?
-            .is_some_and(|user| !user.email_verified());
+            .is_some_and(|user| !user.email_verified().field_value().is_truthy());
         let references = if unverified {
             self.references(user_id).await?
         } else {

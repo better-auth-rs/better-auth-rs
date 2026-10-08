@@ -108,7 +108,7 @@ impl AnonymousPlugin {
             .data;
         if previous
             .as_ref()
-            .is_some_and(|data| data.user.is_anonymous == Some(true))
+            .is_some_and(|data| data.user.is_anonymous.field_value().is_truthy())
         {
             return Err(error(
                 400,
@@ -230,7 +230,7 @@ impl AnonymousPlugin {
                 "Deleting anonymous users is disabled",
             ));
         }
-        if user.is_anonymous != Some(true) {
+        if !user.is_anonymous.is_truthy()? {
             return Err(error(403, "USER_IS_NOT_ANONYMOUS", "User is not anonymous"));
         }
         ctx.database
@@ -323,7 +323,9 @@ impl AnonymousPlugin {
             )
             .await?
             .data;
-        let previous = match previous.filter(|session| session.user.is_anonymous == Some(true)) {
+        let previous = match previous
+            .filter(|session| session.user.is_anonymous.field_value().is_truthy())
+        {
             Some(previous) => Some(previous),
             None => {
                 if let Some(user_id) = req
@@ -334,7 +336,7 @@ impl AnonymousPlugin {
                         .database
                         .get_user_by_id(&user_id)
                         .await?
-                        .filter(|user| user.is_anonymous() == Some(true))
+                        .filter(|user| user.is_anonymous().field_value().is_truthy())
                     {
                         let mut session = None;
                         for candidate in ctx.database.get_user_session_snapshots(&user_id).await? {
@@ -369,7 +371,7 @@ impl AnonymousPlugin {
         let Some(previous) = previous else {
             return Ok(());
         };
-        if previous.user.is_anonymous != Some(true) {
+        if !previous.user.is_anonymous.is_truthy()? {
             return Ok(());
         }
         let Some(new_session) = req.new_session()? else {
@@ -466,7 +468,7 @@ better_auth_core::impl_auth_plugin!(AnonymousPlugin, "anonymous";
                     let session = ctx.session_manager()
                         .resolve(req, better_auth_core::session::SessionRead::Authoritative)
                         .await?.data;
-                    if let Some(session) = session.filter(|session| session.user.is_anonymous == Some(true))
+                    if let Some(session) = session.filter(|session| session.user.is_anonymous.field_value().is_truthy())
                         && !session.user.id.is_undefined() {
                         req.set_server_context("anonymousUserId", session.user.id.field_value())?;
                     }

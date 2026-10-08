@@ -19,7 +19,6 @@ pub(crate) use batch::{
 pub use record::AdapterRecord;
 pub(crate) use record::project_adapter_value;
 mod organization;
-pub(crate) use organization::assign_output;
 mod output;
 mod record;
 mod transform;

@@ -407,7 +407,7 @@ impl EphemeralStore {
                             true,
                         )
                         .await?;
-                        crate::user_fields::assign_output(output, name, field, value)?;
+                        let _ = output.insert(name.to_owned(), value);
                     } else if let Some(mut value) = value {
                         if name == "id" {
                             value = Self::project_id(&crate::SchemaValue::from_field(value))?

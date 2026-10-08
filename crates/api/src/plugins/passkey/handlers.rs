@@ -69,12 +69,12 @@ pub(super) async fn generate_register_options_core(
     let existing_passkeys = ctx.database.list_passkeys_by_user(&user.id).await?;
     let user_name = passkey_name
         .filter(|name| !name.is_empty())
-        .unwrap_or(&user.name);
-    let user_display_name = user
-        .display_name
-        .as_deref()
-        .filter(|name| !name.is_empty())
-        .unwrap_or(&user.name);
+        .map_or_else(|| user.name.field_value(), Into::into);
+    let user_display_name = if user.display_name.is_truthy()? {
+        user.display_name.field_value()
+    } else {
+        user.name.field_value()
+    };
     let users = super::callbacks::Users {
         ctx,
         transaction: None,
@@ -89,8 +89,9 @@ pub(super) async fn generate_register_options_core(
         .iter()
         .map(super::descriptors::CredentialDescriptor::registration_id)
         .collect::<AuthResult<Vec<_>>>()?;
+    // Display labels do not participate in verification. Populate the output with the retained native values below.
     let builder = webauthn
-        .new_challenge_register_builder(Uuid::new_v4().as_bytes(), user_name, user_display_name)
+        .new_challenge_register_builder(Uuid::new_v4().as_bytes(), "", "")
         .map_err(|error| {
             AuthError::internal(format!("Failed to generate register options: {error}"))
         })?
@@ -132,6 +133,14 @@ pub(super) async fn generate_register_options_core(
         &config.authenticator_selection,
         extensions,
     )?;
+    let mut identity = response
+        .get("user")
+        .and_then(FieldValue::as_object)
+        .cloned()
+        .ok_or_else(|| AuthError::internal("Registration options omitted the user object"))?;
+    let _ = identity.insert("name".into(), user_name);
+    let _ = identity.insert("displayName".into(), user_display_name);
+    let _ = response.insert("user".into(), identity.into());
     let _ = response.insert(
         "excludeCredentials".into(),
         descriptors

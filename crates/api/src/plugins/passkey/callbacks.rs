@@ -111,9 +111,12 @@ impl<'a> PasskeyEndpoint<'a> {
 #[serde(rename_all = "camelCase")]
 pub struct PasskeyRegistrationUser {
     pub id: String,
-    pub name: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub display_name: Option<String>,
+    pub name: better_auth_core::SchemaValue<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "better_auth_core::SchemaValue::is_undefined"
+    )]
+    pub display_name: better_auth_core::SchemaValue<Option<String>>,
 }
 /// A verified public-key credential.
 #[derive(Debug, Clone, Serialize)]

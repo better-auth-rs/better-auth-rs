@@ -323,7 +323,7 @@ impl<S: AuthSchema> SecondaryStore<S> {
         let Some(session) = cached.get("session").and_then(FieldValue::as_object) else {
             return Ok(None);
         };
-        let original = cache::session(session.clone())?;
+        let original = cache::session(session.clone(), &[])?;
         let created_at = original.created_at.clone();
         let mut fields = FieldMap::from(original);
         let mut patch = update.into_public_fields()?;
@@ -339,7 +339,7 @@ impl<S: AuthSchema> SecondaryStore<S> {
         fields.extend(patch);
         // Upstream retains the cached creation date, even when a before hook patches it.
         let _ = fields.insert("createdAt".into(), created_at.into_field_value());
-        let mut updated = self.hydrate_session(fields)?;
+        let mut updated = cache::session(fields, &["expiresAt", "createdAt", "updatedAt"])?;
         updated.filter_returned_fields(&self.config.session);
         let _ = cached.insert("session".into(), FieldMap::from(updated.clone()).into());
         let seconds = updated.expires_at().converted_cache_ttl(self.now())?;
@@ -510,7 +510,7 @@ impl<S: AuthSchema> SessionStore<S> for SecondaryStore<S> {
                 return Ok(None);
             };
             let fields = cache::object(&cached.remove("session").unwrap_or(FieldValue::Null))?;
-            let session = cache::session(fields)?;
+            let session = cache::session(fields, &["expiresAt", "createdAt", "updatedAt"])?;
             let _ = cache::user(&cached.remove("user").unwrap_or(FieldValue::Null))?;
             return Ok(Some(session));
         }
@@ -577,7 +577,7 @@ impl<S: AuthSchema> SessionStore<S> for SecondaryStore<S> {
                 return Ok(None);
             };
             let fields = cache::object(&cached.remove("session").unwrap_or(FieldValue::Null))?;
-            let session = cache::session(fields)?;
+            let session = cache::session(fields, &["expiresAt", "createdAt", "updatedAt"])?;
             let mut view = session.clone();
             view.active = true;
             let user = cache::user(&cached.remove("user").unwrap_or(FieldValue::Null))?;
@@ -617,9 +617,10 @@ impl<S: AuthSchema> SessionStore<S> for SecondaryStore<S> {
             // Upstream batch reads skip malformed cache entries and never fall back to the database.
             let data = (|| {
                 let mut fields = cache::object(&cached)?;
-                let session = cache::session(cache::object(
-                    &fields.remove("session").unwrap_or_default(),
-                )?)?;
+                let session = cache::session(
+                    cache::object(&fields.remove("session").unwrap_or_default())?,
+                    &["expiresAt"],
+                )?;
                 let user = cache::user(&fields.remove("user").unwrap_or_default())?;
                 Ok::<_, AuthError>(crate::session::SessionData { session, user })
             })();
@@ -703,7 +704,7 @@ impl<S: AuthSchema> SessionStore<S> for SecondaryStore<S> {
                 continue;
             };
             // Upstream listSessions skips malformed cache records; single-session reads expose malformed records.
-            if let Ok(session) = cache::session(fields.clone()) {
+            if let Ok(session) = cache::session(fields.clone(), &["expiresAt"]) {
                 let view = session.clone();
                 sessions.push((session, Some(view)));
             }

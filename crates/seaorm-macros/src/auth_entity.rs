@@ -379,63 +379,30 @@ fn gen_user(
         .filter(|name| has(name))
         .collect();
 
-    // AuthUser trait — plugin fields return defaults when absent
-    let identity_getters: Vec<_> = ["is_anonymous", "phone_number_verified"]
-        .iter()
-        .filter(|name| has(name))
-        .map(|name| {
-            let field = format_ident!("{name}");
-            quote! { fn #field(&self) -> Option<bool> { self.#field } }
-        })
-        .collect();
-    let phone_impl = if has("phone_number") {
-        quote! { fn phone_number(&self) -> Option<&str> { self.phone_number.as_deref() } }
-    } else {
-        quote! {}
-    };
+    let native_getters = [
+        "email", "email_verified", "created_at", "updated_at", "is_anonymous",
+        "phone_number", "phone_number_verified", "username", "display_username",
+        "two_factor_enabled", "role", "banned", "ban_reason", "ban_expires",
+    ].into_iter().map(|name| {
+        let field = format_ident!("{name}");
+        let ty = match name {
+            "email_verified" | "banned" => quote!(bool),
+            "created_at" | "updated_at" => quote!(#core_root::FieldDate),
+            "ban_expires" => quote!(Option<#core_root::FieldDate>),
+            "is_anonymous" | "phone_number_verified" | "two_factor_enabled" => quote!(Option<bool>),
+            _ => quote!(Option<::std::borrow::Cow<'_, str>>),
+        };
+        let value = if has(name) {
+            quote!(#core_root::SchemaValue::from_field(#core_root::SchemaField::into_field(&self.#field)))
+        } else {
+            quote!(#core_root::SchemaValue::Undefined)
+        };
+        quote! { fn #field(&self) -> #core_root::SchemaValue<#ty> { #value } }
+    });
     let phone_column_impl = if has("phone_number") {
         quote! { fn phone_number_column() -> Option<Self::Column> { Some(Column::PhoneNumber) } }
     } else {
         quote! {}
-    };
-    let username_impl = if has("username") {
-        quote! { fn username(&self) -> Option<&str> { self.username.as_deref() } }
-    } else {
-        quote! { fn username(&self) -> Option<&str> { None } }
-    };
-    let display_username_impl = if has("display_username") {
-        quote! { fn display_username(&self) -> Option<&str> { self.display_username.as_deref() } }
-    } else {
-        quote! { fn display_username(&self) -> Option<&str> { None } }
-    };
-    let two_factor_impl = if has("two_factor_enabled") {
-        if optional_two_factor {
-            quote! { fn two_factor_enabled(&self) -> bool { self.two_factor_enabled == Some(true) } }
-        } else {
-            quote! { fn two_factor_enabled(&self) -> bool { self.two_factor_enabled } }
-        }
-    } else {
-        quote! { fn two_factor_enabled(&self) -> bool { false } }
-    };
-    let role_impl = if has("role") {
-        quote! { fn role(&self) -> Option<&str> { self.role.as_deref() } }
-    } else {
-        quote! { fn role(&self) -> Option<&str> { None } }
-    };
-    let banned_impl = if has("banned") {
-        quote! { fn banned(&self) -> bool { self.banned } }
-    } else {
-        quote! { fn banned(&self) -> bool { false } }
-    };
-    let ban_reason_impl = if has("ban_reason") {
-        quote! { fn ban_reason(&self) -> Option<&str> { self.ban_reason.as_deref() } }
-    } else {
-        quote! { fn ban_reason(&self) -> Option<&str> { None } }
-    };
-    let ban_expires_impl = if has("ban_expires") {
-        quote! { fn ban_expires(&self) -> Option<#core_root::FieldDate> { self.ban_expires.map(Into::into) } }
-    } else {
-        quote! { fn ban_expires(&self) -> Option<#core_root::FieldDate> { None } }
     };
 
     // new_active — plugin fields get Set(default) when present, omitted when absent
@@ -468,19 +435,7 @@ fn gen_user(
             #aliases
             const PLUGIN_FIELDS: &'static [&'static str] = &[#(#plugin_fields),*];
             fn id(&self) -> #core_root::SchemaValue<::std::borrow::Cow<'_, str>> { #core_root::SchemaValue::Typed(#id_view) }
-            fn email(&self) -> Option<&str> { self.email.as_deref() }
-            fn email_verified(&self) -> bool { self.email_verified }
-            fn created_at(&self) -> #core_root::FieldDate { self.created_at.into() }
-            fn updated_at(&self) -> #core_root::FieldDate { self.updated_at.into() }
-            #(#identity_getters)*
-            #phone_impl
-            #username_impl
-            #display_username_impl
-            #two_factor_impl
-            #role_impl
-            #banned_impl
-            #ban_reason_impl
-            #ban_expires_impl
+            #(#native_getters)*
         }
 
         impl #seaorm_root::SeaOrmUserModel for #ident {

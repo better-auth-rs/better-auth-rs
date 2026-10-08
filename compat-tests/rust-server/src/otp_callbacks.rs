@@ -25,7 +25,7 @@ impl OtpCallbacksFixture {
             "body":endpoint.body.json().expect("The callback body must serialize"), "header":request.and_then(|req| req.headers.get("x-callback-tag")),
             "basePath": endpoint.auth.config.base_path,
             "hasResponse":endpoint.response.is_some(),
-            "sessionEmail":endpoint.session.as_ref().and_then(|(user,_)|user.email.as_ref()),
+            "sessionEmail":endpoint.session.as_ref().map(|(user,_)|&user.email),
         }));
     }
     fn fail(endpoint: &EndpointContext<'_, TestSchema>, name: &str) -> AuthResult<()> {

@@ -835,7 +835,7 @@ impl ApiKeyPlugin {
     ) -> AuthResult<AuthResponse> {
         let body: DeleteKeyRequest = request::read(req)?;
         let (user, _session) = ctx.require_session(req).await?;
-        if user.banned() {
+        if user.banned().is_truthy()? {
             return Err(AuthError::authentication_failed("User is banned"));
         }
         let response = delete_key_core(&body, user.id().typed()?, self, ctx).await?;

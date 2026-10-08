@@ -56,8 +56,7 @@ impl FromFieldMap for crate::FieldMap {
 
 /// Trait representing a user entity.
 ///
-/// The framework reads `name`, `image`, and nullable `twoFactorEnabled` from native field extraction.
-/// Other core fields use getters. The `two_factor_enabled` getter supplies truthiness to runtime guards.
+/// Native getters retain schema replacements until an operation requires a concrete type.
 /// Custom types must provide all framework fields and may have additional fields.
 /// If serialized keys differ, override [`Self::serialized_field_name`].
 /// `AuthEntity` generates the serialized field mapping for derived models.
@@ -69,7 +68,7 @@ pub trait AuthUser:
         None
     }
     /// Field presence for runtime records and signed snapshots. Database models use `None`.
-    /// A missing optional core field differs from a present field containing JSON null.
+    /// A missing native field differs from a present field containing undefined or null.
     fn field_presence(&self) -> Option<&std::collections::BTreeSet<String>> {
         None
     }
@@ -95,26 +94,26 @@ pub trait AuthUser:
     }
 
     fn id(&self) -> SchemaValue<Cow<'_, str>>;
-    fn email(&self) -> Option<&str>;
-    fn email_verified(&self) -> bool;
-    fn created_at(&self) -> crate::FieldDate;
-    fn updated_at(&self) -> crate::FieldDate;
-    fn is_anonymous(&self) -> Option<bool> {
-        None
+    fn email(&self) -> SchemaValue<Option<Cow<'_, str>>>;
+    fn email_verified(&self) -> SchemaValue<bool>;
+    fn created_at(&self) -> SchemaValue<crate::FieldDate>;
+    fn updated_at(&self) -> SchemaValue<crate::FieldDate>;
+    fn is_anonymous(&self) -> SchemaValue<Option<bool>> {
+        SchemaValue::Undefined
     }
-    fn phone_number(&self) -> Option<&str> {
-        None
+    fn phone_number(&self) -> SchemaValue<Option<Cow<'_, str>>> {
+        SchemaValue::Undefined
     }
-    fn phone_number_verified(&self) -> Option<bool> {
-        None
+    fn phone_number_verified(&self) -> SchemaValue<Option<bool>> {
+        SchemaValue::Undefined
     }
-    fn username(&self) -> Option<&str>;
-    fn display_username(&self) -> Option<&str>;
-    fn two_factor_enabled(&self) -> bool;
-    fn role(&self) -> Option<&str>;
-    fn banned(&self) -> bool;
-    fn ban_reason(&self) -> Option<&str>;
-    fn ban_expires(&self) -> Option<crate::FieldDate>;
+    fn username(&self) -> SchemaValue<Option<Cow<'_, str>>>;
+    fn display_username(&self) -> SchemaValue<Option<Cow<'_, str>>>;
+    fn two_factor_enabled(&self) -> SchemaValue<Option<bool>>;
+    fn role(&self) -> SchemaValue<Option<Cow<'_, str>>>;
+    fn banned(&self) -> SchemaValue<bool>;
+    fn ban_reason(&self) -> SchemaValue<Option<Cow<'_, str>>>;
+    fn ban_expires(&self) -> SchemaValue<Option<crate::FieldDate>>;
 }
 
 /// Trait representing a session entity.

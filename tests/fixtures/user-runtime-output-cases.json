@@ -1,0 +1,95 @@
+{
+  "version": "1.7.6",
+  "fields": [
+    { "name": "id", "type": "string", "replacement": 7, "calls": 0 },
+    { "name": "name", "type": "string", "replacement": 7 },
+    { "name": "email", "type": "string", "replacement": { "address": "dynamic" } },
+    { "name": "emailVerified", "type": "boolean", "replacement": "verified" },
+    { "name": "image", "type": "string", "replacement": ["avatar"] },
+    { "name": "createdAt", "type": "date", "replacement": 0 },
+    { "name": "updatedAt", "type": "date", "replacement": "not-a-date" },
+    { "name": "isAnonymous", "type": "boolean", "replacement": [] },
+    { "name": "phoneNumber", "type": "string", "replacement": 42 },
+    { "name": "phoneNumberVerified", "type": "boolean", "replacement": { "verified": true } },
+    { "name": "username", "type": "string", "replacement": false },
+    { "name": "displayUsername", "type": "string", "replacement": [1, 2] },
+    { "name": "twoFactorEnabled", "type": "boolean", "replacement": ["enabled"] },
+    { "name": "role", "type": "string", "replacement": ["admin"] },
+    { "name": "banned", "type": "boolean", "replacement": "banned" },
+    { "name": "banReason", "type": "string", "replacement": 99 },
+    { "name": "banExpires", "type": "date", "replacement": { "expiry": 0 } },
+    { "name": "metadata", "type": "json", "replacement": { "type": "undefined" } }
+  ],
+  "representativeFields": ["email", "emailVerified", "createdAt"],
+  "values": [
+    { "name": "undefined", "value": { "type": "undefined" } },
+    { "name": "null", "value": null },
+    { "name": "false", "value": false },
+    { "name": "true", "value": true },
+    { "name": "zero", "value": 0 },
+    { "name": "one", "value": 1 },
+    { "name": "empty-string", "value": "" },
+    { "name": "string", "value": "replacement" },
+    { "name": "empty-array", "value": [] },
+    { "name": "array", "value": ["replacement"] },
+    { "name": "object", "value": { "replacement": true } },
+    { "name": "date", "value": { "type": "date", "value": "2030-01-02T03:04:05.000Z" } },
+    { "name": "invalid-date", "value": { "type": "date", "value": "Invalid Date" } },
+    { "name": "nan", "value": { "type": "number", "value": "NaN" } },
+    { "name": "throw", "error": "user-output-stop" }
+  ],
+  "verifiedConsumers": [
+    { "name": "undefined", "value": { "type": "undefined" }, "status": 403 },
+    { "name": "null", "value": null, "status": 403 },
+    { "name": "zero", "value": 0, "status": 403 },
+    { "name": "empty", "value": "", "status": 403 },
+    { "name": "one", "value": 1, "status": 200 },
+    { "name": "string-false", "value": "false", "status": 200 },
+    { "name": "array", "value": [], "status": 200 },
+    { "name": "object", "value": {}, "status": 200 }
+  ],
+  "roleConsumers": [
+    { "name": "undefined", "value": { "type": "undefined" }, "status": 403 },
+    { "name": "zero", "value": 0, "status": 403 },
+    { "name": "empty", "value": "", "status": 403 },
+    { "name": "admin", "value": "admin", "status": 200 },
+    { "name": "array", "value": ["admin"], "status": 500 },
+    { "name": "object", "value": {}, "status": 500 }
+  ],
+  "emailConsumers": [
+    { "name": "uppercase", "value": "OWNER@RUNTIME.TEST", "status": 200, "sent": 1 },
+    { "name": "number", "value": 7, "status": 500, "sent": 0 },
+    { "name": "null", "value": null, "status": 500, "sent": 0 },
+    { "name": "array", "value": ["owner@runtime.test"], "status": 500, "sent": 0 }
+  ],
+  "banConsumers": [
+    { "name": "falsey-ban", "banned": 0, "expires": 1, "status": 200, "clear": false },
+    { "name": "truthy-ban-no-expiry", "banned": "false", "expires": null, "status": 403, "clear": false },
+    { "name": "truthy-ban-expired-number", "banned": [], "expires": 1, "status": 200, "clear": true },
+    { "name": "truthy-ban-invalid-date", "banned": [], "expires": "not-a-date", "status": 403, "clear": false }
+  ],
+  "changeEmailConsumers": [
+    { "name": "true", "value": true, "status": 400, "changed": false },
+    { "name": "one", "value": 1, "status": 200, "changed": true },
+    { "name": "string-true", "value": "true", "status": 200, "changed": true }
+  ],
+  "cache": [
+    { "name": "email-object", "field": "email", "value": {}, "cookie": false },
+    { "name": "email-null", "field": "email", "value": null, "cookie": false },
+    { "name": "email-omitted", "field": "email", "value": { "type": "undefined" }, "cookie": false },
+    { "name": "email-empty", "field": "email", "value": "", "cookie": true, "cookieValue": "" },
+    { "name": "email-case", "field": "email", "value": "MiXeD@Example.Test", "cookie": true, "cookieValue": "mixed@example.test" },
+    { "name": "verified-number", "field": "emailVerified", "value": 1, "cookie": false },
+    { "name": "verified-null", "field": "emailVerified", "value": null, "cookie": false },
+    { "name": "verified-omitted", "field": "emailVerified", "value": { "type": "undefined" }, "cookie": true, "cookieValue": false },
+    { "name": "created-number", "field": "createdAt", "value": 0, "cookie": false, "secondaryValue": { "type": "date", "value": "1970-01-01T00:00:00.000Z" } },
+    { "name": "created-null", "field": "createdAt", "value": null, "cookie": false, "secondaryValue": { "type": "date", "value": "1970-01-01T00:00:00.000Z" } },
+    { "name": "created-omitted", "field": "createdAt", "value": { "type": "undefined" }, "cookie": true, "cookieDefaultDate": true, "secondaryValue": { "type": "date", "value": "Invalid Date" } },
+    { "name": "created-invalid", "field": "createdAt", "value": "not-a-date", "cookie": false, "secondaryValue": { "type": "date", "value": "Invalid Date" } },
+    { "name": "created-iso", "field": "createdAt", "value": "2030-01-02T03:04:05.000Z", "cookie": true, "cookieValue": { "type": "date", "value": "2030-01-02T03:04:05.000Z" }, "secondaryValue": { "type": "date", "value": "2030-01-02T03:04:05.000Z" } },
+    { "name": "created-noncanonical-iso", "field": "createdAt", "value": "2030-01-02T03:04:05Z", "cookie": true, "compact": false, "cookieValue": { "type": "date", "value": "2030-01-02T03:04:05.000Z" }, "secondaryValue": { "type": "date", "value": "2030-01-02T03:04:05.000Z" } },
+    { "name": "id-omitted", "field": "id", "value": { "type": "undefined" }, "cookie": false },
+    { "name": "name-array", "field": "name", "value": [], "cookie": false },
+    { "name": "role-array", "field": "role", "value": ["admin"], "cookie": true, "cookieValue": ["admin"] }
+  ]
+}

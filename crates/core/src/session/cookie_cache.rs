@@ -2,7 +2,6 @@ use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::Utc;
 use hmac::{Hmac, Mac};
 use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation};
-use serde::Deserialize;
 use serde_json::Value;
 use sha2::Sha256;
 
@@ -10,24 +9,18 @@ use crate::config::{AuthConfig, CookieCacheConfig, CookieCacheStrategy};
 use crate::utils::cookie_utils::{
     clear_existing_cookies, create_chunked_cookies, expire_cookie, related_cookie_name,
 };
-use crate::{AuthError, AuthRequest, AuthResult, CookieAttributes};
+use crate::{
+    AuthError, AuthRequest, AuthResult, CookieAttributes, FieldMap, FieldValue, FromFieldMap,
+};
 
 pub(super) use crate::utils::cookie_utils::get_chunked_cookie as read;
 
 use super::{NativeSessionData, SessionData};
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug)]
 pub(super) struct CachedSession {
-    #[serde(flatten)]
     pub data: SessionData,
-    #[serde(rename = "updatedAt")]
-    pub _updated_at: i64,
-    #[serde(default = "default_version")]
     pub version: String,
-}
-
-fn default_version() -> String {
-    "1".to_string()
 }
 
 fn cache_cookie(
@@ -52,8 +45,8 @@ fn cache_cookie(
 // millisecond representation so JSON.stringify(Date) preserves the signed bytes.
 fn normalize_dates(value: &mut Value) {
     match value {
-        Value::String(text) if text.ends_with('Z') && text.contains('T') => {
-            if let Ok(date) = chrono::DateTime::parse_from_rfc3339(text) {
+        Value::String(text) => {
+            if let Some(date) = crate::utils::json::parse_json_date(text) {
                 *text = date.to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
             }
         }
@@ -82,9 +75,6 @@ pub(super) async fn payload(
     );
     let _ = payload.insert("updatedAt".into(), now.timestamp_millis().into());
     let _ = payload.insert("version".into(), version.into());
-    for value in payload.values_mut() {
-        normalize_dates(value);
-    }
     let max_age = cache_cookie(config, cache, dont_remember)
         .attributes
         .max_age
@@ -154,12 +144,94 @@ pub(super) async fn encode(
 }
 
 fn parse_payload(payload: Value) -> Option<CachedSession> {
-    // The cookie boundary uses the upstream User/Session schemas, which require string IDs.
-    // Secondary storage has a separate snapshot format and permits omitted IDs.
-    let _ = payload.get("user")?.get("id")?.as_str()?;
-    let _ = payload.get("session")?.get("id")?.as_str()?;
-    let _ = payload.get("session")?.get("userId")?.as_str()?;
-    serde_json::from_value(payload).ok()
+    fn core_fields(fields: &mut FieldMap) -> Option<()> {
+        fields.get("id")?.as_str()?;
+        for name in ["createdAt", "updatedAt"] {
+            if fields.get(name).is_none_or(FieldValue::is_undefined) {
+                let _ = fields.insert(name.into(), Utc::now().into());
+            }
+            if !fields.get(name)?.as_date()?.milliseconds().is_finite() {
+                return None;
+            }
+        }
+        Some(())
+    }
+
+    fn optional_string(fields: &FieldMap, name: &str) -> bool {
+        fields
+            .get(name)
+            .is_none_or(|value| value.is_undefined() || value.is_null() || value.as_str().is_some())
+    }
+
+    // All signed cache strategies validate the upstream schemas after reviving ISO dates.
+    // Adapter views remain permissive; cookie validity is a separate trust boundary.
+    let payload = crate::utils::json::safe_parse_field(&FieldValue::from_json(payload).ok()?);
+    let fields = payload.as_object()?;
+    let _ = fields.get("updatedAt")?.as_f64()?;
+    let version = match fields.get("version") {
+        None | Some(FieldValue::Undefined) => "1".to_owned(),
+        Some(value) => value.as_str()?.to_owned(),
+    };
+    let mut user = fields.get("user")?.as_object()?.clone();
+    core_fields(&mut user)?;
+    let email = user.get("email")?.as_str()?.to_lowercase();
+    user.get("name")?.as_str()?;
+    if !optional_string(&user, "image") {
+        return None;
+    }
+    match user.get("emailVerified") {
+        None | Some(FieldValue::Undefined) => {
+            let _ = user.insert("emailVerified".into(), false.into());
+        }
+        Some(FieldValue::Bool(_)) => {}
+        _ => return None,
+    }
+    let _ = user.insert("email".into(), email.into());
+    let user = user.in_field_order(&[
+        "id".into(),
+        "createdAt".into(),
+        "updatedAt".into(),
+        "email".into(),
+        "emailVerified".into(),
+        "name".into(),
+        "image".into(),
+    ]);
+    let mut session = fields.get("session")?.as_object()?.clone();
+    core_fields(&mut session)?;
+    let user_id = session
+        .get("userId")
+        .unwrap_or(&FieldValue::Undefined)
+        .display_utf16()
+        .ok()?;
+    let _ = session.insert("userId".into(), user_id.into());
+    session.get("token")?.as_str()?;
+    if !session
+        .get("expiresAt")?
+        .as_date()?
+        .milliseconds()
+        .is_finite()
+        || !optional_string(&session, "ipAddress")
+        || !optional_string(&session, "userAgent")
+    {
+        return None;
+    }
+    let session = session.in_field_order(&[
+        "id".into(),
+        "createdAt".into(),
+        "updatedAt".into(),
+        "userId".into(),
+        "expiresAt".into(),
+        "token".into(),
+        "ipAddress".into(),
+        "userAgent".into(),
+    ]);
+    Some(CachedSession {
+        data: SessionData {
+            user: crate::UserView::from_field_values(user).ok()?,
+            session: crate::SessionView::from_field_values(session).ok()?,
+        },
+        version,
+    })
 }
 
 pub(super) fn parse_jwt(payload: serde_json::Map<String, Value>) -> Option<(CachedSession, i64)> {
@@ -177,7 +249,9 @@ pub(super) fn decode(
 ) -> Option<(CachedSession, i64)> {
     let (payload, expires_at) = match cache.strategy() {
         CookieCacheStrategy::Compact => {
-            let raw: Value = serde_json::from_slice(&URL_SAFE_NO_PAD.decode(value).ok()?).ok()?;
+            let mut raw: Value =
+                serde_json::from_slice(&URL_SAFE_NO_PAD.decode(value).ok()?).ok()?;
+            normalize_dates(&mut raw);
             let payload = raw.get("session")?.as_object()?;
             let expires = raw.get("expiresAt")?.as_i64()?;
             let signature = URL_SAFE_NO_PAD

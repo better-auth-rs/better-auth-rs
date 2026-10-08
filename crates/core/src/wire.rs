@@ -29,25 +29,25 @@ pub struct UserView {
     pub field_order: Vec<String>,
     /// Configured application fields after output transforms.
     pub additional_fields: crate::FieldMap,
-    /// Present optional core fields and enabled plugin fields. `None` preserves an unconfigured view.
+    /// Present native fields, including own-undefined fields. `None` preserves an unconfigured view.
     pub visible_fields: Option<std::collections::BTreeSet<String>>,
     pub id: SchemaValue<String>,
     pub name: SchemaValue<Option<String>>,
-    pub email: Option<String>,
-    pub email_verified: bool,
+    pub email: SchemaValue<Option<String>>,
+    pub email_verified: SchemaValue<bool>,
     pub image: SchemaValue<Option<String>>,
-    pub created_at: crate::FieldDate,
-    pub updated_at: crate::FieldDate,
-    pub is_anonymous: Option<bool>,
-    pub phone_number: Option<String>,
-    pub phone_number_verified: Option<bool>,
-    pub username: Option<String>,
-    pub display_username: Option<String>,
-    pub two_factor_enabled: Option<bool>,
-    pub role: Option<String>,
-    pub banned: bool,
-    pub ban_reason: Option<String>,
-    pub ban_expires: Option<crate::FieldDate>,
+    pub created_at: SchemaValue<crate::FieldDate>,
+    pub updated_at: SchemaValue<crate::FieldDate>,
+    pub is_anonymous: SchemaValue<Option<bool>>,
+    pub phone_number: SchemaValue<Option<String>>,
+    pub phone_number_verified: SchemaValue<Option<bool>>,
+    pub username: SchemaValue<Option<String>>,
+    pub display_username: SchemaValue<Option<String>>,
+    pub two_factor_enabled: SchemaValue<Option<bool>>,
+    pub role: SchemaValue<Option<String>>,
+    pub banned: SchemaValue<bool>,
+    pub ban_reason: SchemaValue<Option<String>>,
+    pub ban_expires: SchemaValue<Option<crate::FieldDate>>,
     pub metadata: crate::FieldValue,
 }
 
@@ -120,7 +120,7 @@ impl UserView {
                     .cloned()
                     .unwrap_or_default(),
             ),
-            email: user.email().map(str::to_owned),
+            email: user.email().into_owned(),
             email_verified: user.email_verified(),
             image: SchemaValue::from_field(
                 model
@@ -131,17 +131,14 @@ impl UserView {
             created_at: user.created_at(),
             updated_at: user.updated_at(),
             is_anonymous: user.is_anonymous(),
-            phone_number: user.phone_number().map(str::to_owned),
+            phone_number: user.phone_number().into_owned(),
             phone_number_verified: user.phone_number_verified(),
-            username: user.username().map(str::to_owned),
-            display_username: user.display_username().map(str::to_owned),
-            two_factor_enabled: match model.get(T::serialized_field_name("twoFactorEnabled")) {
-                Some(value) => value.decode()?,
-                None => Some(user.two_factor_enabled()),
-            },
-            role: user.role().map(str::to_owned),
+            username: user.username().into_owned(),
+            display_username: user.display_username().into_owned(),
+            two_factor_enabled: user.two_factor_enabled(),
+            role: user.role().into_owned(),
             banned: user.banned(),
-            ban_reason: user.ban_reason().map(str::to_owned),
+            ban_reason: user.ban_reason().into_owned(),
             ban_expires: user.ban_expires(),
             metadata: model
                 .get(T::serialized_field_name("metadata"))
@@ -359,46 +356,58 @@ impl AuthUser for UserView {
     fn id(&self) -> SchemaValue<Cow<'_, str>> {
         self.id.as_ref().map(|id| Cow::Borrowed(id.as_str()))
     }
-    fn email(&self) -> Option<&str> {
-        self.email.as_deref()
+    fn email(&self) -> SchemaValue<Option<Cow<'_, str>>> {
+        self.email
+            .as_ref()
+            .map(|value| value.as_deref().map(Cow::Borrowed))
     }
-    fn email_verified(&self) -> bool {
-        self.email_verified
+    fn email_verified(&self) -> SchemaValue<bool> {
+        self.email_verified.clone()
     }
-    fn created_at(&self) -> crate::FieldDate {
+    fn created_at(&self) -> SchemaValue<crate::FieldDate> {
         self.created_at.clone()
     }
-    fn updated_at(&self) -> crate::FieldDate {
+    fn updated_at(&self) -> SchemaValue<crate::FieldDate> {
         self.updated_at.clone()
     }
-    fn is_anonymous(&self) -> Option<bool> {
-        self.is_anonymous
+    fn is_anonymous(&self) -> SchemaValue<Option<bool>> {
+        self.is_anonymous.clone()
     }
-    fn phone_number(&self) -> Option<&str> {
-        self.phone_number.as_deref()
+    fn phone_number(&self) -> SchemaValue<Option<Cow<'_, str>>> {
+        self.phone_number
+            .as_ref()
+            .map(|value| value.as_deref().map(Cow::Borrowed))
     }
-    fn phone_number_verified(&self) -> Option<bool> {
-        self.phone_number_verified
+    fn phone_number_verified(&self) -> SchemaValue<Option<bool>> {
+        self.phone_number_verified.clone()
     }
-    fn username(&self) -> Option<&str> {
-        self.username.as_deref()
+    fn username(&self) -> SchemaValue<Option<Cow<'_, str>>> {
+        self.username
+            .as_ref()
+            .map(|value| value.as_deref().map(Cow::Borrowed))
     }
-    fn display_username(&self) -> Option<&str> {
-        self.display_username.as_deref()
+    fn display_username(&self) -> SchemaValue<Option<Cow<'_, str>>> {
+        self.display_username
+            .as_ref()
+            .map(|value| value.as_deref().map(Cow::Borrowed))
     }
-    fn two_factor_enabled(&self) -> bool {
-        self.two_factor_enabled == Some(true)
+    fn two_factor_enabled(&self) -> SchemaValue<Option<bool>> {
+        self.two_factor_enabled.clone()
     }
-    fn role(&self) -> Option<&str> {
-        self.role.as_deref()
+    fn role(&self) -> SchemaValue<Option<Cow<'_, str>>> {
+        self.role
+            .as_ref()
+            .map(|value| value.as_deref().map(Cow::Borrowed))
     }
-    fn banned(&self) -> bool {
-        self.banned
+    fn banned(&self) -> SchemaValue<bool> {
+        self.banned.clone()
     }
-    fn ban_reason(&self) -> Option<&str> {
-        self.ban_reason.as_deref()
+    fn ban_reason(&self) -> SchemaValue<Option<Cow<'_, str>>> {
+        self.ban_reason
+            .as_ref()
+            .map(|value| value.as_deref().map(Cow::Borrowed))
     }
-    fn ban_expires(&self) -> Option<crate::FieldDate> {
+    fn ban_expires(&self) -> SchemaValue<Option<crate::FieldDate>> {
         self.ban_expires.clone()
     }
 }
@@ -640,21 +649,21 @@ mod tests {
             additional_fields: Default::default(),
             id: "user-1".to_string().into(),
             name: Some("Ada".to_string()).into(),
-            email: Some("ada@example.com".to_string()),
-            email_verified: true,
+            email: Some("ada@example.com".to_string()).into(),
+            email_verified: true.into(),
             image: Default::default(),
             created_at: Utc::now().into(),
             updated_at: Utc::now().into(),
-            is_anonymous: None,
-            phone_number: None,
-            phone_number_verified: None,
-            username: Some("ada".to_string()),
-            display_username: Some("Ada".to_string()),
-            two_factor_enabled: Some(true),
-            role: Some("admin".to_string()),
-            banned: false,
-            ban_reason: None,
-            ban_expires: None,
+            is_anonymous: None.into(),
+            phone_number: None.into(),
+            phone_number_verified: None.into(),
+            username: Some("ada".to_string()).into(),
+            display_username: Some("Ada".to_string()).into(),
+            two_factor_enabled: Some(true).into(),
+            role: Some("admin".to_string()).into(),
+            banned: false.into(),
+            ban_reason: None.into(),
+            ban_expires: None.into(),
             metadata: crate::FieldMap::new().into(),
         };
 
@@ -736,7 +745,10 @@ mod tests {
                 .await
                 .expect("reproject cached user");
             assert_eq!(projected.two_factor_enabled, value);
-            assert_eq!(projected.two_factor_enabled(), value == Some(true));
+            assert_eq!(
+                projected.two_factor_enabled().is_truthy().unwrap(),
+                value == Some(true)
+            );
             assert_eq!(
                 serde_json::to_value(projected)
                     .expect("serialize public user")

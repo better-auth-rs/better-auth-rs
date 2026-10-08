@@ -7,7 +7,7 @@ use better_auth::plugins::{
 };
 use better_auth::prelude::AuthUser;
 use better_auth::seaorm::{Database, SeaOrmStore};
-use better_auth::{AuthConfig, AuthResult, BetterAuth, FieldValue};
+use better_auth::{AuthConfig, AuthResult, BetterAuth};
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tower_http::cors::{AllowHeaders, AllowMethods, AllowOrigin, CorsLayer};
@@ -132,7 +132,7 @@ async fn get_me(
             "id": session.user.id(),
             "email": session.user.email(),
             "name": session.user.name,
-            "createdAt": FieldValue::Date(session.user.created_at()).json()?,
+            "createdAt": session.user.created_at().json()?,
         }
     })))
 }

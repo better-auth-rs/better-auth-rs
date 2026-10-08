@@ -116,6 +116,7 @@ async fn serial_user_queries_bind_numbers_and_project_strings() -> AuthResult<()
     assert_eq!(
         required(store.get_user_by_id("10").await?)?
             .email
+            .typed()?
             .as_deref(),
         Some("replacement@serial-user.test")
     );
@@ -370,7 +371,7 @@ async fn native_user_update_preserves_undefined_null_and_string_selectors() -> A
                 .await?,
         )?;
         assert_eq!(
-            updated.email.as_deref(),
+            updated.email.typed()?.as_deref(),
             Some(if id.is_string() {
                 "string@serial-user.test"
             } else {

@@ -138,7 +138,7 @@ impl OneTimeTokenPlugin {
             .database
             .create_verification_optional(CreateVerification {
                 identifier: (format!("one-time-token:{stored}")).into(),
-                value: (session_token).into(),
+                value: session_token,
                 expires_at: expires_at.into(),
                 ..Default::default()
             })

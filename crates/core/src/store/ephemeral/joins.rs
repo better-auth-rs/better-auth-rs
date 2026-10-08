@@ -69,7 +69,7 @@ impl EphemeralStore {
                     let key = resolve_field_name(field.field_name.as_deref(), name);
                     Ok(if key == "id" {
                         Some(user.id.field_value())
-                    } else if matches!(name, "name" | "image") {
+                    } else if UserView::NATIVE_FIELDS.contains(&name) {
                         value
                     } else {
                         user.additional_fields
@@ -90,7 +90,7 @@ impl EphemeralStore {
                             true,
                         )
                         .await?;
-                        crate::user_fields::assign_output(output, name, field, value)?;
+                        let _ = output.insert(name.to_owned(), value);
                     }
                     Ok(())
                 })

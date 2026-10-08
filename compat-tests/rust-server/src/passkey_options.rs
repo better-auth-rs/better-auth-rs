@@ -163,7 +163,7 @@ impl PasskeyUserResolver for PasskeyOptions {
                 "Resolved User"
             }
             .into(),
-            display_name: Some("Resolved Display".into()),
+            display_name: Some("Resolved Display".into()).into(),
         })
     }
 }

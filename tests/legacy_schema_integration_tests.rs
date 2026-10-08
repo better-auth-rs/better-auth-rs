@@ -105,38 +105,40 @@ mod user {
         fn id(&self) -> better_auth_core::SchemaValue<Cow<'_, str>> {
             better_auth_core::SchemaValue::Typed(Cow::Owned(self.id.to_string()))
         }
-        fn email(&self) -> Option<&str> {
-            self.email.as_deref()
+        fn email(&self) -> better_auth_core::SchemaValue<Option<Cow<'_, str>>> {
+            better_auth_core::SchemaValue::Typed(self.email.as_deref().map(Cow::Borrowed))
         }
-        fn email_verified(&self) -> bool {
-            self.email_verified
+        fn email_verified(&self) -> better_auth_core::SchemaValue<bool> {
+            self.email_verified.into()
         }
-        fn created_at(&self) -> FieldDate {
+        fn created_at(&self) -> better_auth_core::SchemaValue<FieldDate> {
             self.created_at.into()
         }
-        fn updated_at(&self) -> FieldDate {
+        fn updated_at(&self) -> better_auth_core::SchemaValue<FieldDate> {
             self.updated_at.into()
         }
-        fn username(&self) -> Option<&str> {
-            self.username.as_deref()
+        fn username(&self) -> better_auth_core::SchemaValue<Option<Cow<'_, str>>> {
+            better_auth_core::SchemaValue::Typed(self.username.as_deref().map(Cow::Borrowed))
         }
-        fn display_username(&self) -> Option<&str> {
-            self.display_username.as_deref()
+        fn display_username(&self) -> better_auth_core::SchemaValue<Option<Cow<'_, str>>> {
+            better_auth_core::SchemaValue::Typed(
+                self.display_username.as_deref().map(Cow::Borrowed),
+            )
         }
-        fn two_factor_enabled(&self) -> bool {
-            self.two_factor_enabled
+        fn two_factor_enabled(&self) -> better_auth_core::SchemaValue<Option<bool>> {
+            Some(self.two_factor_enabled).into()
         }
-        fn role(&self) -> Option<&str> {
-            self.role.as_deref()
+        fn role(&self) -> better_auth_core::SchemaValue<Option<Cow<'_, str>>> {
+            better_auth_core::SchemaValue::Typed(self.role.as_deref().map(Cow::Borrowed))
         }
-        fn banned(&self) -> bool {
-            self.banned
+        fn banned(&self) -> better_auth_core::SchemaValue<bool> {
+            self.banned.into()
         }
-        fn ban_reason(&self) -> Option<&str> {
-            self.ban_reason.as_deref()
+        fn ban_reason(&self) -> better_auth_core::SchemaValue<Option<Cow<'_, str>>> {
+            better_auth_core::SchemaValue::Typed(self.ban_reason.as_deref().map(Cow::Borrowed))
         }
-        fn ban_expires(&self) -> Option<FieldDate> {
-            self.ban_expires.map(Into::into)
+        fn ban_expires(&self) -> better_auth_core::SchemaValue<Option<FieldDate>> {
+            self.ban_expires.map(Into::into).into()
         }
     }
 

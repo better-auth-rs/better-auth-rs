@@ -223,7 +223,7 @@ async fn email_otp_null_session_consumes_proof_and_keeps_created_user() -> AuthR
         .get_user_by_email("nullable@session.test")
         .await?
         .ok_or_else(|| AuthError::internal("Expected committed user"))?;
-    assert!(owner.email_verified);
+    assert!(owner.email_verified.is_truthy()?);
     assert_eq!(owner.name.typed()?.as_deref(), Some("Created owner"));
     assert!(
         ctx.database

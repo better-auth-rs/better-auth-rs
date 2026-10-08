@@ -464,6 +464,10 @@ Run the application database migrations before starting the server. Capability v
 
 ## Existing Databases
 
+All native `UserView` fields and `AuthUser` getters preserve omitted, null, and replacement values through `SchemaValue<T>`. The default types remain strings, booleans, and `FieldDate`; optional getters retain `Option<T>`. String getters borrow through `Cow<str>`, while views own strings. `AuthEntity` generates these getters. Manual implementations must return the corresponding `SchemaValue` and preserve omitted plugin fields as `Undefined`. Use `.typed()?` when application code requires the default type; use `.field_value()` when forwarding a native value. A truthy guard is different from a strict boolean comparison.
+
+The shared output projection writes native fields directly into the view. Use `UserView::set_field` for dynamic assignments that must preserve field presence and property order. `additional_fields` contains application fields and must not shadow native values. Generic User deserialization preserves date-like strings. Secondary Session reads apply the upstream Date constructor only to User `createdAt` and `updatedAt`; invalid dates remain invalid dates. Cookie caches validate the upstream User and Session schemas after date revival. These boundaries do not apply Adapter output transforms again.
+
 User `name` and `image` values use `SchemaValue<Option<String>>` in `CreateUser`, `UpdateUser`, and `UserView`. `Undefined` omits a field; `Typed(None)` clears it; `Dynamic(value)` retains a non-string record value. Use `Some(value).into()` for a string and `view.name.typed()?` when application code requires the default type. Signup and OAuth endpoints retain their own input schemas.
 
 The runtime view is independent of the physical model. `AuthEntity` reads each field through its Serde name and binds writes through its mapped SeaORM column. Explicit JSON columns retain JSON values. Custom nullable columns retain their database constraints. Default generated user schemas require `name`; migrate existing NULL names before adding a NOT NULL constraint.

@@ -84,7 +84,7 @@ fn context(endpoint: &EndpointContext<'_, StatelessSchema>) -> Value {
         "returnedHidden":returned.as_ref().and_then(|body|body.get("user")).and_then(|user|user.get("secretNote")),
         "hasSetCookie":endpoint.response.is_some_and(|response|response.headers.contains_key("set-cookie")),
         "location":endpoint.response.and_then(|response|response.headers.get("location")),
-        "actorAnonymous":endpoint.session.as_ref().and_then(|(user,_)|user.is_anonymous)})
+        "actorAnonymous":endpoint.session.as_ref().map(|(user,_)|&user.is_anonymous)})
 }
 
 fn json_field(fields: &FieldMap, name: &str) -> AuthResult<Option<Value>> {

@@ -88,13 +88,13 @@ async fn verify_scalars<S: AuthSchema>(store: Arc<dyn AuthStore<S>>, name: Value
         .await
         .unwrap()
         .unwrap();
-    assert!(verified.email_verified);
+    assert_eq!(verified.email_verified, true);
     assert_eq!(verified.name.json().unwrap(), Some(name));
     assert_eq!(verified.image.json().unwrap(), Some(image));
     let stored = store.get_user_by_id(&id).await.unwrap().unwrap();
     assert_eq!(stored.name, verified.name);
     assert_eq!(stored.image, verified.image);
-    assert!(stored.email_verified);
+    assert_eq!(stored.email_verified, true);
     assert!(store.get_user_accounts(&id).await.unwrap().is_empty());
     assert!(store.get_user_sessions(&id).await.unwrap().is_empty());
     let repeated = store
@@ -150,7 +150,7 @@ async fn failed_verification_field_conversion_rolls_back_cleanup() {
         .unwrap_err();
     assert!(error.to_string().contains("NOT NULL"), "{error}");
     let user = store.get_user_by_id(&id).await.unwrap().unwrap();
-    assert!(!user.email_verified);
+    assert_eq!(user.email_verified, false);
     assert_eq!(user.name.json().unwrap(), Some(json!("Initial")));
     assert_eq!(store.get_user_accounts(&id).await.unwrap().len(), 1);
     assert_eq!(store.get_user_sessions(&id).await.unwrap().len(), 1);
@@ -295,7 +295,7 @@ async fn verification_uses_mapped_fields_and_transforms_serial_references_once()
         .await
         .unwrap()
         .unwrap();
-    assert!(verified.email_verified);
+    assert_eq!(verified.email_verified, true);
     assert_eq!(
         verified.name.json().unwrap(),
         Some(json!({"stored":"Final"}))

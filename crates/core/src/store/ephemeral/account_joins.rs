@@ -10,7 +10,7 @@ pub(super) fn user_value(user: &UserView, logical: &str, physical: &str) -> Valu
     if physical == "id" {
         return user.id.field_value();
     }
-    if matches!(logical, "name" | "image") {
+    if UserView::NATIVE_FIELDS.contains(&logical) {
         return user.native_field_value(logical).unwrap_or_default();
     }
     user.additional_fields
@@ -59,22 +59,30 @@ fn fallback_relation<T>(rows: Vec<T>, many: bool, limit: f64) -> JoinValue<T> {
 impl EphemeralStore {
     fn join_user_visibility(&self, user: &mut UserView) {
         user.visible_fields = Some(
-            ["name", "email", "image"]
-                .into_iter()
-                .map(str::to_owned)
-                .chain(
-                    self.model_fields
-                        .user_plugin_fields()
-                        .iter()
-                        .map(|name| (*name).to_owned()),
-                )
-                .filter(|name| {
-                    user.visible_fields
-                        .as_ref()
-                        .is_none_or(|fields| fields.contains(name))
-                })
-                .chain(self.config.user.fields().keys().cloned())
-                .collect(),
+            [
+                "id",
+                "name",
+                "email",
+                "emailVerified",
+                "image",
+                "createdAt",
+                "updatedAt",
+            ]
+            .into_iter()
+            .map(str::to_owned)
+            .chain(
+                self.model_fields
+                    .user_plugin_fields()
+                    .iter()
+                    .map(|name| (*name).to_owned()),
+            )
+            .filter(|name| {
+                user.visible_fields
+                    .as_ref()
+                    .is_none_or(|fields| fields.contains(name))
+            })
+            .chain(self.config.user.fields().keys().cloned())
+            .collect(),
         );
     }
 
@@ -87,9 +95,11 @@ impl EphemeralStore {
         let (mut user, accounts) = if native {
             let selected = self
                 .raw("user", "findOne", |state| {
-                    let Some(user) = state
-                        .users
-                        .find(|user| user.email.as_deref() == Some(&email.to_lowercase()))?
+                    let Some(user) = state.users.find(|user| {
+                        user.email
+                            .field_value()
+                            .strict_equals(&Value::from(email.to_lowercase()))
+                    })?
                     else {
                         return Ok(None);
                     };

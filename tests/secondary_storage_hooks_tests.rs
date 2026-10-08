@@ -496,7 +496,7 @@ async fn pure_secondary_email_verification_does_not_require_a_session_table() {
             .await
             .unwrap()
             .unwrap();
-        assert!(result.email_verified());
+        assert!(result.email_verified().typed().copied().unwrap());
         assert_eq!(
             auth.store()
                 .get_user_accounts(user.id.typed().unwrap())
@@ -614,7 +614,7 @@ async fn late_email_proof_does_not_revoke_the_verified_owners_new_cached_session
         .await
         .unwrap()
         .unwrap();
-    assert!(winner.email_verified());
+    assert!(winner.email_verified().typed().copied().unwrap());
     assert!(
         auth.store()
             .get_session(unproven.token().typed().unwrap())
@@ -628,7 +628,16 @@ async fn late_email_proof_does_not_revoke_the_verified_owners_new_cached_session
         .await
         .unwrap();
     cache.release.notify_one();
-    assert!(late.await.unwrap().unwrap().unwrap().email_verified());
+    assert!(
+        late.await
+            .unwrap()
+            .unwrap()
+            .unwrap()
+            .email_verified()
+            .typed()
+            .copied()
+            .unwrap()
+    );
 
     assert!(
         auth.store()
@@ -709,6 +718,9 @@ async fn committed_verification_revokes_cache_when_after_hook_fails() {
             .unwrap()
             .unwrap()
             .email_verified()
+            .typed()
+            .copied()
+            .unwrap()
     );
     assert!(
         cache
@@ -744,6 +756,9 @@ async fn committed_verification_revokes_cache_when_after_hook_fails() {
             .unwrap()
             .unwrap()
             .email_verified()
+            .typed()
+            .copied()
+            .unwrap()
     );
     assert!(
         auth.store()
@@ -820,6 +835,9 @@ async fn cache_revocation_failure_rolls_back_verification_and_next_proof_finishe
             .unwrap()
             .unwrap()
             .email_verified()
+            .typed()
+            .copied()
+            .unwrap()
     );
     assert_eq!(
         auth.store()
@@ -844,6 +862,9 @@ async fn cache_revocation_failure_rolls_back_verification_and_next_proof_finishe
             .unwrap()
             .unwrap()
             .email_verified()
+            .typed()
+            .copied()
+            .unwrap()
     );
     assert!(
         auth.store()
@@ -878,6 +899,9 @@ async fn cache_revocation_failure_rolls_back_verification_and_next_proof_finishe
             .unwrap()
             .unwrap()
             .email_verified()
+            .typed()
+            .copied()
+            .unwrap()
     );
     let sessions = auth
         .store()

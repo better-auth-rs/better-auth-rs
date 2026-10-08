@@ -425,7 +425,7 @@ async fn preset_callback_persists_the_captured_subject_and_mapped_user() {
             serde_json::to_value(&user).unwrap()["name"],
             "Mapped Reader"
         );
-        assert!(user.email_verified());
+        assert!(user.email_verified().is_truthy().unwrap());
         let account = ctx
             .database
             .get_account(id, case["expected"]["accountId"].as_str().unwrap())

@@ -71,7 +71,7 @@ impl AdminOptionsFixture {
                 match mode.as_str() {
                     "api-error" => Err(rejection("ADMIN_CALLBACK_REJECTED", "Admin callback rejected")),
                     "ordinary-error" => Err(AuthError::internal("private admin callback failure")),
-                    _ => Ok(format!("Blocked: {}/{}", user.email.as_deref().unwrap_or_default(), user.additional_fields.get("secretNote").and_then(FieldValue::as_str).unwrap_or_default())),
+                    _ => Ok(format!("Blocked: {}/{}", user.email.display_string()?, user.additional_fields.get("secretNote").and_then(FieldValue::as_str).unwrap_or_default())),
                 }
             })
         }))
@@ -147,7 +147,7 @@ impl AdminOptionsFixture {
                 let sessions = match &user { Some(user) => auth.store().get_user_sessions(user.id().typed().unwrap()).await?.len(), None => 0 };
                 let events = fixture.state.lock().unwrap().events.clone();
                 let user = match user.as_ref() { Some(user) => Some(auth.context().internal_user_view(user).await?), None => None };
-                let user = user.map(|user| Ok::<_, AuthError>(json!({"email":user.email,"role":user.role,"name":user.name,"banned":user.banned,"banReason":user.ban_reason,"hasBanExpires":user.ban_expires.is_some(),"secretNote":user.additional_fields.get("secretNote").map(FieldValue::json).transpose()?.flatten()}))).transpose()?;
+                let user = user.map(|user| Ok::<_, AuthError>(json!({"email":user.email,"role":user.role,"name":user.name,"banned":user.banned,"banReason":user.ban_reason,"hasBanExpires":user.ban_expires.is_truthy()?,"secretNote":user.additional_fields.get("secretNote").map(FieldValue::json).transpose()?.flatten()}))).transpose()?;
                 Ok(Json(json!({"events":events,"user":user,"sessions":sessions})))
             }
         }))

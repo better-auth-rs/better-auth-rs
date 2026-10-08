@@ -1,5 +1,5 @@
 use crate::store::schema::resolve_field_name;
-use crate::{AuthRecordFields, FromFieldMap, SchemaField};
+use crate::{AuthRecordFields, FromFieldMap, SchemaValue};
 use crate::{AuthResult, entity::AuthUser, plugin::MetadataMap, wire::UserView};
 use crate::{FieldMap, FieldValue as Value};
 use futures_util::future::BoxFuture;
@@ -92,11 +92,6 @@ impl UserView {
             }
             if let Some(fields) = &mut self.visible_fields {
                 let _ = fields.remove(name);
-            }
-            match name.as_str() {
-                "username" => self.username = None,
-                "displayUsername" => self.display_username = None,
-                _ => {}
             }
         }
         self.additional_fields.retain(|name, _| {
@@ -241,13 +236,21 @@ impl UserView {
                             })
                             .map(str::to_owned)
                             .chain(
-                                ["name", "email", "image"]
-                                    .into_iter()
-                                    .filter(|name| {
-                                        user.field_presence()
-                                            .is_none_or(|fields| fields.contains(*name))
-                                    })
-                                    .map(str::to_owned),
+                                [
+                                    "id",
+                                    "name",
+                                    "email",
+                                    "emailVerified",
+                                    "image",
+                                    "createdAt",
+                                    "updatedAt",
+                                ]
+                                .into_iter()
+                                .filter(|name| {
+                                    user.field_presence()
+                                        .is_none_or(|fields| fields.contains(*name))
+                                })
+                                .map(str::to_owned),
                             )
                             .collect(),
                     );
@@ -270,13 +273,9 @@ impl UserView {
                             view.field_order.push(name.into());
                         }
                         let value = if let Some(projected) = user.projected_fields() {
-                            match name {
-                                "id" => Some(view.id.field_value()),
-                                "name" => Some(view.name.field_value()),
-                                "image" => Some(view.image.field_value()),
-                                _ => projected.get(name).cloned(),
-                            }
-                            .unwrap_or_default()
+                            view.native_field_value(name)
+                                .or_else(|| projected.get(name).cloned())
+                                .unwrap_or_default()
                         } else {
                             let storage_name =
                                 resolve_field_name(field.field_name.as_deref(), name);
@@ -293,14 +292,10 @@ impl UserView {
                                         .and_then(|model| model.get(storage_name))
                                         .cloned()
                                 })
-                                .or_else(|| match (name, storage_name == name) {
-                                    ("username", true) => {
-                                        Some(user.username().map(str::to_owned).into_field())
-                                    }
-                                    ("displayUsername", true) => Some(
-                                        user.display_username().map(str::to_owned).into_field(),
-                                    ),
-                                    _ => None,
+                                .or_else(|| {
+                                    (storage_name == name)
+                                        .then(|| view.native_field_value(name))
+                                        .flatten()
                                 });
                             if raw_extra {
                                 field
@@ -311,55 +306,23 @@ impl UserView {
                                     .await?
                             } else {
                                 field
-                                    .adapter_output(
+                                    .adapter_output_with_capabilities(
                                         value.unwrap_or_default(),
-                                        capabilities.supports_native_json,
+                                        capabilities,
                                     )
                                     .await?
                             }
                         };
-                        if name == "username" || name == "displayUsername" {
-                            if let Some(fields) = &mut view.visible_fields {
-                                if !public || field.returned() {
-                                    let _ = fields.insert(name.to_owned());
-                                } else {
-                                    let _ = fields.remove(name);
-                                }
-                            }
-                            let typed = if !public || field.returned() {
-                                value.decode()?
-                            } else {
-                                None
-                            };
-                            if name == "username" {
-                                view.username = typed;
-                            } else {
-                                view.display_username = typed;
-                            }
-                        }
-                        if name == "name" || name == "image" {
-                            let target = if name == "name" {
-                                &mut view.name
-                            } else {
-                                &mut view.image
-                            };
-                            *target = crate::SchemaValue::from_field(value);
+                        if Self::NATIVE_FIELDS.contains(&name) {
+                            view.set_field(name, value);
                             if public
                                 && !field.returned()
                                 && let Some(fields) = &mut view.visible_fields
                             {
                                 let _ = fields.remove(name);
                             }
-                            return Ok(());
-                        }
-                        {
-                            let mut value = value;
-                            if !field.uses_id_output() {
-                                field.normalize_date(&mut value)?;
-                            }
-                            if !public || field.returned() {
-                                let _ = view.additional_fields.insert(name.to_owned(), value);
-                            }
+                        } else if !public || field.returned() {
+                            view.set_field(name, value);
                         }
                         Ok(())
                     })
@@ -371,80 +334,96 @@ impl UserView {
     }
 }
 
-impl UserView {
-    pub(crate) const NATIVE_FIELDS: &[&str] = &[
-        "id",
-        "name",
-        "email",
-        "emailVerified",
-        "image",
-        "createdAt",
-        "updatedAt",
-        "isAnonymous",
-        "phoneNumber",
-        "phoneNumberVerified",
-        "username",
-        "displayUsername",
-        "twoFactorEnabled",
-        "role",
-        "banned",
-        "banReason",
-        "banExpires",
-    ];
+macro_rules! user_fields {
+    ($($field:ident => $name:literal),* $(,)?) => {
+        impl UserView {
+            pub(crate) const NATIVE_FIELDS: &[&str] = &[$($name),*];
 
-    pub(crate) fn native_field_value(&self, name: &str) -> Option<Value> {
-        if matches!(name, "name" | "email" | "image")
-            && self
-                .visible_fields
-                .as_ref()
-                .is_some_and(|fields| !fields.contains(name))
-        {
-            return None;
-        }
-        let value = match name {
-            "id" if !self.id.is_undefined() => self.id.clone().into_field(),
-            "name" if !self.name.is_undefined() => self.name.clone().into_field(),
-            "email" => self.email.clone().into_field(),
-            "emailVerified" => self.email_verified.into_field(),
-            "image" if !self.image.is_undefined() => self.image.clone().into_field(),
-            "createdAt" => self.created_at.clone().into_field(),
-            "updatedAt" => self.updated_at.clone().into_field(),
-            "id" | "name" | "image" => return None,
-            _ => {
-                if self
-                    .visible_fields
-                    .as_ref()
-                    .is_some_and(|fields| !fields.contains(name))
-                {
+            pub(crate) fn native_field_value(&self, name: &str) -> Option<Value> {
+                if self.visible_fields.as_ref().is_some_and(|fields| !fields.contains(name)) {
                     return None;
                 }
                 let value = match name {
-                    "isAnonymous" => self.is_anonymous.into_field(),
-                    "phoneNumber" => self.phone_number.clone().into_field(),
-                    "phoneNumberVerified" => self.phone_number_verified.into_field(),
-                    "username" => self.username.clone().into_field(),
-                    "displayUsername" => self.display_username.clone().into_field(),
-                    "twoFactorEnabled" => self.two_factor_enabled.into_field(),
-                    "role" => self.role.clone().into_field(),
-                    "banned" => self.banned.into_field(),
-                    "banReason" => self.ban_reason.clone().into_field(),
-                    "banExpires" => self.ban_expires.clone().into_field(),
+                    $($name => self.$field.field_value(),)*
+                    "metadata" => self.metadata.clone(),
                     _ => return None,
                 };
-                if name == "isAnonymous" && value.is_null() && self.visible_fields.is_some() {
-                    return Some(Value::Bool(false));
-                }
-                if self.visible_fields.is_none()
-                    && value.is_null()
-                    && ["isAnonymous", "phoneNumber", "phoneNumberVerified"].contains(&name)
+                if value.is_undefined() && self.visible_fields.is_none()
+                    && !self.field_order.iter().any(|field| field == name)
                 {
                     return None;
                 }
-                value
+                Some(value)
             }
-        };
-        Some(value)
-    }
+
+            /// Assign a native or additional field without decoding schema replacements.
+            /// Preserve existing property order and record newly present fields, including undefined.
+            pub fn set_field(&mut self, name: &str, value: Value) {
+                match name {
+                    $($name => self.$field = SchemaValue::from_field(value),)*
+                    "metadata" => self.metadata = value,
+                    _ => { let _ = self.additional_fields.insert(name.into(), value); }
+                }
+                if let Some(fields) = &mut self.visible_fields {
+                    let _ = fields.insert(name.into());
+                }
+                if !self.field_order.iter().any(|field| field == name) {
+                    self.field_order.push(name.into());
+                }
+            }
+        }
+
+        impl TryFrom<FieldMap> for UserView {
+            type Error = crate::AuthError;
+
+            fn try_from(mut fields: FieldMap) -> Result<Self, Self::Error> {
+                let visible_fields = Some(fields.keys().cloned().collect());
+                Ok(Self {
+                    field_order: fields.keys().cloned().collect(),
+                    $($field: SchemaValue::from_field(fields.remove($name).unwrap_or_default()),)*
+                    metadata: fields.remove("metadata").unwrap_or(Value::Null),
+                    visible_fields,
+                    additional_fields: fields,
+                })
+            }
+        }
+
+        impl AuthRecordFields for UserView {
+            fn field_values(&self) -> AuthResult<FieldMap> {
+                let mut fields = FieldMap::from(self.clone());
+                let _ = fields.insert("metadata".into(), self.metadata.clone());
+                Ok(fields.in_field_order(&self.field_order))
+            }
+
+            fn structured_clone(&self, context: &mut crate::StructuredCloneContext) -> AuthResult<Self> {
+                let mut user = self.clone();
+                $(user.$field = context.clone_field(&self.$field)?;)*
+                user.metadata = context.clone_value(&self.metadata);
+                user.additional_fields = context.clone_map(&self.additional_fields);
+                Ok(user)
+            }
+        }
+    };
+}
+
+user_fields! {
+    id => "id",
+    name => "name",
+    email => "email",
+    email_verified => "emailVerified",
+    image => "image",
+    created_at => "createdAt",
+    updated_at => "updatedAt",
+    is_anonymous => "isAnonymous",
+    phone_number => "phoneNumber",
+    phone_number_verified => "phoneNumberVerified",
+    username => "username",
+    display_username => "displayUsername",
+    two_factor_enabled => "twoFactorEnabled",
+    role => "role",
+    banned => "banned",
+    ban_reason => "banReason",
+    ban_expires => "banExpires",
 }
 
 impl From<UserView> for FieldMap {
@@ -456,85 +435,17 @@ impl From<UserView> for FieldMap {
                     .map(|value| ((*name).into(), value))
             })
             .collect();
-        result.extend(user.additional_fields);
-        result.in_field_order(&user.field_order)
-    }
-}
-
-impl TryFrom<FieldMap> for UserView {
-    type Error = crate::AuthError;
-
-    fn try_from(mut fields: FieldMap) -> Result<Self, Self::Error> {
-        fn take<T: crate::SchemaField>(fields: &mut FieldMap, name: &str) -> AuthResult<T> {
-            fields.remove(name).unwrap_or_default().decode()
+        if user
+            .visible_fields
+            .as_ref()
+            .is_some_and(|fields| fields.contains("metadata"))
+        {
+            let _ = result.insert("metadata".into(), user.metadata.clone());
         }
-        let visible_fields = Some(
-            PLUGIN_FIELDS
-                .iter()
-                .flat_map(|(_, names)| names.iter())
-                .filter(|name| fields.contains_key(**name))
-                .map(|name| (*name).to_owned())
-                .chain(
-                    ["name", "email", "image"]
-                        .into_iter()
-                        .filter(|name| fields.contains_key(*name))
-                        .map(str::to_owned),
-                )
-                .collect(),
-        );
-        Ok(Self {
-            field_order: fields.keys().cloned().collect(),
-            id: crate::SchemaValue::from_field(fields.remove("id").unwrap_or_default()),
-            name: crate::SchemaValue::from_field(fields.remove("name").unwrap_or_default()),
-            email: take(&mut fields, "email")?,
-            email_verified: take(&mut fields, "emailVerified")?,
-            image: crate::SchemaValue::from_field(fields.remove("image").unwrap_or_default()),
-            created_at: take(&mut fields, "createdAt")?,
-            updated_at: take(&mut fields, "updatedAt")?,
-            is_anonymous: take(&mut fields, "isAnonymous")?,
-            phone_number: take(&mut fields, "phoneNumber")?,
-            phone_number_verified: take(&mut fields, "phoneNumberVerified")?,
-            // Keep schema-backed fields in the projected map for later cookie updates.
-            username: fields
-                .get("username")
-                .cloned()
-                .unwrap_or_default()
-                .decode()?,
-            display_username: fields
-                .get("displayUsername")
-                .cloned()
-                .unwrap_or_default()
-                .decode()?,
-            two_factor_enabled: take(&mut fields, "twoFactorEnabled")?,
-            role: take(&mut fields, "role")?,
-            banned: take::<Option<bool>>(&mut fields, "banned")?.unwrap_or(false),
-            ban_reason: take(&mut fields, "banReason")?,
-            ban_expires: take(&mut fields, "banExpires")?,
-            metadata: fields.remove("metadata").unwrap_or(Value::Null),
-            visible_fields,
-            additional_fields: fields,
-        })
-    }
-}
-
-impl AuthRecordFields for UserView {
-    fn field_values(&self) -> AuthResult<FieldMap> {
-        let mut fields = FieldMap::from(self.clone());
-        let _ = fields.insert("metadata".into(), self.metadata.clone());
-        Ok(fields.in_field_order(&self.field_order))
-    }
-
-    fn structured_clone(&self, context: &mut crate::StructuredCloneContext) -> AuthResult<Self> {
-        let mut user = self.clone();
-        user.id = context.clone_field(&self.id)?;
-        user.name = context.clone_field(&self.name)?;
-        user.image = context.clone_field(&self.image)?;
-        user.created_at = context.clone_field(&self.created_at)?;
-        user.updated_at = context.clone_field(&self.updated_at)?;
-        user.ban_expires = context.clone_field(&self.ban_expires)?;
-        user.metadata = context.clone_value(&self.metadata);
-        user.additional_fields = context.clone_map(&self.additional_fields);
-        Ok(user)
+        result.extend(user.additional_fields.into_iter().filter(|(name, _)| {
+            name != "metadata" && !UserView::NATIVE_FIELDS.contains(&name.as_str())
+        }));
+        result.in_field_order(&user.field_order)
     }
 }
 
@@ -553,14 +464,7 @@ impl serde::Serialize for UserView {
 impl<'de> serde::Deserialize<'de> for UserView {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         use serde::de::Error;
-        let mut fields = crate::field_value::serde::map::deserialize(deserializer)?;
-        for name in ["createdAt", "updatedAt", "banExpires"] {
-            if let Some(Value::String(text)) = fields.get(name) {
-                let date = crate::utils::date::parse_date_constructor(text)
-                    .ok_or_else(|| D::Error::custom(format!("Invalid user date field `{name}`")))?;
-                let _ = fields.insert(name.into(), date.into());
-            }
-        }
+        let fields = crate::field_value::serde::map::deserialize(deserializer)?;
         Self::from_field_values(fields).map_err(D::Error::custom)
     }
 }

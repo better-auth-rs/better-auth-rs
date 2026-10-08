@@ -45,7 +45,7 @@ impl OAuthSignInOptions<'_> {
                 )
                 .await;
         }
-        if required && !user.is_some_and(AuthUser::email_verified) {
+        if required && !user.is_some_and(|user| user.email_verified().field_value().is_truthy()) {
             return Err(OAuthSignInError::Generic("email_not_verified".to_owned()));
         }
         Ok(())
@@ -331,10 +331,11 @@ pub(super) async fn process_oauth_sign_in(
         let mut owner_user = owner.user;
         if let better_auth_core::store::JoinValue::One(Some(user)) = &owner_user
             && email_verified
-            && !user.email_verified()
+            && !user.email_verified().is_truthy()?
             && user
                 .email()
-                .is_some_and(|email| email.eq_ignore_ascii_case(provider_email))
+                .field_value()
+                .strict_equals(&provider_email.to_lowercase().into())
         {
             let _ = ctx
                 .database
@@ -351,23 +352,27 @@ pub(super) async fn process_oauth_sign_in(
             let (id, existing_verified) = match &owner_user {
                 better_auth_core::store::JoinValue::One(Some(user)) => (
                     user.id().field_value(),
-                    user.email_verified()
-                        && user
-                            .email()
-                            .is_some_and(|email| email.eq_ignore_ascii_case(provider_email)),
+                    if user
+                        .email()
+                        .field_value()
+                        .strict_equals(&provider_email.to_lowercase().into())
+                        && user.email_verified().is_truthy()?
+                    {
+                        user.email_verified().field_value()
+                    } else {
+                        email_verified.into()
+                    },
                 ),
-                _ => (better_auth_core::FieldValue::Undefined, false),
+                _ => (
+                    better_auth_core::FieldValue::Undefined,
+                    email_verified.into(),
+                ),
             };
             let updated = ctx
                 .database
                 .update_user_by_id_value(
                     &id,
-                    provider_profile_update(
-                        ctx,
-                        user_info,
-                        provider_email,
-                        email_verified || existing_verified,
-                    )?,
+                    provider_profile_update(ctx, user_info, provider_email, existing_verified)?,
                 )
                 .await?;
             if let Some(user) = updated {
@@ -453,7 +458,8 @@ pub(super) async fn process_oauth_sign_in(
         if !linking.enabled()
             || linking.disable_implicit_linking
             || (!trusted_provider && !email_verified)
-            || (linking.require_local_email_verified && !existing_user.email_verified())
+            || (linking.require_local_email_verified
+                && !existing_user.email_verified().is_truthy()?)
         {
             return Err(OAuthSignInError::Generic("account not linked".to_string()));
         }
@@ -504,10 +510,11 @@ pub(super) async fn process_oauth_sign_in(
             .ok_or_else(|| "unable to link account".to_string())?;
 
         if email_verified
-            && !linked_user.email_verified()
+            && !linked_user.email_verified().is_truthy()?
             && linked_user
                 .email()
-                .is_some_and(|email| email.eq_ignore_ascii_case(provider_email))
+                .field_value()
+                .strict_equals(&provider_email.to_lowercase().into())
         {
             let _ = ctx
                 .database
@@ -534,11 +541,16 @@ pub(super) async fn process_oauth_sign_in(
                         ctx,
                         user_info,
                         provider_email,
-                        email_verified
-                            || (linked_user.email_verified()
-                                && linked_user.email().is_some_and(|email| {
-                                    email.eq_ignore_ascii_case(provider_email)
-                                })),
+                        if linked_user
+                            .email()
+                            .field_value()
+                            .strict_equals(&provider_email.to_lowercase().into())
+                            && linked_user.email_verified().is_truthy()?
+                        {
+                            linked_user.email_verified().field_value()
+                        } else {
+                            email_verified.into()
+                        },
                     )?,
                 )
                 .await?;
@@ -694,20 +706,28 @@ fn provider_profile_update<S: better_auth_core::AuthSchema>(
     ctx: &AuthContext<S>,
     user_info: &OAuthUserInfo,
     provider_email: &str,
-    email_verified: bool,
+    email_verified: better_auth_core::FieldValue,
 ) -> AuthResult<UpdateUser> {
+    let mut fields = ctx
+        .config
+        .user
+        .parse_provider_input(&user_info.additional_fields, false)?;
+    let email_verified = match email_verified {
+        better_auth_core::FieldValue::Bool(value) => Some(value),
+        value => {
+            let _ = fields.insert("emailVerified".into(), value);
+            None
+        }
+    };
     Ok(UpdateUser {
-        additional_fields: ctx
-            .config
-            .user
-            .parse_provider_input(&user_info.additional_fields, false)?,
+        additional_fields: fields,
+        email_verified,
         name: user_info
             .name()?
             .map(|value| Some(value.to_owned()).into())
             .unwrap_or_default(),
         image: user_info.image.clone().map(Into::into).unwrap_or_default(),
         email: Some(provider_email.to_lowercase()),
-        email_verified: Some(email_verified),
         ..Default::default()
     })
 }

@@ -29,7 +29,11 @@ pub(crate) async fn change_email_core<S: better_auth_core::AuthSchema>(
         });
     }
     let new_email = body.new_email.to_lowercase();
-    if user.email.as_deref() == Some(new_email.as_str()) {
+    if user
+        .email
+        .field_value()
+        .strict_equals(&new_email.clone().into())
+    {
         return Err(AuthError::bad_request("Email is the same"));
     }
     let verification = ctx
@@ -39,7 +43,11 @@ pub(crate) async fn change_email_core<S: better_auth_core::AuthSchema>(
     let callbacks = ctx
         .extensions
         .get::<std::sync::Arc<super::UserManagementCallbacks<S>>>();
-    let update_now = !user.email_verified && config.change_email.update_without_verification;
+    let update_now = !user
+        .email_verified
+        .field_value()
+        .strict_equals(&true.into())
+        && config.change_email.update_without_verification;
     if !update_now && !can_send {
         return Err(better_auth_core::AuthResponse::json(
             400,
@@ -51,18 +59,17 @@ pub(crate) async fn change_email_core<S: better_auth_core::AuthSchema>(
         || EmailVerificationConfig::default().verification_token_expiry(),
         |options| options.verification_token_expiry(),
     );
-    let old_email = user.email.as_deref().unwrap_or_default();
     if ctx.database.get_user_by_email(&new_email).await?.is_some() {
         let _ = create_email_verification_token(
             ctx.config.signing_secret(),
-            old_email,
+            &crate::plugins::helpers::user_email(user)?,
             Some(&new_email),
             expires_in,
             None,
         )?;
         return Ok(StatusResponse { status: true });
     }
-    let confirmation = user.email_verified
+    let confirmation = user.email_verified.is_truthy()?
         && can_send
         && (callbacks.is_some_and(|callbacks| callbacks.confirmation.is_some())
             || config.change_email.send_change_email_confirmation.is_some());
@@ -78,7 +85,7 @@ pub(crate) async fn change_email_core<S: better_auth_core::AuthSchema>(
                 },
             )
             .await?;
-        recipient.email = Some(new_email.clone());
+        recipient.set_field("email", new_email.clone().into());
         ctx.session_manager()
             .set_session_cookie(
                 req,
@@ -94,24 +101,24 @@ pub(crate) async fn change_email_core<S: better_auth_core::AuthSchema>(
         }
     }
     let (email, update_to, request_type) = if update_now {
-        (new_email.as_str(), None, None)
+        (new_email.clone(), None, None)
     } else if confirmation {
         (
-            old_email,
+            crate::plugins::helpers::user_email(user)?,
             Some(new_email.as_str()),
             Some("change-email-confirmation"),
         )
     } else {
-        recipient.email = Some(new_email.clone());
+        recipient.set_field("email", new_email.clone().into());
         (
-            old_email,
+            crate::plugins::helpers::user_email(user)?,
             Some(new_email.as_str()),
             Some("change-email-verification"),
         )
     };
     let token = create_email_verification_token(
         ctx.config.signing_secret(),
-        email,
+        &email,
         update_to,
         expires_in,
         request_type,

@@ -50,7 +50,7 @@ where
             else {
                 return Ok(None);
             };
-            if user.email_verified() {
+            if user.email_verified().is_truthy()? {
                 return self.output_user(&user, &tx).await.map(Some);
             }
             let hook_context = self.hook_context(Some((&tx, &hook_transaction)));

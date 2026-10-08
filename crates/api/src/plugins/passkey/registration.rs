@@ -57,15 +57,16 @@ pub(super) async fn resolve_user<S: AuthSchema>(
     config: &PasskeyConfig,
 ) -> AuthResult<PasskeyRegistrationUser> {
     if let Some(user) = registration_session(ctx, req, config).await? {
-        let name = user
-            .email()
-            .filter(|email| !email.is_empty())
-            .unwrap_or(user.id.typed()?)
-            .to_owned();
+        let name = user.email().field_value();
+        let name = if name.is_truthy() {
+            name
+        } else {
+            user.id.field_value()
+        };
         return Ok(PasskeyRegistrationUser {
             id: user.id.typed()?.clone(),
-            display_name: Some(name.clone()),
-            name,
+            display_name: better_auth_core::SchemaValue::from_field(name.clone()),
+            name: better_auth_core::SchemaValue::from_field(name),
         });
     }
     let resolver = config.registration.resolve_user.as_ref().ok_or(AuthError::Upstream {
@@ -82,7 +83,7 @@ pub(super) async fn resolve_user<S: AuthSchema>(
         )
         .await
         .map_err(generation_error)?;
-    if user.id.is_empty() || user.name.is_empty() {
+    if user.id.is_empty() || !user.name.is_truthy()? {
         return Err(invalid_user());
     }
     Ok(user)

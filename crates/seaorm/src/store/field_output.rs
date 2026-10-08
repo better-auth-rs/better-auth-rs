@@ -11,6 +11,7 @@ pub(super) fn column_value<E: EntityTrait>(model: &E::Model, column: E::Column) 
 pub(super) fn capabilities(backend: DbBackend) -> FieldOutputCapabilities {
     FieldOutputCapabilities {
         supports_native_json: backend == DbBackend::Postgres,
+        supports_native_dates: backend != DbBackend::Sqlite,
         supports_arrays: false,
         supports_booleans: backend == DbBackend::Postgres,
     }

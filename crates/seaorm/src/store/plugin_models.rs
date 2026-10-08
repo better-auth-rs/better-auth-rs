@@ -161,12 +161,7 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
             .map(|row| super::plugin_rows::record::<M>(row, &fields, backend))
             .collect::<AuthResult<Vec<_>>>()?;
         self.model_fields
-            .project_plugin_records(
-                role,
-                records,
-                super::field_output::capabilities(backend),
-                backend != DbBackend::Sqlite,
-            )
+            .project_plugin_records(role, records, super::field_output::capabilities(backend))
             .await
     }
 }

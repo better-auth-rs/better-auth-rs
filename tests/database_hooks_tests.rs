@@ -252,7 +252,7 @@ impl SeaOrmHooks<TestSchema> for DeleteCaptureHook {
         self.emails
             .lock()
             .expect("delete capture mutex should lock")
-            .push(user.email().map(str::to_owned));
+            .push(user.email().typed()?.as_deref().map(str::to_owned));
         Ok(HookControl::Continue)
     }
 }

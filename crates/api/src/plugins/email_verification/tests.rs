@@ -141,21 +141,21 @@ fn make_test_user(email: &str, verified: bool) -> UserView {
         field_order: Default::default(),
         id: "test-id".into(),
         name: Some("Test".into()).into(),
-        email: Some(email.into()),
-        email_verified: verified,
+        email: Some(email.into()).into(),
+        email_verified: verified.into(),
         image: Default::default(),
         created_at: Utc::now().into(),
         updated_at: Utc::now().into(),
-        is_anonymous: None,
-        phone_number: None,
-        phone_number_verified: None,
-        username: None,
-        display_username: None,
-        two_factor_enabled: Some(false),
-        role: None,
-        banned: false,
-        ban_reason: None,
-        ban_expires: None,
+        is_anonymous: None.into(),
+        phone_number: None.into(),
+        phone_number_verified: None.into(),
+        username: None.into(),
+        display_username: None.into(),
+        two_factor_enabled: Some(false).into(),
+        role: None.into(),
+        banned: false.into(),
+        ban_reason: None.into(),
+        ban_expires: None.into(),
         metadata: better_auth_core::FieldValue::Null,
     }
 }
@@ -229,21 +229,21 @@ fn test_to_user_preserves_fields() {
         field_order: Default::default(),
         id: "test-id".into(),
         name: Some("Test User".into()).into(),
-        email: Some("test@example.com".into()),
-        email_verified: true,
+        email: Some("test@example.com".into()).into(),
+        email_verified: true.into(),
         image: Some("https://img.example.com/a.png".into()).into(),
         created_at: Utc::now().into(),
         updated_at: Utc::now().into(),
-        is_anonymous: None,
-        phone_number: None,
-        phone_number_verified: None,
-        username: Some("testuser".into()),
-        display_username: Some("TestUser".into()),
-        two_factor_enabled: Some(true),
-        role: Some("admin".into()),
-        banned: true,
-        ban_reason: Some("spam".into()),
-        ban_expires: None,
+        is_anonymous: None.into(),
+        phone_number: None.into(),
+        phone_number_verified: None.into(),
+        username: Some("testuser".into()).into(),
+        display_username: Some("TestUser".into()).into(),
+        two_factor_enabled: Some(true).into(),
+        role: Some("admin".into()).into(),
+        banned: true.into(),
+        ban_reason: Some("spam".into()).into(),
+        ban_expires: None.into(),
         metadata: better_auth_core::FieldValue::Null,
     };
     let converted = UserView::from(&user);
@@ -252,18 +252,30 @@ fn test_to_user_preserves_fields() {
         converted.name.typed().unwrap().as_deref(),
         Some("Test User")
     );
-    assert_eq!(converted.email.as_deref(), Some("test@example.com"));
-    assert!(converted.email_verified);
+    assert_eq!(
+        converted.email.typed().unwrap().as_deref(),
+        Some("test@example.com")
+    );
+    assert!(converted.email_verified.is_truthy().unwrap());
     assert_eq!(
         converted.image.typed().unwrap().as_deref(),
         Some("https://img.example.com/a.png")
     );
-    assert_eq!(converted.username.as_deref(), Some("testuser"));
-    assert_eq!(converted.display_username.as_deref(), Some("TestUser"));
+    assert_eq!(
+        converted.username.typed().unwrap().as_deref(),
+        Some("testuser")
+    );
+    assert_eq!(
+        converted.display_username.typed().unwrap().as_deref(),
+        Some("TestUser")
+    );
     assert_eq!(converted.two_factor_enabled, Some(true));
-    assert_eq!(converted.role.as_deref(), Some("admin"));
-    assert!(converted.banned);
-    assert_eq!(converted.ban_reason.as_deref(), Some("spam"));
+    assert_eq!(converted.role.typed().unwrap().as_deref(), Some("admin"));
+    assert!(converted.banned.is_truthy().unwrap());
+    assert_eq!(
+        converted.ban_reason.typed().unwrap().as_deref(),
+        Some("spam")
+    );
 }
 
 // ------------------------------------------------------------------
@@ -471,7 +483,7 @@ async fn test_signup_then_explicit_verification_uses_custom_sender_once() {
         .await
         .unwrap()
         .unwrap();
-    assert!(user.email_verified);
+    assert!(user.email_verified.is_truthy().unwrap());
 
     let request = test_helpers::create_auth_json_request_no_query(
         HttpMethod::Post,
@@ -526,7 +538,7 @@ async fn test_verify_email_basic_flow() {
         .await
         .unwrap()
         .unwrap();
-    assert!(updated.email_verified);
+    assert!(updated.email_verified.is_truthy().unwrap());
 }
 
 // ------------------------------------------------------------------
@@ -592,9 +604,12 @@ async fn test_change_email_verification_after_hook_observes_updated_user() {
     let after_hook: EmailVerificationHook = Arc::new(move |user: &UserView| {
         let hook_state = hook_state.clone();
         let email = user.email.clone();
-        let verified = user.email_verified;
+        let verified = user.email_verified.clone();
         Box::pin(async move {
-            hook_state.lock().unwrap().push((email, verified));
+            hook_state
+                .lock()
+                .unwrap()
+                .push((email.typed()?.clone(), *verified.typed()?));
             Ok(())
         })
     });
@@ -637,7 +652,7 @@ async fn test_change_email_verification_after_hook_observes_updated_user() {
         .await
         .unwrap()
         .unwrap();
-    assert!(updated_user.email_verified);
+    assert!(updated_user.email_verified.is_truthy().unwrap());
 }
 
 // Upstream reference: packages/better-auth/src/api/routes/email-verification.ts :: `afterEmailVerification` runs only after `updateUserByEmail(...)`, so failed updates must not fire the hook.
@@ -698,10 +713,10 @@ async fn test_change_email_verification_does_not_fire_after_hook_when_update_fai
         .unwrap()
         .unwrap();
     assert_eq!(
-        source_user.email.as_deref(),
+        source_user.email.typed().unwrap().as_deref(),
         Some("duplicate-source@test.com")
     );
-    assert!(!source_user.email_verified);
+    assert!(!source_user.email_verified.is_truthy().unwrap());
 }
 
 // Upstream reference: packages/better-auth/src/api/routes/email-verification.test.ts :: describe("Email Verification") and packages/better-auth/src/api/routes/email-verification.ts; adapted to the Rust email verification plugin.
@@ -739,7 +754,7 @@ async fn test_verify_email_before_hook_error_aborts() {
         .await
         .unwrap()
         .unwrap();
-    assert!(!u.email_verified);
+    assert!(!u.email_verified.is_truthy().unwrap());
 }
 
 // ------------------------------------------------------------------

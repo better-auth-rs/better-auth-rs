@@ -297,19 +297,23 @@ async fn verify_user_password(
         .await
 }
 
+enum CredentialSignIn<'a> {
+    Email(Option<&'a EmailVerificationPlugin>),
+    Username,
+}
+
 /// Shared sign-in finalization logic after user lookup and credential verification.
 async fn finalize_sign_in_with_user_core(
     req: &AuthRequest,
     user: impl AuthUser,
     remember_me: Option<bool>,
-    session_failure_status: u16,
-    email_verification: Option<&EmailVerificationPlugin>,
+    method: CredentialSignIn<'_>,
     callback_url: Option<&str>,
     meta: &RequestMeta,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<SignInCoreResult<UserView>> {
     // Send verification email on sign-in if configured
-    if let Some(ev) = email_verification
+    if let CredentialSignIn::Email(Some(ev)) = &method
         && let Err(e) = ev
             .send_verification_on_sign_in_with_request(&user, callback_url, Some(req), ctx)
             .await
@@ -335,6 +339,10 @@ async fn finalize_sign_in_with_user_core(
     .await
     .map_err(SessionIssueError::into_auth_error)?;
     let Some(issued) = issued else {
+        let session_failure_status = match method {
+            CredentialSignIn::Email(_) => 401,
+            CredentialSignIn::Username => 500,
+        };
         if session_failure_status == 401 {
             better_auth_core::observability::logger::current()
                 .error("Failed to create session", &[]);
@@ -420,7 +428,7 @@ pub(crate) async fn sign_in_core(
 
     if (config.require_email_verification
         || email_verification.is_some_and(EmailVerificationPlugin::is_verification_required))
-        && !user.email_verified()
+        && !user.email_verified().is_truthy()?
     {
         if let Some(verification) = email_verification {
             verification
@@ -439,8 +447,7 @@ pub(crate) async fn sign_in_core(
         req,
         user,
         body.remember_me,
-        401,
-        email_verification,
+        CredentialSignIn::Email(email_verification),
         body.callback_url.as_deref(),
         meta,
         ctx,
@@ -484,7 +491,10 @@ pub(crate) async fn sign_in_username_core(
 
     if (config.require_email_verification
         || email_verification.is_some_and(EmailVerificationPlugin::is_verification_required))
-        && !user.email_verified()
+        && !user
+            .email_verified()
+            .is_truthy()
+            .map_err(SignInUsernameFailure::Auth)?
     {
         if let Some(ev) = email_verification {
             ev.send_verification_on_sign_in_with_request(
@@ -503,8 +513,7 @@ pub(crate) async fn sign_in_username_core(
         req,
         user,
         body.remember_me,
-        500,
-        None,
+        CredentialSignIn::Username,
         body.callback_url.as_deref(),
         meta,
         ctx,

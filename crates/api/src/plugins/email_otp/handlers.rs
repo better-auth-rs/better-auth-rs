@@ -124,7 +124,7 @@ impl EmailOtpPlugin {
             .data
             && current.user.id() == user.id()
         {
-            current.user.email_verified = true;
+            current.user.set_field("emailVerified", true.into());
             manager
                 .write_cache(req, &current, manager.dont_remember(req))
                 .await?;
@@ -150,7 +150,7 @@ impl EmailOtpPlugin {
         )
         .await?;
         let user = match ctx.database.get_user_by_email(&email).await? {
-            Some(user) if !user.email_verified() => ctx
+            Some(user) if !user.email_verified().is_truthy()? => ctx
                 .database
                 .verify_user_and_revoke_unproven_access(user.id().typed()?)
                 .await?
@@ -279,7 +279,7 @@ impl EmailOtpPlugin {
             })
             .await?;
         }
-        if !user.email_verified() {
+        if !user.email_verified().is_truthy()? {
             let _ = ctx
                 .database
                 .update_user(
@@ -373,8 +373,8 @@ impl EmailOtpPlugin {
         }
         let _ = self.mark_verified(ctx, &user, new_email.clone()).await?;
         let mut user = authenticated_user;
-        user.email = Some(new_email);
-        user.email_verified = true;
+        user.set_field("email", new_email.into());
+        user.set_field("emailVerified", true.into());
         ctx.session_manager()
             .set_session_cookie(
                 req,
@@ -389,7 +389,7 @@ impl EmailOtpPlugin {
         if !self.config.change_email {
             return Err(AuthError::bad_request("Change email with OTP is disabled"));
         }
-        let email = user.email().unwrap_or_default().to_lowercase();
+        let email = crate::plugins::helpers::user_email(user)?.to_lowercase();
         let new_email = body.get("newEmail").to_lowercase();
         validate_email(&new_email)?;
         if email == new_email {

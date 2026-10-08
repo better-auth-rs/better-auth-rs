@@ -164,10 +164,10 @@ impl AdminPlugin {
         let permissions = HashMap::from([(resource.to_string(), vec![action.to_string()])]);
         if has_permission(
             user.id.as_str(),
-            user.role.as_deref(),
+            &user.role.field_value(),
             &self.config,
             &permissions,
-        ) {
+        )? {
             Ok(())
         } else {
             Err(AuthError::forbidden(message))
@@ -450,7 +450,12 @@ impl AdminPlugin {
             Some(user) => has_permission_core(&body, &user, &self.config)?,
             None => PermissionResponse {
                 error: None,
-                success: has_permission(user_id, role, &self.config, requested),
+                success: has_permission(
+                    user_id,
+                    &role.map_or(better_auth_core::FieldValue::Undefined, Into::into),
+                    &self.config,
+                    requested,
+                )?,
             },
         };
         AuthResponse::json(200, &response).map_err(AuthError::from)
@@ -459,10 +464,10 @@ impl AdminPlugin {
 
 pub(super) fn target_is_admin(
     user_id: Option<&str>,
-    role: Option<&str>,
+    role: &better_auth_core::FieldValue,
     config: &AdminConfig,
-) -> bool {
-    is_admin_user_id(user_id, config) || is_admin_role(role, config)
+) -> AuthResult<bool> {
+    Ok(is_admin_user_id(user_id, config) || is_admin_role(role, config)?)
 }
 
 pub use access::RolePermissions;
