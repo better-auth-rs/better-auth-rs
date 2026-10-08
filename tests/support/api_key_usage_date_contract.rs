@@ -52,7 +52,10 @@ fn visible(row: &ApiKey, seed: &ApiKey, updated: (&FieldDate, Option<&str>)) -> 
     clippy::expect_used,
     reason = "The contract requires every pinned operation and checks guarded writes before comparing complete observations"
 )]
-pub(crate) async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
+pub(crate) async fn contract<S: AuthSchema>(
+    raw: Arc<dyn AuthStore<S>>,
+    backend: &str,
+) -> AuthResult<()> {
     let captured: Value =
         serde_json::from_str(include_str!("../fixtures/api-key-date-usage-1.7.6.json"))?;
     assert_eq!(captured.get("version"), Some(&json!("1.7.6")));
@@ -62,10 +65,10 @@ pub(crate) async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthR
         .expect("captured backends");
     let expected = backends
         .iter()
-        .find(|backend| backend.get("backend") == Some(&json!("sqlite")))
+        .find(|captured| captured.get("backend") == Some(&json!(backend)))
         .and_then(|backend| backend.get("operations"))
         .and_then(Value::as_array)
-        .expect("captured SQLite operations");
+        .expect("captured backend operations");
     assert_eq!(
         expected
             .iter()
@@ -101,26 +104,29 @@ pub(crate) async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthR
                     )
                     .await?
             } else {
-                if name == "refill-from-readback" {
-                    let readback = fixture
-                        .reader
-                        .get_api_key_by_id(seed.id.typed()?)
-                        .await?
-                        .expect("persisted API Key");
-                    let previous = readback.last_refill_at.expect("persisted refill Date");
-                    let previous = FieldValue::Date(previous)
-                        .json()?
-                        .expect("persisted refill Date JSON");
-                    let _ = input
-                        .as_object_mut()
-                        .expect("operation input object")
-                        .insert("previous".into(), previous);
-                }
                 let at = timestamp(&input, "at")?;
                 let write = match name {
                     "refill-some-equal" | "refill-some-miss" | "refill-from-readback" => {
+                        let previous = if name == "refill-from-readback" {
+                            let readback = fixture
+                                .reader
+                                .get_api_key_by_id(seed.id.typed()?)
+                                .await?
+                                .expect("persisted API Key");
+                            let previous = readback.last_refill_at.expect("persisted refill Date");
+                            let observed = FieldValue::Date(previous.clone())
+                                .json()?
+                                .expect("persisted refill Date JSON");
+                            let _ = input
+                                .as_object_mut()
+                                .expect("operation input object")
+                                .insert("previous".into(), observed);
+                            previous
+                        } else {
+                            timestamp(&input, "previous")?.into()
+                        };
                         ApiKeyUsageWrite::Refill {
-                            previous: Some(timestamp(&input, "previous")?),
+                            previous: Some(previous),
                             remaining: input
                                 .get("remaining")
                                 .and_then(Value::as_f64)
@@ -154,7 +160,9 @@ pub(crate) async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthR
             };
             row.into_iter().collect()
         };
-        assert_eq!(rows.len(), usize::from(!name.ends_with("-miss")), "{name}");
+        let missed =
+            name.ends_with("-miss") || (backend == "memory" && name == "refill-some-equal");
+        assert_eq!(rows.len(), usize::from(!missed), "{backend}/{name}");
         if name == "create" {
             let created = rows.first().expect("created API Key").clone();
             assert_eq!(created.updated_at, created.created_at);

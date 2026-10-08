@@ -1,13 +1,16 @@
 use chrono::{DateTime, Utc};
 
 use super::{ApiKeyStore, ConsumeApiKeyResult};
-use crate::{ApiKey, AuthError, AuthResult};
+use crate::{ApiKey, AuthError, AuthResult, FieldDate};
 
 /// A single guarded counter write or timestamp update for API key verification.
 #[derive(Debug, Clone)]
 pub enum ApiKeyUsageWrite {
     Refill {
-        previous: Option<DateTime<Utc>>,
+        /// Clone the observed [`ApiKey::last_refill_at`] value.
+        /// Memory compares Date identity; SQL compares the persisted Date value.
+        /// `None` requires no previous refill Date.
+        previous: Option<FieldDate>,
         remaining: f64,
         at: DateTime<Utc>,
     },
@@ -55,15 +58,11 @@ pub(super) async fn consume(
             let previous = snapshot.last_refill_at.as_ref();
             let last = previous.unwrap_or(&snapshot.created_at).milliseconds();
             if now.timestamp_millis() as f64 - last > interval {
-                let previous = previous
-                    .map(crate::FieldDate::to_datetime)
-                    .transpose()?
-                    .flatten();
                 refilled = store
                     .write_api_key_usage(
                         &snapshot.id,
                         ApiKeyUsageWrite::Refill {
-                            previous,
+                            previous: previous.cloned(),
                             remaining: amount - 1.0,
                             at: now,
                         },

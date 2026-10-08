@@ -76,10 +76,19 @@ async fn sqlite_api_key_fields_match_complete_pinned_operations_and_errors()
 }
 
 #[tokio::test]
+async fn memory_api_key_usage_dates_match_complete_pinned_operations() -> AuthResult<()> {
+    contract::usage_dates::contract(
+        Arc::new(EphemeralStore::new(Arc::new(contract::config()))),
+        "memory",
+    )
+    .await
+}
+
+#[tokio::test]
 async fn sqlite_api_key_usage_dates_match_complete_pinned_operations()
 -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let (store, database) = fixture::sqlite(contract::config()).await;
-    contract::usage_dates::contract(Arc::new(store)).await?;
+    contract::usage_dates::contract(Arc::new(store), "sqlite").await?;
     database.close().await?;
     Ok(())
 }

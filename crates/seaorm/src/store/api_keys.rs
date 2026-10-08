@@ -307,7 +307,7 @@ where
                 guard = guard.and(match previous {
                     Some(previous) => last
                         .into_expr()
-                        .eq(last.save_as(Binding::Date(previous.into()).bind(backend)?)),
+                        .eq(last.save_as(Binding::Date(previous).bind(backend)?)),
                     None => last.is_null(),
                 });
                 query = query

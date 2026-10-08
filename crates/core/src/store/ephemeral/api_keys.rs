@@ -292,8 +292,12 @@ impl ApiKeyStore for EphemeralStore {
                             remaining,
                             at,
                         } => {
-                            let actual = key.last_refill_at.as_ref().map(FieldDate::milliseconds);
-                            if actual != previous.map(|date| date.timestamp_millis() as f64) {
+                            let matches = match (key.last_refill_at.as_ref(), previous.as_ref()) {
+                                (None, None) => true,
+                                (Some(actual), Some(previous)) => actual.same_object(previous),
+                                _ => false,
+                            };
+                            if !matches {
                                 return Ok(None);
                             }
                             key.remaining = Some(remaining);

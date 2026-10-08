@@ -29,7 +29,7 @@ async fn generated_api_key_usage_dates_match_complete_pinned_operations()
     mapped::create_auth_tables(&database).await?;
     let store = SeaOrmStore::<mapped::AppAuthSchema>::new(contract::config(), database.clone())
         .with_plugin_schema::<mapped::AppPluginSchema>();
-    contract::usage_dates::contract(Arc::new(store)).await?;
+    contract::usage_dates::contract(Arc::new(store), "sqlite").await?;
     database.close().await?;
     Ok(())
 }
