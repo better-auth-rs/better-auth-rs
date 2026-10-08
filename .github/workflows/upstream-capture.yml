@@ -51,6 +51,7 @@ on:
       - compat-tests/reference-server/contracts/device-polling-capture.mjs
       - compat-tests/reference-server/contracts/member-sort-stability-capture.mjs
       - compat-tests/reference-server/contracts/api-key-number-sort-capture.mjs
+      - compat-tests/reference-server/contracts/api-key-date-usage-capture.mjs
       - compat-tests/reference-server/contracts/oauth-proxy-max-age-capture.mjs
       - tests/fixtures/cookie-cache-cleanup.capture.mjs
 
@@ -63,8 +64,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - contract: api-key-number-sort
-            regressions: [member-sort-stability]
+          - contract: api-key-date-usage
+            regressions: [api-key-fields, api-key-number-sort]
             backend: ''
     runs-on: ubuntu-latest
     timeout-minutes: 10

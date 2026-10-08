@@ -43,7 +43,7 @@ export const operationNames = [
 ];
 export const failureOperations = ["create", "update", "refill", "decrement", "start-window", "increment-window", "last-request", "updated-at"];
 
-async function withFixture(backend, run, nameMapping) {
+export async function withFixture(backend, run, nameMapping) {
   assert.ok(nameMapping === undefined || ["default", "empty", "renamed"].includes(nameMapping));
   const memory = { user: [], session: [], account: [], verification: [], ordinary_api_key_fields: [] };
   const sqlite = backend === "sqlite" ? new Database(":memory:") : undefined;
@@ -165,7 +165,12 @@ async function withFixture(backend, run, nameMapping) {
       const row = await adapter.incrementOne({ model, where, increment, ...(set ? { set } : {}) });
       return row === null ? [] : [row];
     };
-    return await run({ execute, visible, stored, events, errors, setFailure(value) { failure = value; } });
+    return await run({
+      execute, visible, stored, events, errors, adapter, reader,
+      createInput: () => input(nameMapping),
+      physicalRows: () => sqlite ? sqlite.query("SELECT * FROM ordinary_api_key_fields").all() : memory.ordinary_api_key_fields,
+      setFailure(value) { failure = value; },
+    });
   } finally {
     sqlite?.close();
   }
