@@ -50,7 +50,6 @@ fn visible(row: &ApiKey, seed: &ApiKey, updated: (&FieldDate, Option<&str>)) -> 
 
 #[expect(
     clippy::expect_used,
-    clippy::panic_in_result_fn,
     reason = "The contract requires every pinned operation and checks guarded writes before comparing complete observations"
 )]
 pub(crate) async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
