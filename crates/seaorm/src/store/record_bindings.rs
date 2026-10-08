@@ -99,7 +99,7 @@ pub(super) fn parameter(value: FieldValue, backend: DbBackend) -> AuthResult<Sim
         FieldValue::Number(value) if backend == DbBackend::MySql => {
             // mysql2 emits numeric literals; DOUBLE parameters change MySQL's integer rounding.
             return Ok(SimpleExpr::Custom(
-                better_auth_core::schema_value::number_string(value),
+                better_auth_core::schema_value::number_string(value).into(),
             ));
         }
         FieldValue::Number(value) => {

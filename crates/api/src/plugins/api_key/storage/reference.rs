@@ -8,6 +8,8 @@ use better_auth_core::{
 };
 use tokio::sync::Mutex;
 
+type ReferenceLocks = std::sync::Mutex<HashMap<Vec<u16>, Weak<Mutex<()>>>>;
+
 pub(super) fn cache_key(prefix: &str, value: &FieldValue) -> AuthResult<FieldValue> {
     let mut units = prefix.encode_utf16().collect::<Vec<_>>();
     units.extend_from_slice(value.display_utf16()?.as_utf16());
@@ -143,7 +145,7 @@ pub(super) async fn modify_reference(
     // The upstream lock coordinates reference-list writers only within this process.
     let index = cache_key("api-key:by-ref:", &key.reference_id.field_value())?;
     let units = index.display_utf16()?.as_utf16().to_vec();
-    static LOCKS: OnceLock<std::sync::Mutex<HashMap<Vec<u16>, Weak<Mutex<()>>>>> = OnceLock::new();
+    static LOCKS: OnceLock<ReferenceLocks> = OnceLock::new();
     let lock = {
         let mut locks = LOCKS
             .get_or_init(Default::default)
