@@ -53,7 +53,7 @@ on:
           - email-verification
           - cookie-attributes
       profile:
-        description: Optional existing profile for the client-configuration stage
+        description: Optional comma-separated profiles for the client-configuration stage
         type: string
         default: ''
         required: false

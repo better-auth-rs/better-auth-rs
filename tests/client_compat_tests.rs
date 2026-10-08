@@ -274,6 +274,29 @@ async fn collect_client_compat_profile(
     }
 }
 
+fn selected_configuration_profiles<'a>(
+    profiles: &[&'a str],
+    selected: Option<&str>,
+) -> Result<Vec<&'a str>, String> {
+    let Some(selected) = selected else {
+        return Ok(profiles.to_vec());
+    };
+    let requested: Vec<_> = selected.split(',').map(str::trim).collect();
+    let unknown: Vec<_> = requested
+        .iter()
+        .copied()
+        .filter(|profile| !profiles.contains(profile))
+        .collect();
+    if !unknown.is_empty() {
+        return Err(format!("Unknown configuration profiles: {unknown:?}"));
+    }
+    Ok(profiles
+        .iter()
+        .copied()
+        .filter(|profile| requested.contains(profile))
+        .collect())
+}
+
 #[tokio::test]
 #[ignore = "starts isolated profiles with intentional Bun failures to verify failure aggregation"]
 #[expect(
@@ -281,6 +304,24 @@ async fn collect_client_compat_profile(
     reason = "The Result propagates fixture I/O errors; assertions verify failure aggregation"
 )]
 async fn configuration_failure_aggregation() -> Result<(), Box<dyn std::error::Error>> {
+    let profiles = [
+        "api-error",
+        "api-error-production",
+        "request-query-memory",
+        "unselected",
+    ];
+    assert_eq!(selected_configuration_profiles(&profiles, None)?, profiles);
+    for invalid in ["api-error,missing", "", "api-error,"] {
+        assert!(selected_configuration_profiles(&profiles, Some(invalid)).is_err());
+    }
+    let selected = selected_configuration_profiles(
+        &profiles,
+        Some("request-query-memory, api-error, api-error-production,api-error"),
+    )?;
+    assert_eq!(
+        selected,
+        ["api-error", "api-error-production", "request-query-memory"]
+    );
     let directory = std::env::temp_dir().join(format!(
         "better-auth-compat-aggregation-{}-{}",
         std::process::id(),
@@ -320,9 +361,14 @@ test("profile after failure executes", async () => {{
     let failure = failure.to_str().expect("temporary fixture path is UTF-8");
     let success = success.to_str().expect("temporary fixture path is UTF-8");
     let mut failures = Vec::new();
-    collect_client_compat_profile(&[failure], "api-error", &mut failures).await;
-    collect_client_compat_profile(&[success], "api-error-production", &mut failures).await;
-    collect_client_compat_profile(&[failure], "request-query-memory", &mut failures).await;
+    for profile in selected {
+        let path = if profile == "api-error-production" {
+            success
+        } else {
+            failure
+        };
+        collect_client_compat_profile(&[path], profile, &mut failures).await;
+    }
     let completed = std::fs::read_to_string(marker)?;
     assert_eq!(completed, "api-error-production");
     assert_eq!(
@@ -511,9 +557,8 @@ async fn full_client_compat() {
 #[ignore = "starts external TS and Rust servers for each configuration"]
 async fn configuration_client_compat() {
     let selected = std::env::var("COMPAT_TEST_PROFILE").ok();
-    let mut matched = false;
     let mut failures = Vec::new();
-    for profile in [
+    let profiles = [
         "api-error",
         "api-error-production",
         "request-security-memory",
@@ -720,14 +765,10 @@ async fn configuration_client_compat() {
         "database-lifecycle-cache",
         "database-lifecycle-database",
         "database-lifecycle-preserved",
-    ] {
-        if selected
-            .as_ref()
-            .is_some_and(|selected| selected != profile)
-        {
-            continue;
-        }
-        matched = true;
+    ];
+    let selected = selected_configuration_profiles(&profiles, selected.as_deref())
+        .unwrap_or_else(|error| panic!("{error}"));
+    for profile in selected {
         if profile.starts_with("two-factor-after-") {
             collect_client_compat_profile(
                 &["./tests/config/two-factor-after/"],
@@ -929,7 +970,6 @@ async fn configuration_client_compat() {
             .await;
         }
     }
-    assert!(matched, "No configuration profile matched {selected:?}");
     assert!(
         failures.is_empty(),
         "Client compatibility profiles failed: {}",
