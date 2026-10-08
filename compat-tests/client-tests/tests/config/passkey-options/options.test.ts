@@ -3,6 +3,35 @@ import { compatScenario } from "../../../support/scenario";
 import { signUpUser } from "../../phase6/helpers";
 import { asArray, asRecord, authenticator, fixture } from "./helpers";
 
+compatScenario("Passkey cancelled authentication keeps the counter update without issuing credentials", async (ctx) => {
+  const owner = await signUpUser(ctx, "primary", "passkey-cancelled-auth", "Owner");
+  const f = fixture(ctx); await f.control();
+  const key = authenticator("passkey-cancelled-auth-key");
+  const registration = await f.options();
+  expect((await f.register(key, registration)).status).toBe(200);
+  await f.control({ cancelSession: true });
+  const options = await f.authenticationOptions();
+  const signed = key.authenticate(options, "https://passkeys.example", 1, 0x01, registration.user.id);
+  const failed = await ctx.rawRequest({ actor: "login", path: "/api/auth/passkey/verify-authentication", method: "POST", json: { response: signed } });
+  expect(failed.status).toBe(500);
+  expect(failed.body).toEqual({ code: "UNABLE_TO_CREATE_SESSION", message: "Unable to create session" });
+  f.observations.push(failed);
+  const state = await f.trace(owner.signup.data!.user.id);
+  expect(asArray(state.passkeys)).toHaveLength(1);
+  expect(asRecord(asArray(state.passkeys)[0]).counter).toBe(1);
+  expect(asArray(state.events).map(asRecord).map(event => event.event)).toEqual(["authentication.verified", "session.before"]);
+  const sessions = await ctx.actor().client.listSessions();
+  expect(sessions.error).toBeNull();
+  expect(sessions.data?.map(session => session.token)).toEqual([owner.signup.data!.token]);
+  f.observations.push(ctx.snapshot(sessions));
+  const session = await ctx.actor("login").client.getSession();
+  expect(session.data).toBeNull(); f.observations.push(ctx.snapshot(session));
+  const replay = await ctx.rawRequest({ actor: "login", path: "/api/auth/passkey/verify-authentication", method: "POST", json: { response: signed } });
+  expect(replay.status).toBe(400); expect(asRecord(replay.body).code).toBe("CHALLENGE_NOT_FOUND");
+  f.observations.push(replay);
+  return f.observations;
+});
+
 compatScenario("Passkey options use application RP name, selection, request extensions and custom challenge cookie", async (ctx) => {
   const owner = await signUpUser(ctx, "primary", "passkey-options", "Owner");
   const f = fixture(ctx); await f.control();

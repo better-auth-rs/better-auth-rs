@@ -64,6 +64,10 @@ impl FromFieldMap for crate::FieldMap {
 pub trait AuthUser:
     AuthRecordFields + Clone + Send + Sync + Serialize + std::fmt::Debug + 'static
 {
+    /// Preserve the source property order for native runtime records.
+    fn field_order(&self) -> Option<&[String]> {
+        None
+    }
     /// Field presence for runtime records and signed snapshots. Database models use `None`.
     /// A missing optional core field differs from a present field containing JSON null.
     fn field_presence(&self) -> Option<&std::collections::BTreeSet<String>> {

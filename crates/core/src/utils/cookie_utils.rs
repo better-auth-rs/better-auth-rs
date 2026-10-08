@@ -474,6 +474,12 @@ mod native_cookie_tests {
     use super::*;
     use crate::{FieldMap, FieldValue, Utf16String};
 
+    fn sign_native_cookie_value(value: &FieldValue, secret: &str) -> AuthResult<String> {
+        Ok(encode_cookie_value(&sign_cookie_value_native_raw(
+            value, secret,
+        )?))
+    }
+
     #[test]
     fn native_cookie_tokens_use_text_encoder_then_template_interpolation() -> AuthResult<()> {
         let secret = "native-cookie-signing-secret";

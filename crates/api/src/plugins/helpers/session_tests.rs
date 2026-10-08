@@ -1,4 +1,4 @@
-use super::{SessionIssueError, issue_selected_user_session, issue_user_session};
+use super::{SessionIssueError, issue_selected_user_session_optional, issue_user_session};
 use crate::plugins::test_helpers::create_test_config;
 use better_auth_core::{
     AuthContext, AuthError, AuthResult, CreateUser, FieldMap, FieldValue, RequestMeta,
@@ -54,14 +54,15 @@ async fn selected_users_without_an_admin_identity_reach_session_storage() -> Aut
         } else {
             FieldMap::from([("id".into(), id.clone())]).into()
         };
-        let issued = issue_selected_user_session(
+        let issued = issue_selected_user_session_optional(
             &ctx,
             user.clone(),
             &RequestMeta::default(),
             ctx.config.session.expires_in(),
         )
         .await
-        .map_err(SessionIssueError::into_auth_error)?;
+        .map_err(SessionIssueError::into_auth_error)?
+        .ok_or_else(|| AuthError::internal("Expected created Session"))?;
         assert!(issued.user.strict_equals(&user));
         let stored = ctx
             .database
@@ -91,7 +92,7 @@ async fn selected_banned_user_is_rejected_before_session_hooks() -> AuthResult<(
             ..Default::default()
         })
         .await?;
-    let result = issue_selected_user_session(
+    let result = issue_selected_user_session_optional(
         &ctx,
         FieldMap::from(user.clone()).into(),
         &RequestMeta::default(),

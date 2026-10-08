@@ -9,7 +9,7 @@ use uuid::Uuid;
 use webauthn_rs_core::proto::{COSEAlgorithm, PublicKeyCredential};
 
 use crate::plugins::StatusResponse;
-use crate::plugins::helpers::{SessionIssueError, issue_session_for_id};
+use crate::plugins::helpers::{SessionIssueError, issue_session_for_id_optional};
 
 use super::PasskeyConfig;
 use super::credential::WebAuthnCredential;
@@ -222,7 +222,7 @@ pub(super) async fn verify_authentication_core(
     ip_address: Option<String>,
     user_agent: Option<String>,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> PasskeyHandlerResult<(FieldValue, better_auth_core::session::SessionData)> {
+) -> PasskeyHandlerResult<FieldValue> {
     let Some(origin) = resolve_origins(config, req) else {
         return response_message(400, "origin missing");
     };
@@ -266,135 +266,133 @@ pub(super) async fn verify_authentication_core(
         return passkey_not_found();
     };
 
-    let stored_passkey = match WebAuthnCredential::from_record(
-        &passkey,
-        ctx.database.passkey_storage(),
-        &credential_id,
-    ) {
-        Ok(passkey) => passkey,
-        Err(_) => return passkey_authentication_failure(),
-    };
-    let webauthn = match build_webauthn(config, &ctx.config, &origin) {
-        Ok(webauthn) => webauthn,
-        Err(_) => return passkey_authentication_failure(),
-    };
-
-    let mut state = match stored_state {
-        StoredAuthenticationState::Passkey { state }
-        | StoredAuthenticationState::Discoverable { state } => state,
-    };
-    let Some(flags) = authentication.response.authenticator_data.get(32) else {
-        return passkey_authentication_failure();
-    };
-    // Upstream checks backup flags within the signed assertion, independently of stored flags.
-    let mut verification_credential = stored_passkey.cred.clone();
-    verification_credential.backup_eligible = flags & 0x08 != 0;
-    state
-        .ast
-        .set_allowed_credentials(vec![verification_credential]);
-    let authentication_result = webauthn.authenticate_credential(&authentication, &state.ast);
-    let authentication_result = match authentication_result {
-        Ok(result) => result,
-        Err(_) => return passkey_authentication_failure(),
-    };
-
-    if authentication_result.cred_id() != &stored_passkey.cred.cred_id {
-        return passkey_authentication_failure();
-    }
-    // Another challenge can advance the counter after this challenge captures its credentials.
-    let counter = u64::from(authentication_result.counter());
-    let stored_counter =
-        match better_auth_core::query::field_number(&passkey.counter().field_value()) {
-            Ok(counter) => counter,
+    async {
+        let stored_passkey = match WebAuthnCredential::from_record(
+            &passkey,
+            ctx.database.passkey_storage(),
+            &credential_id,
+        ) {
+            Ok(passkey) => passkey,
             Err(_) => return passkey_authentication_failure(),
         };
-    if (counter > 0 || stored_counter > 0.0) && counter as f64 <= stored_counter {
-        return passkey_authentication_failure();
-    }
-    if let Some(hook) = &config.authentication.after_verification {
-        let verification = super::PasskeyAuthenticationVerification {
-            verified: true,
-            authentication_info: super::PasskeyAuthenticationInfo {
-                credential_id: passkey.credential_id().clone(),
-                new_counter: counter,
-                user_verified: authentication_result.user_verified(),
-                credential_device_type: if authentication_result.backup_eligible() {
-                    "multiDevice"
-                } else {
-                    "singleDevice"
+        let webauthn = match build_webauthn(config, &ctx.config, &origin) {
+            Ok(webauthn) => webauthn,
+            Err(_) => return passkey_authentication_failure(),
+        };
+
+        let mut state = match stored_state {
+            StoredAuthenticationState::Passkey { state }
+            | StoredAuthenticationState::Discoverable { state } => state,
+        };
+        let Some(flags) = authentication.response.authenticator_data.get(32) else {
+            return passkey_authentication_failure();
+        };
+        // Upstream checks backup flags within the signed assertion, independently of stored flags.
+        let mut verification_credential = stored_passkey.cred.clone();
+        verification_credential.backup_eligible = flags & 0x08 != 0;
+        state
+            .ast
+            .set_allowed_credentials(vec![verification_credential]);
+        let authentication_result = webauthn.authenticate_credential(&authentication, &state.ast);
+        let authentication_result = match authentication_result {
+            Ok(result) => result,
+            Err(_) => return passkey_authentication_failure(),
+        };
+
+        if authentication_result.cred_id() != &stored_passkey.cred.cred_id {
+            return passkey_authentication_failure();
+        }
+        // Another challenge can advance the counter after this challenge captures its credentials.
+        let counter = u64::from(authentication_result.counter());
+        let stored_counter =
+            match better_auth_core::query::field_number(&passkey.counter().field_value()) {
+                Ok(counter) => counter,
+                Err(_) => return passkey_authentication_failure(),
+            };
+        if (counter > 0 || stored_counter > 0.0) && counter as f64 <= stored_counter {
+            return passkey_authentication_failure();
+        }
+        if let Some(hook) = &config.authentication.after_verification {
+            let verification = super::PasskeyAuthenticationVerification {
+                verified: true,
+                authentication_info: super::PasskeyAuthenticationInfo {
+                    credential_id: passkey.credential_id().clone(),
+                    new_counter: counter,
+                    user_verified: authentication_result.user_verified(),
+                    credential_device_type: if authentication_result.backup_eligible() {
+                        "multiDevice"
+                    } else {
+                        "singleDevice"
+                    },
+                    credential_backed_up: authentication_result.backup_state(),
+                    origin: super::webauthn::client_origin(
+                        authentication.response.client_data_json.as_ref(),
+                    )?,
+                    rp_id: super::webauthn::rp_id(config, &ctx.config)?,
+                    authenticator_extension_results: super::webauthn::authentication_extensions(
+                        authentication.response.authenticator_data.as_ref(),
+                    )?,
                 },
-                credential_backed_up: authentication_result.backup_state(),
-                origin: super::webauthn::client_origin(
-                    authentication.response.client_data_json.as_ref(),
-                )?,
-                rp_id: super::webauthn::rp_id(config, &ctx.config)?,
-                authenticator_extension_results: super::webauthn::authentication_extensions(
-                    authentication.response.authenticator_data.as_ref(),
-                )?,
-            },
-        };
-        let users = super::callbacks::Users {
-            ctx,
-            transaction: None,
-        };
-        let parsed_body = serde_json::to_value(body)?;
-        if let Err(error) = hook
-            .after_verification(
+            };
+            let users = super::callbacks::Users {
+                ctx,
+                transaction: None,
+            };
+            let parsed_body = serde_json::to_value(body)?;
+            hook.after_verification(
                 super::PasskeyEndpoint::new(ctx, req, &parsed_body, &users),
                 &verification,
                 &body.response,
             )
-            .await
-        {
-            return Err(super::registration::verification_error(error, false));
+            .await?;
         }
-    }
-    let update = match stored_passkey.authentication_update(authentication_result.counter()) {
-        Ok(update) => update,
-        Err(_) => return passkey_authentication_failure(),
-    };
-    let _updated_passkey = match ctx
-        .database
-        .update_passkey_authentication(&passkey.id().into_owned(), update)
+        let update = match stored_passkey.authentication_update(authentication_result.counter()) {
+            Ok(update) => update,
+            Err(_) => return passkey_authentication_failure(),
+        };
+        let _updated_passkey = ctx
+            .database
+            .update_passkey_authentication(&passkey.id().into_owned(), update)
+            .await?;
+
+        let user_id = passkey.user_id().into_owned();
+        let session = issue_session_for_id_optional(
+            ctx,
+            user_id.clone(),
+            &RequestMeta {
+                ip_address,
+                user_agent,
+            },
+            ctx.config.session.expires_in(),
+        )
         .await
-    {
-        Ok(passkey) => passkey,
-        Err(_) => return passkey_authentication_failure(),
-    };
+        .map_err(SessionIssueError::into_auth_error)?;
+        let Some(session) = session else {
+            return response_message(500, "Unable to create session");
+        };
+        let user = if user_id.is_truthy()? {
+            ctx.database.get_user_by_id_field(&user_id).await?
+        } else {
+            None
+        };
+        let Some(user) = user else {
+            return response_message(500, "User not found");
+        };
 
-    let user_id = passkey.user_id().into_owned();
-    let session = issue_session_for_id(
-        ctx,
-        user_id.clone(),
-        &RequestMeta {
-            ip_address,
-            user_agent,
-        },
-        ctx.config.session.expires_in(),
-    )
+        let manager = ctx.session_manager();
+        manager
+            .set_session_cookie(req, manager.internal_data(&user, &session).await?, None)
+            .await?;
+        Ok(PasskeyHandlerOutcome::Success(
+            FieldMap::from(better_auth_core::session::SessionData {
+                session: ctx.session_view(&session).await?,
+                user: ctx.user_view(&user).await?,
+            })
+            .into(),
+        ))
+    }
     .await
-    .map_err(SessionIssueError::into_auth_error)
-    .map_err(|error| super::registration::verification_error(error, false))?;
-    let user = if user_id.is_truthy()? {
-        ctx.database
-            .get_user_by_id_field(&user_id)
-            .await
-            .map_err(|error| super::registration::verification_error(error, false))?
-    } else {
-        None
-    };
-    let Some(user) = user else {
-        return response_message(500, "User not found");
-    };
-
-    Ok(PasskeyHandlerOutcome::Success((
-        FieldMap::from(better_auth_core::session::SessionData {
-            session: ctx.session_view(&session).await?,
-            user: ctx.user_view(&user).await?,
-        })
-        .into(),
-        ctx.session_manager().internal_data(&user, &session).await?,
-    )))
+    .map_err(|error| super::registration::verification_error(error, false))
 }
 
 pub(super) async fn list_user_passkeys_core(

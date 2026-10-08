@@ -1,6 +1,6 @@
 use jsonwebtoken::errors::ErrorKind;
 
-use crate::plugins::helpers::{SessionIssueError, issue_user_session};
+use crate::plugins::helpers::{SessionIssueError, issue_selected_user_session_optional};
 use better_auth_core::wire::{SessionView, UserView};
 use better_auth_core::{AuthContext, AuthError, AuthResult, UpdateUser};
 use better_auth_core::{AuthSession, AuthUser};
@@ -116,7 +116,6 @@ fn verification_error(
                 callback_url,
                 &format!("error={code}"),
             )?,
-            session_data: None,
         });
     }
     Err(AuthError::Upstream {
@@ -130,6 +129,7 @@ pub(super) async fn verify_email_core<U, S>(
     query: &VerifyEmailQuery,
     current_session: Option<(U, S)>,
     config: &EmailVerificationConfig,
+    req: &better_auth_core::AuthRequest,
     ip_address: Option<String>,
     user_agent: Option<String>,
     endpoint: &crate::plugins::endpoint_context::EndpointContext<
@@ -207,24 +207,35 @@ where
                 if let Some(callback_url) = query.callback_url.as_deref() {
                     return Ok(VerifyEmailResult::Redirect {
                         url: callback_url.to_owned(),
-                        session_data: None,
                     });
                 }
 
                 return Ok(VerifyEmailResult::Json {
                     body: serde_json::json!({ "status": true }),
-                    session_data: None,
                 });
             }
             Some("change-email-verification") => {
                 let (mut session_user, session): (UserView, SessionView) = match current_session {
                     Some((user, session)) => (user, session),
                     None => {
-                        let session =
-                            issue_user_session(ctx, user.id().typed()?, ip_address, user_agent)
-                                .await
-                                .map_err(SessionIssueError::into_auth_error)?
-                                .session;
+                        let session = issue_selected_user_session_optional(
+                            ctx,
+                            better_auth_core::FieldMap::from(ctx.internal_user_view(&user).await?)
+                                .into(),
+                            &better_auth_core::RequestMeta {
+                                ip_address,
+                                user_agent,
+                            },
+                            ctx.config.session.expires_in(),
+                        )
+                        .await
+                        .map_err(SessionIssueError::into_auth_error)?
+                        .ok_or(AuthError::Upstream {
+                            status: 500,
+                            code: "FAILED_TO_CREATE_SESSION",
+                            message: "Failed to create session",
+                        })?
+                        .session;
                         (
                             ctx.internal_user_view(&user).await?,
                             ctx.session_manager()
@@ -256,11 +267,13 @@ where
                     user: session_user,
                     session,
                 };
+                ctx.session_manager()
+                    .set_session_cookie(req, data, None)
+                    .await?;
 
                 if let Some(callback_url) = query.callback_url.as_deref() {
                     return Ok(VerifyEmailResult::Redirect {
                         url: callback_url.to_owned(),
-                        session_data: Some(data),
                     });
                 }
 
@@ -269,17 +282,29 @@ where
                         "status": true,
                         "user": ctx.user_view(&updated_user).await?,
                     }),
-                    session_data: Some(data),
                 });
             }
             _ => {
                 let (mut session_user, session) = match current_session {
                     Some(pair) => pair,
                     None => {
-                        let issued =
-                            issue_user_session(ctx, user.id().typed()?, ip_address, user_agent)
-                                .await
-                                .map_err(SessionIssueError::into_auth_error)?;
+                        let issued = issue_selected_user_session_optional(
+                            ctx,
+                            better_auth_core::FieldMap::from(ctx.internal_user_view(&user).await?)
+                                .into(),
+                            &better_auth_core::RequestMeta {
+                                ip_address,
+                                user_agent,
+                            },
+                            ctx.config.session.expires_in(),
+                        )
+                        .await
+                        .map_err(SessionIssueError::into_auth_error)?
+                        .ok_or(AuthError::Upstream {
+                            status: 500,
+                            code: "FAILED_TO_CREATE_SESSION",
+                            message: "Failed to create session",
+                        })?;
                         (
                             ctx.internal_user_view(&user).await?,
                             ctx.session_manager()
@@ -331,11 +356,13 @@ where
                     user: session_user,
                     session,
                 };
+                ctx.session_manager()
+                    .set_session_cookie(req, data, None)
+                    .await?;
 
                 if let Some(callback_url) = query.callback_url.as_deref() {
                     return Ok(VerifyEmailResult::Redirect {
                         url: callback_url.to_owned(),
-                        session_data: Some(data),
                     });
                 }
 
@@ -344,7 +371,6 @@ where
                         "status": true,
                         "user": updated_user,
                     }),
-                    session_data: Some(data),
                 });
             }
         }
@@ -354,13 +380,11 @@ where
         if let Some(callback_url) = query.callback_url.as_deref() {
             return Ok(VerifyEmailResult::Redirect {
                 url: callback_url.to_owned(),
-                session_data: None,
             });
         }
 
         return Ok(VerifyEmailResult::Json {
             body: serde_json::json!({ "status": true, "user": serde_json::Value::Null }),
-            session_data: None,
         });
     }
 
@@ -394,9 +418,22 @@ where
                 session,
             }
         } else {
-            let issued = issue_user_session(ctx, user.id().typed()?, ip_address, user_agent)
-                .await
-                .map_err(SessionIssueError::into_auth_error)?;
+            let issued = issue_selected_user_session_optional(
+                ctx,
+                better_auth_core::FieldMap::from(ctx.internal_user_view(&user).await?).into(),
+                &better_auth_core::RequestMeta {
+                    ip_address,
+                    user_agent,
+                },
+                ctx.config.session.expires_in(),
+            )
+            .await
+            .map_err(SessionIssueError::into_auth_error)?
+            .ok_or(AuthError::Upstream {
+                status: 500,
+                code: "FAILED_TO_CREATE_SESSION",
+                message: "Failed to create session",
+            })?;
             ctx.session_manager()
                 .internal_data(&user, &issued.session)
                 .await?
@@ -406,16 +443,19 @@ where
     } else {
         None
     };
+    if let Some(data) = session_data {
+        ctx.session_manager()
+            .set_session_cookie(req, data, None)
+            .await?;
+    }
 
     if let Some(callback_url) = query.callback_url.as_deref() {
         return Ok(VerifyEmailResult::Redirect {
             url: callback_url.to_owned(),
-            session_data,
         });
     }
 
     Ok(VerifyEmailResult::Json {
         body: serde_json::json!({ "status": true, "user": serde_json::Value::Null }),
-        session_data,
     })
 }

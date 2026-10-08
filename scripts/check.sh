@@ -179,20 +179,28 @@ run_stage() {
       cargo fmt --all -- --check
       local create_status=0
       cargo clippy --workspace --locked --features axum,seaorm2,redis-cache -- -D warnings || create_status=1
-      cargo build --workspace --locked --tests --profile test --features axum,seaorm2,redis-cache --keep-going || create_status=1
-      cargo test --locked --no-fail-fast -p better-auth-core -p better-auth-api -p better-auth-seaorm --lib -- \
-        session verification database_hooks lifecycle transaction create_readback \
-        plugins::jwt:: plugins::passkey:: plugins::organization:: plugins::test_utils:: || create_status=1
-      cargo test --locked --no-fail-fast --features axum,seaorm2,redis-cache \
-        --test database_hooks_tests --test database_lifecycle_tests --test database_hook_updates_tests \
-        --test session_create_payload_tests --test session_initial_defaults_tests --test session_id_policy_tests \
-        --test custom_session_fields_tests --test secondary_storage_hooks_tests \
-        --test transaction_effect_order_tests --test transaction_hook_context_tests \
-        --test organization_native_team_tests --test organization_query_limits_tests \
-        --test test_utils_tests --test legacy_schema_integration_tests || create_status=1
-      cargo test --locked --features axum,seaorm2,redis-cache --test mysql_create_readback_tests -- --ignored || create_status=1
+      # Compile all callers once before commands that would repeat the same compilation failure.
+      if cargo build --workspace --locked --tests --profile test --features axum,seaorm2,redis-cache --keep-going; then
+        cargo test --locked --no-fail-fast -p better-auth-core -p better-auth-api -p better-auth-seaorm --lib -- \
+          session verification database_hooks lifecycle transaction create_readback \
+          user_view_preserves_adapter_order_through_cache_and_visibility \
+          plugins::jwt:: plugins::passkey:: plugins::organization:: plugins::test_utils:: || create_status=1
+        cargo test --locked --no-fail-fast --features axum,seaorm2,redis-cache \
+          --test database_hooks_tests --test database_lifecycle_tests --test database_hook_updates_tests \
+          --test session_create_payload_tests --test session_initial_defaults_tests --test session_id_policy_tests \
+          --test custom_session_fields_tests --test secondary_storage_hooks_tests \
+          --test transaction_effect_order_tests --test transaction_hook_context_tests \
+          --test organization_native_team_tests --test organization_query_limits_tests \
+          --test test_utils_tests --test legacy_schema_integration_tests || create_status=1
+        cargo test --locked --features axum,seaorm2,redis-cache --test mysql_create_readback_tests -- --ignored || create_status=1
+        ./scripts/consumer-check.sh --test session_native_values --test user_session_fields || create_status=1
+        COMPAT_TEST_PROFILE=passkey-first,passkey-options,email-otp,email-otp-options,magic-link,signup-verification,admin-options,crypto-database,crypto-cookie,identity-context \
+          cargo test --locked --test client_compat_tests -- --ignored --nocapture --exact --test-threads=1 \
+          configuration_client_compat phase1_client_compat phase2_client_compat phase3_client_compat || create_status=1
+      else
+        create_status=1
+      fi
       bun --no-install test ./compat-tests/reference-server/consumer-contracts/mysql-create-readback.test.ts || create_status=1
-      ./scripts/consumer-check.sh --test session_native_values --test user_session_fields || create_status=1
       return "$create_status"
       ;;
     api-key-cache)

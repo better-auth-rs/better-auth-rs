@@ -445,6 +445,15 @@ impl UserStore<StatelessSchema> for EphemeralStore {
         let now = crate::FieldDate::from(Utc::now());
         let _ = fields.remove("id");
         let mut user = UserView {
+            field_order: self
+                .config
+                .user
+                .user_field_schema()
+                .adapter_fields(&[])
+                .fields()
+                .keys()
+                .cloned()
+                .collect(),
             additional_fields: fields,
             visible_fields: Some(
                 [

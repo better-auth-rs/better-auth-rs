@@ -95,6 +95,8 @@ The callback types are exported from `better_auth::plugins::passkey`:
 
 Each callback receives a `PasskeyEndpoint` with the request, parsed body, global configuration, application extensions, plugin metadata and a typed user adapter. The user adapter supports lookup by ID or email, creation, update and deletion. These methods use the active transaction during registration. The callback interface does not expose the upstream arbitrary-model adapter.
 
+`PasskeyUsers::create_user` and `PasskeyUsers::update_user` return `AuthResult<Option<UserView>>`. Handle `None` before consuming the user. Cancellation or a completed write with no returned row remains distinct from a callback or adapter error.
+
 `PasskeyAuthenticationInfo.credential_id` uses `SchemaValue<String>` to preserve the selected record's output-projected `credentialID`, including null, omission, and replacement types. Use `.typed()?` for ordinary string callers or `.field_value()` for the complete value. Native authentication uses the request credential ID for record lookup and verifier input. A transformed record ID does not change signature verification or replace the selected owner.
 
 Application API errors retain their status and body. Ordinary errors in registration verification become `FAILED_TO_VERIFY_REGISTRATION`; ordinary authentication-hook errors become `AUTHENTICATION_FAILED`.
@@ -104,6 +106,8 @@ Application API errors retain their status and body. Ordinary errors in registra
 Set `registration.require_session` to `false` and supply `resolve_user` to start registration without a session. An existing session takes precedence over the resolver. The application must establish which account the registration flow may use; the optional client `context` string is not proof of account ownership.
 
 Send `createSession: true` to `/passkey/verify-registration` to create a session after registration. The registration hook may create the user through `ctx.users` and return that user's ID. The hook, user lookup, passkey insertion and session creation run in one adapter transaction. A failure rolls back database writes, while the consumed challenge remains consumed. The response includes the passkey fields, `session` and `user`, and sets the session cookie. Without `createSession`, callback writes retain the upstream nontransactional behavior.
+
+A null Session result returns HTTP 500 with `UNABLE_TO_CREATE_SESSION`. Registration rolls back the transaction, including the new Passkey. Authentication retains the counter update completed before Session creation and fails before the later User lookup or cookie write.
 
 With the default `require_session: true`, both registration endpoints require a fresh session. The default freshness window is 24 hours. Set `AuthConfig.session.fresh_age` to zero to disable the freshness check.
 

@@ -1,5 +1,6 @@
 //! Runtime session and verification storage over the configured database and secondary backend.
 
+mod cache;
 mod forward;
 mod runtime;
 mod session_tokens;
@@ -11,7 +12,7 @@ mod verifications;
 use super::{AuthStore, SecondaryStorage};
 use crate::plugin::MetadataMap;
 use crate::{AuthConfig, AuthError, AuthResult, AuthSchema};
-use serde_json::{Map, Value};
+use chrono::{DateTime, Utc};
 use std::sync::Arc;
 
 /// Install secondary session and verification behavior without changing application stores.
@@ -22,6 +23,7 @@ pub struct SecondaryStore<S: AuthSchema> {
     config: Arc<AuthConfig>,
     metadata: MetadataMap,
     schema_validation: Option<super::schema::SchemaValidation>,
+    clock: Arc<dyn Fn() -> DateTime<Utc> + Send + Sync>,
 }
 
 impl<S: AuthSchema> Clone for SecondaryStore<S> {
@@ -32,6 +34,7 @@ impl<S: AuthSchema> Clone for SecondaryStore<S> {
             config: self.config.clone(),
             metadata: self.metadata.clone(),
             schema_validation: self.schema_validation.clone(),
+            clock: self.clock.clone(),
         }
     }
 }
@@ -50,6 +53,7 @@ impl<S: AuthSchema> SecondaryStore<S> {
             config,
             metadata,
             schema_validation: None,
+            clock: Arc::new(Utc::now),
         })
     }
 
@@ -65,7 +69,16 @@ impl<S: AuthSchema> SecondaryStore<S> {
             config,
             metadata,
             schema_validation: None,
+            clock: Arc::new(Utc::now),
         }
+    }
+
+    /// Set the wall clock for this facade's timestamps, expiration checks, and cache TTLs.
+    /// Clones, runtime views, and deferred writes retain the same clock.
+    /// Underlying stores and storage backends retain their own clocks.
+    pub fn with_clock(mut self, clock: impl Fn() -> DateTime<Utc> + Send + Sync + 'static) -> Self {
+        self.clock = Arc::new(clock);
+        self
     }
 
     /// Attach this auth instance's explicit and automatic schema check.
@@ -81,6 +94,10 @@ impl<S: AuthSchema> SecondaryStore<S> {
         self.storage.is_none() || self.config.session.store_session_in_database()
     }
 
+    fn now(&self) -> DateTime<Utc> {
+        (self.clock)()
+    }
+
     fn database_verifications(&self) -> bool {
         self.storage.is_none() || self.config.verification.store_in_database
     }
@@ -89,22 +106,5 @@ impl<S: AuthSchema> SecondaryStore<S> {
         self.storage.as_deref().ok_or_else(|| {
             AuthError::internal("Secondary storage operation requires an installed backend")
         })
-    }
-}
-
-// Upstream safeJSONParse treats invalid cached JSON as a cache miss. Backend I/O errors still propagate.
-fn decode(value: Option<Value>) -> Option<Value> {
-    match value? {
-        Value::String(value) => serde_json::from_str(&value).ok(),
-        value => Some(value),
-    }
-}
-
-fn object(value: Value) -> AuthResult<Map<String, Value>> {
-    match value {
-        Value::Object(value) => Ok(value),
-        _ => Err(AuthError::internal(
-            "Secondary storage record must be an object",
-        )),
     }
 }

@@ -1,5 +1,6 @@
 use super::{
     contract::{TestResult, revive_fields, stored},
+    lifecycle_cache::{Cache, Entry},
     lifecycle_hooks,
     lifecycle_models::Schema,
     trace::{self, Trace},
@@ -9,10 +10,7 @@ use better_auth_core::{
     AuthConfig, AuthError, AuthResult, CreateSession, CreateUser, CreateVerification, FieldDate,
     FieldMap, FieldValue, SchemaValue,
     id::{IdGeneration, IdGenerator},
-    store::{
-        AuthTransaction, SessionCreateWriter, VerificationCreateWriter,
-        database_hooks::DatabaseHooks,
-    },
+    store::{AuthStore, AuthTransaction, database_hooks::DatabaseHooks, secondary::SecondaryStore},
     user_fields::{FieldTransforms, UserFieldConfig, UserFieldTransform, UserFieldType},
 };
 use better_auth_seaorm::{
@@ -67,7 +65,7 @@ pub(super) struct Case {
     error: Option<Value>,
     pub(super) trace: Vec<Value>,
     after: Value,
-    pub(super) cache: Vec<Value>,
+    cache: Vec<Entry>,
 }
 
 pub(super) fn observe(fields: Option<FieldMap>) -> AuthResult<Value> {
@@ -129,30 +127,6 @@ fn verification(fields: FieldMap) -> CreateVerification {
     }
 }
 
-fn session_writer(trace: Trace, deferred: bool) -> SessionCreateWriter {
-    SessionCreateWriter {
-        write_database: true,
-        deferred,
-        write: Box::new(move |original, actual| {
-            Box::pin(async move {
-                trace.callback(json!({"phase": "writer:session", "original": observe(Some(original))?, "actual": observe(Some(actual))?}));
-                Ok(())
-            })
-        }),
-    }
-}
-
-fn verification_writer(trace: Trace) -> VerificationCreateWriter {
-    Box::new(move |actual| {
-        Box::pin(async move {
-            trace.callback(
-                json!({"phase": "writer:verification", "actual": observe(Some(actual))?}),
-            );
-            Ok(())
-        })
-    })
-}
-
 async fn transaction_body(
     tx: &dyn AuthTransaction<Schema>,
     case: &Case,
@@ -167,22 +141,21 @@ async fn transaction_body(
             );
             Value::Null
         }
-        "session" => observe(
-            tx.create_session_with_writer(
-                session(fields)?,
-                Some(session_writer(trace.clone(), case.deferred)),
-            )
-            .await?
-            .map(FieldMap::from),
-        )?,
+        "session" => {
+            let input = session(fields)?;
+            let created = if case.deferred {
+                tx.create_session_with_deferred_secondary_optional(input)
+                    .await?
+            } else {
+                tx.create_session_optional(input).await?
+            };
+            observe(created.map(FieldMap::from))?
+        }
         "verification" => observe(
-            tx.create_verification_with_writer(
-                verification(fields),
-                Some(verification_writer(trace.clone())),
-            )
-            .await?
-            .map(|record| record.fields())
-            .transpose()?,
+            tx.create_verification_optional(verification(fields))
+                .await?
+                .map(|record| record.fields())
+                .transpose()?,
         )?,
         model => {
             return Err(AuthError::internal(format!(
@@ -242,6 +215,8 @@ fn config(case: &Case, trace: &Trace) -> AuthConfig {
     let mut config = AuthConfig::new("mysql-lifecycle-fixture-secret-at-least-32-characters");
     config.logger.disabled = Some(true);
     config.telemetry.enabled = false;
+    config.session.store_session_in_database = Some(true);
+    config.verification.store_in_database = true;
     config.advanced.database.generate_id = Some(IdGeneration::Custom(IdGenerator::new(|input| {
         Ok(Some(format!("{}-generated-id", input.model)))
     })));
@@ -312,8 +287,24 @@ pub(super) async fn check(mut database: DatabaseConnection, name: &str) -> TestR
     setup(&database, &case).await?;
     let trace = Trace::default();
     trace.capture(&mut database);
-    let config = config(&case, &trace);
-    let raw = SeaOrmStore::<Schema>::new(config.clone(), database.clone());
+    let config = Arc::new(config(&case, &trace));
+    let cache = Arc::new(Cache::new(trace.clone()));
+    let raw: Arc<dyn AuthStore<Schema>> = Arc::new(SeaOrmStore::<Schema>::new(
+        config.as_ref().clone(),
+        database.clone(),
+    ));
+    let raw: Arc<dyn AuthStore<Schema>> = if case.secondary {
+        let fixed_now = capture["lifecycle"]["now"]
+            .as_str()
+            .expect("captured clock")
+            .parse::<chrono::DateTime<chrono::Utc>>()?;
+        Arc::new(
+            SecondaryStore::new(raw, cache.clone(), config.clone(), Default::default())?
+                .with_clock(move || fixed_now),
+        )
+    } else {
+        raw
+    };
     let hooks: Vec<Arc<dyn DatabaseHooks<Schema>>> = vec![
         Arc::new(lifecycle_hooks::Plugin {
             trace: trace.clone(),
@@ -323,8 +314,8 @@ pub(super) async fn check(mut database: DatabaseConnection, name: &str) -> TestR
         Arc::new(lifecycle_hooks::Application(trace.clone())),
     ];
     let store = better_auth_core::store::RuntimeStore::with_runtime(
-        &raw,
-        Arc::new(config),
+        raw.as_ref(),
+        config,
         hooks,
         Default::default(),
     )?;
@@ -353,6 +344,11 @@ pub(super) async fn check(mut database: DatabaseConnection, name: &str) -> TestR
     .with_subscriber(subscriber)
     .await;
     trace::check_lifecycle(trace.take(), &case)?;
+    assert_eq!(
+        cache.entries(),
+        case.cache,
+        "{name} complete cache bytes, TTLs, and insertion order"
+    );
     assert_eq!(result.is_ok(), case.returned, "{name}: {result:?}");
     match result {
         Ok(value) => {

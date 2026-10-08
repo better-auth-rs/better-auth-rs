@@ -261,7 +261,7 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
             )
             .await?
             .ok_or_else(|| AuthError::not_found("Two-factor settings not found"))?;
-        self.project_two_factor_models(row.into_iter().collect())
+        self.project_two_factor_models(vec![row])
             .await?
             .pop()
             .ok_or_else(|| AuthError::internal("Two-factor creation returned no record"))
@@ -277,7 +277,7 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
             .update_two_factor_row(filter, update.into_adapter_fields()?)
             .await?
             .ok_or_else(|| AuthError::not_found("Two-factor settings not found"))?;
-        self.project_two_factor_models(row.into_iter().collect())
+        self.project_two_factor_models(vec![row])
             .await?
             .pop()
             .ok_or_else(|| AuthError::internal("Two-factor creation returned no record"))

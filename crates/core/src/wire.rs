@@ -25,6 +25,8 @@ pub use verification_view::VerificationView;
 /// Public user response shape.
 #[derive(Debug, Clone, PartialEq)]
 pub struct UserView {
+    /// Source property order, independent of the current typed values.
+    pub field_order: Vec<String>,
     /// Configured application fields after output transforms.
     pub additional_fields: crate::FieldMap,
     /// Present optional core fields and enabled plugin fields. `None` preserves an unconfigured view.
@@ -108,6 +110,7 @@ impl UserView {
     pub fn from_model<T: AuthUser>(user: &T) -> crate::AuthResult<Self> {
         let model = user.field_values()?;
         Ok(Self {
+            field_order: user.field_order().unwrap_or_default().to_vec(),
             additional_fields: user.projected_fields().cloned().unwrap_or_default(),
             visible_fields: user.field_presence().cloned(),
             id: user.id().into_owned(),
@@ -331,6 +334,9 @@ impl SessionView {
 }
 
 impl AuthUser for UserView {
+    fn field_order(&self) -> Option<&[String]> {
+        Some(&self.field_order)
+    }
     fn field_presence(&self) -> Option<&std::collections::BTreeSet<String>> {
         self.visible_fields.as_ref()
     }
@@ -629,6 +635,7 @@ mod tests {
     #[test]
     fn user_view_serializes_camel_case() {
         let user = UserView {
+            field_order: Default::default(),
             visible_fields: None,
             additional_fields: Default::default(),
             id: "user-1".to_string().into(),
@@ -655,6 +662,50 @@ mod tests {
         assert_eq!(json["emailVerified"], true);
         assert_eq!(json["displayUsername"], "Ada");
         assert_eq!(json["twoFactorEnabled"], true);
+    }
+
+    #[tokio::test]
+    async fn user_view_preserves_adapter_order_through_cache_and_visibility()
+    -> crate::AuthResult<()> {
+        let source = concat!(
+            r#"{"name":"Owner","email":"owner@example.com","emailVerified":true,"#,
+            r#""createdAt":"2030-01-02T03:04:05.000Z","updatedAt":"2030-01-02T03:04:05.000Z","#,
+            r#""marker":"kept","private":"secret","id":"owner"}"#,
+        );
+        let public = concat!(
+            r#"{"name":"Owner","email":"owner@example.com","emailVerified":true,"#,
+            r#""createdAt":"2030-01-02T03:04:05.000Z","updatedAt":"2030-01-02T03:04:05.000Z","#,
+            r#""marker":"kept","id":"owner"}"#,
+        );
+        let config = crate::user_fields::UserConfig {
+            additional_fields: Some(
+                [
+                    (
+                        "private".into(),
+                        crate::user_fields::UserFieldConfig {
+                            returned: Some(false),
+                            ..Default::default()
+                        },
+                    ),
+                    ("marker".into(), Default::default()),
+                ]
+                .into(),
+            ),
+        };
+        let user: UserView = serde_json::from_str(source)?;
+        let user =
+            UserView::with_internal_fields_for_adapter(&user, &config, &Default::default(), false)
+                .await?;
+        let cached = serde_json::to_string(&user)?;
+        assert_eq!(cached, source);
+        let cached: UserView = serde_json::from_str(&cached)?;
+        let output = UserView::with_fields(&cached, &config, &Default::default()).await?;
+        assert_eq!(serde_json::to_string(&output)?, public);
+        assert_eq!(
+            serde_json::to_string(&UserView::from_model(&output)?)?,
+            public
+        );
+        Ok(())
     }
 
     #[tokio::test]

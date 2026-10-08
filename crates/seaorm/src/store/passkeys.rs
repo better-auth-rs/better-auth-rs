@@ -224,7 +224,7 @@ where
             .update_passkey_patch(filter, patch)
             .await?
             .ok_or_else(|| AuthError::not_found("Passkey not found"))?;
-        self.project_passkey_models(row.into_iter().collect())
+        self.project_passkey_models(vec![row])
             .await?
             .pop()
             .ok_or_else(|| AuthError::internal("Passkey creation returned no record"))

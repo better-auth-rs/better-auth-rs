@@ -214,6 +214,9 @@ impl PasskeyRegistrationHook for PasskeyOptions {
             input.id = user.get("id").and_then(Value::as_str).map(str::to_owned);
             let created = ctx.users.create_user(input).await?;
             if let Some(banned) = user.get("banned").and_then(Value::as_bool) {
+                let created = created.as_ref().ok_or_else(|| {
+                    AuthError::internal("Cannot read properties of null (reading 'id')")
+                })?;
                 let _ = ctx
                     .users
                     .update_user(
@@ -240,6 +243,9 @@ impl PasskeyRegistrationHook for PasskeyOptions {
                     .users
                     .get_user_by_email(user.get("email").and_then(Value::as_str).unwrap())
                     .await?;
+                let created = created.as_ref().ok_or_else(|| {
+                    AuthError::internal("Cannot read properties of null (reading 'id')")
+                })?;
                 let updated = ctx
                     .users
                     .update_user(
@@ -249,7 +255,10 @@ impl PasskeyRegistrationHook for PasskeyOptions {
                             ..Default::default()
                         },
                     )
-                    .await?;
+                    .await?
+                    .ok_or_else(|| {
+                        AuthError::internal("Cannot read properties of null (reading 'name')")
+                    })?;
                 self.event(json!({"event": "users", "found": found.is_some_and(|user| user.id == created.id), "name": updated.name}));
             }
             if control.get("deleteTemporary") == Some(&Value::Bool(true)) {
@@ -258,7 +267,9 @@ impl PasskeyRegistrationHook for PasskeyOptions {
                     user.get("email").and_then(Value::as_str).unwrap()
                 ));
                 input.id = Some("temporary-user".into());
-                let temporary = ctx.users.create_user(input).await?;
+                let temporary = ctx.users.create_user(input).await?.ok_or_else(|| {
+                    AuthError::internal("Cannot read properties of null (reading 'id')")
+                })?;
                 ctx.users.delete_user(temporary.id.typed().unwrap()).await?;
                 self.event(json!({"event": "users.deleted", "missing": ctx.users.get_user_by_id(temporary.id.typed().unwrap()).await?.is_none()}));
             }
@@ -314,6 +325,9 @@ impl<S: AuthSchema> SeaOrmHooks<S> for PasskeyOptions {
                 code: "SESSION_REJECTED",
                 message: "Session rejected",
             });
+        }
+        if self.control().get("cancelSession") == Some(&Value::Bool(true)) {
+            return Ok(DatabaseHookUpdate::Cancel);
         }
         Ok(DatabaseHookUpdate::Continue)
     }

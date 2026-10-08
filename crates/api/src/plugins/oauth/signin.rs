@@ -9,7 +9,9 @@ use super::encryption::encrypt_token_set;
 use super::providers::{OAuthTokenSet, OAuthUserInfo};
 use super::resolved::ResolvedProvider;
 use super::state::AccountCookiePayload;
-use crate::plugins::helpers::{SessionIssueError, apply_default_role, issue_selected_user_session};
+use crate::plugins::helpers::{
+    SessionIssueError, apply_default_role, issue_selected_user_session_optional,
+};
 
 pub(super) struct OAuthSignInOptions<'a> {
     pub(super) request: &'a AuthRequest,
@@ -399,9 +401,11 @@ pub(super) async fn process_oauth_sign_in(
                 return Err(OAuthSignInError::Generic("unable to link account".into()));
             }
         };
-        let issued = issue_selected_user_session(ctx, user, meta, ctx.config.session.expires_in())
-            .await
-            .map_err(OAuthSignInError::from)?;
+        let issued =
+            issue_selected_user_session_optional(ctx, user, meta, ctx.config.session.expires_in())
+                .await
+                .map_err(OAuthSignInError::from)?
+                .ok_or_else(|| OAuthSignInError::Generic("unable to create session".into()))?;
         let account_cookie = ctx.config.account.store_account_cookie().then(|| {
             if !ctx.config.account.update_account_on_sign_in() {
                 return existing_account.clone();
@@ -551,14 +555,15 @@ pub(super) async fn process_oauth_sign_in(
         options
             .check_email_verification(provider, Some(&linked_user), false, ctx)
             .await?;
-        let issued = issue_selected_user_session(
+        let issued = issue_selected_user_session_optional(
             ctx,
             better_auth_core::FieldMap::from(linked_user).into(),
             meta,
             ctx.config.session.expires_in(),
         )
         .await
-        .map_err(OAuthSignInError::from)?;
+        .map_err(OAuthSignInError::from)?
+        .ok_or_else(|| OAuthSignInError::Generic("unable to create session".into()))?;
         let account_cookie = ctx
             .config
             .account
@@ -665,14 +670,15 @@ pub(super) async fn process_oauth_sign_in(
         options
             .check_email_verification(provider, Some(&created_user), true, ctx)
             .await?;
-        let issued = issue_selected_user_session(
+        let issued = issue_selected_user_session_optional(
             ctx,
             better_auth_core::FieldMap::from(ctx.internal_user_view(&created_user).await?).into(),
             meta,
             ctx.config.session.expires_in(),
         )
         .await
-        .map_err(OAuthSignInError::from)?;
+        .map_err(OAuthSignInError::from)?
+        .ok_or_else(|| OAuthSignInError::Generic("unable to create session".into()))?;
         let account_cookie = ctx
             .config
             .account

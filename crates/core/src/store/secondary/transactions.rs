@@ -313,6 +313,12 @@ impl<S: AuthSchema> AuthTransaction<S> for Transaction<S> {
                 crate::AuthError::forbidden("session creation cancelled by database hook")
             })
     }
+    async fn create_session_with_deferred_secondary_optional(
+        &self,
+        input: CreateSession,
+    ) -> AuthResult<Option<crate::wire::SessionView>> {
+        self.create_session_with_storage(input, true).await
+    }
 }
 
 #[async_trait]

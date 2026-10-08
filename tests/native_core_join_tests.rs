@@ -212,7 +212,7 @@ async fn seed(store: &Store, labels: &[&str], account_count: usize) {
             now,
         )
         .unwrap();
-        entities::session::Model::set_expires_at(&mut session, expires_at);
+        entities::session::Model::set_expires_at(&mut session, expires_at).unwrap();
         let _ = session.insert(store.connection()).await.unwrap();
         for index in 0..account_count {
             let _ = store

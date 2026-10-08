@@ -645,7 +645,15 @@ pub(crate) async fn impersonate_user_core(
         active_organization_id: None,
     };
 
-    let session = ctx.database.create_session(create_session).await?;
+    let session = ctx
+        .database
+        .create_session_optional(create_session)
+        .await?
+        .ok_or(AuthError::Upstream {
+            status: 500,
+            code: "FAILED_TO_CREATE_USER",
+            message: "Failed to create user",
+        })?;
     let data = ctx
         .session_manager()
         .internal_data(&target, &session)

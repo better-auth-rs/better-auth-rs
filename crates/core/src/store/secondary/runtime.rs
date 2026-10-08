@@ -39,6 +39,7 @@ impl<S: AuthSchema> RuntimeStore<S> for SecondaryStore<S> {
             config,
             metadata: self.metadata.clone(),
             schema_validation: self.schema_validation.clone(),
+            clock: self.clock.clone(),
         }))
     }
 }

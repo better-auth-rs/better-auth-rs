@@ -9,7 +9,7 @@ use sea_orm::{
 
 use better_auth_core::store::{ListOrganizationMembersParams, MemberStore};
 
-use crate::error::AuthResult;
+use crate::error::{AuthError, AuthResult};
 use crate::schema::AuthSchema;
 use crate::types_org::{CreateMember, Member};
 

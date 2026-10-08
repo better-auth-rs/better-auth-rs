@@ -65,6 +65,7 @@ impl PreparedSessionCreate {
         fields.extend(defaults);
         // CreateSession callers supply explicit overrides, including native public fields.
         fields.extend(input.additional_fields);
+        fields.sort_property_order();
         Ok(Self {
             fields,
             original: None,
@@ -77,6 +78,7 @@ impl PreparedSessionCreate {
 
     /// An empty patch still detaches later property replacements from the original object.
     pub fn apply(&mut self, outcome: DatabaseHookUpdate<FieldMap>) -> bool {
+        self.fields.sort_property_order();
         match outcome {
             DatabaseHookUpdate::Continue => true,
             DatabaseHookUpdate::Cancel => false,
@@ -85,12 +87,14 @@ impl PreparedSessionCreate {
                     self.original = Some(self.fields.clone());
                 }
                 self.fields.extend(patch);
+                self.fields.sort_property_order();
                 true
             }
         }
     }
 
-    pub fn into_parts(self) -> (FieldMap, FieldMap) {
+    pub fn into_parts(mut self) -> (FieldMap, FieldMap) {
+        self.fields.sort_property_order();
         (
             self.original.unwrap_or_else(|| self.fields.clone()),
             self.fields,
@@ -221,6 +225,183 @@ pub fn session_from_create_fields(fields: FieldMap) -> AuthResult<SessionView> {
 mod tests {
     use super::*;
     use crate::{FieldDate, FieldValue, user_fields::UserFieldConfig};
+
+    #[test]
+    fn session_hooks_observe_numeric_properties_before_stable_string_properties() -> AuthResult<()>
+    {
+        let mut config = AuthConfig::new("session-property-order-secret-at-least-32");
+        let _ = config.session.fields_mut().insert(
+            "4".into(),
+            UserFieldConfig {
+                default_value: Some("default-four".into()),
+                ..Default::default()
+            },
+        );
+        let input = CreateSession {
+            inherited_fields: [
+                ("10".into(), "inherited-ten".into()),
+                ("inherited".into(), "kept".into()),
+                ("02".into(), "string-key".into()),
+                ("0".into(), "inherited-zero".into()),
+            ]
+            .into(),
+            additional_fields: [
+                ("2".into(), "caller-two".into()),
+                ("0".into(), "caller-zero".into()),
+                ("tail".into(), "caller-tail".into()),
+            ]
+            .into(),
+            user_id: "owner".into(),
+            expires_at: FieldDate::from_milliseconds(1_000.0),
+            ip_address: None,
+            user_agent: None,
+            impersonated_by: None,
+            active_organization_id: None,
+        };
+        let mut prepared = PreparedSessionCreate::new(input, &config, false)?;
+        let initial = [
+            "0",
+            "2",
+            "4",
+            "10",
+            "ipAddress",
+            "userAgent",
+            "inherited",
+            "02",
+            "tail",
+            "expiresAt",
+            "userId",
+            "token",
+            "createdAt",
+            "updatedAt",
+        ];
+        assert_eq!(
+            prepared
+                .fields_mut()
+                .keys()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+            initial,
+        );
+        let _ = prepared
+            .fields_mut()
+            .insert("1".into(), "direct-one".into());
+        let _ = prepared
+            .fields_mut()
+            .insert("first".into(), "first-hook".into());
+        assert!(prepared.apply(DatabaseHookUpdate::Continue));
+        let detached_order = [
+            "0",
+            "1",
+            "2",
+            "4",
+            "10",
+            "ipAddress",
+            "userAgent",
+            "inherited",
+            "02",
+            "tail",
+            "expiresAt",
+            "userId",
+            "token",
+            "createdAt",
+            "updatedAt",
+            "first",
+        ];
+        assert_eq!(
+            prepared
+                .fields_mut()
+                .keys()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+            detached_order,
+        );
+        assert!(prepared.apply(DatabaseHookUpdate::Patch(FieldMap::new())));
+        let _ = prepared
+            .fields_mut()
+            .insert("3".into(), "direct-three".into());
+        let _ = prepared
+            .fields_mut()
+            .insert("token".into(), "hook-token".into());
+        assert!(
+            prepared.apply(DatabaseHookUpdate::Patch(
+                [
+                    ("9".into(), "patch-nine".into()),
+                    ("first".into(), "patched-first".into()),
+                    ("last".into(), "patch-last".into()),
+                ]
+                .into(),
+            ))
+        );
+        assert_eq!(
+            prepared
+                .fields_mut()
+                .keys()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+            [
+                "0",
+                "1",
+                "2",
+                "3",
+                "4",
+                "9",
+                "10",
+                "ipAddress",
+                "userAgent",
+                "inherited",
+                "02",
+                "tail",
+                "expiresAt",
+                "userId",
+                "token",
+                "createdAt",
+                "updatedAt",
+                "first",
+                "last",
+            ],
+        );
+        let _ = prepared
+            .fields_mut()
+            .insert("8".into(), "final-eight".into());
+        let (original, actual) = prepared.into_parts();
+        assert_eq!(
+            original.keys().map(String::as_str).collect::<Vec<_>>(),
+            detached_order
+        );
+        assert_eq!(
+            actual.keys().map(String::as_str).collect::<Vec<_>>(),
+            [
+                "0",
+                "1",
+                "2",
+                "3",
+                "4",
+                "8",
+                "9",
+                "10",
+                "ipAddress",
+                "userAgent",
+                "inherited",
+                "02",
+                "tail",
+                "expiresAt",
+                "userId",
+                "token",
+                "createdAt",
+                "updatedAt",
+                "first",
+                "last",
+            ],
+        );
+        assert_eq!(actual["0"], FieldValue::from("caller-zero"));
+        assert_eq!(actual["4"], FieldValue::from("default-four"));
+        assert_eq!(original["first"], FieldValue::from("first-hook"));
+        assert_eq!(actual["first"], FieldValue::from("patched-first"));
+        assert_ne!(original["token"], actual["token"]);
+        assert_eq!(actual["token"], FieldValue::from("hook-token"));
+        Ok(())
+    }
 
     #[test]
     fn inherited_session_fields_keep_order_but_yield_to_native_defaults_and_overrides()

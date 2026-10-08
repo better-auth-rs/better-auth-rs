@@ -5,7 +5,8 @@ use super::{
 };
 use crate::plugins::endpoint_context::EndpointContext;
 use crate::plugins::helpers::{
-    SessionIssueError, apply_user_create_fields, get_credential_account, issue_user_session,
+    SessionIssueError, apply_user_create_fields, get_credential_account,
+    issue_selected_user_session_optional,
 };
 use better_auth_core::utils::password;
 use better_auth_core::wire::UserView;
@@ -114,9 +115,7 @@ impl EmailOtpPlugin {
             .email_verification_policy
             .auto_sign_in_after_verification
         {
-            return self
-                .session_response(req, ctx, user.id().typed()?, true)
-                .await;
+            return self.session_response(req, ctx, &user, true).await;
         }
         let manager = ctx.session_manager();
         if let Some(mut current) = manager
@@ -185,8 +184,7 @@ impl EmailOtpPlugin {
                     })?
             }
         };
-        self.session_response(req, ctx, user.id().typed()?, false)
-            .await
+        self.session_response(req, ctx, &user, false).await
     }
 
     pub(super) async fn request_password_reset(
@@ -430,30 +428,32 @@ impl EmailOtpPlugin {
         &self,
         req: &AuthRequest,
         ctx: &AuthContext<impl AuthSchema>,
-        user_id: &str,
+        user: &UserView,
         verification: bool,
     ) -> AuthResult<AuthResponse> {
         let meta = RequestMeta::from_request_with_config(req, &ctx.config.advanced.ip_address);
-        let issued = issue_user_session(ctx, user_id, meta.ip_address, meta.user_agent)
-            .await
-            .map_err(SessionIssueError::into_auth_error)?;
-        let user = ctx.user_view(&issued.user).await?;
+        let issued = issue_selected_user_session_optional(
+            ctx,
+            better_auth_core::FieldMap::from(ctx.internal_user_view(user).await?).into(),
+            &meta,
+            ctx.config.session.expires_in(),
+        )
+        .await
+        .map_err(SessionIssueError::into_auth_error)?
+        .ok_or_else(|| AuthError::internal("Cannot read properties of null (reading 'token')"))?;
+        let token = issued.session.token().field_value();
+        ctx.session_manager()
+            .set_native_session_cookie(req, issued, None)
+            .await?;
+        let user = ctx.user_view(user).await?;
         let mut body = better_auth_core::FieldMap::new();
         if verification {
             let _ = body.insert("status".into(), true.into());
         }
         body.extend([
-            ("token".into(), issued.session.token().field_value()),
+            ("token".into(), token),
             ("user".into(), better_auth_core::FieldMap::from(user).into()),
         ]);
-        let manager = ctx.session_manager();
-        manager
-            .set_session_cookie(
-                req,
-                manager.internal_data(&issued.user, &issued.session).await?,
-                None,
-            )
-            .await?;
         Ok(AuthResponse::native(200, body.into()))
     }
 }

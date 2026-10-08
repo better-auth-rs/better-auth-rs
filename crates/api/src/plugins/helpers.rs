@@ -313,19 +313,7 @@ pub(crate) async fn issue_user_session_with_lifetime<S: better_auth_core::AuthSc
     Ok(IssuedSession { user, session })
 }
 
-/// Issue a session from the selected adapter result, preserving the route's user snapshot.
-pub(crate) async fn issue_selected_user_session<S: better_auth_core::AuthSchema>(
-    ctx: &AuthContext<S>,
-    user: better_auth_core::FieldValue,
-    meta: &better_auth_core::RequestMeta,
-    expires_in: chrono::Duration,
-) -> Result<better_auth_core::session::NativeSessionData, SessionIssueError> {
-    issue_selected_user_session_optional(ctx, user, meta, expires_in)
-        .await?
-        .ok_or_else(|| AuthError::forbidden("session creation cancelled by database hook").into())
-}
-
-/// Retain before-hook cancellation separately from session admission and storage errors.
+/// Preserve cancellation and missing readback separately from admission and storage errors.
 pub(crate) async fn issue_selected_user_session_optional<S: better_auth_core::AuthSchema>(
     ctx: &AuthContext<S>,
     user: better_auth_core::FieldValue,
@@ -338,30 +326,21 @@ pub(crate) async fn issue_selected_user_session_optional<S: better_auth_core::Au
             .cloned()
             .unwrap_or_default(),
     );
-    admit_session_for_id(ctx, &user_id, None).await?;
-    let session = ctx
-        .session_manager()
-        .create_session_for_id_with_lifetime_optional(
-            user_id,
-            meta.ip_address.clone(),
-            meta.user_agent.clone(),
-            expires_in,
-        )
-        .await?;
+    let session = issue_session_for_id_optional(ctx, user_id, meta, expires_in).await?;
     Ok(session.map(|session| better_auth_core::session::NativeSessionData { user, session }))
 }
 
 /// Apply session admission without replacing the supplied owner with a projected User ID.
-pub(crate) async fn issue_session_for_id<S: better_auth_core::AuthSchema>(
+pub(crate) async fn issue_session_for_id_optional<S: better_auth_core::AuthSchema>(
     ctx: &AuthContext<S>,
     user_id: better_auth_core::SchemaValue<String>,
     meta: &better_auth_core::RequestMeta,
     expires_in: chrono::Duration,
-) -> Result<better_auth_core::wire::SessionView, SessionIssueError> {
+) -> Result<Option<better_auth_core::wire::SessionView>, SessionIssueError> {
     admit_session_for_id(ctx, &user_id, None).await?;
     Ok(ctx
         .session_manager()
-        .create_session_for_id_with_lifetime(
+        .create_session_for_id_with_lifetime_optional(
             user_id,
             meta.ip_address.clone(),
             meta.user_agent.clone(),
@@ -493,3 +472,7 @@ mod response_tests;
 #[cfg(test)]
 #[path = "helpers/session_tests.rs"]
 mod session_tests;
+
+#[cfg(test)]
+#[path = "helpers/nullable_session_tests.rs"]
+mod nullable_session_tests;

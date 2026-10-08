@@ -248,18 +248,8 @@ impl PasswordManagementPlugin {
             .ok_or(AuthError::Unauthenticated)?;
         let meta = RequestMeta::from_request_with_config(req, &ctx.config.advanced.ip_address);
 
-        let (response, new_token) =
-            change_password_core(&body, &user, &self.config, &meta, ctx).await?;
-
-        let auth_response = AuthResponse::json(200, &response)?;
-
-        // Set session cookie if a new session was created
-        if let Some(data) = new_token {
-            ctx.session_manager()
-                .set_session_cookie(req, data, None)
-                .await?;
-        }
-        Ok(auth_response)
+        let response = change_password_core(&body, &user, &self.config, req, &meta, ctx).await?;
+        Ok(AuthResponse::json(200, &response)?)
     }
 
     async fn handle_verify_password(

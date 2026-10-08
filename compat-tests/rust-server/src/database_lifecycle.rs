@@ -485,7 +485,7 @@ impl Fixture {
                 },
                 date(CREATED_AT),
             )?;
-            Session::set_expires_at(&mut session, date(EXPIRES_AT));
+            Session::set_expires_at(&mut session, date(EXPIRES_AT))?;
             session.updated_at = Set(date(UPDATED_AT));
             session.device_label = Set(Some(format!("{id}-old")));
             if self.events.stores_sessions {

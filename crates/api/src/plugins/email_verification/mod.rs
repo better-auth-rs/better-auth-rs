@@ -203,34 +203,22 @@ impl EmailVerificationPlugin {
             &query,
             current_session,
             &self.config,
+            req,
             ip_address,
             user_agent,
             &endpoint,
         )
         .await?
         {
-            VerifyEmailResult::Redirect { url, session_data } => {
+            VerifyEmailResult::Redirect { url } => {
                 let mut headers = better_auth_core::Headers::new();
                 _ = headers.insert("Location".to_string(), url);
                 _ = headers.insert("content-type".to_string(), "application/json".to_string());
-                if let Some(data) = session_data {
-                    ctx.session_manager()
-                        .set_session_cookie(req, data, None)
-                        .await?;
-                }
                 let mut response = AuthResponse::new(302);
                 response.headers = headers;
                 Ok(response)
             }
-            VerifyEmailResult::Json { body, session_data } => {
-                let response = AuthResponse::json(200, &body)?;
-                if let Some(data) = session_data {
-                    ctx.session_manager()
-                        .set_session_cookie(req, data, None)
-                        .await?;
-                }
-                Ok(response)
-            }
+            VerifyEmailResult::Json { body } => Ok(AuthResponse::json(200, &body)?),
         }
     }
 

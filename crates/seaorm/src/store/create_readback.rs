@@ -5,7 +5,7 @@ use better_auth_core::{
     user_fields::UserConfig,
 };
 use sea_orm::{
-    ColumnTrait, ConnectionTrait, DatabaseConnection, DbBackend, EntityTrait, Iden, Iterable,
+    ColumnTrait, ConnectionTrait, DatabaseConnection, DbBackend, EntityTrait, Iterable,
     PrimaryKeyToColumn, QueryFilter, QueryResult, QuerySelect, QueryTrait, Statement,
     TransactionTrait,
     sea_query::{ExprTrait, Value},
@@ -102,19 +102,24 @@ impl<E: EntityTrait> CreateReadback<'_, E> {
         &'a self,
         fields: &'a [(E::Column, Binding)],
     ) -> impl Iterator<Item = AuthResult<(E::Column, &'a Binding)>> + 'a {
-        self.schema.fields().iter().filter_map(|(name, field)| {
-            if field.unique != Some(true) {
-                return None;
-            }
-            let column = match (self.column)(resolve_field_name(field.field_name.as_deref(), name))
-            {
-                Ok(column) => column,
-                Err(error) => return Some(Err(error)),
-            };
-            field_value(fields, column)
-                .filter(|value| !is_null(value) && !is_undefined(value))
-                .map(|value| Ok((column, value)))
-        })
+        self.schema
+            .adapter_fields(&[])
+            .additional_fields
+            .into_iter()
+            .flatten()
+            .filter_map(move |(name, field)| {
+                if field.unique != Some(true) {
+                    return None;
+                }
+                let column =
+                    match (self.column)(resolve_field_name(field.field_name.as_deref(), &name)) {
+                        Ok(column) => column,
+                        Err(error) => return Some(Err(error)),
+                    };
+                field_value(fields, column)
+                    .filter(|value| !is_null(value) && !is_undefined(value))
+                    .map(|value| Ok((column, value)))
+            })
     }
 }
 
@@ -259,15 +264,57 @@ mod tests {
             ];
             let columns = readback
                 .unique_values(&fields)
-                .map(|candidate| candidate.map(|(column, _)| column))
+                .map(|candidate| candidate.map(|(column, _)| column.to_string()))
                 .collect::<AuthResult<Vec<_>>>()?;
             let mut expected = Vec::new();
             if probed {
-                expected.push(user::Column::Name);
+                expected.push(user::Column::Name.to_string());
             }
-            expected.extend([user::Column::Email, user::Column::CreatedAt]);
+            expected.extend([
+                user::Column::Email.to_string(),
+                user::Column::CreatedAt.to_string(),
+            ]);
             assert_eq!(columns, expected);
         }
+        Ok(())
+    }
+
+    #[test]
+    fn readback_uses_the_id_declaration_installed_by_input_conversion() -> AuthResult<()> {
+        let mut schema = UserConfig::default();
+        let _ = schema.fields_mut().insert(
+            "id".into(),
+            UserFieldConfig {
+                unique: Some(true),
+                field_name: Some("name".into()),
+                ..Default::default()
+            },
+        );
+        let _ = schema.fields_mut().insert(
+            "email".into(),
+            UserFieldConfig {
+                unique: Some(true),
+                ..Default::default()
+            },
+        );
+        let readback = CreateReadback::<user::Entity> {
+            schema: &schema,
+            policy: &IdGeneration::Database,
+            scope: ReadbackScope::Transaction,
+            column: user::Model::field_column,
+        };
+        let fields = [
+            (
+                user::Column::Name,
+                Binding::Raw("replaced-id-mapping".into()),
+            ),
+            (user::Column::Email, Binding::Raw("mail@example.com".into())),
+        ];
+        let columns = readback
+            .unique_values(&fields)
+            .map(|candidate| candidate.map(|(column, _)| column.to_string()))
+            .collect::<AuthResult<Vec<_>>>()?;
+        assert_eq!(columns, [user::Column::Email.to_string()]);
         Ok(())
     }
 

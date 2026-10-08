@@ -1,9 +1,9 @@
-use super::{SecondaryStore, decode};
+use super::{SecondaryStore, cache};
 use crate::store::VerificationStore;
 use crate::store::{VerificationCreateWriter, database_hooks::VerificationUpdate};
 use crate::types::CreateVerification;
 use crate::wire::VerificationView;
-use crate::{AuthError, AuthResult, AuthSchema};
+use crate::{AuthError, AuthResult, AuthSchema, FieldValue};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 
@@ -36,14 +36,16 @@ impl<S: AuthSchema> SecondaryStore<S> {
             return Ok(None);
         }
         for identifier in &identifiers {
-            let Some(value) = decode(
-                self.secondary()?
-                    .get_and_delete(&format!("verification:{identifier}"))
-                    .await?,
-            ) else {
+            let raw = self
+                .secondary()?
+                .get_and_delete(&format!("verification:{identifier}"))
+                .await?
+                .map(FieldValue::from_json)
+                .transpose()?;
+            let Some(value) = cache::decode(raw) else {
                 continue;
             };
-            let mut record = serde_json::from_value::<VerificationView>(value)?;
+            let mut record = cache::verification(&value)?;
             record.expires_at = record.expires_at.converted_date()?;
             if record.expires_at.date_milliseconds()?.is_nan() {
                 continue;
@@ -97,7 +99,7 @@ impl<S: AuthSchema> SecondaryStore<S> {
         transaction: Option<&dyn crate::store::AuthTransaction<S>>,
     ) -> AuthResult<Option<VerificationView>> {
         let request = crate::hooks::current_request_hook_context();
-        input = input.with_timestamps(Utc::now().into());
+        input = input.with_timestamps(self.now().into());
         input.identifier = self
             .config
             .verification
@@ -223,12 +225,12 @@ impl<S: AuthSchema> SecondaryStore<S> {
                 } else {
                     &record.expires_at
                 };
-            let seconds = expiry.converted_cache_ttl(Utc::now())?;
+            let seconds = expiry.converted_cache_ttl(self.now())?;
             if seconds > 0.0 {
                 self.secondary()?
                     .set_native(
                         &format!("verification:{identifier}").into(),
-                        &serde_json::to_string(&record)?,
+                        &cache::stringify(&record.fields()?.into())?,
                         Some(seconds),
                     )
                     .await?;
@@ -267,18 +269,12 @@ impl<S: AuthSchema> SecondaryStore<S> {
         let seconds = crate::SchemaValue::<crate::FieldDate>::from_field(
             fields.get("expiresAt").cloned().unwrap_or_default(),
         )
-        .cache_ttl(Utc::now())?;
+        .cache_ttl(self.now())?;
         if seconds > 0.0 {
             storage
                 .set_native(
                     &format!("verification:{identifier}").into(),
-                    &crate::FieldValue::from(fields)
-                        .stringify()?
-                        .ok_or_else(|| {
-                            AuthError::internal(
-                                "Verification cache serialization omitted the record",
-                            )
-                        })?,
+                    &cache::stringify(&fields.into())?,
                     Some(seconds),
                 )
                 .await?;
@@ -290,9 +286,13 @@ impl<S: AuthSchema> SecondaryStore<S> {
         let Some(storage) = &self.storage else {
             return Ok(None);
         };
-        decode(storage.get(&format!("verification:{identifier}")).await?)
-            .map(|value| serde_json::from_value(value).map_err(Into::into))
-            .transpose()
+        cache::decode(
+            storage
+                .get_native(&format!("verification:{identifier}").into())
+                .await?,
+        )
+        .map(|value| cache::verification(&value))
+        .transpose()
     }
 
     async fn verification_identifiers(&self, identifier: &str) -> AuthResult<Vec<String>> {
@@ -396,7 +396,7 @@ impl<S: AuthSchema> VerificationStore<S> for SecondaryStore<S> {
     ) -> AuthResult<Option<VerificationView>> {
         let record = self.get_verification_including_expired(identifier).await?;
         match record {
-            Some(record) if record.expires_at.is_after(Utc::now())? => Ok(Some(record)),
+            Some(record) if record.expires_at.is_after(self.now())? => Ok(Some(record)),
             _ => Ok(None),
         }
     }
@@ -471,7 +471,7 @@ impl<S: AuthSchema> VerificationStore<S> for SecondaryStore<S> {
             .consume_verification_including_expired(identifier)
             .await?;
         match record {
-            Some(record) if !record.expires_at.is_before(Utc::now())? => Ok(Some(record)),
+            Some(record) if !record.expires_at.is_before(self.now())? => Ok(Some(record)),
             _ => Ok(None),
         }
     }

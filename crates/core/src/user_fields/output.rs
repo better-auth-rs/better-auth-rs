@@ -224,6 +224,15 @@ impl UserView {
                 .iter()
                 .map(|user| {
                     let mut view = Self::from_model(user)?;
+                    if user.projected_fields().is_none() {
+                        view.field_order = config
+                            .user_field_schema()
+                            .adapter_fields(&[])
+                            .fields()
+                            .keys()
+                            .cloned()
+                            .collect();
+                    }
                     view.visible_fields = Some(
                         Self::active_plugin_fields(metadata)
                             .filter(|name| {
@@ -257,6 +266,9 @@ impl UserView {
                 config.fields(),
                 |(user, view, model), name, field| {
                     Box::pin(async move {
+                        if !view.field_order.iter().any(|field| field == name) {
+                            view.field_order.push(name.into());
+                        }
                         let value = if let Some(projected) = user.projected_fields() {
                             match name {
                                 "id" => Some(view.id.field_value()),
@@ -445,7 +457,7 @@ impl From<UserView> for FieldMap {
             })
             .collect();
         result.extend(user.additional_fields);
-        result
+        result.in_field_order(&user.field_order)
     }
 }
 
@@ -471,6 +483,7 @@ impl TryFrom<FieldMap> for UserView {
                 .collect(),
         );
         Ok(Self {
+            field_order: fields.keys().cloned().collect(),
             id: crate::SchemaValue::from_field(fields.remove("id").unwrap_or_default()),
             name: crate::SchemaValue::from_field(fields.remove("name").unwrap_or_default()),
             email: take(&mut fields, "email")?,
@@ -508,7 +521,7 @@ impl AuthRecordFields for UserView {
     fn field_values(&self) -> AuthResult<FieldMap> {
         let mut fields = FieldMap::from(self.clone());
         let _ = fields.insert("metadata".into(), self.metadata.clone());
-        Ok(fields)
+        Ok(fields.in_field_order(&self.field_order))
     }
 
     fn structured_clone(&self, context: &mut crate::StructuredCloneContext) -> AuthResult<Self> {

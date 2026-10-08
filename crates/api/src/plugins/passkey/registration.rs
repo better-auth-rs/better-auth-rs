@@ -159,7 +159,7 @@ pub(super) async fn verify_registration_core<S: AuthSchema>(
     session_user: Option<UserView>,
     config: &PasskeyConfig,
     ctx: &AuthContext<S>,
-) -> PasskeyHandlerResult<(FieldValue, Option<better_auth_core::session::SessionData>)> {
+) -> PasskeyHandlerResult<FieldValue> {
     let Some(origins) = resolve_origins(config, req) else {
         return response_message(400, "Failed to verify registration");
     };
@@ -278,7 +278,11 @@ pub(super) async fn verify_registration_core<S: AuthSchema>(
             .as_ref()
             .map(|passkey| PasskeyView::from(passkey).field_values())
             .transpose()?;
-        let token = if let Some((user, session)) = session {
+        if let Some((user, session)) = session {
+            let manager = ctx.session_manager();
+            manager
+                .set_session_cookie(req, manager.internal_data(&user, &session).await?, None)
+                .await?;
             let result = result.get_or_insert_with(FieldMap::new);
             let _ = result.insert(
                 "session".into(),
@@ -288,14 +292,8 @@ pub(super) async fn verify_registration_core<S: AuthSchema>(
                 "user".into(),
                 FieldMap::from(ctx.user_view(&user).await?).into(),
             );
-            Some(ctx.session_manager().internal_data(&user, &session).await?)
-        } else {
-            None
-        };
-        Ok((
-            result.map(FieldValue::from).unwrap_or(FieldValue::Null),
-            token,
-        ))
+        }
+        Ok(result.map(FieldValue::from).unwrap_or(FieldValue::Null))
     }
     .await
     .map_err(|error| verification_error(error, true))?;
@@ -405,9 +403,17 @@ impl<S: AuthSchema> Registration<S> {
                 active_organization_id: None,
             };
             let session = match transaction {
-                Some(tx) => tx.create_session_with_deferred_secondary(input).await?,
-                None => self.ctx.database.create_session(input).await?,
-            };
+                Some(tx) => {
+                    tx.create_session_with_deferred_secondary_optional(input)
+                        .await?
+                }
+                None => self.ctx.database.create_session_optional(input).await?,
+            }
+            .ok_or(AuthError::Upstream {
+                status: 500,
+                code: "UNABLE_TO_CREATE_SESSION",
+                message: "Unable to create session",
+            })?;
             Some((user, session))
         } else {
             None

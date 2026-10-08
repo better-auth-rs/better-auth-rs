@@ -916,15 +916,9 @@ pub(crate) async fn handle_social_sign_in(
 
     match ctx.config.account.store_state_strategy() {
         better_auth_core::OAuthStateStrategy::Database => {
-            if response.token.is_some() {
-                return Ok(auth_response);
-            }
             attach_state_cookie(auth_response, &ctx.config, &flow.state)
         }
         better_auth_core::OAuthStateStrategy::Cookie => {
-            if response.token.is_some() {
-                return Ok(auth_response);
-            }
             attach_cookie_state_payload(auth_response, &ctx.config, &flow.payload)
         }
     }

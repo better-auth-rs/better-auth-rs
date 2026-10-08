@@ -71,7 +71,17 @@ where
                 },
             )
             .await?;
+        let order: Vec<_> = self
+            .config()
+            .user
+            .user_field_schema()
+            .adapter_fields(&[])
+            .fields()
+            .keys()
+            .cloned()
+            .collect();
         for (view, row) in output.iter_mut().zip(rows) {
+            view.field_order.clone_from(&order);
             view.visible_fields = row.field_presence().cloned();
         }
         Ok(output)

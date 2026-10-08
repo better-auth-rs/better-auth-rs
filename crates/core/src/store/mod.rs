@@ -379,6 +379,13 @@ pub trait AuthTransaction<S: AuthSchema>:
     ) -> AuthResult<crate::wire::SessionView> {
         self.create_session(create_session).await
     }
+    /// Preserve nullable Session readback while deferring secondary writes until commit.
+    async fn create_session_with_deferred_secondary_optional(
+        &self,
+        create_session: CreateSession,
+    ) -> AuthResult<Option<crate::wire::SessionView>> {
+        self.create_session_optional(create_session).await
+    }
 }
 
 /// Persistent records invalidated when an unverified user proves email ownership.

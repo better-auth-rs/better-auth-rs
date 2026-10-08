@@ -73,6 +73,7 @@ export function createPasskeyOptions(profile: string) {
         before: async () => {
           events.push({ event: "session.before" });
           if (control.failSession) throw APIError.from("FORBIDDEN", { code: "SESSION_REJECTED", message: "Session rejected" });
+          if (control.cancelSession) return false;
         },
         after: async () => { events.push({ event: "session.after" }); },
       } } },

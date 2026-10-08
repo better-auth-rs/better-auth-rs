@@ -101,15 +101,7 @@ impl PasskeyPlugin {
             None
         };
         match registration::verify_registration_core(body, req, user, &self.config, ctx).await? {
-            PasskeyHandlerOutcome::Success((result, token)) => {
-                let response = AuthResponse::native(200, result);
-                if let Some(data) = token {
-                    ctx.session_manager()
-                        .set_session_cookie(req, data, None)
-                        .await?;
-                }
-                Ok(response)
-            }
+            PasskeyHandlerOutcome::Success(result) => Ok(AuthResponse::native(200, result)),
             PasskeyHandlerOutcome::Response(response) => Ok(response),
         }
     }
@@ -141,12 +133,7 @@ impl PasskeyPlugin {
         match verify_authentication_core(&body, req, &self.config, ip_address, user_agent, ctx)
             .await?
         {
-            PasskeyHandlerOutcome::Success((response, data)) => {
-                ctx.session_manager()
-                    .set_session_cookie(req, data, None)
-                    .await?;
-                Ok(AuthResponse::native(200, response))
-            }
+            PasskeyHandlerOutcome::Success(response) => Ok(AuthResponse::native(200, response)),
             PasskeyHandlerOutcome::Response(response) => Ok(response),
         }
     }

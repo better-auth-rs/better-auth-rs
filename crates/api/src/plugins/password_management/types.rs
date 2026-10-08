@@ -55,7 +55,11 @@ pub(crate) struct RequestPasswordResetResponse {
 /// Response body for `POST /change-password`.
 #[derive(Debug, Serialize)]
 pub(crate) struct ChangePasswordResponse<U: Serialize> {
-    pub(crate) token: Option<String>,
+    #[serde(
+        with = "better_auth_core::field_value::serde::value",
+        skip_serializing_if = "better_auth_core::FieldValue::is_undefined"
+    )]
+    pub(crate) token: better_auth_core::FieldValue,
     pub(crate) user: U,
 }
 

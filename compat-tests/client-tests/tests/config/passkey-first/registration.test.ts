@@ -62,6 +62,27 @@ compatScenario("Passkey optional sessions bypass identity resolution and preserv
   return f.observations;
 });
 
+compatScenario("Passkey cancelled session rolls back registration and consumes the challenge", async (ctx) => {
+  const f = fixture(ctx); const userId = "passkey-cancelled-user";
+  await f.control({ createUser: { id: userId, email: ctx.uniqueEmail("passkey-cancelled"), name: "Cancelled User", emailVerified: false }, targetUserId: userId, cancelSession: true });
+  const key = authenticator("passkey-cancelled-key");
+  const options = await f.options();
+  const failed = await f.register(key, options, { createSession: true });
+  expect(failed.status).toBe(500);
+  expect(failed.body).toEqual({ code: "UNABLE_TO_CREATE_SESSION", message: "Unable to create session" });
+  const state = await f.trace(userId);
+  expect(state.user).toBe(false); expect(state.passkeys).toEqual([]);
+  expect(asArray(state.events).map(asRecord).map(event => event.event)).toEqual(["resolve", "registration.extensions", "registration.verified", "session.before"]);
+  const session = await ctx.actor().client.getSession();
+  expect(session.data).toBeNull(); f.observations.push(ctx.snapshot(session));
+  const replay = await f.register(key, options, { createSession: true });
+  expect(replay.status).toBe(400); expect(asRecord(replay.body).code).toBe("CHALLENGE_NOT_FOUND");
+  await f.control({ cancelSession: false });
+  expect((await f.register(key, await f.options(), { createSession: true })).status).toBe(200);
+  expect((await f.trace(userId)).user).toBe(true);
+  return f.observations;
+});
+
 compatScenario("Passkey session registration applies admin bans and expiry inside the transaction", async (ctx) => {
   const f = fixture(ctx);
   const userId = "passkey-banned-user";

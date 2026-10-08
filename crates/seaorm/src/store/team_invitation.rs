@@ -217,7 +217,7 @@ where
                     self.write_session_update(
                         &tx,
                         session_token,
-                        better_auth_core::store::SessionUpdate {
+                        better_auth_core::hooks::SessionUpdate {
                             additional_fields: [("activeTeamId".into(), (*team_id).into())].into(),
                             ..Default::default()
                         },
@@ -232,7 +232,7 @@ where
                 .write_session_update(
                     &tx,
                     session_token,
-                    better_auth_core::store::SessionUpdate {
+                    better_auth_core::hooks::SessionUpdate {
                         additional_fields: [(
                             "activeOrganizationId".into(),
                             invitation.organization_id.field_value(),

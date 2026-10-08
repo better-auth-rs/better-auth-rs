@@ -7,6 +7,7 @@ use tracing_subscriber::{Layer, layer::Context, registry::LookupSpan};
 #[derive(Clone, Debug)]
 pub(super) enum Event {
     Callback(Value),
+    CacheSet(super::lifecycle_cache::Entry),
     Sql { statement: Statement, failed: bool },
     Transaction(&'static str),
 }
@@ -24,6 +25,13 @@ impl Trace {
 
     pub(super) fn take(&self) -> Vec<Event> {
         std::mem::take(&mut *self.0.lock().expect("MySQL readback trace"))
+    }
+
+    pub(super) fn cache_set(&self, entry: super::lifecycle_cache::Entry) {
+        self.0
+            .lock()
+            .expect("MySQL cache trace")
+            .push(Event::CacheSet(entry));
     }
 
     pub(super) fn capture(&self, database: &mut DatabaseConnection) {
@@ -181,6 +189,7 @@ pub(super) fn check_jwk(
         let label = format!("{label} event {index}");
         match actual {
             Event::Callback(value) => assert_eq!(value, expected, "{label} callback"),
+            Event::CacheSet(entry) => panic!("{label} unexpected secondary write: {entry:?}"),
             Event::Transaction(operation) => assert_eq!(
                 expected,
                 &json!({
@@ -259,6 +268,10 @@ fn lifecycle_sql(expected: &Value) -> (String, Value) {
         "insert into `session` (`expiresAt`, `token`, `createdAt`, `updatedAt`, `ipAddress`, `userAgent`, `userId`, `id`) values (?, ?, ?, ?, ?, ?, ?, ?)" => "INSERT INTO `session` (`expiresAt`, `token`, `createdAt`, `updatedAt`, `ipAddress`, `userAgent`, `userId`, `id`) VALUES (?, ?, ?, ?, ?, ?, ?, ?)".to_owned(),
         "insert into `verification` (`identifier`, `value`, `expiresAt`, `createdAt`, `updatedAt`, `id`) values (?, ?, ?, ?, ?, ?)" => "INSERT INTO `verification` (`identifier`, `value`, `expiresAt`, `createdAt`, `updatedAt`, `id`) VALUES (?, ?, ?, ?, ?, ?)".to_owned(),
         "select * from `user` where `id` = ? limit ?" => format!("SELECT {} FROM `user` WHERE `user`.`id` = ? LIMIT ?", projection("user", &user_columns)),
+        "select `primary`.* from (select * from `user` where `user`.`id` = ?) as `primary`" => {
+            parameters.push(json!(1));
+            format!("SELECT {} FROM `user` WHERE `user`.`id` = ? LIMIT ?", projection("user", &user_columns))
+        },
         "select * from `session` where `id` = ? limit ?" => format!("SELECT {} FROM `session` WHERE `session`.`id` = ? LIMIT ?", projection("session", &session_columns)),
         "select * from `verification` where `id` = ? limit ?" => format!("SELECT {} FROM `verification` WHERE `verification`.`id` = ? LIMIT ?", projection("verification", &verification_columns)),
         sql => panic!("Unspecified lifecycle SQL boundary: {sql}"),
@@ -266,92 +279,11 @@ fn lifecycle_sql(expected: &Value) -> (String, Value) {
     (sql, json!(parameters))
 }
 
-fn lifecycle_projection(case: &super::lifecycle::Case) -> super::contract::TestResult<Vec<Value>> {
-    let mut expected = Vec::new();
-    let mut secondary_phases = Vec::new();
-    for event in &case.trace {
-        let phase = event["phase"].as_str().expect("captured lifecycle phase");
-        if matches!(phase, "cache:get" | "cache:set") {
-            if secondary_phases.is_empty() {
-                let before = case
-                    .trace
-                    .iter()
-                    .find(|event| event["phase"] == "before:plugin")
-                    .expect("captured before hook");
-                let original = super::contract::revive_fields(&before["data"]["fields"])?;
-                let mut actual = original.clone();
-                actual.extend(super::contract::revive_fields(&case.patch["fields"])?);
-                expected.push(if case.model == "session" {
-                    json!({"phase": "writer:session", "original": super::lifecycle::observe(Some(original))?, "actual": super::lifecycle::observe(Some(actual))?})
-                } else {
-                    json!({"phase": "writer:verification", "actual": super::lifecycle::observe(Some(actual))?})
-                });
-            }
-            secondary_phases.push(phase);
-        } else if event.get("sql").and_then(Value::as_str)
-            == Some(
-                "select `primary`.* from (select * from `user` where `user`.`id` = ?) as `primary`",
-            )
-        {
-            assert_eq!(case.model, "session");
-            assert_eq!(event["parameters"], json!(["owner-a"]));
-            assert_eq!(event["level"], "query");
-            secondary_phases.push("cache:user-read");
-        } else if case.model == "user" && phase == "before:plugin" {
-            assert_eq!(
-                event["data"]["keys"],
-                json!([
-                    "createdAt",
-                    "updatedAt",
-                    "name",
-                    "email",
-                    "emailVerified",
-                    "image",
-                    "id"
-                ])
-            );
-            expected.push(
-                json!({"phase": "before:plugin", "data": {"fields": event["data"]["fields"]}}),
-            );
-        } else {
-            expected.push(event.clone());
-        }
-    }
-    let writer_runs = case.secondary && !case.cancel && !(case.deferred && case.after_error);
-    let phases: &[&str] = if !writer_runs {
-        &[]
-    } else if case.model == "session" {
-        &["cache:get", "cache:set", "cache:user-read", "cache:set"]
-    } else {
-        &["cache:set"]
-    };
-    assert_eq!(
-        secondary_phases, phases,
-        "{} explicitly excluded production-secondary scope",
-        case.name
-    );
-    let cache_entries = if !writer_runs {
-        0
-    } else if case.model == "session" {
-        2
-    } else {
-        1
-    };
-    assert_eq!(
-        case.cache.len(),
-        cache_entries,
-        "{} fixed-clock fixture scope",
-        case.name
-    );
-    Ok(expected)
-}
-
 pub(super) fn check_lifecycle(
     actual: Vec<Event>,
     case: &super::lifecycle::Case,
 ) -> super::contract::TestResult {
-    // The custom writer observes the real lifecycle handoff. Production cache bytes, TTLs, and user loading need a shared clock.
-    let expected = lifecycle_projection(case)?;
+    let expected = &case.trace;
     assert_eq!(
         actual.len(),
         expected.len(),
@@ -361,13 +293,43 @@ pub(super) fn check_lifecycle(
     for (index, (actual, expected)) in actual.iter().zip(expected).enumerate() {
         let label = format!("{} event {index}", case.name);
         match actual {
-            Event::Callback(value) => assert_eq!(
-                value, &expected,
-                "{label} callback or complete writer arguments"
-            ),
+            Event::Callback(value)
+                if case.model == "user" && expected["phase"] == "before:plugin" =>
+            {
+                // CreateUser preserves values but does not expose JavaScript property insertion order.
+                assert_eq!(
+                    expected["data"]["keys"],
+                    json!([
+                        "createdAt",
+                        "updatedAt",
+                        "name",
+                        "email",
+                        "emailVerified",
+                        "image",
+                        "id"
+                    ]),
+                    "{label} upstream User key order remains an explicit boundary"
+                );
+                assert_eq!(
+                    value,
+                    &json!({"phase": "before:plugin", "data": {"fields": expected["data"]["fields"]}}),
+                    "{label} complete typed User before-hook values"
+                );
+            }
+            Event::Callback(value) => assert_eq!(value, expected, "{label} complete callback"),
+            Event::CacheSet(entry) => {
+                let mut fields = expected.as_object().expect("captured cache write").clone();
+                assert_eq!(fields.remove("phase"), Some(json!("cache:set")), "{label}");
+                let captured: super::lifecycle_cache::Entry =
+                    serde_json::from_value(Value::Object(fields))?;
+                assert_eq!(
+                    entry, &captured,
+                    "{label} exact cache bytes, key, and numeric TTL"
+                );
+            }
             Event::Transaction(operation) => assert_eq!(
                 expected,
-                json!({
+                &json!({
                     "phase": "sql", "level": "query", "sql": operation, "parameters": [],
                 }),
                 "{label} transaction boundary"
@@ -376,7 +338,7 @@ pub(super) fn check_lifecycle(
                 assert!(!failed, "{label} lifecycle SQL must succeed");
                 assert_eq!(expected["phase"], "sql", "{label}");
                 assert_eq!(expected["level"], "query", "{label}");
-                let (sql, values) = lifecycle_sql(&expected);
+                let (sql, values) = lifecycle_sql(expected);
                 assert_eq!(statement.sql, sql, "{label} exact SeaORM SQL");
                 assert_eq!(
                     parameters(statement),

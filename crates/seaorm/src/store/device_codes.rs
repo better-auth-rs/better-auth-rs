@@ -9,6 +9,7 @@ use sea_orm::{
 
 use better_auth_core::store::{DeviceCodeStore, schema::EntityRole, validate_increment_one_update};
 
+use crate::SeaOrmPluginModel;
 use crate::error::{AuthError, AuthResult};
 use crate::schema::AuthSchema;
 use crate::types::{CreateDeviceCode, DeviceCode, UpdateDeviceCode};
@@ -283,7 +284,7 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
             .update_device_code_row(connection, id, update.into_adapter_fields()?)
             .await?
             .ok_or_else(|| AuthError::not_found("Device code not found"))?;
-        self.project_device_code_models(row.into_iter().collect())
+        self.project_device_code_models(vec![row])
             .await?
             .pop()
             .ok_or_else(|| AuthError::internal("Device code creation returned no record"))

@@ -12,6 +12,8 @@
 mod contract;
 #[path = "support/mysql_create_lifecycle.rs"]
 mod lifecycle;
+#[path = "support/mysql_lifecycle_cache.rs"]
+mod lifecycle_cache;
 #[path = "support/mysql_lifecycle_hooks.rs"]
 mod lifecycle_hooks;
 #[path = "support/mysql_lifecycle_models.rs"]

@@ -138,6 +138,7 @@ fn make_test_user(email: &str, verified: bool) -> UserView {
     UserView {
         additional_fields: Default::default(),
         visible_fields: None,
+        field_order: Default::default(),
         id: "test-id".into(),
         name: Some("Test".into()).into(),
         email: Some(email.into()),
@@ -225,6 +226,7 @@ fn test_to_user_preserves_fields() {
     let user = UserView {
         additional_fields: Default::default(),
         visible_fields: None,
+        field_order: Default::default(),
         id: "test-id".into(),
         name: Some("Test User".into()).into(),
         email: Some("test@example.com".into()),

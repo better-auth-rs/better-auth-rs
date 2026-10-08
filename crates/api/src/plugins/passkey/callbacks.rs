@@ -12,13 +12,13 @@ use serde_json::{Map, Value};
 #[async_trait]
 pub trait PasskeyUsers: Send + Sync {
     async fn get_user_by_id(&self, id: &str) -> AuthResult<Option<UserView>>;
-    async fn create_user(&self, user: CreateUser) -> AuthResult<UserView>;
+    async fn create_user(&self, user: CreateUser) -> AuthResult<Option<UserView>>;
     async fn get_user_by_email(&self, email: &str) -> AuthResult<Option<UserView>>;
     async fn update_user(
         &self,
         id: &str,
         update: better_auth_core::UpdateUser,
-    ) -> AuthResult<UserView>;
+    ) -> AuthResult<Option<UserView>>;
     async fn delete_user(&self, id: &str) -> AuthResult<()>;
 }
 /// Endpoint data and the active user adapter.
@@ -61,12 +61,15 @@ impl<S: AuthSchema> PasskeyUsers for Users<'_, S> {
         &self,
         id: &str,
         update: better_auth_core::UpdateUser,
-    ) -> AuthResult<UserView> {
+    ) -> AuthResult<Option<UserView>> {
         let user = match self.transaction {
-            Some(tx) => tx.update_user(id, update).await?,
-            None => self.ctx.database.update_user(id, update).await?,
+            Some(tx) => tx.update_user_optional(id, update).await?,
+            None => self.ctx.database.update_user_optional(id, update).await?,
         };
-        self.ctx.internal_user_view(&user).await
+        match user {
+            Some(user) => self.ctx.internal_user_view(&user).await.map(Some),
+            None => Ok(None),
+        }
     }
     async fn delete_user(&self, id: &str) -> AuthResult<()> {
         match self.transaction {
@@ -74,13 +77,16 @@ impl<S: AuthSchema> PasskeyUsers for Users<'_, S> {
             None => self.ctx.database.delete_user(id).await,
         }
     }
-    async fn create_user(&self, mut user: CreateUser) -> AuthResult<UserView> {
+    async fn create_user(&self, mut user: CreateUser) -> AuthResult<Option<UserView>> {
         crate::plugins::helpers::apply_default_role(self.ctx, &mut user);
         let user = match self.transaction {
-            Some(tx) => tx.create_user(user).await?,
-            None => self.ctx.database.create_user(user).await?,
+            Some(tx) => tx.create_user_optional(user).await?,
+            None => self.ctx.database.create_user_optional(user).await?,
         };
-        self.ctx.internal_user_view(&user).await
+        match user {
+            Some(user) => self.ctx.internal_user_view(&user).await.map(Some),
+            None => Ok(None),
+        }
     }
 }
 impl<'a> PasskeyEndpoint<'a> {

@@ -11,7 +11,7 @@ use super::email_verification::EmailVerificationPlugin;
 use better_auth_core::utils::password::{self as password_utils, PasswordHasher};
 use better_auth_core::wire::UserView;
 
-use crate::plugins::helpers::{SessionIssueError, issue_selected_user_session};
+use crate::plugins::helpers::{SessionIssueError, issue_selected_user_session_optional};
 
 mod callbacks;
 mod request;
@@ -302,6 +302,7 @@ async fn finalize_sign_in_with_user_core(
     req: &AuthRequest,
     user: impl AuthUser,
     remember_me: Option<bool>,
+    session_failure_status: u16,
     email_verification: Option<&EmailVerificationPlugin>,
     callback_url: Option<&str>,
     meta: &RequestMeta,
@@ -325,7 +326,7 @@ async fn finalize_sign_in_with_user_core(
         ctx.config.session.expires_in()
     };
     let user = ctx.internal_user_view(&user).await?;
-    let issued = issue_selected_user_session(
+    let issued = issue_selected_user_session_optional(
         ctx,
         better_auth_core::FieldMap::from(user.clone()).into(),
         meta,
@@ -333,6 +334,17 @@ async fn finalize_sign_in_with_user_core(
     )
     .await
     .map_err(SessionIssueError::into_auth_error)?;
+    let Some(issued) = issued else {
+        if session_failure_status == 401 {
+            better_auth_core::observability::logger::current()
+                .error("Failed to create session", &[]);
+        }
+        return Err(AuthError::Upstream {
+            status: session_failure_status,
+            code: "FAILED_TO_CREATE_SESSION",
+            message: "Failed to create session",
+        });
+    };
     let token = issued.session.token().into_owned();
     let manager = ctx.session_manager();
     manager
@@ -427,6 +439,7 @@ pub(crate) async fn sign_in_core(
         req,
         user,
         body.remember_me,
+        401,
         email_verification,
         body.callback_url.as_deref(),
         meta,
@@ -490,6 +503,7 @@ pub(crate) async fn sign_in_username_core(
         req,
         user,
         body.remember_me,
+        500,
         None,
         body.callback_url.as_deref(),
         meta,

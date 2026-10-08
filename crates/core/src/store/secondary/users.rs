@@ -1,5 +1,4 @@
-use super::sessions::decode_native;
-use super::{SecondaryStore, decode};
+use super::{SecondaryStore, cache};
 use crate::entity::AuthUser;
 use crate::store::{AuthTransaction, UserStore, VerificationCleanup, VerificationSessionCleanup};
 use crate::types::{CreateUser, ListUsersParams, UpdateUser};
@@ -71,18 +70,16 @@ impl<S: AuthSchema> SecondaryStore<S> {
             self.inner.supports_native_json(),
         )
         .await?;
-        let references = decode(
+        let references = cache::decode(
             self.secondary()?
-                .get(&format!("active-sessions-{}", user.id.display_string()?))
+                .get_native(&format!("active-sessions-{}", user.id.display_string()?).into())
                 .await?,
         )
-        .map(FieldValue::from_json)
-        .transpose()?
         .unwrap_or_default();
         if !references.is_truthy() {
             return Ok(());
         }
-        let now = chrono::Utc::now();
+        let now = self.now();
         let references = references
             .as_array()
             .ok_or_else(|| AuthError::internal("Cached user session index must be an array"))?;
@@ -163,32 +160,27 @@ impl<S: AuthSchema> SecondaryStore<S> {
         user: &FieldValue,
         now: chrono::DateTime<chrono::Utc>,
     ) -> AuthResult<()> {
-        let Some(cached) = decode_native(self.secondary()?.get_native(token).await?)? else {
+        let Some(cached) = cache::decode(self.secondary()?.get_native(token).await?) else {
             return Ok(());
         };
-        if !FieldValue::from_json(cached.clone())?.is_truthy() {
-            return Ok(());
-        }
-        let session = cached.get("session").ok_or_else(|| {
-            AuthError::internal("Cached user session refresh requires a session object")
-        })?;
+        let session = cached
+            .as_object()
+            .and_then(|cached| cached.get("session"))
+            .ok_or_else(|| {
+                AuthError::internal("Cached user session refresh requires a session object")
+            })?;
         let expires = session
-            .get("expiresAt")
+            .as_object()
+            .and_then(|session| session.get("expiresAt"))
             .cloned()
-            .map(FieldValue::from_json)
-            .transpose()?
             .unwrap_or_default();
         let seconds = cached_expiration(expires).cache_ttl(now)?;
         let envelope = FieldValue::from(FieldMap::from([
-            ("session".into(), FieldValue::from_json(session.clone())?),
+            ("session".into(), session.clone()),
             ("user".into(), user.clone()),
         ]));
         self.secondary()?
-            .set_native(
-                token,
-                &serde_json::to_string(&crate::field_value::serde::Json(&envelope))?,
-                Some(seconds),
-            )
+            .set_native(token, &cache::stringify(&envelope)?, Some(seconds))
             .await?;
         Ok(())
     }

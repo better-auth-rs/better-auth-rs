@@ -1,4 +1,4 @@
-use super::{SecondaryStore, decode, object};
+use super::{SecondaryStore, cache};
 use crate::entity::AuthSession;
 use crate::store::database_hooks::SessionUpdate;
 use crate::store::{SessionStore, SessionUpdateWriter, TeamMemberLimits};
@@ -7,29 +7,38 @@ use crate::wire::{SessionView, UserView};
 use crate::{AuthError, AuthResult, AuthSchema, FieldMap, FieldValue, FromFieldMap};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value, json};
 
 mod deletion;
 
-#[derive(Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone)]
 pub(super) struct SessionReference {
-    #[serde(default, skip_serializing_if = "crate::SchemaValue::is_undefined")]
     pub token: crate::SchemaValue<String>,
-    #[serde(default, skip_serializing_if = "crate::SchemaValue::is_undefined")]
     pub expires_at: crate::SchemaValue<f64>,
+}
+
+impl SessionReference {
+    fn fields(&self) -> FieldValue {
+        FieldMap::from([
+            ("token".into(), self.token.field_value()),
+            ("expiresAt".into(), self.expires_at.field_value()),
+        ])
+        .into()
+    }
+}
+
+fn encode_references(references: &[SessionReference]) -> AuthResult<String> {
+    cache::stringify(
+        &references
+            .iter()
+            .map(SessionReference::fields)
+            .collect::<Vec<_>>()
+            .into(),
+    )
 }
 
 impl<S: AuthSchema> SecondaryStore<S> {
     pub(super) fn hydrate_session(&self, fields: FieldMap) -> AuthResult<SessionView> {
         let mut session = SessionView::from_field_values(fields)?;
-        session.active = true;
-        Ok(session)
-    }
-
-    fn read_cached_session(&self, fields: Map<String, Value>) -> AuthResult<SessionView> {
-        let mut session: SessionView = serde_json::from_value(Value::Object(fields))?;
         session.active = true;
         Ok(session)
     }
@@ -127,7 +136,7 @@ impl<S: AuthSchema> SecondaryStore<S> {
         let user_id = owner.display_string()?;
         let token = original.get("token").cloned().unwrap_or_default();
         let mut references = self.references(&user_id).await?;
-        let now = Utc::now();
+        let now = self.now();
         retain_references(&mut references, |reference| {
             Ok(
                 crate::query::field_number(&reference.expires_at.field_value())?
@@ -159,7 +168,7 @@ impl<S: AuthSchema> SecondaryStore<S> {
             self.secondary()?
                 .set_native(
                     &format!("active-sessions-{user_id}").into(),
-                    &serde_json::to_string(&references)?,
+                    &encode_references(&references)?,
                     Some(seconds),
                 )
                 .await?;
@@ -182,21 +191,37 @@ impl<S: AuthSchema> SecondaryStore<S> {
         };
         let seconds = expiry.cache_ttl(now)?;
         if seconds > 0.0 {
-            let value = json!({ "session": session.json()?, "user": user });
+            let value = cache::session_envelope(session.clone(), user);
             self.secondary()?
-                .set_native(&token, &serde_json::to_string(&value)?, Some(seconds))
+                .set_native(&token, &cache::stringify(&value)?, Some(seconds))
                 .await?;
         }
         Ok(())
     }
 
     pub(super) async fn references(&self, user_id: &str) -> AuthResult<Vec<SessionReference>> {
-        Ok(decode(
+        Ok(cache::decode(
             self.secondary()?
-                .get(&format!("active-sessions-{user_id}"))
+                .get_native(&format!("active-sessions-{user_id}").into())
                 .await?,
         )
-        .and_then(|value| serde_json::from_value(value).ok())
+        .and_then(|value| {
+            value
+                .as_array()?
+                .iter()
+                .map(|value| {
+                    let fields = value.as_object()?;
+                    Some(SessionReference {
+                        token: crate::SchemaValue::from_field(
+                            fields.get("token").cloned().unwrap_or_default(),
+                        ),
+                        expires_at: crate::SchemaValue::from_field(
+                            fields.get("expiresAt").cloned().unwrap_or_default(),
+                        ),
+                    })
+                })
+                .collect::<Option<Vec<_>>>()
+        })
         .unwrap_or_default())
     }
 
@@ -210,13 +235,9 @@ impl<S: AuthSchema> SecondaryStore<S> {
         if let Some(last) = references.last() {
             let seconds =
                 crate::SchemaValue::<crate::FieldDate>::from_field(last.expires_at.field_value())
-                    .cache_ttl(Utc::now())?;
+                    .cache_ttl(self.now())?;
             self.secondary()?
-                .set_native(
-                    &key.into(),
-                    &serde_json::to_string(&references)?,
-                    Some(seconds),
-                )
+                .set_native(&key.into(), &encode_references(&references)?, Some(seconds))
                 .await
         } else {
             self.secondary()?.delete(&key).await
@@ -224,7 +245,7 @@ impl<S: AuthSchema> SecondaryStore<S> {
     }
 
     async fn add_reference(&self, session: &crate::wire::SessionView) -> AuthResult<()> {
-        let now = Utc::now().timestamp_millis() as f64;
+        let now = self.now().timestamp_millis() as f64;
         let mut references = self.references(&session.user_id.display_string()?).await?;
         retain_references(&mut references, |reference| {
             Ok(
@@ -258,7 +279,7 @@ impl<S: AuthSchema> SecondaryStore<S> {
         if self.storage.is_none() {
             return Ok(());
         }
-        let seconds = session.expires_at().cache_ttl(Utc::now())?;
+        let seconds = session.expires_at().cache_ttl(self.now())?;
         if seconds <= 0.0 {
             return Ok(());
         }
@@ -279,11 +300,11 @@ impl<S: AuthSchema> SecondaryStore<S> {
             ),
             None => None,
         };
-        let value = json!({ "session": self.session_fields(session).await?.json()?, "user": user });
+        let value = cache::session_envelope(self.session_fields(session).await?, user);
         self.secondary()?
             .set_native(
                 &session.token().field_value(),
-                &serde_json::to_string(&value)?,
+                &cache::stringify(&value)?,
                 Some(seconds),
             )
             .await
@@ -294,13 +315,15 @@ impl<S: AuthSchema> SecondaryStore<S> {
         token: &FieldValue,
         update: SessionUpdate,
     ) -> AuthResult<Option<crate::wire::SessionView>> {
-        let Some(mut cached) = decode_native(self.secondary()?.get_native(token).await?)? else {
+        let Some(mut cached) = cache::decode(self.secondary()?.get_native(token).await?)
+            .and_then(|value| value.as_object().cloned())
+        else {
             return Ok(None);
         };
-        let Some(session) = cached.get_mut("session").and_then(Value::as_object_mut) else {
+        let Some(session) = cached.get("session").and_then(FieldValue::as_object) else {
             return Ok(None);
         };
-        let original = self.read_cached_session(session.clone())?;
+        let original = cache::session(session.clone())?;
         let created_at = original.created_at.clone();
         let mut fields = FieldMap::from(original);
         let mut patch = update.into_public_fields()?;
@@ -318,13 +341,13 @@ impl<S: AuthSchema> SecondaryStore<S> {
         let _ = fields.insert("createdAt".into(), created_at.into_field_value());
         let mut updated = self.hydrate_session(fields)?;
         updated.filter_returned_fields(&self.config.session);
-        *session = FieldMap::from(updated.clone()).json()?;
-        let seconds = updated.expires_at().converted_cache_ttl(Utc::now())?;
+        let _ = cached.insert("session".into(), FieldMap::from(updated.clone()).into());
+        let seconds = updated.expires_at().converted_cache_ttl(self.now())?;
         if seconds > 0.0 {
             self.secondary()?
-                .set_native(token, &serde_json::to_string(&cached)?, Some(seconds))
+                .set_native(token, &cache::stringify(&cached.into())?, Some(seconds))
                 .await?;
-            let now = Utc::now().timestamp_millis();
+            let now = self.now().timestamp_millis();
             let mut references = self.references(&updated.user_id.display_string()?).await?;
             retain_references(&mut references, |reference| {
                 Ok(
@@ -411,7 +434,7 @@ impl<S: AuthSchema> SecondaryStore<S> {
                 .delete_native(&reference.token.field_value())
                 .await?;
         }
-        let now = Utc::now().timestamp_millis() as f64;
+        let now = self.now().timestamp_millis() as f64;
         let mut remaining = self.references(user_id).await?;
         retain_references(&mut remaining, |reference| {
             Ok(
@@ -482,13 +505,13 @@ impl<S: AuthSchema> SessionStore<S> for SecondaryStore<S> {
         }
         let raw = self.secondary()?.get_native(token).await?;
         if raw.is_some() {
-            let Some(mut cached) = decode_native(raw)?.and_then(|value| value.as_object().cloned())
+            let Some(mut cached) = cache::decode(raw).and_then(|value| value.as_object().cloned())
             else {
                 return Ok(None);
             };
-            let fields = object(cached.remove("session").unwrap_or(Value::Null))?;
-            let session = self.read_cached_session(fields)?;
-            let _: UserView = serde_json::from_value(cached.remove("user").unwrap_or(Value::Null))?;
+            let fields = cache::object(&cached.remove("session").unwrap_or(FieldValue::Null))?;
+            let session = cache::session(fields)?;
+            let _ = cache::user(&cached.remove("user").unwrap_or(FieldValue::Null))?;
             return Ok(Some(session));
         }
         if !self.database_sessions() || self.config.session.preserve_session_in_database() {
@@ -547,17 +570,17 @@ impl<S: AuthSchema> SessionStore<S> for SecondaryStore<S> {
         if self.storage.is_none() {
             return self.inner.get_session_snapshot(token).await;
         }
-        let raw = self.secondary()?.get(token).await?;
+        let raw = self.secondary()?.get_native(&token.into()).await?;
         if raw.is_some() {
-            let Some(mut cached) = decode(raw).and_then(|value| value.as_object().cloned()) else {
+            let Some(mut cached) = cache::decode(raw).and_then(|value| value.as_object().cloned())
+            else {
                 return Ok(None);
             };
-            let fields = object(cached.remove("session").unwrap_or(Value::Null))?;
-            let session = self.read_cached_session(fields)?;
+            let fields = cache::object(&cached.remove("session").unwrap_or(FieldValue::Null))?;
+            let session = cache::session(fields)?;
             let mut view = session.clone();
             view.active = true;
-            let user: UserView =
-                serde_json::from_value(cached.remove("user").unwrap_or(Value::Null))?;
+            let user = cache::user(&cached.remove("user").unwrap_or(FieldValue::Null))?;
             return Ok(Some((
                 session,
                 Some(crate::session::SessionData {
@@ -587,11 +610,20 @@ impl<S: AuthSchema> SessionStore<S> for SecondaryStore<S> {
         }
         let mut sessions = Vec::new();
         for token in tokens {
-            let Some(cached) = decode(self.secondary()?.get(token).await?) else {
+            let raw = self.secondary()?.get_native(&token.as_str().into()).await?;
+            let Ok(Some(cached)) = cache::parse(raw) else {
                 continue;
             };
             // Upstream batch reads skip malformed cache entries and never fall back to the database.
-            let Ok(mut data) = serde_json::from_value::<crate::session::SessionData>(cached) else {
+            let data = (|| {
+                let mut fields = cache::object(&cached)?;
+                let session = cache::session(cache::object(
+                    &fields.remove("session").unwrap_or_default(),
+                )?)?;
+                let user = cache::user(&fields.remove("user").unwrap_or_default())?;
+                Ok::<_, AuthError>(crate::session::SessionData { session, user })
+            })();
+            let Ok(mut data) = data else {
                 continue;
             };
             if only_active
@@ -600,7 +632,7 @@ impl<S: AuthSchema> SessionStore<S> for SecondaryStore<S> {
                     .expires_at
                     .clone()
                     .converted_date()?
-                    .is_before_or_equal(Utc::now())?
+                    .is_before_or_equal(self.now())?
             {
                 continue;
             }
@@ -648,7 +680,7 @@ impl<S: AuthSchema> SessionStore<S> for SecondaryStore<S> {
         let mut sessions = Vec::new();
         for reference in self.references(user_id).await? {
             if crate::query::field_number(&reference.expires_at.field_value())?
-                <= Utc::now().timestamp_millis() as f64
+                <= self.now().timestamp_millis() as f64
                 || seen
                     .iter()
                     .any(|token| token.same_value_zero(&reference.token.field_value()))
@@ -656,22 +688,22 @@ impl<S: AuthSchema> SessionStore<S> for SecondaryStore<S> {
                 continue;
             }
             seen.push(reference.token.field_value());
-            let Some(cached) = self
+            let raw = self
                 .secondary()?
                 .get_native(&reference.token.field_value())
-                .await?
-                .map(|value| crate::utils::json::safe_parse_field(&value))
-                .map(|value| value.json())
-                .transpose()?
-                .flatten()
+                .await?;
+            let Ok(Some(cached)) = cache::parse(raw) else {
+                continue;
+            };
+            let Some(fields) = cached
+                .as_object()
+                .and_then(|cached| cached.get("session"))
+                .and_then(FieldValue::as_object)
             else {
                 continue;
             };
-            let Some(fields) = cached.get("session").and_then(Value::as_object) else {
-                continue;
-            };
             // Upstream listSessions skips malformed cache records; single-session reads expose malformed records.
-            if let Ok(session) = self.read_cached_session(fields.clone()) {
+            if let Ok(session) = cache::session(fields.clone()) {
                 let view = session.clone();
                 sessions.push((session, Some(view)));
             }
@@ -691,7 +723,7 @@ impl<S: AuthSchema> SessionStore<S> for SecondaryStore<S> {
             token,
             SessionUpdate {
                 expires_at: Some(expires_at.into()),
-                updated_at: Some(Utc::now().into()),
+                updated_at: Some(self.now().into()),
                 ..Default::default()
             },
         )
@@ -905,11 +937,4 @@ fn sort_references(references: &mut Vec<SessionReference>) -> AuthResult<()> {
     });
     *references = sorted.into_iter().map(|(_, reference)| reference).collect();
     Ok(())
-}
-
-pub(super) fn decode_native(value: Option<FieldValue>) -> AuthResult<Option<Value>> {
-    value
-        .map(|value| crate::utils::json::safe_parse_field(&value).json())
-        .transpose()
-        .map(Option::flatten)
 }

@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use url::Url;
 
 use super::{
-    helpers::{SessionIssueError, apply_default_role, issue_user_session},
+    helpers::{SessionIssueError, apply_default_role, issue_selected_user_session_optional},
     one_time_token::TokenStorage,
 };
 
@@ -308,22 +308,33 @@ impl MagicLinkPlugin {
             user
         };
         let meta = RequestMeta::from_request_with_config(req, &ctx.config.advanced.ip_address);
-        let issued = issue_user_session(ctx, user.id().typed()?, meta.ip_address, meta.user_agent)
-            .await
-            .map_err(SessionIssueError::into_auth_error)?;
+        let issued = issue_selected_user_session_optional(
+            ctx,
+            better_auth_core::FieldMap::from(ctx.internal_user_view(&user).await?).into(),
+            &meta,
+            ctx.config.session.expires_in(),
+        )
+        .await
+        .map_err(SessionIssueError::into_auth_error)?;
+        let Some(issued) = issued else {
+            return Ok(error_redirect(error_callback, "failed_to_create_session"));
+        };
+        let session = issued.session.clone();
+        ctx.session_manager()
+            .set_native_session_cookie(req, issued, None)
+            .await?;
         let response = if req.query_string("callbackURL")?.is_none_or(str::is_empty) {
             AuthResponse::native(
                 200,
                 better_auth_core::FieldMap::from([
-                    ("token".into(), issued.session.token().field_value()),
+                    ("token".into(), session.token().field_value()),
                     (
                         "session".into(),
-                        better_auth_core::FieldMap::from(ctx.session_view(&issued.session).await?)
-                            .into(),
+                        better_auth_core::FieldMap::from(ctx.session_view(&session).await?).into(),
                     ),
                     (
                         "user".into(),
-                        better_auth_core::FieldMap::from(ctx.user_view(&issued.user).await?).into(),
+                        better_auth_core::FieldMap::from(ctx.user_view(&user).await?).into(),
                     ),
                 ])
                 .into(),
@@ -335,14 +346,6 @@ impl MagicLinkPlugin {
                 callback
             })
         };
-        let manager = ctx.session_manager();
-        manager
-            .set_session_cookie(
-                req,
-                manager.internal_data(&issued.user, &issued.session).await?,
-                None,
-            )
-            .await?;
         Ok(response)
     }
 }

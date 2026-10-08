@@ -1,4 +1,4 @@
-use super::{AuthError, AuthResult, AuthSchema, FieldValue, SecondaryStore, Utc};
+use super::{AuthError, AuthResult, AuthSchema, FieldValue, SecondaryStore};
 use crate::utils::json::safe_parse_field;
 
 fn property<'a>(value: &'a FieldValue, name: &str) -> AuthResult<&'a FieldValue> {
@@ -51,7 +51,7 @@ impl<S: AuthSchema> SecondaryStore<S> {
                 } else {
                     &[]
                 };
-                let now = Utc::now();
+                let now = self.now();
                 let mut filtered = Vec::new();
                 for session in list {
                     let expires_at = crate::query::field_number(property(session, "expiresAt")?)?;
@@ -70,7 +70,7 @@ impl<S: AuthSchema> SecondaryStore<S> {
                     .unwrap_or(&FieldValue::Undefined);
                 if !filtered.is_empty()
                     && furthest.is_truthy()
-                    && crate::query::field_number(furthest)? > Utc::now().timestamp_millis() as f64
+                    && crate::query::field_number(furthest)? > self.now().timestamp_millis() as f64
                 {
                     let furthest = furthest.clone();
                     let value = FieldValue::from(

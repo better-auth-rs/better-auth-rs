@@ -250,7 +250,7 @@ where
             .await
     }
 
-    async fn create_account_with_connection<C>(
+    pub(super) async fn create_account_with_connection<C>(
         &self,
         db: &C,
         tx: Option<super::HookTransaction<'_, S>>,

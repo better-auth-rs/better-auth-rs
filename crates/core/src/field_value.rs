@@ -110,6 +110,13 @@ impl FieldMap {
         fields
     }
 
+    /// Order array-index properties first and retain insertion order for other properties.
+    pub(crate) fn sort_property_order(&mut self) {
+        self.0.sort_by_key(|name, _| {
+            crate::utils::json::array_index(name).map_or((true, 0), |index| (false, index))
+        });
+    }
+
     /// Import object fields at a JSON boundary without reviving Date strings.
     pub fn from_json(fields: ::serde_json::Map<String, JsonValue>) -> AuthResult<Self> {
         fields

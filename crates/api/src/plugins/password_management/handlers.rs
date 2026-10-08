@@ -9,7 +9,8 @@ use better_auth_core::{
 };
 
 use crate::plugins::helpers::{
-    SessionIssueError, get_credential_account, get_credential_password_hash, issue_user_session,
+    SessionIssueError, get_credential_account, get_credential_password_hash,
+    issue_selected_user_session_optional,
 };
 
 use super::types::*;
@@ -233,17 +234,15 @@ pub(crate) async fn reset_password_token_core(
     )?))
 }
 
-/// Change the user's password and preserve the optional replacement session.
+/// Change the password before revoking sessions and issuing replacement credentials.
 pub(crate) async fn change_password_core(
     body: &ChangePasswordRequest,
     user: &impl AuthUser,
     config: &PasswordManagementConfig,
+    req: &better_auth_core::AuthRequest,
     meta: &RequestMeta,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<(
-    ChangePasswordResponse<UserView>,
-    Option<better_auth_core::session::SessionData>,
-)> {
+) -> AuthResult<ChangePasswordResponse<UserView>> {
     password_utils::validate_password(
         &body.new_password,
         ctx.password_policy.min_length,
@@ -291,33 +290,34 @@ pub(crate) async fn change_password_core(
         ctx.database
             .delete_user_sessions(user.id().typed()?)
             .await?;
-        let session = issue_user_session(
+        let issued = issue_selected_user_session_optional(
             ctx,
-            user.id().typed()?,
-            meta.ip_address.clone(),
-            meta.user_agent.clone(),
+            better_auth_core::FieldMap::from(ctx.internal_user_view(user).await?).into(),
+            meta,
+            ctx.config.session.expires_in(),
         )
         .await
         .map_err(SessionIssueError::into_auth_error)?
-        .session;
-        Some(ctx.session_manager().internal_data(user, &session).await?)
+        .ok_or(AuthError::Upstream {
+            status: 500,
+            code: "FAILED_TO_GET_SESSION",
+            message: "Failed to get session",
+        })?;
+        let token = issued.session.token.field_value();
+        ctx.session_manager()
+            .set_native_session_cookie(req, issued, None)
+            .await?;
+        token
     } else {
-        None
+        better_auth_core::FieldValue::Null
     };
 
     let response = ChangePasswordResponse {
-        token: new_token.as_ref().map(|data| data.session.token.clone()),
-        user: ctx
-            .user_view(
-                &ctx.database
-                    .get_user_by_id(user.id().typed()?)
-                    .await?
-                    .ok_or(AuthError::UserNotFound)?,
-            )
-            .await?,
+        token: new_token,
+        user: ctx.user_view(user).await?,
     };
 
-    Ok((response, new_token))
+    Ok(response)
 }
 
 pub(crate) async fn verify_password_core(
