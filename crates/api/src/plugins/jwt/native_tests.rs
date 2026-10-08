@@ -157,7 +157,7 @@ async fn discovery_spreads_native_public_payload_and_overwrites_kid_even_when_un
     let body: Value = serde_json::from_slice(&response.body.bytes()?)?;
     assert_eq!(
         body,
-        json!({"keys":[{"alg":"public-alg","crv":null},{"0":"public-entry","alg":["native"],"crv":12.0,"kid":19.0}]})
+        json!({"keys":[{"alg":"public-alg","crv":null},{"0":"public-entry","alg":["native"],"crv":12,"kid":19}]})
     );
     Ok(())
 }

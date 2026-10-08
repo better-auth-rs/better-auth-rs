@@ -177,7 +177,7 @@ async fn wallet_native_owner_lookup_reuses_selected_user_and_ignores_other_walle
     let body: Value = serde_json::from_slice(&response.body.bytes()?)?;
     assert_eq!(
         body,
-        json!({"token":42.0,"success":true,"user":{"id":"1","walletAddress":ADDRESS,"chainId":1.0}})
+        json!({"token":42,"success":true,"user":{"id":"1","walletAddress":ADDRESS,"chainId":1}})
     );
     assert_eq!(reads.load(Ordering::SeqCst), 1);
     assert_eq!(
