@@ -7,117 +7,14 @@ use better_auth::plugins::{
     endpoint_context::EndpointContext,
 };
 use better_auth_core::{
-    CreateDeviceCode, UpdateDeviceCode,
-    store::{AuthTransaction, DeviceCodeStore, transaction},
+    CreateDeviceCode,
+    store::{AuthTransaction, transaction},
 };
 
-async fn observe<S: AuthSchema>(
-    ctx: &AuthContext<S>,
-    transaction: Option<&dyn AuthTransaction<S>>,
-    mode: &'static str,
-    owner: &str,
-) -> AuthResult<Value> {
-    let mut endpoint = EndpointContext::native(None, None, FieldValue::Null, ctx);
-    endpoint.transaction = transaction;
-    let store: &dyn DeviceCodeStore = match transaction {
-        Some(transaction) => transaction,
-        None => ctx.database.as_ref(),
-    };
-    let token = format!("ordinary-device:{mode}");
-    let _ = store
-        .create_device_code(CreateDeviceCode {
-            additional_fields: Default::default(),
-            device_code: token.clone(),
-            user_code: format!("ordinary-user:{mode}"),
-            user_id: Some(owner.into()),
-            expires_at: (chrono::Utc::now() + chrono::Duration::hours(1)).into(),
-            status: "approved".into(),
-            last_polled_at: None,
-            polling_interval: None,
-            client_id: Some("ordinary-client".into()),
-            scope: Some("initial".into()).into(),
-        })
-        .await?;
-    let events = Arc::new(Mutex::new(Vec::new()));
-    let authorize_events = events.clone();
-    let prepare_events = events.clone();
-    let result = redeem_device_code(
-        &endpoint,
-        &token,
-        move |row, _endpoint| {
-            Box::pin(async move {
-                trace_lock(&authorize_events)?.push(format!(
-                    "authorize:{}",
-                    required(
-                        row.scope.typed()?.as_deref(),
-                        "Expected the authorization scope"
-                    )?
-                ));
-                if mode == "authorization error" {
-                    return Err(AuthError::internal("ordinary authorization error"));
-                }
-                Ok(DeviceCodeRedemptionAuthorization {
-                    ownership: DeviceCodeOwnership::ClientId("ordinary-client".into()),
-                    context: "issuer".to_owned(),
-                })
-            })
-        },
-        move |row, authorization, endpoint| {
-            Box::pin(async move {
-                trace_lock(&prepare_events)?.push(format!(
-                    "prepare:{}:{authorization}",
-                    required(
-                        row.scope.typed()?.as_deref(),
-                        "Expected the preparation scope"
-                    )?
-                ));
-                if mode == "preparation error" {
-                    return Err(AuthError::internal("ordinary preparation error"));
-                }
-                let store: &dyn DeviceCodeStore = match endpoint.transaction {
-                    Some(transaction) => transaction,
-                    None => endpoint.auth.database.as_ref(),
-                };
-                let _ = store
-                    .update_device_code(
-                        &row.id,
-                        UpdateDeviceCode {
-                            scope: Some("prepared".into()).into(),
-                            ..Default::default()
-                        },
-                    )
-                    .await?;
-                Ok(format!("issued:{authorization}"))
-            })
-        },
-    )
-    .await;
-    let (result, error) = match result {
-        Ok(result) => (
-            json!({
-                "scope": result.claimed_device_code.scope.typed()?,
-                "authorizationContext": result.authorization_context,
-                "redemptionContext": result.redemption_context,
-                "userFound": result.user.id.typed()? == owner,
-                "lastPolledAt": result.claimed_device_code.last_polled_at.is_some(),
-            }),
-            Value::Null,
-        ),
-        Err(AuthError::Internal(message)) => (Value::Null, json!(message)),
-        Err(error) => return Err(error),
-    };
-    let remaining = store.get_device_code_by_device_code(&token).await?;
-    Ok(json!({
-        "name": mode,
-        "events": *trace_lock(&events)?,
-        "result": result,
-        "error": error,
-        "remaining": remaining.map(|row| json!({
-            "scope": row.scope,
-            "lastPolledAt": row.last_polled_at.is_some(),
-        })),
-    }))
-}
+#[path = "../support/device_redemption_contract.rs"]
+mod redemption_contract;
+use chrono as contract_chrono;
+use redemption_contract::observe;
 
 async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, backend: &str) -> AuthResult<()> {
     let auth = BetterAuth::new(config())

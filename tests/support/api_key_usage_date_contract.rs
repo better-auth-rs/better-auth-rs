@@ -1,4 +1,4 @@
-use super::{Fixture, adapter_value, policies, take};
+use super::{Fixture, adapter_value, take};
 use better_auth::__private_core::{
     ApiKey, AuthError, AuthResult, AuthSchema, AuthStore, FieldDate, FieldValue, UpdateApiKey,
     store::ApiKeyUsageWrite,
@@ -56,8 +56,13 @@ pub(crate) async fn contract<S: AuthSchema>(
     raw: Arc<dyn AuthStore<S>>,
     backend: &str,
 ) -> AuthResult<()> {
-    let captured: Value =
-        serde_json::from_str(include_str!("../fixtures/api-key-date-usage-1.7.6.json"))?;
+    let fixture = match backend {
+        "memory" | "sqlite" => include_str!("../fixtures/api-key-date-usage-1.7.6.json"),
+        "postgres" => include_str!("../fixtures/api-key-date-usage-postgres-1.7.6.json"),
+        "mysql" => include_str!("../fixtures/api-key-date-usage-mysql-1.7.6.json"),
+        _ => return Err(AuthError::internal("Unknown API Key Date backend")),
+    };
+    let captured: Value = serde_json::from_str(fixture)?;
     assert_eq!(captured.get("version"), Some(&json!("1.7.6")));
     let backends = captured
         .get("backends")
@@ -76,7 +81,16 @@ pub(crate) async fn contract<S: AuthSchema>(
             .collect::<Vec<_>>(),
         OPERATIONS.map(Some),
     );
-    let fixture = Fixture::new(raw, false, policies).await?;
+    // PostgreSQL rejects fractional values for the declared INTEGER revision column.
+    let revision = if backend == "postgres" {
+        [1.0, 2.0]
+    } else {
+        [1.5, 2.5]
+    };
+    let fixture = Fixture::new(raw, false, |events, failure| {
+        crate::ordinary_field_policies::policies_with_revision("API Key", events, failure, revision)
+    })
+    .await?;
     let mut seed: Option<ApiKey> = None;
     let mut updated: Option<FieldDate> = None;
     let mut updated_label = Some("<created-at>");

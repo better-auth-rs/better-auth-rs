@@ -1,5 +1,9 @@
+#[path = "tests/api_key_additional_fields.rs"]
+mod api_key_additional_fields;
 #[path = "tests/device_code_catalog.rs"]
 mod device_code_catalog;
+#[path = "tests/device_grant.rs"]
+mod device_grant;
 #[path = "tests/passkey_catalog.rs"]
 mod passkey_catalog;
 #[path = "tests/passkey_catalog_storage.rs"]

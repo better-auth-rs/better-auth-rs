@@ -1,0 +1,7 @@
+{
+  "deviceCode": {
+    "additionalFields": {
+      "label": { "type": "string", "required": false, "defaultValue": "Stored display" }
+    }
+  }
+}

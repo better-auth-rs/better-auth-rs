@@ -130,6 +130,11 @@ run_stage() {
         ./compat-tests/reference-server/contracts/api-key-field-policies.test.ts \
         ./compat-tests/reference-server/contracts/api-key-fields.test.ts \
         ./compat-tests/reference-server/contracts/api-key-date-usage.test.ts \
+        ./compat-tests/reference-server/consumer-contracts/api-key-date-usage.test.ts \
+        ./compat-tests/reference-server/contracts/native-plugin-replacements.test.ts \
+        ./compat-tests/reference-server/contracts/device-grant.test.ts \
+        ./compat-tests/reference-server/contracts/device-redemption.test.ts \
+        ./compat-tests/reference-server/consumer-contracts/device-grant-sql.test.ts \
         ./compat-tests/reference-server/contracts/api-key-name-mapping.test.ts \
         ./compat-tests/reference-server/contracts/api-key-live-fields.test.ts \
         ./compat-tests/reference-server/contracts/plugin-output-capabilities.test.ts \
@@ -141,17 +146,19 @@ run_stage() {
         ./compat-tests/reference-server/api-key-metadata.test.ts \
         ./compat-tests/reference-server/api-key-metadata-pages.test.ts
       cargo clippy --locked -p better-auth-core -p better-auth-api -p better-auth-seaorm -- -D warnings
-      cargo clippy --locked --features axum,seaorm2,redis-cache --test plugin_output_capabilities_tests --test api_key_additional_fields_tests --test organization_member_json_filter_reference_tests --test auth_entity_plugin_alias_tests --test plugin_model_fields_tests -- -D warnings
+      cargo clippy --locked --features axum,seaorm2,redis-cache --test plugin_output_capabilities_tests --test api_key_additional_fields_tests --test device_grant_tests --test organization_member_json_filter_reference_tests --test auth_entity_plugin_alias_tests --test plugin_model_fields_tests -- -D warnings
       cargo test --locked -p better-auth-core -p better-auth-api -p better-auth-seaorm --lib -- api_key jwt user_fields::record::tests:: ordinary_object_primitive_conversion_checks_only_the_selected_method member_queries_use_typed_storage_before_output_transforms
       cargo test --locked --features axum,seaorm2,redis-cache \
         --test api_key_additional_fields_tests --test passkey_additional_fields_tests \
+        --test device_grant_tests \
         --test organization_member_json_filter_reference_tests \
         --test two_factor_additional_fields_tests --test device_additional_fields_tests \
         --test jwk_additional_fields_tests --test wallet_additional_fields_tests \
         --test auth_entity_plugin_alias_tests \
         --test plugin_output_capabilities_tests --test sql_user_extra_output_tests \
         --test api_key_metadata_tests --test api_key_metadata_timing_tests --test jwt_transaction_tests
-      cargo test --locked --features axum,seaorm2,redis-cache --test plugin_model_fields_tests -- api_key:: api_key_cache:: device_ownership:: presence:: presence_cache:: core::unsupported_model_fields_fail_during_initialization
+      cargo test --locked --features axum,seaorm2,redis-cache --test plugin_model_fields_tests -- api_key:: api_key_cache:: device_ownership:: device_redemption:: presence:: presence_cache:: core::unsupported_model_fields_fail_during_initialization
+      ./scripts/consumer-check.sh --test generated_plugin_catalog -- --include-ignored api_key_additional_fields device_grant
       ;;
     runtime-values)
       bun --no-install test \
@@ -369,6 +376,9 @@ run_stage() {
     device-storage)
       cargo fmt --all -- --check
       bun --no-install test \
+        ./compat-tests/reference-server/contracts/device-grant.test.ts \
+        ./compat-tests/reference-server/contracts/device-redemption.test.ts \
+        ./compat-tests/reference-server/consumer-contracts/device-grant-sql.test.ts \
         ./compat-tests/reference-server/contracts/native-json-driver.test.ts \
         ./compat-tests/reference-server/consumer-contracts/native-json-driver.test.ts \
         ./compat-tests/reference-server/contracts/device-where.test.ts \
@@ -384,15 +394,18 @@ run_stage() {
         ./compat-tests/reference-server/contracts/device-reference-defaults.test.ts \
         ./compat-tests/reference-server/consumer-contracts/device-reference-defaults.test.ts
       cargo clippy --locked --features axum,seaorm2,redis-cache \
+        --test device_grant_tests \
         --test device_where_tests --test sql_user_extra_output_tests \
         --test plugin_output_capabilities_tests --test native_json_driver_tests \
         --test plugin_model_fields_tests -- -D warnings
       cargo test --locked --no-fail-fast --features axum,seaorm2,redis-cache \
+        --test device_grant_tests \
         --test device_where_tests --test native_json_driver_tests -- --include-ignored --nocapture
       cargo test --locked --features axum,seaorm2,redis-cache --test plugin_model_fields_tests -- \
-        device_ownership:: device_ownership_sets:: device_consumption::
+        device_ownership:: device_ownership_sets:: device_consumption:: device_redemption::
       cargo test --locked --features axum,seaorm2,redis-cache \
         --test sql_user_extra_output_tests --test plugin_output_capabilities_tests
+      ./scripts/consumer-check.sh --test generated_plugin_catalog device_grant -- --include-ignored
       ;;
     device-validation)
       cargo fmt --all -- --check

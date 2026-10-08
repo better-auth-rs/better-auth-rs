@@ -1,0 +1,1365 @@
+{
+  "version": "1.7.6",
+  "backend": "postgres",
+  "grant": {
+    "version": "1.7.6",
+    "sessionLifetime": 600,
+    "cases": [
+      {
+        "input": {
+          "mode": "authorized",
+          "transport": "http",
+          "body": {
+            "scope": "read",
+            "label": " Desk ",
+            "ignored": "drop"
+          }
+        },
+        "issuance": {
+          "status": 200,
+          "headers": [
+            [
+              "cache-control",
+              "no-store"
+            ],
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "pragma",
+              "no-cache"
+            ]
+          ],
+          "body": {
+            "device_code": "ordinary-grant-device",
+            "user_code": "ABCD2345",
+            "verification_uri": "http://device-grant.test/device",
+            "verification_uri_complete": "http://device-grant.test/device?user_code=ABCD2345",
+            "expires_in": 1800,
+            "interval": 5
+          }
+        },
+        "issued": {
+          "clientId": "ordinary-grant-client",
+          "scope": "read",
+          "status": "pending",
+          "pollingInterval": 5000,
+          "label": "Desk",
+          "hasOwner": false
+        },
+        "verification": {
+          "status": 200,
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ]
+          ],
+          "body": {
+            "label": "Desk",
+            "user_code": "ABCD2345",
+            "status": "pending",
+            "client_id": "ordinary-grant-client",
+            "scope": "read"
+          }
+        },
+        "claimed": {
+          "clientId": "ordinary-grant-client",
+          "scope": "read",
+          "status": "pending",
+          "pollingInterval": 5000,
+          "label": "Desk",
+          "hasOwner": true
+        },
+        "approval": {
+          "status": 200,
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ]
+          ],
+          "body": {
+            "success": true
+          }
+        },
+        "approved": {
+          "clientId": "ordinary-grant-client",
+          "scope": "read",
+          "status": "approved",
+          "pollingInterval": 5000,
+          "label": "Desk",
+          "hasOwner": true
+        },
+        "redemption": {
+          "status": 200,
+          "headers": [
+            [
+              "cache-control",
+              "no-store"
+            ],
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "pragma",
+              "no-cache"
+            ]
+          ],
+          "body": {
+            "access_token": {
+              "nonempty": true,
+              "storedForOwner": true
+            },
+            "token_type": "Bearer",
+            "expires_in": {
+              "remainingWithinObservedWindow": true,
+              "expiryWithinConfiguredWindow": true
+            },
+            "scope": "read"
+          }
+        },
+        "events": [
+          {
+            "phase": "authorizeRequest",
+            "request": {
+              "scope": "read",
+              "label": "Desk"
+            },
+            "hasRequest": true,
+            "originalBody": "{\"scope\":\"read\",\"label\":\" Desk \",\"ignored\":\"drop\"}"
+          },
+          {
+            "phase": "onDeviceAuthRequest",
+            "clientId": "ordinary-grant-client",
+            "scope": "read"
+          },
+          {
+            "phase": "getVerificationContext",
+            "row": {
+              "clientId": "ordinary-grant-client",
+              "scope": "read",
+              "status": "pending",
+              "pollingInterval": 5000,
+              "label": "Desk",
+              "hasOwner": true
+            }
+          },
+          {
+            "phase": "validateClient",
+            "clientId": "ordinary-grant-client"
+          },
+          {
+            "phase": "assertSessionRedemption",
+            "row": {
+              "clientId": "ordinary-grant-client",
+              "scope": "read",
+              "status": "approved",
+              "pollingInterval": 5000,
+              "label": "Desk",
+              "hasOwner": true
+            }
+          }
+        ],
+        "consumed": true
+      },
+      {
+        "input": {
+          "mode": "fallback",
+          "transport": "http",
+          "body": {
+            "client_id": "ordinary-client",
+            "scope": "read"
+          }
+        },
+        "issuance": {
+          "status": 200,
+          "headers": [
+            [
+              "cache-control",
+              "no-store"
+            ],
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "pragma",
+              "no-cache"
+            ]
+          ],
+          "body": {
+            "device_code": "ordinary-grant-device",
+            "user_code": "ABCD2345",
+            "verification_uri": "http://device-grant.test/device",
+            "verification_uri_complete": "http://device-grant.test/device?user_code=ABCD2345",
+            "expires_in": 1800,
+            "interval": 5
+          }
+        },
+        "issued": {
+          "clientId": "ordinary-client",
+          "scope": "read",
+          "status": "pending",
+          "pollingInterval": 5000,
+          "label": "Stored display",
+          "hasOwner": false
+        },
+        "verification": {
+          "status": 200,
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ]
+          ],
+          "body": {
+            "label": "Stored display",
+            "user_code": "ABCD2345",
+            "status": "pending",
+            "client_id": "ordinary-client",
+            "scope": "read"
+          }
+        },
+        "claimed": {
+          "clientId": "ordinary-client",
+          "scope": "read",
+          "status": "pending",
+          "pollingInterval": 5000,
+          "label": "Stored display",
+          "hasOwner": true
+        },
+        "approval": {
+          "status": 200,
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ]
+          ],
+          "body": {
+            "success": true
+          }
+        },
+        "approved": {
+          "clientId": "ordinary-client",
+          "scope": "read",
+          "status": "approved",
+          "pollingInterval": 5000,
+          "label": "Stored display",
+          "hasOwner": true
+        },
+        "redemption": {
+          "status": 200,
+          "headers": [
+            [
+              "cache-control",
+              "no-store"
+            ],
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "pragma",
+              "no-cache"
+            ]
+          ],
+          "body": {
+            "access_token": {
+              "nonempty": true,
+              "storedForOwner": true
+            },
+            "token_type": "Bearer",
+            "expires_in": {
+              "remainingWithinObservedWindow": true,
+              "expiryWithinConfiguredWindow": true
+            },
+            "scope": "read"
+          }
+        },
+        "events": [
+          {
+            "phase": "authorizeRequest",
+            "request": {
+              "client_id": "ordinary-client",
+              "scope": "read"
+            },
+            "hasRequest": true,
+            "originalBody": "{\"client_id\":\"ordinary-client\",\"scope\":\"read\"}"
+          },
+          {
+            "phase": "validateClient",
+            "clientId": "ordinary-client"
+          },
+          {
+            "phase": "onDeviceAuthRequest",
+            "clientId": "ordinary-client",
+            "scope": "read"
+          },
+          {
+            "phase": "getVerificationContext",
+            "row": {
+              "clientId": "ordinary-client",
+              "scope": "read",
+              "status": "pending",
+              "pollingInterval": 5000,
+              "label": "Stored display",
+              "hasOwner": true
+            }
+          },
+          {
+            "phase": "validateClient",
+            "clientId": "ordinary-client"
+          },
+          {
+            "phase": "assertSessionRedemption",
+            "row": {
+              "clientId": "ordinary-client",
+              "scope": "read",
+              "status": "approved",
+              "pollingInterval": 5000,
+              "label": "Stored display",
+              "hasOwner": true
+            }
+          }
+        ],
+        "consumed": true
+      },
+      {
+        "input": {
+          "mode": "authorized",
+          "transport": "native",
+          "body": {
+            "scope": "read",
+            "label": " Desk ",
+            "ignored": "drop"
+          }
+        },
+        "issuance": {
+          "status": 200,
+          "headers": [
+            [
+              "cache-control",
+              "no-store"
+            ],
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "pragma",
+              "no-cache"
+            ]
+          ],
+          "body": {
+            "device_code": "ordinary-grant-device",
+            "user_code": "ABCD2345",
+            "verification_uri": "http://device-grant.test/device",
+            "verification_uri_complete": "http://device-grant.test/device?user_code=ABCD2345",
+            "expires_in": 1800,
+            "interval": 5
+          }
+        },
+        "issued": {
+          "clientId": "ordinary-grant-client",
+          "scope": "read",
+          "status": "pending",
+          "pollingInterval": 5000,
+          "label": "Desk",
+          "hasOwner": false
+        },
+        "verification": {
+          "status": 200,
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ]
+          ],
+          "body": {
+            "label": "Desk",
+            "user_code": "ABCD2345",
+            "status": "pending",
+            "client_id": "ordinary-grant-client",
+            "scope": "read"
+          }
+        },
+        "claimed": {
+          "clientId": "ordinary-grant-client",
+          "scope": "read",
+          "status": "pending",
+          "pollingInterval": 5000,
+          "label": "Desk",
+          "hasOwner": true
+        },
+        "approval": {
+          "status": 200,
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ]
+          ],
+          "body": {
+            "success": true
+          }
+        },
+        "approved": {
+          "clientId": "ordinary-grant-client",
+          "scope": "read",
+          "status": "approved",
+          "pollingInterval": 5000,
+          "label": "Desk",
+          "hasOwner": true
+        },
+        "redemption": {
+          "status": 200,
+          "headers": [
+            [
+              "cache-control",
+              "no-store"
+            ],
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "pragma",
+              "no-cache"
+            ]
+          ],
+          "body": {
+            "access_token": {
+              "nonempty": true,
+              "storedForOwner": true
+            },
+            "token_type": "Bearer",
+            "expires_in": {
+              "remainingWithinObservedWindow": true,
+              "expiryWithinConfiguredWindow": true
+            },
+            "scope": "read"
+          }
+        },
+        "events": [
+          {
+            "phase": "authorizeRequest",
+            "request": {
+              "scope": "read",
+              "label": "Desk"
+            },
+            "hasRequest": false,
+            "originalBody": null
+          },
+          {
+            "phase": "onDeviceAuthRequest",
+            "clientId": "ordinary-grant-client",
+            "scope": "read"
+          },
+          {
+            "phase": "getVerificationContext",
+            "row": {
+              "clientId": "ordinary-grant-client",
+              "scope": "read",
+              "status": "pending",
+              "pollingInterval": 5000,
+              "label": "Desk",
+              "hasOwner": true
+            }
+          },
+          {
+            "phase": "validateClient",
+            "clientId": "ordinary-grant-client"
+          },
+          {
+            "phase": "assertSessionRedemption",
+            "row": {
+              "clientId": "ordinary-grant-client",
+              "scope": "read",
+              "status": "approved",
+              "pollingInterval": 5000,
+              "label": "Desk",
+              "hasOwner": true
+            }
+          }
+        ],
+        "consumed": true
+      },
+      {
+        "input": {
+          "mode": "fallback",
+          "transport": "native",
+          "body": {
+            "client_id": "ordinary-client",
+            "scope": "read"
+          }
+        },
+        "issuance": {
+          "status": 200,
+          "headers": [
+            [
+              "cache-control",
+              "no-store"
+            ],
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "pragma",
+              "no-cache"
+            ]
+          ],
+          "body": {
+            "device_code": "ordinary-grant-device",
+            "user_code": "ABCD2345",
+            "verification_uri": "http://device-grant.test/device",
+            "verification_uri_complete": "http://device-grant.test/device?user_code=ABCD2345",
+            "expires_in": 1800,
+            "interval": 5
+          }
+        },
+        "issued": {
+          "clientId": "ordinary-client",
+          "scope": "read",
+          "status": "pending",
+          "pollingInterval": 5000,
+          "label": "Stored display",
+          "hasOwner": false
+        },
+        "verification": {
+          "status": 200,
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ]
+          ],
+          "body": {
+            "label": "Stored display",
+            "user_code": "ABCD2345",
+            "status": "pending",
+            "client_id": "ordinary-client",
+            "scope": "read"
+          }
+        },
+        "claimed": {
+          "clientId": "ordinary-client",
+          "scope": "read",
+          "status": "pending",
+          "pollingInterval": 5000,
+          "label": "Stored display",
+          "hasOwner": true
+        },
+        "approval": {
+          "status": 200,
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ]
+          ],
+          "body": {
+            "success": true
+          }
+        },
+        "approved": {
+          "clientId": "ordinary-client",
+          "scope": "read",
+          "status": "approved",
+          "pollingInterval": 5000,
+          "label": "Stored display",
+          "hasOwner": true
+        },
+        "redemption": {
+          "status": 200,
+          "headers": [
+            [
+              "cache-control",
+              "no-store"
+            ],
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "pragma",
+              "no-cache"
+            ]
+          ],
+          "body": {
+            "access_token": {
+              "nonempty": true,
+              "storedForOwner": true
+            },
+            "token_type": "Bearer",
+            "expires_in": {
+              "remainingWithinObservedWindow": true,
+              "expiryWithinConfiguredWindow": true
+            },
+            "scope": "read"
+          }
+        },
+        "events": [
+          {
+            "phase": "authorizeRequest",
+            "request": {
+              "client_id": "ordinary-client",
+              "scope": "read"
+            },
+            "hasRequest": false,
+            "originalBody": null
+          },
+          {
+            "phase": "validateClient",
+            "clientId": "ordinary-client"
+          },
+          {
+            "phase": "onDeviceAuthRequest",
+            "clientId": "ordinary-client",
+            "scope": "read"
+          },
+          {
+            "phase": "getVerificationContext",
+            "row": {
+              "clientId": "ordinary-client",
+              "scope": "read",
+              "status": "pending",
+              "pollingInterval": 5000,
+              "label": "Stored display",
+              "hasOwner": true
+            }
+          },
+          {
+            "phase": "validateClient",
+            "clientId": "ordinary-client"
+          },
+          {
+            "phase": "assertSessionRedemption",
+            "row": {
+              "clientId": "ordinary-client",
+              "scope": "read",
+              "status": "approved",
+              "pollingInterval": 5000,
+              "label": "Stored display",
+              "hasOwner": true
+            }
+          }
+        ],
+        "consumed": true
+      }
+    ]
+  },
+  "redemption": {
+    "backend": "postgres",
+    "cases": [
+      {
+        "name": "success",
+        "events": [
+          "authorize:initial",
+          "prepare:initial:issuer"
+        ],
+        "result": {
+          "scope": "prepared",
+          "authorizationContext": "issuer",
+          "redemptionContext": "issued:issuer",
+          "userFound": true,
+          "lastPolledAt": true
+        },
+        "error": null,
+        "remaining": null
+      },
+      {
+        "name": "authorization error",
+        "events": [
+          "authorize:initial"
+        ],
+        "result": null,
+        "error": "ordinary authorization error",
+        "remaining": {
+          "scope": "initial",
+          "lastPolledAt": false
+        }
+      },
+      {
+        "name": "preparation error",
+        "events": [
+          "authorize:initial",
+          "prepare:initial:issuer"
+        ],
+        "result": null,
+        "error": "ordinary preparation error",
+        "remaining": {
+          "scope": "initial",
+          "lastPolledAt": true
+        }
+      }
+    ]
+  },
+  "failures": [
+    {
+      "input": {
+        "mode": "authorized",
+        "transport": "http",
+        "body": {
+          "scope": "read",
+          "label": " Desk ",
+          "ignored": "drop"
+        },
+        "failure": "authorizeRequest"
+      },
+      "prior": {},
+      "response": {
+        "status": 500,
+        "headers": [],
+        "body": ""
+      },
+      "error": null,
+      "events": [
+        {
+          "phase": "authorizeRequest",
+          "request": {
+            "scope": "read",
+            "label": "Desk"
+          },
+          "hasRequest": true,
+          "originalBody": "{\"scope\":\"read\",\"label\":\" Desk \",\"ignored\":\"drop\"}"
+        }
+      ],
+      "before": [],
+      "after": [],
+      "unchanged": {
+        "user": true,
+        "session": true,
+        "account": true,
+        "verification": true
+      },
+      "sessionCount": 1
+    },
+    {
+      "input": {
+        "mode": "authorized",
+        "transport": "native",
+        "body": {
+          "scope": "read",
+          "label": " Desk ",
+          "ignored": "drop"
+        },
+        "failure": "authorizeRequest"
+      },
+      "prior": {},
+      "response": null,
+      "error": {
+        "name": "Error",
+        "message": "ordinary authorizeRequest failure"
+      },
+      "events": [
+        {
+          "phase": "authorizeRequest",
+          "request": {
+            "scope": "read",
+            "label": "Desk"
+          },
+          "hasRequest": false,
+          "originalBody": null
+        }
+      ],
+      "before": [],
+      "after": [],
+      "unchanged": {
+        "user": true,
+        "session": true,
+        "account": true,
+        "verification": true
+      },
+      "sessionCount": 1
+    },
+    {
+      "input": {
+        "mode": "authorized",
+        "transport": "http",
+        "body": {
+          "scope": "read",
+          "label": " Desk ",
+          "ignored": "drop"
+        },
+        "failure": "getVerificationContext"
+      },
+      "prior": {
+        "issuance": {
+          "status": 200,
+          "headers": [
+            [
+              "cache-control",
+              "no-store"
+            ],
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "pragma",
+              "no-cache"
+            ]
+          ],
+          "body": {
+            "device_code": "ordinary-grant-device",
+            "user_code": "ABCD2345",
+            "verification_uri": "http://device-grant.test/device",
+            "verification_uri_complete": "http://device-grant.test/device?user_code=ABCD2345",
+            "expires_in": 1800,
+            "interval": 5
+          }
+        },
+        "issued": {
+          "clientId": "ordinary-grant-client",
+          "scope": "read",
+          "status": "pending",
+          "pollingInterval": 5000,
+          "label": "Desk",
+          "hasOwner": false
+        }
+      },
+      "response": {
+        "status": 500,
+        "headers": [],
+        "body": ""
+      },
+      "error": null,
+      "events": [
+        {
+          "phase": "authorizeRequest",
+          "request": {
+            "scope": "read",
+            "label": "Desk"
+          },
+          "hasRequest": true,
+          "originalBody": "{\"scope\":\"read\",\"label\":\" Desk \",\"ignored\":\"drop\"}"
+        },
+        {
+          "phase": "onDeviceAuthRequest",
+          "clientId": "ordinary-grant-client",
+          "scope": "read"
+        },
+        {
+          "phase": "getVerificationContext",
+          "row": {
+            "clientId": "ordinary-grant-client",
+            "scope": "read",
+            "status": "pending",
+            "pollingInterval": 5000,
+            "label": "Desk",
+            "hasOwner": true
+          }
+        }
+      ],
+      "before": [
+        {
+          "deviceCode": "ordinary-grant-device",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": "<device-expiry>",
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5000,
+          "clientId": "ordinary-grant-client",
+          "scope": "read",
+          "label": "Desk",
+          "id": "<device-id>"
+        }
+      ],
+      "after": [
+        {
+          "deviceCode": "ordinary-grant-device",
+          "userCode": "ABCD2345",
+          "userId": "<owner-id>",
+          "expiresAt": "<device-expiry>",
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5000,
+          "clientId": "ordinary-grant-client",
+          "scope": "read",
+          "label": "Desk",
+          "id": "<device-id>"
+        }
+      ],
+      "unchanged": {
+        "user": true,
+        "session": true,
+        "account": true,
+        "verification": true
+      },
+      "sessionCount": 1
+    },
+    {
+      "input": {
+        "mode": "authorized",
+        "transport": "native",
+        "body": {
+          "scope": "read",
+          "label": " Desk ",
+          "ignored": "drop"
+        },
+        "failure": "getVerificationContext"
+      },
+      "prior": {
+        "issuance": {
+          "status": 200,
+          "headers": [
+            [
+              "cache-control",
+              "no-store"
+            ],
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "pragma",
+              "no-cache"
+            ]
+          ],
+          "body": {
+            "device_code": "ordinary-grant-device",
+            "user_code": "ABCD2345",
+            "verification_uri": "http://device-grant.test/device",
+            "verification_uri_complete": "http://device-grant.test/device?user_code=ABCD2345",
+            "expires_in": 1800,
+            "interval": 5
+          }
+        },
+        "issued": {
+          "clientId": "ordinary-grant-client",
+          "scope": "read",
+          "status": "pending",
+          "pollingInterval": 5000,
+          "label": "Desk",
+          "hasOwner": false
+        }
+      },
+      "response": null,
+      "error": {
+        "name": "Error",
+        "message": "ordinary getVerificationContext failure"
+      },
+      "events": [
+        {
+          "phase": "authorizeRequest",
+          "request": {
+            "scope": "read",
+            "label": "Desk"
+          },
+          "hasRequest": false,
+          "originalBody": null
+        },
+        {
+          "phase": "onDeviceAuthRequest",
+          "clientId": "ordinary-grant-client",
+          "scope": "read"
+        },
+        {
+          "phase": "getVerificationContext",
+          "row": {
+            "clientId": "ordinary-grant-client",
+            "scope": "read",
+            "status": "pending",
+            "pollingInterval": 5000,
+            "label": "Desk",
+            "hasOwner": true
+          }
+        }
+      ],
+      "before": [
+        {
+          "deviceCode": "ordinary-grant-device",
+          "userCode": "ABCD2345",
+          "userId": null,
+          "expiresAt": "<device-expiry>",
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5000,
+          "clientId": "ordinary-grant-client",
+          "scope": "read",
+          "label": "Desk",
+          "id": "<device-id>"
+        }
+      ],
+      "after": [
+        {
+          "deviceCode": "ordinary-grant-device",
+          "userCode": "ABCD2345",
+          "userId": "<owner-id>",
+          "expiresAt": "<device-expiry>",
+          "status": "pending",
+          "lastPolledAt": null,
+          "pollingInterval": 5000,
+          "clientId": "ordinary-grant-client",
+          "scope": "read",
+          "label": "Desk",
+          "id": "<device-id>"
+        }
+      ],
+      "unchanged": {
+        "user": true,
+        "session": true,
+        "account": true,
+        "verification": true
+      },
+      "sessionCount": 1
+    },
+    {
+      "input": {
+        "mode": "authorized",
+        "transport": "http",
+        "body": {
+          "scope": "read",
+          "label": " Desk ",
+          "ignored": "drop"
+        },
+        "failure": "assertSessionRedemption"
+      },
+      "prior": {
+        "issuance": {
+          "status": 200,
+          "headers": [
+            [
+              "cache-control",
+              "no-store"
+            ],
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "pragma",
+              "no-cache"
+            ]
+          ],
+          "body": {
+            "device_code": "ordinary-grant-device",
+            "user_code": "ABCD2345",
+            "verification_uri": "http://device-grant.test/device",
+            "verification_uri_complete": "http://device-grant.test/device?user_code=ABCD2345",
+            "expires_in": 1800,
+            "interval": 5
+          }
+        },
+        "issued": {
+          "clientId": "ordinary-grant-client",
+          "scope": "read",
+          "status": "pending",
+          "pollingInterval": 5000,
+          "label": "Desk",
+          "hasOwner": false
+        },
+        "verification": {
+          "status": 200,
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ]
+          ],
+          "body": {
+            "label": "Desk",
+            "user_code": "ABCD2345",
+            "status": "pending",
+            "client_id": "ordinary-grant-client",
+            "scope": "read"
+          }
+        },
+        "claimed": {
+          "clientId": "ordinary-grant-client",
+          "scope": "read",
+          "status": "pending",
+          "pollingInterval": 5000,
+          "label": "Desk",
+          "hasOwner": true
+        },
+        "approval": {
+          "status": 200,
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ]
+          ],
+          "body": {
+            "success": true
+          }
+        },
+        "approved": {
+          "clientId": "ordinary-grant-client",
+          "scope": "read",
+          "status": "approved",
+          "pollingInterval": 5000,
+          "label": "Desk",
+          "hasOwner": true
+        }
+      },
+      "response": {
+        "status": 500,
+        "headers": [],
+        "body": ""
+      },
+      "error": null,
+      "events": [
+        {
+          "phase": "authorizeRequest",
+          "request": {
+            "scope": "read",
+            "label": "Desk"
+          },
+          "hasRequest": true,
+          "originalBody": "{\"scope\":\"read\",\"label\":\" Desk \",\"ignored\":\"drop\"}"
+        },
+        {
+          "phase": "onDeviceAuthRequest",
+          "clientId": "ordinary-grant-client",
+          "scope": "read"
+        },
+        {
+          "phase": "getVerificationContext",
+          "row": {
+            "clientId": "ordinary-grant-client",
+            "scope": "read",
+            "status": "pending",
+            "pollingInterval": 5000,
+            "label": "Desk",
+            "hasOwner": true
+          }
+        },
+        {
+          "phase": "validateClient",
+          "clientId": "ordinary-grant-client"
+        },
+        {
+          "phase": "assertSessionRedemption",
+          "row": {
+            "clientId": "ordinary-grant-client",
+            "scope": "read",
+            "status": "approved",
+            "pollingInterval": 5000,
+            "label": "Desk",
+            "hasOwner": true
+          }
+        }
+      ],
+      "before": [
+        {
+          "deviceCode": "ordinary-grant-device",
+          "userCode": "ABCD2345",
+          "userId": "<owner-id>",
+          "expiresAt": "<device-expiry>",
+          "status": "approved",
+          "lastPolledAt": null,
+          "pollingInterval": 5000,
+          "clientId": "ordinary-grant-client",
+          "scope": "read",
+          "label": "Desk",
+          "id": "<device-id>"
+        }
+      ],
+      "after": [
+        {
+          "deviceCode": "ordinary-grant-device",
+          "userCode": "ABCD2345",
+          "userId": "<owner-id>",
+          "expiresAt": "<device-expiry>",
+          "status": "approved",
+          "lastPolledAt": null,
+          "pollingInterval": 5000,
+          "clientId": "ordinary-grant-client",
+          "scope": "read",
+          "label": "Desk",
+          "id": "<device-id>"
+        }
+      ],
+      "unchanged": {
+        "user": true,
+        "session": true,
+        "account": true,
+        "verification": true
+      },
+      "sessionCount": 1
+    },
+    {
+      "input": {
+        "mode": "authorized",
+        "transport": "native",
+        "body": {
+          "scope": "read",
+          "label": " Desk ",
+          "ignored": "drop"
+        },
+        "failure": "assertSessionRedemption"
+      },
+      "prior": {
+        "issuance": {
+          "status": 200,
+          "headers": [
+            [
+              "cache-control",
+              "no-store"
+            ],
+            [
+              "content-type",
+              "application/json"
+            ],
+            [
+              "pragma",
+              "no-cache"
+            ]
+          ],
+          "body": {
+            "device_code": "ordinary-grant-device",
+            "user_code": "ABCD2345",
+            "verification_uri": "http://device-grant.test/device",
+            "verification_uri_complete": "http://device-grant.test/device?user_code=ABCD2345",
+            "expires_in": 1800,
+            "interval": 5
+          }
+        },
+        "issued": {
+          "clientId": "ordinary-grant-client",
+          "scope": "read",
+          "status": "pending",
+          "pollingInterval": 5000,
+          "label": "Desk",
+          "hasOwner": false
+        },
+        "verification": {
+          "status": 200,
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ]
+          ],
+          "body": {
+            "label": "Desk",
+            "user_code": "ABCD2345",
+            "status": "pending",
+            "client_id": "ordinary-grant-client",
+            "scope": "read"
+          }
+        },
+        "claimed": {
+          "clientId": "ordinary-grant-client",
+          "scope": "read",
+          "status": "pending",
+          "pollingInterval": 5000,
+          "label": "Desk",
+          "hasOwner": true
+        },
+        "approval": {
+          "status": 200,
+          "headers": [
+            [
+              "content-type",
+              "application/json"
+            ]
+          ],
+          "body": {
+            "success": true
+          }
+        },
+        "approved": {
+          "clientId": "ordinary-grant-client",
+          "scope": "read",
+          "status": "approved",
+          "pollingInterval": 5000,
+          "label": "Desk",
+          "hasOwner": true
+        }
+      },
+      "response": null,
+      "error": {
+        "name": "Error",
+        "message": "ordinary assertSessionRedemption failure"
+      },
+      "events": [
+        {
+          "phase": "authorizeRequest",
+          "request": {
+            "scope": "read",
+            "label": "Desk"
+          },
+          "hasRequest": false,
+          "originalBody": null
+        },
+        {
+          "phase": "onDeviceAuthRequest",
+          "clientId": "ordinary-grant-client",
+          "scope": "read"
+        },
+        {
+          "phase": "getVerificationContext",
+          "row": {
+            "clientId": "ordinary-grant-client",
+            "scope": "read",
+            "status": "pending",
+            "pollingInterval": 5000,
+            "label": "Desk",
+            "hasOwner": true
+          }
+        },
+        {
+          "phase": "validateClient",
+          "clientId": "ordinary-grant-client"
+        },
+        {
+          "phase": "assertSessionRedemption",
+          "row": {
+            "clientId": "ordinary-grant-client",
+            "scope": "read",
+            "status": "approved",
+            "pollingInterval": 5000,
+            "label": "Desk",
+            "hasOwner": true
+          }
+        }
+      ],
+      "before": [
+        {
+          "deviceCode": "ordinary-grant-device",
+          "userCode": "ABCD2345",
+          "userId": "<owner-id>",
+          "expiresAt": "<device-expiry>",
+          "status": "approved",
+          "lastPolledAt": null,
+          "pollingInterval": 5000,
+          "clientId": "ordinary-grant-client",
+          "scope": "read",
+          "label": "Desk",
+          "id": "<device-id>"
+        }
+      ],
+      "after": [
+        {
+          "deviceCode": "ordinary-grant-device",
+          "userCode": "ABCD2345",
+          "userId": "<owner-id>",
+          "expiresAt": "<device-expiry>",
+          "status": "approved",
+          "lastPolledAt": null,
+          "pollingInterval": 5000,
+          "clientId": "ordinary-grant-client",
+          "scope": "read",
+          "label": "Desk",
+          "id": "<device-id>"
+        }
+      ],
+      "unchanged": {
+        "user": true,
+        "session": true,
+        "account": true,
+        "verification": true
+      },
+      "sessionCount": 1
+    }
+  ]
+}

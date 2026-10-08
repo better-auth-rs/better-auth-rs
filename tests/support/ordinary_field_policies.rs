@@ -33,6 +33,15 @@ pub(crate) fn policies(
     events: Option<Trace>,
     failure: Arc<AtomicU8>,
 ) -> UserConfig {
+    policies_with_revision(model, events, failure, [1.5, 2.5])
+}
+
+pub(crate) fn policies_with_revision(
+    model: &'static str,
+    events: Option<Trace>,
+    failure: Arc<AtomicU8>,
+    revision: [f64; 2],
+) -> UserConfig {
     let mut fields = UserConfig {
         additional_fields: Some(
             [
@@ -75,7 +84,7 @@ pub(crate) fn policies(
                                 if let Some(events) = &events {
                                     push(events, json!(["default", "revision"]));
                                 }
-                                Ok(1.5.into())
+                                Ok(revision[0].into())
                             }
                         })),
                         on_update: Some(Arc::new({
@@ -84,7 +93,7 @@ pub(crate) fn policies(
                                 if let Some(events) = &events {
                                     push(events, json!(["onUpdate", "revision"]));
                                 }
-                                Ok(2.5.into())
+                                Ok(revision[1].into())
                             }
                         })),
                         ..Default::default()
