@@ -136,6 +136,7 @@ async fn contract<S: AuthSchema>(
         ("array-in", "in", json!(["red", "blue"]), 10),
         ("array-not-in", "not_in", json!(["red", "blue"]), 1),
         ("object-eq", "eq", json!({ "control": true }), 10),
+        ("scalar-not-in", "not_in", json!(r#"["red","blue"]"#), 1),
     ] {
         let input = Input {
             organization_id: storage::ORGANIZATION_ID,

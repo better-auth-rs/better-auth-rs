@@ -80,23 +80,23 @@ fn apply_member_filter<M: SeaOrmOrganizationModel>(
         value => value.clone(),
     };
     let convert =
-        |value: &Value, number_strings: bool| -> AuthResult<sea_orm::sea_query::SimpleExpr> {
+        |value: &Value, convert_strings: bool| -> AuthResult<sea_orm::sea_query::SimpleExpr> {
             if let (Value::String(value), Some(column)) = (value, id_column) {
                 return Ok(column.id_value(value, policy)?.into());
             }
             let value = match value {
                 Value::String(value)
-                    if number_strings && matches!(field_type, Some(UserFieldType::Boolean)) =>
+                    if convert_strings && matches!(field_type, Some(UserFieldType::Boolean)) =>
                 {
                     Value::Bool(value == "true")
                 }
-                value if number_strings => normalize_number(value),
+                value if convert_strings => normalize_number(value),
                 value => value.clone(),
             };
             super::record_bindings::parameter(value, backend)
         };
     let operator = params.filter_operator.as_deref().unwrap_or("eq");
-    if matches!(operator, "in" | "not_in") && value.as_array().is_none() {
+    if operator == "in" && value.as_array().is_none() {
         return Err(better_auth_core::AuthError::internal(
             "Value must be an array",
         ));
@@ -117,16 +117,17 @@ fn apply_member_filter<M: SeaOrmOrganizationModel>(
         let values = value
             .as_array()
             .unwrap_or_else(|| std::slice::from_ref(value));
-        let number_strings = matches!(field_type, Some(UserFieldType::Number))
-            && values.iter().all(|value| {
-                value
-                    .as_str()
-                    .and_then(better_auth_core::organization_fields::numeric_filter)
-                    .is_some()
-            });
+        let convert_strings = value.as_array().is_none()
+            || (matches!(field_type, Some(UserFieldType::Number))
+                && values.iter().all(|value| {
+                    value
+                        .as_str()
+                        .and_then(better_auth_core::organization_fields::numeric_filter)
+                        .is_some()
+                }));
         let values = values
             .iter()
-            .map(|value| convert(value, number_strings))
+            .map(|value| convert(value, convert_strings))
             .collect::<AuthResult<Vec<_>>>()?;
         return Ok(query.filter(if operator == "in" {
             column.is_in(values)

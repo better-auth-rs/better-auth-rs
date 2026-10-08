@@ -373,6 +373,58 @@
               "id": "member-c"
             }
           ]
+        },
+        {
+          "name": "scalar-not-in",
+          "input": {
+            "organizationId": "json-filter-organization",
+            "limit": 1,
+            "offset": 0,
+            "sortBy": "id",
+            "sortOrder": "asc",
+            "filter": {
+              "field": "settings",
+              "value": "[\"red\",\"blue\"]",
+              "operator": "not_in"
+            }
+          },
+          "result": null,
+          "error": {
+            "name": "Error",
+            "message": "Value must be an array"
+          },
+          "events": [],
+          "stored": [
+            {
+              "organizationId": "json-filter-organization",
+              "userId": "user-a",
+              "role": "owner",
+              "createdAt": "2030-01-02T03:04:05.123Z",
+              "settings": [
+                "red",
+                "blue"
+              ],
+              "id": "member-a"
+            },
+            {
+              "organizationId": "json-filter-organization",
+              "userId": "user-b",
+              "role": "member",
+              "createdAt": "2030-01-02T03:04:05.123Z",
+              "settings": {
+                "control": true
+              },
+              "id": "member-b"
+            },
+            {
+              "organizationId": "json-filter-organization",
+              "userId": "user-c",
+              "role": "member",
+              "createdAt": "2030-01-02T03:04:05.123Z",
+              "settings": null,
+              "id": "member-c"
+            }
+          ]
         }
       ]
     },
@@ -750,6 +802,81 @@
               }
             ],
             "total": 1
+          },
+          "error": null,
+          "events": [
+            [
+              "output",
+              "settings",
+              "{\"control\":true}"
+            ]
+          ],
+          "stored": [
+            {
+              "organizationId": "json-filter-organization",
+              "userId": "user-a",
+              "role": "owner",
+              "createdAt": "2030-01-02T03:04:05.123Z",
+              "settings": [
+                "red",
+                "blue"
+              ],
+              "id": "member-a"
+            },
+            {
+              "organizationId": "json-filter-organization",
+              "userId": "user-b",
+              "role": "member",
+              "createdAt": "2030-01-02T03:04:05.123Z",
+              "settings": {
+                "control": true
+              },
+              "id": "member-b"
+            },
+            {
+              "organizationId": "json-filter-organization",
+              "userId": "user-c",
+              "role": "member",
+              "createdAt": "2030-01-02T03:04:05.123Z",
+              "settings": null,
+              "id": "member-c"
+            }
+          ]
+        },
+        {
+          "name": "scalar-not-in",
+          "input": {
+            "organizationId": "json-filter-organization",
+            "limit": 1,
+            "offset": 0,
+            "sortBy": "id",
+            "sortOrder": "asc",
+            "filter": {
+              "field": "settings",
+              "value": "[\"red\",\"blue\"]",
+              "operator": "not_in"
+            }
+          },
+          "result": {
+            "members": [
+              {
+                "organizationId": "json-filter-organization",
+                "userId": "user-b",
+                "role": "member",
+                "createdAt": "2030-01-02T03:04:05.123Z",
+                "settings": {
+                  "control": true
+                },
+                "id": "member-b",
+                "user": {
+                  "id": "user-b",
+                  "name": "user-b",
+                  "email": "user-b@member-json-filter.test",
+                  "image": null
+                }
+              }
+            ],
+            "total": 2
           },
           "error": null,
           "events": [
