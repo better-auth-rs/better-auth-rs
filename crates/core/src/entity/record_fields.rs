@@ -132,19 +132,6 @@ record!(crate::wire::PasskeyView, [
     aaguid => "aaguid",
 ], additional_fields);
 
-record!(crate::types::DeviceCode, [
-    id => "id",
-    device_code => "deviceCode",
-    user_code => "userCode",
-    user_id => "userId",
-    expires_at => "expiresAt",
-    status => "status",
-    last_polled_at => "lastPolledAt",
-    polling_interval => "pollingInterval",
-    client_id => "clientId",
-    scope => "scope",
-], additional_fields);
-
 record!(crate::types::ApiKey, [
     id => "id",
     name => "name",

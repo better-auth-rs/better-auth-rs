@@ -19,7 +19,7 @@ use better_auth_core::store::{
 };
 use better_auth_core::{
     AuthContext, AuthInitContext, AuthPlugin, AuthRequest, AuthResponse, AuthRoute, CreateSession,
-    CreateUser, UpdateUser,
+    CreateUser, FieldValue, UpdateUser,
 };
 use chrono::{Duration, Utc};
 use serde_json::Value;
@@ -47,11 +47,11 @@ impl SecondaryStorage for Cache {
     async fn get(&self, key: &str) -> AuthResult<Option<Value>> {
         SecondaryStorage::get(&self.inner, key).await
     }
-    async fn set(&self, key: &str, value: &str, ttl: Option<u64>) -> AuthResult<()> {
-        if key == *lock(&self.watched)? {
+    async fn set_native(&self, key: &FieldValue, value: &str, ttl: Option<f64>) -> AuthResult<()> {
+        if key.as_str() == Some(lock(&self.watched)?.as_str()) {
             lock(&self.events)?.push("cache");
         }
-        SecondaryStorage::set(&self.inner, key, value, ttl).await
+        SecondaryStorage::set_native(&self.inner, key, value, ttl).await
     }
     async fn delete(&self, key: &str) -> AuthResult<()> {
         SecondaryStorage::delete(&self.inner, key).await

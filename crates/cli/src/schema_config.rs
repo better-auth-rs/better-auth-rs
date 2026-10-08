@@ -155,7 +155,10 @@ pub(crate) enum FieldType {
 }
 
 fn native_policy_role(role: EntityRole) -> bool {
-    matches!(role, EntityRole::ApiKey | EntityRole::Passkey)
+    matches!(
+        role,
+        EntityRole::ApiKey | EntityRole::Passkey | EntityRole::DeviceCode
+    )
 }
 
 impl FieldType {
@@ -493,46 +496,34 @@ impl Entity {
             }
             for (name, field) in &config.additional_fields {
                 if let Some(
-                    role @ (EntityRole::DeviceCode
-                    | EntityRole::Jwk
-                    | EntityRole::WalletAddress
-                    | EntityRole::TwoFactor),
+                    role @ (EntityRole::Jwk | EntityRole::WalletAddress | EntityRole::TwoFactor),
                 ) = entity.role
                 {
-                    if entity.role == Some(EntityRole::DeviceCode) && name == "scope" {
-                        if !matches!(&field.field_type, FieldType::Name(name) if name == "string")
-                            || field.references.is_some()
-                            || resolve_field_name(field.field_name.as_deref(), name) != "scope"
-                        {
-                            return Err("DeviceCode scope requires its ordinary string column without reference or field-name replacement".into());
-                        }
-                    } else {
-                        let storage = resolve_field_name(field.field_name.as_deref(), name);
-                        if role == EntityRole::TwoFactor
-                            && better_auth_schema_registry::core_field_names(role)
-                                .iter()
-                                .any(|core| {
-                                    [name.as_str(), storage].into_iter().any(|name| {
-                                        name == *core || name == core.to_lower_camel_case()
-                                    })
+                    let storage = resolve_field_name(field.field_name.as_deref(), name);
+                    if role == EntityRole::TwoFactor
+                        && better_auth_schema_registry::core_field_names(role)
+                            .iter()
+                            .any(|core| {
+                                [name.as_str(), storage]
+                                    .into_iter()
+                                    .any(|name| name == *core || name == core.to_lower_camel_case())
+                            })
+                        || entity
+                            .fields
+                            .iter()
+                            .filter(|core| core.registry_column.is_some())
+                            .any(|core| {
+                                let rust = core.ident.to_string();
+                                [name.as_str(), storage].into_iter().any(|name| {
+                                    name == rust
+                                        || name == rust.to_lower_camel_case()
+                                        || name == core.column
                                 })
-                            || entity
-                                .fields
-                                .iter()
-                                .filter(|core| core.registry_column.is_some())
-                                .any(|core| {
-                                    let rust = core.ident.to_string();
-                                    [name.as_str(), storage].into_iter().any(|name| {
-                                        name == rust
-                                            || name == rust.to_lower_camel_case()
-                                            || name == core.column
-                                    })
-                                })
-                        {
-                            return Err(format!(
-                                "{role:?} additional field {name} cannot replace native field {storage}"
-                            ));
-                        }
+                            })
+                    {
+                        return Err(format!(
+                            "{role:?} additional field {name} cannot replace native field {storage}"
+                        ));
                     }
                 }
                 if let Some((definition, existing)) = fields

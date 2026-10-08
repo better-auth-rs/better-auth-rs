@@ -175,8 +175,7 @@ impl ModelFields {
 
     pub(crate) fn register(&mut self, role: EntityRole, fields: UserConfig) -> AuthResult<()> {
         match role {
-            EntityRole::ApiKey | EntityRole::Passkey => {}
-            EntityRole::DeviceCode => device::validate_fields(&fields)?,
+            EntityRole::ApiKey | EntityRole::Passkey | EntityRole::DeviceCode => {}
             EntityRole::Jwk => jwk::validate_fields(&fields)?,
             EntityRole::TwoFactor => two_factor::validate_fields(&fields)?,
             EntityRole::WalletAddress => wallet::validate_fields(&fields)?,

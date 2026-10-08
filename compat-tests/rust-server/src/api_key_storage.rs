@@ -1,8 +1,4 @@
-use std::{
-    collections::BTreeMap,
-    sync::{Arc, Mutex},
-    time::{Duration, Instant},
-};
+use std::sync::{Arc, Mutex};
 
 use axum::{Json, Router, routing::post};
 use better_auth::{
@@ -10,15 +6,16 @@ use better_auth::{
     plugins::api_key::{ApiKeyConfig, ApiKeyPlugin, ApiKeyStorage, KeyExpirationConfig},
     store::SecondaryStorage,
 };
+use better_auth_core::FieldValue;
 use serde_json::{Value, json};
 
 struct Entry {
     value: String,
-    ttl: Option<u64>,
-    expires: Option<Instant>,
+    ttl: Option<f64>,
+    expires: Option<f64>,
 }
 struct State {
-    entries: BTreeMap<String, Entry>,
+    entries: super::secondary_storage::NativeCache<Entry>,
     failure: Option<String>,
 }
 struct Storage {
@@ -30,7 +27,7 @@ impl Default for Storage {
     fn default() -> Self {
         Self {
             state: Mutex::new(State {
-                entries: BTreeMap::new(),
+                entries: Default::default(),
                 failure: None,
             }),
             blocked: tokio::sync::watch::channel(false).0,
@@ -39,8 +36,13 @@ impl Default for Storage {
 }
 
 impl Storage {
-    fn check(state: &State, operation: &str, key: &str) -> AuthResult<()> {
-        if key.starts_with("api-key:") && state.failure.as_deref() == Some(operation) {
+    fn is_api_key(key: &FieldValue) -> AuthResult<bool> {
+        let units = better_auth_core::query::field_string_units(key)
+            .ok_or_else(|| AuthError::internal("key.startsWith is not a function"))?;
+        Ok(units.starts_with(&"api-key:".encode_utf16().collect::<Vec<_>>()))
+    }
+    fn check(state: &State, operation: &str, key: &FieldValue) -> AuthResult<()> {
+        if Self::is_api_key(key)? && state.failure.as_deref() == Some(operation) {
             Err(AuthError::internal("compat secondary storage failure"))
         } else {
             Ok(())
@@ -50,7 +52,9 @@ impl Storage {
         let mut state = self.state.lock().unwrap();
         match body["action"].as_str() {
             Some("failure") => state.failure = body["operation"].as_str().map(str::to_owned),
-            Some("evict") => state.entries.retain(|key, _| !key.starts_with("api-key:")),
+            Some("evict") => state
+                .entries
+                .retain(|key, _| !Self::is_api_key(key).unwrap()),
             Some("delete") => {
                 let _ = state.entries.remove(body["key"].as_str().unwrap());
             }
@@ -75,10 +79,10 @@ impl Storage {
             .entries
             .iter()
             .filter(|(key, entry)| {
-                key.starts_with("api-key:")
-                    && entry.expires.is_none_or(|expiry| expiry > Instant::now())
+                Self::is_api_key(key).unwrap()
+                    && entry.expires.is_none_or(|expiry| expiry > chrono::Utc::now().timestamp_millis() as f64)
             })
-            .map(|(key, entry)| json!({"key":key,"value":entry.value,"ttl":entry.ttl}))
+            .map(|(key, entry)| json!({"key":key,"value":entry.value,"ttl":entry.ttl.map(FieldValue::Number)}))
             .collect()
     }
     fn reset(&self) {
@@ -93,26 +97,34 @@ impl Storage {
 impl SecondaryStorage for Storage {
     async fn get_and_delete(&self, key: &str) -> AuthResult<Option<Value>> {
         let mut state = self.state.lock().unwrap();
-        Self::check(&state, "get", key)?;
+        Self::check(&state, "get", &key.into())?;
         Ok(state
             .entries
             .remove(key)
-            .filter(|entry| entry.expires.is_none_or(|expiry| expiry > Instant::now()))
+            .filter(|entry| {
+                entry.expires.is_none_or(|expiry| {
+                    expiry > chrono::Utc::now().timestamp_millis() as f64 || expiry.is_nan()
+                })
+            })
             .map(|entry| Value::String(entry.value)))
     }
 
     async fn get(&self, key: &str) -> AuthResult<Option<Value>> {
         let state = self.state.lock().unwrap();
-        Self::check(&state, "get", key)?;
+        Self::check(&state, "get", &key.into())?;
         Ok(state
             .entries
             .get(key)
-            .filter(|entry| entry.expires.is_none_or(|expiry| expiry > Instant::now()))
+            .filter(|entry| {
+                entry.expires.is_none_or(|expiry| {
+                    expiry > chrono::Utc::now().timestamp_millis() as f64 || expiry.is_nan()
+                })
+            })
             .map(|entry| Value::String(entry.value.clone())))
     }
-    async fn set(&self, key: &str, value: &str, ttl: Option<u64>) -> AuthResult<()> {
+    async fn set_native(&self, key: &FieldValue, value: &str, ttl: Option<f64>) -> AuthResult<()> {
         Self::check(&self.state.lock().unwrap(), "set", key)?;
-        if key.starts_with("api-key:") {
+        if Self::is_api_key(key)? {
             let mut blocked = self.blocked.subscribe();
             while *blocked.borrow_and_update() {
                 blocked
@@ -122,18 +134,19 @@ impl SecondaryStorage for Storage {
             }
         }
         let _ = self.state.lock().unwrap().entries.insert(
-            key.into(),
+            key.clone(),
             Entry {
                 value: value.into(),
                 ttl,
-                expires: ttl.map(|ttl| Instant::now() + Duration::from_secs(ttl)),
+                expires: ttl
+                    .map(|ttl| chrono::Utc::now().timestamp_millis() as f64 + ttl * 1_000.0),
             },
         );
         Ok(())
     }
     async fn delete(&self, key: &str) -> AuthResult<()> {
         let mut state = self.state.lock().unwrap();
-        Self::check(&state, "delete", key)?;
+        Self::check(&state, "delete", &key.into())?;
         let _ = state.entries.remove(key);
         Ok(())
     }

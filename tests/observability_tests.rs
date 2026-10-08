@@ -1536,8 +1536,16 @@ async fn check_device_operations(
                 .id,
             code.id
         );
-        assert!(store.claim_device_code(&code.id, "owner").await?);
-        assert!(!store.claim_device_code(&code.id, "other").await?);
+        assert!(
+            store
+                .claim_device_code(&code.id, &"owner".to_owned().into())
+                .await?
+        );
+        assert!(
+            !store
+                .claim_device_code(&code.id, &"other".to_owned().into())
+                .await?
+        );
         assert!(
             store
                 .update_device_code_if_status(
@@ -1554,7 +1562,7 @@ async fn check_device_operations(
             .get_device_code_by_device_code("device-secret")
             .await?
             .expect("approved code");
-        assert_eq!(approved.user_id.as_deref(), Some("owner"));
+        assert_eq!(approved.user_id.typed()?.as_deref(), Some("owner"));
         assert_eq!(approved.status, "approved");
         assert!(
             !store
@@ -1577,7 +1585,7 @@ async fn check_device_operations(
                 },
             )
             .await?;
-        assert!(renamed.last_polled_at.is_some());
+        assert!(renamed.last_polled_at.typed()?.is_some());
         assert!(
             store
                 .update_device_code(

@@ -8,8 +8,8 @@ use async_trait::async_trait;
 use better_auth::plugins::{endpoint_context::EndpointContext, phone_number::PhoneNumberPlugin};
 use better_auth::store::{MemoryCacheAdapter, SecondaryStorage, transaction};
 use better_auth::{AuthBuilder, AuthConfig, AuthError, AuthResult};
-use better_auth_core::CreateVerification;
 use better_auth_core::wire::VerificationView;
+use better_auth_core::{CreateVerification, FieldValue};
 use better_auth_seaorm::sea_orm::{ConnectionTrait, Database, DbBackend, Statement};
 use better_auth_seaorm::store::__private_test_support::{bundled_schema::BundledSchema, migrator};
 use better_auth_seaorm::{HookControl, SeaOrmHookContext, SeaOrmHooks, SeaOrmStore};
@@ -34,8 +34,8 @@ impl SecondaryStorage for Cache {
     async fn get(&self, key: &str) -> AuthResult<Option<Value>> {
         self.inner.get(key).await
     }
-    async fn set(&self, key: &str, value: &str, ttl: Option<u64>) -> AuthResult<()> {
-        self.inner.set(key, value, ttl).await
+    async fn set_native(&self, key: &FieldValue, value: &str, ttl: Option<f64>) -> AuthResult<()> {
+        self.inner.set_native(key, value, ttl).await
     }
     async fn delete(&self, key: &str) -> AuthResult<()> {
         if self.active.load(Ordering::SeqCst) {

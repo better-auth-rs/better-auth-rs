@@ -2,7 +2,7 @@ use super::*;
 use better_auth::{
     __private_core::{AuthSchema, AuthStore, CreateUser, SchemaValue, store::schema::EntityRole},
     BetterAuth,
-    plugins::{api_key::ApiKeyPlugin, passkey::PasskeyPlugin},
+    plugins::{DeviceAuthorizationPlugin, api_key::ApiKeyPlugin, passkey::PasskeyPlugin},
 };
 use std::sync::Arc;
 
@@ -10,6 +10,7 @@ use std::sync::Arc;
 enum Model {
     ApiKey,
     Passkey,
+    DeviceCode,
 }
 
 struct Store<S: AuthSchema, F> {
@@ -29,6 +30,7 @@ where
         match self.model {
             Model::ApiKey => self.store.create_api_key_record(fields).await.map(Some),
             Model::Passkey => self.store.create_passkey_record(fields).await.map(Some),
+            Model::DeviceCode => self.store.create_device_code_record(fields).await.map(Some),
         }
     }
 
@@ -37,6 +39,7 @@ where
         match self.model {
             Model::ApiKey => self.store.get_api_key_record(&id).await,
             Model::Passkey => self.store.get_passkey_record(&id).await,
+            Model::DeviceCode => self.store.get_device_code_record(&id).await,
         }
     }
 
@@ -45,6 +48,7 @@ where
         match self.model {
             Model::ApiKey => self.store.update_api_key_record(&id, fields).await,
             Model::Passkey => self.store.update_passkey_record(&id, fields).await,
+            Model::DeviceCode => self.store.update_device_code_record(&id, fields).await,
         }
     }
 
@@ -56,6 +60,11 @@ where
                     .await?
             }
             Model::Passkey => self.store.delete_passkey(&id.decode::<String>()?).await?,
+            Model::DeviceCode => {
+                self.store
+                    .delete_device_code(&SchemaValue::from_field(id))
+                    .await?
+            }
         }
         Ok(None)
     }
@@ -80,6 +89,7 @@ where
     let model = match target.role {
         EntityRole::ApiKey => Model::ApiKey,
         EntityRole::Passkey => Model::Passkey,
+        EntityRole::DeviceCode => Model::DeviceCode,
         _ => return Err(format!("Unsupported replacement model {}", target.model).into()),
     };
     let owner = raw
@@ -100,6 +110,7 @@ where
             let builder = match model {
                 Model::ApiKey => builder.plugin(ApiKeyPlugin::builder().build()),
                 Model::Passkey => builder.plugin(PasskeyPlugin::new()),
+                Model::DeviceCode => builder.plugin(DeviceAuthorizationPlugin::new()),
             };
             let auth = builder.plugin(policy).build().await?;
             Ok(Store {

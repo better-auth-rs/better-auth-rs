@@ -316,14 +316,35 @@ pub(crate) async fn issue_selected_user_session<S: better_auth_core::AuthSchema>
     meta: &better_auth_core::RequestMeta,
     expires_in: chrono::Duration,
 ) -> Result<better_auth_core::session::NativeSessionData, SessionIssueError> {
+    issue_selected_user_session_optional(ctx, user, meta, expires_in)
+        .await?
+        .ok_or_else(|| AuthError::forbidden("session creation cancelled by database hook").into())
+}
+
+/// Retain before-hook cancellation separately from session admission and storage errors.
+pub(crate) async fn issue_selected_user_session_optional<S: better_auth_core::AuthSchema>(
+    ctx: &AuthContext<S>,
+    user: better_auth_core::FieldValue,
+    meta: &better_auth_core::RequestMeta,
+    expires_in: chrono::Duration,
+) -> Result<Option<better_auth_core::session::NativeSessionData>, SessionIssueError> {
     let user_id = better_auth_core::SchemaValue::<String>::from_field(
         user.as_object()
             .and_then(|fields| fields.get("id"))
             .cloned()
             .unwrap_or_default(),
     );
-    let session = issue_session_for_id(ctx, user_id, meta, expires_in).await?;
-    Ok(better_auth_core::session::NativeSessionData { user, session })
+    admit_session_for_id(ctx, &user_id, None).await?;
+    let session = ctx
+        .session_manager()
+        .create_session_for_id_with_lifetime_optional(
+            user_id,
+            meta.ip_address.clone(),
+            meta.user_agent.clone(),
+            expires_in,
+        )
+        .await?;
+    Ok(session.map(|session| better_auth_core::session::NativeSessionData { user, session }))
 }
 
 /// Apply session admission without replacing the supplied owner with a projected User ID.

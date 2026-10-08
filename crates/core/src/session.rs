@@ -170,6 +170,11 @@ impl<S: AuthSchema> SessionManager<S> {
         })
     }
 
+    /// Publish the issued snapshot for endpoint hooks without writing cookies or storage.
+    pub fn publish_session(&self, req: &AuthRequest, data: NativeSessionData) -> AuthResult<()> {
+        req.set_new_session(data)
+    }
+
     /// Write session credentials and retain the supplied identity for endpoint after hooks.
     pub async fn set_session_cookie(
         &self,
@@ -289,6 +294,21 @@ impl<S: AuthSchema> SessionManager<S> {
         user_agent: Option<String>,
         expires_in: chrono::Duration,
     ) -> AuthResult<SessionView> {
+        self.create_session_for_id_with_lifetime_optional(
+            user_id, ip_address, user_agent, expires_in,
+        )
+        .await?
+        .ok_or_else(|| AuthError::forbidden("session creation cancelled by database hook"))
+    }
+
+    /// Preserve before-hook cancellation for endpoints that return a specific creation error.
+    pub async fn create_session_for_id_with_lifetime_optional(
+        &self,
+        user_id: crate::SchemaValue<String>,
+        ip_address: Option<String>,
+        user_agent: Option<String>,
+        expires_in: chrono::Duration,
+    ) -> AuthResult<Option<SessionView>> {
         let expires_at = Utc::now() + expires_in;
 
         let create_session = CreateSession {
@@ -301,8 +321,7 @@ impl<S: AuthSchema> SessionManager<S> {
             active_organization_id: None,
         };
 
-        let session = self.database.create_session(create_session).await?;
-        Ok(session)
+        self.database.create_session_optional(create_session).await
     }
 
     /// Read a session directly from the server store and refresh its expiry.

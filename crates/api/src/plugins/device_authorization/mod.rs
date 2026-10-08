@@ -24,21 +24,23 @@ pub use types::DeviceAuthorizationRequest;
 use url::Url;
 
 use crate::plugins::endpoint_context::EndpointContext;
-use crate::plugins::helpers::{SessionIssueError, issue_user_session};
-use better_auth_core::entity::{AuthSession, AuthUser};
+use crate::plugins::helpers::{SessionIssueError, issue_selected_user_session_optional};
+use better_auth_core::entity::AuthUser;
 use better_auth_core::{
-    AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, CreateDeviceCode, DatabaseError,
-    DeviceCode, RequestMeta, UpdateDeviceCode,
+    AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, DatabaseError, DeviceCode,
+    FieldMap, FieldValue, RequestMeta, SchemaValue, UpdateDeviceCode,
 };
 
 pub(super) mod types;
 
 #[cfg(test)]
+mod native_tests;
+#[cfg(test)]
 mod tests;
 
 use types::{
     DeviceActionRequest, DeviceActionResponse, DeviceCodeResponse, DeviceErrorResponse,
-    DeviceReviewContext, DeviceTokenRequest, DeviceTokenResponse, DeviceVerifyResponse,
+    DeviceTokenRequest,
 };
 
 const DEVICE_GRANT_TYPE: &str = "urn:ietf:params:oauth:grant-type:device_code";
@@ -308,26 +310,28 @@ impl DeviceAuthorizationPlugin {
         for _ in 0..3 {
             let device_code = self.generate_device_code().await?;
             let user_code = self.generate_user_code().await?;
-            match ctx
-                .database
-                .create_device_code(CreateDeviceCode {
-                    additional_fields: authorization.additional_fields.clone(),
-                    device_code: device_code.clone(),
-                    user_code: user_code.clone(),
-                    user_id: body.user_id.clone().filter(|id| !id.is_empty()),
-                    expires_at: expires_at.into(),
-                    status: DEVICE_STATUS_PENDING.to_string(),
-                    last_polled_at: None,
-                    polling_interval: Some(polling_interval),
-                    client_id: Some(authorization.client_id.clone()),
-                    scope: body
-                        .scope
+            let mut fields = authorization.additional_fields.clone();
+            fields.extend(FieldMap::from([
+                ("deviceCode".into(), device_code.clone().into()),
+                ("userCode".into(), user_code.clone().into()),
+                (
+                    "userId".into(),
+                    body.user_id
                         .clone()
-                        .map(|scope| Some(scope).into())
-                        .unwrap_or_default(),
-                })
-                .await
-            {
+                        .filter(|id| !id.is_empty())
+                        .map(FieldValue::from)
+                        .unwrap_or(FieldValue::Null),
+                ),
+                ("expiresAt".into(), expires_at.into()),
+                ("status".into(), DEVICE_STATUS_PENDING.into()),
+                ("pollingInterval".into(), polling_interval.into()),
+                ("clientId".into(), authorization.client_id.clone().into()),
+                (
+                    "scope".into(),
+                    body.scope.clone().map(FieldValue::from).unwrap_or_default(),
+                ),
+            ]));
+            match ctx.database.create_device_code_record(fields).await {
                 Ok(_) => {}
                 Err(AuthError::Database(DatabaseError::UniqueConstraint(_))) => continue,
                 Err(error) => return Err(error),
@@ -383,14 +387,9 @@ impl DeviceAuthorizationPlugin {
             &body.device_code,
             move |device_code, endpoint| {
                 Box::pin(async move {
-                    let stored_client_id: Option<String> = serde_json::from_value(
-                        device_code
-                            .client_id
-                            .json()?
-                            .unwrap_or(serde_json::Value::Null),
-                    )?;
-                    if let Some(stored_client_id) = stored_client_id.as_deref()
-                        && stored_client_id != client_id
+                    let stored_client_id = device_code.client_id.field_value();
+                    if stored_client_id.is_truthy()
+                        && !stored_client_id.strict_equals(&client_id.clone().into())
                     {
                         return Err(device_error_response(
                             400,
@@ -413,57 +412,56 @@ impl DeviceAuthorizationPlugin {
             |_device_code, _authorization, _endpoint| Box::pin(async { Ok(()) }),
         )
         .await;
-        let device_code = match redemption {
-            Ok(redemption) => redemption.claimed_device_code,
+        let redemption = match redemption {
+            Ok(redemption) => redemption,
             Err(error @ AuthError::Response(_)) => return Ok(error.to_auth_response()),
             Err(error) => return Err(error),
         };
-        let Some(user_id) = device_code.user_id.as_deref() else {
-            return device_error_response(500, "server_error", INVALID_DEVICE_CODE_STATUS);
-        };
+        let device_code = redemption.claimed_device_code;
         let meta = RequestMeta::from_request_with_config(req, &ctx.config.advanced.ip_address);
-        let session = match issue_user_session(ctx, user_id, meta.ip_address, meta.user_agent)
-            .await
-            .map_err(SessionIssueError::into_auth_error)
-        {
-            Ok(issued) => issued.session,
-            Err(error) => {
-                better_auth_core::observability::logger::current().error(
-                    "failed to create session after device code redemption",
-                    &[
-                        better_auth_core::observability::LogArgument::Error(&error),
-                        better_auth_core::observability::LogArgument::Value(&serde_json::json!(
-                            device_code.id
-                        )),
-                        better_auth_core::observability::LogArgument::Value(&serde_json::json!(
-                            user_id
-                        )),
-                    ],
-                );
-                return device_error_response(500, "server_error", FAILED_TO_CREATE_SESSION);
-            }
+        let issued = issue_selected_user_session_optional(
+            ctx,
+            FieldMap::from(redemption.user).into(),
+            &meta,
+            ctx.config.session.expires_in(),
+        )
+        .await
+        .map_err(SessionIssueError::into_auth_error)?;
+        let Some(issued) = issued else {
+            return device_error_response(500, "server_error", FAILED_TO_CREATE_SESSION);
         };
+        let session = FieldMap::from(issued.session.clone());
+        let token = session.get("token").cloned().unwrap_or_default();
+        ctx.session_manager().publish_session(req, issued.clone())?;
+        if let Some(storage) = &ctx.secondary_storage {
+            let envelope = FieldValue::from(FieldMap::from([
+                ("user".into(), issued.user),
+                ("session".into(), session.clone().into()),
+            ]));
+            let value = envelope
+                .stringify()?
+                .ok_or_else(|| AuthError::internal("Session cache object is undefined"))?;
+            storage
+                .set_native(&token, &value, Some(device_session_ttl(&session)?))
+                .await?;
+        }
 
-        Ok(AuthResponse::json(
+        Ok(AuthResponse::native(
             200,
-            &DeviceTokenResponse {
-                access_token: session.token().to_string(),
-                token_type: "Bearer",
-                expires_in: {
-                    let seconds = ((session.expires_at().milliseconds()
-                        - Utc::now().timestamp_millis() as f64)
-                        / 1_000.0)
-                        .floor();
-                    if seconds < 0.0 { 0.0 } else { seconds }
-                }
-                .into(),
-                scope: device_code
-                    .scope
-                    .field_value()
-                    .decode::<Option<String>>()?
-                    .unwrap_or_default(),
-            },
-        )?
+            FieldMap::from([
+                ("access_token".into(), token),
+                ("token_type".into(), "Bearer".into()),
+                ("expires_in".into(), device_session_ttl(&session)?.into()),
+                (
+                    "scope".into(),
+                    match device_code.scope.into_field_value() {
+                        value if value.is_truthy() => value,
+                        _ => "".into(),
+                    },
+                ),
+            ])
+            .into(),
+        )
         .with_header("Cache-Control", "no-store")
         .with_header("Pragma", "no-cache"))
     }
@@ -481,7 +479,7 @@ impl DeviceAuthorizationPlugin {
             return device_error_response(400, "invalid_request", INVALID_USER_CODE);
         };
 
-        if device_code.expires_at.milliseconds() < Utc::now().timestamp_millis() as f64 {
+        if device_code.expires_at.is_before(Utc::now())? {
             return device_error_response(400, "expired_token", EXPIRED_USER_CODE);
         }
 
@@ -490,18 +488,25 @@ impl DeviceAuthorizationPlugin {
             Err(AuthError::Unauthenticated) => None,
             Err(error) => return Err(error),
         };
-        if let Some(user_id) = user_id.as_ref().and_then(|id| id.as_str())
-            && device_code.user_id.is_none()
-            && device_code.status == DEVICE_STATUS_PENDING
+        if let Some(user_id) = user_id.as_ref().filter(|id| id.field_value().is_truthy())
+            && !device_code.user_id.field_value().is_truthy()
+            && device_code
+                .status
+                .field_value()
+                .strict_equals(&DEVICE_STATUS_PENDING.into())
             && ctx
                 .database
                 .claim_device_code(&device_code.id, user_id)
                 .await?
         {
-            device_code.user_id = Some(user_id.to_string());
+            device_code.user_id = SchemaValue::from_field(user_id.field_value());
         }
-        let can_review = user_id.is_some()
-            && device_code.user_id.as_deref() == user_id.as_ref().and_then(|id| id.as_str());
+        let can_review = user_id.as_ref().is_some_and(|id| {
+            !id.is_undefined()
+                && id
+                    .field_value()
+                    .strict_equals(&device_code.user_id.field_value())
+        });
         let additional_fields = if can_review {
             match self.configured_grant(ctx)? {
                 Some(grant) => grant.verification_context_for(&device_code)?,
@@ -511,19 +516,18 @@ impl DeviceAuthorizationPlugin {
             Default::default()
         };
 
-        AuthResponse::json(
-            200,
-            &DeviceVerifyResponse {
-                user_code,
-                status: device_code.status,
-                review: can_review.then_some(DeviceReviewContext {
-                    additional_fields,
-                    client_id: device_code.client_id,
-                    scope: device_code.scope,
-                }),
-            },
-        )
-        .map_err(AuthError::from)
+        let mut response = additional_fields;
+        response.extend(FieldMap::from([
+            ("user_code".into(), user_code.into()),
+            ("status".into(), device_code.status.into_field_value()),
+        ]));
+        if can_review {
+            response.extend(FieldMap::from([
+                ("client_id".into(), device_code.client_id.into_field_value()),
+                ("scope".into(), device_code.scope.into_field_value()),
+            ]));
+        }
+        Ok(AuthResponse::native(200, response.into()))
     }
 
     async fn handle_device_approve(
@@ -565,26 +569,29 @@ impl DeviceAuthorizationPlugin {
             return device_error_response(400, "invalid_request", INVALID_USER_CODE);
         };
 
-        if device_code.expires_at.milliseconds() < Utc::now().timestamp_millis() as f64 {
+        if device_code.expires_at.is_before(Utc::now())? {
             return device_error_response(400, "expired_token", EXPIRED_USER_CODE);
         }
 
-        if device_code.status != DEVICE_STATUS_PENDING {
+        if !device_code
+            .status
+            .field_value()
+            .strict_equals(&DEVICE_STATUS_PENDING.into())
+        {
             return device_error_response(400, "invalid_request", DEVICE_CODE_ALREADY_PROCESSED);
         }
 
-        // The code must already be bound to a user by `GET /device`. Without
-        // this, any signed-in caller who knows a user_code could approve a
-        // device they never claimed.
-        let Some(claimed_user_id) = device_code.user_id.as_deref() else {
+        let claimed_user_id = device_code.user_id.field_value();
+        if !claimed_user_id.is_truthy() {
             return device_error_response(400, "invalid_request", DEVICE_CODE_NOT_CLAIMED);
-        };
-
-        if current_user_id != claimed_user_id {
-            return device_error_response(403, "access_denied", decision.forbidden_message());
         }
 
-        let updated_user_id = claimed_user_id.to_string();
+        if !current_user_id
+            .field_value()
+            .strict_equals(&claimed_user_id)
+        {
+            return device_error_response(403, "access_denied", decision.forbidden_message());
+        }
 
         let updated = ctx
             .database
@@ -593,7 +600,7 @@ impl DeviceAuthorizationPlugin {
                 DEVICE_STATUS_PENDING,
                 UpdateDeviceCode {
                     status: Some(decision.status().to_string()),
-                    user_id: Some(Some(updated_user_id)),
+                    user_id: Some(SchemaValue::from_field(claimed_user_id)),
                     ..Default::default()
                 },
             )
@@ -721,6 +728,11 @@ impl<S: better_auth_core::AuthSchema> better_auth_core::AuthPlugin<S>
     }
 
     async fn on_init(&self, ctx: &mut better_auth_core::AuthInitContext<S>) -> AuthResult<()> {
+        let role = better_auth_core::store::schema::EntityRole::DeviceCode;
+        ctx.register_model_fields(
+            role,
+            better_auth_core::plugin_runtime::ModelFields::plugin_native_fields(role),
+        )?;
         for (name, length) in [
             ("deviceCodeLength", self.config.device_code_length),
             ("userCodeLength", self.config.user_code_length),
@@ -754,7 +766,10 @@ async fn find_device_code_by_user_code(
     user_code: &str,
 ) -> AuthResult<Option<DeviceCode>> {
     if let Some(code) = ctx.database.get_device_code_by_user_code(user_code).await?
-        && code.user_code == user_code
+        && code
+            .user_code
+            .field_value()
+            .strict_equals(&user_code.into())
     {
         return Ok(Some(code));
     }
@@ -775,7 +790,21 @@ async fn find_device_code_by_user_code(
         .database
         .get_device_code_by_user_code(&normalized)
         .await?
-        .filter(|code| code.user_code == normalized))
+        .filter(|code| {
+            code.user_code
+                .field_value()
+                .strict_equals(&normalized.into())
+        }))
+}
+
+fn device_session_ttl(session: &FieldMap) -> AuthResult<f64> {
+    let expires = session.get("expiresAt").unwrap_or(&FieldValue::Undefined);
+    Ok(
+        ((better_auth_core::query::field_date(expires)?.milliseconds()
+            - Utc::now().timestamp_millis() as f64)
+            / 1_000.0)
+            .floor(),
+    )
 }
 
 fn build_verification_uris(

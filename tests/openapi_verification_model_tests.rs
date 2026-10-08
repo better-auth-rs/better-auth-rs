@@ -69,7 +69,12 @@ impl SecondaryStorage for UnusedSecondaryStorage {
         ))
     }
 
-    async fn set(&self, _: &str, _: &str, _: Option<u64>) -> AuthResult<()> {
+    async fn set_native(
+        &self,
+        _: &better_auth_core::FieldValue,
+        _: &str,
+        _: Option<f64>,
+    ) -> AuthResult<()> {
         Err(AuthError::internal(
             "OpenAPI schema generation must not access secondary storage",
         ))

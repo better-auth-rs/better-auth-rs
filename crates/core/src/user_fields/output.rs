@@ -543,9 +543,9 @@ impl<'de> serde::Deserialize<'de> for UserView {
         let mut fields = crate::field_value::serde::map::deserialize(deserializer)?;
         for name in ["createdAt", "updatedAt", "banExpires"] {
             if let Some(Value::String(text)) = fields.get(name) {
-                let date = crate::utils::date::parse_adapter_date(text)
+                let date = crate::utils::date::parse_date_constructor(text)
                     .ok_or_else(|| D::Error::custom(format!("Invalid user date field `{name}`")))?;
-                let _ = fields.insert(name.into(), crate::FieldDate::from(date).into());
+                let _ = fields.insert(name.into(), date.into());
             }
         }
         Self::from_field_values(fields).map_err(D::Error::custom)

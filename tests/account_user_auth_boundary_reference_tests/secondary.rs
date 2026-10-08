@@ -1,5 +1,6 @@
 use super::*;
 use better_auth_core::{
+    FieldValue,
     observability::LogLevel,
     store::{MemoryCacheAdapter, SecondaryStorage},
 };
@@ -7,7 +8,7 @@ use better_auth_seaorm::sea_orm::{ConnectionTrait, DbBackend, Statement};
 
 struct Cache {
     inner: MemoryCacheAdapter,
-    entries: Mutex<serde_json::Map<String, Value>>,
+    entries: Mutex<Vec<(FieldValue, String, Option<f64>)>>,
     events: Events,
 }
 
@@ -27,10 +28,15 @@ impl Cache {
             .map_err(|_| "Cache recorder poisoned")?
             .clone();
         let mut result = Vec::new();
-        for (key, entry) in entries {
-            let stored = SecondaryStorage::get(&self.inner, &key).await?;
-            assert_eq!(stored.as_ref(), entry.get("value"));
-            result.push(json!({"key":key,"value":entry["value"],"ttl":entry["ttl"]}));
+        for (key, value, ttl) in entries {
+            let stored = SecondaryStorage::get(
+                &self.inner,
+                key.as_str()
+                    .ok_or("This cache snapshot requires a string key")?,
+            )
+            .await?;
+            assert_eq!(stored, Some(Value::String(value.clone())));
+            result.push(json!({"key":key.json()?,"value":value,"ttl":ttl.map(FieldValue::Number).unwrap_or(FieldValue::Undefined).json()?}));
         }
         Ok(result)
     }
@@ -45,15 +51,23 @@ impl SecondaryStorage for Cache {
         Ok(value)
     }
 
-    async fn set(&self, key: &str, value: &str, ttl: Option<u64>) -> AuthResult<()> {
-        SecondaryStorage::set(&self.inner, key, value, ttl).await?;
+    async fn set_native(&self, key: &FieldValue, value: &str, ttl: Option<f64>) -> AuthResult<()> {
+        SecondaryStorage::set_native(&self.inner, key, value, ttl).await?;
         self.events
-            .push(json!({"kind":"secondary.set","key":key,"value":value,"ttl":ttl}))?;
-        let _ = self
+            .push(json!({"kind":"secondary.set","key":key.json()?,"value":value,"ttl":ttl.map(FieldValue::Number).unwrap_or(FieldValue::Undefined).json()?}))?;
+        let mut entries = self
             .entries
             .lock()
-            .map_err(|_| AuthError::internal("Cache recorder poisoned"))?
-            .insert(key.into(), json!({"value":value,"ttl":ttl}));
+            .map_err(|_| AuthError::internal("Cache recorder poisoned"))?;
+        if let Some(entry) = entries
+            .iter_mut()
+            .find(|entry| entry.0.same_value_zero(key))
+        {
+            entry.1 = value.into();
+            entry.2 = ttl;
+        } else {
+            entries.push((key.clone(), value.into(), ttl));
+        }
         Ok(())
     }
 
@@ -61,11 +75,10 @@ impl SecondaryStorage for Cache {
         SecondaryStorage::delete(&self.inner, key).await?;
         self.events
             .push(json!({"kind":"secondary.delete","key":key}))?;
-        let _ = self
-            .entries
+        self.entries
             .lock()
             .map_err(|_| AuthError::internal("Cache recorder poisoned"))?
-            .remove(key);
+            .retain(|entry| entry.0.as_str() != Some(key));
         Ok(())
     }
 
@@ -73,11 +86,10 @@ impl SecondaryStorage for Cache {
         let value = SecondaryStorage::get_and_delete(&self.inner, key).await?;
         self.events
             .push(json!({"kind":"secondary.getAndDelete","key":key,"value":value}))?;
-        let _ = self
-            .entries
+        self.entries
             .lock()
             .map_err(|_| AuthError::internal("Cache recorder poisoned"))?
-            .remove(key);
+            .retain(|entry| entry.0.as_str() != Some(key));
         Ok(value)
     }
 }

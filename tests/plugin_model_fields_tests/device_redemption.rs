@@ -115,7 +115,7 @@ async fn polling_truthiness_contract<S: AuthSchema>(
                 })
                 .await?;
             if interval.is_nan() {
-                assert!(seeded.polling_interval.is_some_and(f64::is_nan));
+                assert!(seeded.polling_interval.typed()?.is_some_and(f64::is_nan));
             }
             let endpoint = EndpointContext::native(None, None, FieldValue::Null, auth.context());
             let events = Arc::new(Mutex::new(Vec::new()));
@@ -165,7 +165,7 @@ async fn polling_truthiness_contract<S: AuthSchema>(
                 assert_eq!(redeemed.claimed_device_code.user_id, seeded.user_id);
                 assert_eq!(redeemed.user.id.typed()?, &owner);
                 let polled = required(
-                    redeemed.claimed_device_code.last_polled_at,
+                    redeemed.claimed_device_code.last_polled_at.typed()?.clone(),
                     "Expected the poll timestamp",
                 )?;
                 assert!(polled.milliseconds() >= started.timestamp_millis() as f64);

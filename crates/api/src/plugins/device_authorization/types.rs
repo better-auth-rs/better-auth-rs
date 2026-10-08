@@ -41,32 +41,6 @@ pub(super) struct DeviceCodeResponse {
 }
 
 #[derive(Debug, Serialize)]
-pub(super) struct DeviceTokenResponse {
-    pub access_token: String,
-    pub token_type: &'static str,
-    pub expires_in: better_auth_core::SchemaValue<f64>,
-    pub scope: String,
-}
-
-#[derive(Debug, Serialize)]
-pub(super) struct DeviceVerifyResponse {
-    pub user_code: String,
-    pub status: String,
-    #[serde(flatten)]
-    pub review: Option<DeviceReviewContext>,
-}
-
-#[derive(Debug, Serialize)]
-pub(super) struct DeviceReviewContext {
-    #[serde(flatten)]
-    pub additional_fields: serde_json::Map<String, serde_json::Value>,
-    #[serde(skip_serializing_if = "better_auth_core::SchemaValue::is_undefined")]
-    pub client_id: better_auth_core::SchemaValue<Option<String>>,
-    #[serde(skip_serializing_if = "better_auth_core::SchemaValue::is_undefined")]
-    pub scope: better_auth_core::SchemaValue<Option<String>>,
-}
-
-#[derive(Debug, Serialize)]
 pub(super) struct DeviceActionResponse {
     pub success: bool,
 }

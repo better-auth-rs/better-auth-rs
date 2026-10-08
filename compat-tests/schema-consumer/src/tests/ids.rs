@@ -349,7 +349,7 @@ async fn plugin_writes<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPlug
                 &device.id,
                 "pending",
                 UpdateDeviceCode {
-                    user_id: Some(Some(owner.clone())),
+                    user_id: Some(Some(owner.clone()).into()),
                     ..Default::default()
                 }
             )
@@ -363,6 +363,8 @@ async fn plugin_writes<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPlug
             .unwrap()
             .unwrap()
             .user_id
+            .typed()
+            .unwrap()
             .as_ref(),
         Some(owner)
     );
@@ -372,7 +374,7 @@ async fn plugin_writes<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPlug
                 &device.id,
                 "pending",
                 UpdateDeviceCode {
-                    user_id: Some(None),
+                    user_id: Some(None.into()),
                     ..Default::default()
                 }
             )
@@ -386,6 +388,8 @@ async fn plugin_writes<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPlug
             .unwrap()
             .unwrap()
             .user_id
+            .typed()
+            .unwrap()
             .is_none()
     );
     store.delete_two_factor(owner).await.unwrap();

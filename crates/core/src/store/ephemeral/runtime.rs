@@ -24,7 +24,7 @@ impl RuntimeStore<StatelessSchema> for EphemeralStore {
             model_fields: model_fields.fresh_runtime(),
             state: self.state.clone(),
             verification_locks: self.verification_locks.clone(),
-            device_code_consumptions: self.device_code_consumptions.clone(),
+            device_code_transaction: self.device_code_transaction.clone(),
             organization_fields: Arc::new(RwLock::new(organization_fields)),
             hooks,
             pending_hooks: None,

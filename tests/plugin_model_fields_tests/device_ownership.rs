@@ -71,7 +71,7 @@ impl Observation {
     fn device(&self, row: &DeviceCode) -> AuthResult<Value> {
         assert_eq!(row.id, self.seeded.id);
         assert_eq!(
-            row.user_id.as_deref(),
+            row.user_id.typed()?.as_deref(),
             Some(self.owner.id.typed()?.as_str())
         );
         let mut value = serde_json::to_value(row)?;
@@ -79,7 +79,7 @@ impl Observation {
             .insert("id".to_owned(), json!("<device-id>"));
         let _ = required(value.as_object_mut(), "Expected a model observation object")?
             .insert("userId".to_owned(), json!("<owner-id>"));
-        if let Some(polled) = &row.last_polled_at {
+        if let Some(polled) = row.last_polled_at.typed()? {
             assert!(polled.milliseconds() >= self.started_at.timestamp_millis() as f64);
             assert!(polled.milliseconds() <= Utc::now().timestamp_millis() as f64);
             assert!(value.get("lastPolledAt").is_some_and(Value::is_string));
@@ -88,7 +88,7 @@ impl Observation {
         } else {
             assert_eq!(value.get("lastPolledAt"), Some(&Value::Null));
         }
-        if let Some(interval) = row.polling_interval {
+        if let Some(interval) = *row.polling_interval.typed()? {
             // JSON has one numeric type; preserve the value with JavaScript's integral spelling.
             let _ = required(value.as_object_mut(), "Expected a model observation object")?.insert(
                 "pollingInterval".to_owned(),
@@ -112,7 +112,7 @@ impl Observation {
 
     async fn remaining(&self, store: &dyn DeviceCodeStore) -> AuthResult<Value> {
         let row = store
-            .get_device_code_by_device_code(&self.seeded.device_code)
+            .get_device_code_by_device_code(self.seeded.device_code.typed()?)
             .await?;
         Ok(json!(
             row.as_ref()
@@ -212,7 +212,7 @@ async fn redeem<S: AuthSchema>(
     let prepare = observation.clone();
     let result = redeem_device_code(
         &endpoint,
-        &observation.seeded.device_code,
+        observation.seeded.device_code.typed()?,
         move |row, _| {
             Box::pin(async move {
                 let visible = authorize.device(row)?;
@@ -491,7 +491,7 @@ async fn unsupported_device_ownership_conditions_leave_the_entire_record_stored(
     let (auth, observation) = setup(memory(), policies).await?;
     let before = auth
         .store()
-        .get_device_code_by_device_code(&observation.seeded.device_code)
+        .get_device_code_by_device_code(observation.seeded.device_code.typed()?)
         .await?
         .ok_or_else(|| AuthError::internal("Expected the stored model record"))?;
     let unsupported_type =
@@ -532,7 +532,7 @@ async fn unsupported_device_ownership_conditions_leave_the_entire_record_stored(
         assert!(matches!(error, AuthError::Config(ref actual) if actual == message));
         assert_eq!(
             auth.store()
-                .get_device_code_by_device_code(&before.device_code)
+                .get_device_code_by_device_code(before.device_code.typed()?)
                 .await?,
             Some(before.clone()),
             "Rejected ownership condition {field} must preserve the complete stored record"
@@ -582,7 +582,7 @@ async fn memory_device_ownership_set_change_conflicts_even_when_both_values_matc
                 assert_eq!(consumed, Some(prepared));
                 assert!(
                     transaction
-                        .get_device_code_by_device_code(&expected.device_code)
+                        .get_device_code_by_device_code(expected.device_code.typed()?)
                         .await?
                         .is_none()
                 );
@@ -608,7 +608,7 @@ async fn memory_device_ownership_set_change_conflicts_even_when_both_values_matc
         }
         assert_eq!(
             auth.store()
-                .get_device_code_by_device_code(&expected.device_code)
+                .get_device_code_by_device_code(expected.device_code.typed()?)
                 .await?,
             Some(expected)
         );
@@ -720,7 +720,7 @@ async fn memory_device_ownership_sets_reject_unsupported_fields_before_callbacks
             assert_eq!(calls.load(Ordering::SeqCst), 0);
             assert_eq!(
                 auth.store()
-                    .get_device_code_by_device_code(&before.device_code)
+                    .get_device_code_by_device_code(before.device_code.typed()?)
                     .await?,
                 Some(before.clone())
             );

@@ -113,7 +113,7 @@ pub(crate) async fn observe<S: AuthSchema>(
                 "authorizationContext": result.authorization_context,
                 "redemptionContext": result.redemption_context,
                 "userFound": result.user.id.typed()? == owner,
-                "lastPolledAt": result.claimed_device_code.last_polled_at.is_some(),
+                "lastPolledAt": result.claimed_device_code.last_polled_at.typed()?.is_some(),
             }),
             Value::Null,
         ),
@@ -121,14 +121,19 @@ pub(crate) async fn observe<S: AuthSchema>(
         Err(error) => return Err(error),
     };
     let remaining = store.get_device_code_by_device_code(&token).await?;
+    let remaining = remaining
+        .map(|row| {
+            Ok::<_, AuthError>(json!({
+                "scope": row.scope,
+                "lastPolledAt": row.last_polled_at.typed()?.is_some(),
+            }))
+        })
+        .transpose()?;
     Ok(json!({
         "name": mode,
         "events": *trace_lock(&events)?,
         "result": result,
         "error": error,
-        "remaining": remaining.map(|row| json!({
-            "scope": row.scope,
-            "lastPolledAt": row.last_polled_at.is_some(),
-        })),
+        "remaining": remaining,
     }))
 }

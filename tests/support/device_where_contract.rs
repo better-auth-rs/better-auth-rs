@@ -235,7 +235,7 @@ async fn stored(
     seeded: &DeviceCode,
 ) -> AuthResult<Vec<Value>> {
     let row = reader
-        .get_device_code_by_device_code(&seeded.device_code)
+        .get_device_code_by_device_code(seeded.device_code.typed()?)
         .await?;
     let events = take(trace);
     let Some(row) = row else {
@@ -480,7 +480,10 @@ pub(crate) async fn run<S: AuthSchema>(
             })
             .await?;
         assert!(!seeded.id.typed()?.is_empty());
-        assert_eq!(seeded.user_id.as_deref(), Some(owner.id.typed()?.as_str()));
+        assert_eq!(
+            seeded.user_id.typed()?.as_deref(),
+            Some(owner.id.typed()?.as_str())
+        );
         let mut seed_events = json!(take(&trace));
         canonical_numbers(&mut seed_events)?;
         assert_eq!(
@@ -512,7 +515,7 @@ pub(crate) async fn run<S: AuthSchema>(
                 Box::pin(async move {
                     if select_source {
                         let source = tx
-                            .get_device_code_by_device_code(&expected.device_code)
+                            .get_device_code_by_device_code(expected.device_code.typed()?)
                             .await?
                             .ok_or_else(|| {
                                 AuthError::internal("The transaction must select the seeded Device")

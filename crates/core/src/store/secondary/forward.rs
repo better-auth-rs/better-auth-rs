@@ -455,6 +455,26 @@ impl<S: AuthSchema> PasskeyStore for SecondaryStore<S> {
 
 #[async_trait]
 impl<S: AuthSchema> DeviceCodeStore for SecondaryStore<S> {
+    async fn create_device_code_record(
+        &self,
+        fields: crate::FieldMap,
+    ) -> AuthResult<crate::FieldMap> {
+        self.inner.create_device_code_record(fields).await
+    }
+    async fn get_device_code_record(
+        &self,
+        id: &crate::SchemaValue<String>,
+    ) -> AuthResult<Option<crate::FieldMap>> {
+        self.inner.get_device_code_record(id).await
+    }
+    async fn update_device_code_record(
+        &self,
+        id: &crate::SchemaValue<String>,
+        fields: crate::FieldMap,
+    ) -> AuthResult<Option<crate::FieldMap>> {
+        self.inner.update_device_code_record(id, fields).await
+    }
+
     async fn create_device_code(&self, input: CreateDeviceCode) -> AuthResult<DeviceCode> {
         self.inner.create_device_code(input).await
     }
@@ -490,7 +510,7 @@ impl<S: AuthSchema> DeviceCodeStore for SecondaryStore<S> {
     async fn claim_device_code(
         &self,
         id: &crate::SchemaValue<String>,
-        user_id: &str,
+        user_id: &crate::SchemaValue<String>,
     ) -> AuthResult<bool> {
         self.inner.claim_device_code(id, user_id).await
     }

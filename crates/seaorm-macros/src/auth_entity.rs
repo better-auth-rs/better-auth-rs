@@ -124,7 +124,10 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
 
     // Validate core fields are present
     if let Some(missing) = core.iter().find(|required| {
-        !(matches!(role, EntityRole::ApiKey | EntityRole::Passkey) && **required != "id"
+        !(matches!(
+            role,
+            EntityRole::ApiKey | EntityRole::Passkey | EntityRole::DeviceCode
+        ) && **required != "id"
             || row_presence && **required == "active"
             || native_two_factor && matches!(**required, "created_at" | "updated_at"))
             && !idents.iter().any(|ident| ident == *required)

@@ -178,8 +178,7 @@ impl UserFieldConfig {
             && let Value::String(text) = value
         {
             *value = Value::Date(
-                crate::utils::date::parse_adapter_date(text)
-                    .map(crate::FieldDate::from)
+                crate::utils::date::parse_date_constructor(text)
                     .unwrap_or_else(crate::FieldDate::invalid),
             );
         }

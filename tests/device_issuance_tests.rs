@@ -132,8 +132,11 @@ async fn ordinary_device_issuance_matches_pinned_code_and_uri_contract()
                 stored: StoredObservation {
                     client_id: stored.client_id.typed()?.clone(),
                     scope: stored.scope.typed()?.clone(),
-                    status: stored.status,
-                    polling_interval: stored.polling_interval.expect("stored polling interval"),
+                    status: stored.status.typed()?.clone(),
+                    polling_interval: stored
+                        .polling_interval
+                        .typed()?
+                        .expect("stored polling interval"),
                 },
             },
             expected,

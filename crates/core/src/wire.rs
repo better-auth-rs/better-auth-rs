@@ -261,17 +261,17 @@ impl SessionView {
 
     /// Continue each projected session while other rows retain their pending field callbacks.
     /// Preserve the original row index for adapter-owned association data.
-    pub async fn with_internal_fields_many_for_adapter_then<T: AuthSession, R: Send, F>(
-        sessions: &[T],
-        config: &crate::config::SessionConfig,
+    pub fn with_internal_fields_many_for_adapter_then<'a, T: AuthSession, R: Send + 'a, F>(
+        sessions: &'a [T],
+        config: &'a crate::config::SessionConfig,
         supports_native_json: bool,
-        complete: impl Fn(usize, Self) -> F + Sync,
-    ) -> crate::AuthResult<Vec<R>>
+        complete: impl Fn(usize, Self) -> F + Send + Sync + 'a,
+    ) -> BoxFuture<'a, crate::AuthResult<Vec<R>>>
     where
-        F: std::future::Future<Output = crate::AuthResult<R>> + Send,
+        F: std::future::Future<Output = crate::AuthResult<R>> + Send + 'a,
     {
-        // Erase the projection future so request callers do not expand its nested Send obligations.
-        let projection: BoxFuture<'_, crate::AuthResult<Vec<R>>> = Box::pin(async {
+        // Erase the entry future so callers do not expand the nested projection's Send obligations.
+        Box::pin(async move {
             let mut rows = session_projection::rows(sessions, config)?;
             let schema = config.adapter_schema();
             crate::user_fields::project_fields_then(
@@ -281,8 +281,7 @@ impl SessionView {
                 |index, row| complete(index, row.view.clone().into_projected_fields()),
             )
             .await
-        });
-        projection.await
+        })
     }
 
     /// Continue ready session projections together, retaining their original row indices.

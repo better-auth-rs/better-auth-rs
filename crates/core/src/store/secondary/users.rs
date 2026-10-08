@@ -187,8 +187,8 @@ impl<S: AuthSchema> SecondaryStore<S> {
             ("user".into(), user.clone()),
         ]));
         self.secondary()?
-            .set(
-                token,
+            .set_native(
+                &token.into(),
                 &serde_json::to_string(&crate::field_value::serde::Json(&envelope))?,
                 Some(seconds),
             )

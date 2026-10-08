@@ -5,7 +5,7 @@ use super::{
 };
 use crate::plugins::endpoint_context::EndpointContext;
 use better_auth_core::{
-    AuthResult, AuthSchema, DeviceCode, DeviceCodeOwnership, UpdateDeviceCode,
+    AuthResult, AuthSchema, DeviceCode, DeviceCodeOwnership, SchemaValue, UpdateDeviceCode,
     store::DeviceCodeStore, wire::UserView,
 };
 use chrono::Utc;
@@ -70,14 +70,12 @@ where
         return Err(device_error_response(400, "invalid_grant", INVALID_DEVICE_CODE)?.into());
     };
     let authorization = authorize(&device_code, endpoint).await?;
-    if let (Some(last_polled_at), Some(polling_interval)) = (
-        device_code.last_polled_at.as_ref(),
-        device_code
-            .polling_interval
-            .filter(|interval| better_auth_core::FieldValue::Number(*interval).is_truthy()),
-    ) {
-        let elapsed = Utc::now().timestamp_millis() as f64 - last_polled_at.milliseconds();
-        if elapsed < polling_interval {
+    let last_polled_at = device_code.last_polled_at.field_value();
+    let polling_interval = device_code.polling_interval.field_value();
+    if last_polled_at.is_truthy() && polling_interval.is_truthy() {
+        let elapsed = Utc::now().timestamp_millis() as f64
+            - better_auth_core::query::field_date(&last_polled_at)?.milliseconds();
+        if elapsed < better_auth_core::query::field_number(&polling_interval)? {
             return Err(device_error_response(400, "slow_down", POLLING_TOO_FREQUENTLY)?.into());
         }
     }
@@ -90,29 +88,38 @@ where
             },
         )
         .await?;
-    if device_code.expires_at.milliseconds() < Utc::now().timestamp_millis() as f64 {
+    if device_code.expires_at.is_before(Utc::now())? {
         store.delete_device_code(&device_code.id).await?;
         return Err(device_error_response(400, "expired_token", EXPIRED_DEVICE_CODE)?.into());
     }
-    if device_code.status == DEVICE_STATUS_PENDING {
+    let status = device_code.status.field_value();
+    if status.strict_equals(&DEVICE_STATUS_PENDING.into()) {
         return Err(
             device_error_response(400, "authorization_pending", AUTHORIZATION_PENDING)?.into(),
         );
     }
-    if device_code.status == DEVICE_STATUS_DENIED {
+    if status.strict_equals(&DEVICE_STATUS_DENIED.into()) {
         store.delete_device_code(&device_code.id).await?;
         return Err(device_error_response(400, "access_denied", ACCESS_DENIED)?.into());
     }
-    if device_code.status != DEVICE_STATUS_APPROVED {
+    if !status.strict_equals(&DEVICE_STATUS_APPROVED.into()) {
         return Err(device_error_response(500, "server_error", INVALID_DEVICE_CODE_STATUS)?.into());
     }
-    let Some(user_id) = device_code.user_id.as_deref().filter(|id| !id.is_empty()) else {
+    let user_id = device_code.user_id.field_value();
+    if !user_id.is_truthy() {
         return Err(device_error_response(500, "server_error", INVALID_DEVICE_CODE_STATUS)?.into());
-    };
+    }
+    let user_id = SchemaValue::from_field(user_id);
     let redemption_context = prepare(&device_code, &authorization.context, endpoint).await?;
     let user = match endpoint.transaction {
-        Some(transaction) => transaction.get_user_by_id(user_id).await?,
-        None => endpoint.auth.database.get_user_by_id(user_id).await?,
+        Some(transaction) => transaction.get_user_by_id_field(&user_id).await?,
+        None => {
+            endpoint
+                .auth
+                .database
+                .get_user_by_id_field(&user_id)
+                .await?
+        }
     };
     let Some(user) = user else {
         return Err(device_error_response(500, "server_error", USER_NOT_FOUND)?.into());
@@ -121,11 +128,8 @@ where
     let claimed = store
         .consume_device_code(&device_code, &authorization.ownership)
         .await?;
-    let Some(claimed_device_code) = claimed.filter(|row| {
-        row.user_id
-            .as_deref()
-            .is_some_and(|user_id| !user_id.is_empty())
-    }) else {
+    let Some(claimed_device_code) = claimed.filter(|row| row.user_id.field_value().is_truthy())
+    else {
         return Err(device_error_response(400, "invalid_grant", INVALID_DEVICE_CODE)?.into());
     };
     Ok(DeviceCodeRedemptionResult {

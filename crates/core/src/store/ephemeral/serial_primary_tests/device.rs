@@ -29,13 +29,13 @@ async fn serial_device_queries_preserve_claim_and_consumption_bindings() -> Auth
             .device_codes
             .snapshot()?
             .iter()
-            .map(|row| row.id.field_value())
+            .map(|row| row.get("id").cloned().unwrap_or_default())
             .collect::<Vec<_>>(),
         [Value::Number(1.0), Value::Number(2.0)]
     );
     let padded = "001".to_owned().into();
-    assert!(store.claim_device_code(&padded, "owner").await?);
-    assert!(!store.claim_device_code(&padded, "other").await?);
+    assert!(store.claim_device_code(&padded, &"owner".into()).await?);
+    assert!(!store.claim_device_code(&padded, &"other".into()).await?);
     assert!(
         store
             .update_device_code_if_status(
@@ -54,7 +54,7 @@ async fn serial_device_queries_preserve_claim_and_consumption_bindings() -> Auth
                 &padded,
                 "pending",
                 UpdateDeviceCode {
-                    user_id: Some(Some("other".into())),
+                    user_id: Some(Some("other".into()).into()),
                     ..Default::default()
                 }
             )
@@ -70,17 +70,24 @@ async fn serial_device_queries_preserve_claim_and_consumption_bindings() -> Auth
             .is_none()
     );
     expected.id = padded.clone();
-    expected.user_id = Some("other".into());
     assert!(
         store
             .consume_device_code(&expected, &ownership)
             .await?
             .is_none()
     );
-    expected.user_id = Some("owner".into());
+    expected.id = first.id.clone();
+    expected.user_id = Some("other".into()).into();
+    assert!(
+        store
+            .consume_device_code(&expected, &ownership)
+            .await?
+            .is_none()
+    );
+    expected.user_id = Some("owner".into()).into();
     let consumed = required(store.consume_device_code(&expected, &ownership).await?)?;
     assert_eq!(consumed.id, "1");
-    assert_eq!(consumed.user_id.as_deref(), Some("owner"));
+    assert_eq!(consumed.user_id.typed()?.as_deref(), Some("owner"));
     assert!(
         store
             .consume_device_code(&expected, &ownership)
@@ -132,7 +139,7 @@ async fn serial_device_transaction_rejects_changed_owner_and_commits_unchanged_o
         .update_device_code(
             &expected.id,
             UpdateDeviceCode {
-                user_id: Some(Some("changed".into())),
+                user_id: Some(Some("changed".into()).into()),
                 ..Default::default()
             },
         )
@@ -142,8 +149,11 @@ async fn serial_device_transaction_rejects_changed_owner_and_commits_unchanged_o
         Err(AuthError::Internal(message)) if message == "Device code changed before transaction commit"
     ));
     let raw = required(store.lock()?.device_codes.snapshot()?.first()).cloned()?;
-    assert_eq!(raw.id.field_value(), Value::Number(1.0));
-    assert_eq!(raw.user_id.as_deref(), Some("changed"));
+    assert_eq!(
+        raw.get("id").cloned().unwrap_or_default(),
+        Value::Number(1.0)
+    );
+    assert_eq!(raw.get("userId").and_then(Value::as_str), Some("changed"));
     let (base, isolated, queue) = store.begin_transaction()?;
     assert_eq!(
         required(isolated.consume_device_code(&updated, &ownership).await?)?,

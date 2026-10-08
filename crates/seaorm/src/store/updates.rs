@@ -72,7 +72,7 @@ fn updated_primary_filter<E: EntityTrait>(
     fallback
 }
 
-async fn execute_returning_raw<E, C>(
+pub(super) async fn execute_returning_raw<E, C>(
     db: &C,
     query: sea_orm::UpdateMany<E>,
     reselect: SimpleExpr,

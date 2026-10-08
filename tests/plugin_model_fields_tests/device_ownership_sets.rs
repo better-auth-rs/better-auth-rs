@@ -117,12 +117,15 @@ impl Observation {
             (&self.seeded, &self.owner, "<device-id>", "<owner-id>")
         };
         assert_eq!(row.id, source.id);
-        assert_eq!(row.user_id.as_deref(), Some(owner.id.typed()?.as_str()));
+        assert_eq!(
+            row.user_id.typed()?.as_deref(),
+            Some(owner.id.typed()?.as_str())
+        );
         let mut value = serde_json::to_value(row)?;
         let object = value.as_object_mut().expect("complete Device object");
         let _ = object.insert("id".into(), json!(id));
         let _ = object.insert("userId".into(), json!(owner_id));
-        if let Some(polled) = &row.last_polled_at {
+        if let Some(polled) = row.last_polled_at.typed()? {
             assert!(polled.milliseconds() >= self.started_at.timestamp_millis() as f64);
             assert!(polled.milliseconds() <= Utc::now().timestamp_millis() as f64);
             assert!(object.get("lastPolledAt").is_some_and(Value::is_string));
@@ -158,7 +161,7 @@ impl Observation {
     async fn remaining(&self, store: &dyn DeviceCodeStore) -> AuthResult<Value> {
         let mut remaining = Vec::new();
         for code in [&self.decoy.device_code, &self.seeded.device_code] {
-            if let Some(row) = store.get_device_code_by_device_code(code).await? {
+            if let Some(row) = store.get_device_code_by_device_code(code.typed()?).await? {
                 remaining.push(self.device(&row)?);
             }
         }
@@ -324,7 +327,7 @@ async fn redeem<S: AuthSchema>(
     let prepare = observation.clone();
     let result = redeem_device_code(
         &endpoint,
-        &observation.seeded.device_code,
+        observation.seeded.device_code.typed()?,
         move |row, _| {
             Box::pin(async move {
                 authorize

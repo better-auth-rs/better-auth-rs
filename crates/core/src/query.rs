@@ -211,8 +211,7 @@ pub fn field_date(value: &FieldValue) -> AuthResult<crate::FieldDate> {
         value => value.clone(),
     };
     Ok(match primitive {
-        FieldValue::String(text) => crate::utils::date::parse_adapter_date(&text)
-            .map(crate::FieldDate::from)
+        FieldValue::String(text) => crate::utils::date::parse_date_constructor(&text)
             .unwrap_or_else(crate::FieldDate::invalid),
         FieldValue::Utf16String(_) => crate::FieldDate::invalid(),
         value => crate::FieldDate::from_milliseconds(field_number(&value)?),

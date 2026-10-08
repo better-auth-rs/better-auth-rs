@@ -59,7 +59,7 @@ async fn observations<S: AuthSchema>(
     let created = empty.store().create_device_code(input).await?;
     let read_by_omitted = omitted
         .store()
-        .get_device_code_by_device_code(&created.device_code)
+        .get_device_code_by_device_code(created.device_code.typed()?)
         .await?
         .expect("ordinary display-field row exists");
     let updated = omitted
@@ -76,7 +76,7 @@ async fn observations<S: AuthSchema>(
         .await?;
     let read_by_empty = empty
         .store()
-        .get_device_code_by_device_code(&created.device_code)
+        .get_device_code_by_device_code(created.device_code.typed()?)
         .await?
         .expect("ordinary display-field row exists");
     Ok(json!({

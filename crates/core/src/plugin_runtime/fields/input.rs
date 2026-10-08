@@ -98,3 +98,46 @@ impl crate::UpdatePasskey {
         Ok(fields)
     }
 }
+
+impl crate::CreateDeviceCode {
+    /// Convert ordinary Rust input to the complete logical adapter record.
+    #[doc(hidden)]
+    pub fn into_adapter_fields(self) -> AuthResult<FieldMap> {
+        let mut fields = self.additional_fields;
+        put(&mut fields, "deviceCode", self.device_code);
+        put(&mut fields, "userCode", self.user_code);
+        put(&mut fields, "userId", self.user_id);
+        put(&mut fields, "expiresAt", self.expires_at);
+        put(&mut fields, "status", self.status);
+        put(&mut fields, "lastPolledAt", self.last_polled_at);
+        put(&mut fields, "pollingInterval", self.polling_interval);
+        if let Some(client_id) = self.client_id {
+            put(&mut fields, "clientId", client_id);
+        } else {
+            let _ = fields.shift_remove("clientId");
+        }
+        let _ = fields.shift_remove("scope");
+        put(&mut fields, "scope", self.scope);
+        Ok(fields)
+    }
+}
+
+impl crate::UpdateDeviceCode {
+    /// Convert supplied values to a logical patch; omitted fields remain absent.
+    #[doc(hidden)]
+    pub fn into_adapter_fields(self) -> AuthResult<FieldMap> {
+        let mut fields = self.additional_fields;
+        let _ = fields.shift_remove("scope");
+        put(&mut fields, "scope", self.scope);
+        if let Some(status) = self.status {
+            put(&mut fields, "status", status);
+        }
+        if let Some(user_id) = self.user_id {
+            put(&mut fields, "userId", user_id);
+        }
+        if let Some(last_polled_at) = self.last_polled_at {
+            put(&mut fields, "lastPolledAt", last_polled_at);
+        }
+        Ok(fields)
+    }
+}

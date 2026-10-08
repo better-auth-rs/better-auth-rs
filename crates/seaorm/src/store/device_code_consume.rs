@@ -1,16 +1,20 @@
-use super::id_filter::IdColumn;
 use super::instrumentation::database_operation;
 use super::plugin_models::Entity;
+use super::record_bindings::Binding;
 use super::{SeaOrmStore, map_db_err};
 use crate::{SeaOrmPluginModel, schema::AuthSchema};
 use better_auth_core::FieldValue as Value;
 use better_auth_core::{
-    AuthResult, DeviceCode, DeviceCodeOwnership, DeviceCodeWhere, FieldValue, WhereMode,
-    WhereOperator,
+    AuthError, AuthResult, DeviceCode, DeviceCodeOwnership, DeviceCodeWhere, FieldValue, WhereMode,
+    WhereOperator, store::schema::EntityRole,
 };
 use sea_orm::{
-    ColumnTrait, ConnectionTrait, DbBackend, EntityTrait, QueryFilter, QuerySelect,
-    sea_query::{BinOper, Condition, ExprTrait, Func, SimpleExpr, extension::postgres::PgBinOper},
+    ColumnTrait, ConnectionTrait, DbBackend, EntityTrait, IdenStatic, Iterable, QueryFilter,
+    QueryResult, QuerySelect, QueryTrait,
+    sea_query::{
+        BinOper, Condition, Expr, ExprTrait, Func, Query, SimpleExpr,
+        extension::postgres::PgBinOper,
+    },
 };
 
 fn candidate(value: FieldValue, backend: DbBackend) -> AuthResult<SimpleExpr> {
@@ -118,6 +122,18 @@ fn ownership_predicate(
     })
 }
 
+fn stored_equals(
+    column: impl ColumnTrait,
+    value: FieldValue,
+    backend: DbBackend,
+) -> AuthResult<SimpleExpr> {
+    if value.is_null() {
+        return Ok(column.is_null());
+    }
+    let value = Binding::for_column(column, value).bind(backend)?;
+    Ok(column.into_expr().eq(column.save_as(value)))
+}
+
 impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema>
     SeaOrmStore<S, O, P>
 {
@@ -126,10 +142,9 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         connection: &impl ConnectionTrait,
         expected: &DeviceCode,
         ownership: &DeviceCodeOwnership,
-    ) -> AuthResult<Option<P::DeviceCode>> {
+    ) -> AuthResult<Option<QueryResult>> {
         let policy = self.config().advanced.database.generate_id();
-        let user = P::DeviceCode::column("user_id")?;
-        let client = P::DeviceCode::column("client_id")?;
+        let user = self.plugin_column::<P::DeviceCode>(EntityRole::DeviceCode, "userId")?;
         let (mut query, field, original) = self
             .model_fields
             .device_code_ownership_query(ownership, policy)?;
@@ -137,42 +152,57 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         query.value =
             super::value_filter::adapter_query_value(query.value, &original, field, backend)?;
         let ownership = ownership_predicate(P::DeviceCode::column(&query.field)?, query, backend)?;
-        let id = P::DeviceCode::column("id")?.eq_id(expected.id.typed()?, policy)?;
-        let filter = Condition::all()
-            .add(id.clone())
-            .add(P::DeviceCode::column("device_code")?.eq(&expected.device_code))
-            .add(super::value_filter::equals(
-                client,
-                &expected.client_id.field_value(),
-                self.connection().get_database_backend(),
-            )?)
-            .add(match &expected.user_id {
-                Some(id) => user.eq_id(id, policy)?,
-                None => user.is_null(),
-            })
+        let (bindings, unchanged) = expected.consumption_bindings()?;
+        let mut filter = Condition::all();
+        for name in ["id", "deviceCode", "clientId", "userId", "status"] {
+            let value = bindings.get(name).ok_or_else(|| {
+                AuthError::internal(format!("Device consumption binding {name} is missing"))
+            })?;
+            let column = self.plugin_column::<P::DeviceCode>(EntityRole::DeviceCode, name)?;
+            filter = filter.add(stored_equals(column, value.clone(), backend)?);
+        }
+        let filter = filter
             .add(user.is_not_null())
-            .add(P::DeviceCode::column("status")?.eq(&expected.status))
-            .add(P::DeviceCode::column("status")?.eq("approved"))
-            .add(ownership);
+            .add(self.plugin_equals::<P::DeviceCode>(
+                EntityRole::DeviceCode,
+                "status",
+                "approved".into(),
+            )?)
+            .add(ownership)
+            .add(Expr::value(unchanged));
         database_operation::<Entity<P::DeviceCode>, _>(self.config(), "consumeOne", async {
             if connection.support_returning() {
-                return Entity::<P::DeviceCode>::delete_many()
+                let mut query = Entity::<P::DeviceCode>::delete_many()
                     .filter(filter)
-                    .exec_with_returning(connection)
+                    .into_query();
+                let _ = query.returning(
+                    Query::returning().exprs(
+                        <P::DeviceCode as SeaOrmPluginModel>::Column::iter()
+                            .map(|column| column.select_as(column.into_returning_expr(backend))),
+                    ),
+                );
+                return connection
+                    .query_one_raw(backend.build(&query))
                     .await
-                    .map(|rows| rows.into_iter().next())
                     .map_err(map_db_err);
             }
             // Callers keep the MySQL row lock and deletion in the same transaction.
-            let row = Entity::<P::DeviceCode>::find()
+            let query = Entity::<P::DeviceCode>::find()
                 .filter(filter)
-                .lock_exclusive()
-                .one(connection)
+                .lock_exclusive();
+            let Some(row) = connection
+                .query_one_raw(query.build(backend))
                 .await
-                .map_err(map_db_err)?;
-            if row.is_none() {
+                .map_err(map_db_err)?
+            else {
                 return Ok(None);
-            }
+            };
+            let primary = self.plugin_column::<P::DeviceCode>(EntityRole::DeviceCode, "id")?;
+            let id = stored_equals(
+                primary,
+                super::plugin_rows::value(&row, primary.as_str())?,
+                backend,
+            )?;
             // Repeating the predicate in DELETE can turn MySQL SELECT coercion warnings into errors.
             let deleted = Entity::<P::DeviceCode>::delete_many()
                 .filter(id)
@@ -180,7 +210,7 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
                 .await
                 .map_err(map_db_err)?;
             Ok(if deleted.rows_affected == 1 {
-                row
+                Some(row)
             } else {
                 None
             })
@@ -190,7 +220,7 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
 
     pub(super) async fn project_consumed_device_code(
         &self,
-        row: Option<P::DeviceCode>,
+        row: Option<QueryResult>,
     ) -> AuthResult<Option<DeviceCode>> {
         Ok(self
             .project_device_code_models(row.into_iter().collect())

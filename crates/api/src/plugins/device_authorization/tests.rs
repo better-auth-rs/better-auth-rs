@@ -15,7 +15,7 @@ use super::*;
 
 type TestSchema = better_auth_seaorm::store::__private_test_support::bundled_schema::BundledSchema;
 
-fn json_body(response: &AuthResponse) -> Value {
+pub(super) fn json_body(response: &AuthResponse) -> Value {
     serde_json::from_slice(&response.body.bytes().unwrap()).unwrap()
 }
 
@@ -43,7 +43,10 @@ async fn generated_code_configuration_checks_storage_limits_at_initialization() 
     }
 }
 
-fn device_token_request(device_code: &str, client_id: &str) -> better_auth_core::AuthRequest {
+pub(super) fn device_token_request(
+    device_code: &str,
+    client_id: &str,
+) -> better_auth_core::AuthRequest {
     test_helpers::create_auth_json_request_no_query(
         HttpMethod::Post,
         "/device/token",
@@ -283,7 +286,7 @@ async fn test_device_token_expired_returns_error_and_deletes_record() {
 
     let response = plugin
         .handle_device_token(
-            &device_token_request(&stored.device_code, "test-client"),
+            &device_token_request(stored.device_code.typed().unwrap(), "test-client"),
             &ctx,
         )
         .await
@@ -295,7 +298,7 @@ async fn test_device_token_expired_returns_error_and_deletes_record() {
     assert_eq!(body["error_description"], EXPIRED_DEVICE_CODE);
     assert!(
         ctx.database
-            .get_device_code_by_device_code(&stored.device_code)
+            .get_device_code_by_device_code(stored.device_code.typed().unwrap())
             .await
             .unwrap()
             .is_none()
@@ -390,7 +393,10 @@ async fn test_device_token_zero_interval_skips_future_poll_timestamp() {
             .await
             .unwrap();
         let response = plugin
-            .handle_device_token(&device_token_request(&row.device_code, "test-client"), &ctx)
+            .handle_device_token(
+                &device_token_request(row.device_code.typed().unwrap(), "test-client"),
+                &ctx,
+            )
             .await
             .unwrap();
         assert_eq!(response.status, 400);
@@ -402,23 +408,25 @@ async fn test_device_token_zero_interval_skips_future_poll_timestamp() {
         );
         let remaining = ctx
             .database
-            .get_device_code_by_device_code(&row.device_code)
+            .get_device_code_by_device_code(row.device_code.typed().unwrap())
             .await
             .unwrap()
             .unwrap();
         if expected_error == "slow_down" {
             assert_eq!(remaining, row);
         } else {
-            let polled = remaining.last_polled_at.as_ref().unwrap().milliseconds();
+            let polled = remaining
+                .last_polled_at
+                .typed()
+                .unwrap()
+                .as_ref()
+                .unwrap()
+                .milliseconds();
             assert!(polled >= started.timestamp_millis() as f64);
             assert!(polled <= Utc::now().timestamp_millis() as f64);
-            assert_eq!(
-                remaining,
-                better_auth_core::DeviceCode {
-                    last_polled_at: remaining.last_polled_at.clone(),
-                    ..row
-                }
-            );
+            let mut expected = row;
+            expected.last_polled_at = remaining.last_polled_at.clone();
+            assert_eq!(remaining, expected);
         }
     }
 }

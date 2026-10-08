@@ -42,7 +42,7 @@ struct Input {
 #[derive(Default)]
 struct State {
     events: Vec<Value>,
-    entries: Map<String, Value>,
+    entries: super::secondary_storage::NativeCache<Value>,
     fail: Option<String>,
     patch: FieldMap,
 }
@@ -90,13 +90,13 @@ impl SecondaryStorage for Cache {
         event(&self.0, "cache.get", json!(key))?;
         Ok(self.0.lock().unwrap().entries.get(key).cloned())
     }
-    async fn set(&self, key: &str, value: &str, _: Option<u64>) -> AuthResult<()> {
+    async fn set_native(&self, key: &FieldValue, value: &str, _: Option<f64>) -> AuthResult<()> {
         event(&self.0, "cache.set", json!(key))?;
         self.0
             .lock()
             .unwrap()
             .entries
-            .insert(key.into(), json!(value));
+            .insert(key.clone(), json!(value));
         Ok(())
     }
     async fn delete(&self, key: &str) -> AuthResult<()> {

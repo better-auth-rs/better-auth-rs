@@ -133,7 +133,7 @@ where
     assert!(created.additional_fields.is_empty());
     assert_eq!(
         store
-            .get_device_code_by_device_code(&created.device_code)
+            .get_device_code_by_device_code(created.device_code.typed()?)
             .await?,
         Some(created.clone())
     );
@@ -146,17 +146,17 @@ where
         .update_device_code(
             &created.id,
             UpdateDeviceCode {
-                user_id: Some(Some(owner_id.clone())),
+                user_id: Some(Some(owner_id.clone()).into()),
                 ..Default::default()
             },
         )
         .await?;
     let mut expected = created;
-    expected.user_id = Some(owner_id);
+    expected.user_id = Some(owner_id).into();
     assert_eq!(updated, expected);
     assert_eq!(
         store
-            .get_device_code_by_user_code(&expected.user_code)
+            .get_device_code_by_user_code(expected.user_code.typed()?)
             .await?,
         Some(expected.clone())
     );

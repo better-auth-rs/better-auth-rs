@@ -1,44 +1,7 @@
 use super::*;
 use crate::id::IdGeneration;
 use crate::user_fields::UserFieldConfig;
-use crate::{DeviceCode, DeviceCodeOwnership, DeviceCodeWhere, WhereMode, WhereOperator};
-
-fn native_name(name: &str) -> bool {
-    crate::store::schema::core_fields(EntityRole::DeviceCode)
-        .iter()
-        .any(|field| field.name == name)
-        || matches!(
-            name,
-            "deviceCode"
-                | "userCode"
-                | "userId"
-                | "expiresAt"
-                | "lastPolledAt"
-                | "pollingInterval"
-                | "clientId"
-        )
-}
-
-pub(super) fn validate_fields(fields: &UserConfig) -> AuthResult<()> {
-    for (name, field) in fields.fields() {
-        let storage = resolve_field_name(field.field_name.as_deref(), name);
-        if name == "scope" {
-            if !matches!(field.field_type, UserFieldType::String)
-                || field.references.is_some()
-                || storage != name
-            {
-                return Err(AuthError::config(
-                    "DeviceCode scope requires its ordinary string column without reference or field-name replacement",
-                ));
-            }
-        } else if native_name(name) || native_name(storage) {
-            return Err(AuthError::config(format!(
-                "DeviceCode additional field {name} cannot replace native field {storage}"
-            )));
-        }
-    }
-    Ok(())
-}
+use crate::{DeviceCodeOwnership, DeviceCodeWhere, WhereMode, WhereOperator};
 
 impl ModelFields {
     /// Bind one ownership condition without invoking application field callbacks.
@@ -49,13 +12,15 @@ impl ModelFields {
         ownership: &DeviceCodeOwnership,
         policy: &IdGeneration,
     ) -> AuthResult<(DeviceCodeWhere, &UserFieldConfig, Value)> {
-        static CLIENT_ID: LazyLock<UserFieldConfig> = LazyLock::new(UserFieldConfig::default);
         let (mut query, logical, field) = match ownership {
-            DeviceCodeOwnership::ClientId(client) => (
-                DeviceCodeWhere::new("clientId", client.clone()),
-                "clientId",
-                &*CLIENT_ID,
-            ),
+            DeviceCodeOwnership::ClientId(client) => {
+                let (logical, field) = self.declared_device_code_ownership_field("clientId")?;
+                (
+                    DeviceCodeWhere::new("clientId", client.clone()),
+                    logical,
+                    field,
+                )
+            }
             DeviceCodeOwnership::FieldEquals { field, value } => {
                 let (logical, config) = self.device_code_ownership_field(field, value)?;
                 (DeviceCodeWhere::new(field, value.clone()), logical, config)
@@ -110,12 +75,10 @@ impl ModelFields {
         &self,
         name: &str,
     ) -> AuthResult<(&str, &UserFieldConfig)> {
-        static SCOPE: LazyLock<UserFieldConfig> = LazyLock::new(|| UserFieldConfig {
-            required: Some(false),
-            ..Default::default()
-        });
+        static NATIVE: LazyLock<UserConfig> =
+            LazyLock::new(|| ModelFields::plugin_native_fields(EntityRole::DeviceCode));
         crate::user_query::declared_field(name, self.fields(EntityRole::DeviceCode))
-            .or_else(|| (name == "scope").then(|| ("scope", &*SCOPE)))
+            .or_else(|| crate::user_query::declared_field(name, &NATIVE))
             .ok_or_else(|| {
                 AuthError::config(format!(
                     "DeviceCode ownership field {name} is not registered"
@@ -183,101 +146,24 @@ impl ModelFields {
         Ok((logical, field))
     }
 
-    /// Prepare scope and declared application fields without changing credential or owner bindings.
-    pub async fn device_code_fields_for_storage(
-        &self,
-        scope: SchemaValue<Option<String>>,
-        additional_fields: FieldMap,
-        create: bool,
-    ) -> AuthResult<FieldMap> {
-        self.device_code_fields_with_binding(scope, additional_fields, create, |_, _, value| {
-            Ok(value)
-        })
-        .await
-    }
-
-    /// Bind scope and application fields before omitting callback Undefined values.
+    /// Capture original physical bindings under their logical names before output policies run.
     #[doc(hidden)]
-    pub async fn device_code_fields_with_binding(
-        &self,
-        scope: SchemaValue<Option<String>>,
-        mut additional_fields: FieldMap,
-        create: bool,
-        bind: impl Fn(&str, &UserFieldConfig, Value) -> AuthResult<Value>,
-    ) -> AuthResult<FieldMap> {
-        // The typed scope owns omission too; application fields cannot supply an omitted native value.
-        let _ = additional_fields.shift_remove("scope");
-        let core = (!scope.is_undefined())
-            .then(|| scope.into_field_value())
+    pub fn device_code_storage_bindings(&self, stored: &FieldMap) -> FieldMap {
+        let schema = self
+            .plugin_fields(EntityRole::DeviceCode)
+            .adapter_fields(&[]);
+        ["id", "deviceCode", "clientId", "userId", "status"]
             .into_iter()
-            .map(|value| ("scope".into(), value))
-            .collect();
-        self.fields(EntityRole::DeviceCode)
-            .organization_storage_fields_with_binding(core, additional_fields, create, bind)
-            .await
-    }
-
-    pub(crate) fn take_device_code_scope(
-        fields: &mut FieldMap,
-    ) -> Option<SchemaValue<Option<String>>> {
-        optional_string(fields, "scope")
-    }
-
-    /// Project stored memory fields while retaining the original credential and authorization state.
-    pub async fn project_device_codes(
-        &self,
-        mut rows: Vec<DeviceCode>,
-    ) -> AuthResult<Vec<DeviceCode>> {
-        let records = rows
-            .iter()
-            .map(|row| {
-                let mut storage = row.additional_fields.clone();
-                if !row.scope.is_undefined() {
-                    let _ = storage.insert("scope".into(), row.scope.field_value());
-                }
-                AdapterRecord::new(FieldMap::new(), storage)
+            .map(|name| {
+                let physical = schema.fields().get(name).map_or(name, |field| {
+                    resolve_field_name(field.field_name.as_deref(), name)
+                });
+                (
+                    name.to_owned(),
+                    stored.get(physical).cloned().unwrap_or_default(),
+                )
             })
-            .collect();
-        let output = self
-            .fields(EntityRole::DeviceCode)
-            .project_memory_adapter_records(records)
-            .await?;
-        for (row, output) in rows.iter_mut().zip(output) {
-            self.assign_device_code_output(row, output);
-        }
-        Ok(rows)
-    }
-
-    /// Project extracted Device fields without replacing the raw record's typed bindings.
-    pub async fn project_device_code_records(
-        &self,
-        mut rows: Vec<DeviceCode>,
-        records: Vec<AdapterRecord>,
-        capabilities: crate::user_fields::FieldOutputCapabilities,
-        supports_native_dates: bool,
-    ) -> AuthResult<Vec<DeviceCode>> {
-        let fields = self.fields(EntityRole::DeviceCode);
-        let output = fields
-            .project_adapter_records_with_capabilities(records, capabilities, supports_native_dates)
-            .await?;
-        for (row, output) in rows.iter_mut().zip(output) {
-            self.assign_device_code_output(row, output);
-        }
-        Ok(rows)
-    }
-
-    pub(crate) fn assign_device_code_output(&self, row: &mut DeviceCode, mut output: FieldMap) {
-        if self
-            .fields(EntityRole::DeviceCode)
-            .fields()
-            .contains_key("scope")
-        {
-            row.scope = output
-                .shift_remove("scope")
-                .map(SchemaValue::from_field)
-                .unwrap_or_default();
-        }
-        row.additional_fields = output;
+            .collect()
     }
 }
 

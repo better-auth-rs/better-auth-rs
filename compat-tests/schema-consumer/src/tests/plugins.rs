@@ -293,9 +293,10 @@ async fn renamed_plugin_tables_preserve_authentication_and_atomic_storage() {
         })
         .await
         .unwrap();
+    let device_owner = better_auth::SchemaValue::from(user_id.to_owned());
     let (first, replay) = tokio::join!(
-        auth.store().claim_device_code(&device.id, user_id),
-        auth.store().claim_device_code(&device.id, user_id),
+        auth.store().claim_device_code(&device.id, &device_owner),
+        auth.store().claim_device_code(&device.id, &device_owner),
     );
     assert_eq!(
         usize::from(first.unwrap()) + usize::from(replay.unwrap()),
@@ -308,6 +309,8 @@ async fn renamed_plugin_tables_preserve_authentication_and_atomic_storage() {
             .unwrap()
             .unwrap()
             .user_id
+            .typed()
+            .unwrap()
             .as_deref(),
         Some(user_id)
     );

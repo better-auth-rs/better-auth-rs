@@ -16,7 +16,7 @@ pub(super) struct State {
     pub(super) accounts: Rows<crate::FieldMap>,
     pub(super) verifications: Rows<crate::FieldMap>,
     pub(super) two_factors: Rows<TwoFactor>,
-    pub(super) device_codes: Rows<DeviceCode>,
+    pub(super) device_codes: Rows<FieldMap>,
     pub(super) api_keys: Rows<FieldMap>,
     pub(super) passkeys: Rows<FieldMap>,
     pub(super) rate_limits: IndexMap<String, crate::store::RateLimitRecord>,

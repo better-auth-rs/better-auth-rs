@@ -159,7 +159,7 @@ fn observe_row(row: &DeviceCode) -> AuthResult<Value> {
     Ok(json!({
         "clientId": row.client_id.json()?, "scope": row.scope.json()?, "status": row.status,
         "pollingInterval": row.polling_interval, "label": row.additional_fields.json()?.get("label"),
-        "hasOwner": row.user_id.is_some(),
+        "hasOwner": row.user_id.typed()?.is_some(),
     }))
 }
 
@@ -316,7 +316,7 @@ pub(crate) async fn setup<S: AuthSchema>(
                         "session policy scope",
                     )?;
                     same(
-                        &json!(row.user_id.is_some()),
+                        &json!(row.user_id.typed()?.is_some()),
                         &json!(true),
                         "session policy owner",
                     )?;
@@ -348,16 +348,13 @@ pub(crate) async fn setup<S: AuthSchema>(
             if failure == Some(Failure::GetVerificationContext) {
                 return Err(Failure::GetVerificationContext.reject());
             }
-            Ok(Some(
-                FieldMap::from_iter([(
-                    "label".into(),
-                    row.additional_fields
-                        .get("label")
-                        .cloned()
-                        .ok_or_else(|| AuthError::internal("Stored display label is missing"))?,
-                )])
-                .json()?,
-            ))
+            Ok(Some(FieldMap::from_iter([(
+                "label".into(),
+                row.additional_fields
+                    .get("label")
+                    .cloned()
+                    .ok_or_else(|| AuthError::internal("Stored display label is missing"))?,
+            )])))
         });
     let validate_events = sender.clone();
     let request_events = sender.clone();

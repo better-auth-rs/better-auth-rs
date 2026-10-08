@@ -52,6 +52,17 @@ impl ModelFields {
                 ("createdAt", Date, false),
                 ("aaguid", String, false),
             ],
+            EntityRole::DeviceCode => vec![
+                ("deviceCode", String, true),
+                ("userCode", String, true),
+                ("userId", String, false),
+                ("expiresAt", Date, true),
+                ("status", String, true),
+                ("lastPolledAt", Date, false),
+                ("pollingInterval", Number, false),
+                ("clientId", String, false),
+                ("scope", String, false),
+            ],
             _ => Vec::new(),
         };
         let mut fields = UserConfig {

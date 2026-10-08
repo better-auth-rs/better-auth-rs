@@ -234,13 +234,13 @@ pub(super) async fn reference_writes<
         .update_device_code(
             &device.id,
             UpdateDeviceCode {
-                user_id: Some(Some(alias.clone())),
+                user_id: Some(Some(alias.clone()).into()),
                 ..Default::default()
             },
         )
         .await
         .unwrap();
-    assert_eq!(changed.user_id.as_ref(), Some(owner));
+    assert_eq!(changed.user_id.typed().unwrap().as_ref(), Some(owner));
     assert_eq!(changed.user_code, "0x10");
     assert!(
         store
@@ -248,7 +248,7 @@ pub(super) async fn reference_writes<
                 &device.id,
                 "pending",
                 UpdateDeviceCode {
-                    user_id: Some(None),
+                    user_id: Some(None.into()),
                     ..Default::default()
                 }
             )
@@ -261,7 +261,7 @@ pub(super) async fn reference_writes<
                 &device.id,
                 "pending",
                 UpdateDeviceCode {
-                    user_id: Some(Some(alias)),
+                    user_id: Some(Some(alias).into()),
                     ..Default::default()
                 }
             )
@@ -275,6 +275,8 @@ pub(super) async fn reference_writes<
             .unwrap()
             .unwrap()
             .user_id
+            .typed()
+            .unwrap()
             .as_ref(),
         Some(owner)
     );

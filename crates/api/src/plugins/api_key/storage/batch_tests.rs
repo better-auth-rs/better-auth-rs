@@ -1,5 +1,6 @@
 #![expect(
     clippy::unwrap_used,
+    clippy::expect_used,
     reason = "Barrier contract fixtures fail immediately on invalid setup or a closed test channel."
 )]
 
@@ -140,7 +141,15 @@ impl SecondaryStorage for Storage {
         .await
     }
 
-    async fn set(&self, key: &str, value: &str, _: Option<u64>) -> AuthResult<()> {
+    async fn set_native(
+        &self,
+        key: &better_auth_core::FieldValue,
+        value: &str,
+        _: Option<f64>,
+    ) -> AuthResult<()> {
+        let key = key
+            .as_str()
+            .expect("API-key batch storage receives string-formatted index keys");
         self.run(key, Mode::Refill, Some(value), |state| {
             if state.mode == Some(Mode::Refill) && key.starts_with("api-key:by-ref:") {
                 state.index_writes.push((

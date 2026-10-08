@@ -1291,6 +1291,23 @@ pub trait PasskeyStore: Send + Sync {
 /// Persistence for OAuth device authorization codes.
 #[async_trait]
 pub trait DeviceCodeStore: Send + Sync {
+    /// Create a complete logical record through the shared adapter field policies.
+    async fn create_device_code_record(
+        &self,
+        fields: crate::FieldMap,
+    ) -> AuthResult<crate::FieldMap>;
+    /// Read a complete logical record without narrowing native values.
+    async fn get_device_code_record(
+        &self,
+        id: &crate::SchemaValue<String>,
+    ) -> AuthResult<Option<crate::FieldMap>>;
+    /// Apply a logical patch through the same policies as record creation.
+    async fn update_device_code_record(
+        &self,
+        id: &crate::SchemaValue<String>,
+        fields: crate::FieldMap,
+    ) -> AuthResult<Option<crate::FieldMap>>;
+
     /// Persist a newly-issued device code.
     async fn create_device_code(&self, input: CreateDeviceCode) -> AuthResult<DeviceCode>;
     /// Fetch a device code by its opaque device-facing token.
@@ -1326,7 +1343,7 @@ pub trait DeviceCodeStore: Send + Sync {
     async fn claim_device_code(
         &self,
         id: &crate::SchemaValue<String>,
-        user_id: &str,
+        user_id: &crate::SchemaValue<String>,
     ) -> AuthResult<bool>;
     /// Consume an approved code while preserving its original identity and owner bindings.
     /// Return and project the actual consumed row, including changes to its scope or poll timestamp.

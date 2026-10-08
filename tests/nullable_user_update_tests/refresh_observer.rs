@@ -1,7 +1,7 @@
 use super::*;
 use async_trait::async_trait;
 use better_auth_core::{
-    UpdateUser,
+    FieldValue, UpdateUser,
     observability::{LogArgument, LogLevel, LogSink},
     store::{
         SecondaryStorage,
@@ -109,7 +109,8 @@ impl<S: AuthSchema> DatabaseHooks<S> for Hooks {
 
 #[derive(Clone, Deserialize, serde::Serialize)]
 struct Entry {
-    key: String,
+    #[serde(with = "better_auth_core::field_value::serde::value")]
+    key: FieldValue,
     value: String,
 }
 
@@ -185,33 +186,37 @@ impl SecondaryStorage for Cache {
             .lock()
             .map_err(|_| AuthError::internal("Cache mutex is poisoned"))?
             .iter()
-            .find(|entry| entry.key == key)
+            .find(|entry| entry.key.as_str() == Some(key))
             .map(|entry| Value::String(entry.value.clone()));
         self.recorder
             .push(json!({"kind": "cache.get.return", "key": key, "value": value}));
         Ok(value)
     }
 
-    async fn set(&self, key: &str, value: &str, ttl: Option<u64>) -> AuthResult<()> {
+    async fn set_native(&self, key: &FieldValue, value: &str, ttl: Option<f64>) -> AuthResult<()> {
         self.recorder
-            .push(json!({"kind": "cache.set.start", "key": key, "value": value, "ttl": ttl}));
+            .push(json!({"kind": "cache.set.start", "key": key.json()?, "value": value, "ttl": ttl.map(FieldValue::Number).unwrap_or(FieldValue::Undefined).json()?}));
         {
             let mut values = self
                 .values
                 .lock()
                 .map_err(|_| AuthError::internal("Cache mutex is poisoned"))?;
-            if let Some(entry) = values.iter_mut().find(|entry| entry.key == key) {
+            if let Some(entry) = values
+                .iter_mut()
+                .find(|entry| entry.key.same_value_zero(key))
+            {
                 entry.value = value.into();
             } else {
                 values.push(Entry {
-                    key: key.into(),
+                    key: key.clone(),
                     value: value.into(),
                 });
             }
         }
-        self.recorder
-            .push(json!({"kind": "cache.set.return", "key": key, "value": {"type": "undefined"}}));
-        if key == "token-b" {
+        self.recorder.push(
+            json!({"kind": "cache.set.return", "key": key.json()?, "value": {"type": "undefined"}}),
+        );
+        if key.as_str() == Some("token-b") {
             self.completed.add_permits(1);
         }
         Ok(())
@@ -223,7 +228,7 @@ impl SecondaryStorage for Cache {
         self.values
             .lock()
             .map_err(|_| AuthError::internal("Cache mutex is poisoned"))?
-            .retain(|entry| entry.key != key);
+            .retain(|entry| entry.key.as_str() != Some(key));
         self.recorder.push(
             json!({"kind": "cache.delete.return", "key": key, "value": {"type": "undefined"}}),
         );

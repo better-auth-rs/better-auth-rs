@@ -133,3 +133,9 @@ target!(
     "passkey-backup-boolean",
     Passkey
 );
+target!(
+    polling_number,
+    "BETTER_AUTH_NATIVE_REPLACEMENT_DEVICE_POLLING_NUMBER_SCHEMA",
+    "device-polling-number",
+    DeviceCode
+);

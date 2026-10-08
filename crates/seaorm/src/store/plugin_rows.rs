@@ -70,7 +70,7 @@ fn local_date(value: chrono::NaiveDateTime, column: &str) -> AuthResult<FieldVal
         .ok_or_else(|| error(column, "database local timestamp is ambiguous or invalid"))
 }
 
-fn value(row: &QueryResult, column: &str) -> AuthResult<FieldValue> {
+pub(super) fn value(row: &QueryResult, column: &str) -> AuthResult<FieldValue> {
     macro_rules! read {
         ($row:expr, $ty:ty) => {
             $row.try_get::<$ty, _>(column)

@@ -505,8 +505,13 @@ impl SecondaryStorage for ControlledSecondaryStorage {
         }
         SecondaryStorage::get(&self.cache, key).await
     }
-    async fn set(&self, key: &str, value: &str, ttl: Option<u64>) -> AuthResult<()> {
-        SecondaryStorage::set(&self.cache, key, value, ttl).await
+    async fn set_native(
+        &self,
+        key: &better_auth::FieldValue,
+        value: &str,
+        ttl: Option<f64>,
+    ) -> AuthResult<()> {
+        SecondaryStorage::set_native(&self.cache, key, value, ttl).await
     }
     async fn delete(&self, key: &str) -> AuthResult<()> {
         if self.fail_delete_next.swap(false, Ordering::SeqCst) {

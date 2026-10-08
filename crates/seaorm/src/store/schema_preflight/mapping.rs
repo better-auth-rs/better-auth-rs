@@ -80,6 +80,15 @@ fn organization<M: SeaOrmOrganizationModel>(
 }
 
 fn plugin<M: SeaOrmPluginModel>(role: EntityRole, fields: &UserConfig) -> AuthResult<SchemaTable> {
+    if role == EntityRole::DeviceCode {
+        return Ok(model::<M::Entity>(columns(
+            ["id"],
+            fields,
+            M::column,
+            &[],
+            Vec::new(),
+        )?));
+    }
     Ok(model::<M::Entity>(columns(
         core_fields(role)
             .iter()
@@ -177,7 +186,9 @@ where
                 organization::<O::OrganizationRole>(role, &organization_fields.organization_role)
             }
             EntityRole::ApiKey => plugin::<P::ApiKey>(role, model_fields.fields(role)),
-            EntityRole::DeviceCode => plugin::<P::DeviceCode>(role, model_fields.fields(role)),
+            EntityRole::DeviceCode => {
+                plugin::<P::DeviceCode>(role, &model_fields.plugin_fields(role))
+            }
             EntityRole::Passkey => plugin::<P::Passkey>(role, model_fields.fields(role)),
             EntityRole::TwoFactor => plugin::<P::TwoFactor>(role, model_fields.fields(role)),
             EntityRole::Jwk => plugin::<P::Jwk>(role, model_fields.fields(role)),

@@ -9,6 +9,12 @@ use better_auth_core::{
 };
 use std::sync::Arc;
 
+#[path = "device_runtime_transaction_tests/bindings.rs"]
+mod bindings;
+
+#[path = "device_runtime_transaction_tests/routes.rs"]
+mod routes;
+
 struct Fields;
 
 #[async_trait::async_trait]
@@ -197,7 +203,12 @@ async fn memory_device_consumption_commits_unchanged_native_snapshots() {
         assert_native_nan(&consumed, field);
         assert!(
             auth.store()
-                .get_device_code_by_device_code(&seeded.device_code)
+                .get_device_code_by_device_code(
+                    seeded
+                        .device_code
+                        .typed()
+                        .expect("Device token remains a string")
+                )
                 .await
                 .expect("read after commit")
                 .is_none(),
@@ -242,7 +253,12 @@ async fn memory_device_consumption_rejects_native_ownership_changes_before_commi
         );
         let remaining = auth
             .store()
-            .get_device_code_by_device_code(&seeded.device_code)
+            .get_device_code_by_device_code(
+                seeded
+                    .device_code
+                    .typed()
+                    .expect("Device token remains a string"),
+            )
             .await
             .expect("read after rejected commit")
             .expect("the live Device row must remain");

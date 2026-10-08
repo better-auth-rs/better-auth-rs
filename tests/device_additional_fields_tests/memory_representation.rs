@@ -207,7 +207,7 @@ async fn direct_observation(
     expected_native: &DeviceCode,
 ) -> AuthResult<Value> {
     let stored = reader
-        .get_device_code_by_device_code(&expected_native.device_code)
+        .get_device_code_by_device_code(expected_native.device_code.typed()?)
         .await?
         .expect("ordinary Device row exists");
     assert_eq!(native(&stored), *expected_native);
@@ -281,7 +281,7 @@ async fn observations(serial: bool) -> AuthResult<Value> {
         } else {
             let row = match name {
                 "read-user" => store
-                    .get_device_code_by_user_code(&created.user_code)
+                    .get_device_code_by_user_code(created.user_code.typed()?)
                     .await?
                     .expect("ordinary Device row exists"),
                 "update" => {
@@ -290,7 +290,7 @@ async fn observations(serial: bool) -> AuthResult<Value> {
                         .await?
                 }
                 _ => store
-                    .get_device_code_by_device_code(&created.device_code)
+                    .get_device_code_by_device_code(created.device_code.typed()?)
                     .await?
                     .expect("ordinary Device row exists"),
             };
@@ -322,7 +322,7 @@ async fn observations(serial: bool) -> AuthResult<Value> {
                 "result":created.additional_fields.json()?, "nativeUnchanged":true,
             })];
             let read = tx
-                .get_device_code_by_device_code(&created.device_code)
+                .get_device_code_by_device_code(created.device_code.typed()?)
                 .await?
                 .expect("transaction reads its Device row");
             assert_eq!(native(&read), expected_native);
@@ -344,7 +344,7 @@ async fn observations(serial: bool) -> AuthResult<Value> {
     .await?;
     let committed = reader
         .store()
-        .get_device_code_by_device_code(&transaction_native.device_code)
+        .get_device_code_by_device_code(transaction_native.device_code.typed()?)
         .await?
         .expect("committed Device row exists");
     assert_eq!(native(&committed), transaction_native);

@@ -119,7 +119,7 @@ enum Event {
     After(u8, FieldMap),
     TransactionReturn(FieldMap),
     Get(String, Option<JsonValue>),
-    Set(String, JsonValue, Option<u64>),
+    Set(FieldValue, JsonValue, Option<f64>),
     Delete(String),
     Consume(String, Option<JsonValue>),
 }
@@ -210,11 +210,11 @@ impl SecondaryStorage for RecordingStorage {
         Ok(value)
     }
 
-    async fn set(&self, key: &str, value: &str, ttl: Option<u64>) -> AuthResult<()> {
-        self.inner.set(key, value, ttl).await?;
+    async fn set_native(&self, key: &FieldValue, value: &str, ttl: Option<f64>) -> AuthResult<()> {
+        self.inner.set_native(key, value, ttl).await?;
         emit(
             &self.events,
-            Event::Set(key.into(), serde_json::from_str(value)?, ttl),
+            Event::Set(key.clone(), serde_json::from_str(value)?, ttl),
         )
     }
 
@@ -461,13 +461,13 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, run: Run) -> TestRe
         let ttl = events
             .iter()
             .find_map(|event| match event {
-                Event::Set(key, _, Some(ttl)) if key == mirror_token => Some(*ttl),
+                Event::Set(key, _, Some(ttl)) if key.as_str() == Some(mirror_token) => Some(*ttl),
                 _ => None,
             })
             .ok_or("Session mirror did not set its original token with a TTL")?;
         let expires_ms = mirror_expiry.milliseconds() as i64;
-        let minimum = u64::try_from((expires_ms - finished).div_euclid(1000))?;
-        let maximum = u64::try_from((expires_ms - started).div_euclid(1000))?;
+        let minimum = (expires_ms - finished).div_euclid(1000) as f64;
+        let maximum = (expires_ms - started).div_euclid(1000) as f64;
         assert!((minimum..=maximum).contains(&ttl));
         let references = json!([{"token": mirror_token, "expiresAt": expires_ms}]);
         let payload = json!({"session": expected_final.json()?, "user": owner_json()});

@@ -1,21 +1,10 @@
 use crate::{
-    AuthError, AuthResult, DeviceCode, DeviceCodeWhere, FieldValue as Value, WhereMode,
-    WhereOperator,
+    AuthError, AuthResult, DeviceCodeWhere, FieldMap, FieldValue as Value, WhereMode, WhereOperator,
 };
-use std::{borrow::Cow, cmp::Ordering};
+use std::cmp::Ordering;
 
-pub(super) fn matches(row: &DeviceCode, query: &DeviceCodeWhere) -> AuthResult<bool> {
-    let native = match query.field.as_str() {
-        "scope" => Some(&row.scope),
-        "clientId" => Some(&row.client_id),
-        _ => None,
-    };
-    let actual = if let Some(native) = native {
-        Some(Cow::Owned(native.field_value()))
-    } else {
-        row.additional_fields.get(&query.field).map(Cow::Borrowed)
-    };
-    let actual = actual.as_deref();
+pub(super) fn matches(row: &FieldMap, query: &DeviceCodeWhere) -> AuthResult<bool> {
+    let actual = row.get(&query.field);
     let insensitive = query.mode == WhereMode::Insensitive
         && (query.value.is_string()
             || query

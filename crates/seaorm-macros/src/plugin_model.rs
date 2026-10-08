@@ -43,7 +43,10 @@ pub(super) fn generate(
     let mut assignments = Vec::new();
     let mut output = Vec::new();
     let mut raw_output = Vec::new();
-    let dynamic_record = matches!(role, EntityRole::ApiKey | EntityRole::Passkey);
+    let dynamic_record = matches!(
+        role,
+        EntityRole::ApiKey | EntityRole::Passkey | EntityRole::DeviceCode
+    );
     for field in &fields.named {
         let Some(ident) = &field.ident else { continue };
         let name = ident.to_string();
@@ -97,14 +100,6 @@ pub(super) fn generate(
             } else {
                 quote!(self.#ident.to_string())
             }
-        } else if role == EntityRole::DeviceCode && matches!(name.as_str(), "client_id" | "scope") {
-            if identity::optional_inner(&field.ty).is_some() {
-                quote!(#core_root::SchemaValue::Typed(self.#ident.to_owned()))
-            } else {
-                quote!(#core_root::SchemaValue::Typed(Some(self.#ident.to_owned())))
-            }
-        } else if role == EntityRole::DeviceCode && name == "polling_interval" {
-            quote!(self.#ident.map(f64::from))
         } else if role == EntityRole::RateLimit && name == "count" {
             quote!(f64::from(self.#ident.to_owned()))
         } else if role == EntityRole::WalletAddress && name == "chain_id" {

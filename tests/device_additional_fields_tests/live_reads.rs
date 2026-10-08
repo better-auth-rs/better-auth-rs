@@ -133,18 +133,18 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, backend: &str) -> A
         let selected = if selector == "deviceCode" {
             reader
                 .store()
-                .get_device_code_by_device_code(&created.device_code)
+                .get_device_code_by_device_code(created.device_code.typed()?)
                 .await?
         } else {
             reader
                 .store()
-                .get_device_code_by_user_code(&created.user_code)
+                .get_device_code_by_user_code(created.user_code.typed()?)
                 .await?
         }
         .expect("ordinary record exists");
         let stored = writer
             .store()
-            .get_device_code_by_device_code(&created.device_code)
+            .get_device_code_by_device_code(created.device_code.typed()?)
             .await?
             .expect("ordinary record remains stored");
         let expected = fixture

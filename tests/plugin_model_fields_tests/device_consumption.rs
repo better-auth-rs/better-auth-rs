@@ -61,7 +61,7 @@ pub(super) async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthR
         .await?;
     let expected = auth
         .store()
-        .get_device_code_by_device_code(&initial.device_code)
+        .get_device_code_by_device_code(initial.device_code.typed()?)
         .await?
         .ok_or_else(|| AuthError::internal("Expected the stored model record"))?;
     let polled = chrono::DateTime::parse_from_rfc3339("2030-01-01T00:00:00Z")
@@ -88,7 +88,7 @@ pub(super) async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthR
     assert_eq!(consumed.last_polled_at, Some(polled.into()));
     assert_eq!(*trace_lock(&events)?, [FieldValue::from("Current")]);
     assert!(
-        raw.get_device_code_by_device_code(&initial.device_code)
+        raw.get_device_code_by_device_code(initial.device_code.typed()?)
             .await?
             .is_none()
     );
@@ -106,7 +106,7 @@ pub(super) async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthR
         "ordinary Device scope output error",
     );
     assert!(
-        raw.get_device_code_by_device_code(&expected.device_code)
+        raw.get_device_code_by_device_code(expected.device_code.typed()?)
             .await?
             .is_none()
     );
@@ -135,7 +135,7 @@ pub(super) async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthR
     );
     failure.store(false, Ordering::SeqCst);
     assert_eq!(
-        raw.get_device_code_by_device_code(&expected.device_code)
+        raw.get_device_code_by_device_code(expected.device_code.typed()?)
             .await?,
         Some(expected)
     );
@@ -145,7 +145,10 @@ pub(super) async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthR
             let mut create = input("created-in-transaction", None);
             create.status = "pending".into();
             let created = tx.create_device_code(create).await?;
-            assert!(tx.claim_device_code(&created.id, &owner).await?);
+            assert!(
+                tx.claim_device_code(&created.id, &owner.clone().into())
+                    .await?
+            );
             assert!(
                 tx.update_device_code_if_status(
                     &created.id,
@@ -158,7 +161,7 @@ pub(super) async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthR
                 .await?
             );
             let expected = tx
-                .get_device_code_by_user_code(&created.user_code)
+                .get_device_code_by_user_code(created.user_code.typed()?)
                 .await?
                 .ok_or_else(|| AuthError::internal("Expected the stored model record"))?;
             let _ = tx
@@ -179,7 +182,7 @@ pub(super) async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthR
                 Some(json!("Inside transaction:out"))
             );
             assert!(
-                tx.get_device_code_by_device_code(&created.device_code)
+                tx.get_device_code_by_device_code(created.device_code.typed()?)
                     .await?
                     .is_none()
             );
@@ -191,12 +194,12 @@ pub(super) async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthR
     })
     .await?;
     assert!(
-        raw.get_device_code_by_device_code(&committed.0.device_code)
+        raw.get_device_code_by_device_code(committed.0.device_code.typed()?)
             .await?
             .is_none()
     );
     assert!(
-        raw.get_device_code_by_device_code(&committed.1.device_code)
+        raw.get_device_code_by_device_code(committed.1.device_code.typed()?)
             .await?
             .is_some()
     );

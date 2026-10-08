@@ -4,7 +4,7 @@ use super::{
 use crate::plugins::endpoint_context::{EndpointContext, WithCallbacks};
 use better_auth_core::{
     AuthContext, AuthError, AuthInitContext, AuthPlugin, AuthResult, AuthSchema, DeviceCode,
-    store::schema::EntityRole, user_fields::UserConfig,
+    FieldMap, store::schema::EntityRole, user_fields::UserConfig,
 };
 use serde_json::{Map, Value};
 use std::{future::Future, pin::Pin, sync::Arc};
@@ -21,8 +21,7 @@ type Authorize<S> = dyn for<'a> Fn(
 type SessionPolicy<S> = dyn for<'a> Fn(&'a DeviceCode, &'a EndpointContext<'_, S>) -> DeviceGrantFuture<'a, ()>
     + Send
     + Sync;
-type VerificationContext =
-    dyn Fn(&DeviceCode) -> AuthResult<Option<Map<String, Value>>> + Send + Sync;
+type VerificationContext = dyn Fn(&DeviceCode) -> AuthResult<Option<FieldMap>> + Send + Sync;
 
 #[derive(Clone, Default)]
 pub(super) struct GrantMetadata {
@@ -104,7 +103,7 @@ impl<S: AuthSchema> DeviceGrant<S> {
     /// Native response fields retain precedence, including their omission.
     pub fn verification_context(
         mut self,
-        callback: impl Fn(&DeviceCode) -> AuthResult<Option<Map<String, Value>>> + Send + Sync + 'static,
+        callback: impl Fn(&DeviceCode) -> AuthResult<Option<FieldMap>> + Send + Sync + 'static,
     ) -> Self {
         self.verification = Some(Arc::new(callback));
         self
@@ -121,16 +120,11 @@ impl<S: AuthSchema> DeviceGrant<S> {
     pub(super) fn verification_context_for(
         &self,
         device_code: &DeviceCode,
-    ) -> AuthResult<Map<String, Value>> {
-        let mut fields = match &self.verification {
+    ) -> AuthResult<FieldMap> {
+        Ok(match &self.verification {
             Some(callback) => callback(device_code)?.unwrap_or_default(),
-            None => Map::new(),
-        };
-        // Upstream assigns every native property after the grant object, including undefined values.
-        for name in ["user_code", "status", "client_id", "scope"] {
-            let _ = fields.remove(name);
-        }
-        Ok(fields)
+            None => FieldMap::new(),
+        })
     }
 }
 
@@ -207,25 +201,12 @@ pub(super) fn register_fields<S: AuthSchema>(
     context: &mut AuthInitContext<S>,
     fields: &UserConfig,
 ) -> AuthResult<()> {
+    let native =
+        better_auth_core::plugin_runtime::ModelFields::plugin_native_fields(EntityRole::DeviceCode);
     let conflicts: Vec<_> = fields
-        .additional_fields
-        .as_ref()
-        .into_iter()
-        .flat_map(|fields| fields.keys())
-        .filter(|name| {
-            matches!(
-                name.as_str(),
-                "deviceCode"
-                    | "userCode"
-                    | "userId"
-                    | "expiresAt"
-                    | "status"
-                    | "lastPolledAt"
-                    | "pollingInterval"
-                    | "clientId"
-                    | "scope"
-            )
-        })
+        .fields()
+        .keys()
+        .filter(|name| native.fields().contains_key(*name))
         .map(String::as_str)
         .collect();
     if !conflicts.is_empty() {

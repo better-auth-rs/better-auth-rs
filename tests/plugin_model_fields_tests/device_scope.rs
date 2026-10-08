@@ -180,7 +180,7 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, backend: &str) -> A
         );
         cases.push(case);
     }
-    let success = store.claim_device_code(&id, &owner).await?;
+    let success = store.claim_device_code(&id, &owner.into()).await?;
     let mut case = observation("claim", None, &trace)?;
     let _ = required(case.as_object_mut(), "Expected a model observation object")?
         .insert("success".to_owned(), json!(success));
@@ -308,7 +308,7 @@ async fn awaited_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResu
         let owner = owner.clone();
         let pending = tokio::spawn(async move {
             if claim {
-                store.claim_device_code(&id, &owner).await
+                store.claim_device_code(&id, &owner.into()).await
             } else {
                 store
                     .update_device_code_if_status(

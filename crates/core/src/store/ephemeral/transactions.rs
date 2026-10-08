@@ -277,14 +277,23 @@ impl State {
 
 impl EphemeralStore {
     pub(super) fn begin_transaction(&self) -> AuthResult<(State, Self, Arc<PendingHookQueue>)> {
-        let base = self.lock()?.deep_clone()?;
+        let (base, working, devices) = {
+            let live = self.lock()?;
+            let base = live.deep_clone()?;
+            let working = base.deep_clone()?;
+            let devices = super::device_codes::DeviceCodeTransaction::new(
+                &live.device_codes,
+                &working.device_codes,
+            )?;
+            (base, working, devices)
+        };
         let queue = Arc::new(Mutex::new(Vec::new()));
         let isolated = Self {
             config: self.config.clone(),
             model_fields: self.model_fields.clone(),
-            state: Arc::new(Mutex::new(base.deep_clone()?)),
+            state: Arc::new(Mutex::new(working)),
             verification_locks: self.verification_locks.clone(),
-            device_code_consumptions: Some(Arc::default()),
+            device_code_transaction: Some(Arc::new(Mutex::new(devices))),
             session_config: self.session_config.clone(),
             organization_fields: Arc::new(RwLock::new(self.organization_fields()?)),
             hooks: self.hooks.clone(),
@@ -310,30 +319,22 @@ impl EphemeralStore {
     ) -> AuthResult<()> {
         let committed = isolated.lock()?.clone();
         let consumed = isolated
-            .device_code_consumptions
+            .device_code_transaction
             .as_ref()
             .map(|consumed| {
-                consumed.lock().map(|rows| rows.clone()).map_err(|_| {
-                    AuthError::internal("Ephemeral device consumption write set poisoned")
-                })
+                consumed
+                    .lock()
+                    .map(|transaction| transaction.consumed.clone())
+                    .map_err(|_| {
+                        AuthError::internal("Ephemeral device consumption write set poisoned")
+                    })
             })
             .transpose()?
             .unwrap_or_default();
         {
             let mut live = self.lock()?;
             for consumed in &consumed {
-                let Some(original) = base.device_codes.find(|row| {
-                    row.id == consumed.row.id && row.device_code == consumed.row.device_code
-                })?
-                else {
-                    // A code created and consumed within this transaction has no live baseline.
-                    continue;
-                };
-                if live
-                    .device_codes
-                    .find(|row| consumed.unchanged(row, &original))?
-                    .is_none()
-                {
+                if !consumed.unchanged(&live.device_codes)? {
                     return Err(AuthError::internal(
                         "Device code changed before transaction commit",
                     ));

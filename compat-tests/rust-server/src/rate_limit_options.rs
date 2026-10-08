@@ -173,7 +173,12 @@ impl SecondaryStorage for MissingIncrement {
     async fn get(&self, _: &str) -> AuthResult<Option<Value>> {
         Ok(None)
     }
-    async fn set(&self, _: &str, _: &str, _: Option<u64>) -> AuthResult<()> {
+    async fn set_native(
+        &self,
+        _: &better_auth_core::FieldValue,
+        _: &str,
+        _: Option<f64>,
+    ) -> AuthResult<()> {
         Ok(())
     }
     async fn delete(&self, _: &str) -> AuthResult<()> {
@@ -190,7 +195,12 @@ impl SecondaryStorage for CounterStorage {
     async fn get(&self, _: &str) -> AuthResult<Option<Value>> {
         Ok(None)
     }
-    async fn set(&self, _: &str, _: &str, _: Option<u64>) -> AuthResult<()> {
+    async fn set_native(
+        &self,
+        _: &better_auth_core::FieldValue,
+        _: &str,
+        _: Option<f64>,
+    ) -> AuthResult<()> {
         Ok(())
     }
     async fn delete(&self, _: &str) -> AuthResult<()> {

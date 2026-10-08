@@ -11,6 +11,7 @@ impl State {
         match role {
             EntityRole::ApiKey => Ok(&self.api_keys),
             EntityRole::Passkey => Ok(&self.passkeys),
+            EntityRole::DeviceCode => Ok(&self.device_codes),
             _ => Err(AuthError::config(format!(
                 "Plugin record storage is not implemented for {role:?}"
             ))),
@@ -21,6 +22,7 @@ impl State {
         match role {
             EntityRole::ApiKey => Ok(&mut self.api_keys),
             EntityRole::Passkey => Ok(&mut self.passkeys),
+            EntityRole::DeviceCode => Ok(&mut self.device_codes),
             _ => Err(AuthError::config(format!(
                 "Plugin record storage is not implemented for {role:?}"
             ))),
@@ -32,6 +34,7 @@ fn model(role: EntityRole) -> AuthResult<&'static str> {
     match role {
         EntityRole::ApiKey => Ok("apikey"),
         EntityRole::Passkey => Ok("passkey"),
+        EntityRole::DeviceCode => Ok("deviceCode"),
         _ => Err(AuthError::config(format!(
             "Plugin record storage is not implemented for {role:?}"
         ))),
@@ -152,20 +155,28 @@ impl EphemeralStore {
         input: FieldMap,
         internal: FieldMap,
     ) -> AuthResult<FieldMap> {
-        let mut storage = self.prepare_plugin_fields(role, input, true).await?;
-        storage.extend(internal);
-        let source = self
-            .raw(model(role)?, "create", |state| {
-                if let Some(id) = self.next_serial_id(state.plugin_rows(role)?.len()) {
-                    let _ = storage.insert("id".into(), id);
-                }
-                Ok(state.plugin_rows_mut(role)?.push_ref(storage))
-            })
-            .await?;
+        let source = self.create_plugin_ref(role, input, internal).await?;
         self.project_plugin_refs(role, vec![source])
             .await?
             .pop()
             .ok_or_else(|| AuthError::internal("Created plugin record was not projected"))
+    }
+
+    pub(super) async fn create_plugin_ref(
+        &self,
+        role: EntityRole,
+        input: FieldMap,
+        internal: FieldMap,
+    ) -> AuthResult<RowRef<FieldMap>> {
+        let mut storage = self.prepare_plugin_fields(role, input, true).await?;
+        storage.extend(internal);
+        self.raw(model(role)?, "create", |state| {
+            if let Some(id) = self.next_serial_id(state.plugin_rows(role)?.len()) {
+                let _ = storage.insert("id".into(), id);
+            }
+            Ok(state.plugin_rows_mut(role)?.push_ref(storage))
+        })
+        .await
     }
 
     pub(super) async fn get_plugin_record(

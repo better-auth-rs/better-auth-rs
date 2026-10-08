@@ -221,10 +221,10 @@ impl<S: AuthSchema> SecondaryStore<S> {
                     &record.expires_at
                 };
             let seconds = expiry.converted_cache_ttl(Utc::now())?;
-            if seconds > 0 {
+            if seconds > 0.0 {
                 self.secondary()?
-                    .set(
-                        &format!("verification:{identifier}"),
+                    .set_native(
+                        &format!("verification:{identifier}").into(),
                         &serde_json::to_string(&record)?,
                         Some(seconds),
                     )
@@ -253,10 +253,10 @@ impl<S: AuthSchema> SecondaryStore<S> {
             return Ok(());
         };
         let seconds = verification.expires_at.cache_ttl(Utc::now())?;
-        if seconds > 0 {
+        if seconds > 0.0 {
             storage
-                .set(
-                    &format!("verification:{identifier}"),
+                .set_native(
+                    &format!("verification:{identifier}").into(),
                     &serde_json::to_string(verification)?,
                     Some(seconds),
                 )

@@ -77,7 +77,7 @@ Scoped verification calls its validator before lookup and propagates callback er
 
 A serialized JSON `null` cache entry is a cache miss. Database fallback reloads and caches the stored key when enabled; secondary-only storage rejects the missing credential. Cache hits do not repeat adapter output transforms.
 
-API keys use the database by default. Set `storage: ApiKeyStorage::SecondaryStorage` to use the shared secondary storage. A configuration's `custom_storage` takes precedence over the shared backend. `MemoryCacheAdapter` and the optional `RedisAdapter` implement `SecondaryStorage`; applications can implement its async `get`, `set`, `delete`, and atomic `get_and_delete` methods. `set` receives an optional TTL in seconds. No TTL means persistent storage.
+API keys use the database by default. Set `storage: ApiKeyStorage::SecondaryStorage` to use the shared secondary storage. A configuration's `custom_storage` takes precedence over the shared backend. `MemoryCacheAdapter` and the optional `RedisAdapter` implement `SecondaryStorage`; applications implement its async `get`, `set_native`, `delete`, and atomic `get_and_delete` methods. `set_native` retains the native key and an optional floating-point TTL in seconds. The `set` convenience method accepts string keys and unsigned TTLs. No TTL means persistent storage.
 
 ```rust
 use std::sync::Arc;

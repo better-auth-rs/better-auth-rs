@@ -19,6 +19,10 @@ pub(super) struct Rows<T>(Vec<Arc<Mutex<T>>>);
 pub(super) struct RowRef<T>(Arc<Mutex<T>>);
 
 impl<T> RowRef<T> {
+    pub(super) fn same_row(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
+
     pub(super) fn read<R>(&self, read: impl FnOnce(&T) -> AuthResult<R>) -> AuthResult<R> {
         read(&*lock(&self.0)?)
     }
@@ -37,6 +41,10 @@ fn lock<T>(row: &Mutex<T>) -> AuthResult<MutexGuard<'_, T>> {
         .map_err(|_| AuthError::internal("Ephemeral row lock poisoned"))
 }
 impl<T: Clone> Rows<T> {
+    pub(super) fn contains_ref(&self, source: &RowRef<T>) -> bool {
+        self.0.iter().any(|row| Arc::ptr_eq(row, &source.0))
+    }
+
     pub(super) fn first_ref(
         &self,
         predicate: impl Fn(&T) -> bool,

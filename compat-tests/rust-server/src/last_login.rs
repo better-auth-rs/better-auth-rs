@@ -1,5 +1,4 @@
 use better_auth::config::{FieldTransforms, UserFieldTransform};
-use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
 use axum::{
@@ -195,14 +194,14 @@ impl PasswordHasher for FixtureHasher {
 }
 
 #[derive(Default)]
-struct Cache(Mutex<BTreeMap<String, String>>);
+struct Cache(Mutex<super::secondary_storage::NativeCache<String>>);
 #[async_trait::async_trait]
 impl SecondaryStorage for Cache {
     async fn get(&self, key: &str) -> AuthResult<Option<Value>> {
         Ok(self.0.lock().unwrap().get(key).cloned().map(Value::String))
     }
-    async fn set(&self, key: &str, value: &str, _: Option<u64>) -> AuthResult<()> {
-        let _ = self.0.lock().unwrap().insert(key.into(), value.into());
+    async fn set_native(&self, key: &FieldValue, value: &str, _: Option<f64>) -> AuthResult<()> {
+        let _ = self.0.lock().unwrap().insert(key.clone(), value.into());
         Ok(())
     }
     async fn delete(&self, key: &str) -> AuthResult<()> {

@@ -190,38 +190,8 @@ pub enum UpdatePasskeyAuthentication {
     },
 }
 
-/// Device authorization code storage shape.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct DeviceCode {
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
-    pub id: SchemaValue<String>,
-    #[serde(rename = "deviceCode")]
-    pub device_code: String,
-    #[serde(rename = "userCode")]
-    pub user_code: String,
-    #[serde(rename = "userId", skip_serializing_if = "Option::is_none")]
-    pub user_id: Option<String>,
-    #[serde(rename = "expiresAt")]
-    #[serde(with = "crate::field_value::serde::date")]
-    pub expires_at: crate::FieldDate,
-    pub status: String,
-    #[serde(rename = "lastPolledAt")]
-    #[serde(default, with = "crate::field_value::serde::optional_date")]
-    pub last_polled_at: Option<crate::FieldDate>,
-    #[serde(rename = "pollingInterval", skip_serializing_if = "Option::is_none")]
-    pub polling_interval: Option<f64>,
-    #[serde(
-        default,
-        rename = "clientId",
-        skip_serializing_if = "crate::SchemaValue::is_undefined"
-    )]
-    pub client_id: crate::SchemaValue<Option<String>>,
-    #[serde(default, skip_serializing_if = "crate::SchemaValue::is_undefined")]
-    pub scope: crate::SchemaValue<Option<String>>,
-    /// Declared application fields after adapter output projection.
-    #[serde(with = "crate::field_value::serde::map", flatten, default)]
-    pub additional_fields: crate::FieldMap,
-}
+mod device;
+pub use device::DeviceCode;
 
 /// Issuer ownership required by atomic device-code consumption.
 #[derive(Debug, Clone, PartialEq)]
@@ -357,7 +327,7 @@ pub struct UpdateDeviceCode {
     pub status: Option<String>,
     /// Update the approving/denying user. `Some(None)` clears it, `None` leaves
     /// it unchanged.
-    pub user_id: Option<Option<String>>,
+    pub user_id: Option<SchemaValue<Option<String>>>,
     /// Update the last poll timestamp. `Some(None)` clears it, `None` leaves it
     /// unchanged.
     pub last_polled_at: Option<Option<crate::FieldDate>>,

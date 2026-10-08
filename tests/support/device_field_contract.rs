@@ -203,7 +203,7 @@ pub(crate) async fn contract<S: AuthSchema>(
     let created = store.create_device_code(input("main")).await?;
     let mut cases = vec![observe("create", &created)?];
     let read = store
-        .get_device_code_by_user_code(&created.user_code)
+        .get_device_code_by_user_code(created.user_code.typed()?)
         .await?
         .expect("created Device exists");
     cases.push(observe("read", &read)?);
@@ -219,12 +219,16 @@ pub(crate) async fn contract<S: AuthSchema>(
         )
         .await?;
     cases.push(observe("update", &updated)?);
-    assert!(store.claim_device_code(&created.id, &owner).await?);
+    assert!(
+        store
+            .claim_device_code(&created.id, &owner.clone().into())
+            .await?
+    );
     let claimed = store
-        .get_device_code_by_device_code(&created.device_code)
+        .get_device_code_by_device_code(created.device_code.typed()?)
         .await?
         .expect("claimed Device exists");
-    assert_eq!(claimed.user_id.as_deref(), Some(owner.as_str()));
+    assert_eq!(claimed.user_id.typed()?.as_deref(), Some(owner.as_str()));
     cases.push(observe("claim", &claimed)?);
     assert!(
         store
@@ -239,7 +243,7 @@ pub(crate) async fn contract<S: AuthSchema>(
             .await?
     );
     let approved = store
-        .get_device_code_by_device_code(&created.device_code)
+        .get_device_code_by_device_code(created.device_code.typed()?)
         .await?
         .expect("approved Device exists");
     cases.push(observe("approve", &approved)?);
@@ -264,11 +268,11 @@ pub(crate) async fn contract<S: AuthSchema>(
     assert_eq!(consumed.id, created.id);
     assert_eq!(consumed.device_code, created.device_code);
     assert_eq!(consumed.client_id, created.client_id);
-    assert_eq!(consumed.user_id.as_deref(), Some(owner.as_str()));
+    assert_eq!(consumed.user_id.typed()?.as_deref(), Some(owner.as_str()));
     assert_eq!(consumed.status, "approved");
     assert!(
         store
-            .get_device_code_by_device_code(&created.device_code)
+            .get_device_code_by_device_code(created.device_code.typed()?)
             .await?
             .is_none()
     );

@@ -1,6 +1,6 @@
 use better_auth_core::{
-    ApiKey, DeviceCode, Invitation, InvitationStatus, Member, Organization, Passkey, SchemaValue,
-    TwoFactor,
+    ApiKey, DeviceCode, FieldMap, Invitation, InvitationStatus, Member, Organization, Passkey,
+    SchemaField, SchemaValue, TwoFactor,
 };
 
 use crate::store::entities;
@@ -125,19 +125,27 @@ impl From<&entities::passkey::Model> for Passkey {
 
 impl From<&entities::device_code::Model> for DeviceCode {
     fn from(model: &entities::device_code::Model) -> Self {
-        Self {
-            additional_fields: Default::default(),
-            id: model.id.clone().into(),
-            device_code: model.device_code.clone(),
-            user_code: model.user_code.clone(),
-            user_id: model.user_id.clone(),
-            expires_at: model.expires_at.into(),
-            status: model.status.clone(),
-            last_polled_at: model.last_polled_at.map(Into::into),
-            polling_interval: model.polling_interval.map(f64::from),
-            client_id: model.client_id.clone().into(),
-            scope: model.scope.clone().into(),
-        }
+        Self::from(FieldMap::from([
+            ("id".into(), model.id.clone().into()),
+            ("deviceCode".into(), model.device_code.clone().into()),
+            ("userCode".into(), model.user_code.clone().into()),
+            ("userId".into(), model.user_id.clone().into_field()),
+            ("expiresAt".into(), model.expires_at.into()),
+            ("status".into(), model.status.clone().into()),
+            (
+                "lastPolledAt".into(),
+                model
+                    .last_polled_at
+                    .map(better_auth_core::FieldDate::from)
+                    .into_field(),
+            ),
+            (
+                "pollingInterval".into(),
+                model.polling_interval.map(f64::from).into_field(),
+            ),
+            ("clientId".into(), model.client_id.clone().into_field()),
+            ("scope".into(), model.scope.clone().into_field()),
+        ]))
     }
 }
 

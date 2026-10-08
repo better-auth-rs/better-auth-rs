@@ -1,4 +1,3 @@
-use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
@@ -63,7 +62,7 @@ fn session_view(session: &better_auth_core::SessionView) -> Value {
 struct Trace {
     options: Value,
     events: Vec<Value>,
-    cache: BTreeMap<String, String>,
+    cache: super::secondary_storage::NativeCache<String>,
     held_delete: Option<(Arc<tokio::sync::Semaphore>, Arc<tokio::sync::Semaphore>)>,
 }
 #[derive(Clone)]
@@ -145,10 +144,13 @@ impl Events {
         let trace = self.trace.lock().unwrap();
         let mut cache = Vec::new();
         let mut references = Vec::new();
-        for (key, value) in &trace.cache {
+        for (key, value) in trace.cache.iter() {
             // Keep malformed entries visible in the snapshot without repairing the cache.
             let value: Value = serde_json::from_str(value).unwrap_or(Value::Null);
-            if key.starts_with("active-sessions-") {
+            if key
+                .as_str()
+                .is_some_and(|key| key.starts_with("active-sessions-"))
+            {
                 let mut tokens = value
                     .as_array()
                     .unwrap()
@@ -170,6 +172,8 @@ impl Events {
                     "expiresAt":date(row["expiresAt"].as_str().unwrap()).to_rfc3339_opts(SecondsFormat::Millis,true)}}));
             }
         }
+        cache.sort_by(|left, right| left["key"].as_str().cmp(&right["key"].as_str()));
+        references.sort_by(|left, right| left["key"].as_str().cmp(&right["key"].as_str()));
         Ok(
             json!({"users":users,"accounts":accounts,"sessions":sessions,"cache":cache,"references":references,"events":trace.events}),
         )
@@ -206,7 +210,12 @@ impl SecondaryStorage for Events {
             .cloned()
             .map(Value::String))
     }
-    async fn set(&self, key: &str, value: &str, _: Option<u64>) -> AuthResult<()> {
+    async fn set_native(
+        &self,
+        key: &better_auth_core::FieldValue,
+        value: &str,
+        _: Option<f64>,
+    ) -> AuthResult<()> {
         self.record("cache.set", json!({"key":key})).await?;
         if self.options()["cacheFailure"] == "set" {
             return Err(rejected());
@@ -216,7 +225,7 @@ impl SecondaryStorage for Events {
             .lock()
             .unwrap()
             .cache
-            .insert(key.into(), value.into());
+            .insert(key.clone(), value.into());
         Ok(())
     }
     async fn delete(&self, key: &str) -> AuthResult<()> {
@@ -476,13 +485,10 @@ impl Fixture {
             if self.secondary {
                 let cached = json!({"session":{"id":id,"token":format!("{id}-token"),"userId":"u1","label":format!("{id}-old"),
                     "createdAt":CREATED_AT,"updatedAt":UPDATED_AT,"expiresAt":EXPIRES_AT},"user":self.auth.context().internal_user_view(&user).await?});
-                let _ = self
-                    .events
-                    .trace
-                    .lock()
-                    .unwrap()
-                    .cache
-                    .insert(format!("{id}-token"), serde_json::to_string(&cached)?);
+                let _ = self.events.trace.lock().unwrap().cache.insert(
+                    format!("{id}-token").into(),
+                    serde_json::to_string(&cached)?,
+                );
             }
         }
         if self.secondary {

@@ -103,11 +103,26 @@ fn device_scope_empty_alias_uses_the_native_column() {
                 IdGeneration::Random,
                 database,
                 Default::default(),
-            );
-            if matches!(alias, Some(" " | "stored_scope")) {
-                assert!(generated.is_err(), "native scope aliases remain restricted");
+            )
+            .expect("native scope alias generates");
+            if let Some(alias @ (" " | "stored_scope")) = alias {
+                assert!(generated.contains(&format!("column_name = {alias:?}")));
+                let definition = better_auth_schema_registry::plugin_schemas()
+                    .iter()
+                    .flat_map(|plugin| plugin.extra_entities)
+                    .find(|entity| entity.role == Some(EntityRole::DeviceCode))
+                    .expect("Device registry model");
+                let entity = Entity::resolve(
+                    definition,
+                    better_auth_schema_registry::core_fields(EntityRole::DeviceCode),
+                    config.0.get("deviceCode"),
+                    database,
+                    Default::default(),
+                )
+                .expect("native scope mapping resolves");
+                assert_eq!(entity.column("scope"), Some(alias));
+                assert_eq!(entity.logical_column("scope"), Some(alias));
             } else {
-                let generated = generated.expect("default scope alias generates");
                 assert_eq!(
                     &generated,
                     baseline.get_or_insert_with(|| generated.clone())

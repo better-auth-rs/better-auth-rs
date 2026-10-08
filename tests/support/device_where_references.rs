@@ -212,7 +212,7 @@ fn expected_bindings(case: &Case, seeded: &DeviceCode) -> AuthResult<DeviceCode>
             }
             "deviceCode" => expected.device_code = value.into(),
             "clientId" => expected.client_id = Some(value.to_owned()).into(),
-            "userId" => expected.user_id = Some(value.into()),
+            "userId" => expected.user_id = Some(value.to_owned()).into(),
             "status" => expected.status = value.into(),
             _ => return Err(AuthError::internal("Unexpected native Device guard")),
         }
@@ -245,12 +245,12 @@ pub(super) async fn consume<S: AuthSchema>(
                 assert!(rollback.original_error);
                 assert!(rollback.after_consume.is_empty());
                 assert!(
-                    tx.get_device_code_by_device_code(&seeded.device_code)
+                    tx.get_device_code_by_device_code(seeded.device_code.typed()?)
                         .await?
                         .is_none()
                 );
                 assert!(
-                    tx.get_device_code_by_user_code(&seeded.user_code)
+                    tx.get_device_code_by_user_code(seeded.user_code.typed()?)
                         .await?
                         .is_none()
                 );

@@ -9,7 +9,7 @@ use tokio::sync::{Semaphore, mpsc};
 struct GatedStorage {
     values: MemoryCacheAdapter,
     started: mpsc::UnboundedSender<String>,
-    completed: mpsc::UnboundedSender<String>,
+    completed: mpsc::UnboundedSender<crate::FieldValue>,
     reject: Semaphore,
     release: Semaphore,
 }
@@ -38,10 +38,15 @@ impl SecondaryStorage for GatedStorage {
         self.values.get(key).await
     }
 
-    async fn set(&self, key: &str, value: &str, seconds: Option<u64>) -> AuthResult<()> {
-        self.values.set(key, value, seconds).await?;
+    async fn set_native(
+        &self,
+        key: &crate::FieldValue,
+        value: &str,
+        seconds: Option<f64>,
+    ) -> AuthResult<()> {
+        self.values.set_native(key, value, seconds).await?;
         self.completed
-            .send(key.into())
+            .send(key.clone())
             .map_err(|error| AuthError::internal(error.to_string()))
     }
 
@@ -165,10 +170,8 @@ async fn refresh_logs_to_instance_and_keeps_pending_peer_after_return()
 
         cache.release.add_permits(1);
         assert_eq!(
-            tokio::time::timeout(Duration::from_secs(5), writes.recv())
-                .await?
-                .as_deref(),
-            Some("pending-session")
+            tokio::time::timeout(Duration::from_secs(5), writes.recv()).await?,
+            Some("pending-session".into())
         );
         let encoded = cache
             .values

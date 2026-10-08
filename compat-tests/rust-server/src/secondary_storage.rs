@@ -3,14 +3,67 @@ use axum::{Json, Router, routing::post};
 use better_auth::__private_core::store::{SecondaryStorage, transaction};
 use better_auth::__private_core::types::{CreateSession, CreateVerification};
 use better_auth::{AuthConfig, AuthError, AuthResult, AuthSchema, BetterAuth};
-use better_auth_core::FieldMap;
+use better_auth_core::{FieldMap, FieldValue};
 use better_auth_seaorm::sea_orm::{ConnectionTrait, DatabaseConnection, Statement};
 use better_auth_seaorm::{DatabaseHookUpdate, HookControl, SeaOrmHookContext, SeaOrmHooks};
 use chrono::{DateTime, Utc};
 use serde_json::{Value, json};
-use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+
+/// Preserve JavaScript Map keys in secondary-storage contract fixtures.
+pub(super) struct NativeCache<T>(Vec<(FieldValue, T)>);
+
+impl<T> Default for NativeCache<T> {
+    fn default() -> Self {
+        Self(Vec::new())
+    }
+}
+
+impl<T> NativeCache<T> {
+    pub(super) fn get(&self, key: &str) -> Option<&T> {
+        let key = FieldValue::from(key);
+        self.0
+            .iter()
+            .find(|(saved, _)| saved.same_value_zero(&key))
+            .map(|(_, value)| value)
+    }
+
+    pub(super) fn insert(&mut self, key: FieldValue, value: T) -> Option<T> {
+        if let Some((_, saved)) = self
+            .0
+            .iter_mut()
+            .find(|(saved, _)| saved.same_value_zero(&key))
+        {
+            return Some(std::mem::replace(saved, value));
+        }
+        self.0.push((key, value));
+        None
+    }
+
+    pub(super) fn remove(&mut self, key: &str) -> Option<T> {
+        let key = FieldValue::from(key);
+        self.0
+            .iter()
+            .position(|(saved, _)| saved.same_value_zero(&key))
+            .map(|index| self.0.remove(index).1)
+    }
+
+    pub(super) fn iter(&self) -> impl Iterator<Item = (&FieldValue, &T)> {
+        self.0.iter().map(|(key, value)| (key, value))
+    }
+
+    pub(super) fn values(&self) -> impl Iterator<Item = &T> {
+        self.0.iter().map(|(_, value)| value)
+    }
+
+    pub(super) fn retain(&mut self, mut keep: impl FnMut(&FieldValue, &T) -> bool) {
+        self.0.retain(|(key, value)| keep(key, value));
+    }
+
+    pub(super) fn clear(&mut self) {
+        self.0.clear();
+    }
+}
 
 struct CustomHash;
 #[async_trait]
@@ -22,13 +75,13 @@ impl better_auth::config::VerificationIdentifierHasher for CustomHash {
 
 #[derive(Default)]
 struct Backend {
-    entries: Mutex<BTreeMap<String, Entry>>,
+    entries: Mutex<NativeCache<Entry>>,
     failure: Mutex<Option<String>>,
 }
 struct Entry {
     value: String,
-    ttl: Option<u64>,
-    expires: Option<Instant>,
+    ttl: Option<f64>,
+    expires: Option<f64>,
 }
 impl Backend {
     fn check(&self, operation: &str) -> AuthResult<()> {
@@ -48,17 +101,21 @@ impl SecondaryStorage for Backend {
             .lock()
             .unwrap()
             .get(key)
-            .filter(|entry| entry.expires.is_none_or(|expires| expires > Instant::now()))
+            .filter(|entry| {
+                entry
+                    .expires
+                    .is_none_or(|expires| expires > Utc::now().timestamp_millis() as f64)
+            })
             .map(|entry| Value::String(entry.value.clone())))
     }
-    async fn set(&self, key: &str, value: &str, ttl: Option<u64>) -> AuthResult<()> {
+    async fn set_native(&self, key: &FieldValue, value: &str, ttl: Option<f64>) -> AuthResult<()> {
         self.check("set")?;
         let _ = self.entries.lock().unwrap().insert(
-            key.into(),
+            key.clone(),
             Entry {
                 value: value.into(),
                 ttl,
-                expires: ttl.map(|ttl| Instant::now() + Duration::from_secs(ttl)),
+                expires: ttl.map(|ttl| Utc::now().timestamp_millis() as f64 + ttl * 1_000.0),
             },
         );
         Ok(())
@@ -75,7 +132,11 @@ impl SecondaryStorage for Backend {
             .lock()
             .unwrap()
             .remove(key)
-            .filter(|entry| entry.expires.is_none_or(|expires| expires > Instant::now()))
+            .filter(|entry| {
+                entry
+                    .expires
+                    .is_none_or(|expires| expires > Utc::now().timestamp_millis() as f64)
+            })
             .map(|entry| Value::String(entry.value)))
     }
 }
@@ -423,15 +484,16 @@ impl SecondaryFixture {
             .await
             .map_err(|error| AuthError::internal(error.to_string()))?;
         let rows: Vec<Value> = rows.into_iter().map(|row| -> AuthResult<Value> { Ok(json!({ "token": row.try_get::<String>("", "token").map_err(|error| AuthError::internal(error.to_string()))?, "live": row.try_get::<DateTime<Utc>>("", "expires_at").map_err(|error| AuthError::internal(error.to_string()))? > Utc::now() })) }).collect::<AuthResult<_>>()?;
-        let entries: Vec<_> = self
+        let mut entries: Vec<_> = self
             .backend
             .entries
             .lock()
             .unwrap()
             .iter()
-            .filter(|(_, entry)| entry.expires.is_none_or(|expires| expires > Instant::now()))
-            .map(|(key, entry)| json!({ "key": key, "value": entry.value, "ttl": entry.ttl }))
+            .filter(|(_, entry)| entry.expires.is_none_or(|expires| expires > Utc::now().timestamp_millis() as f64))
+            .map(|(key, entry)| json!({ "key": key, "value": entry.value, "ttl": entry.ttl.map(FieldValue::Number) }))
             .collect();
+        entries.sort_by(|left, right| left["key"].as_str().cmp(&right["key"].as_str()));
         Ok(
             json!({ "sessions": count("sessions").await?, "verifications": count("verifications").await?, "rows": rows, "entries": entries, "events": *self.events.0.lock().unwrap() }),
         )

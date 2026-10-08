@@ -1,15 +1,31 @@
 use async_trait::async_trait;
-use chrono::{DateTime, Duration, Utc};
+use chrono::{Duration, Utc};
 use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex};
 
+use crate::FieldValue;
 use crate::error::{AuthError, AuthResult};
 
 /// Shared secondary storage. Values have no expiration when `ttl_seconds` is absent.
 #[async_trait]
 pub trait SecondaryStorage: Send + Sync {
     async fn get(&self, key: &str) -> AuthResult<Option<serde_json::Value>>;
-    async fn set(&self, key: &str, value: &str, ttl_seconds: Option<u64>) -> AuthResult<()>;
+    async fn set(&self, key: &str, value: &str, ttl_seconds: Option<u64>) -> AuthResult<()> {
+        self.set_native(
+            &key.into(),
+            value,
+            ttl_seconds.map(|seconds| seconds as f64),
+        )
+        .await
+    }
+    /// Preserve projected keys and numeric TTLs until the backend applies its own storage contract.
+    async fn set_native(
+        &self,
+        key: &FieldValue,
+        value: &str,
+        ttl_seconds: Option<f64>,
+    ) -> AuthResult<()>;
     async fn delete(&self, key: &str) -> AuthResult<()>;
     /// Atomically return and delete a value. Verification consumption requires this guarantee.
     async fn get_and_delete(&self, key: &str) -> AuthResult<Option<serde_json::Value>>;
@@ -45,13 +61,57 @@ pub trait CacheAdapter: Send + Sync {
 
 /// In-memory cache adapter for testing and development
 pub struct MemoryCacheAdapter {
-    data: Arc<Mutex<HashMap<String, CacheEntry>>>,
+    data: Arc<Mutex<HashMap<CacheKey, CacheEntry>>>,
+}
+
+#[derive(Clone, Debug)]
+struct CacheKey(FieldValue);
+
+impl From<&str> for CacheKey {
+    fn from(value: &str) -> Self {
+        Self(value.into())
+    }
+}
+
+impl PartialEq for CacheKey {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.same_value_zero(&other.0)
+    }
+}
+
+impl Eq for CacheKey {}
+
+impl Hash for CacheKey {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        match &self.0 {
+            FieldValue::Undefined => 0_u8.hash(state),
+            FieldValue::Null => 1_u8.hash(state),
+            FieldValue::Bool(value) => (2_u8, value).hash(state),
+            FieldValue::Number(value) => {
+                let bits = if value.is_nan() {
+                    f64::NAN.to_bits()
+                } else if *value == 0.0 {
+                    0
+                } else {
+                    value.to_bits()
+                };
+                (3_u8, bits).hash(state);
+            }
+            FieldValue::String(value) => {
+                (4_u8, value.encode_utf16().collect::<Vec<_>>()).hash(state);
+            }
+            FieldValue::Utf16String(value) => (4_u8, value.as_utf16()).hash(state),
+            FieldValue::Date(value) => (5_u8, value.milliseconds().to_bits()).hash(state),
+            FieldValue::Array(value) => (6_u8, Arc::as_ptr(value)).hash(state),
+            FieldValue::Object(value) => (7_u8, Arc::as_ptr(value)).hash(state),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
 struct CacheEntry {
     value: String,
-    expires_at: Option<DateTime<Utc>>,
+    expires_at: Option<f64>,
 }
 
 impl MemoryCacheAdapter {
@@ -64,7 +124,7 @@ impl MemoryCacheAdapter {
     /// Clean up expired entries
     fn cleanup_expired(&self) {
         if let Ok(mut data) = self.data.lock() {
-            let now = Utc::now();
+            let now = Utc::now().timestamp_millis() as f64;
             data.retain(|_, entry| entry.expires_at.is_none_or(|expires| expires > now));
         }
     }
@@ -81,7 +141,8 @@ impl CacheAdapter for MemoryCacheAdapter {
     async fn set(&self, key: &str, value: &str, expires_in: Duration) -> AuthResult<()> {
         self.cleanup_expired();
 
-        let expires_at = Utc::now() + expires_in;
+        let expires_at =
+            Utc::now().timestamp_millis() as f64 + expires_in.num_milliseconds() as f64;
         let entry = CacheEntry {
             value: value.to_string(),
             expires_at: Some(expires_at),
@@ -91,7 +152,7 @@ impl CacheAdapter for MemoryCacheAdapter {
             .data
             .lock()
             .map_err(|_| AuthError::internal("Cache lock poisoned"))?;
-        let _ = data.insert(key.to_string(), entry);
+        let _ = data.insert(key.into(), entry);
 
         Ok(())
     }
@@ -103,9 +164,9 @@ impl CacheAdapter for MemoryCacheAdapter {
             .data
             .lock()
             .map_err(|_| AuthError::internal("Cache lock poisoned"))?;
-        let now = Utc::now();
+        let now = Utc::now().timestamp_millis() as f64;
 
-        if let Some(entry) = data.get(key) {
+        if let Some(entry) = data.get(&CacheKey::from(key)) {
             if entry.expires_at.is_none_or(|expires| expires > now) {
                 Ok(Some(entry.value.clone()))
             } else {
@@ -121,7 +182,7 @@ impl CacheAdapter for MemoryCacheAdapter {
             .data
             .lock()
             .map_err(|_| AuthError::internal("Cache lock poisoned"))?;
-        let _ = data.remove(key);
+        let _ = data.remove(&CacheKey::from(key));
         Ok(())
     }
 
@@ -132,9 +193,9 @@ impl CacheAdapter for MemoryCacheAdapter {
             .data
             .lock()
             .map_err(|_| AuthError::internal("Cache lock poisoned"))?;
-        let now = Utc::now();
+        let now = Utc::now().timestamp_millis() as f64;
 
-        if let Some(entry) = data.get(key) {
+        if let Some(entry) = data.get(&CacheKey::from(key)) {
             Ok(entry.expires_at.is_none_or(|expires| expires > now))
         } else {
             Ok(false)
@@ -147,8 +208,9 @@ impl CacheAdapter for MemoryCacheAdapter {
             .lock()
             .map_err(|_| AuthError::internal("Cache lock poisoned"))?;
 
-        if let Some(entry) = data.get_mut(key) {
-            entry.expires_at = Some(Utc::now() + expires_in);
+        if let Some(entry) = data.get_mut(&CacheKey::from(key)) {
+            entry.expires_at =
+                Some(Utc::now().timestamp_millis() as f64 + expires_in.num_milliseconds() as f64);
         }
 
         Ok(())
@@ -171,9 +233,9 @@ impl SecondaryStorage for MemoryCacheAdapter {
             .data
             .lock()
             .map_err(|_| AuthError::internal("Cache lock poisoned"))?;
-        let now = Utc::now();
+        let now = Utc::now().timestamp_millis() as f64;
         data.retain(|_, entry| entry.expires_at.is_none_or(|expires| expires > now));
-        if let Some(entry) = data.get_mut(key) {
+        if let Some(entry) = data.get_mut(&CacheKey::from(key)) {
             let count = entry
                 .value
                 .parse::<i64>()
@@ -185,20 +247,9 @@ impl SecondaryStorage for MemoryCacheAdapter {
             entry.value = count.to_string();
             return Ok(count as f64);
         }
-        let duration = std::time::Duration::try_from_secs_f64(ttl_seconds.abs())
-            .map_err(|error| AuthError::validation(format!("Invalid secondary TTL: {error}")))?;
-        let duration = Duration::from_std(duration)
-            .map_err(|error| AuthError::validation(format!("Invalid secondary TTL: {error}")))?;
-        let duration = if ttl_seconds.is_sign_negative() {
-            -duration
-        } else {
-            duration
-        };
-        let expires_at = now
-            .checked_add_signed(duration)
-            .ok_or_else(|| AuthError::validation("Secondary storage TTL is out of range"))?;
+        let expires_at = now + ttl_seconds * 1_000.0;
         let _ = data.insert(
-            key.to_owned(),
+            key.into(),
             CacheEntry {
                 value: "1".to_owned(),
                 expires_at: Some(expires_at),
@@ -213,8 +264,12 @@ impl SecondaryStorage for MemoryCacheAdapter {
             .lock()
             .map_err(|_| AuthError::internal("Cache lock poisoned"))?;
         Ok(data
-            .remove(key)
-            .filter(|entry| entry.expires_at.is_none_or(|expires| expires > Utc::now()))
+            .remove(&CacheKey::from(key))
+            .filter(|entry| {
+                entry
+                    .expires_at
+                    .is_none_or(|expires| expires > Utc::now().timestamp_millis() as f64)
+            })
             .map(|entry| serde_json::Value::String(entry.value)))
     }
 
@@ -224,22 +279,20 @@ impl SecondaryStorage for MemoryCacheAdapter {
             .map(|value| value.map(serde_json::Value::String))
     }
 
-    async fn set(&self, key: &str, value: &str, ttl_seconds: Option<u64>) -> AuthResult<()> {
-        let expires_at = ttl_seconds
-            .map(|seconds| {
-                i64::try_from(seconds)
-                    .ok()
-                    .and_then(Duration::try_seconds)
-                    .and_then(|duration| Utc::now().checked_add_signed(duration))
-                    .ok_or_else(|| AuthError::validation("Secondary storage TTL is out of range"))
-            })
-            .transpose()?;
+    async fn set_native(
+        &self,
+        key: &FieldValue,
+        value: &str,
+        ttl_seconds: Option<f64>,
+    ) -> AuthResult<()> {
+        let expires_at =
+            ttl_seconds.map(|seconds| Utc::now().timestamp_millis() as f64 + seconds * 1_000.0);
         let mut data = self
             .data
             .lock()
             .map_err(|_| AuthError::internal("Cache lock poisoned"))?;
         let _ = data.insert(
-            key.to_owned(),
+            CacheKey(key.clone()),
             CacheEntry {
                 value: value.to_owned(),
                 expires_at,
@@ -354,13 +407,22 @@ pub mod redis_adapter {
                 .map(|value| value.map(serde_json::Value::String))
         }
 
-        async fn set(&self, key: &str, value: &str, ttl_seconds: Option<u64>) -> AuthResult<()> {
+        async fn set_native(
+            &self,
+            key: &FieldValue,
+            value: &str,
+            ttl_seconds: Option<f64>,
+        ) -> AuthResult<()> {
             let mut connection = self.connection.clone();
+            let key = String::from_utf16_lossy(key.display_utf16()?.as_utf16());
+            let mut command = redis::cmd("SET");
+            command.arg(key).arg(value);
             if let Some(seconds) = ttl_seconds {
-                connection.set_ex::<_, _, ()>(key, value, seconds).await?;
-            } else {
-                connection.set::<_, _, ()>(key, value).await?;
+                command
+                    .arg("EX")
+                    .arg(crate::schema_value::number_string(seconds));
             }
+            command.query_async::<()>(&mut connection).await?;
             Ok(())
         }
 
@@ -441,7 +503,7 @@ mod tests {
         SecondaryStorage::set(cache.as_ref(), "counter", "0", Some(60))
             .await
             .unwrap();
-        let expires_at = cache.data.lock().unwrap()["counter"].expires_at;
+        let expires_at = cache.data.lock().unwrap()[&super::CacheKey::from("counter")].expires_at;
         let mut increments = tokio::task::JoinSet::new();
         for _ in 0..16 {
             let cache = cache.clone();
@@ -454,7 +516,10 @@ mod tests {
         }
         counts.sort_unstable();
         assert_eq!(counts, (1..=16).collect::<Vec<_>>());
-        assert_eq!(cache.data.lock().unwrap()["counter"].expires_at, expires_at);
+        assert_eq!(
+            cache.data.lock().unwrap()[&super::CacheKey::from("counter")].expires_at,
+            expires_at
+        );
         assert_eq!(
             CacheAdapter::get(cache.as_ref(), "counter").await.unwrap(),
             Some("16".to_owned())

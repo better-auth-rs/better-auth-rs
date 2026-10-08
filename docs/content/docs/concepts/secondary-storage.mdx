@@ -19,7 +19,11 @@ let auth = BetterAuth::<AppAuthSchema>::new(config)
     .await?;
 ```
 
-`SecondaryStorage::set` accepts an optional TTL in seconds. An absent TTL means no expiry. Implement `get_and_delete` as one atomic operation; a separate read and delete permits replay of verification tokens. Redis uses `GETDEL`. Backend errors propagate. Invalid cached JSON follows the upstream cache-miss rules described below.
+Implement `SecondaryStorage::set_native` to receive the original `FieldValue` key and an optional `f64` TTL in seconds. A projected Session token can have a non-string value. TTLs can be negative or NaN when the upstream caller supplies these values. Keep these arguments intact until the backend applies its storage contract. `set` remains a convenience method for string keys and unsigned TTLs and forwards to `set_native`. An absent TTL means no expiry.
+
+`MemoryCacheAdapter` compares keys with JavaScript Map equality. The adapter stores numeric expiration times and returns an entry only when the expiration is absent or greater than the current time. Negative and NaN TTLs therefore produce cache misses. `RedisAdapter` converts keys to JavaScript string values at the Redis encoding boundary and sends the supplied TTL through `SET EX`; Redis parameter errors propagate.
+
+Implement `get_and_delete` as one atomic operation; a separate read and delete permits replay of verification tokens. Redis uses `GETDEL`. Backend errors propagate. Invalid cached JSON follows the upstream cache-miss rules described below.
 
 ### Sessions
 
@@ -28,6 +32,8 @@ With a secondary backend, sessions use the cache by default. Set `session.store_
 For `AuthEntity` session models, `field_name` accepts the Rust field name, its camel-case name, or its Serde serialization name. The same mapping applies to database writes, response projection and secondary-storage projection. The cache stores logical field names. Handwritten session models with storage aliases must implement `AuthSession::serialized_field_name`.
 
 Each session token stores a session and user snapshot. `active-sessions-<userId>` stores the token list and expiration times. Listing sessions reads this index and the cached records. Updating a user through the authentication store refreshes cached user snapshots. A direct database update does not refresh the cache.
+
+Device token redemption retains the User selected before code consumption. The endpoint creates the Session from that User's projected ID, publishes the new Session for endpoint hooks, and then writes the explicit `{user, session}` cache snapshot. That write uses the projected Session token and an unclamped expiration difference. A cache error leaves the code consumed, the Session created, and the new Session published. The endpoint does not issue session cookies.
 
 Set `session.preserve_session_in_database` with database session storage to retain ended rows. Revocation removes the cache entry and expires live database rows. The database update also applies `updatedAt` and configured `on_update` fields. Expired rows keep their dates and receive no delete hooks. Database fallback remains disabled, so a retained row cannot restore a revoked session. Repeated revocation does not repeat delete hooks.
 

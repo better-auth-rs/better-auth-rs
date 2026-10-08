@@ -121,8 +121,7 @@ pub mod schema_date {
         let value = super::value::deserialize(deserializer)?;
         Ok(crate::SchemaValue::from_field(match value {
             FieldValue::String(text) => FieldValue::Date(
-                crate::utils::date::parse_adapter_date(&text)
-                    .map(FieldDate::from)
+                crate::utils::date::parse_date_constructor(&text)
                     .unwrap_or_else(FieldDate::invalid),
             ),
             value => value,
@@ -162,9 +161,7 @@ pub mod date {
         deserializer: D,
     ) -> Result<FieldDate, D::Error> {
         let value = String::deserialize(deserializer)?;
-        Ok(crate::utils::date::parse_adapter_date(&value)
-            .map(FieldDate::from)
-            .unwrap_or_else(FieldDate::invalid))
+        Ok(crate::utils::date::parse_date_constructor(&value).unwrap_or_else(FieldDate::invalid))
     }
 }
 
@@ -185,9 +182,7 @@ pub mod optional_date {
         deserializer: D,
     ) -> Result<Option<FieldDate>, D::Error> {
         Ok(Option::<String>::deserialize(deserializer)?.map(|value| {
-            crate::utils::date::parse_adapter_date(&value)
-                .map(FieldDate::from)
-                .unwrap_or_else(FieldDate::invalid)
+            crate::utils::date::parse_date_constructor(&value).unwrap_or_else(FieldDate::invalid)
         }))
     }
 }

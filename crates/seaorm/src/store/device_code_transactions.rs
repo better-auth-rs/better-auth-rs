@@ -5,10 +5,10 @@ use crate::schema::AuthSchema;
 use crate::types::{CreateDeviceCode, DeviceCode, UpdateDeviceCode};
 use async_trait::async_trait;
 use better_auth_core::{
-    AuthResult,
+    AuthResult, FieldMap, SchemaValue,
     store::{DeviceCodeStore, schema::EntityRole},
 };
-use sea_orm::{ConnectionTrait, EntityTrait, QueryFilter, QuerySelect};
+use sea_orm::{ConnectionTrait, EntityTrait, QueryFilter, QuerySelect, QueryTrait};
 
 #[async_trait]
 impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema>
@@ -18,6 +18,52 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         self.store
             .create_device_code_with_connection(&self.tx, input)
             .await
+    }
+
+    async fn create_device_code_record(&self, input: FieldMap) -> AuthResult<FieldMap> {
+        let row = self.store.insert_device_code(&self.tx, input).await?;
+        Ok(self
+            .store
+            .project_plugin_rows::<P::DeviceCode, FieldMap>(EntityRole::DeviceCode, vec![row])
+            .await?
+            .remove(0))
+    }
+
+    async fn get_device_code_record(
+        &self,
+        id: &SchemaValue<String>,
+    ) -> AuthResult<Option<FieldMap>> {
+        let filter = self
+            .store
+            .plugin_id_filter::<P::DeviceCode>(EntityRole::DeviceCode, id)?;
+        let row = self.store.get_device_code_row(&self.tx, filter).await?;
+        Ok(self
+            .store
+            .project_plugin_rows::<P::DeviceCode, FieldMap>(
+                EntityRole::DeviceCode,
+                row.into_iter().collect(),
+            )
+            .await?
+            .pop())
+    }
+
+    async fn update_device_code_record(
+        &self,
+        id: &SchemaValue<String>,
+        input: FieldMap,
+    ) -> AuthResult<Option<FieldMap>> {
+        let row = self
+            .store
+            .update_device_code_row(&self.tx, id, input)
+            .await?;
+        Ok(self
+            .store
+            .project_plugin_rows::<P::DeviceCode, FieldMap>(
+                EntityRole::DeviceCode,
+                row.into_iter().collect(),
+            )
+            .await?
+            .pop())
     }
 
     async fn get_device_code_by_device_code(
@@ -81,46 +127,29 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
     async fn claim_device_code(
         &self,
         id: &better_auth_core::SchemaValue<String>,
-        user_id: &str,
+        user_id: &SchemaValue<String>,
     ) -> AuthResult<bool> {
         let (query, guard, reselect) = self.store.prepare_device_code_claim(id, user_id).await?;
-        if self
-            .store
-            .model_fields
-            .fields(EntityRole::DeviceCode)
-            .fields()
-            .is_empty()
-        {
-            return database_operation::<Entity<P::DeviceCode>, _>(
-                self.store.config(),
-                "incrementOne",
-                async {
-                    query
-                        .filter(guard)
-                        .exec(&self.tx)
-                        .await
-                        .map(|result| result.rows_affected == 1)
-                        .map_err(map_db_err)
-                },
-            )
-            .await;
-        }
         let row = database_operation::<Entity<P::DeviceCode>, _>(
             self.store.config(),
             "incrementOne",
             async {
                 if self.tx.get_database_backend() == sea_orm::DbBackend::MySql
-                    && Entity::<P::DeviceCode>::find()
-                        .filter(guard.clone())
-                        .lock_exclusive()
-                        .one(&self.tx)
+                    && self
+                        .tx
+                        .query_one_raw(
+                            Entity::<P::DeviceCode>::find()
+                                .filter(guard.clone())
+                                .lock_exclusive()
+                                .build(self.tx.get_database_backend()),
+                        )
                         .await
                         .map_err(map_db_err)?
                         .is_none()
                 {
                     return Ok(None);
                 }
-                super::updates::execute_update_returning_one::<Entity<P::DeviceCode>, _>(
+                super::updates::execute_returning_raw::<Entity<P::DeviceCode>, _>(
                     &self.tx,
                     query.filter(guard),
                     reselect,

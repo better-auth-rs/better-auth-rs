@@ -1,196 +1,241 @@
-use super::rows::RowRef;
+use super::rows::{RowRef, Rows};
 use super::*;
-use crate::store::schema::EntityRole;
-use crate::store::schema::resolve_field_name;
-use crate::user_fields::project_adapter_value;
+use crate::store::schema::{EntityRole, resolve_field_name};
 
 #[path = "device_query.rs"]
 mod query;
 
 #[derive(Clone)]
+struct DeviceCodeOrigin {
+    isolated: RowRef<FieldMap>,
+    live: RowRef<FieldMap>,
+    before: FieldMap,
+}
+
+#[derive(Default)]
+pub(super) struct DeviceCodeTransaction {
+    origins: Vec<DeviceCodeOrigin>,
+    pub(super) consumed: Vec<DeviceCodeConsumption>,
+}
+
+impl DeviceCodeTransaction {
+    pub(super) fn new(live: &Rows<FieldMap>, isolated: &Rows<FieldMap>) -> AuthResult<Self> {
+        let live = live.select_refs(|_| true)?;
+        let isolated = isolated.select_refs(|_| true)?;
+        let origins = live
+            .into_iter()
+            .zip(isolated)
+            .map(|(live, isolated)| {
+                let before = live.read(|row| Ok(row.clone()))?;
+                Ok(DeviceCodeOrigin {
+                    isolated,
+                    live,
+                    before,
+                })
+            })
+            .collect::<AuthResult<Vec<_>>>()?;
+        Ok(Self {
+            origins,
+            consumed: Vec::new(),
+        })
+    }
+}
+
+#[derive(Clone)]
 pub(super) struct DeviceCodeConsumption {
-    pub(super) row: DeviceCode,
+    origin: Option<DeviceCodeOrigin>,
+    binding_fields: Vec<String>,
     ownership_field: Option<String>,
 }
 
 impl DeviceCodeConsumption {
-    pub(super) fn unchanged(&self, live: &DeviceCode, baseline: &DeviceCode) -> bool {
-        same_bindings(live, baseline)
-            && self.ownership_field.as_deref().is_none_or(|field| {
-                // Compare against the baseline because prepare may change the transaction's field.
-                if field == "scope" {
-                    match (&live.scope, &baseline.scope) {
-                        (
-                            crate::SchemaValue::Dynamic(live),
-                            crate::SchemaValue::Dynamic(baseline),
-                        ) => same_snapshot_value(live, baseline),
-                        _ => live.scope == baseline.scope,
-                    }
-                } else {
-                    match (
-                        live.additional_fields.get(field),
-                        baseline.additional_fields.get(field),
-                    ) {
-                        (Some(live), Some(baseline)) => same_snapshot_value(live, baseline),
-                        (None, None) => true,
-                        _ => false,
-                    }
-                }
-            })
+    pub(super) fn unchanged(&self, live: &Rows<FieldMap>) -> AuthResult<bool> {
+        let Some(origin) = &self.origin else {
+            // Rows created inside this transaction have no pre-transaction owner.
+            return Ok(true);
+        };
+        if !live.contains_ref(&origin.live) {
+            return Ok(false);
+        }
+        origin.live.read(|row| {
+            Ok(self
+                .binding_fields
+                .iter()
+                .chain(self.ownership_field.iter())
+                .all(|name| match (row.get(name), origin.before.get(name)) {
+                    (Some(actual), Some(before)) => actual.same_value_zero(before),
+                    (None, None) => true,
+                    _ => false,
+                }))
+        })
     }
 }
 
-// Snapshot copies have distinct object handles. Preserve native values that JSON would merge with null or omission.
-fn same_snapshot_value(live: &Value, baseline: &Value) -> bool {
-    match (live, baseline) {
-        (Value::Number(live), Value::Number(baseline)) => {
-            live == baseline || (live.is_nan() && baseline.is_nan())
-        }
-        (Value::Array(live), Value::Array(baseline)) => {
-            live.len() == baseline.len()
-                && live
-                    .iter()
-                    .zip(baseline.iter())
-                    .all(|(live, baseline)| same_snapshot_value(live, baseline))
-        }
-        (Value::Object(live), Value::Object(baseline)) => {
-            live.len() == baseline.len()
-                && live.iter().all(|(field, live)| {
-                    baseline
-                        .get(field)
-                        .is_some_and(|baseline| same_snapshot_value(live, baseline))
-                })
-        }
-        _ => live == baseline,
-    }
+fn value<'a>(row: &'a FieldMap, name: &str) -> &'a Value {
+    row.get(name).unwrap_or(&Value::Undefined)
 }
 
 impl EphemeralStore {
-    async fn find_device_code(
-        &self,
-        predicate: impl Fn(&DeviceCode) -> bool + Send,
-    ) -> AuthResult<Option<DeviceCode>> {
-        let selected = self
-            .raw("deviceCode", "findOne", |state| {
-                state
-                    .device_codes
-                    .first_ref(predicate)?
-                    .map(|source| {
-                        let snapshot = source.read(|row| Ok(row.clone()))?;
-                        Ok((snapshot, source))
-                    })
-                    .transpose()
+    fn device_column(&self, name: &str) -> String {
+        let fields = self
+            .model_fields
+            .plugin_fields(EntityRole::DeviceCode)
+            .adapter_fields(&[]);
+        fields
+            .fields()
+            .get(name)
+            .map_or(name, |field| {
+                resolve_field_name(field.field_name.as_deref(), name)
             })
-            .await?;
-        let Some((snapshot, source)) = selected else {
-            return Ok(None);
-        };
-        self.project_device_code(snapshot, source).await.map(Some)
+            .to_owned()
     }
 
-    async fn project_device_code(
+    async fn find_device_code(
         &self,
-        mut snapshot: DeviceCode,
-        source: RowRef<DeviceCode>,
-    ) -> AuthResult<DeviceCode> {
-        let scope = Some(snapshot.scope.field_value());
-        let fields = self.model_fields.fields(EntityRole::DeviceCode);
-        let mut output = FieldMap::new();
-        for (name, field) in fields.fields() {
-            let value = if name == "scope" {
-                scope.clone()
-            } else {
-                source.read(|row| {
-                    Ok(row
-                        .additional_fields
-                        .get(resolve_field_name(field.field_name.as_deref(), name))
-                        .cloned())
-                })?
-            };
-            let value = project_adapter_value(
-                value.unwrap_or_default(),
-                field,
-                field.references_id(),
-                true,
-            )
+        field: &str,
+        operand: Value,
+    ) -> AuthResult<Option<DeviceCode>> {
+        let operand = self.plugin_query_value(EntityRole::DeviceCode, field, operand)?;
+        let column = self.device_column(field);
+        let selected = self
+            .raw("deviceCode", "findOne", |state| {
+                state.device_codes.first_ref(|row| {
+                    crate::query::field_matches_equality(value(row, &column), &operand)
+                })
+            })
             .await?;
-            let _ = output.insert(name.clone(), value);
-        }
-        // Only declared application fields are live; authorization fields retain the selected snapshot.
-        self.model_fields
-            .assign_device_code_output(&mut snapshot, output);
-        snapshot.id = Self::project_id(&snapshot.id)?;
-        Ok(snapshot)
+        Ok(self
+            .project_device_code_refs(selected.into_iter().collect())
+            .await?
+            .pop())
+    }
+
+    async fn project_device_code_refs(
+        &self,
+        sources: Vec<RowRef<FieldMap>>,
+    ) -> AuthResult<Vec<DeviceCode>> {
+        let bindings = sources
+            .iter()
+            .map(|source| {
+                source.read(|row| Ok(self.model_fields.device_code_storage_bindings(row)))
+            })
+            .collect::<AuthResult<Vec<_>>>()?;
+        let projected = self
+            .project_plugin_refs(EntityRole::DeviceCode, sources)
+            .await?;
+        Ok(projected
+            .into_iter()
+            .zip(bindings)
+            .map(|(fields, bindings)| DeviceCode::from(fields).with_storage_bindings(bindings))
+            .collect())
     }
 
     async fn project_device_code_snapshots(
         &self,
-        rows: Vec<DeviceCode>,
+        rows: Vec<FieldMap>,
     ) -> AuthResult<Vec<DeviceCode>> {
-        let mut rows = self.model_fields.project_device_codes(rows).await?;
-        for row in &mut rows {
-            row.id = Self::project_id(&row.id)?;
-        }
-        Ok(rows)
+        let mut sources = Rows::default();
+        let refs = rows.into_iter().map(|row| sources.push_ref(row)).collect();
+        self.project_device_code_refs(refs).await
     }
 
-    async fn device_code_fields_for_storage(
+    async fn update_device_code_guarded(
         &self,
-        scope: crate::SchemaValue<Option<String>>,
-        additional_fields: FieldMap,
-        create: bool,
-    ) -> AuthResult<FieldMap> {
-        self.model_fields
-            .device_code_fields_with_binding(scope, additional_fields, create, |_, field, value| {
-                self.memory_plugin_field_input(field, value)
-            })
-            .await
+        id: &crate::SchemaValue<String>,
+        status: &str,
+        unclaimed: bool,
+        input: FieldMap,
+    ) -> AuthResult<bool> {
+        let id = self.plugin_query_value(EntityRole::DeviceCode, "id", id.field_value())?;
+        let status = self.plugin_query_value(EntityRole::DeviceCode, "status", status.into())?;
+        let owner = if unclaimed {
+            Some(self.plugin_query_value(EntityRole::DeviceCode, "userId", Value::Null)?)
+        } else {
+            None
+        };
+        let patch = self
+            .prepare_plugin_fields(EntityRole::DeviceCode, input, false)
+            .await?;
+        let status_column = self.device_column("status");
+        let owner_column = self.device_column("userId");
+        let selected = self
+            .raw(
+                "deviceCode",
+                if unclaimed { "incrementOne" } else { "update" },
+                |state| {
+                    let selected = state.device_codes.first_ref(|row| {
+                        crate::query::field_matches_equality(value(row, "id"), &id)
+                            && crate::query::field_matches_equality(
+                                value(row, &status_column),
+                                &status,
+                            )
+                            && owner.as_ref().is_none_or(|owner| {
+                                crate::query::field_matches_equality(
+                                    value(row, &owner_column),
+                                    owner,
+                                )
+                            })
+                    })?;
+                    if let Some(source) = &selected {
+                        source.write(|row| {
+                            row.extend(patch);
+                            Ok(())
+                        })?;
+                    }
+                    Ok(selected)
+                },
+            )
+            .await?;
+        // Output callbacks run after a successful write, including boolean-returning writes.
+        Ok(!self
+            .project_device_code_refs(selected.into_iter().collect())
+            .await?
+            .is_empty())
     }
 }
 
 #[async_trait]
 impl DeviceCodeStore for EphemeralStore {
+    async fn create_device_code_record(&self, fields: FieldMap) -> AuthResult<FieldMap> {
+        self.create_plugin_record(EntityRole::DeviceCode, fields, FieldMap::new())
+            .await
+    }
+
+    async fn get_device_code_record(
+        &self,
+        id: &crate::SchemaValue<String>,
+    ) -> AuthResult<Option<FieldMap>> {
+        self.get_plugin_record(EntityRole::DeviceCode, id).await
+    }
+
+    async fn update_device_code_record(
+        &self,
+        id: &crate::SchemaValue<String>,
+        fields: FieldMap,
+    ) -> AuthResult<Option<FieldMap>> {
+        self.update_plugin_record(EntityRole::DeviceCode, id, fields, FieldMap::new())
+            .await
+    }
+
     async fn create_device_code(&self, input: CreateDeviceCode) -> AuthResult<DeviceCode> {
-        let mut fields = self
-            .device_code_fields_for_storage(input.scope, input.additional_fields, true)
+        let source = self
+            .create_plugin_ref(
+                EntityRole::DeviceCode,
+                input.into_adapter_fields()?,
+                FieldMap::new(),
+            )
             .await?;
-        let scope = crate::plugin_runtime::ModelFields::take_device_code_scope(&mut fields);
-        let mut device_code = DeviceCode {
-            additional_fields: fields,
-            id: self
-                .generated_id("deviceCode", None, self.lock()?.device_codes.len())?
-                .map(crate::SchemaValue::Typed)
-                .unwrap_or_default(),
-            device_code: input.device_code,
-            user_code: input.user_code,
-            user_id: input.user_id,
-            expires_at: input.expires_at,
-            status: input.status,
-            last_polled_at: input.last_polled_at,
-            polling_interval: input.polling_interval,
-            client_id: input
-                .client_id
-                .map(|value| crate::SchemaValue::Typed(Some(value)))
-                .unwrap_or_default(),
-            scope: scope.unwrap_or_default(),
-        };
-        let (snapshot, source) = self
-            .raw("deviceCode", "create", |state| {
-                if let Some(id) = self.next_serial_id(state.device_codes.len()) {
-                    device_code.id = crate::SchemaValue::from_field(id);
-                }
-                let source = state.device_codes.push_ref(device_code.clone());
-                Ok((device_code, source))
-            })
-            .await?;
-        self.project_device_code(snapshot, source).await
+        self.project_device_code_refs(vec![source])
+            .await?
+            .pop()
+            .ok_or_else(|| AuthError::internal("Created device code was not projected"))
     }
 
     async fn get_device_code_by_device_code(
         &self,
         device_code: &str,
     ) -> AuthResult<Option<DeviceCode>> {
-        self.find_device_code(|row| row.device_code == device_code)
+        self.find_device_code("deviceCode", device_code.into())
             .await
     }
 
@@ -198,8 +243,7 @@ impl DeviceCodeStore for EphemeralStore {
         &self,
         user_code: &str,
     ) -> AuthResult<Option<DeviceCode>> {
-        self.find_device_code(|row| row.user_code == user_code)
-            .await
+        self.find_device_code("userCode", user_code.into()).await
     }
 
     async fn update_device_code(
@@ -207,42 +251,19 @@ impl DeviceCodeStore for EphemeralStore {
         id: &crate::SchemaValue<String>,
         update: UpdateDeviceCode,
     ) -> AuthResult<DeviceCode> {
-        let mut fields = self
-            .device_code_fields_for_storage(update.scope, update.additional_fields, false)
-            .await?;
-        let scope = crate::plugin_runtime::ModelFields::take_device_code_scope(&mut fields);
-        let id = self.memory_primary_id_query(&id.field_value())?;
-        let (snapshot, source) = self
-            .raw("deviceCode", "update", |state| {
-                let Some(source) = state
-                    .device_codes
-                    .first_ref(|row| row.id.field_value().strict_equals(&id))?
-                else {
-                    return Ok(None);
-                };
-
-                let snapshot = source.write(|device_code| {
-                    device_code.additional_fields.extend(fields);
-                    if let Some(scope) = scope {
-                        device_code.scope = scope;
-                    }
-                    if let Some(status) = update.status {
-                        device_code.status = status;
-                    }
-                    if let Some(user_id) = update.user_id {
-                        device_code.user_id = user_id;
-                    }
-                    if let Some(last_polled_at) = update.last_polled_at {
-                        device_code.last_polled_at = last_polled_at;
-                    }
-
-                    Ok(device_code.clone())
-                })?;
-                Ok(Some((snapshot, source)))
-            })
+        let source = self
+            .update_plugin_ref(
+                EntityRole::DeviceCode,
+                id,
+                update.into_adapter_fields()?,
+                FieldMap::new(),
+            )
             .await?
             .ok_or_else(|| AuthError::not_found("Device code not found"))?;
-        self.project_device_code(snapshot, source).await
+        self.project_device_code_refs(vec![source])
+            .await?
+            .pop()
+            .ok_or_else(|| AuthError::internal("Updated device code was not projected"))
     }
 
     async fn update_device_code_if_status(
@@ -251,82 +272,22 @@ impl DeviceCodeStore for EphemeralStore {
         current_status: &str,
         update: UpdateDeviceCode,
     ) -> AuthResult<bool> {
-        let mut fields = self
-            .device_code_fields_for_storage(update.scope, update.additional_fields, false)
-            .await?;
-        let scope = crate::plugin_runtime::ModelFields::take_device_code_scope(&mut fields);
-        let id = crate::SchemaValue::<String>::from_field(
-            self.memory_primary_id_query(&id.field_value())?,
-        );
-        let row = self
-            .raw("deviceCode", "update", |state| {
-                let Some(mut device_code) = state.device_codes.get_mut(&id)? else {
-                    return Ok(None);
-                };
-
-                if device_code.status != current_status {
-                    return Ok(None);
-                }
-
-                device_code.additional_fields.extend(fields);
-                if let Some(scope) = scope {
-                    device_code.scope = scope;
-                }
-                if let Some(status) = update.status {
-                    device_code.status = status;
-                }
-                if let Some(user_id) = update.user_id {
-                    device_code.user_id = user_id;
-                }
-                if let Some(last_polled_at) = update.last_polled_at {
-                    device_code.last_polled_at = last_polled_at;
-                }
-
-                Ok(Some(device_code.clone()))
-            })
-            .await?;
-        // Successful boolean writes still await the adapter output policy.
-        Ok(!self
-            .project_device_code_snapshots(row.into_iter().collect())
-            .await?
-            .is_empty())
+        self.update_device_code_guarded(id, current_status, false, update.into_adapter_fields()?)
+            .await
     }
 
     async fn claim_device_code(
         &self,
         id: &crate::SchemaValue<String>,
-        user_id: &str,
+        user_id: &crate::SchemaValue<String>,
     ) -> AuthResult<bool> {
-        let mut fields = self
-            .device_code_fields_for_storage(Default::default(), Default::default(), false)
-            .await?;
-        let scope = crate::plugin_runtime::ModelFields::take_device_code_scope(&mut fields);
-        let id = crate::SchemaValue::<String>::from_field(
-            self.memory_primary_id_query(&id.field_value())?,
-        );
-        let row = self
-            .raw("deviceCode", "incrementOne", |state| {
-                let Some(mut device_code) = state.device_codes.get_mut(&id)? else {
-                    return Ok(None);
-                };
-
-                if device_code.status != "pending" || device_code.user_id.is_some() {
-                    return Ok(None);
-                }
-
-                device_code.additional_fields.extend(fields);
-                if let Some(scope) = scope {
-                    device_code.scope = scope;
-                }
-                device_code.user_id = Some(user_id.to_string());
-                Ok(Some(device_code.clone()))
-            })
-            .await?;
-        // Successful boolean writes still await the adapter output policy.
-        Ok(!self
-            .project_device_code_snapshots(row.into_iter().collect())
-            .await?
-            .is_empty())
+        self.update_device_code_guarded(
+            id,
+            "pending",
+            true,
+            [("userId".into(), user_id.field_value())].into(),
+        )
+        .await
     }
 
     async fn consume_device_code(
@@ -340,46 +301,58 @@ impl DeviceCodeStore for EphemeralStore {
         if matches!(field.field_type, crate::user_fields::UserFieldType::Json) {
             query.value = super::field_bindings::memory_json_query_value(query.value, &original)?;
         }
-        let mut expected = expected.clone();
-        expected.id = crate::SchemaValue::from_field(
-            self.memory_primary_id_query(&expected.id.field_value())?,
-        );
+        let approved =
+            self.plugin_query_value(EntityRole::DeviceCode, "status", "approved".into())?;
+        let (bindings, unchanged) = expected.consumption_bindings()?;
+        let names = ["id", "deviceCode", "clientId", "userId", "status"];
+        let columns: Vec<_> = names.iter().map(|name| self.device_column(name)).collect();
         let row = self
             .raw("deviceCode", "consumeOne", |state| {
                 let mut selected = None;
-                // Memory evaluates every row before consumption, including rows with another ID.
+                // Evaluate ownership for every row before deletion; another row can still fail the operation.
                 for source in state.device_codes.select_refs(|_| true)? {
-                    let row = source.read(|row| Ok(row.clone()))?;
-                    let matches = query::matches(&row, &query)?;
-                    if selected.is_none()
-                        && same_bindings(&row, &expected)
-                        && row.user_id.is_some()
-                        && row.status == "approved"
-                        && matches
-                    {
+                    let matches = source.read(|row| {
+                        let owns = query::matches(row, &query)?;
+                        Ok(unchanged
+                            && owns
+                            && names.iter().zip(&columns).all(|(name, column)| {
+                                value(row, column).strict_equals(value(bindings, name))
+                            })
+                            && !value(row, &columns[3]).is_null()
+                            && !value(row, &columns[3]).is_undefined()
+                            && crate::query::field_matches_equality(
+                                value(row, &columns[4]),
+                                &approved,
+                            ))
+                    })?;
+                    if selected.is_none() && matches {
                         selected = Some(source);
                     }
                 }
-                let row = match selected {
-                    Some(selected) => state.device_codes.remove_ref(&selected)?,
-                    None => None,
+                let Some(selected) = selected else {
+                    return Ok(None);
                 };
-                if let Some(row) = &row
-                    && let Some(consumed) = &self.device_code_consumptions
+                let row = state.device_codes.remove_ref(&selected)?;
+                if row.is_some()
+                    && let Some(transaction) = &self.device_code_transaction
                 {
-                    consumed
-                        .lock()
-                        .map_err(|_| {
-                            AuthError::internal("Ephemeral device consumption write set poisoned")
-                        })?
-                        .push(DeviceCodeConsumption {
-                            row: row.clone(),
-                            ownership_field: (!matches!(
-                                ownership,
-                                crate::DeviceCodeOwnership::ClientId(_)
-                            ))
-                            .then(|| query.field.clone()),
-                        });
+                    let mut transaction = transaction.lock().map_err(|_| {
+                        AuthError::internal("Ephemeral device consumption write set poisoned")
+                    })?;
+                    let origin = transaction
+                        .origins
+                        .iter()
+                        .find(|origin| origin.isolated.same_row(&selected))
+                        .cloned();
+                    transaction.consumed.push(DeviceCodeConsumption {
+                        origin,
+                        binding_fields: columns,
+                        ownership_field: (!matches!(
+                            ownership,
+                            crate::DeviceCodeOwnership::ClientId(_)
+                        ))
+                        .then(|| query.field.clone()),
+                    });
                 }
                 Ok(row)
             })
@@ -391,11 +364,11 @@ impl DeviceCodeStore for EphemeralStore {
     }
 
     async fn delete_device_code(&self, id: &crate::SchemaValue<String>) -> AuthResult<()> {
-        let id = crate::SchemaValue::<String>::from_field(
-            self.memory_primary_id_query(&id.field_value())?,
-        );
+        let id = self.plugin_query_value(EntityRole::DeviceCode, "id", id.field_value())?;
         self.raw("deviceCode", "delete", |state| {
-            let _ = state.device_codes.remove(&id)?;
+            let _ = state
+                .device_codes
+                .remove_first(|row| crate::query::field_matches_equality(value(row, "id"), &id))?;
             Ok(())
         })
         .await
@@ -406,20 +379,17 @@ impl DeviceCodeStore for EphemeralStore {
         id: &crate::SchemaValue<String>,
         status: &str,
     ) -> AuthResult<bool> {
-        let id = crate::SchemaValue::<String>::from_field(
-            self.memory_primary_id_query(&id.field_value())?,
-        );
+        let id = self.plugin_query_value(EntityRole::DeviceCode, "id", id.field_value())?;
+        let status = self.plugin_query_value(EntityRole::DeviceCode, "status", status.into())?;
+        let column = self.device_column("status");
         self.raw("deviceCode", "delete", |state| {
-            let should_delete = state
+            Ok(state
                 .device_codes
-                .get(&id)?
-                .is_some_and(|device_code| device_code.status == status);
-
-            if should_delete {
-                let _ = state.device_codes.remove(&id)?;
-            }
-
-            Ok(should_delete)
+                .remove_first(|row| {
+                    crate::query::field_matches_equality(value(row, "id"), &id)
+                        && crate::query::field_matches_equality(value(row, &column), &status)
+                })?
+                .is_some())
         })
         .await
     }
@@ -427,6 +397,23 @@ impl DeviceCodeStore for EphemeralStore {
 
 #[async_trait]
 impl DeviceCodeStore for super::transactions::EphemeralTransaction {
+    async fn create_device_code_record(&self, fields: FieldMap) -> AuthResult<FieldMap> {
+        self.store.create_device_code_record(fields).await
+    }
+    async fn get_device_code_record(
+        &self,
+        id: &crate::SchemaValue<String>,
+    ) -> AuthResult<Option<FieldMap>> {
+        self.store.get_device_code_record(id).await
+    }
+    async fn update_device_code_record(
+        &self,
+        id: &crate::SchemaValue<String>,
+        fields: FieldMap,
+    ) -> AuthResult<Option<FieldMap>> {
+        self.store.update_device_code_record(id, fields).await
+    }
+
     async fn create_device_code(&self, input: CreateDeviceCode) -> AuthResult<DeviceCode> {
         self.store.create_device_code(input).await
     }
@@ -462,7 +449,7 @@ impl DeviceCodeStore for super::transactions::EphemeralTransaction {
     async fn claim_device_code(
         &self,
         id: &crate::SchemaValue<String>,
-        user_id: &str,
+        user_id: &crate::SchemaValue<String>,
     ) -> AuthResult<bool> {
         self.store.claim_device_code(id, user_id).await
     }
@@ -483,12 +470,4 @@ impl DeviceCodeStore for super::transactions::EphemeralTransaction {
     ) -> AuthResult<bool> {
         self.store.delete_device_code_if_status(id, status).await
     }
-}
-
-pub(super) fn same_bindings(actual: &DeviceCode, expected: &DeviceCode) -> bool {
-    actual.id == expected.id
-        && actual.device_code == expected.device_code
-        && actual.client_id == expected.client_id
-        && actual.user_id == expected.user_id
-        && actual.status == expected.status
 }

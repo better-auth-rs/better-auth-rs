@@ -128,7 +128,7 @@ async fn memory_serial_device_reference_reaches_output_as_a_number() -> AuthResu
     let created = auth.store().create_device_code(input).await?;
     let read = auth
         .store()
-        .get_device_code_by_device_code(&created.device_code)
+        .get_device_code_by_device_code(created.device_code.typed()?)
         .await?
         .expect("ordinary reference record exists");
     let expected: Value =

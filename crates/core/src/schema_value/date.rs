@@ -39,8 +39,8 @@ impl SchemaValue<FieldDate> {
     }
 
     /// Compute create-cache TTL. Upstream accepts a number or calls the Date object's getTime method.
-    /// Invalid Date skips the cache write; other replacement types fail at this operation boundary.
-    pub fn cache_ttl(&self, now: DateTime<Utc>) -> AuthResult<u64> {
+    /// Preserve NaN and infinity; each caller applies its upstream write condition.
+    pub fn cache_ttl(&self, now: DateTime<Utc>) -> AuthResult<f64> {
         let millis = match self {
             Self::Typed(date) => date.milliseconds(),
             Self::Dynamic(FieldValue::Number(value)) => *value,
@@ -48,11 +48,12 @@ impl SchemaValue<FieldDate> {
                 return Err(AuthError::internal("expiresAt.getTime is not a function"));
             }
         };
-        ttl(millis, now)
+        let seconds = ((millis - now.timestamp_millis() as f64) / 1_000.0).floor();
+        Ok(if seconds < 0.0 { 0.0 } else { seconds })
     }
 
     /// Compute update-cache TTL after the endpoint's explicit Date constructor conversion.
-    pub fn converted_cache_ttl(&self, now: DateTime<Utc>) -> AuthResult<u64> {
+    pub fn converted_cache_ttl(&self, now: DateTime<Utc>) -> AuthResult<f64> {
         self.clone().converted_date()?.cache_ttl(now)
     }
 
@@ -62,19 +63,4 @@ impl SchemaValue<FieldDate> {
             &self.into_field_value(),
         )?))
     }
-}
-
-fn ttl(millis: f64, now: DateTime<Utc>) -> AuthResult<u64> {
-    let seconds = ((millis - now.timestamp_millis() as f64) / 1_000.0).floor();
-    // Upstream guards the write with ttl > 0. NaN therefore has no secondary effect.
-    if seconds.partial_cmp(&0.0) != Some(std::cmp::Ordering::Greater) {
-        return Ok(0);
-    }
-    std::time::Duration::try_from_secs_f64(seconds)
-        .map(|duration| duration.as_secs())
-        .map_err(|error| {
-            AuthError::internal(format!(
-                "Verification cache TTL exceeds the backend range: {error}"
-            ))
-        })
 }
