@@ -192,7 +192,12 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
     }
 
     async fn end_session(&self, token: &str) -> AuthResult<()> {
-        self.delete_sessions_with_hooks(|row| row.token == token, true)
+        self.end_session_by_token_value(&token.into()).await
+    }
+
+    async fn end_session_by_token_value(&self, token: &crate::FieldValue) -> AuthResult<()> {
+        let (column, token) = self.memory_session_token_query(token.clone())?;
+        self.delete_sessions_with_hooks(|row| session_token_matches(row, &column, &token), true)
             .await
             .map(|_| ())
     }
@@ -434,20 +439,29 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
     }
 
     async fn delete_session(&self, token: &str) -> AuthResult<()> {
-        self.model_fields.begin_id_query(EntityRole::Session)?;
-        let session = self
-            .raw("session", "findOne", |state| {
-                Ok(state
-                    .sessions
-                    .first_ref(|row| row.token == token)?
-                    .map(SessionSource::Live))
-            })
-            .await?;
-        // A failed single-row snapshot prevents deletion, unlike a failed batch snapshot.
-        let Some(session) = (match session {
-            Some(row) => self.output_session(row).await.ok(),
-            None => None,
-        }) else {
+        self.delete_session_by_token_value(&token.into()).await
+    }
+
+    async fn delete_session_by_token_value(&self, token: &crate::FieldValue) -> AuthResult<()> {
+        let snapshot = async {
+            self.model_fields.begin_id_query(EntityRole::Session)?;
+            let (column, converted) = self.memory_session_token_query(token.clone())?;
+            let session = self
+                .raw("session", "findOne", |state| {
+                    Ok(state
+                        .sessions
+                        .first_ref(|row| session_token_matches(row, &column, &converted))?
+                        .map(SessionSource::Live))
+                })
+                .await?;
+            match session {
+                Some(row) => self.output_session(row).await.map(Some),
+                None => Ok(None),
+            }
+        }
+        .await;
+        // Upstream catches query and projection failures before single-row delete hooks.
+        let Some(session) = snapshot.ok().flatten() else {
             return Ok(());
         };
         let transaction = EphemeralTransaction {
@@ -468,8 +482,11 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
             }
         }
         self.model_fields.begin_id_query(EntityRole::Session)?;
+        let (column, converted) = self.memory_session_token_query(token.clone())?;
         self.raw("session", "delete", |state| {
-            let _ = state.sessions.remove_first(|row| row.token == token)?;
+            state
+                .sessions
+                .retain(|row| !session_token_matches(row, &column, &converted))?;
             Ok(())
         })
         .await?;
@@ -617,6 +634,7 @@ async fn invitation_fields_update_atomically_with_team_membership() {
     let invitation = store.create_invitation(input).await.unwrap();
     let session = store
         .create_session(CreateSession {
+            inherited_fields: Default::default(),
             additional_fields: Default::default(),
             user_id: "member".into(),
             expires_at: (Utc::now() + chrono::Duration::days(1)).into(),
@@ -697,4 +715,15 @@ async fn invitation_fields_update_atomically_with_team_membership() {
             .len(),
         1
     );
+}
+
+fn session_token_matches(row: &SessionView, column: &str, token: &crate::FieldValue) -> bool {
+    let fields = crate::FieldMap::from(row.clone());
+    crate::query::field_matches_equality(
+        fields
+            .get(column)
+            .or_else(|| fields.get("token"))
+            .unwrap_or(&crate::FieldValue::Undefined),
+        token,
+    )
 }

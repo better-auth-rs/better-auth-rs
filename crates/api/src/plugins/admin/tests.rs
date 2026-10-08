@@ -85,6 +85,7 @@ async fn test_custom_admin_role_can_use_permission_engine() {
 
     let admin_session = database
         .create_session(CreateSession {
+            inherited_fields: Default::default(),
             additional_fields: Default::default(),
             user_id: admin.id.clone(),
             expires_at: (Utc::now() + Duration::hours(24)).into(),

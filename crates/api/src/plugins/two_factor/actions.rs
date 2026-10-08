@@ -29,33 +29,18 @@ pub(super) async fn enable_core<S: better_auth_core::AuthSchema>(
                 message: "OTP is not available",
             });
         }
-        let updated = ctx
-            .database
-            .update_user(
-                user.id().typed()?,
-                UpdateUser {
-                    two_factor_enabled: Some(true),
-                    ..Default::default()
-                },
-            )
-            .await?;
-        let issued = issue_user_session(
+        let updated = update_two_factor_user(user, true, ctx)
+            .await?
+            .ok_or_else(|| AuthError::internal("Cannot read properties of null (reading 'id')"))?;
+        let _ = issue_factor_session(
+            req,
+            updated.id().into_owned(),
+            FieldMap::from(updated).into(),
+            current_session.field_values()?,
             ctx,
-            updated.id().typed()?,
-            current_session.ip_address().map(str::to_owned),
-            current_session.user_agent().map(str::to_owned),
         )
-        .await
-        .map_err(SessionIssueError::into_auth_error)?;
-        let manager = ctx.session_manager();
-        manager
-            .set_session_cookie(
-                req,
-                manager.internal_data(&issued.user, &issued.session).await?,
-                None,
-            )
-            .await?;
-        ctx.database.delete_session(current_session.token()).await?;
+        .await?;
+        delete_factor_session(current_session, ctx).await?;
         return Ok((
             EnableResponse {
                 method: "otp",
@@ -74,11 +59,11 @@ pub(super) async fn enable_core<S: better_auth_core::AuthSchema>(
     }
     let existing = ctx
         .database
-        .get_two_factor_by_user_id(user.id().typed()?)
+        .get_two_factor_by_user_id_value(&user.id().into_owned())
         .await?;
     if existing
         .as_ref()
-        .is_some_and(|factor| factor.verified != Some(false))
+        .is_some_and(|factor| !factor.verified.field_value().strict_equals(&false.into()))
     {
         return Err(AuthError::Upstream {
             status: 400,
@@ -91,66 +76,48 @@ pub(super) async fn enable_core<S: better_auth_core::AuthSchema>(
     let encrypted_backup_codes = config
         .backup_code_options
         .storage
-        .encode(&backup_codes, ctx.config.encryption_secret())
+        .encode(
+            &backup_codes
+                .iter()
+                .cloned()
+                .map(FieldValue::from)
+                .collect::<Vec<_>>()
+                .into(),
+            ctx.config.encryption_secret(),
+        )
         .await?;
     let secret = generate_secret();
     let encrypted_secret = encrypt_value(ctx.config.encryption_secret(), &secret)?;
 
     let set_cookie_headers = Vec::new();
     if config.skip_verification_on_enable {
-        let updated_user = ctx
-            .database
-            .update_user(
-                user.id().typed()?,
-                UpdateUser {
-                    two_factor_enabled: Some(true),
-                    ..Default::default()
-                },
-            )
-            .await?;
-        let issued = issue_user_session(
+        let updated_user = update_two_factor_user(user, true, ctx)
+            .await?
+            .ok_or_else(|| AuthError::internal("Cannot read properties of null (reading 'id')"))?;
+        let _ = issue_factor_session(
+            req,
+            updated_user.id().into_owned(),
+            FieldMap::from(updated_user).into(),
+            current_session.field_values()?,
             ctx,
-            updated_user.id().typed()?,
-            current_session.ip_address().map(str::to_owned),
-            current_session.user_agent().map(str::to_owned),
         )
-        .await
-        .map_err(SessionIssueError::into_auth_error)?;
-        let manager = ctx.session_manager();
-        manager
-            .set_session_cookie(
-                req,
-                manager.internal_data(&issued.user, &issued.session).await?,
-                None,
-            )
-            .await?;
-        ctx.database.delete_session(current_session.token()).await?;
+        .await?;
+        delete_factor_session(current_session, ctx).await?;
     }
 
+    let mut fields = FieldMap::from([
+        ("secret".into(), encrypted_secret.into()),
+        ("backupCodes".into(), encrypted_backup_codes),
+        ("verified".into(), config.skip_verification_on_enable.into()),
+    ]);
     if let Some(existing) = existing {
         let _ = ctx
             .database
-            .update_two_factor(
-                &existing.id,
-                better_auth_core::UpdateTwoFactor {
-                    additional_fields: Default::default(),
-                    secret: Some(encrypted_secret),
-                    backup_codes: Some(encrypted_backup_codes),
-                    verified: Some(config.skip_verification_on_enable),
-                },
-            )
+            .update_two_factor_record(&existing.id, fields)
             .await?;
     } else {
-        let _ = ctx
-            .database
-            .create_two_factor(CreateTwoFactor {
-                additional_fields: Default::default(),
-                user_id: user.id().typed()?.to_string(),
-                secret: encrypted_secret,
-                backup_codes: encrypted_backup_codes,
-                verified: config.skip_verification_on_enable,
-            })
-            .await?;
+        let _ = fields.insert("userId".into(), user.id().field_value());
+        let _ = ctx.database.create_two_factor_record(fields).await?;
     }
 
     let totp_uri = build_totp(
@@ -191,35 +158,21 @@ pub(super) async fn disable_core(
     )
     .await?;
 
-    let updated_user = ctx
-        .database
-        .update_user(
-            user.id().typed()?,
-            UpdateUser {
-                two_factor_enabled: Some(false),
-                ..Default::default()
-            },
-        )
+    let updated_user = update_two_factor_user(user, false, ctx)
+        .await?
+        .ok_or_else(|| AuthError::internal("Cannot read properties of null (reading 'id')"))?;
+    ctx.database
+        .delete_two_factor_by_user_id_value(&updated_user.id().into_owned())
         .await?;
-    ctx.database.delete_two_factor(user.id().typed()?).await?;
-
-    let issued = issue_user_session(
+    let _ = issue_factor_session(
+        req,
+        updated_user.id().into_owned(),
+        FieldMap::from(updated_user).into(),
+        current_session.field_values()?,
         ctx,
-        updated_user.id().typed()?,
-        current_session.ip_address().map(str::to_owned),
-        current_session.user_agent().map(str::to_owned),
     )
-    .await
-    .map_err(SessionIssueError::into_auth_error)?;
-    let manager = ctx.session_manager();
-    manager
-        .set_session_cookie(
-            req,
-            manager.internal_data(&issued.user, &issued.session).await?,
-            None,
-        )
-        .await?;
-    ctx.database.delete_session(current_session.token()).await?;
+    .await?;
+    delete_factor_session(current_session, ctx).await?;
 
     let mut set_cookie_headers = Vec::new();
 
@@ -251,7 +204,10 @@ pub(super) async fn get_totp_uri_core(
 ) -> AuthResult<TotpUriResponse> {
     require_totp(config)?;
     let two_factor = load_two_factor_record(user, ctx).await?;
-    let secret = decrypt_value(ctx.config.encryption_secret(), two_factor.secret())?;
+    let secret = crate::plugins::symmetric::decrypt_field(
+        ctx.config.encryption_secret(),
+        &two_factor.secret.field_value(),
+    )?;
     verify_user_password(
         ctx,
         user,
@@ -274,18 +230,26 @@ pub(super) async fn verify_totp_core(
     body: &VerifyTotpRequest,
     config: &TwoFactorConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<(SessionTokenResponse<UserView>, Vec<String>)> {
+) -> AuthResult<(SessionTokenResponse, Vec<String>)> {
     require_totp(config)?;
     let state = resolve_two_factor_state(req, ctx).await?;
     let two_factor = load_two_factor_record(state.user(), ctx).await?;
-    if state.is_sign_in() && two_factor.verified == Some(false) {
+    if state.is_sign_in()
+        && two_factor
+            .verified
+            .field_value()
+            .strict_equals(&false.into())
+    {
         return Err(AuthError::bad_request("TOTP not enabled"));
     }
     assert_not_locked(&state, &two_factor, &config.account_lockout, ctx).await?;
     let attempt = begin_attempt(&state, req, ctx).await?;
     let valid = (|| {
-        let secret = decrypt_value(ctx.config.encryption_secret(), two_factor.secret())?;
-        build_totp(config, &secret, None, state.user(), ctx)?
+        let secret = crate::plugins::symmetric::decrypt_field(
+            ctx.config.encryption_secret(),
+            &two_factor.secret.field_value(),
+        )?;
+        totp_verifier(config, &secret)
             .with_default_period()
             .check_current(&body.code)
     })();
@@ -302,17 +266,17 @@ pub(super) async fn verify_totp_core(
         return Err(AuthError::authentication_failed("Invalid code"));
     }
     reset_failures(&state, &two_factor, &config.account_lockout, ctx).await?;
-    let needs_enrollment = two_factor.verified != Some(true);
+    let needs_enrollment = !two_factor
+        .verified
+        .field_value()
+        .strict_equals(&true.into());
     let update_enrollment = async {
         if needs_enrollment {
             let _ = ctx
                 .database
-                .update_two_factor(
+                .update_two_factor_record(
                     &two_factor.id,
-                    better_auth_core::UpdateTwoFactor {
-                        verified: Some(true),
-                        ..Default::default()
-                    },
+                    FieldMap::from([("verified".into(), true.into())]),
                 )
                 .await?;
         }
@@ -332,6 +296,26 @@ pub(super) async fn verify_totp_core(
             .await
         }
         ResolvedTwoFactorState::Pending(pending) => {
+            if needs_enrollment
+                && !pending
+                    .user
+                    .field_values()?
+                    .get("twoFactorEnabled")
+                    .is_some_and(FieldValue::is_truthy)
+            {
+                let updated = update_two_factor_user(&pending.user, true, ctx).await?;
+                let _ = issue_factor_session(
+                    req,
+                    pending.user.id.clone(),
+                    updated.map_or(FieldValue::Null, |user| FieldMap::from(user).into()),
+                    FieldMap::new(),
+                    ctx,
+                )
+                .await?;
+                return Err(AuthError::internal(
+                    "Cannot read properties of null (reading 'token')",
+                ));
+            }
             update_enrollment.await?;
             finalize_pending_two_factor(pending, req, body.trust_device.unwrap_or(false), ctx).await
         }
@@ -381,7 +365,10 @@ pub(super) async fn send_otp_core<S: better_auth_core::AuthSchema>(
         .database
         .create_verification(CreateVerification {
             identifier: (identifier).into(),
-            value: (format!("{}:0", stored_otp)).into(),
+            value: SchemaValue::from_field(better_auth_core::query::field_add(
+                &stored_otp.display_utf16()?.into(),
+                &":0".into(),
+            )?),
             expires_at: (Utc::now()
                 + if config.otp_period.is_zero() {
                     Duration::minutes(3)
@@ -417,11 +404,11 @@ pub(super) async fn verify_otp_core(
     body: &VerifyOtpRequest,
     config: &TwoFactorConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<(SessionTokenResponse<UserView>, Vec<String>)> {
+) -> AuthResult<(SessionTokenResponse, Vec<String>)> {
     let state = resolve_two_factor_state(req, ctx).await?;
     let factor = if state.is_sign_in() {
         ctx.database
-            .get_two_factor_by_user_id(state.user().id().typed()?)
+            .get_two_factor_by_user_id_value(&state.user().id().into_owned())
             .await?
     } else {
         None
@@ -438,18 +425,12 @@ pub(super) async fn verify_otp_core(
         return Err(AuthError::bad_request("OTP has expired"));
     };
 
-    let value = verification.value.typed()?;
-    let mut parts = value.split(':');
-    let stored_otp = parts.next().unwrap_or_default();
-    let attempts = parts
-        .next()
-        .and_then(|counter| counter.parse::<usize>().ok())
-        .unwrap_or(0);
+    let (stored_otp, attempts) = split_otp_record(&verification.value.field_value())?;
     if attempts
         >= if config.otp_allowed_attempts == 0 {
-            5
+            5.0
         } else {
-            config.otp_allowed_attempts
+            config.otp_allowed_attempts as f64
         }
     {
         return Err(AuthError::bad_request(
@@ -459,17 +440,23 @@ pub(super) async fn verify_otp_core(
 
     let is_valid = config
         .otp_storage
-        .verify(stored_otp, &body.code, ctx.config.encryption_secret())
+        .verify(&stored_otp, &body.code, ctx.config.encryption_secret())
         .await?;
 
     if !is_valid {
-        let next_value = format!("{}:{}", stored_otp, attempts + 1);
+        let next_value = better_auth_core::query::field_add(
+            &stored_otp.display_utf16()?.into(),
+            &FieldValue::from(format!(
+                ":{}",
+                better_auth_core::schema_value::number_string(attempts + 1.0)
+            )),
+        )?;
         let expires_at = verification.expires_at.clone();
         _ = ctx
             .database
             .create_verification(CreateVerification {
                 identifier: (identifier).into(),
-                value: (next_value).into(),
+                value: SchemaValue::from_field(next_value),
                 expires_at,
                 ..Default::default()
             })
@@ -496,6 +483,18 @@ pub(super) async fn verify_otp_core(
             .await
         }
         ResolvedTwoFactorState::Pending(pending) => {
+            if !pending
+                .user
+                .field_values()?
+                .get("twoFactorEnabled")
+                .is_some_and(FieldValue::is_truthy)
+            {
+                return Err(AuthError::Upstream {
+                    status: 400,
+                    code: "FAILED_TO_CREATE_SESSION",
+                    message: "Failed to create session",
+                });
+            }
             finalize_pending_two_factor(pending, req, body.trust_device.unwrap_or(false), ctx).await
         }
     }
@@ -507,7 +506,11 @@ pub(super) async fn generate_backup_codes_core(
     config: &TwoFactorConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<BackupCodesResponse> {
-    if !user.two_factor_enabled() {
+    if !user
+        .field_values()?
+        .get("twoFactorEnabled")
+        .is_some_and(FieldValue::is_truthy)
+    {
         return Err(AuthError::bad_request("Two factor isn't enabled"));
     }
 
@@ -528,16 +531,21 @@ pub(super) async fn generate_backup_codes_core(
     let encrypted = config
         .backup_code_options
         .storage
-        .encode(&backup_codes, ctx.config.encryption_secret())
+        .encode(
+            &backup_codes
+                .iter()
+                .cloned()
+                .map(FieldValue::from)
+                .collect::<Vec<_>>()
+                .into(),
+            ctx.config.encryption_secret(),
+        )
         .await?;
     _ = ctx
         .database
-        .update_two_factor(
+        .update_two_factor_record(
             &two_factor.id,
-            better_auth_core::UpdateTwoFactor {
-                backup_codes: Some(encrypted),
-                ..Default::default()
-            },
+            FieldMap::from([("backupCodes".into(), encrypted)]),
         )
         .await?;
 
@@ -552,11 +560,11 @@ pub(super) async fn verify_backup_code_core(
     body: &VerifyBackupCodeRequest,
     config: &TwoFactorConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<(SessionTokenResponse<UserView>, Vec<String>)> {
+) -> AuthResult<(SessionTokenResponse, Vec<String>)> {
     let state = resolve_two_factor_state(req, ctx).await?;
     let two_factor = ctx
         .database
-        .get_two_factor_by_user_id(state.user().id().typed()?)
+        .get_two_factor_by_user_id_value(&state.user().id().into_owned())
         .await?
         .ok_or_else(|| AuthError::bad_request("Backup codes aren't enabled"))?;
     assert_not_locked(&state, &two_factor, &config.account_lockout, ctx).await?;
@@ -564,26 +572,30 @@ pub(super) async fn verify_backup_code_core(
     let decoded = match config
         .backup_code_options
         .storage
-        .decode(two_factor.backup_codes(), ctx.config.encryption_secret())
+        .decode(
+            &two_factor.backup_codes.field_value(),
+            ctx.config.encryption_secret(),
+        )
         .await
     {
+        Ok(codes) => options::remaining_backup_codes(&codes, &body.code),
+        Err(error) => {
+            finish_attempt(attempt, false, ctx).await;
+            return Err(error);
+        }
+    };
+    let decoded = match decoded {
         Ok(codes) => codes,
         Err(error) => {
             finish_attempt(attempt, false, ctx).await;
             return Err(error);
         }
     };
-    let Some(mut backup_codes) = decoded else {
+    let Some(backup_codes) = decoded else {
         finish_attempt(attempt, true, ctx).await;
         record_failure(&state, &two_factor, &config.account_lockout, ctx).await?;
         return Err(AuthError::authentication_failed("Invalid backup code"));
     };
-    if !backup_codes.contains(&body.code) {
-        finish_attempt(attempt, true, ctx).await;
-        record_failure(&state, &two_factor, &config.account_lockout, ctx).await?;
-        return Err(AuthError::authentication_failed("Invalid backup code"));
-    }
-    backup_codes.retain(|candidate| candidate != &body.code);
 
     let encrypted = config
         .backup_code_options
@@ -594,8 +606,8 @@ pub(super) async fn verify_backup_code_core(
         .database
         .compare_exchange_two_factor_backup_codes(
             &two_factor.id,
-            &two_factor.backup_codes,
-            &encrypted,
+            &two_factor.backup_codes.field_value(),
+            encrypted,
         )
         .await?
     {
@@ -610,7 +622,11 @@ pub(super) async fn verify_backup_code_core(
             if body.disable_session.unwrap_or(false) {
                 Ok((
                     SessionTokenResponse {
-                        token: Some(session.token().to_string()),
+                        token: session
+                            .field_values()?
+                            .get("token")
+                            .cloned()
+                            .unwrap_or_default(),
                         user: ctx.user_view(&user).await?,
                     },
                     Vec::new(),
@@ -631,7 +647,7 @@ pub(super) async fn verify_backup_code_core(
             if body.disable_session.unwrap_or(false) {
                 return Ok((
                     SessionTokenResponse {
-                        token: None,
+                        token: FieldValue::Undefined,
                         user: ctx.user_view(&pending.user).await?,
                     },
                     Vec::new(),
@@ -646,17 +662,20 @@ pub(super) async fn view_backup_codes_core<S: better_auth_core::AuthSchema>(
     user_id: &str,
     config: &BackupCodeOptions,
     ctx: &AuthContext<S>,
-) -> AuthResult<Vec<String>> {
+) -> AuthResult<FieldValue> {
     let two_factor = ctx
         .database
         .get_two_factor_by_user_id(user_id)
         .await?
         .ok_or_else(|| AuthError::bad_request("Backup codes aren't enabled"))?;
-    let Some(backup_codes) = config
+    let backup_codes = config
         .storage
-        .decode(two_factor.backup_codes(), ctx.config.encryption_secret())
-        .await?
-    else {
+        .decode(
+            &two_factor.backup_codes.field_value(),
+            ctx.config.encryption_secret(),
+        )
+        .await?;
+    if !backup_codes.is_truthy() {
         return Err(AuthError::bad_request("Invalid backup code"));
     };
     Ok(backup_codes)

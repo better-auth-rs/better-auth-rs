@@ -58,11 +58,11 @@ async fn secondary_two_factor_fields_forward_policies_and_atomic_operations() ->
 }
 
 #[tokio::test]
-async fn two_factor_additional_fields_reject_native_names_and_physical_aliases() {
-    for (name, column) in [
-        ("secret", None),
-        ("createdAt", None),
-        ("label", Some("stored_secret")),
+async fn two_factor_fields_accept_native_replacements_and_require_physical_columns() {
+    for (name, column, accepted) in [
+        ("secret", None, true),
+        ("createdAt", None, false),
+        ("label", Some("stored_secret"), true),
     ] {
         let (store, _) = fixture::sqlite(contract::config()).await;
         let fields = UserConfig {
@@ -83,9 +83,13 @@ async fn two_factor_additional_fields_reject_native_names_and_physical_aliases()
             .plugin(contract::Fields(fields))
             .build()
             .await;
-        assert!(
-            matches!(result, Err(AuthError::Config(_))),
-            "{name}/{column:?}"
-        );
+        if accepted {
+            assert!(result.is_ok(), "{name}/{column:?}");
+        } else {
+            assert!(
+                matches!(result, Err(AuthError::Config(_))),
+                "{name}/{column:?}"
+            );
+        }
     }
 }

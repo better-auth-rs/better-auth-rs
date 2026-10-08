@@ -40,6 +40,7 @@ async fn run<S: AuthSchema>(
             .await?;
         let session = store
             .create_session(CreateSession {
+                inherited_fields: Default::default(),
                 additional_fields: Default::default(),
                 user_id: user.id.clone(),
                 expires_at: (if expired && name == "a" {

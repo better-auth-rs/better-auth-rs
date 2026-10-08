@@ -25,6 +25,7 @@ impl PreparedSessionCreate {
         secondary_only: bool,
     ) -> AuthResult<Self> {
         let _ = input.additional_fields.remove("id");
+        let _ = input.inherited_fields.remove("id");
         let mut fields = FieldMap::new();
         if secondary_only {
             let id = config
@@ -52,6 +53,7 @@ impl PreparedSessionCreate {
                 let _ = fields.insert(name.into(), value.into());
             }
         }
+        fields.extend(input.inherited_fields);
         fields.extend(input.additional_fields.clone());
         fields.extend([
             ("expiresAt".into(), input.expires_at.into()),
@@ -191,4 +193,74 @@ pub fn session_from_create_fields(fields: FieldMap) -> AuthResult<SessionView> {
     let mut session = SessionView::from_field_values(fields)?;
     session.active = true;
     Ok(session)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{FieldDate, FieldValue, user_fields::UserFieldConfig};
+
+    #[test]
+    fn inherited_session_fields_keep_order_but_yield_to_native_defaults_and_overrides()
+    -> AuthResult<()> {
+        let mut config = AuthConfig::new("session-inheritance-secret-at-least-32");
+        let _ = config.session.fields_mut().insert(
+            "marker".into(),
+            UserFieldConfig {
+                default_value: Some("default".into()),
+                ..Default::default()
+            },
+        );
+        let inherited: FieldMap = [
+            ("id".into(), "old-id".into()),
+            ("token".into(), "old-token".into()),
+            ("userId".into(), "old-user".into()),
+            ("marker".into(), "old-marker".into()),
+            (
+                "sameObject".into(),
+                FieldMap::from([("value".into(), 1.into())]).into(),
+            ),
+            ("ownUndefined".into(), FieldValue::Undefined),
+        ]
+        .into();
+        let input = crate::CreateSession {
+            inherited_fields: inherited.clone(),
+            additional_fields: [("ownUndefined".into(), FieldValue::Null)].into(),
+            user_id: "new-user".into(),
+            expires_at: FieldDate::from_milliseconds(100.0),
+            ip_address: None,
+            user_agent: None,
+            impersonated_by: None,
+            active_organization_id: None,
+        };
+        let (original, actual) = PreparedSessionCreate::new(input, &config, false)?.into_parts();
+        assert_eq!(original, actual);
+        assert!(!actual.contains_key("id"));
+        assert_eq!(actual.get("userId"), Some(&"new-user".into()));
+        assert_ne!(actual.get("token"), Some(&"old-token".into()));
+        assert_eq!(actual.get("marker"), Some(&"default".into()));
+        assert_eq!(actual.get("ownUndefined"), Some(&FieldValue::Null));
+        assert!(
+            actual
+                .get("sameObject")
+                .zip(inherited.get("sameObject"))
+                .is_some_and(|(left, right)| left.strict_equals(right))
+        );
+        assert_eq!(
+            actual.keys().map(String::as_str).collect::<Vec<_>>(),
+            [
+                "ipAddress",
+                "userAgent",
+                "token",
+                "userId",
+                "marker",
+                "sameObject",
+                "ownUndefined",
+                "expiresAt",
+                "createdAt",
+                "updatedAt"
+            ]
+        );
+        Ok(())
+    }
 }

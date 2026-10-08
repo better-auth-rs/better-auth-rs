@@ -215,6 +215,7 @@ async fn scenario<S: AuthSchema>(
         .await?;
     let session = store
         .create_session(CreateSession {
+            inherited_fields: Default::default(),
             user_id: "owner".into(),
             expires_at: date("2099-01-01T00:00:00Z")?,
             active_organization_id: Some("org".into()),

@@ -14,6 +14,7 @@ fn event(events: &Events, value: impl Into<String>) -> AuthResult<()> {
 
 fn input(label: Option<&str>) -> AuthResult<CreateSession> {
     Ok(CreateSession {
+        inherited_fields: Default::default(),
         user_id: "owner".into(),
         expires_at: "2031-01-02T03:04:05Z"
             .parse::<chrono::DateTime<chrono::Utc>>()

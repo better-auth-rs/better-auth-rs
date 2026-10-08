@@ -364,14 +364,7 @@ impl DeviceCodeStore for EphemeralStore {
     }
 
     async fn delete_device_code(&self, id: &crate::SchemaValue<String>) -> AuthResult<()> {
-        let id = self.plugin_query_value(EntityRole::DeviceCode, "id", id.field_value())?;
-        self.raw("deviceCode", "delete", |state| {
-            let _ = state
-                .device_codes
-                .remove_first(|row| crate::query::field_matches_equality(value(row, "id"), &id))?;
-            Ok(())
-        })
-        .await
+        self.delete_plugin_records(EntityRole::DeviceCode, id).await
     }
 
     async fn delete_device_code_if_status(
@@ -383,13 +376,12 @@ impl DeviceCodeStore for EphemeralStore {
         let status = self.plugin_query_value(EntityRole::DeviceCode, "status", status.into())?;
         let column = self.device_column("status");
         self.raw("deviceCode", "delete", |state| {
-            Ok(state
-                .device_codes
-                .remove_first(|row| {
-                    crate::query::field_matches_equality(value(row, "id"), &id)
-                        && crate::query::field_matches_equality(value(row, &column), &status)
-                })?
-                .is_some())
+            let before = state.device_codes.len();
+            state.device_codes.retain(|row| {
+                !(crate::query::field_matches_equality(value(row, "id"), &id)
+                    && crate::query::field_matches_equality(value(row, &column), &status))
+            })?;
+            Ok(state.device_codes.len() != before)
         })
         .await
     }

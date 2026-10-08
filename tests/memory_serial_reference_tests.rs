@@ -147,6 +147,7 @@ async fn memory_reference_fields_match_pinned_conversion_and_callback_values() {
             "session" => {
                 let row = store
                     .create_session(CreateSession {
+                        inherited_fields: Default::default(),
                         user_id: "1".into(),
                         expires_at,
                         additional_fields: extras,

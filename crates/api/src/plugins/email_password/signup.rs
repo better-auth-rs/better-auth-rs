@@ -256,6 +256,7 @@ pub(super) async fn sign_up_core<S: AuthSchema>(
                 if auto_sign_in {
                     let session = tx
                         .create_session(CreateSession {
+                            inherited_fields: Default::default(),
                             additional_fields: Default::default(),
                             user_id: user.id().into_owned(),
                             expires_at: (chrono::Utc::now() + expires_in).into(),

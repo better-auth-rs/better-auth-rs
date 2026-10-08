@@ -12,6 +12,7 @@ impl State {
             EntityRole::ApiKey => Ok(&self.api_keys),
             EntityRole::Passkey => Ok(&self.passkeys),
             EntityRole::DeviceCode => Ok(&self.device_codes),
+            EntityRole::TwoFactor => Ok(&self.two_factors),
             _ => Err(AuthError::config(format!(
                 "Plugin record storage is not implemented for {role:?}"
             ))),
@@ -23,6 +24,7 @@ impl State {
             EntityRole::ApiKey => Ok(&mut self.api_keys),
             EntityRole::Passkey => Ok(&mut self.passkeys),
             EntityRole::DeviceCode => Ok(&mut self.device_codes),
+            EntityRole::TwoFactor => Ok(&mut self.two_factors),
             _ => Err(AuthError::config(format!(
                 "Plugin record storage is not implemented for {role:?}"
             ))),
@@ -35,6 +37,7 @@ fn model(role: EntityRole) -> AuthResult<&'static str> {
         EntityRole::ApiKey => Ok("apikey"),
         EntityRole::Passkey => Ok("passkey"),
         EntityRole::DeviceCode => Ok("deviceCode"),
+        EntityRole::TwoFactor => Ok("twoFactor"),
         _ => Err(AuthError::config(format!(
             "Plugin record storage is not implemented for {role:?}"
         ))),
@@ -226,20 +229,37 @@ impl EphemeralStore {
         let mut patch = self.prepare_plugin_fields(role, input, false).await?;
         patch.extend(internal);
         self.raw(model(role)?, "update", |state| {
-            let Some(source) = state.plugin_rows(role)?.first_ref(|row| {
+            let matches = state.plugin_rows(role)?.select_refs(|row| {
                 crate::query::field_matches_equality(
                     row.get("id").unwrap_or(&FieldValue::Undefined),
                     &id,
                 )
-            })?
-            else {
-                return Ok(None);
-            };
-            source.write(|row| {
-                row.extend(patch);
-                Ok(())
             })?;
-            Ok(Some(source))
+            for source in &matches {
+                source.write(|row| {
+                    row.extend(patch.clone());
+                    Ok(())
+                })?;
+            }
+            Ok(matches.into_iter().next())
+        })
+        .await
+    }
+
+    pub(super) async fn delete_plugin_records(
+        &self,
+        role: EntityRole,
+        id: &SchemaValue<String>,
+    ) -> AuthResult<()> {
+        let id = self.plugin_query_value(role, "id", id.field_value())?;
+        self.raw(model(role)?, "delete", |state| {
+            state.plugin_rows_mut(role)?.retain(|row| {
+                !crate::query::field_matches_equality(
+                    row.get("id").unwrap_or(&FieldValue::Undefined),
+                    &id,
+                )
+            })?;
+            Ok(())
         })
         .await
     }

@@ -553,6 +553,7 @@ mod tests {
         .await;
 
         let create_session2 = CreateSession {
+            inherited_fields: Default::default(),
             additional_fields: Default::default(),
             user_id: user.id.clone(),
             expires_at: (Utc::now() + Duration::hours(24)).into(),
@@ -591,6 +592,7 @@ mod tests {
         ctx.set_metadata("admin.enabled", serde_json::Value::Bool(true));
 
         let direct_session = CreateSession {
+            inherited_fields: Default::default(),
             additional_fields: Default::default(),
             user_id: user.id.clone(),
             expires_at: (Utc::now() + Duration::hours(24)).into(),
@@ -602,6 +604,7 @@ mod tests {
         ctx.database.create_session(direct_session).await.unwrap();
 
         let impersonated_session = CreateSession {
+            inherited_fields: Default::default(),
             additional_fields: Default::default(),
             user_id: user.id.clone(),
             expires_at: (Utc::now() + Duration::hours(24)).into(),
@@ -650,6 +653,7 @@ mod tests {
         .await;
 
         let create_session2 = CreateSession {
+            inherited_fields: Default::default(),
             additional_fields: Default::default(),
             user_id: user.id.clone(),
             expires_at: (Utc::now() + Duration::hours(24)).into(),
@@ -696,6 +700,7 @@ mod tests {
         let user2 = ctx.database.create_user(create_user2).await.unwrap();
 
         let create_session2 = CreateSession {
+            inherited_fields: Default::default(),
             additional_fields: Default::default(),
             user_id: user2.id,
             expires_at: (Utc::now() + Duration::hours(24)).into(),
@@ -741,6 +746,7 @@ mod tests {
         .await;
 
         let create_session2 = CreateSession {
+            inherited_fields: Default::default(),
             additional_fields: Default::default(),
             user_id: user.id.clone(),
             expires_at: (Utc::now() + Duration::hours(24)).into(),

@@ -4,11 +4,10 @@ use super::*;
 mod duration_tests;
 
 impl AccountLockout {
-    fn locked_until(&self, now: chrono::DateTime<Utc>) -> AuthResult<chrono::DateTime<Utc>> {
-        better_auth_core::utils::date::from_milliseconds(
+    fn locked_until(&self, now: chrono::DateTime<Utc>) -> better_auth_core::FieldDate {
+        better_auth_core::FieldDate::from_milliseconds(
             now.timestamp_millis() as f64 + self.duration_seconds * 1000.0,
         )
-        .ok_or_else(|| AuthError::config("Account lockout expiration is out of range"))
     }
 }
 
@@ -21,8 +20,11 @@ pub(super) async fn assert_not_locked(
     if !state.is_sign_in() || !config.enabled {
         return Ok(());
     }
-    if let Some(until) = &factor.locked_until {
-        if until.milliseconds() > Utc::now().timestamp_millis() as f64 {
+    let until = factor.locked_until.field_value();
+    if until.is_truthy() {
+        if better_auth_core::query::field_date(&until)?.milliseconds()
+            > Utc::now().timestamp_millis() as f64
+        {
             return Err(AuthError::Upstream {
                 status: 429,
                 code: "ACCOUNT_TEMPORARILY_LOCKED",
@@ -30,7 +32,7 @@ pub(super) async fn assert_not_locked(
             });
         }
         ctx.database
-            .reset_two_factor_failures(&factor.id, Some(Utc::now()))
+            .reset_two_factor_failures(&factor.id, Some(Utc::now().into()))
             .await?;
     }
     Ok(())
@@ -45,7 +47,7 @@ pub(super) async fn record_failure(
     if state.is_sign_in() && config.enabled {
         ctx.database
             .record_two_factor_failure(&factor.id, config.max_failed_attempts, &|| {
-                config.locked_until(Utc::now())
+                Ok(config.locked_until(Utc::now()))
             })
             .await?;
     }
@@ -96,12 +98,13 @@ pub(super) async fn begin_attempt<S: better_auth_core::AuthSchema>(
         }
     }
     .ok_or_else(|| AuthError::authentication_failed("Invalid two factor cookie"))?;
-    let attempts = consumed
-        .value
-        .display_string()?
-        .parse::<usize>()
-        .unwrap_or(CHALLENGE_ATTEMPT_LIMIT);
-    if attempts >= CHALLENGE_ATTEMPT_LIMIT {
+    let parsed = better_auth_core::query::field_number(&consumed.value.field_value())?;
+    let attempts = if parsed.is_finite() && parsed.fract() == 0.0 && parsed >= 0.0 {
+        parsed
+    } else {
+        CHALLENGE_ATTEMPT_LIMIT as f64
+    };
+    if attempts >= CHALLENGE_ATTEMPT_LIMIT as f64 {
         let invalidation = ctx
             .database
             .consume_verification_by_identifier(&pending.key)
@@ -127,8 +130,8 @@ pub(super) async fn begin_attempt<S: better_auth_core::AuthSchema>(
     }
     Ok(Some(ChallengeAttempt {
         identifier,
-        failures: attempts,
-        expires_at: consumed.expires_at.clone(),
+        failures: attempts as usize,
+        expires_at: pending.expires_at.clone(),
     }))
 }
 

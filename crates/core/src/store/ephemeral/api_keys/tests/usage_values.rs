@@ -144,3 +144,69 @@ async fn memory_usage_binds_replaced_guards_and_applies_set_after_increment() ->
     assert_eq!(only_row(&store)?, expected);
     Ok(())
 }
+
+#[tokio::test]
+async fn multi_match_update_and_atomic_usage_keep_distinct_targets() -> AuthResult<()> {
+    let store = EphemeralStore::default();
+    for remaining in [0.0, 2.0, 3.0] {
+        let _ = store
+            .create_api_key_record(
+                [
+                    ("id".into(), "shared".into()),
+                    ("remaining".into(), remaining.into()),
+                ]
+                .into(),
+            )
+            .await?;
+    }
+    let id = "shared".to_owned().into();
+    let result = store
+        .write_api_key_usage(&id, ApiKeyUsageWrite::Decrement)
+        .await?
+        .ok_or_else(|| AuthError::internal("The second matching row must consume quota"))?;
+    assert_eq!(result.remaining.field_value(), 1.0.into());
+    let remaining = || -> AuthResult<Vec<FieldValue>> {
+        Ok(store
+            .plugin_storage_rows(EntityRole::ApiKey)?
+            .iter()
+            .map(|row| row.get("remaining").cloned().unwrap_or_default())
+            .collect())
+    };
+    assert_eq!(remaining()?, [0.0.into(), 1.0.into(), 3.0.into()]);
+    let _ = store
+        .update_api_key_record(&id, [("remaining".into(), 8.0.into())].into())
+        .await?;
+    assert_eq!(remaining()?, [8.0.into(), 8.0.into(), 8.0.into()]);
+    store.delete_api_key(&id).await?;
+    assert!(remaining()?.is_empty());
+    Ok(())
+}
+
+#[tokio::test]
+async fn atomic_usage_finishes_guard_evaluation_before_any_write() -> AuthResult<()> {
+    let store = EphemeralStore::default();
+    for remaining in [
+        2.0.into(),
+        FieldValue::from(FieldMap::from([
+            ("valueOf".into(), false.into()),
+            ("toString".into(), false.into()),
+        ])),
+    ] {
+        let _ = store
+            .create_api_key_record(
+                [
+                    ("id".into(), "shared".into()),
+                    ("remaining".into(), remaining),
+                ]
+                .into(),
+            )
+            .await?;
+    }
+    let before = store.plugin_storage_rows(EntityRole::ApiKey)?;
+    let result = store
+        .write_api_key_usage(&"shared".to_owned().into(), ApiKeyUsageWrite::Decrement)
+        .await;
+    assert!(result.is_err());
+    assert_eq!(store.plugin_storage_rows(EntityRole::ApiKey)?, before);
+    Ok(())
+}

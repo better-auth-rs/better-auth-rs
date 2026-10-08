@@ -383,6 +383,7 @@ impl<S: AuthSchema> Registration<S> {
                 .await
                 .map_err(crate::plugins::helpers::SessionIssueError::into_auth_error)?;
             let input = CreateSession {
+                inherited_fields: Default::default(),
                 additional_fields: Default::default(),
                 user_id,
                 expires_at: (Utc::now() + self.ctx.config.session.expires_in()).into(),

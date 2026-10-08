@@ -245,6 +245,7 @@ where
             let _ = S::Session::parse_user_id(user_id)?;
         }
         let input = CreateSession {
+            inherited_fields: Default::default(),
             user_id: prepared.user_id,
             expires_at: prepared.expires_at,
             ip_address: prepared.ip_address,
@@ -510,7 +511,15 @@ where
     }
 
     async fn end_session(&self, token: &str) -> AuthResult<()> {
-        let condition = Condition::all().add(S::Session::token_column().eq(token));
+        self.end_session_by_token_value(&token.into()).await
+    }
+
+    async fn end_session_by_token_value(
+        &self,
+        token: &better_auth_core::FieldValue,
+    ) -> AuthResult<()> {
+        self.model_fields.begin_id_query(EntityRole::Session)?;
+        let condition = Condition::all().add(self.session_token_filter(token)?);
         self.delete_sessions_with_connection(self.connection(), None, condition, true)
             .await
             .map(|_| ())
@@ -777,13 +786,20 @@ where
     }
 
     async fn delete_session(&self, token: &str) -> AuthResult<()> {
+        self.delete_session_by_token_value(&token.into()).await
+    }
+
+    async fn delete_session_by_token_value(
+        &self,
+        token: &better_auth_core::FieldValue,
+    ) -> AuthResult<()> {
         self.model_fields.begin_id_query(EntityRole::Session)?;
         let snapshot = database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
             self.config(),
             "findOne",
             async {
                 <S::Session as SeaOrmSessionModel>::Entity::find()
-                    .filter(S::Session::token_column().eq(token))
+                    .filter(self.session_token_filter(token)?)
                     .one(self.connection())
                     .await
                     .map_err(map_db_err)
@@ -818,7 +834,7 @@ where
             "delete",
             async {
                 <S::Session as SeaOrmSessionModel>::Entity::delete_many()
-                    .filter(S::Session::token_column().eq(token))
+                    .filter(self.session_token_filter(token)?)
                     .exec(self.connection())
                     .await
                     .map_err(map_db_err)

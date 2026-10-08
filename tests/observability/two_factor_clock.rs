@@ -42,7 +42,7 @@ async fn check(store: &impl TwoFactorStore, collection: &str) -> AuthResult<()> 
         serde_json::from_str(include_str!("../fixtures/account-lockout-clock-1.7.6.json"))?;
     let factor = store
         .create_two_factor(CreateTwoFactor {
-            additional_fields: Default::default(),
+            additional_fields: [("lockedUntil".into(), FieldValue::Null)].into(),
             user_id: "ordinary-clock".into(),
             secret: "ordinary-secret".into(),
             backup_codes: "ordinary-codes".into(),
@@ -67,6 +67,7 @@ async fn check(store: &impl TwoFactorStore, collection: &str) -> AuthResult<()> 
                     "clock.milliseconds" = now
                 );
                 better_auth_core::utils::date::from_milliseconds(now as f64 + duration * 1000.0)
+                    .map(Into::into)
                     .ok_or_else(|| AuthError::config("Fixed deadline is out of range"))
             })
             .instrument(capture.span())
@@ -83,7 +84,7 @@ async fn check(store: &impl TwoFactorStore, collection: &str) -> AuthResult<()> 
             case["name"]
         );
         assert_eq!(
-            json!({"failedVerificationCount":stored.failed_verification_count,"lockedUntil":stored.locked_until.map_or(FieldValue::Null, FieldValue::Date).json()?}),
+            json!({"failedVerificationCount":stored.failed_verification_count,"lockedUntil":stored.locked_until.json()?}),
             case["stored"],
             "{}",
             case["name"]
@@ -92,7 +93,7 @@ async fn check(store: &impl TwoFactorStore, collection: &str) -> AuthResult<()> 
 
     let factor = store
         .create_two_factor(CreateTwoFactor {
-            additional_fields: Default::default(),
+            additional_fields: [("lockedUntil".into(), FieldValue::Null)].into(),
             user_id: "ordinary-deadline-error".into(),
             secret: "ordinary-secret".into(),
             backup_codes: "ordinary-codes".into(),
@@ -125,8 +126,8 @@ async fn check(store: &impl TwoFactorStore, collection: &str) -> AuthResult<()> 
         .get_two_factor_by_user_id("ordinary-deadline-error")
         .await?
         .expect("created factor remains");
-    assert_eq!(stored.failed_verification_count, Some(1));
-    assert!(stored.locked_until.is_none());
+    assert_eq!(stored.failed_verification_count, Some(1.0));
+    assert!(stored.locked_until.typed()?.is_none());
     Ok(())
 }
 

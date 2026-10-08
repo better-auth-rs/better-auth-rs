@@ -109,6 +109,7 @@ impl<S: AuthSchema> DatabaseHooks<S> for Hooks {
 
 fn session(user_id: better_auth_core::SchemaValue<String>) -> CreateSession {
     CreateSession {
+        inherited_fields: Default::default(),
         user_id,
         expires_at: (Utc::now() + Duration::hours(1)).into(),
         ip_address: None,

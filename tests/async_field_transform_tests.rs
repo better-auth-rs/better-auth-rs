@@ -208,6 +208,7 @@ async fn check_writes<S: AuthSchema>(store: &impl AuthStore<S>, gate: &Gate) -> 
     let session = drive(
         gate,
         store.create_session(CreateSession {
+            inherited_fields: Default::default(),
             user_id: id.clone().into(),
             expires_at: (chrono::Utc::now() + chrono::Duration::hours(1)).into(),
             ip_address: None,

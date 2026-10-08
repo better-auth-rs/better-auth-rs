@@ -354,16 +354,16 @@ async fn memory_native_declarations_preserve_storage_and_public_values() -> Test
             let ttl = observed
                 .iter()
                 .find_map(|event| match event {
-                    Event::Set(key, _, Some(ttl)) if key == initial_token => Some(*ttl),
+                    Event::Set(key, _, Some(ttl)) if key.as_str() == Some(initial_token) => {
+                        Some(*ttl)
+                    }
                     _ => None,
                 })
                 .ok_or("Original token cache write is missing")?;
             let expires = date(EXPIRY)?.milliseconds() as i64;
-            assert!(
-                (u64::try_from((expires - finished).div_euclid(1000))?
-                    ..=u64::try_from((expires - started).div_euclid(1000))?)
-                    .contains(&ttl)
-            );
+            let minimum = (expires - finished).div_euclid(1000) as f64;
+            let maximum = (expires - started).div_euclid(1000) as f64;
+            assert!((minimum..=maximum).contains(&ttl));
             let references = json!([{"token": initial_token, "expiresAt": expires}]);
             let payload = json!({"session": expected.json()?, "user": owner_json()});
             expected_events.extend([

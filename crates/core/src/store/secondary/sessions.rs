@@ -11,6 +11,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 use std::collections::HashSet;
 
+mod deletion;
+
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct SessionReference {
@@ -582,60 +584,15 @@ impl<S: AuthSchema> SessionStore<S> for SecondaryStore<S> {
     }
 
     async fn delete_session(&self, token: &str) -> AuthResult<()> {
-        if self.storage.is_none() {
-            return self.inner.delete_session(token).await;
-        }
-        let cached = self.secondary()?.get(token).await?;
-        if cached
-            .as_ref()
-            .map(|value| FieldValue::from_json(value.clone()))
-            .transpose()?
-            .is_some_and(|value| value.is_truthy())
-        {
-            let cached = decode(cached);
-            if let Some(user_id) = cached
-                .as_ref()
-                .and_then(|cached| cached.get("session"))
-                .and_then(|session| session.get("userId"))
-                .and_then(Value::as_str)
-            {
-                let references = self
-                    .secondary()?
-                    .get(&format!("active-sessions-{user_id}"))
-                    .await?;
-                if references
-                    .as_ref()
-                    .map(|value| FieldValue::from_json(value.clone()))
-                    .transpose()?
-                    .is_some_and(|value| value.is_truthy())
-                {
-                    let mut references: Vec<SessionReference> = decode(references)
-                        .and_then(|value| serde_json::from_value(value).ok())
-                        .unwrap_or_default();
-                    references.retain(|reference| {
-                        reference.token != token
-                            && reference.expires_at > Utc::now().timestamp_millis()
-                    });
-                    self.write_references(user_id, references).await?;
-                } else {
-                    crate::observability::logger::current()
-                        .error("Active sessions list not found in secondary storage", &[]);
-                }
-            } else {
-                crate::observability::logger::current()
-                    .error("Session not found in secondary storage", &[]);
-                return Ok(());
-            }
-        }
-        self.secondary()?.delete(token).await?;
-        if !self.database_sessions() {
-            return Ok(());
-        }
-        if self.config.session.preserve_session_in_database() {
-            self.inner.end_session(token).await
-        } else {
-            self.inner.delete_session(token).await
-        }
+        self.delete_session_by_token_value(&token.into()).await
+    }
+
+    async fn delete_session_by_token_value(&self, token: &FieldValue) -> AuthResult<()> {
+        self.delete_runtime_session(token).await
+    }
+
+    async fn end_session_by_token_value(&self, token: &FieldValue) -> AuthResult<()> {
+        self.inner.end_session_by_token_value(token).await
     }
 
     async fn delete_sessions(&self, tokens: &[String]) -> AuthResult<()> {

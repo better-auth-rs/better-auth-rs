@@ -36,12 +36,31 @@ use hmac::{Hmac, Mac};
 use sha2::Sha256;
 
 /// Sign a cookie value using the upstream HMAC-SHA256 format.
-#[expect(clippy::expect_used, reason = "HMAC-SHA256 accepts every key length")]
 pub fn sign_cookie_value_raw(value: &str, secret: &str) -> String {
+    format!("{value}.{}", cookie_signature(value.as_bytes(), secret))
+}
+
+#[expect(clippy::expect_used, reason = "HMAC-SHA256 accepts every key length")]
+fn cookie_signature(value: &[u8], secret: &str) -> String {
     let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes())
         .expect("HMAC-SHA256 accepts every key length");
-    mac.update(value.as_bytes());
-    format!("{value}.{}", STANDARD.encode(mac.finalize().into_bytes()))
+    mac.update(value);
+    STANDARD.encode(mac.finalize().into_bytes())
+}
+
+fn sign_native_cookie_value(value: &crate::FieldValue, secret: &str) -> AuthResult<String> {
+    // TextEncoder defaults undefined to empty text; template interpolation retains "undefined".
+    let signing_text = if value.is_undefined() {
+        String::new()
+    } else {
+        String::from_utf16_lossy(value.display_utf16()?.as_utf16())
+    };
+    let signature = cookie_signature(signing_text.as_bytes(), secret);
+    let text = value
+        .display_utf16()?
+        .to_utf8()
+        .map_err(|_| AuthError::internal("URI malformed"))?;
+    Ok(encode_cookie_value(&format!("{text}.{signature}")))
 }
 
 /// Sign and percent-encode a cookie value for an HTTP response.
@@ -166,17 +185,25 @@ pub fn create_session_cookies(
 }
 
 pub(crate) fn session_cookie_headers<'a>(
-    token: &'a str,
+    token: &str,
     dont_remember: bool,
     config: &'a AuthConfig,
 ) -> impl Iterator<Item = AuthResult<String>> + 'a {
+    native_session_cookie_headers(token.into(), dont_remember, config)
+}
+
+pub(crate) fn native_session_cookie_headers(
+    token: crate::FieldValue,
+    dont_remember: bool,
+    config: &AuthConfig,
+) -> impl Iterator<Item = AuthResult<String>> + '_ {
     // Build each header only when requested so a later failure retains earlier writes.
     std::iter::once_with(move || {
-        create_session_cookie_with_max_age(
-            Some(token),
-            (!dont_remember).then_some(config.session.expires_in().as_seconds_f64()),
-            config,
-        )
+        let signed = sign_native_cookie_value(&token, config.signing_secret())?;
+        let mut resolved = config.auth_cookie("session_token", Default::default());
+        resolved.attributes.max_age =
+            (!dont_remember).then_some(config.session.expires_in().as_seconds_f64());
+        render_cookie(&signed, &resolved)
     })
     .chain(dont_remember.then_some(()).into_iter().map(move |()| {
         create_session_like_cookie(
@@ -420,3 +447,50 @@ mod cache_cleanup_tests;
 #[cfg(test)]
 #[path = "cookie_utils/mutation_tests.rs"]
 mod mutation_tests;
+
+#[cfg(test)]
+mod native_cookie_tests {
+    use super::*;
+    use crate::{FieldMap, FieldValue, Utf16String};
+
+    #[test]
+    fn native_cookie_tokens_use_text_encoder_then_template_interpolation() -> AuthResult<()> {
+        let secret = "native-cookie-signing-secret";
+        for (value, text) in [
+            (7.into(), "7"),
+            (FieldValue::Null, "null"),
+            (false.into(), "false"),
+            (vec![7.into(), 8.into()].into(), "7,8"),
+            ("".into(), ""),
+        ] {
+            assert_eq!(
+                sign_native_cookie_value(&value, secret)?,
+                sign_cookie_value(text, secret)
+            );
+        }
+        let empty = sign_cookie_value_raw("", secret);
+        assert_eq!(
+            sign_native_cookie_value(&FieldValue::Undefined, secret)?,
+            encode_cookie_value(&format!("undefined{empty}"))
+        );
+        assert!(
+            sign_native_cookie_value(
+                &FieldValue::from(Utf16String::from_units(vec![0xd800])),
+                secret
+            )
+            .is_err()
+        );
+        assert!(
+            sign_native_cookie_value(
+                &FieldMap::from([
+                    ("toString".into(), false.into()),
+                    ("valueOf".into(), false.into())
+                ])
+                .into(),
+                secret
+            )
+            .is_err()
+        );
+        Ok(())
+    }
+}

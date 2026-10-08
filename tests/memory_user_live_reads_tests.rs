@@ -96,6 +96,7 @@ async fn seed(store: &EphemeralStore) -> AuthResult<String> {
         .await?;
     let session = store
         .create_session(CreateSession {
+            inherited_fields: Default::default(),
             user_id: "ordinary-user".into(),
             user_agent: None,
             ip_address: None,

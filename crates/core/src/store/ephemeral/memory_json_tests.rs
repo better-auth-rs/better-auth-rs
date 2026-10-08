@@ -293,6 +293,7 @@ async fn users(fixture: &Fixture) -> AuthResult<(JsonValue, UserView, UserView)>
 async fn sessions(fixture: &Fixture, user: &UserView) -> AuthResult<JsonValue> {
     let mut operations = Vec::new();
     let create = |label| CreateSession {
+        inherited_fields: Default::default(),
         additional_fields: input(label, false),
         user_id: user.id.clone(),
         expires_at: (Utc::now() + chrono::Duration::days(7)).into(),

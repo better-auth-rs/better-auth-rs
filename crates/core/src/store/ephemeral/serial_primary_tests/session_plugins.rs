@@ -30,6 +30,7 @@ impl Model {
             Self::Session => {
                 let row = store
                     .create_session(CreateSession {
+                        inherited_fields: Default::default(),
                         additional_fields,
                         user_id: "001".into(),
                         expires_at: fixed_date("2100-01-02T03:04:05.000Z")?,
@@ -522,6 +523,7 @@ async fn serial_session_token_deletion_preserves_duplicate_ids_after_reuse() -> 
     for expected in ["1", "2", "3"] {
         let row = store
             .create_session(CreateSession {
+                inherited_fields: Default::default(),
                 additional_fields: FieldMap::new(),
                 user_id: "001".into(),
                 expires_at: fixed_date("2100-01-02T03:04:05.000Z")?,
@@ -537,6 +539,7 @@ async fn serial_session_token_deletion_preserves_duplicate_ids_after_reuse() -> 
     store.delete_session(required(tokens.get(1))?).await?;
     let reused = store
         .create_session(CreateSession {
+            inherited_fields: Default::default(),
             additional_fields: FieldMap::new(),
             user_id: "001".into(),
             expires_at: fixed_date("2100-01-02T03:04:05.000Z")?,

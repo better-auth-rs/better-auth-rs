@@ -20,6 +20,7 @@ async fn context() -> (AuthContext<TestSchema>, String, String) {
     let user_id = user.id().into_owned();
     let session = database
         .create_session(CreateSession {
+            inherited_fields: Default::default(),
             additional_fields: Default::default(),
             user_id: user_id.clone(),
             expires_at: (Utc::now() + Duration::hours(1)).into(),

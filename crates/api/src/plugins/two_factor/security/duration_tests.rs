@@ -23,8 +23,8 @@ fn lockout_date_matches_pinned_numeric_configuration() {
         )
         .unwrap();
         assert_eq!(
-            config.locked_until(now).unwrap(),
-            expected.with_timezone(&Utc),
+            config.locked_until(now).milliseconds(),
+            expected.timestamp_millis() as f64,
             "{}",
             case["name"]
         );

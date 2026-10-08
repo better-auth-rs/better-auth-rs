@@ -232,13 +232,13 @@ async fn file_sqlite_credentials_are_consumed_once_and_failures_are_not_lost()
                     let consumed = store
                         .compare_exchange_two_factor_backup_codes(
                             &id,
-                            "original-codes",
-                            "remaining-codes",
+                            &"original-codes".into(),
+                            "remaining-codes".into(),
                         )
                         .await?;
                     store
                         .record_two_factor_failure(&id, 10, &|| {
-                            Ok(Utc::now() + chrono::Duration::minutes(15))
+                            Ok((Utc::now() + chrono::Duration::minutes(15)).into())
                         })
                         .await?;
                     Ok::<_, crate::error::AuthError>(consumed)
@@ -277,10 +277,12 @@ async fn file_sqlite_credentials_are_consumed_once_and_failures_are_not_lost()
     assert_eq!(backup_winners, 1);
     let factor = factor
         .ok_or_else(|| std::io::Error::other("two-factor record must survive verification"))?;
-    assert_eq!(factor.failed_verification_count, Some(32));
+    assert_eq!(factor.failed_verification_count, Some(32.0));
     assert!(
         factor
             .locked_until
+            .typed()?
+            .as_ref()
             .is_some_and(|until| until.milliseconds() > Utc::now().timestamp_millis() as f64)
     );
     Ok(())

@@ -15,7 +15,7 @@ pub(super) struct State {
     pub(super) sessions: Rows<SessionView>,
     pub(super) accounts: Rows<crate::FieldMap>,
     pub(super) verifications: Rows<crate::FieldMap>,
-    pub(super) two_factors: Rows<TwoFactor>,
+    pub(super) two_factors: Rows<FieldMap>,
     pub(super) device_codes: Rows<FieldMap>,
     pub(super) api_keys: Rows<FieldMap>,
     pub(super) passkeys: Rows<FieldMap>,

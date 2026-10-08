@@ -1,139 +1,225 @@
-use super::id_filter::IdColumn;
 use super::instrumentation::database_operation;
-use super::plugin_models::{Entity, set};
-use crate::SeaOrmPluginModel;
-use async_trait::async_trait;
-use better_auth_core::{FieldMap, FieldValue, SchemaField};
-use chrono::Utc;
-use sea_orm::{ColumnTrait, DbBackend, EntityTrait, ExprTrait, QueryFilter, sea_query::Expr};
-
-use better_auth_core::store::{TwoFactorStore, schema::EntityRole};
-
-use crate::error::AuthResult;
-use crate::schema::AuthSchema;
-use crate::types::{CreateTwoFactor, TwoFactor};
-use better_auth_core::{TwoFactorStorage, UpdateTwoFactor};
-
+use super::plugin_models::Entity;
 use super::{SeaOrmStore, map_db_err};
+use crate::{SeaOrmPluginModel, schema::AuthSchema};
+use async_trait::async_trait;
+use better_auth_core::{
+    AuthError, AuthResult, CreateTwoFactor, FieldDate, FieldMap, FieldValue, FromFieldMap,
+    SchemaValue, TwoFactor, TwoFactorStorage, UpdateTwoFactor,
+    store::{TwoFactorStore, schema::EntityRole},
+};
+use sea_orm::{
+    ColumnTrait, ConnectionTrait, EntityTrait, ExprTrait, IdenStatic, QueryFilter, QueryResult,
+    QueryTrait,
+    sea_query::{Expr, SimpleExpr},
+};
+
+#[cfg(test)]
+#[path = "two_factor_record_tests.rs"]
+mod record_tests;
 
 impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema>
     SeaOrmStore<S, O, P>
 {
     pub(super) fn validate_two_factor_fields(&self) -> AuthResult<()> {
-        super::plugin_models::validate_additional_field_columns::<P::TwoFactor>(
-            EntityRole::TwoFactor,
-            self.model_fields.fields(EntityRole::TwoFactor),
-        )
+        self.validate_plugin_fields::<P::TwoFactor>(EntityRole::TwoFactor)
+    }
+
+    fn two_factor_timestamps(&self, fields: &mut FieldMap, create: bool) {
+        if P::TwoFactor::two_factor_storage() != TwoFactorStorage::Legacy {
+            return;
+        }
+        let schema = self.model_fields.plugin_fields(EntityRole::TwoFactor);
+        let now = FieldDate::from(chrono::Utc::now());
+        for name in if create {
+            &["createdAt", "updatedAt"][..]
+        } else {
+            &["updatedAt"][..]
+        } {
+            if !schema.fields().contains_key(*name) {
+                fields
+                    .entry((*name).into())
+                    .or_insert_with(|| now.clone().into());
+            }
+        }
     }
 
     async fn prepare_two_factor_fields(
         &self,
-        input: FieldMap,
+        mut input: FieldMap,
         create: bool,
     ) -> AuthResult<super::plugin_models::Write<P::TwoFactor>> {
-        let config = self.model_fields.fields(EntityRole::TwoFactor);
-        super::plugin_models::additional_fields::<P::TwoFactor>(
-            config,
-            input,
+        let schema = self.model_fields.plugin_fields(EntityRole::TwoFactor);
+        let mut legacy = FieldMap::new();
+        if P::TwoFactor::two_factor_storage() == TwoFactorStorage::Legacy {
+            for name in ["createdAt", "updatedAt"] {
+                if !schema.fields().contains_key(name)
+                    && let Some(value) = input.remove(name)
+                {
+                    let _ = legacy.insert(name.into(), value);
+                }
+            }
+        }
+        let mut active = self
+            .prepare_plugin_fields::<P::TwoFactor>(
+                EntityRole::TwoFactor,
+                "twoFactor",
+                input,
+                create,
+            )
+            .await?;
+        super::plugin_models::apply::<P::TwoFactor>(
+            &mut active,
+            legacy,
             self.config().advanced.database.generate_id(),
-            self.connection().get_database_backend(),
-            create,
-        )
-        .await
+        )?;
+        Ok(active)
     }
 
     async fn project_two_factor_models(
         &self,
-        models: Vec<P::TwoFactor>,
+        rows: Vec<QueryResult>,
     ) -> AuthResult<Vec<TwoFactor>> {
-        let fields = self.model_fields.fields(EntityRole::TwoFactor);
-        let records = models
+        let schema = self.model_fields.plugin_fields(EntityRole::TwoFactor);
+        let legacy = rows
             .iter()
-            .map(|model| {
-                super::plugin_models::record_fields(
-                    model,
-                    fields,
-                    self.connection().get_database_backend(),
-                )
+            .map(|row| {
+                let mut fields = FieldMap::new();
+                if P::TwoFactor::two_factor_storage() == TwoFactorStorage::Legacy {
+                    for name in ["createdAt", "updatedAt"] {
+                        if !schema.fields().contains_key(name) {
+                            let column = P::TwoFactor::column(name)?;
+                            let value = super::plugin_rows::value(row, column.as_str())?;
+                            let _ = fields.insert(
+                                name.into(),
+                                better_auth_core::query::field_date(&value)?.into(),
+                            );
+                        }
+                    }
+                }
+                Ok(fields)
             })
             .collect::<AuthResult<Vec<_>>>()?;
-        let mut rows = models
-            .iter()
-            .map(SeaOrmPluginModel::record)
-            .collect::<AuthResult<Vec<_>>>()?;
-        let output = fields
-            .project_adapter_records_with_capabilities(
-                records,
-                super::field_output::capabilities(self.connection().get_database_backend()),
-                self.connection().get_database_backend() != DbBackend::Sqlite,
+        self.project_plugin_rows::<P::TwoFactor, FieldMap>(EntityRole::TwoFactor, rows)
+            .await?
+            .into_iter()
+            .zip(legacy)
+            .map(|(mut fields, legacy)| {
+                fields.extend(legacy);
+                TwoFactor::from_field_values(fields)
+            })
+            .collect()
+    }
+
+    async fn insert_two_factor(&self, mut input: FieldMap) -> AuthResult<QueryResult> {
+        self.two_factor_timestamps(&mut input, true);
+        let active = self.prepare_two_factor_fields(input, true).await?;
+        database_operation::<Entity<P::TwoFactor>, _>(self.config(), "create", async {
+            active.insert_raw(self.connection()).await
+        })
+        .await
+    }
+
+    async fn get_two_factor_row(&self, filter: SimpleExpr) -> AuthResult<Option<QueryResult>> {
+        database_operation::<Entity<P::TwoFactor>, _>(self.config(), "findOne", async {
+            self.connection()
+                .query_one_raw(
+                    Entity::<P::TwoFactor>::find()
+                        .filter(filter)
+                        .build(self.connection().get_database_backend()),
+                )
+                .await
+                .map_err(map_db_err)
+        })
+        .await
+    }
+
+    async fn update_two_factor_row(
+        &self,
+        filter: SimpleExpr,
+        mut input: FieldMap,
+    ) -> AuthResult<Option<QueryResult>> {
+        self.two_factor_timestamps(&mut input, false);
+        let active = self.prepare_two_factor_fields(input, false).await?;
+        database_operation::<Entity<P::TwoFactor>, _>(self.config(), "update", async {
+            super::updates::execute_update_returning_raw::<Entity<P::TwoFactor>, _>(
+                self.connection(),
+                active
+                    .update(self.connection().get_database_backend())?
+                    .filter(filter.clone()),
+                filter,
             )
-            .await?;
-        for (row, output) in rows.iter_mut().zip(output) {
-            row.additional_fields = output;
-        }
-        Ok(rows)
+            .await
+        })
+        .await
     }
 }
 
 #[async_trait]
-impl<S, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> TwoFactorStore
+impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> TwoFactorStore
     for SeaOrmStore<S, O, P>
-where
-    S: AuthSchema + Send + Sync,
 {
-    async fn create_two_factor(&self, two_factor: CreateTwoFactor) -> AuthResult<TwoFactor> {
-        let mut fields = FieldMap::from_iter([
-            ("secret".to_owned(), (two_factor.secret).into_field()),
-            (
-                "backup_codes".to_owned(),
-                (two_factor.backup_codes).into_field(),
-            ),
-            ("user_id".to_owned(), (two_factor.user_id).into_field()),
-            ("verified".to_owned(), (two_factor.verified).into_field()),
-            ("failed_verification_count".to_owned(), (0).into_field()),
-            ("locked_until".to_owned(), FieldValue::Null),
-        ]);
-        if P::TwoFactor::two_factor_storage() == TwoFactorStorage::Legacy {
-            let now = Utc::now();
-            let _ = fields.insert(
-                "created_at".to_owned(),
-                better_auth_core::FieldValue::Date((now).into()),
-            );
-            let _ = fields.insert(
-                "updated_at".to_owned(),
-                better_auth_core::FieldValue::Date((now).into()),
-            );
-        }
-        let mut active = self
-            .prepare_two_factor_fields(two_factor.additional_fields, true)
-            .await?;
-        super::plugin_models::apply::<P::TwoFactor>(
-            &mut active,
-            self.create_fields("twoFactor", None, fields)?,
-            self.config().advanced.database.generate_id(),
-        )?;
-        let model = database_operation::<Entity<P::TwoFactor>, _>(self.config(), "create", async {
-            active.insert(self.connection()).await
-        })
-        .await?;
-        Ok(self.project_two_factor_models(vec![model]).await?.remove(0))
+    async fn create_two_factor_record(&self, input: FieldMap) -> AuthResult<FieldMap> {
+        let row = self.insert_two_factor(input).await?;
+        Ok(self
+            .project_plugin_rows::<P::TwoFactor, FieldMap>(EntityRole::TwoFactor, vec![row])
+            .await?
+            .remove(0))
+    }
+
+    async fn get_two_factor_record(
+        &self,
+        id: &SchemaValue<String>,
+    ) -> AuthResult<Option<FieldMap>> {
+        let filter = self.plugin_id_filter::<P::TwoFactor>(EntityRole::TwoFactor, id)?;
+        let row = self.get_two_factor_row(filter).await?;
+        Ok(self
+            .project_plugin_rows::<P::TwoFactor, FieldMap>(
+                EntityRole::TwoFactor,
+                row.into_iter().collect(),
+            )
+            .await?
+            .pop())
+    }
+
+    async fn update_two_factor_record(
+        &self,
+        id: &SchemaValue<String>,
+        input: FieldMap,
+    ) -> AuthResult<Option<FieldMap>> {
+        let filter = self.plugin_id_filter::<P::TwoFactor>(EntityRole::TwoFactor, id)?;
+        let row = self.update_two_factor_row(filter, input).await?;
+        Ok(self
+            .project_plugin_rows::<P::TwoFactor, FieldMap>(
+                EntityRole::TwoFactor,
+                row.into_iter().collect(),
+            )
+            .await?
+            .pop())
+    }
+
+    async fn create_two_factor(&self, input: CreateTwoFactor) -> AuthResult<TwoFactor> {
+        let row = self.insert_two_factor(input.into_adapter_fields()?).await?;
+        Ok(self.project_two_factor_models(vec![row]).await?.remove(0))
     }
 
     async fn get_two_factor_by_user_id(&self, user_id: &str) -> AuthResult<Option<TwoFactor>> {
-        let model =
-            database_operation::<Entity<P::TwoFactor>, _>(self.config(), "findOne", async {
-                Entity::<P::TwoFactor>::find()
-                    .filter(
-                        P::TwoFactor::column("user_id")?
-                            .eq_id(user_id, self.config().advanced.database.generate_id())?,
-                    )
-                    .one(self.connection())
-                    .await
-                    .map_err(map_db_err)
-            })
-            .await?;
+        self.get_two_factor_by_user_id_value(&user_id.to_owned().into())
+            .await
+    }
+
+    async fn get_two_factor_by_user_id_value(
+        &self,
+        user_id: &SchemaValue<String>,
+    ) -> AuthResult<Option<TwoFactor>> {
+        let filter = self.plugin_equals::<P::TwoFactor>(
+            EntityRole::TwoFactor,
+            "userId",
+            user_id.field_value(),
+        )?;
+        let row = self.get_two_factor_row(filter).await?;
         Ok(self
-            .project_two_factor_models(model.into_iter().collect())
+            .project_two_factor_models(row.into_iter().collect())
             .await?
             .pop())
     }
@@ -143,46 +229,48 @@ where
         user_id: &str,
         backup_codes: &str,
     ) -> AuthResult<TwoFactor> {
-        let mut active = self
-            .prepare_two_factor_fields(FieldMap::new(), false)
-            .await?;
-        set::<P::TwoFactor>(
-            &mut active,
-            "backup_codes",
-            backup_codes.to_owned(),
-            self.config().advanced.database.generate_id(),
-        )?;
-        if P::TwoFactor::two_factor_storage() == TwoFactorStorage::Legacy {
-            set::<P::TwoFactor>(
-                &mut active,
-                "updated_at",
-                better_auth_core::FieldDate::from(Utc::now()),
-                self.config().advanced.database.generate_id(),
-            )?;
-        }
-        let filter = P::TwoFactor::column("user_id")?
-            .eq_id(user_id, self.config().advanced.database.generate_id())?;
-        let model = database_operation::<Entity<P::TwoFactor>, _>(self.config(), "update", async {
-            super::updates::update_record_returning_one::<Entity<P::TwoFactor>, _>(
-                self.connection(),
-                active,
-                filter.clone(),
+        let filter =
+            self.plugin_equals::<P::TwoFactor>(EntityRole::TwoFactor, "userId", user_id.into())?;
+        let row = self
+            .update_two_factor_row(
                 filter,
+                FieldMap::from([("backupCodes".into(), backup_codes.into())]),
             )
-            .await
-        })
-        .await?
-        .ok_or_else(|| crate::error::AuthError::not_found("Two-factor settings not found"))?;
-        Ok(self.project_two_factor_models(vec![model]).await?.remove(0))
+            .await?
+            .ok_or_else(|| AuthError::not_found("Two-factor settings not found"))?;
+        Ok(self.project_two_factor_models(vec![row]).await?.remove(0))
+    }
+
+    async fn update_two_factor(
+        &self,
+        id: &SchemaValue<String>,
+        update: UpdateTwoFactor,
+    ) -> AuthResult<TwoFactor> {
+        let filter = self.plugin_id_filter::<P::TwoFactor>(EntityRole::TwoFactor, id)?;
+        let row = self
+            .update_two_factor_row(filter, update.into_adapter_fields()?)
+            .await?
+            .ok_or_else(|| AuthError::not_found("Two-factor settings not found"))?;
+        Ok(self.project_two_factor_models(vec![row]).await?.remove(0))
     }
 
     async fn delete_two_factor(&self, user_id: &str) -> AuthResult<()> {
+        self.delete_two_factor_by_user_id_value(&user_id.to_owned().into())
+            .await
+    }
+
+    async fn delete_two_factor_by_user_id_value(
+        &self,
+        user_id: &SchemaValue<String>,
+    ) -> AuthResult<()> {
+        let filter = self.plugin_equals::<P::TwoFactor>(
+            EntityRole::TwoFactor,
+            "userId",
+            user_id.field_value(),
+        )?;
         database_operation::<Entity<P::TwoFactor>, _>(self.config(), "delete", async {
             Entity::<P::TwoFactor>::delete_many()
-                .filter(
-                    P::TwoFactor::column("user_id")?
-                        .eq_id(user_id, self.config().advanced.database.generate_id())?,
-                )
+                .filter(filter)
                 .exec(self.connection())
                 .await
                 .map(|_| ())
@@ -191,98 +279,29 @@ where
         .await
     }
 
-    async fn update_two_factor(
-        &self,
-        id: &better_auth_core::SchemaValue<String>,
-        update: UpdateTwoFactor,
-    ) -> AuthResult<TwoFactor> {
-        let id = id.typed()?;
-        let mut fields = FieldMap::from_iter([("id".to_owned(), (id.to_owned()).into_field())]);
-        if P::TwoFactor::two_factor_storage() == TwoFactorStorage::Legacy {
-            let _ = fields.insert(
-                "updated_at".to_owned(),
-                better_auth_core::FieldValue::Date((Utc::now()).into()),
-            );
-        }
-        let mut active = self
-            .prepare_two_factor_fields(update.additional_fields, false)
-            .await?;
-        super::plugin_models::apply::<P::TwoFactor>(
-            &mut active,
-            fields,
-            self.config().advanced.database.generate_id(),
-        )?;
-        if let Some(secret) = update.secret {
-            set::<P::TwoFactor>(
-                &mut active,
-                "secret",
-                secret,
-                self.config().advanced.database.generate_id(),
-            )?;
-        }
-        if let Some(codes) = update.backup_codes {
-            set::<P::TwoFactor>(
-                &mut active,
-                "backup_codes",
-                codes,
-                self.config().advanced.database.generate_id(),
-            )?;
-        }
-        if let Some(verified) = update.verified {
-            set::<P::TwoFactor>(
-                &mut active,
-                "verified",
-                verified,
-                self.config().advanced.database.generate_id(),
-            )?;
-        }
-        let filter =
-            P::TwoFactor::column("id")?.eq_id(id, self.config().advanced.database.generate_id())?;
-        let model = database_operation::<Entity<P::TwoFactor>, _>(self.config(), "update", async {
-            super::updates::update_record_returning_one::<Entity<P::TwoFactor>, _>(
-                self.connection(),
-                active,
-                filter.clone(),
-                filter,
-            )
-            .await
-        })
-        .await?
-        .ok_or_else(|| crate::error::AuthError::not_found("Two-factor settings not found"))?;
-        Ok(self.project_two_factor_models(vec![model]).await?.remove(0))
-    }
-
     async fn compare_exchange_two_factor_backup_codes(
         &self,
-        id: &better_auth_core::SchemaValue<String>,
-        previous: &str,
-        replacement: &str,
+        id: &SchemaValue<String>,
+        previous: &FieldValue,
+        replacement: FieldValue,
     ) -> AuthResult<bool> {
-        let id = id.typed()?;
-        let active = self
-            .prepare_two_factor_fields(FieldMap::new(), false)
-            .await?;
-        let by_id =
-            P::TwoFactor::column("id")?.eq_id(id, self.config().advanced.database.generate_id())?;
-        let filter = by_id
-            .clone()
-            .and(P::TwoFactor::column("backup_codes")?.eq(previous));
+        let by_id = self.plugin_id_filter::<P::TwoFactor>(EntityRole::TwoFactor, id)?;
+        let guard = by_id.clone().and(self.plugin_equals::<P::TwoFactor>(
+            EntityRole::TwoFactor,
+            "backupCodes",
+            previous.clone(),
+        )?);
+        let mut input = FieldMap::from([("backupCodes".into(), replacement)]);
+        self.two_factor_timestamps(&mut input, false);
+        let active = self.prepare_two_factor_fields(input, false).await?;
         let row =
             database_operation::<Entity<P::TwoFactor>, _>(self.config(), "incrementOne", async {
-                let mut query = active
-                    .update(self.connection().get_database_backend())?
-                    .col_expr(
-                        P::TwoFactor::column("backup_codes")?,
-                        Expr::value(replacement),
-                    );
-                if P::TwoFactor::two_factor_storage() == TwoFactorStorage::Legacy {
-                    query = query
-                        .col_expr(P::TwoFactor::column("updated_at")?, Expr::value(Utc::now()));
-                }
-                super::updates::increment_returning_one(
+                super::updates::increment_returning_raw::<Entity<P::TwoFactor>>(
                     self.connection(),
-                    query.filter(filter.clone()),
-                    filter,
+                    active
+                        .update(self.connection().get_database_backend())?
+                        .filter(guard.clone()),
+                    guard,
                     by_id,
                 )
                 .await
@@ -296,26 +315,24 @@ where
 
     async fn record_two_factor_failure(
         &self,
-        id: &better_auth_core::SchemaValue<String>,
+        id: &SchemaValue<String>,
         max_attempts: i64,
-        locked_until: &(dyn Fn() -> AuthResult<chrono::DateTime<Utc>> + Send + Sync),
+        locked_until: &(dyn Fn() -> AuthResult<FieldDate> + Send + Sync),
     ) -> AuthResult<()> {
-        let id = id.typed()?;
-        let filter =
-            P::TwoFactor::column("id")?.eq_id(id, self.config().advanced.database.generate_id())?;
+        let by_id = self.plugin_id_filter::<P::TwoFactor>(EntityRole::TwoFactor, id)?;
+        let counter =
+            self.plugin_column::<P::TwoFactor>(EntityRole::TwoFactor, "failedVerificationCount")?;
+        // An increment without SET does not run input transforms or update factories.
         let query = Entity::<P::TwoFactor>::update_many()
-            .col_expr(
-                P::TwoFactor::column("failed_verification_count")?,
-                Expr::col(P::TwoFactor::column("failed_verification_count")?).add(1),
-            )
-            .filter(filter.clone());
+            .col_expr(counter, Expr::col(counter).add(1))
+            .filter(by_id.clone());
         let row =
             database_operation::<Entity<P::TwoFactor>, _>(self.config(), "incrementOne", async {
-                super::updates::increment_returning_one(
+                super::updates::increment_returning_raw::<Entity<P::TwoFactor>>(
                     self.connection(),
                     query,
-                    filter.clone(),
-                    filter.clone(),
+                    by_id.clone(),
+                    by_id.clone(),
                 )
                 .await
             })
@@ -324,30 +341,42 @@ where
             .project_two_factor_models(row.into_iter().collect())
             .await?
             .pop()
-            .and_then(|row| row.failed_verification_count)
-            .unwrap_or(0);
-        if failures >= max_attempts {
-            let locked_until = locked_until()?;
+            .map(|row| row.failed_verification_count.field_value())
+            .unwrap_or_default();
+        let failures = if failures.is_null() || failures.is_undefined() {
+            0.0
+        } else {
+            better_auth_core::query::field_number(&failures)?
+        };
+        if failures >= max_attempts as f64 {
+            let until = locked_until()?;
+            let by_id = self.plugin_id_filter::<P::TwoFactor>(EntityRole::TwoFactor, id)?;
+            let guard = by_id.clone().and(counter.into_expr().gte(counter.save_as(
+                self.plugin_parameter(
+                    EntityRole::TwoFactor,
+                    "failedVerificationCount",
+                    (max_attempts as f64).into(),
+                )?,
+            )));
             let active = self
-                .prepare_two_factor_fields(FieldMap::new(), false)
+                .prepare_two_factor_fields(
+                    FieldMap::from([("lockedUntil".into(), until.into())]),
+                    false,
+                )
                 .await?;
-            let filter =
-                filter.and(P::TwoFactor::column("failed_verification_count")?.gte(max_attempts));
             let row = database_operation::<Entity<P::TwoFactor>, _>(
                 self.config(),
                 "incrementOne",
                 async {
-                    let query = active
-                        .update(self.connection().get_database_backend())?
-                        .col_expr(
-                            P::TwoFactor::column("locked_until")?,
-                            Expr::value(locked_until),
-                        )
-                        .filter(filter.clone());
-                    let by_id = P::TwoFactor::column("id")?
-                        .eq_id(id, self.config().advanced.database.generate_id())?;
-                    super::updates::increment_returning_one(self.connection(), query, filter, by_id)
-                        .await
+                    super::updates::increment_returning_raw::<Entity<P::TwoFactor>>(
+                        self.connection(),
+                        active
+                            .update(self.connection().get_database_backend())?
+                            .filter(guard.clone()),
+                        guard,
+                        by_id,
+                    )
+                    .await
                 },
             )
             .await?;
@@ -360,49 +389,52 @@ where
 
     async fn reset_two_factor_failures(
         &self,
-        id: &better_auth_core::SchemaValue<String>,
-        locked_before: Option<chrono::DateTime<Utc>>,
+        id: &SchemaValue<String>,
+        locked_before: Option<FieldDate>,
     ) -> AuthResult<()> {
-        let id = id.typed()?;
-        let active = self
-            .prepare_two_factor_fields(FieldMap::new(), false)
-            .await?;
-        let by_id =
-            P::TwoFactor::column("id")?.eq_id(id, self.config().advanced.database.generate_id())?;
-        let mut filter = by_id.clone();
+        let by_id = self.plugin_id_filter::<P::TwoFactor>(EntityRole::TwoFactor, id)?;
+        let guarded = locked_before.is_some();
+        let mut guard = by_id.clone();
         if let Some(expired) = locked_before {
-            filter = filter.and(P::TwoFactor::column("locked_until")?.lte(expired));
+            let column =
+                self.plugin_column::<P::TwoFactor>(EntityRole::TwoFactor, "lockedUntil")?;
+            guard = guard.and(column.into_expr().lte(column.save_as(self.plugin_parameter(
+                EntityRole::TwoFactor,
+                "lockedUntil",
+                expired.into(),
+            )?)));
         }
-        let update = active
-            .update(self.connection().get_database_backend())?
-            .col_expr(
-                P::TwoFactor::column("failed_verification_count")?,
-                Expr::value(0),
+        let active = self
+            .prepare_two_factor_fields(
+                FieldMap::from([
+                    ("failedVerificationCount".into(), 0.0.into()),
+                    ("lockedUntil".into(), FieldValue::Null),
+                ]),
+                false,
             )
-            .col_expr(
-                P::TwoFactor::column("locked_until")?,
-                Expr::value(None::<chrono::DateTime<Utc>>),
-            )
-            .filter(filter.clone());
+            .await?;
         let row = database_operation::<Entity<P::TwoFactor>, _>(
             self.config(),
-            if locked_before.is_some() {
-                "incrementOne"
-            } else {
-                "update"
-            },
+            if guarded { "incrementOne" } else { "update" },
             async {
-                if locked_before.is_some() {
-                    super::updates::increment_returning_one(
+                let query = active
+                    .update(self.connection().get_database_backend())?
+                    .filter(guard.clone());
+                if guarded {
+                    super::updates::increment_returning_raw::<Entity<P::TwoFactor>>(
                         self.connection(),
-                        update,
-                        filter,
+                        query,
+                        guard,
                         by_id,
                     )
                     .await
                 } else {
-                    super::updates::execute_update_returning_one(self.connection(), update, by_id)
-                        .await
+                    super::updates::execute_update_returning_raw::<Entity<P::TwoFactor>, _>(
+                        self.connection(),
+                        query,
+                        by_id,
+                    )
+                    .await
                 }
             },
         )

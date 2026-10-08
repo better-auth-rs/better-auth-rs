@@ -116,9 +116,9 @@ where
         user_id: owner_id.clone().into(),
         secret: "ordinary-encrypted-secret".into(),
         backup_codes: "ordinary-encrypted-codes".into(),
-        verified: Some(false),
-        failed_verification_count: Some(0),
-        locked_until: None,
+        verified: Some(false).into(),
+        failed_verification_count: Some(0.0).into(),
+        locked_until: None.into(),
         created_at: Default::default(),
         updated_at: Default::default(),
     };
@@ -159,15 +159,15 @@ where
         ]))?,
     )?;
     let nullable = active.update(database).await?.record()?;
-    expected.verified = None;
-    expected.failed_verification_count = None;
+    expected.verified = None.into();
+    expected.failed_verification_count = None.into();
     assert_eq!(nullable, expected);
     let nullable_value = factor_value(&nullable, &id, &owner_id)?;
     let lock: chrono::DateTime<chrono::Utc> = "2030-01-02T03:19:05.123Z".parse()?;
     let calls = AtomicUsize::new(0);
     let deadline = || {
         calls.fetch_add(1, Ordering::SeqCst);
-        Ok(lock)
+        Ok(lock.into())
     };
     store
         .record_two_factor_failure(&created.id, 100, &deadline)
@@ -184,15 +184,15 @@ where
         .await?
         .ok_or("Missing nullable factor after increment")?;
     store.reset_two_factor_failures(&created.id, None).await?;
-    expected.failed_verification_count = Some(0);
+    expected.failed_verification_count = Some(0.0).into();
     let reset = stored::<P>(database, &id).await?;
     assert_eq!(reset, expected);
     let mut increments = Vec::new();
-    for count in [1, 2] {
+    for count in [1.0, 2.0] {
         store
             .record_two_factor_failure(&created.id, 100, &deadline)
             .await?;
-        expected.failed_verification_count = Some(count);
+        expected.failed_verification_count = Some(count).into();
         let increment = stored::<P>(database, &id).await?;
         assert_eq!(increment, expected);
         increments.push(factor_value(&increment, &id, &owner_id)?);
@@ -209,7 +209,7 @@ where
         )
         .await?;
     expected.backup_codes = "replacement-encrypted-codes".into();
-    expected.verified = Some(true);
+    expected.verified = Some(true).into();
     assert_eq!(updated, expected);
     let updated_read = store
         .get_two_factor_by_user_id(&owner_id)
@@ -257,8 +257,8 @@ where
         store
             .compare_exchange_two_factor_backup_codes(
                 &created.id,
-                &expected.backup_codes,
-                "consumed-codes"
+                &expected.backup_codes.field_value(),
+                "consumed-codes".into()
             )
             .await?
     );
@@ -266,8 +266,8 @@ where
         !store
             .compare_exchange_two_factor_backup_codes(
                 &created.id,
-                &expected.backup_codes,
-                "stale-codes"
+                &expected.backup_codes.field_value(),
+                "stale-codes".into()
             )
             .await?
     );
@@ -275,30 +275,33 @@ where
     assert_eq!(stored::<P>(database, &id).await?, expected);
 
     store.reset_two_factor_failures(&created.id, None).await?;
-    expected.failed_verification_count = Some(0);
+    expected.failed_verification_count = Some(0.0).into();
     assert_eq!(stored::<P>(database, &id).await?, expected);
     store
         .record_two_factor_failure(&created.id, 2, &deadline)
         .await?;
-    expected.failed_verification_count = Some(1);
+    expected.failed_verification_count = Some(1.0).into();
     assert_eq!(stored::<P>(database, &id).await?, expected);
     assert_eq!(calls.load(Ordering::SeqCst), 0);
     store
         .record_two_factor_failure(&created.id, 2, &deadline)
         .await?;
-    expected.failed_verification_count = Some(2);
-    expected.locked_until = Some(lock.into());
+    expected.failed_verification_count = Some(2.0).into();
+    expected.locked_until = Some(lock.into()).into();
     assert_eq!(stored::<P>(database, &id).await?, expected);
     assert_eq!(calls.load(Ordering::SeqCst), 1);
     store
-        .reset_two_factor_failures(&created.id, Some(lock - chrono::Duration::seconds(1)))
+        .reset_two_factor_failures(
+            &created.id,
+            Some((lock - chrono::Duration::seconds(1)).into()),
+        )
         .await?;
     assert_eq!(stored::<P>(database, &id).await?, expected);
     store
-        .reset_two_factor_failures(&created.id, Some(lock))
+        .reset_two_factor_failures(&created.id, Some(lock.into()))
         .await?;
-    expected.failed_verification_count = Some(0);
-    expected.locked_until = None;
+    expected.failed_verification_count = Some(0.0).into();
+    expected.locked_until = None.into();
     assert_eq!(stored::<P>(database, &id).await?, expected);
 
     let updated_owner = store

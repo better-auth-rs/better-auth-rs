@@ -581,6 +581,14 @@ pub trait SessionStore<S: AuthSchema>: Send + Sync {
         }
         Ok(())
     }
+    /// Expire preserved Sessions selected by a projected token.
+    async fn end_session_by_token_value(&self, token: &crate::FieldValue) -> AuthResult<()> {
+        let token = token.as_str().ok_or_else(|| {
+            AuthError::config("The store must support native Session token expiry")
+        })?;
+        self.end_session(token).await
+    }
+
     /// Read a session and an optional loaded relationship without discarding missing or array children.
     async fn get_session_snapshot(
         &self,
@@ -652,6 +660,14 @@ pub trait SessionStore<S: AuthSchema>: Send + Sync {
         expires_at: chrono::DateTime<chrono::Utc>,
     ) -> AuthResult<crate::wire::SessionView>;
     async fn delete_session(&self, token: &str) -> AuthResult<()>;
+    /// Delete using the projected token before the adapter applies query conversion.
+    async fn delete_session_by_token_value(&self, token: &crate::FieldValue) -> AuthResult<()> {
+        let token = token.as_str().ok_or_else(|| {
+            AuthError::config("The store must support native Session token deletion")
+        })?;
+        self.delete_session(token).await
+    }
+
     /// Delete a token list through one batch lifecycle. Do not update active-session indices.
     async fn delete_sessions(&self, _tokens: &[String]) -> AuthResult<()> {
         Err(AuthError::config(
@@ -1083,8 +1099,34 @@ pub trait InvitationStore: Send + Sync {
 
 #[async_trait]
 pub trait TwoFactorStore: Send + Sync {
+    /// Create complete logical fields through the shared adapter policies.
+    async fn create_two_factor_record(&self, input: crate::FieldMap)
+    -> AuthResult<crate::FieldMap>;
+    /// Read complete projected fields without narrowing native replacements.
+    async fn get_two_factor_record(
+        &self,
+        id: &crate::SchemaValue<String>,
+    ) -> AuthResult<Option<crate::FieldMap>>;
+    /// Apply a logical patch through the shared adapter policies.
+    async fn update_two_factor_record(
+        &self,
+        id: &crate::SchemaValue<String>,
+        input: crate::FieldMap,
+    ) -> AuthResult<Option<crate::FieldMap>>;
+    /// Query the projected owner without string conversion.
+    async fn get_two_factor_by_user_id_value(
+        &self,
+        user_id: &crate::SchemaValue<String>,
+    ) -> AuthResult<Option<TwoFactor>>;
+    /// Delete by the projected owner without string conversion.
+    async fn delete_two_factor_by_user_id_value(
+        &self,
+        user_id: &crate::SchemaValue<String>,
+    ) -> AuthResult<()>;
     async fn create_two_factor(&self, two_factor: CreateTwoFactor) -> AuthResult<TwoFactor>;
-    async fn get_two_factor_by_user_id(&self, user_id: &str) -> AuthResult<Option<TwoFactor>>;
+    async fn get_two_factor_by_user_id(&self, user_id: &str) -> AuthResult<Option<TwoFactor>> {
+        self.get_two_factor_by_user_id_value(&user_id.into()).await
+    }
     async fn update_two_factor_backup_codes(
         &self,
         user_id: &str,
@@ -1100,8 +1142,8 @@ pub trait TwoFactorStore: Send + Sync {
     async fn compare_exchange_two_factor_backup_codes(
         &self,
         id: &crate::SchemaValue<String>,
-        previous: &str,
-        replacement: &str,
+        previous: &crate::FieldValue,
+        replacement: crate::FieldValue,
     ) -> AuthResult<bool>;
     /// Atomically count a failed verification, then apply the lock if the budget is spent.
     /// Invoke `locked_until` once after the increment reaches `max_attempts`, before the guarded lock update.
@@ -1109,15 +1151,18 @@ pub trait TwoFactorStore: Send + Sync {
         &self,
         id: &crate::SchemaValue<String>,
         max_attempts: i64,
-        locked_until: &(dyn Fn() -> AuthResult<chrono::DateTime<chrono::Utc>> + Send + Sync),
+        locked_until: &(dyn Fn() -> AuthResult<crate::FieldDate> + Send + Sync),
     ) -> AuthResult<()>;
     /// Reset failed verifications, optionally requiring an expired lock.
     async fn reset_two_factor_failures(
         &self,
         id: &crate::SchemaValue<String>,
-        locked_before: Option<chrono::DateTime<chrono::Utc>>,
+        locked_before: Option<crate::FieldDate>,
     ) -> AuthResult<()>;
-    async fn delete_two_factor(&self, user_id: &str) -> AuthResult<()>;
+    async fn delete_two_factor(&self, user_id: &str) -> AuthResult<()> {
+        self.delete_two_factor_by_user_id_value(&user_id.into())
+            .await
+    }
 }
 
 #[async_trait]

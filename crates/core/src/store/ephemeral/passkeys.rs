@@ -215,13 +215,7 @@ impl PasskeyStore for EphemeralStore {
     }
 
     async fn delete_passkey(&self, id: &str) -> AuthResult<()> {
-        let id = self.plugin_query_value(EntityRole::Passkey, "id", id.into())?;
-        self.raw("passkey", "delete", |state| {
-            let _ = state
-                .passkeys
-                .remove_first(|row| row.get("id").is_some_and(|value| value.strict_equals(&id)))?;
-            Ok(())
-        })
-        .await
+        self.delete_plugin_records(EntityRole::Passkey, &id.into())
+            .await
     }
 }

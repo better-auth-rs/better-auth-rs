@@ -151,6 +151,7 @@ pub(super) async fn observe(joins: bool) -> AuthResult<Value> {
     });
     let session = store
         .create_session(CreateSession {
+            inherited_fields: Default::default(),
             user_id: user_id.clone().into(),
             expires_at: "2100-01-01T00:00:00Z"
                 .parse::<chrono::DateTime<chrono::Utc>>()

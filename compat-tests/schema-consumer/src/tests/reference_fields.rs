@@ -126,6 +126,7 @@ async fn user_and_session_references_keep_aliases_bindings_and_single_output_tra
     let user = store.create_user(CreateUser::new()).await.unwrap();
     let session = store
         .create_session(CreateSession {
+            inherited_fields: Default::default(),
             additional_fields: Default::default(),
             user_id: user.id.clone(),
             expires_at: FieldDate::from_milliseconds(user.created_at.milliseconds() + 3_600_000.0),

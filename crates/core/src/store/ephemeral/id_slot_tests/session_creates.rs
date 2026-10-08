@@ -3,6 +3,7 @@ use crate::store::database_hooks::{DatabaseHookContext, SessionUpdate};
 
 fn input(label: Option<&str>) -> AuthResult<CreateSession> {
     Ok(CreateSession {
+        inherited_fields: Default::default(),
         user_id: "owner".into(),
         expires_at: date(EXPIRES_AT)?,
         ip_address: Some(String::new()),

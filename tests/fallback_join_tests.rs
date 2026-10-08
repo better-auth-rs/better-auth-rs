@@ -98,6 +98,7 @@ async fn run<S: AuthSchema>(
         }
         let session = store
             .create_session(CreateSession {
+                inherited_fields: Default::default(),
                 user_id: name.into(),
                 user_agent: Some(name.into()),
                 expires_at: "2099-01-01T00:00:00Z"
@@ -293,6 +294,7 @@ async fn ephemeral_session_projection_preserves_core_aliases_and_stored_override
         .await?;
     let session = store
         .create_session(CreateSession {
+            inherited_fields: Default::default(),
             user_id: "alice".into(),
             user_agent: Some("browser".into()),
             expires_at: (chrono::Utc::now() + chrono::Duration::days(1)).into(),

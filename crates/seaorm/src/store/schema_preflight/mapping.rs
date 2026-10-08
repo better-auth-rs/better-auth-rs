@@ -80,9 +80,19 @@ fn organization<M: SeaOrmOrganizationModel>(
 }
 
 fn plugin<M: SeaOrmPluginModel>(role: EntityRole, fields: &UserConfig) -> AuthResult<SchemaTable> {
-    if role == EntityRole::DeviceCode {
+    if matches!(role, EntityRole::DeviceCode | EntityRole::TwoFactor) {
+        let mut required = vec!["id"];
+        if role == EntityRole::TwoFactor
+            && M::two_factor_storage() == better_auth_core::TwoFactorStorage::Legacy
+        {
+            for (logical, physical) in [("createdAt", "created_at"), ("updatedAt", "updated_at")] {
+                if !fields.fields().contains_key(logical) {
+                    required.push(physical);
+                }
+            }
+        }
         return Ok(model::<M::Entity>(columns(
-            ["id"],
+            required,
             fields,
             M::column,
             &[],
@@ -99,9 +109,6 @@ fn plugin<M: SeaOrmPluginModel>(role: EntityRole, fields: &UserConfig) -> AuthRe
                     && !(role == EntityRole::Passkey
                         && matches!(field.name, "name" | "aaguid")
                         && fields.fields().contains_key(field.name))
-                    && !(role == EntityRole::TwoFactor
-                        && M::two_factor_storage() == better_auth_core::TwoFactorStorage::Native
-                        && matches!(field.name, "created_at" | "updated_at"))
             })
             .map(|field| field.name),
         fields,
@@ -190,7 +197,9 @@ where
                 plugin::<P::DeviceCode>(role, &model_fields.plugin_fields(role))
             }
             EntityRole::Passkey => plugin::<P::Passkey>(role, model_fields.fields(role)),
-            EntityRole::TwoFactor => plugin::<P::TwoFactor>(role, model_fields.fields(role)),
+            EntityRole::TwoFactor => {
+                plugin::<P::TwoFactor>(role, &model_fields.plugin_fields(role))
+            }
             EntityRole::Jwk => plugin::<P::Jwk>(role, model_fields.fields(role)),
             EntityRole::WalletAddress => {
                 plugin::<P::WalletAddress>(role, model_fields.fields(role))

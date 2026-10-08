@@ -147,6 +147,7 @@ async fn setup(preserve: bool) -> (BetterAuth<BundledSchema>, DatabaseConnection
 
 fn input(user_id: String) -> CreateSession {
     CreateSession {
+        inherited_fields: Default::default(),
         additional_fields: Default::default(),
         user_id: user_id.into(),
         expires_at: (Utc::now() + Duration::hours(1)).into(),

@@ -58,9 +58,16 @@ impl<T: Clone> Rows<T> {
     }
 
     pub(super) fn select_refs(&self, predicate: impl Fn(&T) -> bool) -> AuthResult<Vec<RowRef<T>>> {
+        self.try_select_refs(|row| Ok(predicate(row)))
+    }
+
+    pub(super) fn try_select_refs(
+        &self,
+        predicate: impl Fn(&T) -> AuthResult<bool>,
+    ) -> AuthResult<Vec<RowRef<T>>> {
         let mut selected = Vec::new();
         for row in &self.0 {
-            if predicate(&*lock(row)?) {
+            if predicate(&*lock(row)?)? {
                 selected.push(RowRef(row.clone()));
             }
         }

@@ -178,6 +178,7 @@ mod tests {
         let session = manager
             .database
             .create_session(CreateSession {
+                inherited_fields: Default::default(),
                 user_id: "canonical-owner".into(),
                 expires_at: (chrono::Utc::now() + chrono::Duration::hours(1)).into(),
                 additional_fields: Default::default(),

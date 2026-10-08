@@ -52,6 +52,14 @@ impl ModelFields {
                 ("createdAt", Date, false),
                 ("aaguid", String, false),
             ],
+            EntityRole::TwoFactor => vec![
+                ("secret", String, true),
+                ("backupCodes", String, true),
+                ("userId", String, true),
+                ("verified", Boolean, false),
+                ("failedVerificationCount", Number, false),
+                ("lockedUntil", Date, false),
+            ],
             EntityRole::DeviceCode => vec![
                 ("deviceCode", String, true),
                 ("userCode", String, true),
@@ -113,6 +121,36 @@ impl ModelFields {
                         }
                     })),
                 });
+            }
+        } else if role == EntityRole::TwoFactor {
+            for (name, declaration) in fields.fields_mut() {
+                if matches!(
+                    name.as_str(),
+                    "secret" | "backupCodes" | "userId" | "failedVerificationCount" | "lockedUntil"
+                ) {
+                    declaration.returned = Some(false);
+                }
+                if matches!(
+                    name.as_str(),
+                    "verified" | "failedVerificationCount" | "lockedUntil"
+                ) {
+                    declaration.input = Some(false);
+                }
+                if matches!(name.as_str(), "secret" | "userId") {
+                    declaration.index = Some(true);
+                }
+                match name.as_str() {
+                    "verified" => declaration.default_value = Some(true.into()),
+                    "failedVerificationCount" => declaration.default_value = Some(0.into()),
+                    "userId" => {
+                        declaration.references = Some(UserFieldReference {
+                            model: "user".into(),
+                            field: "id".into(),
+                            ..Default::default()
+                        })
+                    }
+                    _ => {}
+                }
             }
         } else if role == EntityRole::Passkey
             && let Some(field) = fields.fields_mut().get_mut("userId")

@@ -139,3 +139,9 @@ target!(
     "device-polling-number",
     DeviceCode
 );
+target!(
+    verified_boolean,
+    "BETTER_AUTH_NATIVE_REPLACEMENT_TWO_FACTOR_VERIFIED_BOOLEAN_SCHEMA",
+    "two-factor-verified-boolean",
+    TwoFactor
+);

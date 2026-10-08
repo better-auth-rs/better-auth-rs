@@ -207,77 +207,65 @@ impl ApiKeyStore for EphemeralStore {
         };
         let row = self
             .raw("apikey", write.operation(), |state| {
-                let Some(source) = state.api_keys.first_ref(|key| {
-                    crate::query::field_matches_equality(
-                        key.get("id").unwrap_or(&FieldValue::Undefined),
-                        &id,
-                    )
-                })?
-                else {
-                    return Ok(None);
-                };
-                let wrote = source.write(|key| {
+                let matches = state.api_keys.try_select_refs(|key| {
+                    if !field_matches_equality(key.get("id").unwrap_or(&FieldValue::Undefined), &id)
+                    {
+                        return Ok(false);
+                    }
                     let value = |name| {
                         key.get(schema.record_storage_key(name))
                             .cloned()
                             .unwrap_or_default()
                     };
-                    let increment = match &write {
+                    match &write {
                         ApiKeyUsageWrite::Refill { .. } => {
-                            if !field_matches_equality(&value("lastRefillAt"), &previous) {
-                                return Ok(false);
-                            }
-                            None
+                            Ok(field_matches_equality(&value("lastRefillAt"), &previous))
                         }
                         ApiKeyUsageWrite::Decrement => {
-                            let remaining = value("remaining");
-                            if !field_compare(&remaining, &maximum)?
-                                .is_some_and(|order| order.is_gt())
-                            {
-                                return Ok(false);
-                            }
-                            Some((
-                                "remaining",
-                                FieldValue::Number(remaining.as_f64().unwrap_or(0.0) - 1.0),
-                            ))
+                            Ok(field_compare(&value("remaining"), &maximum)?
+                                .is_some_and(|order| order.is_gt()))
                         }
                         ApiKeyUsageWrite::StartWindow {
                             previous_before, ..
-                        } => {
-                            let actual = value("lastRequest");
-                            let matches = match previous_before {
-                                None => field_matches_equality(&actual, &previous),
-                                Some(_) => field_compare(&actual, &previous)?
-                                    .is_some_and(|order| order.is_le()),
-                            };
-                            if !matches {
-                                return Ok(false);
-                            }
-                            None
-                        }
+                        } => match previous_before {
+                            None => Ok(field_matches_equality(&value("lastRequest"), &previous)),
+                            Some(_) => Ok(field_compare(&value("lastRequest"), &previous)?
+                                .is_some_and(|order| order.is_le())),
+                        },
                         ApiKeyUsageWrite::IncrementWindow { .. } => {
-                            let count = value("requestCount");
-                            if !field_compare(&value("lastRequest"), &previous)?
+                            Ok(field_compare(&value("lastRequest"), &previous)?
                                 .is_some_and(|order| order.is_gt())
-                                || !field_compare(&count, &maximum)?
-                                    .is_some_and(|order| order.is_lt())
-                            {
-                                return Ok(false);
-                            }
-                            Some((
-                                "requestCount",
-                                FieldValue::Number(count.as_f64().unwrap_or(0.0) + 1.0),
-                            ))
+                                && field_compare(&value("requestCount"), &maximum)?
+                                    .is_some_and(|order| order.is_lt()))
                         }
-                        ApiKeyUsageWrite::LastRequest(_) | ApiKeyUsageWrite::UpdatedAt(_) => None,
-                    };
-                    if let Some((name, value)) = increment {
-                        let _ = key.insert(schema.record_storage_key(name).to_owned(), value);
+                        ApiKeyUsageWrite::LastRequest(_) | ApiKeyUsageWrite::UpdatedAt(_) => {
+                            Ok(true)
+                        }
                     }
-                    key.extend(fields);
-                    Ok(true)
                 })?;
-                Ok(wrote.then_some(source))
+                let writes = if write.operation() == "incrementOne" {
+                    1
+                } else {
+                    matches.len()
+                };
+                for source in matches.iter().take(writes) {
+                    source.write(|key| {
+                        let increment = match &write {
+                            ApiKeyUsageWrite::Decrement => Some(("remaining", -1.0)),
+                            ApiKeyUsageWrite::IncrementWindow { .. } => Some(("requestCount", 1.0)),
+                            _ => None,
+                        };
+                        if let Some((name, delta)) = increment {
+                            let column = schema.record_storage_key(name);
+                            let value =
+                                key.get(column).and_then(FieldValue::as_f64).unwrap_or(0.0) + delta;
+                            let _ = key.insert(column.to_owned(), value.into());
+                        }
+                        key.extend(fields.clone());
+                        Ok(())
+                    })?;
+                }
+                Ok(matches.into_iter().next())
             })
             .await?;
         self.project_plugin_refs(EntityRole::ApiKey, row.into_iter().collect())
@@ -289,17 +277,7 @@ impl ApiKeyStore for EphemeralStore {
     }
 
     async fn delete_api_key(&self, id: &crate::SchemaValue<String>) -> AuthResult<()> {
-        let id = self.plugin_query_value(EntityRole::ApiKey, "id", id.field_value())?;
-        self.raw("apikey", "delete", |state| {
-            let _ = state.api_keys.remove_first(|key| {
-                crate::query::field_matches_equality(
-                    key.get("id").unwrap_or(&FieldValue::Undefined),
-                    &id,
-                )
-            })?;
-            Ok(())
-        })
-        .await
+        self.delete_plugin_records(EntityRole::ApiKey, id).await
     }
 
     async fn delete_expired_api_keys(&self) -> AuthResult<usize> {

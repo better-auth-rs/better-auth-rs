@@ -28,6 +28,7 @@ async fn create_test_context_with_user() -> (AuthContext<TestSchema>, UserView, 
 
     let session = database
         .create_session(CreateSession {
+            inherited_fields: Default::default(),
             additional_fields: Default::default(),
             user_id: user.id().into_owned(),
             expires_at: (Utc::now() + Duration::hours(24)).into(),
@@ -61,6 +62,7 @@ async fn create_user_with_session(
     let session = ctx
         .database
         .create_session(CreateSession {
+            inherited_fields: Default::default(),
             additional_fields: Default::default(),
             user_id: user.id().into_owned(),
             expires_at: (Utc::now() + Duration::hours(24)).into(),

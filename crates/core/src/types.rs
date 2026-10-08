@@ -345,6 +345,8 @@ where
 /// Session creation data
 #[derive(Debug, Clone)]
 pub struct CreateSession {
+    /// Fields inherited before native values and configured defaults are applied.
+    pub inherited_fields: crate::FieldMap,
     /// Trusted application fields written with the initial session record.
     pub additional_fields: crate::FieldMap,
     pub user_id: crate::SchemaValue<String>,

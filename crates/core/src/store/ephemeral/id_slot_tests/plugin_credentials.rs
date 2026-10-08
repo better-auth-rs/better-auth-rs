@@ -7,6 +7,7 @@ use crate::user_fields::UserConfig;
 enum Model {
     ApiKey,
     Passkey,
+    TwoFactor,
 }
 
 impl Model {
@@ -14,6 +15,7 @@ impl Model {
         match self {
             Self::ApiKey => EntityRole::ApiKey,
             Self::Passkey => EntityRole::Passkey,
+            Self::TwoFactor => EntityRole::TwoFactor,
         }
     }
 
@@ -21,6 +23,14 @@ impl Model {
         match self {
             Self::ApiKey => "apikey",
             Self::Passkey => "passkey",
+            Self::TwoFactor => "twoFactor",
+        }
+    }
+
+    fn field(self) -> &'static str {
+        match self {
+            Self::ApiKey | Self::Passkey => "name",
+            Self::TwoFactor => "secret",
         }
     }
 
@@ -28,6 +38,7 @@ impl Model {
         match self {
             Self::ApiKey => store.create_api_key_record(input).await,
             Self::Passkey => store.create_passkey_record(input).await,
+            Self::TwoFactor => store.create_two_factor_record(input).await,
         }
     }
 
@@ -36,6 +47,7 @@ impl Model {
         match self {
             Self::ApiKey => store.get_api_key_record(&id).await,
             Self::Passkey => store.get_passkey_record(&id).await,
+            Self::TwoFactor => store.get_two_factor_record(&id).await,
         }
     }
 
@@ -49,6 +61,7 @@ impl Model {
         match self {
             Self::ApiKey => store.update_api_key_record(&id, input).await,
             Self::Passkey => store.update_passkey_record(&id, input).await,
+            Self::TwoFactor => store.update_two_factor_record(&id, input).await,
         }
     }
 
@@ -57,6 +70,7 @@ impl Model {
         required(match self {
             Self::ApiKey => state.api_keys.first_ref(|_| true)?,
             Self::Passkey => state.passkeys.first_ref(|_| true)?,
+            Self::TwoFactor => state.two_factors.first_ref(|_| true)?,
         })
     }
 
@@ -64,6 +78,9 @@ impl Model {
         match self {
             Self::ApiKey => required(store.get_api_key_by_id(id).await?)?.field_values(),
             Self::Passkey => required(store.get_passkey_by_id(id).await?)?.field_values(),
+            Self::TwoFactor => {
+                required(store.get_two_factor_by_user_id("selected-owner").await?)?.field_values()
+            }
         }
     }
 }
@@ -71,7 +88,7 @@ impl Model {
 // These regressions reuse source-derived ID invariants; the ID fixture has no credential models.
 #[tokio::test]
 async fn memory_plugin_id_slot_reads_primary_key_at_its_position() -> AuthResult<()> {
-    for model in [Model::ApiKey, Model::Passkey] {
+    for model in [Model::ApiKey, Model::Passkey, Model::TwoFactor] {
         for slot in ["before-label", "after-label"] {
             let mut config = AuthConfig::default();
             config.advanced.database.generate_id = Some(IdGeneration::Serial);
@@ -129,7 +146,7 @@ async fn memory_plugin_id_slot_reads_primary_key_at_its_position() -> AuthResult
 
 #[tokio::test]
 async fn memory_plugin_supplied_ids_preserve_defaults_presence_and_query_types() -> AuthResult<()> {
-    for model in [Model::ApiKey, Model::Passkey] {
+    for model in [Model::ApiKey, Model::Passkey, Model::TwoFactor] {
         for (supplied, stored_id, output_id, generated) in [
             (
                 None,
@@ -170,7 +187,7 @@ async fn memory_plugin_supplied_ids_preserve_defaults_presence_and_query_types()
                     Ok(Some("generated-id".into()))
                 })));
             let store = EphemeralStore::new(Arc::new(config));
-            let mut input = FieldMap::from([("name".into(), "selected".into())]);
+            let mut input = FieldMap::from([(model.field().into(), "selected".into())]);
             if let Some(supplied) = supplied {
                 let _ = input.insert("id".into(), supplied);
             }
@@ -190,12 +207,12 @@ async fn memory_plugin_supplied_ids_preserve_defaults_presence_and_query_types()
                 assert!(model.read(&store, output_id).await?.is_none());
             }
             assert_eq!(store.plugin_storage_rows(model.role())?, before);
-            let patch = FieldMap::from([("name".into(), "updated".into())]);
+            let patch = FieldMap::from([(model.field().into(), "updated".into())]);
             let updated = required(model.update(&store, query_id, patch).await?)?;
-            let _ = output.insert("name".into(), "updated".into());
+            let _ = output.insert(model.field().into(), "updated".into());
             assert_eq!(updated, output);
             let mut expected_raw = required(before.first())?.clone();
-            let _ = expected_raw.insert("name".into(), "updated".into());
+            let _ = expected_raw.insert(model.field().into(), "updated".into());
             assert_eq!(store.plugin_storage_rows(model.role())?, [expected_raw]);
             assert_eq!(
                 events(&trace)?,
@@ -212,7 +229,7 @@ async fn memory_plugin_supplied_ids_preserve_defaults_presence_and_query_types()
 
 #[tokio::test]
 async fn memory_plugin_primary_id_filters_distinguish_null_from_undefined() -> AuthResult<()> {
-    for model in [Model::ApiKey, Model::Passkey] {
+    for model in [Model::ApiKey, Model::Passkey, Model::TwoFactor] {
         for (stored_id, output_id, matches) in [
             (None, Value::Undefined, [true, true, false, false]),
             (
@@ -229,7 +246,7 @@ async fn memory_plugin_primary_id_filters_distinguish_null_from_undefined() -> A
                     &store,
                     [
                         ("id".into(), "selected".into()),
-                        ("name".into(), "stored-name".into()),
+                        (model.field().into(), "stored-name".into()),
                     ]
                     .into(),
                 )
@@ -257,13 +274,17 @@ async fn memory_plugin_primary_id_filters_distinguish_null_from_undefined() -> A
             let query = if matches[2] { 42.into() } else { Value::Null };
             let updated = required(
                 model
-                    .update(&store, query, [("name".into(), "updated".into())].into())
+                    .update(
+                        &store,
+                        query,
+                        [(model.field().into(), "updated".into())].into(),
+                    )
                     .await?,
             )?;
-            let _ = expected.insert("name".into(), "updated".into());
+            let _ = expected.insert(model.field().into(), "updated".into());
             assert_eq!(updated, expected);
             let mut expected_raw = required(before.first())?.clone();
-            let _ = expected_raw.insert("name".into(), "updated".into());
+            let _ = expected_raw.insert(model.field().into(), "updated".into());
             assert_eq!(store.plugin_storage_rows(model.role())?, [expected_raw]);
         }
     }
@@ -272,7 +293,7 @@ async fn memory_plugin_primary_id_filters_distinguish_null_from_undefined() -> A
 
 #[tokio::test]
 async fn memory_plugin_typed_reads_preserve_raw_output_values_and_presence() -> AuthResult<()> {
-    for model in [Model::ApiKey, Model::Passkey] {
+    for model in [Model::ApiKey, Model::Passkey, Model::TwoFactor] {
         for output_value in [
             Value::Undefined,
             Value::Null,
@@ -287,7 +308,7 @@ async fn memory_plugin_typed_reads_preserve_raw_output_values_and_presence() -> 
                 UserConfig {
                     additional_fields: Some(
                         [(
-                            "name".into(),
+                            model.field().into(),
                             UserFieldConfig {
                                 transform: Some(FieldTransforms {
                                     output: Some(UserFieldTransform::new(move |_| {
@@ -303,23 +324,27 @@ async fn memory_plugin_typed_reads_preserve_raw_output_values_and_presence() -> 
                     ),
                 },
             )?;
-            let created = model
-                .create(
-                    &store,
-                    [
-                        ("id".into(), "selected".into()),
-                        ("name".into(), "stored-name".into()),
-                    ]
-                    .into(),
-                )
-                .await?;
+            let mut input = FieldMap::from([
+                ("id".into(), "selected".into()),
+                (model.field().into(), "stored-name".into()),
+            ]);
+            if matches!(model, Model::TwoFactor) {
+                let _ = input.insert("userId".into(), "selected-owner".into());
+            }
+            let created = model.create(&store, input).await?;
             let before = store.plugin_storage_rows(model.role())?;
             let raw = required(model.read(&store, "selected".into()).await?)?;
             assert_eq!(raw, created);
-            assert_eq!(raw.get("name"), Some(&expected_value));
+            assert_eq!(raw.get(model.field()), Some(&expected_value));
             let mut typed = model.typed_fields(&store, "selected").await?;
             if matches!(model, Model::Passkey) {
                 for internal in ["credential", "updatedAt"] {
+                    assert!(!raw.contains_key(internal));
+                    assert_eq!(typed.shift_remove(internal), Some(Value::Undefined));
+                }
+            }
+            if matches!(model, Model::TwoFactor) {
+                for internal in ["createdAt", "updatedAt"] {
                     assert!(!raw.contains_key(internal));
                     assert_eq!(typed.shift_remove(internal), Some(Value::Undefined));
                 }

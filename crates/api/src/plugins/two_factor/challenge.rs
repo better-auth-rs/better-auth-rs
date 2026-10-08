@@ -15,7 +15,7 @@ impl TwoFactorPlugin {
         }
         let Some(data) = req
             .new_session()?
-            .filter(|data| data.user_field("twoFactorEnabled").as_bool() == Some(true))
+            .filter(|data| data.user_field("twoFactorEnabled").is_truthy())
         else {
             return Ok(());
         };
@@ -33,7 +33,7 @@ impl TwoFactorPlugin {
         }
 
         delete_session_cookies(req, &ctx.config, true, Some(&mut response.headers))?;
-        ctx.database.delete_session(&data.session.token).await?;
+        delete_factor_session(&data.session, ctx).await?;
         req.clear_new_session()?;
         let challenge = begin_sign_in_challenge(&user, ctx, &mut response.headers).await?;
         response.replace_returned(AuthResponse::json(200, &challenge)?);

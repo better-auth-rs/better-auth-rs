@@ -1687,21 +1687,28 @@ async fn run(listener: TcpListener, port: u16) -> Result<(), Box<dyn std::error:
                     match two_factor_plugin
                         .view_backup_codes(&query.user_id, &ctx)
                         .await
+                        .and_then(|backup_codes| {
+                            better_auth_core::AuthResponse::native(
+                                200,
+                                better_auth_core::FieldMap::from([
+                                    ("status".into(), true.into()),
+                                    ("backupCodes".into(), backup_codes),
+                                ]).into(),
+                            ).body.into_bytes()
+                        })
                     {
-                        Ok(backup_codes) => (
+                        Ok(body) => (
                             axum::http::StatusCode::OK,
-                            Json(serde_json::json!({
-                                "status": true,
-                                "backupCodes": backup_codes,
-                            })),
-                        ),
+                            [(axum::http::header::CONTENT_TYPE, "application/json")],
+                            body,
+                        ).into_response(),
                         Err(error) => (
                             axum::http::StatusCode::from_u16(error.status_code())
                                 .unwrap_or(axum::http::StatusCode::INTERNAL_SERVER_ERROR),
                             Json(serde_json::json!({
                                 "message": error.to_string(),
                             })),
-                        ),
+                        ).into_response(),
                     }
                 }
             }),

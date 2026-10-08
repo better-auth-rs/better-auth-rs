@@ -5,25 +5,33 @@ use std::borrow::Cow;
 use crate::entity::{AuthApiKey, AuthPasskey, AuthTwoFactor};
 
 /// Two-factor authentication response shape.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct TwoFactor {
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub id: SchemaValue<String>,
-    pub secret: String,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub secret: SchemaValue<String>,
     #[serde(rename = "backupCodes")]
-    pub backup_codes: String,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub backup_codes: SchemaValue<String>,
     #[serde(rename = "userId")]
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub user_id: SchemaValue<String>,
     /// Whether the authenticator secret has completed enrollment.
-    pub verified: Option<bool>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub verified: SchemaValue<Option<bool>>,
     /// Consecutive failed sign-in verifications across factors and challenges.
     #[serde(rename = "failedVerificationCount")]
-    pub failed_verification_count: Option<i64>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub failed_verification_count: SchemaValue<Option<f64>>,
     /// End of the account-level verification lock.
     #[serde(rename = "lockedUntil")]
-    #[serde(default, with = "crate::field_value::serde::optional_date")]
-    pub locked_until: Option<crate::FieldDate>,
+    #[serde(
+        default,
+        with = "crate::field_value::serde::optional_schema_date",
+        skip_serializing_if = "SchemaValue::is_undefined"
+    )]
+    pub locked_until: SchemaValue<Option<crate::FieldDate>>,
     #[serde(rename = "createdAt")]
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     #[serde(with = "crate::field_value::serde::schema_date")]
@@ -466,23 +474,23 @@ impl AuthTwoFactor for TwoFactor {
     fn id(&self) -> SchemaValue<Cow<'_, str>> {
         self.id.as_ref().map(|id| Cow::Borrowed(id.as_str()))
     }
-    fn secret(&self) -> &str {
+    fn secret(&self) -> &SchemaValue<String> {
         &self.secret
     }
-    fn backup_codes(&self) -> &str {
+    fn backup_codes(&self) -> &SchemaValue<String> {
         &self.backup_codes
     }
     fn user_id(&self) -> SchemaValue<Cow<'_, str>> {
         self.user_id.as_ref().map(|id| Cow::Borrowed(id.as_str()))
     }
-    fn verified(&self) -> Option<bool> {
-        self.verified
+    fn verified(&self) -> &SchemaValue<Option<bool>> {
+        &self.verified
     }
-    fn failed_verification_count(&self) -> Option<i64> {
-        self.failed_verification_count
+    fn failed_verification_count(&self) -> &SchemaValue<Option<f64>> {
+        &self.failed_verification_count
     }
-    fn locked_until(&self) -> Option<crate::FieldDate> {
-        self.locked_until.clone()
+    fn locked_until(&self) -> &SchemaValue<Option<crate::FieldDate>> {
+        &self.locked_until
     }
     fn created_at(&self) -> &SchemaValue<crate::FieldDate> {
         &self.created_at
@@ -500,9 +508,9 @@ impl<T: AuthTwoFactor> From<&T> for TwoFactor {
             secret: two_factor.secret().to_owned(),
             backup_codes: two_factor.backup_codes().to_owned(),
             user_id: two_factor.user_id().into_owned(),
-            verified: two_factor.verified(),
-            failed_verification_count: two_factor.failed_verification_count(),
-            locked_until: two_factor.locked_until(),
+            verified: two_factor.verified().clone(),
+            failed_verification_count: two_factor.failed_verification_count().clone(),
+            locked_until: two_factor.locked_until().clone(),
             created_at: two_factor.created_at().clone(),
             updated_at: two_factor.updated_at().clone(),
         }

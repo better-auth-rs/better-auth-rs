@@ -185,6 +185,7 @@ impl Runtime {
         let session = auth
             .store()
             .create_session(CreateSession {
+                inherited_fields: Default::default(),
                 user_id: "nan-owner".into(),
                 expires_at: expiry.into(),
                 ip_address: None,
@@ -268,14 +269,13 @@ impl Runtime {
             .get_two_factor_by_user_id("nan-owner")
             .await?
         {
-            assert!(factor.locked_until.is_none());
-            let mut value = serde_json::to_value(factor)?;
-            assert_eq!(
-                value
-                    .as_object_mut()
+            assert!(factor.locked_until.is_undefined());
+            let value = serde_json::to_value(factor)?;
+            assert!(
+                !value
+                    .as_object()
                     .expect("factor object")
-                    .remove("lockedUntil"),
-                Some(Value::Null)
+                    .contains_key("lockedUntil")
             );
             factors.push(value);
         }
@@ -420,7 +420,7 @@ async fn nan_period_http_operations_match_pinned_responses_storage_and_callbacks
             .await?;
         let factor = enrollment.factor().await?;
         let key = enrollment.auth.context().config.encryption_secret();
-        let generated_secret = decrypt(key, &factor.secret)?;
+        let generated_secret = decrypt(key, factor.secret.typed()?)?;
         assert_eq!(generated_secret.len(), 32);
         assert!(
             generated_secret
@@ -428,7 +428,7 @@ async fn nan_period_http_operations_match_pinned_responses_storage_and_callbacks
                 .all(|byte| byte.is_ascii_alphanumeric())
         );
         assert_eq!(
-            serde_json::from_str::<Value>(&decrypt(key, &factor.backup_codes)?)?,
+            serde_json::from_str::<Value>(&decrypt(key, factor.backup_codes.typed()?)?)?,
             codes
         );
         let uri = response["body"]["totpURI"]
@@ -447,8 +447,14 @@ async fn nan_period_http_operations_match_pinned_responses_storage_and_callbacks
                 .all(|byte| byte.is_ascii_uppercase() || (b'2'..=b'7').contains(&byte))
         );
         enrollment.replacements.extend([
-            (factor.secret, "<enrollment-secret-ciphertext>".into()),
-            (factor.backup_codes, "<enrollment-backup-ciphertext>".into()),
+            (
+                factor.secret.typed()?.clone(),
+                "<enrollment-secret-ciphertext>".into(),
+            ),
+            (
+                factor.backup_codes.typed()?.clone(),
+                "<enrollment-backup-ciphertext>".into(),
+            ),
             (encoded.into(), "<enrollment-secret-base32>".into()),
         ]);
         normalize(&mut response, &enrollment.replacements);

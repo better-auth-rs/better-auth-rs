@@ -60,12 +60,15 @@ impl From<&entities::two_factor::Model> for TwoFactor {
         Self {
             additional_fields: Default::default(),
             id: model.id.clone().into(),
-            secret: model.secret.clone(),
-            backup_codes: model.backup_codes.clone(),
+            secret: model.secret.clone().into(),
+            backup_codes: model.backup_codes.clone().into(),
             user_id: model.user_id.clone().into(),
-            verified: Some(model.verified),
-            failed_verification_count: Some(model.failed_verification_count),
-            locked_until: model.locked_until.map(Into::into),
+            verified: Some(model.verified).into(),
+            failed_verification_count: Some(model.failed_verification_count as f64).into(),
+            locked_until: model
+                .locked_until
+                .map(better_auth_core::FieldDate::from)
+                .into(),
             created_at: better_auth_core::FieldDate::from(model.created_at).into(),
             updated_at: better_auth_core::FieldDate::from(model.updated_at).into(),
         }

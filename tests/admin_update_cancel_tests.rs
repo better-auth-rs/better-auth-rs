@@ -154,6 +154,7 @@ async fn observe<S: AuthSchema>(
     let actor = auth
         .store()
         .create_session(CreateSession {
+            inherited_fields: Default::default(),
             user_id: "actor".into(),
             expires_at: "2099-01-01T00:00:00Z"
                 .parse::<chrono::DateTime<chrono::Utc>>()?

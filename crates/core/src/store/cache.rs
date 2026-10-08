@@ -11,6 +11,15 @@ use crate::error::{AuthError, AuthResult};
 #[async_trait]
 pub trait SecondaryStorage: Send + Sync {
     async fn get(&self, key: &str) -> AuthResult<Option<serde_json::Value>>;
+    /// Read a projected key without coercing native values into strings.
+    async fn get_native(&self, key: &FieldValue) -> AuthResult<Option<FieldValue>> {
+        let FieldValue::String(key) = key else {
+            return Err(AuthError::config(
+                "Secondary storage must support native keys for this read",
+            ));
+        };
+        self.get(key).await?.map(FieldValue::from_json).transpose()
+    }
     async fn set(&self, key: &str, value: &str, ttl_seconds: Option<u64>) -> AuthResult<()> {
         self.set_native(
             &key.into(),
@@ -27,6 +36,15 @@ pub trait SecondaryStorage: Send + Sync {
         ttl_seconds: Option<f64>,
     ) -> AuthResult<()>;
     async fn delete(&self, key: &str) -> AuthResult<()>;
+    /// Delete a projected key without coercing native values into strings.
+    async fn delete_native(&self, key: &FieldValue) -> AuthResult<()> {
+        let FieldValue::String(key) = key else {
+            return Err(AuthError::config(
+                "Secondary storage must support native keys for this deletion",
+            ));
+        };
+        self.delete(key).await
+    }
     /// Atomically return and delete a value. Verification consumption requires this guarantee.
     async fn get_and_delete(&self, key: &str) -> AuthResult<Option<serde_json::Value>>;
     /// Atomically increment a counter. Apply the TTL only when the counter does not exist.
@@ -228,6 +246,31 @@ impl CacheAdapter for MemoryCacheAdapter {
 
 #[async_trait]
 impl SecondaryStorage for MemoryCacheAdapter {
+    async fn get_native(&self, key: &FieldValue) -> AuthResult<Option<FieldValue>> {
+        self.cleanup_expired();
+        let data = self
+            .data
+            .lock()
+            .map_err(|_| AuthError::internal("Cache lock poisoned"))?;
+        Ok(data
+            .get(&CacheKey(key.clone()))
+            .filter(|entry| {
+                entry
+                    .expires_at
+                    .is_none_or(|expires| expires > Utc::now().timestamp_millis() as f64)
+            })
+            .map(|entry| FieldValue::String(entry.value.clone())))
+    }
+
+    async fn delete_native(&self, key: &FieldValue) -> AuthResult<()> {
+        let mut data = self
+            .data
+            .lock()
+            .map_err(|_| AuthError::internal("Cache lock poisoned"))?;
+        let _ = data.remove(&CacheKey(key.clone()));
+        Ok(())
+    }
+
     async fn increment(&self, key: &str, ttl_seconds: f64) -> AuthResult<f64> {
         let mut data = self
             .data
@@ -369,6 +412,18 @@ pub mod redis_adapter {
 
     #[async_trait]
     impl SecondaryStorage for RedisAdapter {
+        async fn get_native(&self, key: &FieldValue) -> AuthResult<Option<FieldValue>> {
+            let key = String::from_utf16_lossy(key.display_utf16()?.as_utf16());
+            CacheAdapter::get(self, &key)
+                .await
+                .map(|value| value.map(FieldValue::String))
+        }
+
+        async fn delete_native(&self, key: &FieldValue) -> AuthResult<()> {
+            let key = String::from_utf16_lossy(key.display_utf16()?.as_utf16());
+            CacheAdapter::delete(self, &key).await
+        }
+
         async fn increment(&self, key: &str, ttl_seconds: f64) -> AuthResult<f64> {
             let milliseconds = (ttl_seconds * 1000.0).ceil();
             let milliseconds = if milliseconds.is_finite() {
@@ -438,6 +493,52 @@ pub use redis_adapter::RedisAdapter;
 #[cfg(test)]
 mod tests {
     use super::{CacheAdapter, MemoryCacheAdapter, SecondaryStorage};
+
+    #[tokio::test]
+    async fn native_keys_preserve_type_and_object_identity_across_reads_and_deletes()
+    -> crate::AuthResult<()> {
+        use crate::{FieldMap, FieldValue};
+
+        let cache = MemoryCacheAdapter::new();
+        let object = FieldValue::from(FieldMap::default());
+        let keys = [
+            FieldValue::Number(7.0),
+            FieldValue::from("7"),
+            FieldValue::Undefined,
+            FieldValue::from("undefined"),
+            object.clone(),
+            FieldValue::from(crate::Utf16String::from_units(vec![0xd800])),
+        ];
+        for (index, key) in keys.iter().enumerate() {
+            cache.set_native(key, &index.to_string(), None).await?;
+        }
+        assert!(
+            cache
+                .get_native(&FieldMap::default().into())
+                .await?
+                .is_none()
+        );
+        for (index, key) in keys.iter().enumerate() {
+            assert_eq!(
+                cache.get_native(&key.clone()).await?,
+                Some(FieldValue::from(index.to_string()))
+            );
+        }
+        cache.delete_native(&7.0.into()).await?;
+        assert!(cache.get_native(&7.0.into()).await?.is_none());
+        assert_eq!(cache.get_native(&"7".into()).await?, Some("1".into()));
+        cache.delete_native(&object.clone()).await?;
+        assert!(cache.get_native(&object).await?.is_none());
+        cache
+            .set_native(&FieldValue::Undefined, "expired", Some(0.0))
+            .await?;
+        assert!(cache.get_native(&FieldValue::Undefined).await?.is_none());
+        assert_eq!(
+            cache.get_native(&"undefined".into()).await?,
+            Some("3".into())
+        );
+        Ok(())
+    }
 
     #[cfg(feature = "redis-cache")]
     #[tokio::test]

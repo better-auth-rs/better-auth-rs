@@ -26,7 +26,7 @@ use better_auth::{
 };
 use better_auth_core::{
     AuthContext, AuthError, AuthPlugin, AuthRequest, AuthResponse, AuthResult, AuthRoute,
-    AuthSchema, BeforeRequestAction, HttpMethod, hooks::current_request_hook_context,
+    AuthSchema, BeforeRequestAction, FieldMap, HttpMethod, hooks::current_request_hook_context,
     middleware::RateLimitConfig, store::StatelessSchema,
 };
 use serde_json::{Value, json};
@@ -502,7 +502,10 @@ fn routes<S: AuthSchema>(auth: Arc<BetterAuth<S>>, events: Events, body: BodyTra
                                 if input["path"] == "generateTOTP" {
                                     AuthResponse::json(200, &json!({"code":api.generate_totp(input.get("body").cloned()).await?})).map_err(Into::into)
                                 } else {
-                                    AuthResponse::json(200, &json!({"status":true,"backupCodes":api.view_backup_codes(input.get("body").cloned()).await?})).map_err(Into::into)
+                                    Ok(AuthResponse::native(200, FieldMap::from([
+                                        ("status".into(), true.into()),
+                                        ("backupCodes".into(), api.view_backup_codes(input.get("body").cloned()).await?),
+                                    ]).into()))
                                 }
                             }.await;
                             return wire(result);

@@ -265,6 +265,38 @@ impl<S: AuthSchema> InvitationStore for SecondaryStore<S> {
 
 #[async_trait]
 impl<S: AuthSchema> TwoFactorStore for SecondaryStore<S> {
+    async fn create_two_factor_record(
+        &self,
+        input: crate::FieldMap,
+    ) -> AuthResult<crate::FieldMap> {
+        self.inner.create_two_factor_record(input).await
+    }
+    async fn get_two_factor_record(
+        &self,
+        id: &crate::SchemaValue<String>,
+    ) -> AuthResult<Option<crate::FieldMap>> {
+        self.inner.get_two_factor_record(id).await
+    }
+    async fn update_two_factor_record(
+        &self,
+        id: &crate::SchemaValue<String>,
+        input: crate::FieldMap,
+    ) -> AuthResult<Option<crate::FieldMap>> {
+        self.inner.update_two_factor_record(id, input).await
+    }
+    async fn get_two_factor_by_user_id_value(
+        &self,
+        user_id: &crate::SchemaValue<String>,
+    ) -> AuthResult<Option<TwoFactor>> {
+        self.inner.get_two_factor_by_user_id_value(user_id).await
+    }
+    async fn delete_two_factor_by_user_id_value(
+        &self,
+        user_id: &crate::SchemaValue<String>,
+    ) -> AuthResult<()> {
+        self.inner.delete_two_factor_by_user_id_value(user_id).await
+    }
+
     async fn create_two_factor(&self, two_factor: CreateTwoFactor) -> AuthResult<TwoFactor> {
         self.inner.create_two_factor(two_factor).await
     }
@@ -290,8 +322,8 @@ impl<S: AuthSchema> TwoFactorStore for SecondaryStore<S> {
     async fn compare_exchange_two_factor_backup_codes(
         &self,
         id: &crate::SchemaValue<String>,
-        previous: &str,
-        replacement: &str,
+        previous: &crate::FieldValue,
+        replacement: crate::FieldValue,
     ) -> AuthResult<bool> {
         self.inner
             .compare_exchange_two_factor_backup_codes(id, previous, replacement)
@@ -301,7 +333,7 @@ impl<S: AuthSchema> TwoFactorStore for SecondaryStore<S> {
         &self,
         id: &crate::SchemaValue<String>,
         max_attempts: i64,
-        locked_until: &(dyn Fn() -> AuthResult<chrono::DateTime<chrono::Utc>> + Send + Sync),
+        locked_until: &(dyn Fn() -> AuthResult<crate::FieldDate> + Send + Sync),
     ) -> AuthResult<()> {
         self.inner
             .record_two_factor_failure(id, max_attempts, locked_until)
@@ -310,7 +342,7 @@ impl<S: AuthSchema> TwoFactorStore for SecondaryStore<S> {
     async fn reset_two_factor_failures(
         &self,
         id: &crate::SchemaValue<String>,
-        locked_before: Option<chrono::DateTime<chrono::Utc>>,
+        locked_before: Option<crate::FieldDate>,
     ) -> AuthResult<()> {
         self.inner
             .reset_two_factor_failures(id, locked_before)

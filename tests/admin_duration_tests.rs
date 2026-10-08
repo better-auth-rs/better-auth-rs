@@ -122,6 +122,7 @@ async fn admin_configuration_preserves_fractional_ban_and_impersonation_lifetime
         }
         let actor = store
             .create_session(CreateSession {
+                inherited_fields: Default::default(),
                 user_id: "admin".into(),
                 expires_at: valid_until.into(),
                 additional_fields: Default::default(),

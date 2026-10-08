@@ -9,19 +9,19 @@ use sha2::Sha256;
 use std::sync::Arc;
 use totp_rs::{Algorithm, TOTP};
 
-use better_auth_core::entity::{AuthSession, AuthTwoFactor, AuthUser};
+use better_auth_core::entity::{AuthRecordFields, AuthSession, AuthUser};
 use better_auth_core::utils::cookie_utils::{
     create_clear_cookie, create_session_like_cookie, related_cookie_name,
 };
 use better_auth_core::wire::UserView;
 use better_auth_core::{
-    AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, CreateTwoFactor,
-    CreateVerification, RequestMeta, TwoFactor, UpdateUser,
+    AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, CreateVerification, FieldMap,
+    FieldValue, RequestMeta, SchemaValue, TwoFactor, UpdateUser,
 };
 
 use crate::plugins::helpers::{
-    SessionIssueError, delete_session_cookies, get_cookie, get_credential_password_hash,
-    issue_user_session, issue_user_session_with_lifetime,
+    SessionIssueError, admit_session_for_id, delete_session_cookies, get_cookie,
+    get_credential_password_hash,
 };
 
 use super::StatusResponse;
@@ -45,6 +45,8 @@ use security::*;
 
 #[cfg(test)]
 mod enrollment_tests;
+#[cfg(test)]
+mod native_tests;
 #[cfg(test)]
 mod security_tests;
 #[cfg(test)]
@@ -241,11 +243,20 @@ pub(crate) struct TotpUriResponse {
     totp_uri: String,
 }
 
-#[derive(Debug, Serialize)]
-pub(crate) struct SessionTokenResponse<U: Serialize> {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    token: Option<String>,
-    user: U,
+#[derive(Debug)]
+pub(crate) struct SessionTokenResponse {
+    token: FieldValue,
+    user: UserView,
+}
+
+impl SessionTokenResponse {
+    fn into_field_value(self) -> FieldValue {
+        FieldMap::from([
+            ("token".into(), self.token),
+            ("user".into(), FieldMap::from(self.user).into()),
+        ])
+        .into()
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -269,6 +280,7 @@ struct PendingTwoFactorState {
     user: UserView,
     key: String,
     dont_remember: bool,
+    expires_at: SchemaValue<better_auth_core::FieldDate>,
 }
 
 enum ResolvedTwoFactorState {
@@ -348,7 +360,10 @@ pub(crate) async fn inspect_trusted_device(
         });
     };
 
-    if verification.value != user.id().into_owned()
+    if !verification
+        .value
+        .field_value()
+        .strict_equals(&user.id().field_value())
         || verification.expires_at.is_before_or_equal(Utc::now())?
     {
         return Ok(TrustedDeviceCheck {
@@ -420,9 +435,9 @@ pub(crate) async fn begin_sign_in_challenge(
         .unwrap_or(false)
         && ctx
             .database
-            .get_two_factor_by_user_id(user.id().typed()?)
+            .get_two_factor_by_user_id_value(&user.id().into_owned())
             .await?
-            .is_some_and(|factor| factor.verified != Some(false))
+            .is_some_and(|factor| !factor.verified.field_value().strict_equals(&false.into()))
     {
         two_factor_methods.push("totp");
     }
@@ -444,20 +459,7 @@ impl TwoFactorPlugin {
     /// Generate a TOTP from a supplied secret in trusted server code.
     pub fn generate_totp(&self, secret: &str) -> AuthResult<String> {
         require_totp(&self.config)?;
-        let inner = TOTP::new_unchecked(
-            Algorithm::SHA1,
-            if self.config.totp_digits == 0 {
-                6
-            } else {
-                self.config.totp_digits
-            },
-            1,
-            1,
-            secret.as_bytes().to_vec(),
-            None,
-            String::new(),
-        );
-        totp::Totp::new(inner, self.config.totp_period)
+        totp_verifier(&self.config, secret)
             .with_default_period()
             .generate_current()
     }
@@ -477,7 +479,7 @@ impl TwoFactorPlugin {
         &self,
         user_id: &str,
         ctx: &AuthContext<S>,
-    ) -> AuthResult<Vec<String>> {
+    ) -> AuthResult<FieldValue> {
         view_backup_codes_core(user_id, &self.config.backup_code_options, ctx).await
     }
 }
@@ -555,6 +557,11 @@ impl<S: better_auth_core::AuthSchema> better_auth_core::AuthPlugin<S> for TwoFac
         &self,
         ctx: &mut better_auth_core::AuthInitContext<S>,
     ) -> better_auth_core::AuthResult<()> {
+        let role = better_auth_core::store::schema::EntityRole::TwoFactor;
+        ctx.register_model_fields(
+            role,
+            better_auth_core::plugin_runtime::ModelFields::plugin_native_fields(role),
+        )?;
         ctx.extensions.insert(self.config.clone());
         S::User::require_plugin_fields("two-factor", &["two_factor_enabled"])?;
         ctx.set_metadata(METADATA_ENABLED, serde_json::Value::Bool(true));
@@ -637,7 +644,7 @@ impl TwoFactorPlugin {
 
         let (response, set_cookie_headers) =
             verify_totp_core(req, &body, &self.config, ctx).await?;
-        let mut auth_response = AuthResponse::json(200, &response)?;
+        let mut auth_response = AuthResponse::native(200, response.into_field_value());
         for cookie in set_cookie_headers {
             auth_response = auth_response.with_appended_header("Set-Cookie", cookie);
         }
@@ -661,7 +668,7 @@ impl TwoFactorPlugin {
         let body: VerifyOtpRequest = request::read(req, false)?;
 
         let (response, set_cookie_headers) = verify_otp_core(req, &body, &self.config, ctx).await?;
-        let mut auth_response = AuthResponse::json(200, &response)?;
+        let mut auth_response = AuthResponse::native(200, response.into_field_value());
         for cookie in set_cookie_headers {
             auth_response = auth_response.with_appended_header("Set-Cookie", cookie);
         }
@@ -695,7 +702,7 @@ impl TwoFactorPlugin {
 
         let (response, set_cookie_headers) =
             verify_backup_code_core(req, &body, &self.config, ctx).await?;
-        let mut auth_response = AuthResponse::json(200, &response)?;
+        let mut auth_response = AuthResponse::native(200, response.into_field_value());
         for cookie in set_cookie_headers {
             auth_response = auth_response.with_appended_header("Set-Cookie", cookie);
         }
@@ -742,15 +749,17 @@ async fn resolve_two_factor_state<S: better_auth_core::AuthSchema>(
 
     let user = ctx
         .database
-        .get_user_by_id(verification.value.typed()?)
+        .get_user_by_id_value(&verification.value.field_value())
         .await?
         .ok_or_else(|| AuthError::authentication_failed("Invalid two factor cookie"))?;
-    let dont_remember = read_signed_cookie(req, DONT_REMEMBER_COOKIE_SUFFIX, ctx)?.is_some();
+    let dont_remember = read_signed_cookie(req, DONT_REMEMBER_COOKIE_SUFFIX, ctx)?
+        .is_some_and(|value| !value.is_empty());
 
     Ok(ResolvedTwoFactorState::Pending(PendingTwoFactorState {
         user: ctx.internal_user_view(&user).await?,
         key: identifier,
         dont_remember,
+        expires_at: verification.expires_at,
     }))
 }
 
@@ -761,49 +770,48 @@ async fn verify_existing_session_factor(
     enrollment: Option<EnrollmentMethod>,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     complete_enrollment: impl std::future::Future<Output = AuthResult<()>>,
-) -> AuthResult<(SessionTokenResponse<UserView>, Vec<String>)> {
-    if enrollment.is_some() && !user.two_factor_enabled() {
-        let updated_user = ctx
-            .database
-            .update_user(
-                user.id().typed()?,
-                UpdateUser {
-                    two_factor_enabled: Some(true),
-                    ..Default::default()
-                },
-            )
-            .await?;
-        let issued = issue_user_session(
+) -> AuthResult<(SessionTokenResponse, Vec<String>)> {
+    if enrollment.is_some()
+        && !user
+            .field_values()?
+            .get("twoFactorEnabled")
+            .is_some_and(FieldValue::is_truthy)
+    {
+        let updated_user = update_two_factor_user(&user, true, ctx).await?;
+        let issued = issue_factor_session(
+            req,
+            user.id().into_owned(),
+            updated_user
+                .clone()
+                .map_or(FieldValue::Null, |user| FieldMap::from(user).into()),
+            session.field_values()?,
             ctx,
-            updated_user.id().typed()?,
-            session.ip_address().map(str::to_owned),
-            session.user_agent().map(str::to_owned),
         )
-        .await
-        .map_err(SessionIssueError::into_auth_error)?;
-        let manager = ctx.session_manager();
-        manager
-            .set_session_cookie(
-                req,
-                manager
-                    .internal_data(&updated_user, &issued.session)
-                    .await?,
-                None,
-            )
-            .await?;
-        ctx.database.delete_session(session.token()).await?;
+        .await?;
+        delete_factor_session(&session, ctx).await?;
         complete_enrollment.await?;
         return Ok((
             SessionTokenResponse {
-                token: Some(if enrollment == Some(EnrollmentMethod::Otp) {
-                    issued.session.token().to_string()
+                token: if enrollment == Some(EnrollmentMethod::Otp) {
+                    issued
+                        .field_values()?
+                        .get("token")
+                        .cloned()
+                        .unwrap_or_default()
                 } else {
-                    session.token().to_string()
-                }),
+                    session
+                        .field_values()?
+                        .get("token")
+                        .cloned()
+                        .unwrap_or_default()
+                },
                 // TS keeps the verify response on the pre-update snapshot even
                 // though the re-issued session already observes 2FA as enabled.
                 user: if enrollment == Some(EnrollmentMethod::Otp) {
-                    ctx.user_view(&updated_user).await?
+                    ctx.user_view(updated_user.as_ref().ok_or_else(|| {
+                        AuthError::internal("Cannot convert undefined or null to object")
+                    })?)
+                    .await?
                 } else {
                     ctx.user_view(&user).await?
                 },
@@ -815,7 +823,11 @@ async fn verify_existing_session_factor(
     complete_enrollment.await?;
     Ok((
         SessionTokenResponse {
-            token: Some(session.token().to_string()),
+            token: session
+                .field_values()?
+                .get("token")
+                .cloned()
+                .unwrap_or_default(),
             user: ctx.user_view(&user).await?,
         },
         Vec::new(),
@@ -827,12 +839,17 @@ async fn finalize_pending_two_factor<S: better_auth_core::AuthSchema>(
     req: &AuthRequest,
     trust_device: bool,
     ctx: &AuthContext<S>,
-) -> AuthResult<(SessionTokenResponse<UserView>, Vec<String>)> {
+) -> AuthResult<(SessionTokenResponse, Vec<String>)> {
     let Some(consumed) = ctx
         .database
         .consume_verification_by_identifier(&pending.key)
         .await?
-        .filter(|verification| verification.value == pending.user.id)
+        .filter(|verification| {
+            verification
+                .value
+                .field_value()
+                .strict_equals(&pending.user.id.field_value())
+        })
     else {
         req.append_response_header(
             "Set-Cookie",
@@ -848,46 +865,60 @@ async fn finalize_pending_two_factor<S: better_auth_core::AuthSchema>(
     } else {
         ctx.config.session.expires_in()
     };
-    let issued = issue_user_session_with_lifetime(
-        ctx,
-        consumed.value.typed()?,
-        meta.ip_address,
-        meta.user_agent,
-        expires_in,
-    )
-    .await
-    .map_err(SessionIssueError::into_auth_error)?;
-
     let manager = ctx.session_manager();
+    admit_session_for_id(ctx, &consumed.value, None)
+        .await
+        .map_err(SessionIssueError::into_auth_error)?;
+    let Some(session) = manager
+        .create_session_for_id_with_lifetime_optional(
+            consumed.value,
+            meta.ip_address,
+            meta.user_agent,
+            expires_in,
+        )
+        .await?
+    else {
+        return Err(AuthError::Upstream {
+            status: 500,
+            code: "FAILED_TO_CREATE_SESSION",
+            message: "failed to create session",
+        });
+    };
     manager
-        .set_session_cookie(
+        .set_native_session_cookie(
             req,
-            manager
-                .internal_data(&pending.user, &issued.session)
-                .await?,
+            better_auth_core::session::NativeSessionData {
+                user: FieldMap::from(pending.user.clone()).into(),
+                session: session.clone(),
+            },
             None,
         )
         .await?;
-    let mut set_cookie_headers = vec![clear_cookie_header(
-        req,
-        &ctx.config,
-        TWO_FACTOR_COOKIE_SUFFIX,
-    )?];
+    req.append_response_header(
+        "Set-Cookie",
+        clear_cookie_header(req, &ctx.config, TWO_FACTOR_COOKIE_SUFFIX)?,
+    )?;
     if trust_device {
-        set_cookie_headers.push(create_trust_device_cookie_header(&issued.user, ctx).await?);
-        set_cookie_headers.push(clear_cookie_header(
-            req,
-            &ctx.config,
-            DONT_REMEMBER_COOKIE_SUFFIX,
-        )?);
+        req.append_response_header(
+            "Set-Cookie",
+            create_trust_device_cookie_header(&pending.user, ctx).await?,
+        )?;
+        req.append_response_header(
+            "Set-Cookie",
+            clear_cookie_header(req, &ctx.config, DONT_REMEMBER_COOKIE_SUFFIX)?,
+        )?;
     }
 
     Ok((
         SessionTokenResponse {
-            token: Some(issued.session.token().to_string()),
-            user: ctx.user_view(&issued.user).await?,
+            token: session
+                .field_values()?
+                .get("token")
+                .cloned()
+                .unwrap_or_default(),
+            user: ctx.user_view(&pending.user).await?,
         },
-        set_cookie_headers,
+        Vec::new(),
     ))
 }
 
@@ -896,7 +927,7 @@ async fn load_two_factor_record(
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<TwoFactor> {
     ctx.database
-        .get_two_factor_by_user_id(user.id().typed()?)
+        .get_two_factor_by_user_id_value(&user.id().into_owned())
         .await?
         .ok_or_else(|| AuthError::bad_request("TOTP not enabled"))
 }

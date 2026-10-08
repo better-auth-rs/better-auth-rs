@@ -171,6 +171,7 @@ async fn failed_acceptance_compensates_invitation_updates_without_committing_mem
         .await;
         let session = store
             .create_session(CreateSession {
+                inherited_fields: Default::default(),
                 additional_fields: Default::default(),
                 user_id: "recipient".into(),
                 expires_at: (chrono::Utc::now() + chrono::Duration::days(1)).into(),
@@ -271,6 +272,7 @@ async fn claim_output_and_compensation_errors_preserve_the_upstream_failure_stag
         .await;
         let session = store
             .create_session(CreateSession {
+                inherited_fields: Default::default(),
                 additional_fields: Default::default(),
                 user_id: "recipient".into(),
                 expires_at: (chrono::Utc::now() + chrono::Duration::days(1)).into(),

@@ -433,6 +433,7 @@ impl SecondaryFixture {
                     Box::pin(async move {
                         let _ = tx
                             .create_session_with_deferred_secondary(CreateSession {
+                                inherited_fields: Default::default(),
                                 additional_fields: Default::default(),
                                 user_id: user_id.into(),
                                 expires_at: (Utc::now() + chrono::Duration::days(7)).into(),
@@ -490,9 +491,24 @@ impl SecondaryFixture {
             .lock()
             .unwrap()
             .iter()
-            .filter(|(_, entry)| entry.expires.is_none_or(|expires| expires > Utc::now().timestamp_millis() as f64))
-            .map(|(key, entry)| json!({ "key": key, "value": entry.value, "ttl": entry.ttl.map(FieldValue::Number) }))
-            .collect();
+            .filter(|(_, entry)| {
+                entry
+                    .expires
+                    .is_none_or(|expires| expires > Utc::now().timestamp_millis() as f64)
+            })
+            .map(|(key, entry)| {
+                FieldMap::from([
+                    ("key".into(), key.clone()),
+                    ("value".into(), entry.value.clone().into()),
+                    (
+                        "ttl".into(),
+                        entry.ttl.map_or(FieldValue::Null, FieldValue::Number),
+                    ),
+                ])
+                .json()
+                .map(Value::Object)
+            })
+            .collect::<AuthResult<_>>()?;
         entries.sort_by(|left, right| left["key"].as_str().cmp(&right["key"].as_str()));
         Ok(
             json!({ "sessions": count("sessions").await?, "verifications": count("verifications").await?, "rows": rows, "entries": entries, "events": *self.events.0.lock().unwrap() }),

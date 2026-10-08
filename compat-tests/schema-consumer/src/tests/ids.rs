@@ -103,6 +103,7 @@ async fn core_writes<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPlugin
     }
     let session = store
         .create_session(CreateSession {
+            inherited_fields: Default::default(),
             user_id: user.id.clone(),
             expires_at: FieldDate::from_milliseconds(user.created_at.milliseconds() + 3_600_000.0),
             ip_address: None,

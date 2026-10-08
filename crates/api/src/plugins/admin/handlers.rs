@@ -628,6 +628,7 @@ pub(crate) async fn impersonate_user_core(
     )
     .ok_or_else(|| AuthError::internal("Invalid impersonation expiration date"))?;
     let create_session = CreateSession {
+        inherited_fields: Default::default(),
         additional_fields: Default::default(),
         user_id: target.id().into_owned(),
         expires_at: expires_at.into(),

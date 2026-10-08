@@ -311,6 +311,7 @@ async fn check_case<S: AuthSchema, T: AuthStore<S> + Clone + 'static>(
         );
         let session = store
             .create_session(CreateSession {
+                inherited_fields: Default::default(),
                 user_id: user.id,
                 expires_at: expires_at.clone(),
                 ip_address: None,

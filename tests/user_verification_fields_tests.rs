@@ -67,6 +67,7 @@ async fn seed_access<S: AuthSchema>(store: &dyn AuthStore<S>) -> String {
         .unwrap();
     let _ = store
         .create_session(CreateSession {
+            inherited_fields: Default::default(),
             user_id: id.clone().into(),
             expires_at: (chrono::Utc::now() + chrono::Duration::hours(1)).into(),
             additional_fields: Default::default(),

@@ -19,6 +19,7 @@ struct Graph {
 
 fn session_input(user_id: &str) -> CreateSession {
     CreateSession {
+        inherited_fields: Default::default(),
         user_id: user_id.into(),
         expires_at: (Utc::now() + chrono::Duration::hours(1)).into(),
         ip_address: None,

@@ -124,6 +124,7 @@ pub(crate) mod test_helpers {
         expires_in: Duration,
     ) -> SessionView {
         let create_session = CreateSession {
+            inherited_fields: Default::default(),
             additional_fields: Default::default(),
             user_id: user_id.into(),
             expires_at: (Utc::now() + expires_in).into(),

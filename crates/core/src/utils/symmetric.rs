@@ -7,7 +7,7 @@ use chacha20poly1305::{
 use rand::RngCore;
 use sha2::{Digest, Sha256};
 
-use crate::{AuthError, AuthResult, config::SecretKey};
+use crate::{AuthError, AuthResult, FieldValue, config::SecretKey};
 
 fn raw_encrypt(secret: &str, plaintext: &str) -> AuthResult<String> {
     let cipher = XChaCha20Poly1305::new_from_slice(&Sha256::digest(secret.as_bytes()))
@@ -85,6 +85,45 @@ pub fn decrypt<'a>(key: impl Into<SecretKey<'a>>, encoded: &str) -> AuthResult<S
                     "Cannot decrypt legacy bare-hex payload: no legacy secret available. Set BETTER_AUTH_SECRET for backwards compatibility.",
                 ))
             }
+        }
+    }
+}
+
+/// Consume native ciphertext at the cipher's string operation without coercing adapter output.
+pub fn decrypt_field<'a>(
+    key: impl Into<SecretKey<'a>>,
+    encoded: &FieldValue,
+) -> AuthResult<String> {
+    let key = key.into();
+    match encoded {
+        FieldValue::String(encoded) => decrypt(key, encoded),
+        FieldValue::Utf16String(encoded) => {
+            // Ciphertext is ASCII hex. Preserve envelope key selection before rejecting invalid code units.
+            let encoded = String::from_utf16_lossy(encoded.as_utf16());
+            decrypt(key, &encoded)
+        }
+        value => {
+            let message = match &key {
+                SecretKey::Single(_) => format!(
+                    "hex string expected, got {}",
+                    match value {
+                        FieldValue::Undefined => "undefined",
+                        FieldValue::Bool(_) => "boolean",
+                        FieldValue::Number(_) => "number",
+                        _ => "object",
+                    }
+                ),
+                SecretKey::Versioned { .. } => match value {
+                    FieldValue::Null => {
+                        "Cannot read properties of null (reading 'startsWith')".into()
+                    }
+                    FieldValue::Undefined => {
+                        "Cannot read properties of undefined (reading 'startsWith')".into()
+                    }
+                    _ => "data.startsWith is not a function".into(),
+                },
+            };
+            Err(AuthError::internal(message))
         }
     }
 }

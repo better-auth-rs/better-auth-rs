@@ -153,7 +153,7 @@ run_stage() {
       cargo clippy --locked --keep-going --features axum,seaorm2,redis-cache --test plugin_output_capabilities_tests --test async_field_transform_tests --test api_key_additional_fields_tests --test device_grant_tests --test organization_member_json_filter_reference_tests --test auth_entity_plugin_alias_tests --test plugin_model_fields_tests -- -D warnings || plugin_status=1
       cargo test --locked -p better-auth-cli schema_config || plugin_status=1
       cargo check --locked --manifest-path compat-tests/rust-server/Cargo.toml || plugin_status=1
-      cargo test --locked --no-fail-fast -p better-auth-core -p better-auth-api -p better-auth-seaorm --lib -- api_key passkey device store::cache::tests:: store::secondary:: utils::date::tests:: id_slot_tests::plugin_credentials query::dynamic_value_tests utils::json::runtime jwt user_fields::record::tests:: ordinary_object_primitive_conversion_checks_only_the_selected_method member_queries_use_typed_storage_before_output_transforms store::updates:: field_value::serde::tests:: store::value_filter::tests:: schema_value::tests:: || plugin_status=1
+      cargo test --locked --no-fail-fast -p better-auth-core -p better-auth-api -p better-auth-seaorm --lib -- api_key passkey device two_factor session_token_delete native_cookie store::session_create::tests:: store::cache::tests:: store::secondary:: utils::date::tests:: id_slot_tests::plugin_credentials query::dynamic_value_tests utils::json::runtime jwt user_fields::record::tests:: ordinary_object_primitive_conversion_checks_only_the_selected_method member_queries_use_typed_storage_before_output_transforms store::updates:: field_value::serde::tests:: store::value_filter::tests:: schema_value::tests:: || plugin_status=1
       cargo test --locked --no-fail-fast --features axum,seaorm2,redis-cache \
         --test async_field_transform_tests --test api_key_additional_fields_tests --test passkey_additional_fields_tests \
         --test device_grant_tests --test device_runtime_transaction_tests --test device_where_tests \
@@ -161,7 +161,7 @@ run_stage() {
         --test secondary_storage_hooks_tests --test session_create_payload_tests \
         --test session_initial_defaults_tests --test nullable_user_update_tests \
         --test organization_member_json_filter_reference_tests \
-        --test two_factor_additional_fields_tests --test device_additional_fields_tests \
+        --test two_factor_additional_fields_tests --test totp_period_nan_tests --test observability_tests --test device_additional_fields_tests \
         --test jwk_additional_fields_tests --test wallet_additional_fields_tests \
         --test auth_entity_plugin_alias_tests \
         --test plugin_output_capabilities_tests --test sql_user_extra_output_tests \

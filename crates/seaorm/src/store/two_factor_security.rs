@@ -81,11 +81,11 @@ mod tests {
         assert_eq!(factor.verified, Some(true));
         assert_eq!(factor.secret, "encrypted-secret");
         assert_eq!(factor.backup_codes, "encrypted-codes");
-        assert_eq!(factor.failed_verification_count, Some(0));
-        assert!(factor.locked_until.is_none());
+        assert_eq!(factor.failed_verification_count, Some(0.0));
+        assert_eq!(factor.locked_until, None);
         store
             .record_two_factor_failure(&factor.id, 1, &|| {
-                Ok(chrono::Utc::now() + chrono::Duration::minutes(15))
+                Ok((chrono::Utc::now() + chrono::Duration::minutes(15)).into())
             })
             .await
             .unwrap();
@@ -94,7 +94,7 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
-        assert_eq!(factor.failed_verification_count, Some(1));
-        assert!(factor.locked_until.is_some());
+        assert_eq!(factor.failed_verification_count, Some(1.0));
+        assert!(factor.locked_until.typed().unwrap().is_some());
     }
 }

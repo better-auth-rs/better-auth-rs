@@ -8,7 +8,7 @@ use crate::schema::AuthSchema;
 use crate::store::{AuthStore, JoinValue};
 use crate::types::CreateSession;
 use crate::utils::cookie_utils::{
-    get_cookie, related_cookie_name, session_cookie_headers, verify_cookie_value,
+    get_cookie, native_session_cookie_headers, related_cookie_name, verify_cookie_value,
 };
 use crate::wire::{SessionView, UserView};
 use crate::{AuthError, AuthRequest, HttpMethod};
@@ -217,7 +217,10 @@ impl<S: AuthSchema> SessionManager<S> {
         transaction: Option<&dyn crate::store::AuthTransaction<S>>,
     ) -> AuthResult<()> {
         let dont_remember = dont_remember.unwrap_or_else(|| self.dont_remember(req));
-        for cookie in session_cookie_headers(&data.session.token, dont_remember, &self.config) {
+        let token = crate::FieldMap::from(data.session.clone())
+            .shift_remove("token")
+            .unwrap_or_default();
+        for cookie in native_session_cookie_headers(token, dont_remember, &self.config) {
             req.append_response_header("Set-Cookie", cookie?)?;
         }
         self.write_cache_with_response(req, &data, dont_remember, None, transaction)
@@ -312,6 +315,7 @@ impl<S: AuthSchema> SessionManager<S> {
         let expires_at = Utc::now() + expires_in;
 
         let create_session = CreateSession {
+            inherited_fields: Default::default(),
             additional_fields: Default::default(),
             user_id,
             expires_at: expires_at.into(),
@@ -384,25 +388,31 @@ impl<S: AuthSchema> SessionManager<S> {
         })
     }
 
-    async fn resolve_relations(
+    fn resolve_relations(
         &self,
         req: &AuthRequest,
         read: SessionRead,
         typed_user: bool,
-    ) -> AuthResult<SessionResolution<SessionData<JoinValue<UserView>>>> {
-        let raw = if req.path() == "/get-session" {
-            req.query.clone()
-        } else {
-            Some(
-                req.query
-                    .as_ref()
-                    .filter(|value| value.is_object())
-                    .cloned()
-                    .unwrap_or_else(|| serde_json::json!({})),
-            )
-        };
-        let query = crate::query::session_query(raw)?;
-        crate::query::with_validated_query(query, self.resolve_inner(req, read, typed_user)).await
+    ) -> impl std::future::Future<
+        Output = AuthResult<SessionResolution<SessionData<JoinValue<UserView>>>>,
+    > + Send {
+        // Prove Send here instead of expanding the session pipeline in each request caller.
+        async move {
+            let raw = if req.path() == "/get-session" {
+                req.query.clone()
+            } else {
+                Some(
+                    req.query
+                        .as_ref()
+                        .filter(|value| value.is_object())
+                        .cloned()
+                        .unwrap_or_else(|| serde_json::json!({})),
+                )
+            };
+            let query = crate::query::session_query(raw)?;
+            crate::query::with_validated_query(query, self.resolve_inner(req, read, typed_user))
+                .await
+        }
     }
 
     async fn resolve_inner(

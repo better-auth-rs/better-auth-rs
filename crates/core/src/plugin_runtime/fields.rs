@@ -4,7 +4,6 @@ mod input;
 mod jwk;
 mod models;
 mod record;
-mod two_factor;
 mod wallet;
 
 use crate::id::AdapterIdInput;
@@ -171,9 +170,11 @@ impl ModelFields {
 
     pub(crate) fn register(&mut self, role: EntityRole, fields: UserConfig) -> AuthResult<()> {
         match role {
-            EntityRole::ApiKey | EntityRole::Passkey | EntityRole::DeviceCode => {}
+            EntityRole::ApiKey
+            | EntityRole::Passkey
+            | EntityRole::DeviceCode
+            | EntityRole::TwoFactor => {}
             EntityRole::Jwk => jwk::validate_fields(&fields)?,
-            EntityRole::TwoFactor => two_factor::validate_fields(&fields)?,
             EntityRole::WalletAddress => wallet::validate_fields(&fields)?,
             EntityRole::User
             | EntityRole::Session

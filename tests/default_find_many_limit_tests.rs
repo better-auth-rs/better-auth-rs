@@ -88,6 +88,7 @@ async fn check_limit<S: AuthSchema>(
             .await?;
         let session = store
             .create_session(CreateSession {
+                inherited_fields: Default::default(),
                 additional_fields: Default::default(),
                 user_id: user_id.clone().into(),
                 expires_at: (Utc::now() + Duration::hours(1)).into(),
@@ -276,6 +277,7 @@ async fn secondary_session_lists_do_not_apply_database_find_many_limits() -> Aut
         for _ in 0..4 {
             let session = store
                 .create_session(CreateSession {
+                    inherited_fields: Default::default(),
                     additional_fields: Default::default(),
                     user_id: user.id.clone(),
                     expires_at: (Utc::now() + Duration::hours(1)).into(),

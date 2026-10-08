@@ -114,6 +114,7 @@ async fn invitation_creation_and_resend_preserve_pinned_fractional_lifetimes() {
             .unwrap();
         let session = store
             .create_session(CreateSession {
+                inherited_fields: Default::default(),
                 user_id: "owner".into(),
                 expires_at: valid_until.into(),
                 additional_fields: Default::default(),

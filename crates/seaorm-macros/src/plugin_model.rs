@@ -45,7 +45,7 @@ pub(super) fn generate(
     let mut raw_output = Vec::new();
     let dynamic_record = matches!(
         role,
-        EntityRole::ApiKey | EntityRole::Passkey | EntityRole::DeviceCode
+        EntityRole::ApiKey | EntityRole::Passkey | EntityRole::DeviceCode | EntityRole::TwoFactor
     );
     for field in &fields.named {
         let Some(ident) = &field.ident else { continue };
@@ -104,22 +104,6 @@ pub(super) fn generate(
             quote!(f64::from(self.#ident.to_owned()))
         } else if role == EntityRole::WalletAddress && name == "chain_id" {
             quote!(i64::from(self.#ident))
-        } else if role == EntityRole::TwoFactor && name == "verified" {
-            if identity::optional_inner(&field.ty).is_some() {
-                quote!(self.#ident)
-            } else {
-                quote!(Some(self.#ident))
-            }
-        } else if role == EntityRole::TwoFactor && name == "failed_verification_count" {
-            if identity::optional_inner(&field.ty).is_some() {
-                quote!(self.#ident.map(i64::from))
-            } else {
-                quote!(Some(i64::from(self.#ident)))
-            }
-        } else if role == EntityRole::TwoFactor
-            && matches!(name.as_str(), "created_at" | "updated_at")
-        {
-            quote!(#core_root::SchemaValue::Typed(self.#ident.into()))
         } else if matches!(
             name.as_str(),
             "expires_at" | "last_polled_at" | "locked_until" | "created_at" | "updated_at"
@@ -132,9 +116,7 @@ pub(super) fn generate(
         } else {
             quote!(self.#ident.to_owned())
         };
-        let value = if matches!(role, EntityRole::WalletAddress | EntityRole::TwoFactor)
-            && name == "user_id"
-        {
+        let value = if role == EntityRole::WalletAddress && name == "user_id" {
             quote!(#core_root::SchemaValue::from_field(#core_root::SchemaField::into_field(#value)))
         } else {
             value
@@ -149,8 +131,6 @@ pub(super) fn generate(
         }
     });
     let two_factor_storage = options.native_two_factor.then(|| {
-        output.push(quote!(created_at: #core_root::SchemaValue::Undefined,));
-        output.push(quote!(updated_at: #core_root::SchemaValue::Undefined,));
         quote! {
             fn two_factor_storage() -> #core_root::TwoFactorStorage {
                 #core_root::TwoFactorStorage::Native

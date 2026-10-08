@@ -141,3 +141,34 @@ impl crate::UpdateDeviceCode {
         Ok(fields)
     }
 }
+
+impl crate::CreateTwoFactor {
+    /// Convert ordinary Rust input without supplying adapter-owned defaults.
+    #[doc(hidden)]
+    pub fn into_adapter_fields(self) -> AuthResult<FieldMap> {
+        let mut fields = self.additional_fields;
+        put(&mut fields, "secret", self.secret);
+        put(&mut fields, "backupCodes", self.backup_codes);
+        put(&mut fields, "userId", self.user_id);
+        put(&mut fields, "verified", self.verified);
+        Ok(fields)
+    }
+}
+
+impl crate::UpdateTwoFactor {
+    /// Convert supplied native and extension values into one logical patch.
+    #[doc(hidden)]
+    pub fn into_adapter_fields(self) -> AuthResult<FieldMap> {
+        let mut fields = self.additional_fields;
+        if let Some(value) = self.secret {
+            put(&mut fields, "secret", value);
+        }
+        if let Some(value) = self.backup_codes {
+            put(&mut fields, "backupCodes", value);
+        }
+        if let Some(value) = self.verified {
+            put(&mut fields, "verified", value);
+        }
+        Ok(fields)
+    }
+}

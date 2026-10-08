@@ -145,6 +145,7 @@ impl Events {
         let mut cache = Vec::new();
         let mut references = Vec::new();
         for (key, value) in trace.cache.iter() {
+            let mut entry = FieldMap::from([("key".into(), key.clone())]).json()?;
             // Keep malformed entries visible in the snapshot without repairing the cache.
             let value: Value = serde_json::from_str(value).unwrap_or(Value::Null);
             if key
@@ -158,18 +159,21 @@ impl Events {
                     .map(|row| row["token"].clone())
                     .collect::<Vec<_>>();
                 tokens.sort_by(|a, b| a.as_str().cmp(&b.as_str()));
-                references.push(json!({"key":key,"tokens":tokens}));
+                let _ = entry.insert("tokens".into(), json!(tokens));
+                references.push(Value::Object(entry));
             } else {
                 let row = &value["session"];
                 if row.is_null() {
-                    cache.push(json!({"key":key,"session":null}));
+                    let _ = entry.insert("session".into(), Value::Null);
+                    cache.push(Value::Object(entry));
                     continue;
                 }
-                cache.push(json!({"key":key,"session":{
+                let _ = entry.insert("session".into(), json!({
                     "id":row["id"],"token":row["token"],"userId":row["userId"],"label":row["label"],
                     "createdAt":date(row["createdAt"].as_str().unwrap()).to_rfc3339_opts(SecondsFormat::Millis,true),
                     "updatedAt":date(row["updatedAt"].as_str().unwrap()).to_rfc3339_opts(SecondsFormat::Millis,true),
-                    "expiresAt":date(row["expiresAt"].as_str().unwrap()).to_rfc3339_opts(SecondsFormat::Millis,true)}}));
+                    "expiresAt":date(row["expiresAt"].as_str().unwrap()).to_rfc3339_opts(SecondsFormat::Millis,true)}));
+                cache.push(Value::Object(entry));
             }
         }
         cache.sort_by(|left, right| left["key"].as_str().cmp(&right["key"].as_str()));
@@ -216,7 +220,11 @@ impl SecondaryStorage for Events {
         value: &str,
         _: Option<f64>,
     ) -> AuthResult<()> {
-        self.record("cache.set", json!({"key":key})).await?;
+        self.record(
+            "cache.set",
+            Value::Object(FieldMap::from([("key".into(), key.clone())]).json()?),
+        )
+        .await?;
         if self.options()["cacheFailure"] == "set" {
             return Err(rejected());
         }
@@ -466,6 +474,7 @@ impl Fixture {
                 Some(id.into()),
                 format!("{id}-token"),
                 CreateSession {
+                    inherited_fields: Default::default(),
                     additional_fields: Default::default(),
                     user_id: "u1".into(),
                     expires_at: date(EXPIRES_AT).into(),

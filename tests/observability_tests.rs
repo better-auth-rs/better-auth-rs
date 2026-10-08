@@ -1291,39 +1291,42 @@ async fn check_two_factor_operations(
     async {
         let until = chrono::Utc::now() + chrono::Duration::minutes(5);
         store
-            .record_two_factor_failure(&factor.id, 2, &|| Ok(until))
+            .record_two_factor_failure(&factor.id, 2, &|| Ok(until.into()))
             .await?;
         store
-            .record_two_factor_failure(&factor.id, 2, &|| Ok(until))
+            .record_two_factor_failure(&factor.id, 2, &|| Ok(until.into()))
             .await?;
         let locked = store
             .get_two_factor_by_user_id("owner")
             .await?
             .expect("created factor");
-        assert_eq!(locked.failed_verification_count, Some(2));
-        assert!(locked.locked_until.is_some());
+        assert_eq!(locked.failed_verification_count, Some(2.0));
+        assert!(locked.locked_until.typed()?.is_some());
         store.reset_two_factor_failures(&factor.id, None).await?;
         let reset = store
             .get_two_factor_by_user_id("owner")
             .await?
             .expect("created factor");
-        assert_eq!(reset.failed_verification_count, Some(0));
-        assert!(reset.locked_until.is_none());
+        assert_eq!(reset.failed_verification_count, Some(0.0));
+        assert!(reset.locked_until.typed()?.is_none());
         store
-            .record_two_factor_failure(&factor.id, 2, &|| Ok(until))
+            .record_two_factor_failure(&factor.id, 2, &|| Ok(until.into()))
             .await?;
         store
-            .record_two_factor_failure(&factor.id, 2, &|| Ok(until))
+            .record_two_factor_failure(&factor.id, 2, &|| Ok(until.into()))
             .await?;
         store
-            .reset_two_factor_failures(&factor.id, Some(until + chrono::Duration::minutes(1)))
+            .reset_two_factor_failures(
+                &factor.id,
+                Some((until + chrono::Duration::minutes(1)).into()),
+            )
             .await?;
         let expired = store
             .get_two_factor_by_user_id("owner")
             .await?
             .expect("created factor");
-        assert_eq!(expired.failed_verification_count, Some(0));
-        assert!(expired.locked_until.is_none());
+        assert_eq!(expired.failed_verification_count, Some(0.0));
+        assert!(expired.locked_until.typed()?.is_none());
         Ok::<_, AuthError>(())
     }
     .instrument(capture_span)

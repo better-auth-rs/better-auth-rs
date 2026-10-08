@@ -63,6 +63,7 @@ async fn challenge_database_failures_preserve_upstream_errors_and_cookie_expiry(
         user,
         key: "failure-challenge".into(),
         dont_remember: false,
+        expires_at: (Utc::now() + Duration::minutes(5)).into(),
     });
     let req = AuthRequest::new(HttpMethod::Post, "/two-factor/verify-totp");
     let failure = begin_attempt(&state, &req, &ctx).await.err().unwrap();
@@ -215,7 +216,7 @@ async fn authenticator_enrollment_can_restart_only_until_verified() {
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(first_record.verified, Some(false));
+    assert_eq!(first_record.verified.field_value(), false.into());
     let (second, _) = enable_core(
         &AuthRequest::new(better_auth_core::HttpMethod::Post, "/two-factor/enable"),
         &body,
@@ -295,7 +296,7 @@ async fn authenticator_enrollment_can_restart_only_until_verified() {
         .unwrap();
     assert_eq!(preserved.secret, second_record.secret);
     assert_eq!(preserved.backup_codes, second_record.backup_codes);
-    assert_eq!(preserved.verified, Some(true));
+    assert_eq!(preserved.verified.field_value(), true.into());
 }
 
 #[tokio::test]
@@ -374,9 +375,11 @@ async fn failed_challenge_budget_and_account_lock_survive_new_challenges() {
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(factor.failed_verification_count, Some(10));
+    assert_eq!(factor.failed_verification_count.field_value(), 10.0.into());
     ctx.database
-        .record_two_factor_failure(&factor.id, 10, &|| Ok(Utc::now() - Duration::seconds(1)))
+        .record_two_factor_failure(&factor.id, 10, &|| {
+            Ok((Utc::now() - Duration::seconds(1)).into())
+        })
         .await
         .unwrap();
     let _ = verify_backup_code_core(&req, &valid, &config, &ctx)
@@ -388,8 +391,8 @@ async fn failed_challenge_budget_and_account_lock_survive_new_challenges() {
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(factor.failed_verification_count, Some(0));
-    assert!(factor.locked_until.is_none());
+    assert_eq!(factor.failed_verification_count.field_value(), 0.0.into());
+    assert!(factor.locked_until.field_value().is_null());
 }
 
 #[tokio::test]

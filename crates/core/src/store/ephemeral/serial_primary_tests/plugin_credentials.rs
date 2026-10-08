@@ -281,8 +281,11 @@ async fn serial_two_factor_ids_keep_backup_code_and_lockout_guards() -> AuthResu
             .two_factors
             .snapshot()?
             .iter()
-            .map(|row| (row.id.field_value(), row.user_id.field_value()))
-            .collect::<Vec<_>>(),
+            .map(|row| Ok((
+                required(row.get("id"))?.clone(),
+                required(row.get("userId"))?.clone()
+            )))
+            .collect::<AuthResult<Vec<_>>>()?,
         [
             (Value::Number(1.0), Value::Number(1.0)),
             (Value::Number(2.0), Value::Number(2.0))
@@ -300,16 +303,17 @@ async fn serial_two_factor_ids_keep_backup_code_and_lockout_guards() -> AuthResu
         .await?;
     assert_eq!(updated.id, "1");
     assert_eq!(updated.secret, "updated-secret");
+    let original_codes: Value = "encrypted-codes".into();
     let (first, second_attempt) = tokio::join!(
         store.compare_exchange_two_factor_backup_codes(
             &padded,
-            "encrypted-codes",
-            "first-replacement"
+            &original_codes,
+            "first-replacement".into()
         ),
         store.compare_exchange_two_factor_backup_codes(
             &padded,
-            "encrypted-codes",
-            "second-replacement"
+            &original_codes,
+            "second-replacement".into()
         ),
     );
     assert_eq!(
@@ -321,31 +325,31 @@ async fn serial_two_factor_ids_keep_backup_code_and_lockout_guards() -> AuthResu
     );
     assert!(
         !store
-            .compare_exchange_two_factor_backup_codes(&padded, "encrypted-codes", "replayed")
+            .compare_exchange_two_factor_backup_codes(&padded, &original_codes, "replayed".into())
             .await?
     );
     let until = Utc::now() + chrono::Duration::minutes(15);
     store
-        .record_two_factor_failure(&padded, 2, &|| Ok(until))
+        .record_two_factor_failure(&padded, 2, &|| Ok(until.into()))
         .await?;
     store
-        .record_two_factor_failure(&padded, 2, &|| Ok(until))
+        .record_two_factor_failure(&padded, 2, &|| Ok(until.into()))
         .await?;
     let locked = required(store.get_two_factor_by_user_id("1").await?)?;
-    assert_eq!(locked.failed_verification_count, Some(2));
+    assert_eq!(locked.failed_verification_count, Some(2.0));
     assert_eq!(locked.locked_until, Some(until.into()));
     store
-        .reset_two_factor_failures(&padded, Some(until - chrono::Duration::seconds(1)))
+        .reset_two_factor_failures(&padded, Some((until - chrono::Duration::seconds(1)).into()))
         .await?;
     assert_eq!(
         required(store.get_two_factor_by_user_id("001").await?)?.failed_verification_count,
-        Some(2)
+        Some(2.0)
     );
     store
-        .reset_two_factor_failures(&padded, Some(until))
+        .reset_two_factor_failures(&padded, Some(until.into()))
         .await?;
     let reset = required(store.get_two_factor_by_user_id("1").await?)?;
-    assert_eq!(reset.failed_verification_count, Some(0));
+    assert_eq!(reset.failed_verification_count, Some(0.0));
     assert_eq!(reset.locked_until, None);
     assert_eq!(
         required(store.get_two_factor_by_user_id("002").await?)?,

@@ -111,6 +111,7 @@ pub(super) async fn seed<S: AuthSchema>(store: &dyn AuthStore<S>, scenario: &str
         let owner = if *suffix == "a" { "user-b" } else { "user-a" };
         let _ = store
             .create_session(CreateSession {
+                inherited_fields: Default::default(),
                 user_id: format!("user-{suffix}").into(),
                 expires_at: "2100-01-02T03:04:05.000Z"
                     .parse::<chrono::DateTime<chrono::Utc>>()?

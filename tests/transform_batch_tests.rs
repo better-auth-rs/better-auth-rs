@@ -266,6 +266,7 @@ async fn check<S: AuthSchema>(
         tokens.push(
             store
                 .create_session(CreateSession {
+                    inherited_fields: Default::default(),
                     user_id: ids[0].clone().into(),
                     expires_at: (chrono::Utc::now() + chrono::Duration::hours(1)).into(),
                     ip_address: None,

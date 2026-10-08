@@ -113,6 +113,16 @@ impl EphemeralStore {
         Ok(crate::SchemaValue::from_field(value))
     }
 
+    pub(super) fn memory_session_token_query(&self, value: Value) -> AuthResult<(String, Value)> {
+        let schema = self.session_config.adapter_schema();
+        let value = self.memory_field_query(&schema, "token", value)?;
+        let value = match schema.fields().get("token") {
+            Some(field) => crate::user_query::bind_filter(field, &value)?,
+            None => value,
+        };
+        Ok((schema.record_storage_key("token").to_owned(), value))
+    }
+
     pub(super) fn memory_session_user_id_query(&self, value: Value) -> AuthResult<Value> {
         match self.session_config.fields().get("userId") {
             Some(field) => crate::user_query::bind_filter(

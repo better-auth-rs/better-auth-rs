@@ -495,6 +495,7 @@ async fn accepting_multiple_teams_rolls_back_every_write_when_one_team_is_full()
         .unwrap();
     let session = store
         .create_session(CreateSession {
+            inherited_fields: Default::default(),
             additional_fields: Default::default(),
             user_id: "user-b".into(),
             expires_at: (chrono::Utc::now() + chrono::Duration::hours(1)).into(),
@@ -619,6 +620,7 @@ async fn single_team_invitation_captures_cookie_before_switching_organization() 
         .unwrap();
     let session = store
         .create_session(CreateSession {
+            inherited_fields: Default::default(),
             additional_fields: Default::default(),
             user_id: "user-b".into(),
             expires_at: (chrono::Utc::now() + chrono::Duration::hours(1)).into(),
@@ -697,6 +699,7 @@ async fn dynamic_team_limits_run_in_order_and_rollback_callback_failures() {
         .unwrap();
     let session = store
         .create_session(CreateSession {
+            inherited_fields: Default::default(),
             additional_fields: Default::default(),
             user_id: "user-b".into(),
             expires_at: (chrono::Utc::now() + chrono::Duration::hours(1)).into(),

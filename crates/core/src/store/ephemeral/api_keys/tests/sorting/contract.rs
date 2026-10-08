@@ -222,7 +222,9 @@ async fn query(store: &EphemeralStore, operation: &str) -> AuthResult<Vec<ApiKey
         })?;
         crate::query::paginate_memory(selected, Some(2.0), Some(1.0))
     };
-    store.project_api_key_refs(selected).await
+    store
+        .project_api_key_refs(selected.into_iter().map(|(_, source)| source).collect())
+        .await
 }
 
 #[test]

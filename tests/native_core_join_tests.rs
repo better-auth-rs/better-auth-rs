@@ -200,6 +200,7 @@ async fn seed(store: &Store, labels: &[&str], account_count: usize) {
             Some(format!("session-{suffix}")),
             format!("ordinary-session-{suffix}"),
             CreateSession {
+                inherited_fields: Default::default(),
                 user_id: user.id.clone(),
                 expires_at: expires_at.into(),
                 ip_address: None,

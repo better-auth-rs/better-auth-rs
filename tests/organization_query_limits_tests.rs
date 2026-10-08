@@ -49,6 +49,7 @@ async fn check<S: AuthSchema>(
         .ok_or_else(|| AuthError::internal("fixture requires two users"))?;
     let session = store
         .create_session(CreateSession {
+            inherited_fields: Default::default(),
             additional_fields: Default::default(),
             user_id: first.id().into_owned(),
             expires_at: (Utc::now() + Duration::hours(1)).into(),

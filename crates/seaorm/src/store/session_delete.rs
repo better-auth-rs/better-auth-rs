@@ -14,11 +14,45 @@ use super::{HookTransaction, map_db_err};
 
 use super::transaction_hooks::after_write;
 
+#[cfg(test)]
+#[path = "session_token_delete_tests.rs"]
+mod token_tests;
+
 impl<S, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> SeaOrmStore<S, O, P>
 where
     S: AuthSchema,
     S::Session: SeaOrmSessionModel,
 {
+    pub(super) fn session_token_filter(
+        &self,
+        token: &better_auth_core::FieldValue,
+    ) -> AuthResult<sea_orm::sea_query::SimpleExpr> {
+        let field = self
+            .config()
+            .session
+            .fields()
+            .get("token")
+            .cloned()
+            .unwrap_or_default();
+        let backend = self.connection().get_database_backend();
+        let value = if field.references_id() {
+            self.config()
+                .advanced
+                .database
+                .generate_id()
+                .adapter_id_query(token.clone())?
+        } else {
+            token.clone()
+        };
+        let value = better_auth_core::user_query::bind_filter(&field, &value)?;
+        let value = super::value_filter::adapter_query_value(value, token, &field, backend)?;
+        let name = better_auth_core::store::schema::resolve_field_name(
+            field.field_name.as_deref(),
+            "token",
+        );
+        super::value_filter::equals(S::Session::field_column(name)?, &value, backend)
+    }
+
     pub(super) async fn session_delete_snapshot(
         &self,
         session: S::Session,

@@ -1,7 +1,7 @@
 use super::{TwoFactorConfig, TwoFactorPlugin, request};
 use better_auth_core::{
-    AuthContext, AuthError, AuthResponse, AuthResult, AuthRoute, AuthSchema, HttpMethod,
-    NativeRequest,
+    AuthContext, AuthError, AuthResponse, AuthResult, AuthRoute, AuthSchema, FieldMap, FieldValue,
+    HttpMethod, NativeRequest,
 };
 use serde_json::Value;
 
@@ -54,7 +54,7 @@ impl<'a, S: AuthSchema> TwoFactorApi<'a, S> {
         Ok(serde_json::from_slice::<Result>(&response.body.bytes()?)?.code)
     }
     /// Validate and coerce the supplied user ID, then read the stored backup codes.
-    pub async fn view_backup_codes(&self, body: Option<Value>) -> AuthResult<Vec<String>> {
+    pub async fn view_backup_codes(&self, body: Option<Value>) -> AuthResult<FieldValue> {
         let route = AuthRoute::server_only(HttpMethod::Post, "viewBackupCodes")
             .body_validator(|request| request::validate_native(request, "viewBackupCodes"));
         let response = self
@@ -74,16 +74,23 @@ impl<'a, S: AuthSchema> TwoFactorApi<'a, S> {
                         .plugin
                         .view_backup_codes(&body.user_id, &context)
                         .await?;
-                    AuthResponse::json(200, &serde_json::json!({"status":true,"backupCodes":codes}))
-                        .map_err(Into::into)
+                    Ok(AuthResponse::native(
+                        200,
+                        FieldMap::from([
+                            ("status".into(), true.into()),
+                            ("backupCodes".into(), codes),
+                        ])
+                        .into(),
+                    ))
                 },
             )
             .await?;
-        #[derive(serde::Deserialize)]
-        struct Result {
-            #[serde(rename = "backupCodes")]
-            backup_codes: Vec<String>,
-        }
-        Ok(serde_json::from_slice::<Result>(&response.body.bytes()?)?.backup_codes)
+        Ok(response
+            .body
+            .field_value()?
+            .as_object()
+            .and_then(|fields| fields.get("backupCodes"))
+            .cloned()
+            .unwrap_or_default())
     }
 }

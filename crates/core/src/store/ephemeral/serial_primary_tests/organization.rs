@@ -379,6 +379,7 @@ async fn serial_invitation_cookie_projects_ids_without_changing_session_update_o
         }
         let session = store
             .create_session(CreateSession {
+                inherited_fields: Default::default(),
                 additional_fields,
                 user_id: "001".into(),
                 expires_at: (Utc::now() + chrono::Duration::days(1)).into(),

@@ -174,6 +174,7 @@ pub(crate) async fn run<S: AuthSchema>(
     let session = auth
         .store()
         .create_session(CreateSession {
+            inherited_fields: Default::default(),
             user_id: OWNER.into(),
             expires_at: (chrono::Utc::now() + auth.config().session.expires_in()).into(),
             ip_address: None,

@@ -282,12 +282,12 @@ pub trait AuthTwoFactor:
         None
     }
     fn id(&self) -> SchemaValue<Cow<'_, str>>;
-    fn secret(&self) -> &str;
-    fn backup_codes(&self) -> &str;
+    fn secret(&self) -> &SchemaValue<String>;
+    fn backup_codes(&self) -> &SchemaValue<String>;
     fn user_id(&self) -> SchemaValue<Cow<'_, str>>;
-    fn verified(&self) -> Option<bool>;
-    fn failed_verification_count(&self) -> Option<i64>;
-    fn locked_until(&self) -> Option<crate::FieldDate>;
+    fn verified(&self) -> &SchemaValue<Option<bool>>;
+    fn failed_verification_count(&self) -> &SchemaValue<Option<f64>>;
+    fn locked_until(&self) -> &SchemaValue<Option<crate::FieldDate>>;
     fn created_at(&self) -> &SchemaValue<crate::FieldDate>;
     fn updated_at(&self) -> &SchemaValue<crate::FieldDate>;
 }

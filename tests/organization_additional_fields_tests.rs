@@ -89,6 +89,7 @@ async fn custom_organization_tables_preserve_fields_and_atomic_invitation_defaul
         .await?;
     let session = store
         .create_session(CreateSession {
+            inherited_fields: Default::default(),
             additional_fields: Default::default(),
             user_id: "recipient".into(),
             expires_at: (chrono::Utc::now() + chrono::Duration::hours(1)).into(),
@@ -174,6 +175,7 @@ async fn custom_organization_tables_preserve_fields_and_atomic_invitation_defaul
     );
     let owner_session = store
         .create_session(CreateSession {
+            inherited_fields: Default::default(),
             user_id: "owner".into(),
             expires_at: (chrono::Utc::now() + chrono::Duration::hours(1)).into(),
             ip_address: None,

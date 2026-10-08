@@ -385,6 +385,7 @@ async fn optional_runtime_fields_preserve_absence_then_explicit_null() {
 
     let session = store
         .create_session(CreateSession {
+            inherited_fields: Default::default(),
             additional_fields: Default::default(),
             user_id: user.id,
             expires_at: (Utc::now() + chrono::Duration::days(1)).into(),

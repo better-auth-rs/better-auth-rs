@@ -164,6 +164,7 @@ async fn scenario<S: AuthSchema>(
     for id in ["owner", "recipient"] {
         let session = store
             .create_session(CreateSession {
+                inherited_fields: Default::default(),
                 user_id: id.into(),
                 expires_at: "2099-01-01T00:00:00Z"
                     .parse::<chrono::DateTime<chrono::Utc>>()

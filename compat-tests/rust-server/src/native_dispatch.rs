@@ -11,8 +11,8 @@ use better_auth_core::observability::{
     AfterEndpointHook, BeforeEndpointHook, EndpointHooks, instrumentation::with_endpoint_hook,
 };
 use better_auth_core::{
-    AuthContext, AuthPlugin, AuthRequest, AuthResponse, AuthRoute, BeforeRequestAction, HttpMethod,
-    NativeRequest, store::StatelessSchema as S,
+    AuthContext, AuthPlugin, AuthRequest, AuthResponse, AuthRoute, BeforeRequestAction, FieldMap,
+    HttpMethod, NativeRequest, store::StatelessSchema as S,
 };
 use serde_json::{Value, json};
 use std::{
@@ -222,7 +222,10 @@ pub(super) async fn router(base: &str) -> AuthResult<Router> {
   let source=NativeRequest{request:original.as_ref(),headers:headers.as_ref()};
   let result:AuthResult<Value>=async{match operation{
    "generateTOTP"=>Ok(json!({"code":auth.two_factor()?.with_request(source).generate_totp(input.get("body").cloned()).await?})),
-   "viewBackupCodes"=>Ok(json!({"status":true,"backupCodes":auth.two_factor()?.with_request(source).view_backup_codes(input.get("body").cloned()).await?})),
+   "viewBackupCodes"=>Ok(Value::Object(FieldMap::from([
+    ("status".into(), true.into()),
+    ("backupCodes".into(), auth.two_factor()?.with_request(source).view_backup_codes(input.get("body").cloned()).await?),
+   ]).json()?)),
    "createVerificationOTP"=>{let kind:EmailOtpType=serde_json::from_value(input["body"]["type"].clone())?;Ok(json!(auth.email_otp()?.with_request(source).create(input["body"]["email"].as_str().unwrap_or_default(),kind).await?))},
    "getVerificationOTP"=>{let kind:EmailOtpType=serde_json::from_value(input["query"]["type"].clone())?;Ok(json!({"otp":auth.email_otp()?.with_request(source).get(input["query"]["email"].as_str().unwrap_or_default(),kind).await?}))},
    "signJWT"=>Ok(json!({"token":auth.jwt()?.with_request(source).sign(serde_json::from_value(input["body"]["payload"].clone())?).await?})),

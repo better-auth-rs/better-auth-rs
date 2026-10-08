@@ -196,7 +196,7 @@ async fn native_verified_states_control_setup_and_sign_in_methods() {
         if verified == Some(false) {
             assert_eq!(result.unwrap().status, 200);
             assert_eq!(stored.id, original.id);
-            assert_eq!(stored.verified, Some(false));
+            assert_eq!(stored.verified.field_value(), false.into());
             assert_ne!(stored.secret, original.secret);
             assert_ne!(stored.backup_codes, original.backup_codes);
         } else {
@@ -229,7 +229,7 @@ async fn native_totp_completion_rotates_sessions_only_for_incomplete_enrollment(
         assert_eq!(body["token"], fixture.session.token);
         assert_eq!(body["user"]["twoFactorEnabled"], false);
         let stored = fixture.record().await;
-        assert_eq!(stored.verified, Some(true));
+        assert_eq!(stored.verified.field_value(), true.into());
         assert_eq!(stored.id, original.id);
         assert_eq!(stored.secret, original.secret);
         assert_eq!(stored.backup_codes, original.backup_codes);
@@ -304,7 +304,7 @@ async fn native_pending_totp_accepts_null_but_rejects_explicit_false() {
         let result = plugin.handle_verify_totp(&request, &fixture.ctx).await;
         if verified == Some(false) {
             assert_eq!(result.unwrap_err().to_string(), "TOTP not enabled");
-            assert_eq!(fixture.record().await.verified, Some(false));
+            assert_eq!(fixture.record().await.verified.field_value(), false.into());
             assert!(
                 fixture
                     .ctx
@@ -321,7 +321,7 @@ async fn native_pending_totp_accepts_null_but_rejects_explicit_false() {
                 serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
             assert_eq!(body["user"]["twoFactorEnabled"], true);
             assert_ne!(body["token"], fixture.session.token);
-            assert_eq!(fixture.record().await.verified, Some(true));
+            assert_eq!(fixture.record().await.verified.field_value(), true.into());
             assert!(
                 fixture
                     .ctx

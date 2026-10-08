@@ -207,6 +207,7 @@ fn input(case: Case) -> TestResult<CreateSession> {
         let _ = additional_fields.insert("label".into(), "caller".into());
     }
     Ok(CreateSession {
+        inherited_fields: Default::default(),
         user_id: "owner".into(),
         expires_at: "2100-01-02T03:04:05Z"
             .parse::<chrono::DateTime<chrono::Utc>>()?

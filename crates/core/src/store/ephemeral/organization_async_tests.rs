@@ -351,6 +351,7 @@ async fn invitation_member_output_failure_compensates_without_member_seat_or_ses
     let invitation = store.create_invitation(input).await?;
     let session = store
         .create_session(CreateSession {
+            inherited_fields: Default::default(),
             user_id: "member".into(),
             expires_at: (Utc::now() + chrono::Duration::days(1)).into(),
             additional_fields: Default::default(),

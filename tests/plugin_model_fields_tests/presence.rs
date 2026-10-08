@@ -20,6 +20,7 @@ pub(super) async fn token<S: AuthSchema>(auth: &BetterAuth<S>, owner: &str) -> A
     let session = auth
         .store()
         .create_session(CreateSession {
+            inherited_fields: Default::default(),
             user_id: owner.into(),
             expires_at: (chrono::Utc::now() + chrono::Duration::hours(1)).into(),
             ip_address: None,

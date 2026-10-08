@@ -86,6 +86,7 @@ async fn contract<S: AuthSchema>(
         let session = auth
             .store()
             .create_session(CreateSession {
+                inherited_fields: Default::default(),
                 user_id: owner.clone().into(),
                 expires_at: (chrono::Utc::now() + chrono::Duration::hours(1)).into(),
                 ip_address: None,

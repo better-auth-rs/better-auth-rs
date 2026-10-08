@@ -260,7 +260,7 @@ async fn test_verify_existing_session_factor_enables_two_factor_and_reissues_ses
     let queued = request.take_response_headers().unwrap();
     let set_cookie_headers: Vec<_> = queued.get_all("set-cookie").collect();
     assert_eq!(response.user.two_factor_enabled, Some(false));
-    assert_eq!(response.token.as_deref(), Some(session.token.as_str()));
+    assert_eq!(response.token.as_str(), Some(session.token.as_str()));
     assert_eq!(set_cookie_headers.len(), 1);
     assert!(
         ctx.database
@@ -316,7 +316,10 @@ async fn test_view_backup_codes_returns_decrypted_codes() {
         .view_backup_codes(user.id.typed().unwrap(), &ctx)
         .await
         .unwrap();
-    assert_eq!(backup_codes, expected_codes);
+    assert_eq!(
+        backup_codes.json().unwrap(),
+        Some(serde_json::json!(expected_codes))
+    );
 }
 
 #[tokio::test]
@@ -332,7 +335,7 @@ async fn test_view_backup_codes_rejects_invalid_stored_json() {
             verified: true,
             user_id: user.id.typed().unwrap().clone(),
             secret: encrypt_value(&ctx.config.secret, "totp-secret").unwrap(),
-            backup_codes: encrypt_value(&ctx.config.secret, "\"not-an-array\"").unwrap(),
+            backup_codes: encrypt_value(&ctx.config.secret, "not-json").unwrap(),
         })
         .await
         .unwrap();

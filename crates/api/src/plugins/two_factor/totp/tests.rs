@@ -151,7 +151,7 @@ async fn nan_period_enrollment_uri_encodes_the_persisted_secret() -> AuthResult<
         let secret = decrypt_value(ctx.config.encryption_secret(), &factor.secret)?;
         assert_eq!(secret.len(), 32);
         assert!(secret.bytes().all(|byte| byte.is_ascii_alphanumeric()));
-        assert_eq!(factor.verified, Some(false));
+        assert_eq!(factor.verified.field_value(), false.into());
         let uri = response.totp_uri.expect("TOTP enrollment URI");
         let parsed = url::Url::parse(&uri).expect("valid enrollment URI");
         let encoded = parsed

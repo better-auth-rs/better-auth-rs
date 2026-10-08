@@ -1179,6 +1179,7 @@ async fn legacy_numeric_session_rejects_invalid_user_id_before_constructor() {
     let store = SeaOrmStore::<LegacySchema>::new(config, database.clone());
     let error = store
         .create_session(CreateSession {
+            inherited_fields: Default::default(),
             user_id: "invalid-numeric-user-id".into(),
             expires_at: (Utc::now() + chrono::Duration::minutes(30)).into(),
             ip_address: None,

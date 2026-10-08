@@ -32,6 +32,7 @@ pub(super) async fn seed<S: AuthSchema>(store: &dyn AuthStore<S>, now: i64) -> T
         .await?;
     let _ = store
         .create_session(CreateSession {
+            inherited_fields: Default::default(),
             user_id: "duration-owner".into(),
             expires_at: FieldDate::from_milliseconds((now + 3_600_000) as f64),
             ip_address: None,

@@ -72,6 +72,7 @@ async fn memory_session_undefined_id_alias_matches_complete_upstream_observation
     let store = EphemeralStore::new(Arc::new(config));
     let empty = memory(&store, "after-label")?;
     let create = CreateSession {
+        inherited_fields: Default::default(),
         user_id: "001".into(),
         expires_at: date(EXPIRES_AT)?,
         ip_address: Some(String::new()),

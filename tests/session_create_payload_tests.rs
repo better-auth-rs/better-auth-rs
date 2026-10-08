@@ -257,6 +257,7 @@ fn hooks<S: AuthSchema>(case: Case, events: &Sender<Event>) -> Vec<Arc<dyn Datab
 
 fn input() -> AuthResult<CreateSession> {
     Ok(CreateSession {
+        inherited_fields: Default::default(),
         user_id: "owner".into(),
         expires_at: date(EXPIRY)?,
         ip_address: Some("192.0.2.10".into()),

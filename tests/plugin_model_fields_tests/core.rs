@@ -168,6 +168,7 @@ async fn core_contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>) -> AuthResult<
         let session = auth
             .store()
             .create_session(CreateSession {
+                inherited_fields: Default::default(),
                 user_id: user.id,
                 expires_at: (chrono::Utc::now() + chrono::Duration::hours(1)).into(),
                 ip_address: None,

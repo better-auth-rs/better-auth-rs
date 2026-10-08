@@ -44,6 +44,7 @@ async fn assert_signing_transaction<S: AuthSchema>(auth: BetterAuth<S>) {
                         .await?;
                     let session = tx
                         .create_session(CreateSession {
+                            inherited_fields: Default::default(),
                             additional_fields: Default::default(),
                             user_id: user.id().into_owned(),
                             expires_at: (chrono::Utc::now() + chrono::Duration::hours(1)).into(),

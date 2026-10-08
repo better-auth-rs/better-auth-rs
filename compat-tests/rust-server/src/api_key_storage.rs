@@ -6,8 +6,8 @@ use better_auth::{
     plugins::api_key::{ApiKeyConfig, ApiKeyPlugin, ApiKeyStorage, KeyExpirationConfig},
     store::SecondaryStorage,
 };
-use better_auth_core::FieldValue;
-use serde_json::{Value, json};
+use better_auth_core::{FieldMap, FieldValue};
+use serde_json::Value;
 
 struct Entry {
     value: String,
@@ -48,7 +48,7 @@ impl Storage {
             Ok(())
         }
     }
-    fn control(&self, body: &Value) -> Vec<Value> {
+    fn control(&self, body: &Value) -> AuthResult<Vec<Value>> {
         let mut state = self.state.lock().unwrap();
         match body["action"].as_str() {
             Some("failure") => state.failure = body["operation"].as_str().map(str::to_owned),
@@ -80,9 +80,22 @@ impl Storage {
             .iter()
             .filter(|(key, entry)| {
                 Self::is_api_key(key).unwrap()
-                    && entry.expires.is_none_or(|expiry| expiry > chrono::Utc::now().timestamp_millis() as f64)
+                    && entry
+                        .expires
+                        .is_none_or(|expiry| expiry > chrono::Utc::now().timestamp_millis() as f64)
             })
-            .map(|(key, entry)| json!({"key":key,"value":entry.value,"ttl":entry.ttl.map(FieldValue::Number)}))
+            .map(|(key, entry)| {
+                FieldMap::from([
+                    ("key".into(), key.clone()),
+                    ("value".into(), entry.value.clone().into()),
+                    (
+                        "ttl".into(),
+                        entry.ttl.map_or(FieldValue::Null, FieldValue::Number),
+                    ),
+                ])
+                .json()
+                .map(Value::Object)
+            })
             .collect()
     }
     fn reset(&self) {
@@ -234,7 +247,7 @@ impl ApiKeyStorageFixture {
                             .await
                             .unwrap();
                     }
-                    let entries = storage.control(&body);
+                    let entries = storage.control(&body).unwrap();
                     let rows = if let Some(reference) = body["referenceId"].as_str() {
                         auth.store()
                             .list_api_keys_by_reference(reference)

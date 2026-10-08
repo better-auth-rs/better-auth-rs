@@ -8,6 +8,7 @@ async fn serial_array_owners_join_only_after_fallback_projection() -> AuthResult
         let raw_owner = Value::from(vec![Value::Number(1.0)]);
         let session = store
             .create_session(CreateSession {
+                inherited_fields: Default::default(),
                 user_id: crate::SchemaValue::from_field(raw_owner.clone()),
                 expires_at: (Utc::now() + chrono::Duration::hours(1)).into(),
                 additional_fields: Default::default(),

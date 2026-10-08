@@ -38,9 +38,7 @@ impl Totp {
     }
 
     pub(super) fn generate_at(&self, time_millis: i64) -> AuthResult<String> {
-        Ok(self
-            .inner
-            .generate(Self::hotp_counter(self.counter(time_millis))?))
+        self.generate_hotp(self.counter(time_millis))
     }
 
     pub(super) fn generate_current(&self) -> AuthResult<String> {
@@ -54,15 +52,25 @@ impl Totp {
     fn check_at(&self, token: &str, time_millis: i64) -> AuthResult<bool> {
         let counter = self.counter(time_millis);
         let skew = i16::from(self.inner.skew);
-        let mut verifier = self.inner.clone();
-        verifier.skew = 0;
         let mut matched = false;
         for offset in -skew..=skew {
             // Upstream adds each window offset as a Number before converting to BigInt.
-            let candidate = Self::hotp_counter(counter + f64::from(offset))?;
-            matched |= verifier.check(token, candidate);
+            let candidate = self.generate_hotp(counter + f64::from(offset))?;
+            matched |= token.len() == candidate.len()
+                && openssl::memcmp::eq(token.as_bytes(), candidate.as_bytes());
         }
         Ok(matched)
+    }
+
+    fn generate_hotp(&self, counter: f64) -> AuthResult<String> {
+        if !(1..=8).contains(&self.inner.digits) {
+            return Err(AuthError::internal("Digits must be between 1 and 8"));
+        }
+        let counter = Self::hotp_counter(counter)?;
+        if self.inner.secret.is_empty() {
+            return Err(AuthError::internal("HMAC key must not be empty"));
+        }
+        Ok(self.inner.generate(counter))
     }
 
     pub(super) fn get_url(&self) -> AuthResult<String> {

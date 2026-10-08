@@ -212,6 +212,7 @@ async fn seed(store: &EphemeralStore) -> AuthResult<()> {
             .await?;
         let session = store
             .create_session(CreateSession {
+                inherited_fields: Default::default(),
                 user_id: format!("user-{suffix}").into(),
                 user_agent: Some(format!("{label}-agent")),
                 expires_at: "2099-01-01T00:00:00Z"
@@ -426,6 +427,7 @@ async fn native_user_child_reads_unconfigured_image_after_name_callback() -> Aut
             .await?;
         let row = store
             .create_session(CreateSession {
+                inherited_fields: Default::default(),
                 user_id: "ordinary-user".into(),
                 user_agent: None,
                 ip_address: None,

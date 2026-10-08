@@ -48,10 +48,18 @@ struct State {
 }
 type Shared = Arc<Mutex<State>>;
 
-fn event(state: &Shared, kind: impl Into<String>, value: Value) -> AuthResult<()> {
+fn event(
+    state: &Shared,
+    kind: impl Into<String>,
+    value: impl Into<Option<Value>>,
+) -> AuthResult<()> {
     let kind = kind.into();
     let mut state = state.lock().unwrap();
-    state.events.push(json!({"kind": kind, "value": value}));
+    let mut entry = Map::from_iter([("kind".into(), json!(kind))]);
+    if let Some(value) = value.into() {
+        let _ = entry.insert("value".into(), value);
+    }
+    state.events.push(Value::Object(entry));
     if state.fail.as_deref() == Some(&kind) {
         return Err(AuthError::internal(format!("fixture {kind} rejected")));
     }
@@ -91,7 +99,7 @@ impl SecondaryStorage for Cache {
         Ok(self.0.lock().unwrap().entries.get(key).cloned())
     }
     async fn set_native(&self, key: &FieldValue, value: &str, _: Option<f64>) -> AuthResult<()> {
-        event(&self.0, "cache.set", json!(key))?;
+        event(&self.0, "cache.set", key.json()?)?;
         self.0
             .lock()
             .unwrap()
@@ -530,6 +538,7 @@ impl Fixture {
             .auth
             .store()
             .create_session(better_auth_core::CreateSession {
+                inherited_fields: Default::default(),
                 additional_fields: Default::default(),
                 user_id: self.user_id.clone().into(),
                 expires_at: (chrono::Utc::now() + chrono::Duration::days(1)).into(),

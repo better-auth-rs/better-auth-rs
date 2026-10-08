@@ -90,10 +90,7 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
         Err(err) => return err.to_compile_error(),
     };
     let EntityOptions {
-        role,
-        row_presence,
-        native_two_factor,
-        ..
+        role, row_presence, ..
     } = options;
 
     let fields = match &input.data {
@@ -126,10 +123,12 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
     if let Some(missing) = core.iter().find(|required| {
         !(matches!(
             role,
-            EntityRole::ApiKey | EntityRole::Passkey | EntityRole::DeviceCode
+            EntityRole::ApiKey
+                | EntityRole::Passkey
+                | EntityRole::DeviceCode
+                | EntityRole::TwoFactor
         ) && **required != "id"
-            || row_presence && **required == "active"
-            || native_two_factor && matches!(**required, "created_at" | "updated_at"))
+            || row_presence && **required == "active")
             && !idents.iter().any(|ident| ident == *required)
     }) {
         return syn::Error::new_spanned(
@@ -187,19 +186,6 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
                 return Err(syn::Error::new_spanned(
                     field,
                     "row_presence session models cannot expose an active field",
-                ));
-            }
-            if native_two_factor
-                && column_aliases.iter().any(|alias| {
-                    matches!(
-                        alias.as_str(),
-                        "created_at" | "createdAt" | "updated_at" | "updatedAt"
-                    )
-                })
-            {
-                return Err(syn::Error::new_spanned(
-                    field,
-                    "native_two_factor models cannot expose createdAt or updatedAt fields",
                 ));
             }
             field_columns.push(quote! { #(#column_aliases)|* => Ok(Column::#column), });

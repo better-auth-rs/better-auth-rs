@@ -234,6 +234,7 @@ async fn exercise<S: AuthSchema>(
     let session = auth
         .store()
         .create_session(CreateSession {
+            inherited_fields: Default::default(),
             additional_fields: Default::default(),
             user_id: id.clone().into(),
             expires_at: (Utc::now() + Duration::hours(1)).into(),

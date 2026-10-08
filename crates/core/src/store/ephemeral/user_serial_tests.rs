@@ -160,6 +160,7 @@ async fn serial_user_joins_keep_numeric_bindings_in_both_modes() -> AuthResult<(
         assert_eq!(required(user)?.id, "1");
         let session = store
             .create_session(CreateSession {
+                inherited_fields: Default::default(),
                 user_id: owner.id,
                 expires_at: (Utc::now() + chrono::Duration::hours(1)).into(),
                 additional_fields: Default::default(),
@@ -302,6 +303,7 @@ async fn non_serial_session_owner_projection_preserves_lone_utf16() -> AuthResul
     let owner = Value::Utf16String(crate::Utf16String::from_units(vec![0xd800]));
     let session = store
         .create_session(CreateSession {
+            inherited_fields: Default::default(),
             user_id: crate::SchemaValue::from_field(owner.clone()),
             expires_at: (Utc::now() + chrono::Duration::hours(1)).into(),
             additional_fields: Default::default(),

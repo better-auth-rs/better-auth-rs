@@ -344,6 +344,7 @@ impl<'a, S: AuthSchema> TestUtilsApi<'a, S> {
                 .unwrap_or_default()
         };
         let input = CreateSession {
+            inherited_fields: Default::default(),
             user_id: options.user_id.into(),
             expires_at: (Utc::now() + self.auth.config.session.expires_in()).into(),
             ip_address: meta.ip_address,

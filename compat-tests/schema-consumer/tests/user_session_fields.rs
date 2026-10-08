@@ -97,6 +97,7 @@ async fn generated_user_and_session_fields_preserve_storage_and_projection() {
     );
     let session = store
         .create_session(CreateSession {
+            inherited_fields: Default::default(),
             user_id: user.id.clone(),
             expires_at: FieldDate::from_milliseconds(user.created_at.milliseconds() + 3_600_000.0),
             ip_address: None,

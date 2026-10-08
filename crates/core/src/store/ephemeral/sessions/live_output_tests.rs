@@ -123,6 +123,7 @@ fn observe_memory(store: &EphemeralStore, trace: &Trace) -> AuthResult<JsonValue
 
 fn session_input(label: &str) -> AuthResult<CreateSession> {
     Ok(CreateSession {
+        inherited_fields: Default::default(),
         user_id: "1".into(),
         expires_at: date(EXPIRES_AT)?,
         ip_address: Some(String::new()),

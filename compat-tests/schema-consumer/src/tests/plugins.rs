@@ -259,8 +259,8 @@ async fn renamed_plugin_tables_preserve_authentication_and_atomic_storage() {
         auth.store()
             .compare_exchange_two_factor_backup_codes(
                 &factor.id,
-                &factor.backup_codes,
-                "replacement"
+                &factor.backup_codes.field_value(),
+                "replacement".into()
             )
             .await
             .unwrap()
@@ -268,7 +268,11 @@ async fn renamed_plugin_tables_preserve_authentication_and_atomic_storage() {
     assert!(
         !auth
             .store()
-            .compare_exchange_two_factor_backup_codes(&factor.id, &factor.backup_codes, "replay")
+            .compare_exchange_two_factor_backup_codes(
+                &factor.id,
+                &factor.backup_codes.field_value(),
+                "replay".into()
+            )
             .await
             .unwrap()
     );

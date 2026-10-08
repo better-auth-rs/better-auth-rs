@@ -7,7 +7,7 @@ use better_auth::seaorm::sea_orm::entity::prelude::DateTimeUtc;
 use better_auth::{
     __private_core::{
         AuthError, AuthResult, AuthSchema, AuthStore, CreateTwoFactor, CreateUser, FieldMap,
-        TwoFactor, UpdateTwoFactor,
+        FieldValue, TwoFactor, UpdateTwoFactor,
     },
     BetterAuth,
     plugins::TwoFactorPlugin,
@@ -74,6 +74,7 @@ fn input(owner: &str) -> CreateTwoFactor {
         backup_codes: "ordinary-encrypted-codes".into(),
         verified: false,
         additional_fields: [
+            ("lockedUntil".into(), FieldValue::Null),
             (
                 "activatedAt".into(),
                 "2029-01-02T03:04:05.000Z"
@@ -256,18 +257,18 @@ impl<S: AuthSchema> Fixture<S> {
                 .store
                 .compare_exchange_two_factor_backup_codes(
                     &created.id,
-                    "ordinary-updated-codes",
-                    replacement,
+                    &"ordinary-updated-codes".into(),
+                    replacement.into(),
                 )
                 .await?;
             operations.push(self.observe(name, json!(exchanged)).await?);
         }
         let deadline = "2030-01-02T03:04:05.123Z"
-            .parse()
+            .parse::<DateTimeUtc>()
             .expect("fixed fixture deadline parses");
         for name in ["failure-increment", "failure-lock"] {
             self.store
-                .record_two_factor_failure(&created.id, 2, &|| Ok(deadline))
+                .record_two_factor_failure(&created.id, 2, &|| Ok(deadline.into()))
                 .await?;
             operations.push(self.observe(name, Value::Null).await?);
         }
@@ -278,13 +279,18 @@ impl<S: AuthSchema> Fixture<S> {
             self.store
                 .reset_two_factor_failures(
                     &created.id,
-                    Some(cutoff.parse().expect("fixed fixture cutoff parses")),
+                    Some(
+                        cutoff
+                            .parse::<DateTimeUtc>()
+                            .expect("fixed fixture cutoff parses")
+                            .into(),
+                    ),
                 )
                 .await?;
             operations.push(self.observe(name, Value::Null).await?);
         }
         self.store
-            .record_two_factor_failure(&created.id, 2, &|| Ok(deadline))
+            .record_two_factor_failure(&created.id, 2, &|| Ok(deadline.into()))
             .await?;
         operations.push(
             self.observe("failure-increment-after-reset", Value::Null)
@@ -325,8 +331,8 @@ impl<S: AuthSchema> Fixture<S> {
                 .store
                 .compare_exchange_two_factor_backup_codes(
                     &seeded.as_ref().expect("seeded factor").id,
-                    "ordinary-encrypted-codes",
-                    "ordinary-error-cas-codes",
+                    &"ordinary-encrypted-codes".into(),
+                    "ordinary-error-cas-codes".into(),
                 )
                 .await
                 .map(|_| ()),
@@ -359,10 +365,10 @@ impl<S: AuthSchema> Fixture<S> {
     async fn boundary(&self, scenario: Scenario) -> AuthResult<Value> {
         let created = self.store.create_two_factor(input(&self.owner)).await?;
         let deadline = "2030-01-02T03:04:05.123Z"
-            .parse()
+            .parse::<DateTimeUtc>()
             .expect("fixed fixture deadline parses");
         self.store
-            .record_two_factor_failure(&created.id, 2, &|| Ok(deadline))
+            .record_two_factor_failure(&created.id, 2, &|| Ok(deadline.into()))
             .await?;
         let before = self.stored().await?;
         assert_eq!(before["failedVerificationCount"], 1);
@@ -374,7 +380,7 @@ impl<S: AuthSchema> Fixture<S> {
                 self.failure.store(1, Ordering::SeqCst);
                 let result = self
                     .store
-                    .record_two_factor_failure(&created.id, 2, &|| Ok(deadline))
+                    .record_two_factor_failure(&created.id, 2, &|| Ok(deadline.into()))
                     .await;
                 self.failure.store(0, Ordering::SeqCst);
                 let message = "ordinary TwoFactor input error";
@@ -404,7 +410,12 @@ impl<S: AuthSchema> Fixture<S> {
                 self.store
                     .reset_two_factor_failures(
                         &created.id,
-                        Some(cutoff.parse().expect("fixed fixture cutoff parses")),
+                        Some(
+                            cutoff
+                                .parse::<DateTimeUtc>()
+                                .expect("fixed fixture cutoff parses")
+                                .into(),
+                        ),
                     )
                     .await?;
                 let observation = self.observe(name, Value::Null).await?;
