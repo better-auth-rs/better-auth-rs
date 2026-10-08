@@ -1,5 +1,5 @@
 name: CI
-run-name: ${{ github.event_name == 'workflow_dispatch' && inputs.stage != 'all' && format('Focused check - {0} {1}', inputs.stage, inputs.profile) || 'Full acceptance' }} - ${{ github.ref_name }}
+run-name: ${{ github.event_name == 'workflow_dispatch' && inputs.stage != 'all' && format('Focused check - {0} {1}', inputs.stage, contains(inputs.profile, ',') && 'profile batch' || inputs.profile) || 'Full acceptance' }} - ${{ github.ref_name }}
 
 on:
   push:
@@ -62,7 +62,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && inputs.stage || 'all' }}-${{ inputs.profile || 'all' }}
+  # Batch selections can exceed GitHub's 400-character concurrency-group limit.
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && inputs.stage || 'all' }}-${{ contains(inputs.profile, ',') && github.run_id || inputs.profile || 'all' }}
   # A skipped push run must not cancel manual acceptance on the same branch.
   cancel-in-progress: false
 
