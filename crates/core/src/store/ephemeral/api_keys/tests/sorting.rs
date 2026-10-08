@@ -232,6 +232,7 @@ fn number_sort_rows(value: &Value) -> AuthResult<Vec<ApiKey>> {
             let remaining = if value["remaining"]["type"] == "number" {
                 match value["remaining"]["value"].as_str() {
                     Some("-0") => -0.0,
+                    Some("NaN") => f64::NAN,
                     Some("Infinity") => f64::INFINITY,
                     Some("-Infinity") => f64::NEG_INFINITY,
                     _ => return Err(AuthError::internal("Unexpected number sort fixture tag")),
@@ -256,23 +257,22 @@ fn number_sort_rows(value: &Value) -> AuthResult<Vec<ApiKey>> {
 
 fn assert_number_sort_rows(actual: &[ApiKey], expected: &Value) -> AuthResult<()> {
     let expected = number_sort_rows(expected)?;
-    assert_eq!(actual, expected.as_slice());
-    // Record equality cannot distinguish signed zeros in the quota.
+    // Record equality rejects NaN and cannot distinguish signed zeros in the quota.
+    let with_remaining_bits = |row: &ApiKey| {
+        let mut row = row.clone();
+        let remaining = row.remaining.take().map(f64::to_bits);
+        (row, remaining)
+    };
     assert_eq!(
-        actual
-            .iter()
-            .map(|row| row.remaining.map(f64::to_bits))
-            .collect::<Vec<_>>(),
-        expected
-            .iter()
-            .map(|row| row.remaining.map(f64::to_bits))
-            .collect::<Vec<_>>()
+        actual.iter().map(with_remaining_bits).collect::<Vec<_>>(),
+        expected.iter().map(with_remaining_bits).collect::<Vec<_>>()
     );
     Ok(())
 }
 
 #[tokio::test]
-async fn number_sort_preserves_signed_zero_and_infinity_ties_from_pinned_rows() -> AuthResult<()> {
+async fn number_sort_preserves_signed_zero_nan_and_infinity_ties_from_pinned_rows() -> AuthResult<()>
+{
     let fixture: Value = serde_json::from_str(include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../../tests/fixtures/api-key-number-sort-1.7.6.json"
@@ -281,7 +281,12 @@ async fn number_sort_preserves_signed_zero_and_infinity_ties_from_pinned_rows() 
     let cases = fixture["cases"]
         .as_array()
         .ok_or_else(|| AuthError::internal("Expected API Key number sort cases"))?;
-    for pair in ["signed-zero", "positive-infinity", "negative-infinity"] {
+    for pair in [
+        "signed-zero",
+        "nan-finite",
+        "positive-infinity",
+        "negative-infinity",
+    ] {
         for order in ["forward", "reverse"] {
             let case = cases
                 .iter()

@@ -105,28 +105,14 @@ impl ApiKeyStore for EphemeralStore {
                             (name, key)
                         })
                         .collect();
-                    // Mixed values need not form a total order, and conversion errors must stop comparisons.
-                    // ponytail: O(n²) over all matching keys before pagination; use a fallible stable sorter for large collections.
-                    #[expect(
-                        clippy::indexing_slicing,
-                        reason = "The outer range bounds current; current only decreases while positive"
-                    )]
-                    for index in 1..named.len() {
-                        let mut current = index;
-                        while current > 0 {
-                            let order = compare_names(&named[current].0, &named[current - 1].0)?;
-                            let order = if direction == "desc" {
-                                order.reverse()
-                            } else {
-                                order
-                            };
-                            if !order.is_lt() {
-                                break;
-                            }
-                            named.swap(current - 1, current);
-                            current -= 1;
-                        }
-                    }
+                    insertion_sort_by(&mut named, |left, right| {
+                        let order = compare_names(&left.0, &right.0)?;
+                        Ok(if direction == "desc" {
+                            order.reverse()
+                        } else {
+                            order
+                        })
+                    })?;
                     keys = named.into_iter().map(|(_, key)| key).collect();
                 } else if let Some((field @ ("enabled" | "rateLimitEnabled"), direction)) =
                     sort.filter(|_| keys.len() > 1)
@@ -153,14 +139,30 @@ impl ApiKeyStore for EphemeralStore {
                     keys = values.into_iter().map(|(_, key)| key).collect();
                 } else if let Some((field, direction)) = sort.filter(|_| keys.len() > 1) {
                     let compare = comparator(field)?;
-                    keys.sort_by(|a, b| {
-                        let order = compare(&a.0, &b.0);
+                    let directed = |left: &ApiKey, right: &ApiKey| {
+                        let order = compare(left, right);
                         if direction == "desc" {
                             order.reverse()
                         } else {
                             order
                         }
-                    });
+                    };
+                    if matches!(
+                        field,
+                        "start"
+                            | "prefix"
+                            | "referenceId"
+                            | "configId"
+                            | "permissions"
+                            | "metadata"
+                            | "key"
+                    ) {
+                        keys.sort_by(|left, right| directed(&left.0, &right.0));
+                    } else {
+                        insertion_sort_by(&mut keys, |left, right| {
+                            Ok(directed(&left.0, &right.0))
+                        })?;
+                    }
                 }
                 Ok(crate::query::paginate_memory(
                     keys,
@@ -391,6 +393,26 @@ impl ApiKeyStore for EphemeralStore {
         })
         .await
     }
+}
+
+// Mixed values need not form a total order, and conversion errors must stop comparisons.
+// ponytail: O(n²) over all matching rows before pagination; use a subquadratic fallible stable sorter if large lists become costly.
+fn insertion_sort_by<T>(
+    values: &mut [T],
+    mut compare: impl FnMut(&T, &T) -> AuthResult<std::cmp::Ordering>,
+) -> AuthResult<()> {
+    #[expect(
+        clippy::indexing_slicing,
+        reason = "The outer range bounds current; current only decreases while positive"
+    )]
+    for index in 1..values.len() {
+        let mut current = index;
+        while current > 0 && compare(&values[current], &values[current - 1])?.is_lt() {
+            values.swap(current - 1, current);
+            current -= 1;
+        }
+    }
+    Ok(())
 }
 
 fn compare_names(left: &FieldValue, right: &FieldValue) -> AuthResult<std::cmp::Ordering> {
@@ -642,8 +664,9 @@ fn comparator(field: &str) -> AuthResult<fn(&ApiKey, &ApiKey) -> std::cmp::Order
 
 fn compare_numbers(left: Option<f64>, right: Option<f64>) -> std::cmp::Ordering {
     match (left, right) {
-        (Some(left), Some(right)) if left == right => std::cmp::Ordering::Equal,
-        (Some(left), Some(right)) => left.total_cmp(&right),
+        (Some(left), Some(right)) => (left - right)
+            .partial_cmp(&0.0)
+            .unwrap_or(std::cmp::Ordering::Equal),
         (None, None) => std::cmp::Ordering::Equal,
         (None, Some(_)) => std::cmp::Ordering::Less,
         (Some(_), None) => std::cmp::Ordering::Greater,
