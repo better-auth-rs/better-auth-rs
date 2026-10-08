@@ -76,6 +76,15 @@ async fn sqlite_api_key_fields_match_complete_pinned_operations_and_errors()
 }
 
 #[tokio::test]
+async fn sqlite_api_key_usage_dates_match_complete_pinned_operations()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let (store, database) = fixture::sqlite(contract::config()).await;
+    contract::usage_dates::contract(Arc::new(store)).await?;
+    database.close().await?;
+    Ok(())
+}
+
+#[tokio::test]
 async fn secondary_api_key_fields_forward_policies_and_extra_values() -> AuthResult<()> {
     let auth = BetterAuth::new(contract::config())
         .store(EphemeralStore::new(Arc::new(contract::config())))

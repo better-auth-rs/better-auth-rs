@@ -4,6 +4,7 @@ mod fields;
 use super::id_filter::IdColumn;
 use super::instrumentation::database_operation;
 use super::plugin_models::{Entity, set};
+use super::record_bindings::Binding;
 use crate::SeaOrmPluginModel;
 use async_trait::async_trait;
 use chrono::Utc;
@@ -291,6 +292,7 @@ where
                 .await?
         };
         let operation = write.operation();
+        let backend = self.connection().get_database_backend();
         let reselect =
             P::ApiKey::column("id")?.eq_id(id, self.config().advanced.database.generate_id())?;
         let mut guard = reselect.clone();
@@ -303,12 +305,14 @@ where
             } => {
                 let last = P::ApiKey::column("last_refill_at")?;
                 guard = guard.and(match previous {
-                    Some(previous) => last.eq(previous),
+                    Some(previous) => last
+                        .into_expr()
+                        .eq(last.save_as(Binding::Date(previous.into()).bind(backend)?)),
                     None => last.is_null(),
                 });
                 query = query
                     .col_expr(P::ApiKey::column("remaining")?, Expr::value(remaining))
-                    .col_expr(last, Expr::value(at));
+                    .col_expr(last, last.save_as(Binding::Date(at.into()).bind(backend)?));
             }
             ApiKeyUsageWrite::Decrement => {
                 let remaining = P::ApiKey::column("remaining")?;
@@ -321,12 +325,14 @@ where
             } => {
                 let last = P::ApiKey::column("last_request")?;
                 guard = guard.and(match previous_before {
-                    Some(previous) => last.lte(previous),
+                    Some(previous) => last
+                        .into_expr()
+                        .lte(last.save_as(Binding::Date(previous.into()).bind(backend)?)),
                     None => last.is_null(),
                 });
                 query = query
                     .col_expr(P::ApiKey::column("request_count")?, Expr::value(1.0))
-                    .col_expr(last, Expr::value(at));
+                    .col_expr(last, last.save_as(Binding::Date(at.into()).bind(backend)?));
             }
             ApiKeyUsageWrite::IncrementWindow {
                 previous_after,
@@ -335,19 +341,29 @@ where
             } => {
                 let last = P::ApiKey::column("last_request")?;
                 let count = P::ApiKey::column("request_count")?;
-                guard = guard.and(last.gt(previous_after)).and(count.lt(maximum));
+                guard = guard
+                    .and(
+                        last.into_expr()
+                            .gt(last.save_as(Binding::Date(previous_after.into()).bind(backend)?)),
+                    )
+                    .and(count.lt(maximum));
                 query = query
                     .col_expr(count, Expr::col(count).add(1.0))
-                    .col_expr(last, Expr::value(at));
+                    .col_expr(last, last.save_as(Binding::Date(at.into()).bind(backend)?));
             }
             ApiKeyUsageWrite::LastRequest(at) => {
-                query = query.col_expr(P::ApiKey::column("last_request")?, Expr::value(at));
+                let last = P::ApiKey::column("last_request")?;
+                query = query.col_expr(last, last.save_as(Binding::Date(at.into()).bind(backend)?));
             }
             ApiKeyUsageWrite::UpdatedAt(at) => {
-                query = query.col_expr(P::ApiKey::column("updated_at")?, Expr::value(at));
+                let updated = P::ApiKey::column("updated_at")?;
+                query = query.col_expr(
+                    updated,
+                    updated.save_as(Binding::Date(at.into()).bind(backend)?),
+                );
             }
         }
-        query = fields.apply_to(query, self.connection().get_database_backend())?;
+        query = fields.apply_to(query, backend)?;
         let query = query.filter(guard.clone());
         let model = database_operation::<Entity<P::ApiKey>, _>(self.config(), operation, async {
             if operation == "incrementOne" {

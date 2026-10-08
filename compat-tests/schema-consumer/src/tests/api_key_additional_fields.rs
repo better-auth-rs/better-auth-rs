@@ -21,3 +21,15 @@ async fn generated_api_key_columns_preserve_complete_field_policies_usage_and_er
     }
     Ok(())
 }
+
+#[tokio::test]
+async fn generated_api_key_usage_dates_match_complete_pinned_operations()
+-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let database = Database::connect("sqlite::memory:").await?;
+    mapped::create_auth_tables(&database).await?;
+    let store = SeaOrmStore::<mapped::AppAuthSchema>::new(contract::config(), database.clone())
+        .with_plugin_schema::<mapped::AppPluginSchema>();
+    contract::usage_dates::contract(Arc::new(store)).await?;
+    database.close().await?;
+    Ok(())
+}

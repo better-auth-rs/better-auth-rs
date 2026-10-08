@@ -129,6 +129,7 @@ run_stage() {
         ./compat-tests/reference-server/contracts/plugin-display-presence.test.ts \
         ./compat-tests/reference-server/contracts/api-key-field-policies.test.ts \
         ./compat-tests/reference-server/contracts/api-key-fields.test.ts \
+        ./compat-tests/reference-server/contracts/api-key-date-usage.test.ts \
         ./compat-tests/reference-server/contracts/api-key-name-mapping.test.ts \
         ./compat-tests/reference-server/contracts/api-key-live-fields.test.ts \
         ./compat-tests/reference-server/contracts/plugin-output-capabilities.test.ts \
