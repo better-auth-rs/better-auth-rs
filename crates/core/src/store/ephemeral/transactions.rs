@@ -186,6 +186,13 @@ impl AuthTransaction<StatelessSchema> for EphemeralTransaction {
     async fn get_user_by_username(&self, username: &str) -> AuthResult<Option<UserView>> {
         self.store.get_user_by_username(username).await
     }
+    async fn get_user_by_field_value(
+        &self,
+        field: &str,
+        value: &Value,
+    ) -> AuthResult<Option<UserView>> {
+        self.store.get_user_by_field_value(field, value).await
+    }
     async fn update_user(&self, id: &str, update: UpdateUser) -> AuthResult<UserView> {
         self.store.update_user(id, update).await
     }

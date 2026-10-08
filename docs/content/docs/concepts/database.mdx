@@ -98,6 +98,8 @@ The CLI generates core entities, plugin fields and tables, unique indexes, and f
 
 Call the generated `create_auth_tables(&database).await?` from the application's initial migration. The function creates tables in an empty database and fails when a table already exists. The function does not compare schemas, alter existing tables, or track migration versions. Use your application's versioned SeaORM migrations for later changes, including plugin additions.
 
+The generated legacy User columns retain SQL defaults: `banned` and legacy `two_factor_enabled` default to `false`, and the admin schema's `metadata` defaults to `{}`. These defaults allow writes when the corresponding plugins are inactive. Inactive input fields remain omitted from writes and runtime records. Native `twoFactorEnabled` remains nullable without a SQL default. An `additionalFields` replacement does not inherit the legacy default; register its runtime policy and provide the required value or an application-owned database default.
+
 The application owns the generated source. The four core entities use `AuthSchema`. Organization tables use `SeaOrmOrganizationSchema`. API keys, device codes, passkeys, two-factor credentials, JWT keys, and wallet addresses use `SeaOrmPluginSchema`. Table and column attributes on the selected models control all store operations, including conditional updates and transactions.
 
 For application-owned entities, bind the four model types with `AuthSchema`:
@@ -466,6 +468,10 @@ Run the application database migrations before starting the server. Capability v
 
 All native `UserView` fields and `AuthUser` getters preserve omitted, null, and replacement values through `SchemaValue<T>`. The default types remain strings, booleans, and `FieldDate`; optional getters retain `Option<T>`. String getters borrow through `Cow<str>`, while views own strings. `AuthEntity` generates these getters. Manual implementations must return the corresponding `SchemaValue` and preserve omitted plugin fields as `Undefined`. Use `.typed()?` when application code requires the default type; use `.field_value()` when forwarding a native value. A truthy guard is different from a strict boolean comparison.
 
+`CreateUser` and `UpdateUser` retain convenient typed members. Supply an upstream native replacement through `additional_fields`; that value replaces the convenience member before conversion. Each DTO becomes one ordered `FieldMap` before User hooks and adapter policies. User creation/update hooks receive `&mut FieldMap` and return `DatabaseHookUpdate<FieldMap>`. Update hooks see the original object, while creation hooks see cumulative patches. `get_user_by_field_value` queries a logical or mapped field without narrowing the selector to a Rust string.
+
+SeaORM reads User and Account directly from raw database snapshots through `AdapterRecord`. Output transforms receive raw column values before declaration-specific decoding, including SQL NULL and cross-type values. Point reads, write returns, and native joins share that projection. Native joins retain the SQL query snapshot; fallback joins use already projected relation values. Database parameter conversion, atomic guards, transactions, and MySQL readback remain separate from field policies.
+
 The shared output projection writes native fields directly into the view. Use `UserView::set_field` for dynamic assignments that must preserve field presence and property order. `additional_fields` contains application fields and must not shadow native values. Generic User deserialization preserves date-like strings. Secondary Session reads apply the upstream Date constructor only to User `createdAt` and `updatedAt`; invalid dates remain invalid dates. Cookie caches validate the upstream User and Session schemas after date revival. These boundaries do not apply Adapter output transforms again.
 
 User `name` and `image` values use `SchemaValue<Option<String>>` in `CreateUser`, `UpdateUser`, and `UserView`. `Undefined` omits a field; `Typed(None)` clears it; `Dynamic(value)` retains a non-string record value. Use `Some(value).into()` for a string and `view.name.typed()?` when application code requires the default type. Signup and OAuth endpoints retain their own input schemas.
@@ -505,7 +511,7 @@ Memory string predicates retain type-safe handling of replacement values. Query 
 
 `UserStore::update_user_by_id_value` and its transaction counterpart accept a `FieldValue` ID and return `None` after cancellation or an unmatched query. Before-hook cancellation skips the query and after hooks. An unmatched query runs `after_update_user(None)`. OAuth profile overrides preserve the selected User or User array when the update returns `None`. The required string-ID `update_user` API still reports cancellation and missing-row errors.
 
-`SeaOrmHooks::before_update_user` now receives `id: &FieldValue`. Update custom hook implementations to use this signature. Read `id.as_str()` when the hook requires a string; preserve other values when forwarding a native selector. Generic `DatabaseHooks::before_update_user` retains its existing arguments. No database migration is required.
+`SeaOrmHooks::before_update_user` now receives `id: &FieldValue`. Update custom hook implementations to use this signature. Read `id.as_str()` when the hook requires a string; preserve other values when forwarding a native selector. Generic `DatabaseHooks::before_update_user` receives `&mut FieldMap` and the hook context. Both hook interfaces return `DatabaseHookUpdate<FieldMap>`. No database migration is required.
 
 ## Account Hook Cancellation
 

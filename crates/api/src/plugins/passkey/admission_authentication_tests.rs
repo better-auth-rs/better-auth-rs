@@ -484,7 +484,10 @@ async fn signed_authentication_consumes_projected_admin_bans_after_counter_write
             expected.banned = false.into();
             expected.ban_reason = None.into();
             expected.ban_expires = None.into();
-            assert!(stored.updated_at.milliseconds() >= expected.updated_at.milliseconds());
+            assert!(
+                stored.updated_at.date_milliseconds()?
+                    >= expected.updated_at.date_milliseconds()?
+            );
             expected.updated_at = stored.updated_at.clone();
         }
         assert_eq!(FieldMap::from(stored), FieldMap::from(expected), "{name}");

@@ -145,10 +145,10 @@ impl<S: AuthSchema> AuthPlugin<S> for BodyBefore {
 impl<S: AuthSchema> DatabaseHooks<S> for BodyTrace {
     async fn before_update_user(
         &self,
-        _: &better_auth_core::UpdateUser,
+        _: &mut better_auth_core::FieldMap,
         context: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<
-        better_auth_core::store::database_hooks::DatabaseHookUpdate<better_auth_core::UpdateUser>,
+        better_auth_core::store::database_hooks::DatabaseHookUpdate<better_auth_core::FieldMap>,
     > {
         self.record("user.update.before", context.request.as_ref(), None);
         if context.request.as_ref().is_some_and(|request| {
@@ -186,11 +186,11 @@ impl<S: AuthSchema> DatabaseHooks<S> for BodyTrace {
     }
     async fn before_create_user(
         &self,
-        _: &mut better_auth_core::CreateUser,
+        _: &mut better_auth_core::FieldMap,
         context: &DatabaseHookContext<'_, S>,
-    ) -> AuthResult<DatabaseHookControl> {
+    ) -> AuthResult<better_auth_core::store::database_hooks::DatabaseHookUpdate<better_auth_core::FieldMap>> {
         self.record("user.before", context.request.as_ref(), None);
-        Ok(DatabaseHookControl::Continue)
+        Ok(better_auth_core::store::database_hooks::DatabaseHookUpdate::Continue)
     }
     async fn after_create_user(
         &self,

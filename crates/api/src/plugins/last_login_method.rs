@@ -6,13 +6,13 @@ use async_trait::async_trait;
 use better_auth_core::entity::AuthSession;
 use better_auth_core::plugin_runtime::PluginRuntime;
 use better_auth_core::store::database_hooks::{
-    DatabaseHookContext, DatabaseHookControl, DatabaseHooks,
+    DatabaseHookContext, DatabaseHookUpdate, DatabaseHooks,
 };
 use better_auth_core::user_fields::{UserConfig, UserFieldConfig};
 use better_auth_core::utils::cookie_utils::{encode_cookie_value, render_cookie};
 use better_auth_core::{
     AuthContext, AuthInitContext, AuthPlugin, AuthRequest, AuthResponse, AuthResult, AuthRoute,
-    AuthSchema, CreateUser, UpdateUser,
+    AuthSchema, FieldMap, UpdateUser,
 };
 
 use super::endpoint_context::EndpointContext;
@@ -155,11 +155,11 @@ fn database_endpoint<'a, S: AuthSchema>(
 impl<S: AuthSchema> DatabaseHooks<S> for LoginDatabaseHooks<S> {
     async fn before_create_user(
         &self,
-        user: &mut CreateUser,
+        user: &mut FieldMap,
         context: &DatabaseHookContext<'_, S>,
-    ) -> AuthResult<DatabaseHookControl> {
+    ) -> AuthResult<DatabaseHookUpdate<FieldMap>> {
         if context.request.is_none() {
-            return Ok(DatabaseHookControl::Continue);
+            return Ok(DatabaseHookUpdate::Continue);
         }
         let auth = self.runtime.context()?;
         if let Some(endpoint) = database_endpoint(context, &auth)
@@ -168,11 +168,9 @@ impl<S: AuthSchema> DatabaseHooks<S> for LoginDatabaseHooks<S> {
                 .resolve(&endpoint)?
                 .filter(|value| !value.is_empty())
         {
-            let _ = user
-                .additional_fields
-                .insert("lastLoginMethod".into(), method.into());
+            let _ = user.insert("lastLoginMethod".into(), method.into());
         }
-        Ok(DatabaseHookControl::Continue)
+        Ok(DatabaseHookUpdate::Continue)
     }
 
     async fn after_create_session(

@@ -10,9 +10,7 @@ use better_auth_core::schema::AuthSchema;
 pub use better_auth_core::store::database_hooks::{
     DatabaseHookUpdate, SessionUpdate, VerificationUpdate,
 };
-use better_auth_core::types::{
-    CreateAccount, CreateUser, CreateVerification, UpdateAccount, UpdateUser,
-};
+use better_auth_core::types::{CreateAccount, CreateVerification, UpdateAccount};
 
 /// Control flow returned by SeaORM `before_*` hooks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -45,11 +43,11 @@ pub trait SeaOrmHooks<S: AuthSchema>: Send + Sync {
 
     async fn before_create_user(
         &self,
-        user: &mut CreateUser,
+        user: &mut better_auth_core::FieldMap,
         ctx: &SeaOrmHookContext<'_, S>,
-    ) -> AuthResult<HookControl> {
+    ) -> AuthResult<DatabaseHookUpdate<better_auth_core::FieldMap>> {
         let _ = (user, ctx);
-        Ok(HookControl::Continue)
+        Ok(DatabaseHookUpdate::Continue)
     }
 
     async fn after_create_user(
@@ -64,9 +62,9 @@ pub trait SeaOrmHooks<S: AuthSchema>: Send + Sync {
     async fn before_update_user(
         &self,
         id: &better_auth_core::FieldValue,
-        update: &UpdateUser,
+        update: &mut better_auth_core::FieldMap,
         ctx: &SeaOrmHookContext<'_, S>,
-    ) -> AuthResult<DatabaseHookUpdate<UpdateUser>> {
+    ) -> AuthResult<DatabaseHookUpdate<better_auth_core::FieldMap>> {
         let _ = (id, update, ctx);
         Ok(DatabaseHookUpdate::Continue)
     }

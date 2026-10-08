@@ -1,40 +1,11 @@
 use sea_orm::{
-    ColumnTrait, ConnectionTrait, EntityTrait, FromQueryResult, Iden, IdenStatic, Iterable,
-    PrimaryKeyToColumn, QueryFilter, QueryResult, QuerySelect, QueryTrait,
+    ColumnTrait, ConnectionTrait, EntityTrait, Iden, IdenStatic, Iterable, PrimaryKeyToColumn,
+    QueryFilter, QueryResult, QuerySelect, QueryTrait,
     sea_query::{ExprTrait, Query, SimpleExpr},
 };
 
 use super::map_db_err;
 use crate::error::{AuthError, AuthResult};
-
-pub(super) async fn update_record_returning_one<E: EntityTrait, C: ConnectionTrait>(
-    db: &C,
-    record: super::record_write::RecordWrite<E>,
-    filter: SimpleExpr,
-    reselect: SimpleExpr,
-) -> AuthResult<Option<E::Model>> {
-    execute_update_returning_one(
-        db,
-        record.update(db.get_database_backend())?.filter(filter),
-        reselect,
-    )
-    .await
-}
-
-pub(super) async fn execute_update_returning_one<E, C>(
-    db: &C,
-    query: sea_orm::UpdateMany<E>,
-    reselect: SimpleExpr,
-) -> AuthResult<Option<E::Model>>
-where
-    E: EntityTrait,
-    C: ConnectionTrait,
-{
-    execute_update_returning_raw(db, query, reselect)
-        .await?
-        .map(|row| E::Model::from_query_result(&row, "").map_err(map_db_err))
-        .transpose()
-}
 
 pub(super) async fn execute_update_returning_raw<E, C>(
     db: &C,

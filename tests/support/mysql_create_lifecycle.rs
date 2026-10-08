@@ -89,16 +89,11 @@ fn date(fields: &FieldMap, name: &str) -> AuthResult<FieldDate> {
     }
 }
 
-fn user(fields: &FieldMap) -> AuthResult<CreateUser> {
-    let mut input = CreateUser::new();
-    input.id = Some(fields["id"].decode()?);
-    input.name = SchemaValue::from_field(fields["name"].clone());
-    input.email = Some(fields["email"].decode()?);
-    input.email_verified = Some(fields["emailVerified"].decode()?);
-    input.image = SchemaValue::from_field(fields["image"].clone());
-    input.created_at = Some(date(fields, "createdAt")?);
-    input.updated_at = Some(date(fields, "updatedAt")?);
-    Ok(input)
+fn user(fields: &FieldMap) -> CreateUser {
+    CreateUser {
+        additional_fields: fields.clone(),
+        ..Default::default()
+    }
 }
 
 fn session(fields: FieldMap) -> AuthResult<CreateSession> {
@@ -136,7 +131,7 @@ async fn transaction_body(
     let result = match case.model.as_str() {
         "user" => {
             assert!(
-                tx.create_user_optional(user(&fields)?).await?.is_none(),
+                tx.create_user_optional(user(&fields)).await?.is_none(),
                 "nullable User readback"
             );
             Value::Null
@@ -332,7 +327,7 @@ pub(super) async fn check(mut database: DatabaseConnection, name: &str) -> TestR
             assert_eq!(case.model, "user");
             assert!(
                 store
-                    .create_user_optional(user(&revive_fields(&case.input["fields"])?)?)
+                    .create_user_optional(user(&revive_fields(&case.input["fields"])?))
                     .await?
                     .is_none()
             );

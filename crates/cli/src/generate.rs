@@ -260,6 +260,21 @@ fn gen_entity(entity: &Entity, generation: IdGeneration, config: &SchemaConfig) 
         let primary_key = field
             .primary_key
             .then(|| quote! { #[sea_orm(primary_key, auto_increment = #auto_increment)] });
+        let legacy_default = if entity.role == Some(EntityRole::User) && field.attributes.is_none()
+        {
+            match field.registry_column {
+                Some("metadata") => {
+                    Some(quote!(#[sea_orm(default_expr = "Expr::cust(\"('{}')\")")]))
+                }
+                Some("banned") => Some(quote!(#[sea_orm(default_value = false)])),
+                Some("two_factor_enabled") if !entity.two_factor_native_schema => {
+                    Some(quote!(#[sea_orm(default_value = false)]))
+                }
+                _ => None,
+            }
+        } else {
+            None
+        };
         let number_storage = if entity.role == Some(EntityRole::RateLimit) && name == "count" {
             Some(quote!(#[sea_orm(column_type = "Integer")]))
         } else if field.attributes.is_none()
@@ -284,6 +299,7 @@ fn gen_entity(entity: &Entity, generation: IdGeneration, config: &SchemaConfig) 
             #column_attr
             #serialized
             #primary_key
+            #legacy_default
             #number_storage
             #reference
             pub #name: #ty,

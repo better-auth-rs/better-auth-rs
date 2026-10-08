@@ -49,28 +49,25 @@ where
                 ),
                 S::User::id_column(),
             );
-            let rows =
-                database_operation::<Entity<O::Member>, _>(
-                    self.config(),
-                    "findOne",
-                    super::joins::joined_rows::<
-                        Entity<O::Member>,
-                        <S::User as SeaOrmUserModel>::Entity,
-                    >(self.connection(), &query),
-                )
-                .await?;
+            let rows = database_operation::<Entity<O::Member>, _>(
+                self.config(),
+                "findOne",
+                super::joins::joined_raw_rows(self.connection(), &query),
+            )
+            .await?;
             let mut rows = rows.into_iter();
             let Some((member, first_user)) = rows.next() else {
                 return Ok(None);
             };
-            let users = super::joins::limited_children::<<S::User as SeaOrmUserModel>::Entity>(
+            let users = super::joins::selected_raw_children(
                 std::iter::once(first_user)
                     .chain(rows.map(|(_, user)| user))
                     .flatten(),
                 S::User::id_column(),
+                true,
                 limit,
-            );
-            (member, Some(users))
+            )?;
+            (member.model::<O::Member>()?, Some(users))
         } else {
             let member =
                 database_operation::<Entity<O::Member>, _>(self.config(), "findOne", async {
@@ -113,7 +110,10 @@ where
         MemberUser::finish(&relation, member, output, require_user)
     }
 
-    async fn output_member_join_user(&self, user: &S::User) -> AuthResult<MemberUserView> {
+    async fn output_member_join_user(
+        &self,
+        user: &super::plugin_rows::SqlRow,
+    ) -> AuthResult<MemberUserView> {
         // The one selected child remains a complete field map for the summary decoder.
         let mut pages = self
             .output_native_user_pages(vec![std::slice::from_ref(user)])

@@ -2,10 +2,9 @@ use super::{
     lifecycle::{Case, observe},
     lifecycle_models::Schema,
     trace::Trace,
-    values,
 };
 use better_auth_core::{
-    AuthError, AuthResult, CreateUser, CreateVerification, FieldMap, FieldValue,
+    AuthError, AuthResult, CreateVerification, FieldMap,
     store::database_hooks::{
         DatabaseHookContext, DatabaseHookControl, DatabaseHookUpdate, DatabaseHooks,
     },
@@ -41,18 +40,15 @@ impl Plugin {
 impl DatabaseHooks<Schema> for Plugin {
     async fn before_create_user(
         &self,
-        input: &mut CreateUser,
+        input: &mut FieldMap,
         _: &DatabaseHookContext<'_, Schema>,
-    ) -> AuthResult<DatabaseHookControl> {
-        // CreateUser exposes typed values but does not retain JavaScript property insertion order.
-        let fields = user_values(input)?;
-        self.trace.callback(json!({"phase": "before:plugin", "data": {"fields": values::observe(&FieldValue::from(fields))?}}));
-        if self.case.cancel {
-            return Ok(DatabaseHookControl::Cancel);
-        }
-        input.id = Some(self.patch["id"].decode()?);
-        input.name = better_auth_core::SchemaValue::from_field(self.patch["name"].clone());
-        Ok(DatabaseHookControl::Continue)
+    ) -> AuthResult<DatabaseHookUpdate<FieldMap>> {
+        self.before(input.clone())?;
+        Ok(if self.case.cancel {
+            DatabaseHookUpdate::Cancel
+        } else {
+            DatabaseHookUpdate::Patch(self.patch.clone())
+        })
     }
 
     async fn after_create_user(
@@ -152,56 +148,4 @@ impl DatabaseHooks<Schema> for Application {
     ) -> AuthResult<()> {
         self.after(input.map(VerificationView::fields).transpose()?)
     }
-}
-
-pub(super) fn user_values(input: &CreateUser) -> AuthResult<FieldMap> {
-    let CreateUser {
-        created_at,
-        updated_at,
-        additional_fields,
-        id,
-        email,
-        name,
-        image,
-        email_verified,
-        username,
-        display_username,
-        is_anonymous,
-        phone_number,
-        phone_number_verified,
-        role,
-        banned,
-        ban_reason,
-        ban_expires,
-        metadata,
-    } = input;
-    assert!(additional_fields.is_empty());
-    assert_eq!(username, &None);
-    assert_eq!(display_username, &None);
-    assert_eq!(is_anonymous, &None);
-    assert_eq!(phone_number, &None);
-    assert_eq!(phone_number_verified, &None);
-    assert_eq!(role, &None);
-    assert_eq!(banned, &None);
-    assert_eq!(ban_reason, &None);
-    assert_eq!(ban_expires, &None);
-    assert_eq!(metadata, &None);
-    Ok(FieldMap::from([
-        (
-            "createdAt".into(),
-            created_at.clone().expect("seeded createdAt").into(),
-        ),
-        (
-            "updatedAt".into(),
-            updated_at.clone().expect("seeded updatedAt").into(),
-        ),
-        ("id".into(), id.clone().expect("seeded ID").into()),
-        ("email".into(), email.clone().expect("seeded email").into()),
-        ("name".into(), name.field_value()),
-        ("image".into(), image.field_value()),
-        (
-            "emailVerified".into(),
-            email_verified.expect("seeded emailVerified").into(),
-        ),
-    ]))
 }

@@ -16,20 +16,18 @@ use better_auth::{
 };
 use better_auth_core::{
     AuthContext, AuthPlugin, AuthRequest, AuthResponse, AuthRoute, AuthUser, BeforeRequestAction,
-    CreateUser, FieldMap, FieldValue, UpdateUser,
+    FieldMap, FieldValue,
     config::{CookieCacheConfig, UserFieldConfig},
     hooks::RequestHookContext,
     middleware::RateLimitConfig,
     store::{
         SecondaryStorage,
-        database_hooks::{
-            DatabaseHookContext, DatabaseHookControl, DatabaseHookUpdate, DatabaseHooks,
-        },
+        database_hooks::{DatabaseHookContext, DatabaseHookUpdate, DatabaseHooks},
     },
 };
 use better_auth_seaorm::{
     SeaOrmStore,
-    hooks::{HookControl, SeaOrmHookContext, SeaOrmHooks},
+    hooks::{SeaOrmHookContext, SeaOrmHooks},
 };
 use serde_json::{Value, json};
 
@@ -156,16 +154,16 @@ impl<S: AuthSchema> AuthPlugin<S> for Events {
 }
 
 macro_rules! hooks {
-    ($hook:ident, $context:ident, $control:ident $(, $id:ident)?) => {
+    ($hook:ident, $context:ident $(, $id:ident)?) => {
         #[better_auth::database_hooks]
         impl<S: AuthSchema> $hook<S> for Events {
-            async fn before_create_user(&self, user: &mut CreateUser, context: &$context<'_,S>) -> AuthResult<$control> {
-                self.record("user.before", context.request.as_ref(), Some(user.additional_fields.get("lastLoginMethod").map(FieldValue::json).transpose()?.flatten().unwrap_or(Value::Null)));
-                Ok($control::Continue)
+            async fn before_create_user(&self, user: &mut FieldMap, context: &$context<'_,S>) -> AuthResult<DatabaseHookUpdate<FieldMap>> {
+                self.record("user.before", context.request.as_ref(), Some(user.get("lastLoginMethod").map(FieldValue::json).transpose()?.flatten().unwrap_or(Value::Null)));
+                Ok(DatabaseHookUpdate::Continue)
             }
             async fn after_create_user(&self, _: Option<&better_auth_core::wire::UserView>, context: &$context<'_,S>) -> AuthResult<()> { self.record("user.after", context.request.as_ref(), None); Ok(()) }
-            async fn before_update_user(&self, $($id: &FieldValue,)? user: &UpdateUser, context: &$context<'_,S>) -> AuthResult<DatabaseHookUpdate<UpdateUser>> {
-                self.record("user.update", context.request.as_ref(), Some(user.additional_fields.get("lastLoginMethod").map(FieldValue::json).transpose()?.flatten().unwrap_or(Value::Null)));
+            async fn before_update_user(&self, $($id: &FieldValue,)? user: &mut FieldMap, context: &$context<'_,S>) -> AuthResult<DatabaseHookUpdate<FieldMap>> {
+                self.record("user.update", context.request.as_ref(), Some(user.get("lastLoginMethod").map(FieldValue::json).transpose()?.flatten().unwrap_or(Value::Null)));
                 if self.fails("update") { return Err(rejected()); }
                 Ok(DatabaseHookUpdate::Continue)
             }
@@ -179,8 +177,8 @@ macro_rules! hooks {
         }
     };
 }
-hooks!(DatabaseHooks, DatabaseHookContext, DatabaseHookControl);
-hooks!(SeaOrmHooks, SeaOrmHookContext, HookControl, _id);
+hooks!(DatabaseHooks, DatabaseHookContext);
+hooks!(SeaOrmHooks, SeaOrmHookContext, _id);
 
 struct FixtureHasher;
 #[async_trait::async_trait]

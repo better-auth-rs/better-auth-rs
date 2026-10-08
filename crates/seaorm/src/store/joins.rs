@@ -16,6 +16,8 @@ const PARENT: &str = "_auth_parent";
 const CHILD: &str = "_auth_child";
 const CHILD_PRESENT: &str = "_auth_child_present";
 
+use super::plugin_rows::SqlRow;
+
 pub(super) fn relation_value<T>(many: bool, mut rows: Vec<T>) -> JoinValue<T> {
     if many {
         JoinValue::Many(rows)
@@ -24,37 +26,57 @@ pub(super) fn relation_value<T>(many: bool, mut rows: Vec<T>) -> JoinValue<T> {
     }
 }
 
-pub(super) fn selected_children<E: EntityTrait>(
-    rows: impl Iterator<Item = E::Model>,
-    id: E::Column,
-    many: bool,
-    limit: f64,
-) -> Vec<E::Model> {
-    if many {
-        limited_children::<E>(rows, id, limit)
-    } else {
-        // Kysely overwrites a singular relationship for every matching SQL row.
-        rows.last().into_iter().collect()
-    }
-}
-
-pub(super) fn grouped_rows<P: EntityTrait, C: EntityTrait>(
-    rows: Vec<(P::Model, Option<C::Model>)>,
-    parent_id: P::Column,
-) -> Vec<(P::Model, Vec<C::Model>)> {
-    let mut groups: Vec<(P::Model, Vec<C::Model>)> = Vec::new();
-    for (parent, child) in rows {
-        let id = parent.get(parent_id);
-        if let Some((_, children)) = groups
-            .iter_mut()
-            .find(|(parent, _)| parent.get(parent_id) == id)
-        {
+fn grouped_by_key<P, C, K: PartialEq>(
+    rows: impl Iterator<Item = (K, P, Option<C>)>,
+) -> Vec<(P, Vec<C>)> {
+    let mut groups: Vec<(K, P, Vec<C>)> = Vec::new();
+    for (id, parent, child) in rows {
+        if let Some((_, _, children)) = groups.iter_mut().find(|(stored, _, _)| *stored == id) {
             children.extend(child);
         } else {
-            groups.push((parent, child.into_iter().collect()));
+            groups.push((id, parent, child.into_iter().collect()));
         }
     }
     groups
+        .into_iter()
+        .map(|(_, parent, children)| (parent, children))
+        .collect()
+}
+
+pub(super) fn grouped_raw_rows(
+    rows: Vec<(SqlRow, Option<SqlRow>)>,
+    parent_id: impl IdenStatic,
+) -> AuthResult<Vec<(SqlRow, Vec<SqlRow>)>> {
+    let rows = rows
+        .into_iter()
+        .map(|(parent, child)| Ok((parent.value(parent_id.as_str())?, parent, child)))
+        .collect::<AuthResult<Vec<_>>>()?;
+    Ok(grouped_by_key(rows.into_iter()))
+}
+
+pub(super) fn selected_raw_children(
+    rows: impl Iterator<Item = SqlRow>,
+    id: impl IdenStatic,
+    many: bool,
+    limit: f64,
+) -> AuthResult<Vec<SqlRow>> {
+    if !many {
+        // Kysely overwrites a singular relationship for every matching SQL row.
+        return Ok(rows.last().into_iter().collect());
+    }
+    let mut selected = Vec::new();
+    let mut ids = Vec::new();
+    for row in rows {
+        if selected.len() >= limit as usize {
+            break;
+        }
+        let key = row.value(id.as_str())?;
+        if !ids.contains(&key) {
+            ids.push(key);
+            selected.push(row);
+        }
+    }
+    Ok(selected)
 }
 
 type ChildPagesFuture<'a> = std::pin::Pin<
@@ -190,21 +212,42 @@ pub(super) fn limited_children<E: EntityTrait>(
     id: E::Column,
     limit: f64,
 ) -> Vec<E::Model> {
+    limited_by_key(rows.map(|row| (row.get(id), row)), limit)
+}
+
+fn limited_by_key<T, K: PartialEq>(rows: impl Iterator<Item = (K, T)>, limit: f64) -> Vec<T> {
     // Kysely caps the assembled child array with slice, not a SQL LIMIT.
     let limit = limit as usize;
     let mut selected = Vec::new();
     let mut ids = Vec::new();
-    for row in rows {
+    for (id, row) in rows {
         if selected.len() >= limit {
             break;
         }
-        let id = row.get(id);
         if !ids.contains(&id) {
             ids.push(id);
             selected.push(row);
         }
     }
     selected
+}
+
+pub(super) async fn joined_raw_rows(
+    db: &impl ConnectionTrait,
+    query: &SelectStatement,
+) -> AuthResult<Vec<(SqlRow, Option<SqlRow>)>> {
+    db.query_all(query)
+        .await
+        .map_err(super::map_db_err)?
+        .into_iter()
+        .map(|row| {
+            let present = row
+                .try_get::<bool>("", CHILD_PRESENT)
+                .map_err(super::map_db_err)?;
+            let row = SqlRow::from(row);
+            Ok((row.prefixed("A_"), present.then(|| row.prefixed("B_"))))
+        })
+        .collect()
 }
 
 pub(super) fn optional_model<M: FromQueryResult>(

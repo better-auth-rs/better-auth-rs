@@ -12,7 +12,7 @@ use better_auth::plugins::{
 };
 use better_auth::{AuthBuilder, AuthConfig, AuthError, AuthResult, BetterAuth};
 use better_auth_core::store::AccountStore;
-use better_auth_core::{AuthUser, CreateAccount, UpdateAccount, UpdateUser};
+use better_auth_core::{AuthUser, CreateAccount, UpdateAccount};
 use better_auth_seaorm::hooks::{HookControl, SeaOrmHookContext, SeaOrmHooks};
 use serde_json::{Value, json};
 use std::sync::{Arc, Mutex};
@@ -278,23 +278,25 @@ impl SeaOrmHooks<TestSchema> for OAuthLinkIdTokenFixture {
     async fn before_update_user(
         &self,
         _: &better_auth_core::FieldValue,
-        update: &UpdateUser,
+        update: &mut better_auth_core::FieldMap,
         ctx: &SeaOrmHookContext<'_, TestSchema>,
-    ) -> AuthResult<better_auth::seaorm::DatabaseHookUpdate<UpdateUser>> {
+    ) -> AuthResult<better_auth::seaorm::DatabaseHookUpdate<better_auth_core::FieldMap>> {
         if ctx.request.as_ref().is_some_and(|request| {
             request
                 .path
                 .as_deref()
                 .is_some_and(|path| path.ends_with("/link-social"))
         }) {
-            self.state
-                .lock()
-                .unwrap()
-                .image_updates
-                .push(match update.image.json()? {
+            self.state.lock().unwrap().image_updates.push(
+                match update
+                    .get("image")
+                    .unwrap_or(&better_auth_core::FieldValue::Undefined)
+                    .json()?
+                {
                     Some(image) => json!({ "image": image }),
                     None => json!({}),
-                });
+                },
+            );
         }
         self.hook("user.update.before", ctx)?;
         Ok(better_auth::seaorm::DatabaseHookUpdate::Continue)

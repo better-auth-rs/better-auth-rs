@@ -1,4 +1,7 @@
-use super::{TypedTransactionFuture, database_hooks::DatabaseHookUpdate};
+use super::{
+    TypedTransactionFuture,
+    database_hooks::{DatabaseHookUpdate, PreparedRecordWrite},
+};
 use crate::{AuthConfig, AuthResult, CreateSession, FieldMap, SessionView};
 
 /// A secondary creation write between database insertion and creation-after hooks.
@@ -14,8 +17,7 @@ pub struct SessionCreateWriter {
 /// Prepared public fields shared by database and secondary Session creation.
 #[doc(hidden)]
 pub struct PreparedSessionCreate {
-    fields: FieldMap,
-    original: Option<FieldMap>,
+    fields: PreparedRecordWrite,
 }
 
 impl PreparedSessionCreate {
@@ -67,38 +69,21 @@ impl PreparedSessionCreate {
         fields.extend(input.additional_fields);
         fields.sort_property_order();
         Ok(Self {
-            fields,
-            original: None,
+            fields: PreparedRecordWrite::new(fields),
         })
     }
 
     pub fn fields_mut(&mut self) -> &mut FieldMap {
-        &mut self.fields
+        self.fields.fields_mut()
     }
 
     /// An empty patch still detaches later property replacements from the original object.
     pub fn apply(&mut self, outcome: DatabaseHookUpdate<FieldMap>) -> bool {
-        self.fields.sort_property_order();
-        match outcome {
-            DatabaseHookUpdate::Continue => true,
-            DatabaseHookUpdate::Cancel => false,
-            DatabaseHookUpdate::Patch(patch) => {
-                if self.original.is_none() {
-                    self.original = Some(self.fields.clone());
-                }
-                self.fields.extend(patch);
-                self.fields.sort_property_order();
-                true
-            }
-        }
+        self.fields.apply(outcome)
     }
 
-    pub fn into_parts(mut self) -> (FieldMap, FieldMap) {
-        self.fields.sort_property_order();
-        (
-            self.original.unwrap_or_else(|| self.fields.clone()),
-            self.fields,
-        )
+    pub fn into_parts(self) -> (FieldMap, FieldMap) {
+        self.fields.into_parts()
     }
 }
 

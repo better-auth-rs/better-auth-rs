@@ -2,8 +2,8 @@
 
 use crate::hooks::RequestHookContext;
 use crate::store::AuthTransaction;
-use crate::types::{CreateAccount, CreateUser, CreateVerification, UpdateAccount, UpdateUser};
-use crate::{AuthConfig, AuthResult, AuthSchema};
+use crate::types::{CreateAccount, CreateVerification, UpdateAccount};
+use crate::{AuthConfig, AuthResult, AuthSchema, FieldMap};
 use async_trait::async_trait;
 
 /// Preserve the awaited adapter lookup between hooks and adapter field conversion.
@@ -53,34 +53,62 @@ pub struct SessionUpdate {
 
 pub use crate::types_account::VerificationUpdate;
 
-impl UpdateUser {
-    /// Merge supplied fields without replacing fields omitted from the patch.
-    pub fn merge(&mut self, patch: Self) {
-        macro_rules! fields {
-            ($($field:ident),* $(,)?) => {$(if patch.$field.is_some() { self.$field = patch.$field; })*};
+/// Ordered hook fields preserve shallow patches and the original object after detachment.
+#[doc(hidden)]
+pub struct PreparedRecordWrite {
+    fields: FieldMap,
+    original: Option<FieldMap>,
+}
+
+impl PreparedRecordWrite {
+    pub fn new(mut fields: FieldMap) -> Self {
+        fields.sort_property_order();
+        Self {
+            fields,
+            original: None,
         }
-        fields!(
-            email,
-            email_verified,
-            username,
-            display_username,
-            is_anonymous,
-            phone_number,
-            phone_number_verified,
-            role,
-            banned,
-            ban_reason,
-            ban_expires,
-            two_factor_enabled,
-            metadata
-        );
-        if !patch.name.is_undefined() {
-            self.name = patch.name;
+    }
+
+    pub fn fields_mut(&mut self) -> &mut FieldMap {
+        &mut self.fields
+    }
+
+    /// Update hooks receive the original object even after a preceding hook returns a patch.
+    pub fn original_fields_mut(&mut self) -> &mut FieldMap {
+        self.original.as_mut().unwrap_or(&mut self.fields)
+    }
+
+    /// An empty patch still detaches later property replacements from the original object.
+    pub fn apply(&mut self, outcome: DatabaseHookUpdate<FieldMap>) -> bool {
+        self.fields.sort_property_order();
+        if let Some(original) = &mut self.original {
+            original.sort_property_order();
         }
-        if !patch.image.is_undefined() {
-            self.image = patch.image;
+        match outcome {
+            DatabaseHookUpdate::Continue => true,
+            DatabaseHookUpdate::Cancel => false,
+            DatabaseHookUpdate::Patch(patch) => {
+                if self.original.is_none() {
+                    self.original = Some(self.fields.clone());
+                }
+                self.fields.extend(patch);
+                self.fields.sort_property_order();
+                true
+            }
         }
-        self.additional_fields.extend(patch.additional_fields);
+    }
+
+    pub fn into_fields(mut self) -> FieldMap {
+        self.fields.sort_property_order();
+        self.fields
+    }
+
+    pub fn into_parts(mut self) -> (FieldMap, FieldMap) {
+        self.fields.sort_property_order();
+        (
+            self.original.unwrap_or_else(|| self.fields.clone()),
+            self.fields,
+        )
     }
 }
 
@@ -145,10 +173,10 @@ pub trait DatabaseHooks<S: AuthSchema>: Send + Sync {
     /// Edit a user before creation or cancel the write.
     async fn before_create_user(
         &self,
-        _data: &mut CreateUser,
+        _data: &mut FieldMap,
         _ctx: &DatabaseHookContext<'_, S>,
-    ) -> AuthResult<DatabaseHookControl> {
-        Ok(DatabaseHookControl::Continue)
+    ) -> AuthResult<DatabaseHookUpdate<FieldMap>> {
+        Ok(DatabaseHookUpdate::Continue)
     }
     /// Observe a committed user creation.
     async fn after_create_user(
@@ -161,9 +189,9 @@ pub trait DatabaseHooks<S: AuthSchema>: Send + Sync {
     /// Inspect the original user update and return a patch or cancellation.
     async fn before_update_user(
         &self,
-        _data: &UpdateUser,
+        _data: &mut FieldMap,
         _ctx: &DatabaseHookContext<'_, S>,
-    ) -> AuthResult<DatabaseHookUpdate<UpdateUser>> {
+    ) -> AuthResult<DatabaseHookUpdate<FieldMap>> {
         Ok(DatabaseHookUpdate::Continue)
     }
     /// Observe a committed user update.

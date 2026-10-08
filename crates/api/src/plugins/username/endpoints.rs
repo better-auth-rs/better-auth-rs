@@ -1,5 +1,5 @@
 use better_auth_core::{
-    AuthContext, AuthRequest, AuthResponse, AuthResult, AuthSchema, RequestMeta,
+    AuthContext, AuthRequest, AuthResponse, AuthResult, AuthSchema, FieldValue, RequestMeta,
 };
 use serde_json::json;
 
@@ -19,12 +19,13 @@ impl UsernamePlugin {
         if username.is_empty() {
             return Err(error(422, "INVALID_USERNAME", "Username is invalid"));
         }
+        let username = FieldValue::from(username);
         if let Some((code, message)) = self.config.validate_raw(&username).await? {
             return Err(error(422, code, message));
         }
         let found = context
             .database
-            .get_user_by_username(&self.config.normalize(&username)?)
+            .get_user_by_field_value("username", &self.config.normalize(&username)?)
             .await?;
         Ok(AuthResponse::json(
             200,
@@ -57,9 +58,9 @@ impl UsernamePlugin {
         let username = if self.config.username_validation_order
             == Some(UsernameValidationOrder::PreNormalization)
         {
-            self.config.normalize(&body.username)?
+            self.config.normalize(&body.username.clone().into())?
         } else {
-            body.username.clone()
+            body.username.clone().into()
         };
         if let Some((code, message)) = self.config.validate_raw(&username).await? {
             return Err(error(422, code, message));

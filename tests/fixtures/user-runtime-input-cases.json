@@ -1,0 +1,20 @@
+{
+  "version": "1.7.6",
+  "emails": [
+    { "name": "uppercase", "value": "OWNER@RUNTIME.TEST", "create": "owner@runtime.test", "update": "owner@runtime.test" },
+    { "name": "null", "value": null, "create": { "type": "undefined" }, "update": null },
+    { "name": "undefined", "value": { "type": "undefined" }, "create": { "type": "undefined" }, "update": { "type": "undefined" } },
+    { "name": "empty", "value": "", "create": "", "update": "" },
+    { "name": "zero", "value": 0, "createError": true, "update": 0 },
+    { "name": "false", "value": false, "createError": true, "update": false },
+    { "name": "object", "value": {}, "createError": true, "updateError": true },
+    { "name": "array", "value": [], "createError": true, "updateError": true }
+  ],
+  "usernames": [
+    { "name": "disabled-number", "mode": "disabled", "value": 7, "expected": 7, "events": ["validate"] },
+    { "name": "disabled-false", "mode": "disabled", "value": false, "expected": false, "events": [] },
+    { "name": "custom-object", "mode": "custom", "value": { "length": 4, "label": "input" }, "expected": { "length": 5, "label": "normalized" }, "events": ["validate", "normalize", "normalize"] },
+    { "name": "short-object", "mode": "custom", "value": { "length": 2, "label": "short" }, "error": "Username is too short", "events": [] },
+    { "name": "default-number", "mode": "default", "value": 7, "error": "toLowerCase", "events": ["validate"] }
+  ]
+}

@@ -183,6 +183,7 @@ run_stage() {
       if cargo build --workspace --locked --tests --profile test --features axum,seaorm2,redis-cache --keep-going; then
         cargo test --locked --no-fail-fast -p better-auth-core -p better-auth-api -p better-auth-seaorm --lib -- \
           session verification database_hooks lifecycle transaction create_readback user_fields user_query wire:: \
+          user_column_defaults \
           user_view_preserves_adapter_order_through_cache_and_visibility \
           plugins::jwt:: plugins::passkey:: plugins::organization:: plugins::test_utils:: \
           plugins::admin:: plugins::email_verification:: plugins::email_password:: \
@@ -195,10 +196,18 @@ run_stage() {
           --test organization_native_team_tests --test organization_query_limits_tests \
           --test test_utils_tests --test legacy_schema_integration_tests \
           --test user_runtime_output_tests --test user_runtime_cache_tests \
+          --test user_runtime_input_tests --test user_account_raw_column_tests \
           --test user_verification_fields_tests --test user_record_values_tests \
+          --test account_owner_batch_tests --test account_identity_tests \
+          --test account_user_selected_relations_reference_tests \
+          --test native_core_join_tests --test native_memory_join_tests \
+          --test memory_user_live_reads_tests --test api_key_number_name_tests \
+          --test plugin_display_json_tests --test plugin_model_fields_tests \
+          --test nullable_user_update_tests --test sql_user_string_output_tests --test sql_user_extra_output_tests \
           --test username_runtime_tests --test email_normalization_tests || create_status=1
         cargo test --locked --features axum,seaorm2,redis-cache --test mysql_create_readback_tests -- --ignored || create_status=1
-        ./scripts/consumer-check.sh --test session_native_values --test user_session_fields || create_status=1
+        cargo test --locked -p better-auth-cli --test generate || create_status=1
+        ./scripts/consumer-check.sh --lib --test session_native_values --test user_session_fields || create_status=1
         COMPAT_TEST_PROFILE=passkey-first,passkey-options,email-otp,email-otp-options,magic-link,signup-verification,admin-options,crypto-database,crypto-cookie,identity-context \
           cargo test --locked --test client_compat_tests -- --ignored --nocapture --exact --test-threads=1 \
           configuration_client_compat phase1_client_compat phase2_client_compat phase3_client_compat || create_status=1
@@ -207,7 +216,16 @@ run_stage() {
       fi
       bun --no-install test ./compat-tests/reference-server/consumer-contracts/mysql-create-readback.test.ts || create_status=1
       bun --no-install test ./compat-tests/reference-server/contracts/user-runtime-output.test.ts \
-        ./compat-tests/reference-server/contracts/user-runtime-cache.test.ts || create_status=1
+        ./compat-tests/reference-server/contracts/user-runtime-cache.test.ts \
+        ./compat-tests/reference-server/contracts/user-runtime-input.test.ts \
+        ./compat-tests/reference-server/contracts/user-account-raw-column.test.ts \
+        ./compat-tests/reference-server/contracts/account-owner-batch.test.ts \
+        ./compat-tests/reference-server/contracts/account-duplicates.test.ts \
+        ./compat-tests/reference-server/contracts/account-user-selected-relations.test.ts \
+        ./compat-tests/reference-server/contracts/native-core-joins.test.ts \
+        ./compat-tests/reference-server/contracts/memory-user-live-reads.test.ts \
+        ./compat-tests/reference-server/contracts/sql-user-string-output.test.ts \
+        ./compat-tests/reference-server/contracts/sql-user-extra-output.test.ts || create_status=1
       return "$create_status"
       ;;
     api-key-cache)

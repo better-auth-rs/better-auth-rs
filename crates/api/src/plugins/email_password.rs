@@ -459,7 +459,7 @@ pub(crate) async fn sign_in_core(
 pub(crate) async fn sign_in_username_core(
     req: &AuthRequest,
     body: &SignInUsernameRequest,
-    normalized_username: &str,
+    normalized_username: &better_auth_core::FieldValue,
     config: &EmailPasswordConfig,
     email_verification: Option<&EmailVerificationPlugin>,
     meta: &RequestMeta,
@@ -472,7 +472,7 @@ pub(crate) async fn sign_in_username_core(
     let email_verification = email_verification.or(verification.as_ref());
     let Some(user) = ctx
         .database
-        .get_user_by_username(normalized_username)
+        .get_user_by_field_value("username", normalized_username)
         .await
         .map_err(SignInUsernameFailure::Auth)?
     else {

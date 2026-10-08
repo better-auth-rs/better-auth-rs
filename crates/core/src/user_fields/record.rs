@@ -83,6 +83,12 @@ impl UserConfig {
     /// Compose the complete User declaration before replacing adapter-owned ID policies.
     #[doc(hidden)]
     pub fn user_field_schema(&self) -> Self {
+        self.user_field_schema_with_plugins(&[])
+    }
+
+    /// Compose core fields, enabled plugin fields, and application replacements in schema order.
+    #[doc(hidden)]
+    pub fn user_field_schema_with_plugins(&self, plugins: &[&str]) -> Self {
         let mut fields: indexmap::IndexMap<_, _> = [
             (
                 "name".into(),
@@ -112,6 +118,40 @@ impl UserConfig {
             ("updatedAt".into(), timestamp(true, true)),
         ]
         .into();
+        for name in plugins {
+            let mut declaration = match *name {
+                "isAnonymous" | "twoFactorEnabled" | "banned" => UserFieldConfig {
+                    default_value: Some(false.into()),
+                    input: Some(false),
+                    ..field(UserFieldType::Boolean, false)
+                },
+                "phoneNumber" => UserFieldConfig {
+                    unique: Some(true),
+                    sortable: Some(true),
+                    returned: Some(true),
+                    ..field(UserFieldType::String, false)
+                },
+                "phoneNumberVerified" => UserFieldConfig {
+                    returned: Some(true),
+                    input: Some(false),
+                    ..field(UserFieldType::Boolean, false)
+                },
+                "banExpires" => UserFieldConfig {
+                    input: Some(false),
+                    ..field(UserFieldType::Date, false)
+                },
+                "role" | "banReason" => UserFieldConfig {
+                    input: Some(false),
+                    ..field(UserFieldType::String, false)
+                },
+                _ => field(UserFieldType::String, false),
+            };
+            if *name == "username" {
+                declaration.unique = Some(true);
+                declaration.sortable = Some(true);
+            }
+            let _ = fields.insert((*name).into(), declaration);
+        }
         fields.extend(self.fields().clone());
         Self {
             additional_fields: Some(fields),

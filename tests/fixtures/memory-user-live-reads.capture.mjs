@@ -1,12 +1,13 @@
 const modules = `${import.meta.dir}/../../compat-tests/reference-server/node_modules`;
 const { betterAuth } = await import(`${modules}/better-auth/dist/index.mjs`);
 
-export async function capture(path, joins) {
+export async function capture(path, joins, database) {
   const events = [];
   let adapter;
   let enabled = false;
   let nested = false;
   const auth = betterAuth({
+    database,
     baseURL: "http://ordinary-user-read.test",
     secret: "ordinary-user-read-secret-with-more-than-thirty-two-characters",
     telemetry: { enabled: false }, logger: { disabled: true },
@@ -29,12 +30,17 @@ export async function capture(path, joins) {
   adapter = context.adapter;
   const createdAt = new Date("2025-01-01T00:00:00.000Z");
   const create = (model, data) => adapter.create({ model, forceAllowId: true, data: { createdAt, updatedAt: createdAt, ...data } });
-  await create("user", { id: "ordinary-user", name: "ordinary-name", image: "image-before", email: "ordinary@user-read.test", emailVerified: true });
-  await create("session", { id: "ordinary-session", token: "ordinary-session-token", userId: "ordinary-user", expiresAt: new Date("2099-01-01T00:00:00.000Z") });
-  await create("account", { id: "ordinary-account", providerId: "ordinary-provider", accountId: "ordinary-account", userId: "ordinary-user" });
+  const createUser = () => create("user", { id: "ordinary-user", name: "ordinary-name", image: "image-before", email: "ordinary@user-read.test", emailVerified: true });
+  if (path !== "create") await createUser();
+  if (path !== "create" && path !== "update") {
+    await create("session", { id: "ordinary-session", token: "ordinary-session-token", userId: "ordinary-user", expiresAt: new Date("2099-01-01T00:00:00.000Z") });
+    await create("account", { id: "ordinary-account", providerId: "ordinary-provider", accountId: "ordinary-account", userId: "ordinary-user" });
+  }
   enabled = true;
   let users;
   switch (path) {
+    case "create": users = [await createUser()]; break;
+    case "update": users = [await context.internalAdapter.updateUser("ordinary-user", { image: "image-before" })]; break;
     case "point": users = [await context.internalAdapter.findUserById("ordinary-user")]; break;
     case "email": users = [(await context.internalAdapter.findUserByEmail("ordinary@user-read.test")).user]; break;
     case "user-accounts": users = [(await context.internalAdapter.findUserByEmail("ordinary@user-read.test", { includeAccounts: true })).user]; break;

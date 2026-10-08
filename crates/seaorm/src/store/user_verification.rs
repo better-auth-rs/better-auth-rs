@@ -41,26 +41,21 @@ where
         let mut revoked = None;
         let result = async {
             self.model_fields.canonicalize_id(better_auth_core::store::schema::EntityRole::User)?;
-            let Some(user) = database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(self.config(), "findOne", async { <S::User as SeaOrmUserModel>::Entity::find()
+            let Some(user) = database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(self.config(), "findOne", async { super::plugin_rows::one(&tx, <S::User as SeaOrmUserModel>::Entity::find()
                 .filter(S::User::id_column().eq(self.parse_id(user_id, S::User::parse_id)?))
-                .lock_exclusive()
-                .one(&tx)
-                .await
-                .map_err(map_db_err) }).await?
+                .lock_exclusive()).await }).await?
             else {
                 return Ok(None);
             };
+            let user = self.output_user(&user, &tx).await?;
             if user.email_verified().is_truthy()? {
-                return self.output_user(&user, &tx).await.map(Some);
+                return Ok(Some(user));
             }
             let hook_context = self.hook_context(Some((&tx, &hook_transaction)));
             self.model_fields.canonicalize_id(better_auth_core::store::schema::EntityRole::Account)?;
-            let accounts = match database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(self.config(), "findMany", async { <S::Account as SeaOrmAccountModel>::Entity::find()
+            let accounts = match database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(self.config(), "findMany", async { super::plugin_rows::all(&tx, <S::Account as SeaOrmAccountModel>::Entity::find()
                 .filter(S::Account::user_id_column().eq(self.parse_id(user_id, S::Account::parse_user_id)?))
-                .limit(super::pagination::default_limit(self.config(), tx.get_database_backend())?)
-                .all(&tx)
-                .await
-                .map_err(map_db_err) }).await { Ok(rows) => self.output_accounts(&rows, &tx).await, Err(error) => Err(error) }?;
+                .limit(super::pagination::default_limit(self.config(), tx.get_database_backend())?)).await }).await { Ok(rows) => self.output_accounts(&rows, &tx).await, Err(error) => Err(error) }?;
             let sessions = if database_sessions {
                 match database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(self.config(), "findMany", async { <S::Session as SeaOrmSessionModel>::Entity::find()
                     .filter(S::Session::user_id_column().eq(self.parse_id(user_id, S::Session::parse_user_id)?))
@@ -93,24 +88,16 @@ where
                     }
                 }
             }
-            let mut update = UpdateUser {
-                email_verified: Some(true),
-                ..Default::default()
-            };
-            let original = update.clone();
+            let update = UpdateUser { email_verified: Some(true), ..Default::default() };
+            let mut prepared = better_auth_core::store::database_hooks::PreparedRecordWrite::new(update.into_user_fields()?);
             for hook in self.hooks() {
-                match better_auth_core::observability::database::with_database_hook(hook_context.config, hook.hook_metadata(), better_auth_core::observability::database::DatabaseHook::BeforeUpdateUser, hook
-                    .before_update_user(&user_id.into(), &original, &hook_context))
-                    .await?
-                {
-                    crate::hooks::DatabaseHookUpdate::Continue => {}
-                    crate::hooks::DatabaseHookUpdate::Cancel => {
-                        return Err(cancelled_by_hook("email verification"));
-                    }
-                    crate::hooks::DatabaseHookUpdate::Patch(mut patch) => {
-                        patch.prepare_user_fields(&self.config().user)?;
-                        update.merge(patch);
-                    }
+                let outcome = better_auth_core::observability::database::with_database_hook(
+                    hook_context.config, hook.hook_metadata(),
+                    better_auth_core::observability::database::DatabaseHook::BeforeUpdateUser,
+                    hook.before_update_user(&user_id.into(), prepared.original_fields_mut(), &hook_context),
+                ).await?;
+                if !prepared.apply(outcome) {
+                    return Err(cancelled_by_hook("email verification"));
                 }
             }
             let _ = database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(self.config(), "deleteMany", async { <S::Account as SeaOrmAccountModel>::Entity::delete_many()
@@ -126,7 +113,7 @@ where
                     .map_err(map_db_err) }).await?;
             }
             let user = self
-                .update_user_record(&tx, &user_id.into(), update)
+                .update_user_record(&tx, &user_id.into(), prepared.into_fields())
                 .await?
                 .ok_or(better_auth_core::AuthError::UserNotFound)?;
             let user = self.output_user(&user, &tx).await?;

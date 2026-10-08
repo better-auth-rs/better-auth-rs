@@ -31,7 +31,10 @@ async fn context() -> (AuthContext<TestSchema>, String, String) {
         })
         .await
         .unwrap();
-    let token = better_auth_core::entity::AuthSession::token(&session).to_string();
+    let token = better_auth_core::entity::AuthSession::token(&session)
+        .typed()
+        .unwrap()
+        .to_string();
     let mut config = AuthConfig::new("a-secret-that-is-at-least-32-characters");
     config.session.bearer = Some(Default::default());
     (

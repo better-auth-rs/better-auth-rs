@@ -14,8 +14,8 @@ use better_auth_core::{
     user_fields::UserConfig,
 };
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityName, EntityTrait, FromQueryResult,
-    IntoActiveModel, Iterable, QueryFilter, QuerySelect, QueryTrait, Select, Value,
+    ColumnTrait, ConnectionTrait, EntityName, EntityTrait, FromQueryResult, IdenStatic, Iterable,
+    QueryFilter, QuerySelect, QueryTrait, Select, Value,
     sea_query::{Expr, ExprTrait, JoinType, Query},
 };
 
@@ -251,27 +251,25 @@ where
                 Some(input.users_limit),
                 None,
             )?;
-            <S::User as SeaOrmUserModel>::Entity::find()
-                .filter(S::User::id_column().is_in(members.iter().map(|(_, owner)| owner.clone())))
-                .limit(limit)
-                .all(self.connection())
-                .await
-                .map_err(map_db_err)?
+            super::plugin_rows::all(
+                self.connection(),
+                <S::User as SeaOrmUserModel>::Entity::find()
+                    .filter(
+                        S::User::id_column().is_in(members.iter().map(|(_, owner)| owner.clone())),
+                    )
+                    .limit(limit),
+            )
+            .await?
         };
         let ids = user_rows
             .iter()
-            .map(|user| {
-                user.clone()
-                    .into_active_model()
-                    .get(S::User::id_column())
-                    .into_value()
-                    .ok_or_else(|| AuthError::internal("Stored member user ID is unavailable"))
-            })
+            .map(|user| user.value(S::User::id_column().as_str())?.display_utf16())
             .collect::<AuthResult<Vec<_>>>()?;
         let users = self.output_users(&user_rows, self.connection()).await?;
         let members = members
             .into_iter()
             .map(|(member, owner)| {
+                let owner = crate::__private_field_value(owner)?.display_utf16()?;
                 let index = ids.iter().position(|id| *id == owner).ok_or_else(|| {
                     AuthError::internal("Unexpected error: User not found for member")
                 })?;

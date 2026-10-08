@@ -10,7 +10,7 @@ use better_auth_core::{
     store::{AccountStore, SessionStore, UserStore, VerificationStore, transaction},
 };
 use better_auth_seaorm::{
-    DatabaseHookUpdate, HookControl, SeaOrmHookContext, SeaOrmHooks, SeaOrmStore, SessionUpdate,
+    DatabaseHookUpdate, SeaOrmHookContext, SeaOrmHooks, SeaOrmStore, SessionUpdate,
     VerificationUpdate,
     sea_orm::{Database, EntityTrait},
     store::__private_test_support::{bundled_schema::BundledSchema, migrator},
@@ -43,21 +43,20 @@ impl SeaOrmHooks<BundledSchema> for PatchHook {
     async fn before_update_user(
         &self,
         _: &better_auth_core::FieldValue,
-        update: &UpdateUser,
+        update: &mut better_auth_core::FieldMap,
         _: &SeaOrmHookContext<'_, BundledSchema>,
-    ) -> AuthResult<DatabaseHookUpdate<UpdateUser>> {
-        assert_eq!(update.name.typed().unwrap().as_deref(), Some("requested"));
-        assert!(update.image.is_undefined());
+    ) -> AuthResult<DatabaseHookUpdate<better_auth_core::FieldMap>> {
+        assert_eq!(
+            update
+                .get("name")
+                .and_then(better_auth_core::FieldValue::as_str),
+            Some("requested")
+        );
+        assert!(!update.contains_key("image"));
         Ok(DatabaseHookUpdate::Patch(if self.first {
-            UpdateUser {
-                image: Some("first-image".into()).into(),
-                ..Default::default()
-            }
+            better_auth_core::FieldMap::from([("image".into(), "first-image".into())])
         } else {
-            UpdateUser {
-                name: Some("last-name".into()).into(),
-                ..Default::default()
-            }
+            better_auth_core::FieldMap::from([("name".into(), "last-name".into())])
         }))
     }
     async fn before_update_account(
@@ -368,12 +367,14 @@ struct CommitHook {
 impl SeaOrmHooks<BundledSchema> for CommitHook {
     async fn before_create_user(
         &self,
-        _: &mut CreateUser,
+        _: &mut better_auth_core::FieldMap,
         ctx: &SeaOrmHookContext<'_, BundledSchema>,
-    ) -> AuthResult<HookControl> {
+    ) -> AuthResult<
+        better_auth_core::store::database_hooks::DatabaseHookUpdate<better_auth_core::FieldMap>,
+    > {
         assert!(ctx.tx.is_some());
         self.events.lock().unwrap().push("before".into());
-        Ok(HookControl::Continue)
+        Ok(better_auth_core::store::database_hooks::DatabaseHookUpdate::Continue)
     }
     async fn after_create_user(
         &self,

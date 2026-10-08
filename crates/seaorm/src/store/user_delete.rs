@@ -29,15 +29,16 @@ where
                 self.config(),
                 "findMany",
                 async {
-                    <S::Account as SeaOrmAccountModel>::Entity::find()
-                        .filter(condition.clone())
-                        .limit(super::pagination::default_limit(
-                            self.config(),
-                            db.get_database_backend(),
-                        )?)
-                        .all(db)
-                        .await
-                        .map_err(map_db_err)
+                    super::plugin_rows::all(
+                        db,
+                        <S::Account as SeaOrmAccountModel>::Entity::find()
+                            .filter(condition.clone())
+                            .limit(super::pagination::default_limit(
+                                self.config(),
+                                db.get_database_backend(),
+                            )?),
+                    )
+                    .await
                 },
             )
             .await
@@ -121,11 +122,12 @@ where
             self.config(),
             "findOne",
             async {
-                <S::User as SeaOrmUserModel>::Entity::find()
-                    .filter(S::User::id_column().eq(user_id.clone()))
-                    .one(db)
-                    .await
-                    .map_err(map_db_err)
+                super::plugin_rows::one(
+                    db,
+                    <S::User as SeaOrmUserModel>::Entity::find()
+                        .filter(S::User::id_column().eq(user_id.clone())),
+                )
+                .await
             },
         )
         .await;

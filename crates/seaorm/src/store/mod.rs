@@ -50,8 +50,9 @@ mod transaction_hooks;
 mod two_factor;
 mod two_factor_security;
 mod updates;
+mod user_column_defaults;
 mod user_delete;
-mod user_values;
+mod user_output;
 mod user_verification;
 mod users;
 mod value_filter;
@@ -548,19 +549,16 @@ where
         &self,
         email: &str,
     ) -> AuthResult<Option<better_auth_core::wire::UserView>> {
-        use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
-        self.store
-            .model_fields
-            .begin_id_query(better_auth_core::store::schema::EntityRole::User)?;
-        match <S::User as SeaOrmUserModel>::Entity::find()
-            .filter(
-                <S::User as SeaOrmUserModel>::email_column()
-                    .eq(crate::utils::email::normalize_user_email(email)),
-            )
-            .one(&self.tx)
-            .await
-            .map_err(map_db_err)?
-            .as_ref()
+        match plugin_rows::one(
+            &self.tx,
+            self.store.user_field_query(
+                &self.tx,
+                "email",
+                &crate::utils::email::normalize_user_email(email).into(),
+            )?,
+        )
+        .await?
+        .as_ref()
         {
             Some(row) => self.store.output_user(row, &self.tx).await.map(Some),
             None => Ok(None),
@@ -571,6 +569,15 @@ where
         username: &str,
     ) -> AuthResult<Option<better_auth_core::wire::UserView>> {
         self.store.find_user_by_username(&self.tx, username).await
+    }
+    async fn get_user_by_field_value(
+        &self,
+        field: &str,
+        value: &better_auth_core::FieldValue,
+    ) -> AuthResult<Option<better_auth_core::UserView>> {
+        self.store
+            .find_user_by_field_value(&self.tx, field, value)
+            .await
     }
     async fn update_user(
         &self,

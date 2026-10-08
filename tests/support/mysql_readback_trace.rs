@@ -293,29 +293,6 @@ pub(super) fn check_lifecycle(
     for (index, (actual, expected)) in actual.iter().zip(expected).enumerate() {
         let label = format!("{} event {index}", case.name);
         match actual {
-            Event::Callback(value)
-                if case.model == "user" && expected["phase"] == "before:plugin" =>
-            {
-                // CreateUser preserves values but does not expose JavaScript property insertion order.
-                assert_eq!(
-                    expected["data"]["keys"],
-                    json!([
-                        "createdAt",
-                        "updatedAt",
-                        "name",
-                        "email",
-                        "emailVerified",
-                        "image",
-                        "id"
-                    ]),
-                    "{label} upstream User key order remains an explicit boundary"
-                );
-                assert_eq!(
-                    value,
-                    &json!({"phase": "before:plugin", "data": {"fields": expected["data"]["fields"]}}),
-                    "{label} complete typed User before-hook values"
-                );
-            }
             Event::Callback(value) => assert_eq!(value, expected, "{label} complete callback"),
             Event::CacheSet(entry) => {
                 let mut fields = expected.as_object().expect("captured cache write").clone();

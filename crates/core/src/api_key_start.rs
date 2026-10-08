@@ -28,6 +28,24 @@ impl Utf16String {
         String::from_utf16(&self.0)
     }
 
+    /// Lowercase Unicode segments without replacing unpaired surrogates.
+    pub fn to_lowercase(&self) -> Self {
+        let mut units = Vec::new();
+        let mut segment = String::new();
+        for scalar in char::decode_utf16(self.0.iter().copied()) {
+            match scalar {
+                Ok(scalar) => segment.push(scalar),
+                Err(error) => {
+                    units.extend(segment.to_lowercase().encode_utf16());
+                    segment.clear();
+                    units.push(error.unpaired_surrogate());
+                }
+            }
+        }
+        units.extend(segment.to_lowercase().encode_utf16());
+        Self(units)
+    }
+
     /// Encode the prefix as WTF-8 for adapters that preserve unpaired surrogates.
     pub fn to_wtf8(&self) -> Vec<u8> {
         let mut bytes = Vec::new();

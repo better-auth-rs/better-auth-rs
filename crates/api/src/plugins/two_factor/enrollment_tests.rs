@@ -45,10 +45,10 @@ impl better_auth_seaorm::SeaOrmHooks<BundledSchema> for RejectEnrollment {
     async fn before_update_user(
         &self,
         _id: &better_auth_core::FieldValue,
-        update: &UpdateUser,
+        update: &mut better_auth_core::FieldMap,
         _ctx: &better_auth_seaorm::SeaOrmHookContext<'_, BundledSchema>,
-    ) -> AuthResult<better_auth_seaorm::DatabaseHookUpdate<UpdateUser>> {
-        if update.two_factor_enabled == Some(true) {
+    ) -> AuthResult<better_auth_seaorm::DatabaseHookUpdate<better_auth_core::FieldMap>> {
+        if update.get("twoFactorEnabled") == Some(&true.into()) {
             return Err(AuthError::internal("Enrollment user update rejected"));
         }
         Ok(better_auth_seaorm::DatabaseHookUpdate::Continue)

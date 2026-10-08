@@ -14,13 +14,10 @@ use better_auth::{
         AccountManagementPlugin, EmailPasswordPlugin, OAuthPlugin, SessionManagementPlugin,
         oauth::GenericOAuthConfig,
     },
-    store::{
-        DatabaseHookContext, DatabaseHookControl, DatabaseHookUpdate, DatabaseHooks,
-        StatelessSchema,
-    },
+    store::{DatabaseHookContext, DatabaseHookUpdate, DatabaseHooks, StatelessSchema},
 };
 use better_auth_core::{
-    CreateUser, FieldMap, SessionView, UserView,
+    FieldMap, SessionView, UserView,
     middleware::RateLimitConfig,
     store::{CacheAdapter, MemoryCacheAdapter},
 };
@@ -69,11 +66,13 @@ impl Hooks {
 impl DatabaseHooks<StatelessSchema> for Hooks {
     async fn before_create_user(
         &self,
-        user: &mut CreateUser,
+        user: &mut better_auth_core::FieldMap,
         ctx: &DatabaseHookContext<'_, StatelessSchema>,
-    ) -> AuthResult<DatabaseHookControl> {
-        self.record("user.before", json!(user.email), ctx);
-        Ok(DatabaseHookControl::Continue)
+    ) -> AuthResult<
+        better_auth_core::store::database_hooks::DatabaseHookUpdate<better_auth_core::FieldMap>,
+    > {
+        self.record("user.before", json!(user.get("email")), ctx);
+        Ok(better_auth_core::store::database_hooks::DatabaseHookUpdate::Continue)
     }
     async fn after_create_user(
         &self,

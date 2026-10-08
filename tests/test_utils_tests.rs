@@ -11,9 +11,7 @@ use better_auth::plugins::{OrganizationPlugin, TestUtilsPlugin};
 use better_auth::seaorm::sea_orm::{self, ConnectionTrait, Schema, entity::prelude::*};
 use better_auth::seaorm::{self, AuthEntity, Database, SeaOrmStore};
 use better_auth::{AuthConfig, AuthSchema, BetterAuth};
-use better_auth_core::store::database_hooks::{
-    DatabaseHookContext, DatabaseHookControl, DatabaseHooks,
-};
+use better_auth_core::store::database_hooks::{DatabaseHookContext, DatabaseHooks};
 use better_auth_core::store::{EphemeralStore, StatelessSchema};
 use better_auth_core::user_fields::{UserFieldConfig, UserFieldType};
 use better_auth_core::{
@@ -311,13 +309,20 @@ struct CancellingHooks;
 impl<S: AuthSchema> DatabaseHooks<S> for CancellingHooks {
     async fn before_create_user(
         &self,
-        user: &mut CreateUser,
+        user: &mut better_auth_core::FieldMap,
         _: &DatabaseHookContext<'_, S>,
-    ) -> AuthResult<DatabaseHookControl> {
-        match user.email.as_deref() {
-            Some("cancel@example.com") => Ok(DatabaseHookControl::Cancel),
+    ) -> AuthResult<
+        better_auth_core::store::database_hooks::DatabaseHookUpdate<better_auth_core::FieldMap>,
+    > {
+        match user
+            .get("email")
+            .and_then(better_auth_core::FieldValue::as_str)
+        {
+            Some("cancel@example.com") => {
+                Ok(better_auth_core::store::database_hooks::DatabaseHookUpdate::Cancel)
+            }
             Some("throw@example.com") => Err(AuthError::internal("before failed")),
-            _ => Ok(DatabaseHookControl::Continue),
+            _ => Ok(better_auth_core::store::database_hooks::DatabaseHookUpdate::Continue),
         }
     }
     async fn before_create_session(

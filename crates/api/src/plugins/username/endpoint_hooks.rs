@@ -1,6 +1,6 @@
 use better_auth_core::session::SessionRead;
 use better_auth_core::{
-    AuthContext, AuthRequest, AuthResult, AuthSchema, AuthUser, BeforeRequestAction,
+    AuthContext, AuthRequest, AuthResult, AuthSchema, BeforeRequestAction, FieldValue,
 };
 use serde_json::Value;
 
@@ -36,7 +36,11 @@ impl UsernamePlugin {
                 async {
                     if !body.contains_key("username")
                         && let Some(display) = body.get("displayUsername").and_then(Value::as_str)
-                        && self.config.validate_input(display).await?.is_none()
+                        && self
+                            .config
+                            .validate_input(&FieldValue::from(display))
+                            .await?
+                            .is_none()
                     {
                         let value = display.to_owned();
                         let _ = body.insert("username".into(), value.into());
@@ -54,10 +58,11 @@ impl UsernamePlugin {
             "plugin:username",
             async {
                 if let Some(username) = body.get("username").and_then(Value::as_str) {
-                    if let Some((code, message)) = self.config.validate_input(username).await? {
+                    let username = FieldValue::from(username);
+                    if let Some((code, message)) = self.config.validate_input(&username).await? {
                         return Err(error(400, code, message));
                     }
-                    let normalized = self.config.normalize(username)?;
+                    let normalized = self.config.normalize(&username)?;
                     let session = if signup {
                         None
                     } else {
@@ -70,11 +75,12 @@ impl UsernamePlugin {
                     if !signup
                         && self.config.immutable_username
                         && let Some(session) = &session
-                        && session
+                        && session.user.username.field_value().is_truthy()
+                        && !session
                             .user
                             .username
-                            .as_deref()
-                            .is_some_and(|value| !value.is_empty() && value != normalized)
+                            .field_value()
+                            .strict_equals(&normalized)
                     {
                         return Err(error(
                             400,
@@ -82,11 +88,16 @@ impl UsernamePlugin {
                             "Username cannot be updated",
                         ));
                     }
-                    if let Some(existing) =
-                        context.database.get_user_by_username(&normalized).await?
+                    if let Some(existing) = context
+                        .database
+                        .get_user_by_field_value("username", &normalized)
+                        .await?
                         && (signup
                             || session.as_ref().is_none_or(|session| {
-                                existing.id().into_owned() != session.user.id
+                                !existing
+                                    .id
+                                    .field_value()
+                                    .strict_equals(&session.user.id.field_value())
                             }))
                     {
                         return Err(error(
@@ -103,11 +114,12 @@ impl UsernamePlugin {
                     let normalized = if self.config.display_username_validation_order
                         == Some(UsernameValidationOrder::PostNormalization)
                     {
-                        self.config.normalize_display(display)?
+                        self.config.normalize_display(&FieldValue::from(display))?
                     } else {
-                        display.to_owned()
+                        FieldValue::from(display)
                     };
-                    if let Some(validator) = &self.config.display_username_validator
+                    if normalized.is_string()
+                        && let Some(validator) = &self.config.display_username_validator
                         && !validator.validate(&normalized).await?
                     {
                         return Err(error(

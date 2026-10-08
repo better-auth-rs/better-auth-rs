@@ -1,16 +1,16 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use better_auth_core::{AuthError, AuthResult};
+use better_auth_core::{AuthError, AuthResult, FieldValue};
 
 /// Synchronous normalization applied at each upstream endpoint and adapter boundary.
-pub type UsernameNormalizer = dyn Fn(&str) -> AuthResult<String> + Send + Sync;
+pub type UsernameNormalizer = dyn Fn(&FieldValue) -> AuthResult<FieldValue> + Send + Sync;
 
 /// Asynchronous validation of a username or display username.
 #[async_trait]
 pub trait UsernameValidator: Send + Sync {
     /// Return false to reject the value. Callback errors retain their original response.
-    async fn validate(&self, value: &str) -> AuthResult<bool>;
+    async fn validate(&self, value: &FieldValue) -> AuthResult<bool>;
 }
 
 /// Input normalization for one username field.
@@ -91,28 +91,45 @@ pub(super) fn error(status: u16, code: &'static str, message: &'static str) -> A
 }
 
 impl UsernameConfig {
-    pub(super) fn normalize(&self, value: &str) -> AuthResult<String> {
+    pub(super) fn normalize(&self, value: &FieldValue) -> AuthResult<FieldValue> {
         match &self.username_normalization {
-            UsernameNormalization::Default => Ok(value.to_lowercase()),
-            UsernameNormalization::Disabled => Ok(value.to_owned()),
+            UsernameNormalization::Default => match value {
+                FieldValue::String(value) => Ok(value.to_lowercase().into()),
+                FieldValue::Utf16String(value) => Ok(value.to_lowercase().into()),
+                _ => Err(AuthError::internal(
+                    "username.toLowerCase is not a function",
+                )),
+            },
+            UsernameNormalization::Disabled => Ok(value.clone()),
             UsernameNormalization::Custom(callback) => callback(value),
         }
     }
 
-    pub(super) fn normalize_display(&self, value: &str) -> AuthResult<String> {
+    pub(super) fn normalize_display(&self, value: &FieldValue) -> AuthResult<FieldValue> {
         match &self.display_username_normalization {
-            UsernameNormalization::Default | UsernameNormalization::Disabled => {
-                Ok(value.to_owned())
-            }
+            UsernameNormalization::Default | UsernameNormalization::Disabled => Ok(value.clone()),
             UsernameNormalization::Custom(callback) => callback(value),
         }
     }
 
     pub(super) async fn validate_raw(
         &self,
-        value: &str,
+        value: &FieldValue,
     ) -> AuthResult<Option<(&'static str, &'static str)>> {
-        let length = value.encode_utf16().count() as f64;
+        let length = match value {
+            FieldValue::Undefined | FieldValue::Null => {
+                return Err(AuthError::internal("Cannot read username length"));
+            }
+            FieldValue::String(value) => value.encode_utf16().count() as f64,
+            FieldValue::Utf16String(value) => value.as_utf16().len() as f64,
+            FieldValue::Array(value) => value.len() as f64,
+            value => better_auth_core::query::field_number(
+                value
+                    .as_object()
+                    .and_then(|value| value.get("length"))
+                    .unwrap_or(&FieldValue::Undefined),
+            )?,
+        };
         let minimum = if self.min_username_length == 0.0 || self.min_username_length.is_nan() {
             3.0
         } else {
@@ -132,10 +149,12 @@ impl UsernameConfig {
         let valid = match &self.username_validator {
             Some(callback) => callback.validate(value).await?,
             None => {
-                !value.is_empty()
+                let value = value.display_utf16()?;
+                !value.as_utf16().is_empty()
                     && value
-                        .bytes()
-                        .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'.'))
+                        .as_utf16()
+                        .iter()
+                        .all(|unit| matches!(unit, 48..=57 | 65..=90 | 97..=122 | 95 | 46))
             }
         };
         Ok((!valid).then_some(("INVALID_USERNAME", "Username is invalid")))
@@ -143,7 +162,7 @@ impl UsernameConfig {
 
     pub(super) async fn validate_input(
         &self,
-        value: &str,
+        value: &FieldValue,
     ) -> AuthResult<Option<(&'static str, &'static str)>> {
         if self.username_validation_order == Some(UsernameValidationOrder::PostNormalization) {
             self.validate_raw(&self.normalize(value)?).await
@@ -152,7 +171,7 @@ impl UsernameConfig {
         }
     }
 
-    pub(super) async fn validate_display(&self, value: &str) -> AuthResult<()> {
+    pub(super) async fn validate_display(&self, value: &FieldValue) -> AuthResult<()> {
         if let Some(callback) = &self.display_username_validator {
             let valid = if self.display_username_validation_order
                 == Some(UsernameValidationOrder::PostNormalization)

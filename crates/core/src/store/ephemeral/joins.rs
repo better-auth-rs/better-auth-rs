@@ -7,9 +7,7 @@ use super::*;
 use crate::session::SessionData;
 use crate::store::schema::resolve_field_name;
 use crate::store::{JoinValue, ResolvedJoin};
-use crate::user_fields::{
-    UserFieldConfig, project_adapter_value, project_source_fields_batches_then,
-};
+use crate::user_fields::{project_adapter_value, project_source_fields_batches_then};
 
 type UserRef = RowRef<UserView>;
 type AccountRef = RowRef<FieldMap>;
@@ -33,74 +31,39 @@ impl EphemeralStore {
             self.model_fields
                 .begin_id_output(crate::store::schema::EntityRole::User)?;
         }
-        // Core fields keep their schema positions even when an application replaces a policy.
-        let mut fields: IndexMap<String, UserFieldConfig> = [
-            "name",
-            "email",
-            "emailVerified",
-            "image",
-            "createdAt",
-            "updatedAt",
-        ]
-        .into_iter()
-        .map(|name| (name.to_owned(), UserFieldConfig::default()))
-        .collect();
-        fields.extend(self.config.user.fields().clone());
-        for name in UserView::NATIVE_FIELDS {
-            let _ = fields.entry((*name).into()).or_default();
-        }
-        let fields = crate::user_fields::UserConfig {
-            additional_fields: Some(fields),
-        }
-        .adapter_fields(&[]);
+        let fields = self.user_schema();
         let mut rows = users
             .into_iter()
-            .map(|user| (user, FieldMap::new(), FieldMap::new()))
+            .map(|user| (user, (), FieldMap::new()))
             .collect::<Vec<_>>();
         project_source_fields_batches_then(
             &mut rows,
             fields.fields(),
-            |(source, native, _), name, field| {
-                source.read(|user| {
-                    let value = user.native_field_value(name);
-                    if let Some(value) = &value {
-                        let _ = native.insert(name.to_owned(), value.clone());
-                    }
-                    let key = resolve_field_name(field.field_name.as_deref(), name);
-                    Ok(if key == "id" {
-                        Some(user.id.field_value())
-                    } else if UserView::NATIVE_FIELDS.contains(&name) {
-                        value
-                    } else {
-                        user.additional_fields
-                            .get(key)
-                            .cloned()
-                            .or_else(|| (key == name).then_some(value).flatten())
-                    })
-                })
+            |(source, _, _), name, field| {
+                let physical = resolve_field_name(field.field_name.as_deref(), name);
+                source.read(|user| Ok(FieldMap::from(user.clone()).get(physical).cloned()))
             },
             |(_, _, output), name, field, value| {
-                let configured = name != "id" && self.config.user.fields().contains_key(name);
                 Box::pin(async move {
-                    if configured {
-                        let value = project_adapter_value(
+                    let value = if name == "id" {
+                        Self::project_id(&crate::SchemaValue::from_field(
+                            value.unwrap_or_default(),
+                        ))?
+                        .into_field_value()
+                    } else {
+                        project_adapter_value(
                             value.unwrap_or_default(),
                             field,
                             field.references_id(),
                             true,
                         )
-                        .await?;
-                        let _ = output.insert(name.to_owned(), value);
-                    }
+                        .await?
+                    };
+                    let _ = output.insert(name.to_owned(), value);
                     Ok(())
                 })
             },
-            |_, (source, native, output)| {
-                let mut user = UserView::from_field_values(std::mem::take(native))?;
-                user.metadata = source.read(|user| Ok(user.metadata.clone()))?;
-                self.assign_user_output(&mut user, std::mem::take(output))?;
-                Ok(user)
-            },
+            |_, (_, _, output)| UserView::from_field_values(std::mem::take(output)),
             complete,
         )
         .await

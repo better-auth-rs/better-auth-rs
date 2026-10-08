@@ -69,9 +69,9 @@ struct Observer {
 impl<S: AuthSchema> DatabaseHooks<S> for Observer {
     async fn before_update_user(
         &self,
-        _: &UpdateUser,
+        _: &mut better_auth_core::FieldMap,
         _: &DatabaseHookContext<'_, S>,
-    ) -> AuthResult<DatabaseHookUpdate<UpdateUser>> {
+    ) -> AuthResult<DatabaseHookUpdate<better_auth_core::FieldMap>> {
         lock(&self.events)?.push("before");
         match self.mode.load(Ordering::SeqCst) {
             1 => Ok(DatabaseHookUpdate::Cancel),

@@ -193,27 +193,24 @@ where
         let rows = database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
             self.config(),
             "findOne",
-            super::joins::joined_rows::<
-                <S::Session as SeaOrmSessionModel>::Entity,
-                <S::User as SeaOrmUserModel>::Entity,
-            >(self.connection(), &query),
+            super::joins::joined_raw_rows(self.connection(), &query),
         )
         .await?;
-        let (rows, users): (Vec<_>, Vec<_>) = super::joins::grouped_rows::<
-            <S::Session as SeaOrmSessionModel>::Entity,
-            <S::User as SeaOrmUserModel>::Entity,
-        >(rows, S::Session::id_column())
-        .into_iter()
-        .map(|(session, users)| {
-            let users = super::joins::selected_children::<<S::User as SeaOrmUserModel>::Entity>(
-                users.into_iter(),
-                S::User::id_column(),
-                relation.many,
-                self.config().advanced.database.find_many_limit(),
-            );
-            (session, users)
-        })
-        .unzip();
+        let (rows, users): (Vec<_>, Vec<_>) =
+            super::joins::grouped_raw_rows(rows, S::Session::id_column())?
+                .into_iter()
+                .map(|(session, users)| {
+                    let users = super::joins::selected_raw_children(
+                        users.into_iter(),
+                        S::User::id_column(),
+                        relation.many,
+                        self.config().advanced.database.find_many_limit(),
+                    )?;
+                    Ok((session.model::<S::Session>()?, users))
+                })
+                .collect::<AuthResult<Vec<_>>>()?
+                .into_iter()
+                .unzip();
         Ok(self
             .native_session_snapshots(&rows, &users, relation.many)
             .await?
@@ -265,29 +262,22 @@ where
                     ),
                     S::User::id_column(),
                 );
-                let rows = super::joins::joined_rows::<
-                    <S::Session as SeaOrmSessionModel>::Entity,
-                    <S::User as SeaOrmUserModel>::Entity,
-                >(self.connection(), &query)
-                .await?;
-                let (rows, users): (Vec<_>, Vec<_>) = super::joins::grouped_rows::<
-                    <S::Session as SeaOrmSessionModel>::Entity,
-                    <S::User as SeaOrmUserModel>::Entity,
-                >(
-                    rows, S::Session::id_column()
-                )
-                .into_iter()
-                .map(|(session, users)| {
-                    let users =
-                        super::joins::selected_children::<<S::User as SeaOrmUserModel>::Entity>(
-                            users.into_iter(),
-                            S::User::id_column(),
-                            relation.many,
-                            self.config().advanced.database.find_many_limit(),
-                        );
-                    (session, users)
-                })
-                .unzip();
+                let rows = super::joins::joined_raw_rows(self.connection(), &query).await?;
+                let (rows, users): (Vec<_>, Vec<_>) =
+                    super::joins::grouped_raw_rows(rows, S::Session::id_column())?
+                        .into_iter()
+                        .map(|(session, users)| {
+                            let users = super::joins::selected_raw_children(
+                                users.into_iter(),
+                                S::User::id_column(),
+                                relation.many,
+                                self.config().advanced.database.find_many_limit(),
+                            )?;
+                            Ok((session.model::<S::Session>()?, users))
+                        })
+                        .collect::<AuthResult<Vec<_>>>()?
+                        .into_iter()
+                        .unzip();
                 Ok((rows, Some(users)))
             } else {
                 parent

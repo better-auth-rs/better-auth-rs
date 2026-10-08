@@ -547,11 +547,12 @@ impl<'a> PreparedUserQuery<'a> {
 
     fn memory_value(&self, (user, raw): (&UserView, &FieldMap), name: &str) -> AuthResult<Value> {
         let name = if name == "_id" { "id" } else { name };
-        let logical = declared_field(name, self.fields).map_or(name, |(logical, _)| logical);
-        if UserView::NATIVE_FIELDS.contains(&logical) {
-            return Ok(user.field_values()?.remove(logical).unwrap_or_default());
+        let storage = declared_field(name, self.fields).map_or(name, |(logical, field)| {
+            resolve_field_name(field.field_name.as_deref(), logical)
+        });
+        if UserView::NATIVE_FIELDS.contains(&storage) {
+            return Ok(user.field_values()?.remove(storage).unwrap_or_default());
         }
-        let storage = additional_field(name, self.fields).map_or(name, |(storage, _)| storage);
         Ok(raw.get(storage).cloned().unwrap_or_default())
     }
 

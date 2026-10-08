@@ -92,14 +92,16 @@ struct OrderingHook {
 impl SeaOrmHooks<TestSchema> for OrderingHook {
     async fn before_create_user(
         &self,
-        _user: &mut CreateUser,
+        _user: &mut better_auth_core::FieldMap,
         _ctx: &SeaOrmHookContext<'_, TestSchema>,
-    ) -> AuthResult<HookControl> {
+    ) -> AuthResult<
+        better_auth_core::store::database_hooks::DatabaseHookUpdate<better_auth_core::FieldMap>,
+    > {
         self.events
             .lock()
             .expect("hook events mutex should lock")
             .push(self.label);
-        Ok(HookControl::Continue)
+        Ok(better_auth_core::store::database_hooks::DatabaseHookUpdate::Continue)
     }
 }
 
@@ -112,14 +114,16 @@ struct RequestContextHook {
 impl SeaOrmHooks<TestSchema> for RequestContextHook {
     async fn before_create_user(
         &self,
-        _user: &mut CreateUser,
+        _user: &mut better_auth_core::FieldMap,
         ctx: &SeaOrmHookContext<'_, TestSchema>,
-    ) -> AuthResult<HookControl> {
+    ) -> AuthResult<
+        better_auth_core::store::database_hooks::DatabaseHookUpdate<better_auth_core::FieldMap>,
+    > {
         self.seen
             .lock()
             .expect("request context mutex should lock")
             .push(ctx.request.clone());
-        Ok(HookControl::Continue)
+        Ok(better_auth_core::store::database_hooks::DatabaseHookUpdate::Continue)
     }
 }
 

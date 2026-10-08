@@ -14,7 +14,7 @@ use better_auth_core::{
     hooks::with_request_hook_context,
     store::{
         EphemeralStore, StatelessSchema, UserStore,
-        database_hooks::{DatabaseHookContext, DatabaseHookControl, DatabaseHooks},
+        database_hooks::{DatabaseHookContext, DatabaseHooks},
     },
 };
 
@@ -167,19 +167,27 @@ struct NestedHook(Arc<Mutex<Vec<String>>>);
 impl DatabaseHooks<Schema> for NestedHook {
     async fn before_create_user(
         &self,
-        user: &mut CreateUser,
+        user: &mut better_auth_core::FieldMap,
         context: &DatabaseHookContext<'_, Schema>,
-    ) -> AuthResult<DatabaseHookControl> {
+    ) -> AuthResult<
+        better_auth_core::store::database_hooks::DatabaseHookUpdate<better_auth_core::FieldMap>,
+    > {
         self.0
             .lock()
             .map_err(|_| AuthError::internal("Plugin hook event lock poisoned"))?
             .push(format!(
                 "plugin.before:{}",
-                user.email.as_deref().ok_or_else(|| AuthError::internal(
-                    "Created fixture user must have an email"
-                ))?
+                user.get("email")
+                    .and_then(better_auth_core::FieldValue::as_str)
+                    .ok_or_else(|| AuthError::internal(
+                        "Created fixture user must have an email"
+                    ))?
             ));
-        if user.email.as_deref() == Some("parent@example.com") {
+        if user
+            .get("email")
+            .and_then(better_auth_core::FieldValue::as_str)
+            == Some("parent@example.com")
+        {
             let _ = context
                 .transaction
                 .ok_or_else(|| AuthError::internal("Missing real transaction"))?
@@ -190,7 +198,7 @@ impl DatabaseHooks<Schema> for NestedHook {
                 )
                 .await?;
         }
-        Ok(DatabaseHookControl::Continue)
+        Ok(better_auth_core::store::database_hooks::DatabaseHookUpdate::Continue)
     }
     async fn after_create_user(
         &self,
@@ -221,20 +229,24 @@ struct ApplicationHook(Arc<Mutex<Vec<String>>>);
 impl better_auth_seaorm::hooks::SeaOrmHooks<Schema> for ApplicationHook {
     async fn before_create_user(
         &self,
-        user: &mut CreateUser,
+        user: &mut better_auth_core::FieldMap,
         context: &better_auth_seaorm::hooks::SeaOrmHookContext<'_, Schema>,
-    ) -> AuthResult<better_auth_seaorm::hooks::HookControl> {
+    ) -> AuthResult<
+        better_auth_core::store::database_hooks::DatabaseHookUpdate<better_auth_core::FieldMap>,
+    > {
         assert!(context.tx.is_some());
         self.0
             .lock()
             .map_err(|_| AuthError::internal("Application hook event lock poisoned"))?
             .push(format!(
                 "app.before:{}",
-                user.email.as_deref().ok_or_else(|| AuthError::internal(
-                    "Created fixture user must have an email"
-                ))?
+                user.get("email")
+                    .and_then(better_auth_core::FieldValue::as_str)
+                    .ok_or_else(|| AuthError::internal(
+                        "Created fixture user must have an email"
+                    ))?
             ));
-        Ok(better_auth_seaorm::hooks::HookControl::Continue)
+        Ok(better_auth_core::store::database_hooks::DatabaseHookUpdate::Continue)
     }
     async fn after_create_user(
         &self,

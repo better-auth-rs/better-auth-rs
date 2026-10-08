@@ -53,9 +53,9 @@ pub trait SeaOrmHooks<S: AuthSchema>: Send + Sync {
 
     async fn before_create_user(
         &self,
-        user: &mut CreateUser,
+        user: &mut FieldMap,
         ctx: &SeaOrmHookContext<'_, S>,
-    ) -> AuthResult<HookControl>;
+    ) -> AuthResult<DatabaseHookUpdate<FieldMap>>;
 
     async fn after_create_user(
         &self,
@@ -66,9 +66,9 @@ pub trait SeaOrmHooks<S: AuthSchema>: Send + Sync {
     async fn before_update_user(
         &self,
         id: &better_auth::FieldValue,
-        update: &UpdateUser,
+        update: &mut FieldMap,
         ctx: &SeaOrmHookContext<'_, S>,
-    ) -> AuthResult<DatabaseHookUpdate<UpdateUser>>;
+    ) -> AuthResult<DatabaseHookUpdate<FieldMap>>;
 
     async fn after_update_user(
         &self,
@@ -108,7 +108,7 @@ Creation-after hooks receive `Option<&View>` for User, Account, Session, and Ver
 
 ## Rejecting Operations
 
-Return `HookControl::Cancel` from user, account, verification create hooks and delete hooks to cancel the write. Session creation and update hooks return `DatabaseHookUpdate::Cancel`. An error stops the operation and propagates to the caller.
+Return `HookControl::Cancel` from Account and Verification creation hooks and delete hooks to cancel the write. User creation/update hooks and Session creation/update hooks return `DatabaseHookUpdate::Cancel`. An error stops the operation and propagates to the caller.
 
 Bulk deletion snapshots the matching records, runs every before hook, performs one batch write, then runs after hooks in snapshot order. A before-hook cancellation preserves the complete batch. An after-hook error occurs after the complete write and stops later hooks and queued effects. User deletion applies this sequence to session children, then account children, before the user's own hooks. SQLite foreign-key cascades can remove children whose hooks cancelled their explicit deletion.
 
@@ -123,24 +123,26 @@ Atomic verification consumption returns `None` when a before-delete hook cancels
 impl SeaOrmHooks<AppAuthSchema> for BlockDisposableEmails {
     async fn before_create_user(
         &self,
-        user: &mut CreateUser,
+        user: &mut FieldMap,
         _ctx: &SeaOrmHookContext<'_, AppAuthSchema>,
-    ) -> AuthResult<HookControl> {
-        if let Some(email) = &user.email {
-            if email.ends_with("@disposable.com") {
-                return Ok(HookControl::Cancel);
-            }
+    ) -> AuthResult<DatabaseHookUpdate<FieldMap>> {
+        if user.get("email").and_then(FieldValue::as_str)
+            .is_some_and(|email| email.ends_with("@disposable.com"))
+        {
+            return Ok(DatabaseHookUpdate::Cancel);
         }
-        Ok(HookControl::Continue)
+        Ok(DatabaseHookUpdate::Continue)
     }
 }
 ```
 
 ## Modifying Data
 
-Create hooks receive mutable references. Each update hook receives the original patch and returns `DatabaseHookUpdate::Continue`, `Cancel`, or `Patch(data)`. Returned patches merge in registration order. A later hook can overwrite fields returned by an earlier hook, but cannot observe the earlier patch through its input. `SessionUpdate` and `VerificationUpdate` provide the corresponding session and verification fields. Nullable fields use `Option<Option<T>>` to distinguish omission from clearing a value.
+User creation and update hooks receive the complete `FieldMap`, including native replacements, null, and own-undefined properties. `CreateUser` and `UpdateUser` remain convenient caller inputs; their `additional_fields` values override the corresponding native members before hooks. Creation normalizes a non-null email before hooks. Updates lowercase only truthy email values. A non-string value fails only when that string operation runs.
 
-Session creation hooks receive one complete `FieldMap`, including `token`, `userId`, `expiresAt`, `createdAt`, `updatedAt`, client fields, and configured defaults. Each hook sees prior in-place edits and returned `DatabaseHookUpdate::Patch` values. The first returned patch, including an empty map, detaches later property replacements from the original creation object. Secondary cache keys and TTL use that original object; the cached Session contains the final adapter result. The active-session owner and user lookup retain the original caller user ID. `FieldDate` values are immutable, so JavaScript `Date.setTime` alias mutations are not supported. `CreateSession` remains the caller input type. Native output values that fit the Rust field type update the typed Session member. Other output shapes remain in the `FieldMap` overlay and serialize unchanged; typed accessors retain the stored value. This typed-accessor limitation applies to values such as a numeric token or a null creation date.
+Create hooks receive mutable references. Each update hook receives the original patch and returns `DatabaseHookUpdate::Continue`, `Cancel`, or `Patch(data)`. Returned patches merge in registration order. User and Session preparation share `PreparedRecordWrite`: creation hooks see cumulative changes; update hooks see the original object. The first returned patch detaches property replacement while retaining shallow object identities. A later hook can overwrite fields returned by an earlier hook, but cannot observe the earlier patch through its input. `SessionUpdate` and `VerificationUpdate` provide the corresponding session and verification fields. Nullable fields use `Option<Option<T>>` to distinguish omission from clearing a value.
+
+Session creation hooks receive one complete `FieldMap`, including `token`, `userId`, `expiresAt`, `createdAt`, `updatedAt`, client fields, and configured defaults. Each hook sees prior in-place edits and returned `DatabaseHookUpdate::Patch` values. The first returned patch, including an empty map, detaches later property replacements from the original creation object. Secondary cache keys and TTL use that original object; the cached Session contains the final adapter result. The active-session owner and user lookup retain the original caller user ID. `FieldDate` values are immutable, so JavaScript `Date.setTime` alias mutations are not supported. `CreateSession` remains the caller input type. Native Session getters and views use `SchemaValue` to preserve replacement values without a second overlay. Use `.typed()?` only when the consuming operation requires the default Rust type.
 
 After-update hooks receive `None` when the database matches no row. The store still returns `UserNotFound` for a missing user. If a transaction caller catches that error and commits, the nullable after hook runs in its original queue position. Rollback discards the hook. A cancelled update does not run after-update hooks.
 
@@ -149,13 +151,14 @@ After-update hooks receive `None` when the database matches no row. The store st
 impl SeaOrmHooks<AppAuthSchema> for NormalizeEmail {
     async fn before_create_user(
         &self,
-        user: &mut CreateUser,
+        user: &mut FieldMap,
         _ctx: &SeaOrmHookContext<'_, AppAuthSchema>,
-    ) -> AuthResult<HookControl> {
-        if let Some(email) = &mut user.email {
-            *email = email.to_lowercase();
+    ) -> AuthResult<DatabaseHookUpdate<FieldMap>> {
+        if let Some(email) = user.get("email").and_then(FieldValue::as_str) {
+            let normalized = email.to_lowercase();
+            let _ = user.insert("email".into(), normalized.into());
         }
-        Ok(HookControl::Continue)
+        Ok(DatabaseHookUpdate::Continue)
     }
 }
 ```

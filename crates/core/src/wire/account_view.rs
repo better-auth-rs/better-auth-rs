@@ -1,11 +1,13 @@
 use crate::{AuthRecordFields, AuthResult, FromFieldMap, SchemaValue};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 /// A projected account returned by the adapter and trusted database hooks.
 /// Field readers must require a type only when an operation needs that type.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct AccountView {
+    #[serde(skip)]
+    pub field_order: Vec<String>,
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub id: SchemaValue<String>,
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
@@ -51,25 +53,19 @@ pub struct AccountView {
     pub updated_at: SchemaValue<crate::FieldDate>,
     #[serde(
         deserialize_with = "crate::field_value::serde::map::deserialize",
-        flatten,
-        serialize_with = "serialize_additional_fields"
+        flatten
     )]
     pub additional_fields: crate::FieldMap,
 }
 
-fn serialize_additional_fields<S: serde::Serializer>(
-    fields: &crate::FieldMap,
-    serializer: S,
-) -> Result<S::Ok, S::Error> {
-    use serde::ser::SerializeMap;
-    let mut output = serializer.serialize_map(None)?;
-    for (name, value) in fields {
-        // Explicit native construction must not bypass the account cookie password boundary.
-        if name != "password" && !value.is_undefined() {
-            output.serialize_entry(name, &crate::field_value::serde::Json(value))?;
-        }
+impl serde::Serialize for AccountView {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::Error;
+        let mut fields = self.field_values().map_err(S::Error::custom)?;
+        // Account cookies must exclude passwords, including explicit additional-field overrides.
+        let _ = fields.shift_remove("password");
+        crate::field_value::serde::map::serialize(&fields, serializer)
     }
-    output.end()
 }
 
 impl AccountView {
@@ -82,6 +78,7 @@ impl AccountView {
     /// Preserve projected date values before JSON serialization loses invalid-date provenance.
     pub fn from_adapter_fields(mut fields: crate::FieldMap) -> Self {
         Self {
+            field_order: fields.keys().cloned().collect(),
             id: SchemaValue::from_field(fields.shift_remove("id").unwrap_or_default()),
             account_id: SchemaValue::from_field(
                 fields.shift_remove("accountId").unwrap_or_default(),

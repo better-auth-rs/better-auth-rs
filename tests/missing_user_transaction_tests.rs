@@ -90,9 +90,9 @@ impl<S: AuthSchema> SeaOrmHooks<S> for MissingUpdateHooks {
     async fn before_update_user(
         &self,
         _: &better_auth_core::FieldValue,
-        update: &UpdateUser,
+        update: &mut better_auth_core::FieldMap,
         context: &SeaOrmHookContext<'_, S>,
-    ) -> AuthResult<DatabaseHookUpdate<UpdateUser>> {
+    ) -> AuthResult<DatabaseHookUpdate<better_auth_core::FieldMap>> {
         self.before(update, context.transaction).await
     }
 
@@ -115,9 +115,9 @@ impl<S: AuthSchema> SeaOrmHooks<S> for MissingUpdateHooks {
 impl<S: AuthSchema> DatabaseHooks<S> for MissingUpdateHooks {
     async fn before_update_user(
         &self,
-        update: &UpdateUser,
+        update: &mut better_auth_core::FieldMap,
         context: &DatabaseHookContext<'_, S>,
-    ) -> AuthResult<DatabaseHookUpdate<UpdateUser>> {
+    ) -> AuthResult<DatabaseHookUpdate<better_auth_core::FieldMap>> {
         self.before(update, context.transaction).await
     }
 

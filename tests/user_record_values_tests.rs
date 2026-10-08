@@ -3,8 +3,7 @@
 use better_auth::config::{FieldTransforms, UserFieldTransform};
 use better_auth_core::store::UserStore;
 use better_auth_core::{
-    AuthConfig, AuthError, AuthResult, AuthSchema, AuthStore, CreateUser, FieldMap, UpdateUser,
-    UserView,
+    AuthConfig, AuthError, AuthResult, AuthSchema, AuthStore, CreateUser, FieldMap, UserView,
     store::{
         EphemeralStore, RuntimeStore,
         database_hooks::{DatabaseHookContext, DatabaseHookUpdate, DatabaseHooks},
@@ -37,9 +36,9 @@ fn required<T>(value: Option<T>, context: &str) -> AuthResult<T> {
 impl<S: AuthSchema> DatabaseHooks<S> for Trace {
     async fn before_update_user(
         &self,
-        patch: &UpdateUser,
+        patch: &mut better_auth_core::FieldMap,
         _: &DatabaseHookContext<'_, S>,
-    ) -> AuthResult<DatabaseHookUpdate<UpdateUser>> {
+    ) -> AuthResult<DatabaseHookUpdate<better_auth_core::FieldMap>> {
         self.lock()?.push(json!({"before":fields(patch)?}));
         Ok(DatabaseHookUpdate::Continue)
     }

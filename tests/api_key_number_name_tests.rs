@@ -5,7 +5,7 @@ mod contract;
 
 use better_auth::__private_core::{
     FieldValue,
-    store::{ApiKeyStore, EphemeralStore},
+    store::{EphemeralStore, schema::EntityRole},
 };
 use contract::{Scenario, TestResult};
 use serde_json::{Value, json};
@@ -13,16 +13,12 @@ use std::sync::Arc;
 
 async fn stored(store: &EphemeralStore) -> TestResult<Value> {
     let mut result = Vec::new();
-    for row in store
-        .find_api_keys_by_reference(contract::OWNER, None)
-        .await?
-    {
-        let mut value = FieldValue::from_json(serde_json::to_value(&row)?)?
+    for row in store.plugin_storage_rows(EntityRole::ApiKey)? {
+        let mut value = FieldValue::from(row)
             .json()?
             .ok_or("API Key must serialize")?;
         let fields = value.as_object_mut().ok_or("Expected an API Key object")?;
-        assert!(row.permissions.typed()?.is_none());
-        assert_eq!(fields.remove("permissions"), Some(Value::Null));
+        assert!(!fields.contains_key("permissions"));
         for field in ["createdAt", "updatedAt"] {
             let date = fields.get_mut(field).ok_or("Missing API Key date")?;
             *date = json!({"type":"date", "value": date});

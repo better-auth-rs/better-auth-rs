@@ -210,6 +210,13 @@ impl<S: AuthSchema> AuthTransaction<S> for Transaction<S> {
     ) -> AuthResult<Option<crate::wire::UserView>> {
         self.inner.get_user_by_username(username).await
     }
+    async fn get_user_by_field_value(
+        &self,
+        field: &str,
+        value: &crate::FieldValue,
+    ) -> AuthResult<Option<crate::UserView>> {
+        self.inner.get_user_by_field_value(field, value).await
+    }
     async fn update_user(
         &self,
         id: &str,

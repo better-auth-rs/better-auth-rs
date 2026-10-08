@@ -55,8 +55,6 @@ impl Events {
     fn record(
         &self,
         kind: &str,
-        username: &Option<Option<String>>,
-        display: &Option<Option<String>>,
         fields: &FieldMap,
         request: Option<&better_auth_core::RequestHookContext>,
     ) -> AuthResult<()> {
@@ -71,22 +69,17 @@ impl Events {
                 event[name] = value;
             }
         }
-        if let Some(value) = username {
-            event["username"] = json!(value);
-        }
-        if let Some(value) = display {
-            event["displayUsername"] = json!(value);
-        }
         self.0.lock().unwrap().events.push(event);
         Ok(())
     }
-    fn normalize(&self, prefix: &'static str, value: &str, output: String) -> AuthResult<String> {
+    fn normalize(&self, prefix: &'static str, value: &FieldValue, output: String) -> AuthResult<FieldValue> {
+        let value = value.display_string()?;
         self.0
             .lock()
             .unwrap()
             .calls
             .push(format!("{prefix}:{value}"));
-        Ok(output)
+        Ok(output.into())
     }
 }
 
@@ -96,7 +89,8 @@ struct Validator {
 }
 #[async_trait]
 impl UsernameValidator for Validator {
-    async fn validate(&self, value: &str) -> AuthResult<bool> {
+    async fn validate(&self, value: &FieldValue) -> AuthResult<bool> {
+        let value = value.display_string()?;
         let (prefix, control) = if self.display {
             ("display-validate", "displayValidator")
         } else {
@@ -123,29 +117,25 @@ impl UsernameValidator for Validator {
 impl<S: AuthSchema> SeaOrmHooks<S> for Events {
     async fn before_create_user(
         &self,
-        user: &mut CreateUser,
+        user: &mut better_auth_core::FieldMap,
         context: &SeaOrmHookContext<'_, S>,
-    ) -> AuthResult<HookControl> {
+    ) -> AuthResult<better_auth_core::store::database_hooks::DatabaseHookUpdate<better_auth_core::FieldMap>> {
         self.record(
             "create",
-            &user.username,
-            &user.display_username,
-            &user.additional_fields,
+            user,
             context.request.as_ref(),
         )?;
-        Ok(HookControl::Continue)
+        Ok(better_auth_core::store::database_hooks::DatabaseHookUpdate::Continue)
     }
     async fn before_update_user(
         &self,
         _: &better_auth_core::FieldValue,
-        update: &UpdateUser,
+        update: &mut better_auth_core::FieldMap,
         context: &SeaOrmHookContext<'_, S>,
-    ) -> AuthResult<DatabaseHookUpdate<UpdateUser>> {
+    ) -> AuthResult<DatabaseHookUpdate<better_auth_core::FieldMap>> {
         self.record(
             "update",
-            &update.username,
-            &update.display_username,
-            &update.additional_fields,
+            update,
             context.request.as_ref(),
         )?;
         Ok(if self.0.lock().unwrap().controls["echoUpdate"] == true {
@@ -177,12 +167,12 @@ fn configure(profile: &str, events: &Events) -> UsernameConfig {
         }));
         let trace = events.clone();
         config.username_normalization = UsernameNormalization::Custom(Arc::new(move |value| {
-            trace.normalize("normalize", value, format!("n{value}"))
+            trace.normalize("normalize", value, format!("n{}", value.display_string()?))
         }));
         let trace = events.clone();
         config.display_username_normalization =
             UsernameNormalization::Custom(Arc::new(move |value| {
-                trace.normalize("display", value, format!("d{value}"))
+                trace.normalize("display", value, format!("d{}", value.display_string()?))
             }));
         if !matches!(profile, "username-order-default" | "username-writes") {
             let order = if profile == "username-order-post" {
@@ -208,7 +198,7 @@ fn configure(profile: &str, events: &Events) -> UsernameConfig {
         let trace = events.clone();
         config.display_username_normalization =
             UsernameNormalization::Custom(Arc::new(move |value| {
-                trace.normalize("display", value, value.trim().into())
+                trace.normalize("display", value, value.as_str().ok_or_else(|| AuthError::internal("value.trim is not a function"))?.trim().into())
             }));
         config.display_username_validation_order = Some(UsernameValidationOrder::PostNormalization);
     } else if profile == "username-no-display" {

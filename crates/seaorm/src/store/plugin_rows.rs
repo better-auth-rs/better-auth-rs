@@ -5,9 +5,100 @@ use better_auth_core::{
     user_fields::{AdapterRecord, UserConfig},
 };
 use sea_orm::sqlx::{Row, TypeInfo, ValueRef};
-use sea_orm::{DbBackend, IdenStatic, Iterable, QueryResult};
+use sea_orm::{
+    ConnectionTrait, DbBackend, EntityTrait, FromQueryResult, IdenStatic, Iterable, QueryResult,
+    QuerySelect, QueryTrait, Select,
+};
+use std::sync::Arc;
 
 use crate::SeaOrmPluginModel;
+
+#[derive(Debug, Clone)]
+pub(super) struct SqlRow {
+    row: Arc<QueryResult>,
+    prefix: &'static str,
+}
+
+impl From<QueryResult> for SqlRow {
+    fn from(row: QueryResult) -> Self {
+        Self {
+            row: Arc::new(row),
+            prefix: "",
+        }
+    }
+}
+
+impl SqlRow {
+    pub(super) fn prefixed(&self, prefix: &'static str) -> Self {
+        Self {
+            row: self.row.clone(),
+            prefix,
+        }
+    }
+
+    pub(super) fn value(&self, column: &str) -> AuthResult<FieldValue> {
+        value(&self.row, &format!("{}{column}", self.prefix))
+    }
+
+    pub(super) fn model<M: FromQueryResult>(&self) -> AuthResult<M> {
+        M::from_query_result(&self.row, self.prefix).map_err(super::map_db_err)
+    }
+
+    pub(super) fn record<E: EntityTrait>(
+        &self,
+        fields: &UserConfig,
+        backend: DbBackend,
+        primary: E::Column,
+        column: impl Fn(&str) -> AuthResult<E::Column>,
+    ) -> AuthResult<AdapterRecord> {
+        record_from_reader::<E>(fields, backend, primary, column, |column| {
+            self.value(column)
+        })
+    }
+
+    pub(super) fn native_record<E: EntityTrait>(
+        &self,
+        fields: &UserConfig,
+        backend: DbBackend,
+        primary: E::Column,
+        column: impl Fn(&str) -> AuthResult<E::Column>,
+    ) -> AuthResult<AdapterRecord> {
+        let storage = super::joins::native_child_fields(fields, |name, _| {
+            self.value(column(name)?.as_str())
+        })?;
+        let mut record = self.record::<E>(fields, backend, primary, column)?;
+        record.map_storage_fields(
+            fields,
+            super::field_output::capabilities(backend),
+            |name, _| Ok(Some(storage.get(name).cloned().unwrap_or_default())),
+        )?;
+        Ok(record)
+    }
+}
+
+pub(super) async fn all<E: EntityTrait>(
+    db: &impl ConnectionTrait,
+    query: Select<E>,
+) -> AuthResult<Vec<SqlRow>> {
+    db.query_all(&query.into_query())
+        .await
+        .map(|rows| rows.into_iter().map(Into::into).collect())
+        .map_err(super::map_db_err)
+}
+
+pub(super) async fn one<E: EntityTrait>(
+    db: &impl ConnectionTrait,
+    query: Select<E>,
+) -> AuthResult<Option<SqlRow>> {
+    db.query_one(&query.limit(1).into_query())
+        .await
+        .map(|row| row.map(Into::into))
+        .map_err(super::map_db_err)
+}
+
+pub(super) fn ordered_output(fields: &UserConfig, output: FieldMap) -> FieldMap {
+    output.in_field_order(&fields.fields().keys().cloned().collect::<Vec<_>>())
+}
 
 pub(super) fn record<M: SeaOrmPluginModel>(
     row: &QueryResult,
@@ -17,16 +108,28 @@ pub(super) fn record<M: SeaOrmPluginModel>(
     record_from_columns::<M::Entity>(row, fields, backend, M::column("id")?, M::column)
 }
 
-pub(super) fn record_from_columns<E: sea_orm::EntityTrait>(
+pub(super) fn record_from_columns<E: EntityTrait>(
     row: &QueryResult,
     fields: &UserConfig,
     backend: DbBackend,
     primary: E::Column,
     column: impl Fn(&str) -> AuthResult<E::Column>,
 ) -> AuthResult<AdapterRecord> {
+    record_from_reader::<E>(fields, backend, primary, column, |column| {
+        value(row, column)
+    })
+}
+
+fn record_from_reader<E: EntityTrait>(
+    fields: &UserConfig,
+    backend: DbBackend,
+    primary: E::Column,
+    column: impl Fn(&str) -> AuthResult<E::Column>,
+    read: impl Fn(&str) -> AuthResult<FieldValue>,
+) -> AuthResult<AdapterRecord> {
     let mut core = FieldMap::new();
     let mut storage = FieldMap::new();
-    let raw = value(row, primary.as_str())?;
+    let raw = read(primary.as_str())?;
     let id = if !raw.is_null() && !raw.is_undefined() {
         raw.display_utf16()?.into()
     } else {
@@ -40,7 +143,7 @@ pub(super) fn record_from_columns<E: sea_orm::EntityTrait>(
         let name =
             better_auth_core::store::schema::resolve_field_name(field.field_name.as_deref(), name);
         let column = column(name)?;
-        let _ = storage.insert(name.into(), value(row, column.as_str())?);
+        let _ = storage.insert(name.into(), read(column.as_str())?);
     }
     let mut record = AdapterRecord::new(core, storage);
     record.map_storage_fields(

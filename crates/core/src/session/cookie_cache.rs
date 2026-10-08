@@ -145,7 +145,7 @@ pub(super) async fn encode(
 
 fn parse_payload(payload: Value) -> Option<CachedSession> {
     fn core_fields(fields: &mut FieldMap) -> Option<()> {
-        fields.get("id")?.as_str()?;
+        let _ = fields.get("id")?.as_str()?;
         for name in ["createdAt", "updatedAt"] {
             if fields.get(name).is_none_or(FieldValue::is_undefined) {
                 let _ = fields.insert(name.into(), Utc::now().into());
@@ -175,7 +175,7 @@ fn parse_payload(payload: Value) -> Option<CachedSession> {
     let mut user = fields.get("user")?.as_object()?.clone();
     core_fields(&mut user)?;
     let email = user.get("email")?.as_str()?.to_lowercase();
-    user.get("name")?.as_str()?;
+    let _ = user.get("name")?.as_str()?;
     if !optional_string(&user, "image") {
         return None;
     }
@@ -204,7 +204,7 @@ fn parse_payload(payload: Value) -> Option<CachedSession> {
         .display_utf16()
         .ok()?;
     let _ = session.insert("userId".into(), user_id.into());
-    session.get("token")?.as_str()?;
+    let _ = session.get("token")?.as_str()?;
     if !session
         .get("expiresAt")?
         .as_date()?

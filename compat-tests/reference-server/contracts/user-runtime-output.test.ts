@@ -7,11 +7,17 @@ async function outputCase(name: string, replacement: unknown, fail = false, call
   const memory = { user: [user()], session: [], account: [], verification: [] };
   const before = structuredClone(memory);
   const events: unknown[] = [];
-  const auth = build(memory, { [name]: { transform: { output(value: unknown) {
-    events.push(value);
-    if (fail) throw new Error("user-output-stop");
-    return replacement;
-  } } });
+  const auth = build(memory, {
+    [name]: {
+      transform: {
+        output(value: unknown) {
+          events.push(value);
+          if (fail) throw new Error("user-output-stop");
+          return replacement;
+        },
+      },
+    },
+  });
   const { internalAdapter } = await auth.$context;
   if (fail) {
     await expect(internalAdapter.findUserById(owner)).rejects.toThrow("user-output-stop");

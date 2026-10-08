@@ -1,0 +1,17 @@
+{
+  "version": "1.7.6",
+  "fields": [
+    { "model": "user", "name": "email", "type": "string", "raw": "owner@runtime.test", "replacement": 7, "expected": 7 },
+    { "model": "user", "name": "emailVerified", "type": "boolean", "raw": "stored-boolean", "expected": "stored-boolean" },
+    { "model": "user", "name": "createdAt", "type": "date", "raw": "not-a-date", "expected": { "type": "date", "value": "Invalid Date" } },
+    { "model": "account", "name": "accessToken", "type": "string", "raw": "stored-token", "replacement": {}, "expected": {} },
+    { "model": "account", "name": "accessTokenExpiresAt", "type": "date", "raw": "not-a-date", "expected": { "type": "date", "value": "Invalid Date" } },
+    { "model": "account", "name": "password", "type": "string", "raw": "stored-password", "replacement": [], "expected": [] }
+  ],
+  "operations": [
+    { "name": "user", "models": ["user"] },
+    { "name": "account", "models": ["account"] },
+    { "name": "owner", "models": ["account", "user"] },
+    { "name": "accounts", "models": ["user", "account"] }
+  ]
+}

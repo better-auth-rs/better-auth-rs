@@ -414,9 +414,11 @@ async fn sqlite_device_scope_callbacks_surround_real_storage() -> AuthResult<()>
 }
 
 #[tokio::test]
-async fn unsupported_device_scope_declarations_fail_at_initialization() {
-    let result = BetterAuth::new(config())
-        .store_arc(memory())
+async fn native_device_scope_declaration_replacement_uses_shared_json_policies() -> AuthResult<()> {
+    // Behavior source: @better-auth/core adapter-factory transformInput/transformOutput JSON policies.
+    let raw = Arc::new(EphemeralStore::new(Arc::new(config())));
+    let auth = BetterAuth::new(config())
+        .store_arc(raw.clone())
         .plugin(Fields(vec![(
             EntityRole::DeviceCode,
             fields(
@@ -424,11 +426,37 @@ async fn unsupported_device_scope_declarations_fail_at_initialization() {
                 UserFieldConfig {
                     field_type: UserFieldType::Json,
                     required: Some(false),
+                    field_name: Some("scope_payload".into()),
                     ..Default::default()
                 },
             ),
         )]))
         .build()
-        .await;
-    assert!(matches!(result, Err(AuthError::Config(_))));
+        .await?;
+    let value = FieldValue::from_json(json!({"read": ["profile"]}))?;
+    let created = auth
+        .store()
+        .create_device_code(input(
+            "json-replacement",
+            SchemaValue::from_field(value.clone()),
+        )?)
+        .await?;
+    assert_eq!(created.scope.field_value(), value);
+    assert_eq!(
+        auth.store()
+            .get_device_code_by_device_code("ordinary-device:json-replacement")
+            .await?
+            .expect("created device")
+            .scope
+            .field_value(),
+        value
+    );
+    let stored = raw.plugin_storage_rows(EntityRole::DeviceCode)?;
+    assert_eq!(stored.len(), 1);
+    assert_eq!(
+        stored[0].get("scope_payload"),
+        Some(&FieldValue::from("{\"read\":[\"profile\"]}"))
+    );
+    assert!(!stored[0].contains_key("scope"));
+    Ok(())
 }

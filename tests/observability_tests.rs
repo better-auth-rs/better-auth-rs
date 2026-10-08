@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use better_auth::__private_core::store::{
     StatelessSchema,
-    database_hooks::{DatabaseHookContext, DatabaseHookControl, DatabaseHooks},
+    database_hooks::{DatabaseHookContext, DatabaseHooks},
 };
 use better_auth::__private_core::{
     AuthContext, AuthPlugin, AuthRequest, AuthResponse, AuthRoute, BeforeRequestAction, HttpMethod,
@@ -669,8 +669,10 @@ impl DatabaseHooks<S> for Lifecycle {
         &self,
         _: &mut better_auth::__private_core::CreateUser,
         _: &DatabaseHookContext<'_, S>,
-    ) -> AuthResult<DatabaseHookControl> {
-        Ok(DatabaseHookControl::Continue)
+    ) -> AuthResult<
+        better_auth_core::store::database_hooks::DatabaseHookUpdate<better_auth_core::FieldMap>,
+    > {
+        Ok(better_auth_core::store::database_hooks::DatabaseHookUpdate::Continue)
     }
     async fn after_create_user(
         &self,

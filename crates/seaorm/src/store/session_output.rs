@@ -108,7 +108,7 @@ where
     pub(super) async fn native_session_snapshots(
         &self,
         rows: &[S::Session],
-        users: &[Vec<S::User>],
+        users: &[Vec<super::plugin_rows::SqlRow>],
         many: bool,
     ) -> AuthResult<Vec<SessionSnapshot>>
     where
@@ -191,8 +191,7 @@ where
                     .await?;
                 let mut projected = Vec::with_capacity(users.len());
                 for user in users {
-                    let mut user = self.output_user(&user, self.connection()).await?;
-                    self.set_join_user_visibility(&mut user);
+                    let user = self.output_user(&user, self.connection()).await?;
                     projected.push(user);
                 }
                 let data = SessionData {

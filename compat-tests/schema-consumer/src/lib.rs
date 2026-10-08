@@ -79,6 +79,39 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn generated_legacy_user_defaults_do_not_activate_plugin_fields() {
+        use better_auth::seaorm::sea_orm::EntityTrait;
+        use better_auth::{CreateUser, FieldMap, store::UserStore};
+
+        let database = Database::connect("sqlite::memory:").await.unwrap();
+        generated::create_auth_tables(&database).await.unwrap();
+        let store =
+            SeaOrmStore::<generated::AppAuthSchema>::new(AuthConfig::default(), database.clone());
+        let user = store
+            .create_user(CreateUser {
+                banned: Some(true),
+                metadata: Some(FieldMap::from([("inactive".into(), true.into())]).into()),
+                additional_fields: FieldMap::from([("twoFactorEnabled".into(), true.into())]),
+                ..CreateUser::new()
+                    .with_name("Inactive plugins")
+                    .with_email("inactive@example.com")
+            })
+            .await
+            .unwrap();
+        assert!(user.banned.is_undefined());
+        assert!(user.two_factor_enabled.is_undefined());
+        assert!(user.metadata.is_undefined());
+        let stored = generated::user::Entity::find_by_id(user.id.typed().unwrap())
+            .one(&database)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(!stored.banned);
+        assert!(!stored.two_factor_enabled);
+        assert_eq!(stored.metadata, json!({}));
+    }
+
+    #[tokio::test]
     async fn generated_schema_supports_authentication_and_two_factor() {
         let database = Database::connect("sqlite::memory:").await.unwrap();
         generated::create_auth_tables(&database).await.unwrap();

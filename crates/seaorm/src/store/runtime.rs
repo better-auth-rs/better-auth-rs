@@ -12,8 +12,7 @@ use better_auth_core::store::database_hooks::{
 };
 use better_auth_core::store::{AuthStore, RuntimeStore};
 use better_auth_core::{
-    AuthConfig, AuthResult, AuthSchema, CreateAccount, CreateUser, CreateVerification,
-    UpdateAccount, UpdateUser,
+    AuthConfig, AuthResult, AuthSchema, CreateAccount, CreateVerification, UpdateAccount,
 };
 
 impl<S, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> RuntimeStore<S>
@@ -87,18 +86,15 @@ impl<S: AuthSchema> SeaOrmHooks<S> for PluginHook<S> {
 
     async fn before_create_user(
         &self,
-        _data: &mut CreateUser,
+        _data: &mut better_auth_core::FieldMap,
         ctx: &SeaOrmHookContext<'_, S>,
-    ) -> AuthResult<HookControl> {
+    ) -> AuthResult<DatabaseHookUpdate<better_auth_core::FieldMap>> {
         let context = DatabaseHookContext {
             config: ctx.config,
             request: ctx.request.clone(),
             transaction: ctx.transaction,
         };
-        Ok(match self.0.before_create_user(_data, &context).await? {
-            DatabaseHookControl::Continue => HookControl::Continue,
-            DatabaseHookControl::Cancel => HookControl::Cancel,
-        })
+        self.0.before_create_user(_data, &context).await
     }
 
     async fn after_create_user(
@@ -117,9 +113,9 @@ impl<S: AuthSchema> SeaOrmHooks<S> for PluginHook<S> {
     async fn before_update_user(
         &self,
         _id: &better_auth_core::FieldValue,
-        _data: &UpdateUser,
+        _data: &mut better_auth_core::FieldMap,
         ctx: &SeaOrmHookContext<'_, S>,
-    ) -> AuthResult<DatabaseHookUpdate<UpdateUser>> {
+    ) -> AuthResult<DatabaseHookUpdate<better_auth_core::FieldMap>> {
         let context = DatabaseHookContext {
             config: ctx.config,
             request: ctx.request.clone(),

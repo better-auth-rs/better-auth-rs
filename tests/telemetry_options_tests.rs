@@ -483,9 +483,11 @@ struct Hooks;
 impl DatabaseHooks<S> for Hooks {
     async fn before_create_user(
         &self,
-        _: &mut core::CreateUser,
+        _: &mut core::FieldMap,
         _: &DatabaseHookContext<'_, S>,
-    ) -> AuthResult<DatabaseHookControl> {
+    ) -> AuthResult<
+        better_auth_core::store::database_hooks::DatabaseHookUpdate<better_auth_core::FieldMap>,
+    > {
         Err(AuthError::internal("must not invoke hook"))
     }
     async fn after_update_user(

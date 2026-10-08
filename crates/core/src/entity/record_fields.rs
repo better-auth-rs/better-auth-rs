@@ -228,7 +228,7 @@ record!(crate::wire::AccountView, [
     password => "password",
     created_at => "createdAt",
     updated_at => "updatedAt",
-], additional_fields);
+], additional_fields; order: field_order);
 
 record!(crate::wire::VerificationView, [
     id => "id",

@@ -319,6 +319,16 @@ pub trait AuthTransaction<S: AuthSchema>:
             "The store must support transactional username lookup",
         ))
     }
+    /// Query a native User field value using the active transaction.
+    async fn get_user_by_field_value(
+        &self,
+        _field: &str,
+        _value: &crate::FieldValue,
+    ) -> AuthResult<Option<crate::UserView>> {
+        Err(AuthError::config(
+            "The store must support native transactional user field queries",
+        ))
+    }
     async fn update_user(&self, id: &str, update: UpdateUser) -> AuthResult<crate::UserView>;
     /// Return null for a cancelled update or a missing row. Cancellation skips after hooks.
     async fn update_user_optional(
@@ -479,6 +489,16 @@ pub trait UserStore<S: AuthSchema>: Send + Sync {
         ))
     }
     async fn get_user_by_username(&self, username: &str) -> AuthResult<Option<crate::UserView>>;
+    /// Query a declared User field without narrowing its native runtime value.
+    async fn get_user_by_field_value(
+        &self,
+        _field: &str,
+        _value: &crate::FieldValue,
+    ) -> AuthResult<Option<crate::UserView>> {
+        Err(AuthError::config(
+            "The store must support native user field queries",
+        ))
+    }
     async fn get_user_by_phone_number(
         &self,
         phone_number: &str,

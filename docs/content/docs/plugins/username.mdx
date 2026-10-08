@@ -1,6 +1,6 @@
 ---
 title: Username
-description: Username authentication, validation, normalization, and typed storage.
+description: Username authentication, validation, normalization, and native field policies.
 ---
 
 Register `UsernamePlugin` alongside `EmailPasswordPlugin` to enable `/sign-in/username` and `/is-username-available`. `EmailPasswordPlugin::username(true)` remains a shorthand for the default options. Register one form per auth instance.
@@ -34,7 +34,7 @@ Omitted or empty field names use the logical `username` or `displayUsername` nam
 | `immutable_username` | `false` | Reject changed usernames through HTTP and native update-user endpoints once a nonempty username exists |
 | `display_username` | `true` | Store and return the separate display username |
 
-Custom validators are asynchronous. Custom normalizers use `Arc<UsernameNormalizer>` and return `AuthResult<String>`. Errors propagate through the calling endpoint or adapter. Length checks run before the username validator and count UTF-16 units rather than Rust characters or UTF-8 bytes.
+Custom validators are asynchronous and receive `&FieldValue`. Custom normalizers use `Arc<UsernameNormalizer>`, receive `&FieldValue`, and return `AuthResult<FieldValue>`. Use `.as_str()` inside callbacks that require text; preserve the original value when the callback does not perform a string operation. Errors propagate through the calling endpoint or adapter. Length checks run before the username validator. String lengths count UTF-16 units; arrays use their length, objects use their `length` property, and missing lengths produce NaN comparisons. The default regular expression converts the value to a string. Disabled normalization preserves native values; default normalization requires a string.
 
 Normalization runs at each upstream boundary. Email signup and update-user parse configured fields, database hooks normalize their patches, and the adapter applies field transforms. Direct adapter writes skip the endpoint layer. A non-idempotent callback can therefore run multiple times; the library does not combine these calls. Availability validates the original text. Username sign-in has its own ordering: explicit `PreNormalization` normalizes before validation and again for lookup, while omission and `PostNormalization` validate before the lookup normalization.
 
@@ -42,4 +42,4 @@ Email signup can infer a missing username from a valid `displayUsername`, includ
 
 Native `call_endpoint` runs the same Username endpoint hooks. Direct `auth.store().create_user` and `update_user` calls run database hooks; immutable-username enforcement belongs to the update-user endpoint. Transactional uniqueness checks use the active transaction, including uncommitted users. Application before-update hooks receive the original patch and may overwrite an earlier plugin patch, matching upstream hook order.
 
-Trusted `CreateUser` and `UpdateUser` inputs distinguish omitted username fields (`None`), explicit null (`Some(None)`), and strings (`Some(Some(value))`). Nullable updates clear stored columns. Session caches apply public field visibility without running normalization again.
+Trusted `CreateUser` and `UpdateUser` inputs distinguish omitted username fields (`None`), explicit null (`Some(None)`), and strings (`Some(Some(value))`). Native values supplied through `additional_fields` replace these convenience inputs before hooks. Hook normalization uses upstream truthiness, preserves falsy values, and returns a shallow copy of the complete object. Nullable updates clear stored columns. Session caches apply public field visibility without running normalization again.

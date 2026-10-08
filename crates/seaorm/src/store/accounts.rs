@@ -16,7 +16,7 @@ use crate::hooks::DatabaseHookUpdate;
 use crate::schema::{AuthSchema, SeaOrmAccountModel, SeaOrmUserModel};
 use crate::types::{CreateAccount, UpdateAccount};
 
-use super::{SeaOrmStore, cancelled_by_hook, map_db_err};
+use super::{SeaOrmStore, cancelled_by_hook, map_db_err, plugin_rows::SqlRow};
 
 impl<S, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> SeaOrmStore<S, O, P>
 where
@@ -27,43 +27,47 @@ where
         &self,
         provider: &str,
         provider_account_id: &str,
-    ) -> AuthResult<Vec<S::Account>> {
+    ) -> AuthResult<Vec<SqlRow>> {
         self.model_fields.canonicalize_id(EntityRole::Account)?;
         database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(
             self.config(),
             "findMany",
             async {
-                <S::Account as SeaOrmAccountModel>::Entity::find()
-                    .filter(<S::Account as SeaOrmAccountModel>::provider_id_column().eq(provider))
-                    .filter(
-                        <S::Account as SeaOrmAccountModel>::account_id_column()
-                            .eq(provider_account_id),
-                    )
-                    .limit(2)
-                    .all(self.connection())
-                    .await
-                    .map_err(map_db_err)
+                super::plugin_rows::all(
+                    self.connection(),
+                    <S::Account as SeaOrmAccountModel>::Entity::find()
+                        .filter(
+                            <S::Account as SeaOrmAccountModel>::provider_id_column().eq(provider),
+                        )
+                        .filter(
+                            <S::Account as SeaOrmAccountModel>::account_id_column()
+                                .eq(provider_account_id),
+                        )
+                        .limit(2),
+                )
+                .await
             },
         )
         .await
     }
 
-    pub(super) async fn user_account_records(&self, user_id: &str) -> AuthResult<Vec<S::Account>> {
+    pub(super) async fn user_account_records(&self, user_id: &str) -> AuthResult<Vec<SqlRow>> {
         self.model_fields.canonicalize_id(EntityRole::Account)?;
         let user_id = self.parse_id(user_id, <S::Account as SeaOrmAccountModel>::parse_user_id)?;
         database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(
             self.config(),
             "findMany",
             async {
-                <S::Account as SeaOrmAccountModel>::Entity::find()
-                    .filter(<S::Account as SeaOrmAccountModel>::user_id_column().eq(user_id))
-                    .limit(super::pagination::default_limit(
-                        self.config(),
-                        self.connection().get_database_backend(),
-                    )?)
-                    .all(self.connection())
-                    .await
-                    .map_err(map_db_err)
+                super::plugin_rows::all(
+                    self.connection(),
+                    <S::Account as SeaOrmAccountModel>::Entity::find()
+                        .filter(<S::Account as SeaOrmAccountModel>::user_id_column().eq(user_id))
+                        .limit(super::pagination::default_limit(
+                            self.config(),
+                            self.connection().get_database_backend(),
+                        )?),
+                )
+                .await
             },
         )
         .await
@@ -71,7 +75,7 @@ where
 
     pub(super) async fn output_accounts(
         &self,
-        rows: &[S::Account],
+        rows: &[SqlRow],
         db: &impl ConnectionTrait,
     ) -> AuthResult<Vec<better_auth_core::wire::AccountView>> {
         if !rows.is_empty() {
@@ -80,7 +84,14 @@ where
         let fields = self.config().account.field_schema();
         let records = rows
             .iter()
-            .map(|row| row.record_fields(&fields))
+            .map(|row| {
+                row.record::<<S::Account as SeaOrmAccountModel>::Entity>(
+                    &fields,
+                    db.get_database_backend(),
+                    S::Account::id_column(),
+                    S::Account::field_column,
+                )
+            })
             .collect::<AuthResult<Vec<_>>>()?;
         Ok(fields
             .project_adapter_records(
@@ -90,58 +101,45 @@ where
             )
             .await?
             .into_iter()
+            .map(|output| super::plugin_rows::ordered_output(&fields, output))
             .map(better_auth_core::wire::AccountView::from_adapter_fields)
             .collect())
     }
 
     pub(super) async fn output_account(
         &self,
-        account: &S::Account,
+        account: &SqlRow,
         db: &impl ConnectionTrait,
     ) -> AuthResult<AccountView> {
-        self.model_fields.canonicalize_id(EntityRole::Account)?;
-        account
-            .record(
-                &self.config().account.field_schema(),
-                db.get_database_backend() == sea_orm::DbBackend::Postgres,
-                db.get_database_backend() != sea_orm::DbBackend::Sqlite,
-            )
-            .await
+        Ok(self
+            .output_accounts(std::slice::from_ref(account), db)
+            .await?
+            .remove(0))
     }
 
-    pub(super) async fn output_native_account(
-        &self,
-        account: &S::Account,
-    ) -> AuthResult<AccountView> {
+    pub(super) async fn output_native_account(&self, account: &SqlRow) -> AuthResult<AccountView> {
         self.model_fields.canonicalize_id(EntityRole::Account)?;
         let fields = self.config().account.field_schema();
         let backend = self.connection().get_database_backend();
-        let storage = super::joins::native_child_fields(&fields, |name, field| {
-            let value = super::field_output::column_value::<
-                <S::Account as SeaOrmAccountModel>::Entity,
-            >(account, S::Account::field_column(name)?);
-            super::field_output::raw_field_output(value, field, backend)?.ok_or_else(|| {
-                AuthError::internal(format!(
-                    "Raw SQL output omitted selected Account field: {name}"
-                ))
-            })
-        })?;
-        let mut record = account.record_fields(&fields)?;
-        record.map_storage_fields(
+        let record = account.native_record::<<S::Account as SeaOrmAccountModel>::Entity>(
             &fields,
-            super::field_output::capabilities(backend),
-            |name, _| Ok(Some(storage.get(name).cloned().unwrap_or_default())),
+            backend,
+            S::Account::id_column(),
+            S::Account::field_column,
         )?;
         // Projection preserves the one selected child.
         Ok(AccountView::from_adapter_fields(
-            fields
-                .project_adapter_records(
-                    vec![record],
-                    backend == sea_orm::DbBackend::Postgres,
-                    backend != sea_orm::DbBackend::Sqlite,
-                )
-                .await?
-                .remove(0),
+            super::plugin_rows::ordered_output(
+                &fields,
+                fields
+                    .project_adapter_records(
+                        vec![record],
+                        backend == sea_orm::DbBackend::Postgres,
+                        backend != sea_orm::DbBackend::Sqlite,
+                    )
+                    .await?
+                    .remove(0),
+            ),
         ))
     }
 
@@ -149,7 +147,7 @@ where
         &self,
         relation: &ResolvedJoin,
         value: FieldValue,
-    ) -> AuthResult<Vec<S::Account>> {
+    ) -> AuthResult<Vec<SqlRow>> {
         if value.is_null() || value.is_undefined() {
             return Ok(Vec::new());
         }
@@ -184,17 +182,15 @@ where
             if relation.many { "findMany" } else { "findOne" },
             async {
                 if relation.many {
-                    query
-                        .limit(super::pagination::default_limit(self.config(), backend)?)
-                        .all(self.connection())
-                        .await
-                        .map_err(map_db_err)
+                    super::plugin_rows::all(
+                        self.connection(),
+                        query.limit(super::pagination::default_limit(self.config(), backend)?),
+                    )
+                    .await
                 } else {
-                    query
-                        .one(self.connection())
+                    super::plugin_rows::one(self.connection(), query)
                         .await
                         .map(|account| account.into_iter().collect())
-                        .map_err(map_db_err)
                 }
             },
         )
@@ -204,47 +200,53 @@ where
     async fn native_account_owners(
         &self,
         records: Vec<AdapterRecord>,
-        users: &[Vec<S::User>],
+        users: &[Vec<SqlRow>],
         many: bool,
     ) -> AuthResult<Vec<AccountOwner>>
     where
         S::User: SeaOrmUserModel,
     {
         let backend = self.connection().get_database_backend();
-        self.config()
-            .account
-            .field_schema()
+        let fields = self.config().account.field_schema();
+        fields
             .project_adapter_records_batches_then(
                 records,
                 backend == sea_orm::DbBackend::Postgres,
                 backend != sea_orm::DbBackend::Sqlite,
-                |ready| async move {
-                    let pages = ready
-                        .iter()
-                        .map(|(index, _)| {
-                            users.get(*index).map(Vec::as_slice).ok_or_else(|| {
-                                AuthError::internal("Account projection lost its joined User page")
+                |ready| {
+                    let fields = &fields;
+                    async move {
+                        let pages = ready
+                            .iter()
+                            .map(|(index, _)| {
+                                users.get(*index).map(Vec::as_slice).ok_or_else(|| {
+                                    AuthError::internal(
+                                        "Account projection lost its joined User page",
+                                    )
+                                })
                             })
-                        })
-                        .collect::<AuthResult<Vec<_>>>()?;
-                    let projected = self.output_native_user_pages(pages).await?;
-                    ready
-                        .into_iter()
-                        .zip(projected)
-                        .map(|((index, output), users)| {
-                            let users = users
-                                .into_iter()
-                                .map(UserView::try_from)
-                                .collect::<AuthResult<Vec<_>>>()?;
-                            Ok((
-                                index,
-                                AccountOwner {
-                                    account: AccountView::from_adapter_fields(output),
-                                    user: super::joins::relation_value(many, users),
-                                },
-                            ))
-                        })
-                        .collect()
+                            .collect::<AuthResult<Vec<_>>>()?;
+                        let projected = self.output_native_user_pages(pages).await?;
+                        ready
+                            .into_iter()
+                            .zip(projected)
+                            .map(|((index, output), users)| {
+                                let users = users
+                                    .into_iter()
+                                    .map(UserView::try_from)
+                                    .collect::<AuthResult<Vec<_>>>()?;
+                                Ok((
+                                    index,
+                                    AccountOwner {
+                                        account: AccountView::from_adapter_fields(
+                                            super::plugin_rows::ordered_output(fields, output),
+                                        ),
+                                        user: super::joins::relation_value(many, users),
+                                    },
+                                ))
+                            })
+                            .collect()
+                    }
                 },
             )
             .await
@@ -301,12 +303,9 @@ where
                 .map(str::to_owned),
         )?;
         let id = id.as_deref().map(S::Account::parse_id).transpose()?;
-        let mut active = super::record_write::RecordWrite::from_active(S::Account::new_active(
-            id.clone(),
-            &input,
-        )?);
-        active.not_set(S::Account::id_column());
-        active.apply_fields(input, S::Account::field_column)?;
+        let mut active = super::record_write::RecordWrite::<
+            <S::Account as SeaOrmAccountModel>::Entity,
+        >::from_fields(input, S::Account::field_column)?;
         if let Some(id) = id {
             active.set(S::Account::id_column(), id.into());
         } else {
@@ -317,7 +316,7 @@ where
             "create",
             async {
                 active
-                    .insert(
+                    .insert_raw(
                         db,
                         super::create_readback::CreateReadback {
                             schema: &fields,
@@ -327,6 +326,7 @@ where
                         },
                     )
                     .await
+                    .map(|row| row.map(SqlRow::from))
             },
         )
         .await?;
@@ -423,27 +423,24 @@ where
             let rows = database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(
                 self.config(),
                 "findMany",
-                super::joins::joined_rows::<
-                    <S::Account as SeaOrmAccountModel>::Entity,
-                    <S::User as SeaOrmUserModel>::Entity,
-                >(self.connection(), &query),
+                super::joins::joined_raw_rows(self.connection(), &query),
             )
             .await?;
-            let (records, users): (Vec<_>, Vec<_>) = super::joins::grouped_rows::<
-                <S::Account as SeaOrmAccountModel>::Entity,
-                <S::User as SeaOrmUserModel>::Entity,
-            >(rows, S::Account::id_column())
-            .into_iter()
-            .map(|(account, users)| {
-                let users = super::joins::selected_children::<<S::User as SeaOrmUserModel>::Entity>(
-                    users.into_iter(),
-                    S::User::id_column(),
-                    relation.many,
-                    self.config().advanced.database.find_many_limit(),
-                );
-                (account, users)
-            })
-            .unzip();
+            let (records, users): (Vec<_>, Vec<_>) =
+                super::joins::grouped_raw_rows(rows, S::Account::id_column())?
+                    .into_iter()
+                    .map(|(account, users)| {
+                        let users = super::joins::selected_raw_children(
+                            users.into_iter(),
+                            S::User::id_column(),
+                            relation.many,
+                            self.config().advanced.database.find_many_limit(),
+                        )?;
+                        Ok((account, users))
+                    })
+                    .collect::<AuthResult<Vec<_>>>()?
+                    .into_iter()
+                    .unzip();
             (records, Some(users))
         } else {
             (self.account_records(provider, account_id).await?, None)
@@ -451,7 +448,14 @@ where
         let fields = self.config().account.field_schema();
         let extracted = records
             .iter()
-            .map(|record| record.record_fields(&fields))
+            .map(|record| {
+                record.record::<<S::Account as SeaOrmAccountModel>::Entity>(
+                    &fields,
+                    self.connection().get_database_backend(),
+                    S::Account::id_column(),
+                    S::Account::field_column,
+                )
+            })
             .collect::<AuthResult<Vec<_>>>()?;
         let backend = self.connection().get_database_backend();
         let owners = if let Some(users) = native_users {
@@ -481,12 +485,13 @@ where
                                 .await?;
                             let mut projected = Vec::with_capacity(users.len());
                             for user in users {
-                                let mut user = self.output_user(&user, self.connection()).await?;
-                                self.set_join_user_visibility(&mut user);
+                                let user = self.output_user(&user, self.connection()).await?;
                                 projected.push(user);
                             }
                             Ok(AccountOwner {
-                                account: AccountView::from_adapter_fields(output),
+                                account: AccountView::from_adapter_fields(
+                                    super::plugin_rows::ordered_output(fields, output),
+                                ),
                                 user: super::joins::relation_value(relation.many, projected),
                             })
                         }
@@ -511,15 +516,21 @@ where
             self.config(),
             "findOne",
             async {
-                <S::Account as SeaOrmAccountModel>::Entity::find()
-                    .filter(<S::Account as SeaOrmAccountModel>::user_id_column().eq(stored_user_id))
-                    .filter(
-                        <S::Account as SeaOrmAccountModel>::provider_id_column().eq("credential"),
-                    )
-                    .filter(<S::Account as SeaOrmAccountModel>::account_id_column().eq(user_id))
-                    .one(self.connection())
-                    .await
-                    .map_err(map_db_err)
+                super::plugin_rows::one(
+                    self.connection(),
+                    <S::Account as SeaOrmAccountModel>::Entity::find()
+                        .filter(
+                            <S::Account as SeaOrmAccountModel>::user_id_column().eq(stored_user_id),
+                        )
+                        .filter(
+                            <S::Account as SeaOrmAccountModel>::provider_id_column()
+                                .eq("credential"),
+                        )
+                        .filter(
+                            <S::Account as SeaOrmAccountModel>::account_id_column().eq(user_id),
+                        ),
+                )
+                .await
             },
         )
         .await?;
@@ -592,16 +603,18 @@ where
             self.config(),
             "update",
             async {
-                super::updates::update_record_returning_one::<
+                super::updates::execute_update_returning_raw::<
                     <S::Account as SeaOrmAccountModel>::Entity,
                     _,
                 >(
                     self.connection(),
-                    active,
-                    S::Account::id_column().eq(account_id),
+                    active
+                        .update(backend)?
+                        .filter(S::Account::id_column().eq(account_id)),
                     reselect,
                 )
                 .await
+                .map(|row| row.map(SqlRow::from))
             },
         )
         .await?
@@ -634,11 +647,12 @@ where
                 self.config(),
                 "findOne",
                 async {
-                    <S::Account as SeaOrmAccountModel>::Entity::find()
-                        .filter(S::Account::id_column().eq(account_id.clone()))
-                        .one(self.connection())
-                        .await
-                        .map_err(map_db_err)
+                    super::plugin_rows::one(
+                        self.connection(),
+                        <S::Account as SeaOrmAccountModel>::Entity::find()
+                            .filter(S::Account::id_column().eq(account_id.clone())),
+                    )
+                    .await
                 },
             )
             .await?

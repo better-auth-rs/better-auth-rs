@@ -6,7 +6,7 @@ use better_auth_core::{
     plugin_runtime::PluginRuntime,
     store::{
         EphemeralStore, StatelessSchema,
-        database_hooks::{DatabaseHookContext, DatabaseHookControl, DatabaseHooks},
+        database_hooks::{DatabaseHookContext, DatabaseHooks},
     },
 };
 use std::sync::{Arc, OnceLock};
@@ -17,11 +17,22 @@ struct Capture(Arc<OnceLock<PluginRuntime<StatelessSchema>>>);
 impl DatabaseHooks<StatelessSchema> for Capture {
     async fn before_create_user(
         &self,
-        input: &mut CreateUser,
+        input: &mut better_auth_core::FieldMap,
         _: &DatabaseHookContext<'_, StatelessSchema>,
-    ) -> AuthResult<DatabaseHookControl> {
-        input.name = Some(self.0.get().unwrap().context()?.base_url().to_owned()).into();
-        Ok(DatabaseHookControl::Continue)
+    ) -> AuthResult<
+        better_auth_core::store::database_hooks::DatabaseHookUpdate<better_auth_core::FieldMap>,
+    > {
+        let _ = input.insert(
+            "name".into(),
+            self.0
+                .get()
+                .unwrap()
+                .context()?
+                .base_url()
+                .to_owned()
+                .into(),
+        );
+        Ok(better_auth_core::store::database_hooks::DatabaseHookUpdate::Continue)
     }
 }
 #[async_trait]

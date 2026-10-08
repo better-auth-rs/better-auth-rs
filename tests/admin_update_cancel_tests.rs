@@ -10,7 +10,7 @@ use better_auth_core::store::{EphemeralStore, StatelessSchema};
 use better_auth_core::{
     AuthConfig, AuthContext, AuthError, AuthInitContext, AuthPlugin, AuthRequest, AuthResponse,
     AuthResult, AuthRoute, AuthSchema, AuthStore, CookieCacheConfig, CreateSession, CreateUser,
-    HttpMethod, SchemaValue, UpdateUser, UserView, utils::cookie_utils::sign_cookie_value,
+    HttpMethod, SchemaValue, UserView, utils::cookie_utils::sign_cookie_value,
 };
 use chrono::{DateTime, Utc};
 use serde_json::{Value, json};
@@ -41,10 +41,16 @@ impl Observer {
 impl<S: AuthSchema> DatabaseHooks<S> for Observer {
     async fn before_update_user(
         &self,
-        update: &UpdateUser,
+        update: &mut better_auth_core::FieldMap,
         _: &DatabaseHookContext<'_, S>,
-    ) -> AuthResult<DatabaseHookUpdate<UpdateUser>> {
-        self.record("before", update.name.json()?)?;
+    ) -> AuthResult<DatabaseHookUpdate<better_auth_core::FieldMap>> {
+        self.record(
+            "before",
+            update
+                .get("name")
+                .unwrap_or(&better_auth_core::FieldValue::Undefined)
+                .json()?,
+        )?;
         match self.mode {
             "cancel" => Ok(DatabaseHookUpdate::Cancel),
             "error" => Err(AuthError::internal(MESSAGE)),

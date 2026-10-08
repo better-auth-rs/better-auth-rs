@@ -29,10 +29,12 @@ struct Patch {
 impl<S: AuthSchema> DatabaseHooks<S> for Patch {
     async fn before_update_user(
         &self,
-        _: &UpdateUser,
+        _: &mut better_auth_core::FieldMap,
         _: &DatabaseHookContext<'_, S>,
-    ) -> AuthResult<DatabaseHookUpdate<UpdateUser>> {
-        Ok(DatabaseHookUpdate::Patch(self.update.clone()))
+    ) -> AuthResult<DatabaseHookUpdate<better_auth_core::FieldMap>> {
+        Ok(DatabaseHookUpdate::Patch(
+            self.update.clone().into_user_fields()?,
+        ))
     }
 
     async fn after_update_user(

@@ -9,9 +9,7 @@ use better_auth_core::{
     AuthConfig, AuthError, AuthResult, AuthSchema, AuthStore, AuthUser, CreateUser, UpdateUser,
     store::{
         EphemeralStore, RuntimeStore,
-        database_hooks::{
-            DatabaseHookContext, DatabaseHookControl, DatabaseHookUpdate, DatabaseHooks,
-        },
+        database_hooks::{DatabaseHookContext, DatabaseHookUpdate, DatabaseHooks},
     },
     wire::UserView,
 };
@@ -49,11 +47,13 @@ impl ImageHooks {
 impl<S: AuthSchema> DatabaseHooks<S> for ImageHooks {
     async fn before_create_user(
         &self,
-        row: &mut CreateUser,
+        row: &mut better_auth_core::FieldMap,
         _: &DatabaseHookContext<'_, S>,
-    ) -> AuthResult<DatabaseHookControl> {
+    ) -> AuthResult<
+        better_auth_core::store::database_hooks::DatabaseHookUpdate<better_auth_core::FieldMap>,
+    > {
         self.record("create.before", row);
-        Ok(DatabaseHookControl::Continue)
+        Ok(better_auth_core::store::database_hooks::DatabaseHookUpdate::Continue)
     }
 
     async fn after_create_user(
@@ -69,9 +69,9 @@ impl<S: AuthSchema> DatabaseHooks<S> for ImageHooks {
 
     async fn before_update_user(
         &self,
-        row: &UpdateUser,
+        row: &mut better_auth_core::FieldMap,
         _: &DatabaseHookContext<'_, S>,
-    ) -> AuthResult<DatabaseHookUpdate<UpdateUser>> {
+    ) -> AuthResult<DatabaseHookUpdate<better_auth_core::FieldMap>> {
         self.record("update.before", row);
         if self.reject.load(Ordering::SeqCst) {
             return Err(AuthError::internal("image update rejected"));

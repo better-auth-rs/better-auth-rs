@@ -1,6 +1,6 @@
 use super::*;
 use better_auth_core::{
-    CreateVerification, UpdateAccount, UpdateUser,
+    CreateVerification, UpdateAccount,
     store::database_hooks::{
         DatabaseHookContext, DatabaseHookControl, DatabaseHookUpdate, DatabaseHooks, SessionUpdate,
         VerificationUpdate,
@@ -9,31 +9,6 @@ use better_auth_core::{
 };
 
 pub(super) struct Hooks(pub(super) Events);
-
-fn user_update_fields(data: &UpdateUser) -> FieldMap {
-    use better_auth_core::SchemaField;
-    let mut fields = data.additional_fields.clone();
-    for (name, value) in [("name", &data.name), ("image", &data.image)] {
-        if !value.is_undefined() {
-            let _ = fields.insert(name.into(), value.field_value());
-        }
-    }
-    macro_rules! optional {
-        ($($field:ident => $name:literal),* $(,)?) => {$(
-            if let Some(value) = &data.$field {
-                let _ = fields.insert($name.into(), value.into_field());
-            }
-        )*};
-    }
-    optional!(
-        email => "email", email_verified => "emailVerified", username => "username",
-        display_username => "displayUsername", is_anonymous => "isAnonymous",
-        phone_number => "phoneNumber", phone_number_verified => "phoneNumberVerified",
-        role => "role", banned => "banned", ban_reason => "banReason", ban_expires => "banExpires",
-        two_factor_enabled => "twoFactorEnabled", metadata => "metadata",
-    );
-    fields
-}
 
 impl Hooks {
     fn record(
@@ -60,11 +35,13 @@ impl Hooks {
 impl<S: AuthSchema> DatabaseHooks<S> for Hooks {
     async fn before_create_user(
         &self,
-        data: &mut CreateUser,
+        data: &mut better_auth_core::FieldMap,
         _: &DatabaseHookContext<'_, S>,
-    ) -> AuthResult<DatabaseHookControl> {
+    ) -> AuthResult<
+        better_auth_core::store::database_hooks::DatabaseHookUpdate<better_auth_core::FieldMap>,
+    > {
         self.unexpected("user", "create", "before", &data)?;
-        Ok(DatabaseHookControl::Continue)
+        Ok(better_auth_core::store::database_hooks::DatabaseHookUpdate::Continue)
     }
     async fn after_create_user(
         &self,
@@ -78,10 +55,10 @@ impl<S: AuthSchema> DatabaseHooks<S> for Hooks {
     }
     async fn before_update_user(
         &self,
-        data: &UpdateUser,
+        data: &mut better_auth_core::FieldMap,
         _: &DatabaseHookContext<'_, S>,
-    ) -> AuthResult<DatabaseHookUpdate<UpdateUser>> {
-        self.record("user", "update", "before", user_update_fields(data).into())?;
+    ) -> AuthResult<DatabaseHookUpdate<better_auth_core::FieldMap>> {
+        self.record("user", "update", "before", data.clone().into())?;
         Ok(DatabaseHookUpdate::Continue)
     }
     async fn after_update_user(

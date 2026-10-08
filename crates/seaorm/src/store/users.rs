@@ -2,119 +2,35 @@ use super::instrumentation::database_operation;
 use async_trait::async_trait;
 use better_auth_core::id::AdapterIdInput;
 use better_auth_core::store::schema::{EntityRole, resolve_field_name};
-use chrono::Utc;
-use sea_orm::{
-    ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QuerySelect,
-};
+use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QuerySelect};
 
 use better_auth_core::store::{ResolvedJoin, UserStore};
-use better_auth_core::user_fields::{
-    AdapterRecord, FieldOutputCapabilities, UserConfig, UserFieldType,
-};
-use better_auth_core::{AuthUser, FieldMap, FieldValue};
+use better_auth_core::{FieldMap, FieldValue};
 
 use crate::error::{AuthError, AuthResult};
-use crate::hooks::DatabaseHookUpdate;
 use crate::schema::{AuthSchema, SeaOrmAccountModel, SeaOrmUserModel};
 use crate::types::{CreateUser, ListUsersParams, UpdateUser};
-use crate::utils::email::{normalize_optional_user_email, normalize_user_email};
+use crate::utils::email::normalize_user_email;
 
-use super::{
-    SeaOrmStore, cancelled_by_hook,
-    field_output::{column_value, sqlite_extra_output},
-    map_db_err,
-};
+use super::{SeaOrmStore, cancelled_by_hook, plugin_rows::SqlRow};
 
 impl<S, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> SeaOrmStore<S, O, P>
 where
     S: AuthSchema,
     S::User: SeaOrmUserModel,
 {
-    pub(super) async fn output_users(
-        &self,
-        rows: &[S::User],
-        db: &impl ConnectionTrait,
-    ) -> AuthResult<Vec<better_auth_core::wire::UserView>> {
-        if !rows.is_empty() {
-            self.model_fields.begin_id_output(EntityRole::User)?;
-        }
-        let sqlite = db.get_database_backend() == sea_orm::DbBackend::Sqlite;
-        let mut fields = self.config().user.user_adapter_fields();
-        // The typed model getter already projects immutable SQL primary keys.
-        let _ = fields.fields_mut().shift_remove("id");
-        let mut output =
-            better_auth_core::wire::UserView::with_internal_fields_many_for_adapter_using(
-                rows,
-                &fields,
-                &Default::default(),
-                FieldOutputCapabilities {
-                    supports_native_json: db.get_database_backend() == sea_orm::DbBackend::Postgres,
-                    supports_native_dates: !sqlite,
-                    supports_arrays: !sqlite,
-                    supports_booleans: !sqlite,
-                },
-                |model, name, field| {
-                    if (sqlite || matches!(field.field_type, UserFieldType::String))
-                        && field.references.is_none()
-                    {
-                        let physical = resolve_field_name(field.field_name.as_deref(), name);
-                        let column = S::User::field_column(physical)?;
-                        let value =
-                            column_value::<<S::User as SeaOrmUserModel>::Entity>(model, column);
-                        if sqlite {
-                            sqlite_extra_output(value, field)
-                        } else {
-                            crate::__private_field_value(value).map(Some)
-                        }
-                    } else {
-                        Ok(None)
-                    }
-                },
-            )
-            .await?;
-        let order: Vec<_> = self
-            .config()
-            .user
-            .user_field_schema()
-            .adapter_fields(&[])
-            .fields()
-            .keys()
-            .cloned()
-            .collect();
-        for (view, row) in output.iter_mut().zip(rows) {
-            view.field_order.clone_from(&order);
-            view.visible_fields = row.field_presence().cloned();
-        }
-        Ok(output)
-    }
-
-    async fn user_record_by_email(&self, email: &str) -> AuthResult<Option<S::User>> {
-        self.model_fields.begin_id_query(EntityRole::User)?;
-        let email = normalize_user_email(email);
+    async fn user_record_by_email(&self, email: &str) -> AuthResult<Option<SqlRow>> {
+        let query = self.user_field_query(
+            self.connection(),
+            "email",
+            &normalize_user_email(email).into(),
+        )?;
         database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
             self.config(),
             "findOne",
-            async {
-                <S::User as SeaOrmUserModel>::Entity::find()
-                    .filter(<S::User as SeaOrmUserModel>::email_column().eq(email))
-                    .one(self.connection())
-                    .await
-                    .map_err(map_db_err)
-            },
+            super::plugin_rows::one(self.connection(), query),
         )
         .await
-    }
-
-    pub(super) async fn output_user(
-        &self,
-        row: &S::User,
-        db: &impl ConnectionTrait,
-    ) -> AuthResult<better_auth_core::wire::UserView> {
-        // Projection preserves the one input row.
-        Ok(self
-            .output_users(std::slice::from_ref(row), db)
-            .await?
-            .remove(0))
     }
 
     pub(super) async fn get_user_by_id_with_connection(
@@ -137,11 +53,11 @@ where
                     db.get_database_backend(),
                 )?,
             };
-            <S::User as SeaOrmUserModel>::Entity::find()
-                .filter(filter)
-                .one(db)
-                .await
-                .map_err(map_db_err)
+            super::plugin_rows::one(
+                db,
+                <S::User as SeaOrmUserModel>::Entity::find().filter(filter),
+            )
+            .await
         };
         let row = if trace_query {
             database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
@@ -159,94 +75,12 @@ where
         }
     }
 
-    fn native_user_record(&self, user: &S::User, fields: &UserConfig) -> AuthResult<AdapterRecord> {
-        let backend = self.connection().get_database_backend();
-        let storage = super::joins::native_child_fields(fields, |name, field| {
-            let value = column_value::<<S::User as SeaOrmUserModel>::Entity>(
-                user,
-                S::User::field_column(name)?,
-            );
-            super::field_output::raw_field_output(value, field, backend)?.ok_or_else(|| {
-                AuthError::internal(format!(
-                    "Raw SQL output omitted selected User field: {name}"
-                ))
-            })
-        })?;
-        let core = FieldMap::from([("id".into(), user.id().into_owned().into_field_value())]);
-        let mut record = AdapterRecord::new(core, FieldMap::new());
-        record.map_storage_fields(
-            fields,
-            super::field_output::capabilities(backend),
-            |name, _| Ok(Some(storage.get(name).cloned().unwrap_or_default())),
-        )?;
-        Ok(record)
-    }
-
-    pub(super) async fn output_native_user_pages(
-        &self,
-        pages: Vec<&[S::User]>,
-    ) -> AuthResult<Vec<Vec<FieldMap>>> {
-        if pages.iter().any(|page| !page.is_empty()) {
-            self.model_fields.begin_id_output(EntityRole::User)?;
-        }
-        let mut fields = self.config().user.clone();
-        for name in [
-            "name",
-            "email",
-            "emailVerified",
-            "image",
-            "createdAt",
-            "updatedAt",
-        ]
-        .into_iter()
-        .chain(self.model_fields.user_plugin_fields().iter().copied())
-        {
-            let _ = fields
-                .fields_mut()
-                .entry(name.into())
-                .or_insert_with(|| ResolvedJoin::user_field(self.config(), name));
-        }
-        let mut fields = fields.user_adapter_fields();
-        let _ = fields.fields_mut().insert("id".into(), Default::default());
-        super::joins::project_child_pages(
-            &fields,
-            pages,
-            self.connection().get_database_backend(),
-            &|user| self.native_user_record(user, &fields),
-        )
-        .await
-    }
-
-    pub(super) fn set_join_user_visibility(&self, user: &mut better_auth_core::UserView) {
-        user.visible_fields = Some(
-            [
-                "id",
-                "name",
-                "email",
-                "emailVerified",
-                "image",
-                "createdAt",
-                "updatedAt",
-            ]
-            .into_iter()
-            .map(str::to_owned)
-            .chain(
-                self.model_fields
-                    .user_plugin_fields()
-                    .iter()
-                    .map(|name| (*name).to_owned()),
-            )
-            .chain(self.config().user.fields().keys().cloned())
-            .collect(),
-        );
-    }
-
     pub(super) async fn selected_join_users(
         &self,
         relation: &ResolvedJoin,
         value: FieldValue,
         limit: f64,
-    ) -> AuthResult<Vec<S::User>> {
+    ) -> AuthResult<Vec<SqlRow>> {
         if value.is_null() || value.is_undefined() {
             return Ok(Vec::new());
         }
@@ -273,17 +107,17 @@ where
             if relation.many { "findMany" } else { "findOne" },
             async {
                 if relation.many {
-                    query
-                        .limit(super::pagination::sql_pagination(backend, Some(limit), None)?.0)
-                        .all(self.connection())
-                        .await
-                        .map_err(map_db_err)
+                    super::plugin_rows::all(
+                        self.connection(),
+                        query.limit(
+                            super::pagination::sql_pagination(backend, Some(limit), None)?.0,
+                        ),
+                    )
+                    .await
                 } else {
-                    query
-                        .one(self.connection())
+                    super::plugin_rows::one(self.connection(), query)
                         .await
                         .map(|user| user.into_iter().collect())
-                        .map_err(map_db_err)
                 }
             },
         )
@@ -295,25 +129,67 @@ where
         db: &impl ConnectionTrait,
         username: &str,
     ) -> AuthResult<Option<better_auth_core::wire::UserView>> {
-        let Some(column) = S::User::username_column() else {
+        let Some(_) = S::User::username_column() else {
             return Ok(None);
         };
+        self.find_user_by_field_value(db, "username", &username.into())
+            .await
+    }
+
+    pub(super) fn user_field_query(
+        &self,
+        db: &impl ConnectionTrait,
+        name: &str,
+        value: &FieldValue,
+    ) -> AuthResult<sea_orm::Select<<S::User as SeaOrmUserModel>::Entity>> {
+        let schema = self.user_field_schema().adapter_fields(&[]);
+        let (logical, field) = schema
+            .fields()
+            .get_key_value(name)
+            .or_else(|| {
+                schema.fields().iter().find(|(logical, field)| {
+                    resolve_field_name(field.field_name.as_deref(), logical) == name
+                })
+            })
+            .ok_or_else(|| AuthError::internal(format!("Field {name} not found in model user")))?;
         self.model_fields.begin_id_query(EntityRole::User)?;
-        match database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
+        let physical = resolve_field_name(field.field_name.as_deref(), logical);
+        let backend = db.get_database_backend();
+        let bound = if logical == "id" || field.references_id() {
+            self.config()
+                .advanced
+                .database
+                .generate_id()
+                .adapter_id_query(value.clone())?
+        } else {
+            value.clone()
+        };
+        let bound = better_auth_core::user_query::bind_filter(field, &bound)?;
+        let bound = super::value_filter::adapter_query_value(bound, value, field, backend)?;
+        Ok(
+            <S::User as SeaOrmUserModel>::Entity::find().filter(super::value_filter::equals(
+                S::User::field_column(physical)?,
+                &bound,
+                backend,
+            )?),
+        )
+    }
+
+    pub(super) async fn find_user_by_field_value(
+        &self,
+        db: &impl ConnectionTrait,
+        name: &str,
+        value: &FieldValue,
+    ) -> AuthResult<Option<better_auth_core::UserView>> {
+        let query = self.user_field_query(db, name, value)?;
+        let row = database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
             self.config(),
             "findOne",
-            async {
-                <S::User as SeaOrmUserModel>::Entity::find()
-                    .filter(column.eq(username))
-                    .one(db)
-                    .await
-                    .map_err(map_db_err)
-            },
+            super::plugin_rows::one(db, query),
         )
-        .await?
-        .as_ref()
-        {
-            Some(row) => self.output_user(row, db).await.map(Some),
+        .await?;
+        match row {
+            Some(row) => self.output_user(&row, db).await.map(Some),
             None => Ok(None),
         }
     }
@@ -322,51 +198,50 @@ where
         &self,
         db: &C,
         tx: Option<super::HookTransaction<'_, S>>,
-        mut create_user: CreateUser,
+        create_user: CreateUser,
     ) -> AuthResult<Option<better_auth_core::wire::UserView>>
     where
         C: ConnectionTrait,
     {
-        create_user.prepare_user_fields(&self.config().user)?;
-        create_user.email = normalize_optional_user_email(create_user.email);
+        let mut prepared = better_auth_core::store::database_hooks::PreparedRecordWrite::new(
+            create_user.into_user_fields()?,
+        );
         let hook_context = self.hook_context(tx);
         for hook in self.hooks() {
-            if better_auth_core::observability::database::with_database_hook(
+            let outcome = better_auth_core::observability::database::with_database_hook(
                 hook_context.config,
                 hook.hook_metadata(),
                 better_auth_core::observability::database::DatabaseHook::BeforeCreateUser,
-                hook.before_create_user(&mut create_user, &hook_context),
+                hook.before_create_user(prepared.fields_mut(), &hook_context),
             )
-            .await?
-            .is_cancelled()
-            {
+            .await?;
+            if !prepared.apply(outcome) {
                 return Ok(None);
             }
-            create_user.prepare_user_fields(&self.config().user)?;
         }
+        let input = prepared.into_fields();
+        let supplied = input.get("id").cloned();
+        let backend = db.get_database_backend();
         self.model_fields.begin_id_input(
             EntityRole::User,
             AdapterIdInput {
-                force_allow_id: create_user.id.is_some(),
-                supports_native_uuid: db.get_database_backend() == sea_orm::DbBackend::Postgres,
+                force_allow_id: supplied.is_some(),
+                supports_native_uuid: backend == sea_orm::DbBackend::Postgres,
             },
         )?;
-        let now = Utc::now();
-        let input = create_user.take_user_field_input(&self.config().user)?;
-        let (mut fields, user_id) = self
-            .config()
-            .user
-            .create_user_storage_fields(
+        let schema = self.user_field_schema();
+        let fields = schema
+            .storage_fields_with_bound_id(
                 input,
-                || {
-                    let id = if let Some(policy) =
-                        self.model_fields.id_input_policy(EntityRole::User)?
-                    {
-                        self.generated_id_with_policy("user", create_user.id.take(), policy)?
-                    } else {
-                        create_user.id.take()
-                    };
-                    id.as_deref().map(S::User::parse_id).transpose()
+                true,
+                || match self.model_fields.id_input_policy(EntityRole::User)? {
+                    Some(policy) => self
+                        .config()
+                        .advanced
+                        .database
+                        .generate_id()
+                        .adapter_create_id_input("user", supplied.clone(), policy),
+                    None => Ok(supplied.clone()),
                 },
                 |name, field, value| {
                     crate::reference_id::input_binding(
@@ -376,73 +251,32 @@ where
                         self.config().advanced.database.generate_id(),
                         S::User::field_column,
                         S::User::native_json_field,
-                        db.get_database_backend(),
+                        backend,
                     )
                 },
             )
             .await?;
-        let mut name = std::mem::take(&mut create_user.name);
-        let mut image = std::mem::take(&mut create_user.image);
-        for (key, target) in [("name", &mut name), ("image", &mut image)] {
-            if let Some(field) = self.config().user.fields().get(key) {
-                *target = better_auth_core::SchemaValue::from_field(
-                    fields
-                        .remove(resolve_field_name(field.field_name.as_deref(), key))
-                        .unwrap_or_default(),
-                );
-            }
-        }
-        let ban_expires = create_user.ban_expires.take();
-        let created_at = create_user.created_at.take();
-        let updated_at = create_user.updated_at.take();
-        let database_generated_id = user_id.is_none();
-        let mut model = S::User::new_active(user_id, create_user, now)?;
-        for (name, value) in [
-            ("createdAt", created_at),
-            ("updatedAt", updated_at),
-            ("banExpires", ban_expires),
-        ] {
-            if let Some(date) = value {
-                let storage = self.config().user.fields().get(name).map_or(name, |field| {
-                    resolve_field_name(field.field_name.as_deref(), name)
-                });
-                if fields.contains_key(storage) {
-                    continue;
-                }
-                let value = if db.get_database_backend() == sea_orm::DbBackend::Sqlite {
-                    super::record_bindings::sqlite_date(date)?
-                } else {
-                    better_auth_core::FieldValue::Date(date)
-                };
-                let _ = fields.insert(storage.into(), value);
-            }
-        }
-        if database_generated_id {
-            model.not_set(S::User::id_column());
-        }
+        let active =
+            super::record_write::RecordWrite::<<S::User as SeaOrmUserModel>::Entity>::from_fields(
+                fields,
+                S::User::field_column,
+            )?;
         let user = database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
             self.config(),
             "create",
-            async {
-                super::user_values::insert::<S::User>(
-                    db,
-                    model,
-                    name,
-                    image,
-                    fields,
-                    super::create_readback::CreateReadback {
-                        schema: &self.config().user.user_field_schema(),
-                        policy: self.config().advanced.database.generate_id(),
-                        scope: self.readback_scope(tx),
-                        column: S::User::field_column,
-                    },
-                )
-                .await
-            },
+            active.insert_raw(
+                db,
+                super::create_readback::CreateReadback {
+                    schema: &schema,
+                    policy: self.config().advanced.database.generate_id(),
+                    scope: self.readback_scope(tx),
+                    column: S::User::field_column,
+                },
+            ),
         )
         .await?;
         let user = match user {
-            Some(user) => Some(self.output_user(&user, db).await?),
+            Some(user) => Some(self.output_user(&SqlRow::from(user), db).await?),
             None => None,
         };
         self.after_creation(
@@ -475,33 +309,27 @@ where
         db: &impl ConnectionTrait,
         tx: Option<super::HookTransaction<'_, S>>,
         id: &FieldValue,
-        mut update: UpdateUser,
+        update: UpdateUser,
     ) -> AuthResult<std::ops::ControlFlow<(), Option<better_auth_core::UserView>>> {
-        update.prepare_user_fields(&self.config().user)?;
-        update.email = normalize_optional_user_email(update.email);
-        if update.phone_number == Some(None) {
-            update.phone_number_verified = Some(false);
-        }
+        let mut prepared = better_auth_core::store::database_hooks::PreparedRecordWrite::new(
+            update.into_user_fields()?,
+        );
         let hook_context = self.hook_context(tx);
-        let original = update.clone();
         for hook in self.hooks() {
-            match better_auth_core::observability::database::with_database_hook(
+            let outcome = better_auth_core::observability::database::with_database_hook(
                 hook_context.config,
                 hook.hook_metadata(),
                 better_auth_core::observability::database::DatabaseHook::BeforeUpdateUser,
-                hook.before_update_user(id, &original, &hook_context),
+                hook.before_update_user(id, prepared.original_fields_mut(), &hook_context),
             )
-            .await?
-            {
-                DatabaseHookUpdate::Continue => {}
-                DatabaseHookUpdate::Cancel => return Ok(std::ops::ControlFlow::Break(())),
-                DatabaseHookUpdate::Patch(mut patch) => {
-                    patch.prepare_user_fields(&self.config().user)?;
-                    update.merge(patch);
-                }
+            .await?;
+            if !prepared.apply(outcome) {
+                return Ok(std::ops::ControlFlow::Break(()));
             }
         }
-        let user = self.update_user_record(db, id, update).await?;
+        let user = self
+            .update_user_record(db, id, prepared.into_fields())
+            .await?;
         let Some(user) = user else {
             let store = self.clone();
             let request = hook_context.request.clone();
@@ -539,92 +367,64 @@ where
         &self,
         db: &impl ConnectionTrait,
         user_id: &FieldValue,
-        mut update: UpdateUser,
-    ) -> AuthResult<Option<S::User>> {
+        input: FieldMap,
+    ) -> AuthResult<Option<SqlRow>> {
         self.model_fields.canonicalize_id(EntityRole::User)?;
-        let user_id = self
-            .config()
-            .advanced
-            .database
-            .generate_id()
-            .adapter_id_query(user_id.clone())?;
+        let policy = self.config().advanced.database.generate_id();
+        let user_id = policy.adapter_id_query(user_id.clone())?;
+        let backend = db.get_database_backend();
         self.model_fields.begin_id_input(
             EntityRole::User,
             AdapterIdInput {
                 force_allow_id: false,
-                supports_native_uuid: db.get_database_backend() == sea_orm::DbBackend::Postgres,
+                supports_native_uuid: backend == sea_orm::DbBackend::Postgres,
             },
         )?;
-        let mut fields = self
-            .config()
-            .user
-            .user_adapter_fields()
-            .storage_fields_with_binding(
-                update.take_user_field_input(&self.config().user)?,
+        let supplied = input.get("id").cloned();
+        let fields = self
+            .user_field_schema()
+            .storage_fields_with_bound_id(
+                input,
                 false,
+                || match self.model_fields.id_input_policy(EntityRole::User)? {
+                    Some(input_policy) => supplied
+                        .clone()
+                        .map(|value| policy.adapter_id_input(value, input_policy))
+                        .transpose()
+                        .map(Option::flatten),
+                    None => Ok(supplied.clone()),
+                },
                 |name, field, value| {
                     crate::reference_id::input_binding(
                         name,
                         field,
                         value,
-                        self.config().advanced.database.generate_id(),
+                        policy,
                         S::User::field_column,
                         S::User::native_json_field,
-                        db.get_database_backend(),
+                        backend,
                     )
                 },
             )
             .await?;
-        let mut name = std::mem::take(&mut update.name);
-        let mut image = std::mem::take(&mut update.image);
-        for (key, target) in [("name", &mut name), ("image", &mut image)] {
-            if let Some(field) = self.config().user.fields().get(key) {
-                *target = better_auth_core::SchemaValue::from_field(
-                    fields
-                        .remove(resolve_field_name(field.field_name.as_deref(), key))
-                        .unwrap_or_default(),
-                );
-            }
-        }
-        if let Some(value) = update.ban_expires.take() {
-            let storage = self
-                .config()
-                .user
-                .fields()
-                .get("banExpires")
-                .map_or("banExpires", |field| {
-                    resolve_field_name(field.field_name.as_deref(), "banExpires")
-                });
-            if !fields.contains_key(storage) {
-                let value = match value {
-                    Some(date) if db.get_database_backend() == sea_orm::DbBackend::Sqlite => {
-                        super::record_bindings::sqlite_date(date)?
-                    }
-                    Some(date) => better_auth_core::FieldValue::Date(date),
-                    None => better_auth_core::FieldValue::Null,
-                };
-                let _ = fields.insert(storage.into(), value);
-            }
-        }
+        let active =
+            super::record_write::RecordWrite::<<S::User as SeaOrmUserModel>::Entity>::from_fields(
+                fields,
+                S::User::field_column,
+            )?;
+        let filter =
+            super::value_filter::equals_id(S::User::id_column(), &user_id, policy, backend)?;
         database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
             self.config(),
             "update",
-            async {
-                let mut active = <S::User as SeaOrmUserModel>::ActiveModel::default();
-                S::User::apply_update(&mut active, update, Utc::now())?;
-                super::user_values::update::<S::User>(
-                    db,
-                    active,
-                    name,
-                    image,
-                    fields,
-                    user_id,
-                    self.config().advanced.database.generate_id(),
-                )
-                .await
-            },
+            super::updates::execute_update_returning_raw(
+                db,
+                active.update(backend)?.filter(filter.clone()),
+                filter,
+            ),
         )
         .await
+        .map(|row| row.map(SqlRow::from))
     }
 
     pub(crate) async fn create_user_in_tx(
@@ -731,19 +531,20 @@ where
             self.config(),
             "findMany",
             async {
-                <S::User as SeaOrmUserModel>::Entity::find()
-                    .filter(<S::User as SeaOrmUserModel>::id_column().is_in(user_ids))
-                    .limit(
-                        super::pagination::sql_pagination(
-                            self.connection().get_database_backend(),
-                            Some(limit),
-                            None,
-                        )?
-                        .0,
-                    )
-                    .all(self.connection())
-                    .await
-                    .map_err(map_db_err)
+                super::plugin_rows::all(
+                    self.connection(),
+                    <S::User as SeaOrmUserModel>::Entity::find()
+                        .filter(<S::User as SeaOrmUserModel>::id_column().is_in(user_ids))
+                        .limit(
+                            super::pagination::sql_pagination(
+                                self.connection().get_database_backend(),
+                                Some(limit),
+                                None,
+                            )?
+                            .0,
+                        ),
+                )
+                .await
             },
         )
         .await
@@ -769,9 +570,12 @@ where
                 <S::User as SeaOrmUserModel>::Entity,
                 <S::Account as SeaOrmAccountModel>::Entity,
             >(
-                <S::User as SeaOrmUserModel>::Entity::find()
-                    .filter(S::User::email_column().eq(normalize_user_email(email)))
-                    .limit(1),
+                self.user_field_query(
+                    self.connection(),
+                    "email",
+                    &normalize_user_email(email).into(),
+                )?
+                .limit(1),
                 (
                     S::User::field_column(&relation.from)?,
                     S::Account::field_column(&relation.to)?,
@@ -781,25 +585,21 @@ where
             let rows = database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
                 self.config(),
                 "findOne",
-                super::joins::joined_rows::<
-                    <S::User as SeaOrmUserModel>::Entity,
-                    <S::Account as SeaOrmAccountModel>::Entity,
-                >(self.connection(), &query),
+                super::joins::joined_raw_rows(self.connection(), &query),
             )
             .await?;
             let mut rows = rows.into_iter();
             let Some((record, first_account)) = rows.next() else {
                 return Ok(None);
             };
-            let accounts =
-                super::joins::selected_children::<<S::Account as SeaOrmAccountModel>::Entity>(
-                    std::iter::once(first_account)
-                        .chain(rows.map(|(_, account)| account))
-                        .flatten(),
-                    S::Account::id_column(),
-                    relation.many,
-                    self.config().advanced.database.find_many_limit(),
-                );
+            let accounts = super::joins::selected_raw_children(
+                std::iter::once(first_account)
+                    .chain(rows.map(|(_, account)| account))
+                    .flatten(),
+                S::Account::id_column(),
+                relation.many,
+                self.config().advanced.database.find_many_limit(),
+            )?;
             (record, Some(accounts))
         } else {
             let Some(record) = self.user_record_by_email(email).await? else {
@@ -807,8 +607,7 @@ where
             };
             (record, None)
         };
-        let mut user = self.output_user(&record, self.connection()).await?;
-        self.set_join_user_visibility(&mut user);
+        let user = self.output_user(&record, self.connection()).await?;
         let records = if let Some(records) = native_accounts {
             records
         } else {
@@ -858,26 +657,19 @@ where
         &self,
         phone_number: &str,
     ) -> AuthResult<Option<better_auth_core::wire::UserView>> {
-        let column = S::User::phone_number_column()
+        let _ = S::User::phone_number_column()
             .ok_or_else(|| AuthError::config("The user entity requires phone_number"))?;
-        self.model_fields.begin_id_query(EntityRole::User)?;
-        match database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
-            self.config(),
-            "findOne",
-            async {
-                <S::User as SeaOrmUserModel>::Entity::find()
-                    .filter(column.eq(phone_number))
-                    .one(self.connection())
-                    .await
-                    .map_err(map_db_err)
-            },
-        )
-        .await?
-        .as_ref()
-        {
-            Some(row) => self.output_user(row, self.connection()).await.map(Some),
-            None => Ok(None),
-        }
+        self.find_user_by_field_value(self.connection(), "phoneNumber", &phone_number.into())
+            .await
+    }
+
+    async fn get_user_by_field_value(
+        &self,
+        field: &str,
+        value: &FieldValue,
+    ) -> AuthResult<Option<better_auth_core::UserView>> {
+        self.find_user_by_field_value(self.connection(), field, value)
+            .await
     }
 
     async fn update_user(
@@ -945,27 +737,16 @@ where
             self.config(),
             "findMany",
             async {
-                <S::User as SeaOrmUserModel>::Entity::find()
-                    .all(self.connection())
-                    .await
-                    .map_err(map_db_err)
+                super::plugin_rows::all(
+                    self.connection(),
+                    <S::User as SeaOrmUserModel>::Entity::find(),
+                )
+                .await
             },
         )
         .await?;
 
-        let query_record = |model: S::User| {
-            let view = better_auth_core::UserView::from_model(&model)?;
-            let mut fields = better_auth_core::FieldMap::new();
-            for (name, field) in self.config().user.fields() {
-                let physical = resolve_field_name(field.field_name.as_deref(), name);
-                let column = S::User::field_column(physical)?;
-                let value = crate::__private_field_value(column_value::<
-                    <S::User as SeaOrmUserModel>::Entity,
-                >(&model, column))?;
-                let _ = fields.insert(physical.to_owned(), value);
-            }
-            AuthResult::Ok((view, fields, model))
-        };
+        let query_record = |row| self.query_user_record(row);
         let records = models
             .into_iter()
             .map(&query_record)
@@ -981,10 +762,11 @@ where
             self.config(),
             "count",
             async {
-                let rows = <S::User as SeaOrmUserModel>::Entity::find()
-                    .all(self.connection())
-                    .await
-                    .map_err(map_db_err)?;
+                let rows = super::plugin_rows::all(
+                    self.connection(),
+                    <S::User as SeaOrmUserModel>::Entity::find(),
+                )
+                .await?;
                 let records = rows
                     .into_iter()
                     .map(query_record)

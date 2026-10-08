@@ -294,7 +294,8 @@ async fn test_stop_impersonating_restores_admin_session() {
 
     let restored_token = body["session"]["token"].as_str().unwrap();
     assert_eq!(
-        restored_token, admin_session.token,
+        restored_token,
+        admin_session.token.typed().unwrap(),
         "stop-impersonating should restore the original admin session token"
     );
     let restored_session = ctx

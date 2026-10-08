@@ -20,10 +20,6 @@ impl<E: EntityTrait> Default for RecordWrite<E> {
 }
 
 impl<E: EntityTrait> RecordWrite<E> {
-    pub(super) fn from_bindings(fields: Vec<(E::Column, Binding)>) -> Self {
-        Self { fields }
-    }
-
     pub(super) fn is_empty(&self) -> bool {
         self.fields.is_empty()
     }

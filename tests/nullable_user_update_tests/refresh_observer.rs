@@ -1,7 +1,7 @@
 use super::*;
 use async_trait::async_trait;
 use better_auth_core::{
-    FieldValue, UpdateUser,
+    FieldValue,
     observability::{LogArgument, LogLevel, LogSink},
     store::{
         SecondaryStorage,
@@ -74,16 +74,17 @@ pub(super) struct Hooks {
 impl<S: AuthSchema> DatabaseHooks<S> for Hooks {
     async fn before_update_user(
         &self,
-        data: &UpdateUser,
+        data: &mut better_auth_core::FieldMap,
         context: &DatabaseHookContext<'_, S>,
-    ) -> AuthResult<DatabaseHookUpdate<UpdateUser>> {
+    ) -> AuthResult<DatabaseHookUpdate<better_auth_core::FieldMap>> {
         assert!(context.request.is_none());
         assert_eq!(
             serde_json::to_value(data)?,
             serde_json::to_value(super::super::update("Updated"))?
         );
-        self.recorder
-            .push(json!({"kind": "hook.before", "data": {"name": data.name}, "context": null}));
+        self.recorder.push(
+            json!({"kind": "hook.before", "data": {"name": data.get("name")}, "context": null}),
+        );
         Ok(if self.scenario == "cancel-committed" {
             DatabaseHookUpdate::Cancel
         } else {

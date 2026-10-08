@@ -4,7 +4,7 @@ use crate::store::database_hooks::SessionUpdate;
 use crate::store::{SessionStore, SessionUpdateWriter, TeamMemberLimits};
 use crate::types::{CreateSession, Invitation, Member};
 use crate::wire::{SessionView, UserView};
-use crate::{AuthError, AuthResult, AuthSchema, FieldMap, FieldValue, FromFieldMap};
+use crate::{AuthError, AuthResult, AuthSchema, FieldMap, FieldValue};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 
@@ -37,12 +37,6 @@ fn encode_references(references: &[SessionReference]) -> AuthResult<String> {
 }
 
 impl<S: AuthSchema> SecondaryStore<S> {
-    pub(super) fn hydrate_session(&self, fields: FieldMap) -> AuthResult<SessionView> {
-        let mut session = SessionView::from_field_values(fields)?;
-        session.active = true;
-        Ok(session)
-    }
-
     pub(super) async fn session_fields(
         &self,
         session: &crate::wire::SessionView,

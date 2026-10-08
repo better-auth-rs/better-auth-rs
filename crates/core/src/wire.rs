@@ -788,6 +788,7 @@ mod tests {
     #[test]
     fn account_view_omits_password_on_serialize() {
         let account = AccountView {
+            field_order: Default::default(),
             additional_fields: Default::default(),
             id: "acc-1".to_string().into(),
             account_id: "account-id".to_string().into(),

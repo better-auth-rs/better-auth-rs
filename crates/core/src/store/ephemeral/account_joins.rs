@@ -6,21 +6,10 @@ use crate::store::{AccountOwner, JoinValue, ResolvedJoin, UserAccounts};
 type UserRef = RowRef<UserView>;
 type AccountRef = RowRef<FieldMap>;
 
-pub(super) fn user_value(user: &UserView, logical: &str, physical: &str) -> Value {
-    if physical == "id" {
-        return user.id.field_value();
-    }
-    if UserView::NATIVE_FIELDS.contains(&logical) {
-        return user.native_field_value(logical).unwrap_or_default();
-    }
-    user.additional_fields
+pub(super) fn user_value(user: &UserView, _logical: &str, physical: &str) -> Value {
+    FieldMap::from(user.clone())
         .get(physical)
         .cloned()
-        .or_else(|| {
-            (physical == logical)
-                .then(|| user.native_field_value(logical))
-                .flatten()
-        })
         .unwrap_or_default()
 }
 

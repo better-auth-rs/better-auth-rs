@@ -2,7 +2,7 @@ use super::hooks::CommittedWrite;
 use super::rows::RowRef;
 use super::*;
 use crate::id::AdapterIdInput;
-use crate::store::database_hooks::{DatabaseHookControl, DatabaseHookUpdate};
+use crate::store::database_hooks::{DatabaseHookControl, PreparedRecordWrite};
 use crate::store::schema::EntityRole;
 use crate::store::schema::resolve_field_name;
 
@@ -11,10 +11,42 @@ impl EphemeralStore {
         &self,
         email: &str,
     ) -> AuthResult<Option<RowRef<UserView>>> {
+        self.user_ref_by_field_value("email", &Value::from(email.to_lowercase()))
+            .await
+    }
+
+    async fn user_ref_by_field_value(
+        &self,
+        name: &str,
+        value: &Value,
+    ) -> AuthResult<Option<RowRef<UserView>>> {
+        self.model_fields.begin_id_query(EntityRole::User)?;
+        let schema = self.user_schema();
+        let (logical, field) = schema
+            .fields()
+            .get_key_value(name)
+            .or_else(|| {
+                schema
+                    .fields()
+                    .iter()
+                    .find(|(_, field)| field.field_name.as_deref() == Some(name))
+            })
+            .ok_or_else(|| AuthError::config(format!("User field {name} does not exist")))?;
+        let value = if logical == "id" {
+            self.memory_primary_id_query(value)?
+        } else {
+            crate::user_query::bind_filter(
+                field,
+                &self.memory_field_query(&schema, logical, value.clone())?,
+            )?
+        };
+        let physical = resolve_field_name(field.field_name.as_deref(), logical);
         self.user_ref(|user| {
-            user.email
-                .field_value()
-                .strict_equals(&Value::from(email.to_lowercase()))
+            let stored = FieldMap::from(user.clone())
+                .get(physical)
+                .cloned()
+                .unwrap_or_default();
+            stored.strict_equals(&value) || (value.is_null() && stored.is_undefined())
         })
         .await
     }
@@ -53,7 +85,7 @@ impl EphemeralStore {
     async fn finish_user_update(
         &self,
         id: &Value,
-        update: UpdateUser,
+        update: FieldMap,
     ) -> AuthResult<Option<UserView>> {
         let user = self.update_user_record_optional(id, update).await?;
         self.after(CommittedWrite::UserUpdated(user.clone()))
@@ -66,38 +98,35 @@ impl EphemeralStore {
         Ok(self.output_users(vec![user]).await?.remove(0))
     }
 
-    pub(super) async fn output_users(&self, mut users: Vec<UserView>) -> AuthResult<Vec<UserView>> {
+    pub(super) fn user_schema(&self) -> crate::user_fields::UserConfig {
+        self.config
+            .user
+            .user_field_schema_with_plugins(self.model_fields.user_plugin_fields())
+            .adapter_fields(&[])
+    }
+
+    pub(super) fn user_storage_fields(&self, user: &UserView) -> FieldMap {
+        FieldMap::from(user.clone())
+    }
+
+    pub(super) async fn output_users(&self, users: Vec<UserView>) -> AuthResult<Vec<UserView>> {
         if !users.is_empty() {
             self.model_fields.begin_id_output(EntityRole::User)?;
         }
         let storage = users
-            .iter_mut()
-            .map(|user| {
-                let mut input = std::mem::take(&mut user.additional_fields);
-                for (name, config) in self.config.user.fields() {
-                    if UserView::NATIVE_FIELDS.contains(&name.as_str())
-                        && let Some(value) = user.native_field_value(name)
-                    {
-                        let _ = input.insert(
-                            resolve_field_name(config.field_name.as_deref(), name).into(),
-                            value,
-                        );
-                    }
-                }
-                let _ = input.insert("id".into(), user.id.field_value());
-                Ok(input)
-            })
-            .collect::<AuthResult<Vec<_>>>()?;
-        let fields = self
-            .config
-            .user
-            .user_adapter_fields()
-            .output_memory_fields_many(&storage)
-            .await?;
-        for (user, fields) in users.iter_mut().zip(fields) {
-            self.assign_user_output(user, fields)?;
+            .iter()
+            .map(|user| self.user_storage_fields(user))
+            .collect::<Vec<_>>();
+        let mut schema = self.user_schema();
+        if let Some(id) = schema.fields_mut().get_mut("id") {
+            id.field_name = Some("id".into());
         }
-        Ok(users)
+        schema
+            .output_memory_fields_many(&storage)
+            .await?
+            .into_iter()
+            .map(UserView::try_from)
+            .collect()
     }
 
     pub(super) fn project_id(
@@ -113,108 +142,66 @@ impl EphemeralStore {
         }
     }
 
-    pub(super) fn assign_user_output(
-        &self,
-        user: &mut UserView,
-        mut fields: FieldMap,
-    ) -> AuthResult<()> {
-        user.id = Self::project_id(&user.id)?;
-        let _ = fields.remove("id");
-        for name in self.config.user.fields().keys() {
-            if name != "id" && UserView::NATIVE_FIELDS.contains(&name.as_str()) {
-                user.set_field(name, fields.remove(name).unwrap_or_default());
-            }
-        }
-        user.additional_fields.clear();
-        for (name, value) in fields {
-            user.set_field(&name, value);
-        }
-        Ok(())
-    }
-
-    fn assign_user_storage_fields(&self, user: &mut UserView) {
-        for (name, field) in self.config.user.fields() {
-            if name != "id"
-                && UserView::NATIVE_FIELDS.contains(&name.as_str())
-                && let Some(value) = user
-                    .additional_fields
-                    .remove(resolve_field_name(field.field_name.as_deref(), name))
-            {
-                user.set_field(name, value);
-            }
+    fn assign_user_storage_fields(&self, user: &mut UserView, storage: &FieldMap) {
+        for (name, value) in storage {
+            user.set_field(name, value.clone());
         }
     }
 
-    pub(super) async fn prepare_user_update(&self, update: UpdateUser) -> AuthResult<UpdateUser> {
+    pub(super) async fn prepare_user_update(&self, update: UpdateUser) -> AuthResult<FieldMap> {
         let update = self
             .prepare_user_update_optional(update)
             .await?
             .ok_or_else(|| AuthError::forbidden("user update cancelled by database hook"))?;
         self.prepare_user_update_fields(update).await
     }
+
     async fn prepare_user_update_optional(
         &self,
-        mut update: UpdateUser,
-    ) -> AuthResult<Option<UpdateUser>> {
-        update.prepare_user_fields(&self.config.user)?;
-        let original = update.clone();
+        update: UpdateUser,
+    ) -> AuthResult<Option<FieldMap>> {
+        let mut prepared = PreparedRecordWrite::new(update.into_user_fields()?);
         let transaction = EphemeralTransaction {
             store: self.clone(),
         };
         let context = self.hook_context(&transaction);
         for hook in &self.hooks {
-            match crate::observability::database::with_database_hook(
+            let outcome = crate::observability::database::with_database_hook(
                 context.config,
                 hook.hook_metadata(),
                 crate::observability::database::DatabaseHook::BeforeUpdateUser,
-                hook.before_update_user(&original, &context),
+                hook.before_update_user(prepared.original_fields_mut(), &context),
             )
-            .await?
-            {
-                DatabaseHookUpdate::Continue => {}
-                DatabaseHookUpdate::Cancel => return Ok(None),
-                DatabaseHookUpdate::Patch(mut patch) => {
-                    patch.prepare_user_fields(&self.config.user)?;
-                    update.merge(patch);
-                }
+            .await?;
+            if !prepared.apply(outcome) {
+                return Ok(None);
             }
         }
-        Ok(Some(update))
+        Ok(Some(prepared.into_fields()))
     }
 
-    async fn prepare_user_update_fields(&self, mut update: UpdateUser) -> AuthResult<UpdateUser> {
-        let fields = update.take_user_field_input(&self.config.user)?;
+    async fn prepare_user_update_fields(&self, fields: FieldMap) -> AuthResult<FieldMap> {
         self.model_fields
             .begin_id_input(EntityRole::User, AdapterIdInput::default())?;
-        update.additional_fields = self
-            .config
-            .user
-            .user_adapter_fields()
-            .storage_fields_with_binding(fields, false, |_, field, value| {
-                self.memory_plugin_field_input(field, value)
-            })
-            .await?;
-        for (name, target) in [("name", &mut update.name), ("image", &mut update.image)] {
-            if let Some(field) = self.config.user.fields().get(name) {
-                *target = crate::SchemaValue::from_field(
-                    update
-                        .additional_fields
-                        .remove(resolve_field_name(field.field_name.as_deref(), name))
-                        .unwrap_or_default(),
-                );
-            }
-        }
-        update.username = self
-            .config
-            .user
-            .stored_username_field(&update.additional_fields, "username")?
-            .or(update.username);
-        update.display_username = self
-            .config
-            .user
-            .stored_username_field(&update.additional_fields, "displayUsername")?
-            .or(update.display_username);
-        Ok(update)
+        self.user_schema()
+            .storage_fields_with_bound_id(
+                fields.clone(),
+                false,
+                || match (
+                    self.model_fields.id_input_policy(EntityRole::User)?,
+                    fields.get("id"),
+                ) {
+                    (Some(policy), Some(value)) => self
+                        .config
+                        .advanced
+                        .database
+                        .generate_id()
+                        .adapter_id_input(value.clone(), policy),
+                    (_, value) => Ok(value.cloned()),
+                },
+                |_, field, value| self.memory_plugin_field_input(field, value),
+            )
+            .await
     }
 
     async fn update_user_outcome(
@@ -236,7 +223,7 @@ impl EphemeralStore {
     pub(super) async fn update_user_record(
         &self,
         id: &str,
-        update: UpdateUser,
+        update: FieldMap,
     ) -> AuthResult<UserView> {
         self.model_fields.canonicalize_id(EntityRole::User)?;
         let id = self.memory_primary_id_query(&Value::from(id))?;
@@ -248,9 +235,8 @@ impl EphemeralStore {
     async fn update_user_record_optional(
         &self,
         id: &Value,
-        update: UpdateUser,
+        update: FieldMap,
     ) -> AuthResult<Option<UserView>> {
-        let updated_at = Utc::now();
         let user = self
             .raw("user", "update", |state| {
                 let selected = state.users.select_refs(|user| {
@@ -258,86 +244,15 @@ impl EphemeralStore {
                     value.strict_equals(id) || (id.is_null() && value.is_undefined())
                 })?;
                 for row in &selected {
-                    let mut update = update.clone();
                     row.write(|user| {
-                        if update.phone_number == Some(None) {
-                            update.phone_number_verified = Some(false);
-                        }
-                        if let Some(email) = update.email {
-                            if let Some(fields) = &mut user.visible_fields {
-                                let _ = fields.insert("email".into());
-                            }
-                            user.email = Some(email.to_lowercase()).into();
-                        }
-                        if !update.name.is_undefined() {
-                            if let Some(fields) = &mut user.visible_fields {
-                                let _ = fields.insert("name".into());
-                            }
-                            user.name = update.name;
-                        }
-                        if !update.image.is_undefined() {
-                            if let Some(fields) = &mut user.visible_fields {
-                                let _ = fields.insert("image".into());
-                            }
-                            user.image = update.image;
-                        }
-                        if let Some(email_verified) = update.email_verified {
-                            user.email_verified = email_verified.into();
-                        }
-                        if let Some(value) = update.is_anonymous {
-                            user.is_anonymous = Some(value).into();
-                        }
-                        if let Some(value) = update.phone_number {
-                            user.phone_number = value.into();
-                        }
-                        if let Some(value) = update.phone_number_verified {
-                            user.phone_number_verified = Some(value).into();
-                        }
-                        if let Some(username) = update.username {
-                            user.username = username.into();
-                        }
-                        if let Some(display_username) = update.display_username {
-                            user.display_username = display_username.into();
-                        }
-                        if let Some(role) = update.role {
-                            user.role = Some(role).into();
-                        }
-                        if let Some(banned) = update.banned {
-                            user.banned = banned.into();
-                        }
-                        if let Some(ban_reason) = update.ban_reason {
-                            if let Some(fields) = &mut user.visible_fields {
-                                let _ = fields.insert("banReason".into());
-                            }
-                            user.ban_reason = ban_reason.into();
-                        }
-                        if let Some(ban_expires) = update.ban_expires {
-                            if let Some(fields) = &mut user.visible_fields {
-                                let _ = fields.insert("banExpires".into());
-                            }
-                            user.ban_expires = ban_expires.into();
-                        }
-                        if let Some(two_factor_enabled) = update.two_factor_enabled {
-                            user.two_factor_enabled = Some(two_factor_enabled).into();
-                        }
-                        if let Some(metadata) = update.metadata {
-                            user.metadata = metadata;
-                        }
-                        user.updated_at = updated_at.into();
-                        user.additional_fields.extend(update.additional_fields);
-                        self.assign_user_storage_fields(user);
+                        self.assign_user_storage_fields(user, &update);
                         Ok(())
                     })?;
                 }
-                selected
-                    .first()
-                    .map(|row| row.read(|user| Ok(user.clone())))
-                    .transpose()
+                Ok(selected.into_iter().next())
             })
             .await?;
-        futures_util::future::OptionFuture::from(user.map(|user| self.output_user(user)))
-            .await
-            .transpose()
+        self.output_optional_user_ref(user).await
     }
 }
 
@@ -371,165 +286,56 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             .await?
             .ok_or_else(|| AuthError::forbidden("user creation returned no record"))
     }
-    async fn create_user_optional(
-        &self,
-        mut create_user: CreateUser,
-    ) -> AuthResult<Option<UserView>> {
-        create_user.prepare_user_fields(&self.config.user)?;
-        create_user.email = create_user
-            .email
-            .map(|value| crate::utils::email::normalize_user_email(&value));
+    async fn create_user_optional(&self, create_user: CreateUser) -> AuthResult<Option<UserView>> {
+        let mut prepared = PreparedRecordWrite::new(create_user.into_user_fields()?);
         let transaction = EphemeralTransaction {
             store: self.clone(),
         };
         let context = self.hook_context(&transaction);
         for hook in &self.hooks {
-            if crate::observability::database::with_database_hook(
+            let outcome = crate::observability::database::with_database_hook(
                 context.config,
                 hook.hook_metadata(),
                 crate::observability::database::DatabaseHook::BeforeCreateUser,
-                hook.before_create_user(&mut create_user, &context),
+                hook.before_create_user(prepared.fields_mut(), &context),
             )
-            .await?
-                == DatabaseHookControl::Cancel
-            {
+            .await?;
+            if !prepared.apply(outcome) {
                 return Ok(None);
             }
-            create_user.prepare_user_fields(&self.config.user)?;
         }
-        let fields = create_user.take_user_field_input(&self.config.user)?;
+        let input = prepared.into_fields();
         self.model_fields.begin_id_input(
             EntityRole::User,
             AdapterIdInput {
-                force_allow_id: create_user.id.is_some(),
+                force_allow_id: true,
                 supports_native_uuid: false,
             },
         )?;
-        let mut fields = self
-            .config
-            .user
-            .user_adapter_fields()
+        let fields = self
+            .user_schema()
             .storage_fields_with_bound_id(
-                fields,
+                input.clone(),
                 true,
                 || {
+                    let supplied = input.get("id").cloned();
                     let Some(policy) = self.model_fields.id_input_policy(EntityRole::User)? else {
-                        return Ok(create_user.id.take().map(Value::from));
+                        return Ok(supplied);
                     };
-                    let row_count = self.lock()?.users.len();
-                    let id = self.generated_id_with_policy(
-                        "user",
-                        create_user.id.take(),
-                        row_count,
-                        policy,
-                    )?;
-                    Ok(self
-                        .next_serial_id(row_count)
-                        .or_else(|| id.map(Value::from)))
-                },
-                |name, field, value| {
-                    let value = self.memory_plugin_field_input(field, value)?;
-                    if name == "id"
-                        && let Some(id) = self.next_serial_id(self.lock()?.users.len())
-                    {
-                        return Ok(id);
+                    if let Some(serial) = self.next_serial_id(self.lock()?.users.len()) {
+                        return Ok(Some(serial));
                     }
-                    Ok(value)
+                    self.config
+                        .advanced
+                        .database
+                        .generate_id()
+                        .adapter_create_id_input("user", supplied, policy)
                 },
+                |_, field, value| self.memory_plugin_field_input(field, value),
             )
             .await?;
-        let id = crate::SchemaValue::from_field(fields.get("id").cloned().unwrap_or_default());
-        for (name, target) in [
-            ("name", &mut create_user.name),
-            ("image", &mut create_user.image),
-        ] {
-            if let Some(field) = self.config.user.fields().get(name) {
-                *target = crate::SchemaValue::from_field(
-                    fields
-                        .remove(resolve_field_name(field.field_name.as_deref(), name))
-                        .unwrap_or_default(),
-                );
-            }
-        }
-        let username = self
-            .config
-            .user
-            .stored_username_field(&fields, "username")?
-            .or(create_user.username.take())
-            .flatten();
-        let display_username = self
-            .config
-            .user
-            .stored_username_field(&fields, "displayUsername")?
-            .or(create_user.display_username.take())
-            .flatten();
-        let now = crate::FieldDate::from(Utc::now());
-        let _ = fields.remove("id");
-        let mut user = UserView {
-            field_order: self
-                .config
-                .user
-                .user_field_schema()
-                .adapter_fields(&[])
-                .fields()
-                .keys()
-                .cloned()
-                .collect(),
-            additional_fields: fields,
-            visible_fields: Some(
-                [
-                    ("name", !create_user.name.is_undefined()),
-                    ("email", create_user.email.is_some()),
-                    ("image", !create_user.image.is_undefined()),
-                    ("banReason", create_user.ban_reason.is_some()),
-                    ("banExpires", create_user.ban_expires.is_some()),
-                ]
-                .into_iter()
-                .filter(|(_, present)| *present)
-                .map(|(name, _)| name.to_owned())
-                .chain(
-                    [
-                        "id",
-                        "emailVerified",
-                        "createdAt",
-                        "updatedAt",
-                        "isAnonymous",
-                        "phoneNumber",
-                        "phoneNumberVerified",
-                        "username",
-                        "displayUsername",
-                        "twoFactorEnabled",
-                        "role",
-                        "banned",
-                    ]
-                    .into_iter()
-                    .map(str::to_owned),
-                )
-                .collect(),
-            ),
-            id: id.clone(),
-            name: create_user.name,
-            email: create_user.email.into(),
-            email_verified: create_user.email_verified.unwrap_or(false).into(),
-            image: create_user.image,
-            created_at: create_user.created_at.unwrap_or_else(|| now.clone()).into(),
-            updated_at: create_user.updated_at.unwrap_or(now).into(),
-            is_anonymous: Some(create_user.is_anonymous.unwrap_or(false)).into(),
-            phone_number: create_user.phone_number.into(),
-            phone_number_verified: create_user.phone_number_verified.into(),
-            username: username.into(),
-            display_username: display_username.into(),
-            two_factor_enabled: Some(false).into(),
-            role: create_user.role.into(),
-            banned: create_user.banned.unwrap_or(false).into(),
-            ban_reason: create_user.ban_reason.into(),
-            ban_expires: create_user.ban_expires.into(),
-            metadata: create_user
-                .metadata
-                .unwrap_or_else(|| FieldMap::new().into()),
-        };
-        self.assign_user_storage_fields(&mut user);
-        crate::observability::database::with_database_operation(
+        let mut user = UserView::try_from(fields)?;
+        let user = crate::observability::database::with_database_operation(
             &self.config,
             "user",
             "create",
@@ -538,12 +344,11 @@ impl UserStore<StatelessSchema> for EphemeralStore {
                 if let Some(id) = self.next_serial_id(state.users.len()) {
                     user.id = crate::SchemaValue::from_field(id);
                 }
-                state.users.push(user.clone());
-                Ok(())
+                Ok(state.users.push_ref(user))
             },
         )
         .await?;
-        let user = self.output_user(user).await?;
+        let user = self.output_user_refs(vec![user]).await?.remove(0);
         self.after(CommittedWrite::UserCreated(Some(user.clone())))
             .await?;
         Ok(Some(user))
@@ -602,24 +407,21 @@ impl UserStore<StatelessSchema> for EphemeralStore {
     }
 
     async fn get_user_by_username(&self, username: &str) -> AuthResult<Option<UserView>> {
-        let user = self
-            .user_ref(|user| {
-                user.username
-                    .field_value()
-                    .strict_equals(&Value::from(username))
-            })
-            .await?;
-        self.output_optional_user_ref(user).await
+        self.get_user_by_field_value("username", &Value::from(username))
+            .await
     }
 
     async fn get_user_by_phone_number(&self, phone_number: &str) -> AuthResult<Option<UserView>> {
-        let user = self
-            .user_ref(|user| {
-                user.phone_number
-                    .field_value()
-                    .strict_equals(&Value::from(phone_number))
-            })
-            .await?;
+        self.get_user_by_field_value("phoneNumber", &Value::from(phone_number))
+            .await
+    }
+
+    async fn get_user_by_field_value(
+        &self,
+        name: &str,
+        value: &Value,
+    ) -> AuthResult<Option<UserView>> {
+        let user = self.user_ref_by_field_value(name, value).await?;
         self.output_optional_user_ref(user).await
     }
 
@@ -728,23 +530,33 @@ impl UserStore<StatelessSchema> for EphemeralStore {
                     .into_iter()
                     .map(|source| {
                         let snapshot = source.read(|user| Ok(user.clone()))?;
-                        Ok((snapshot, source))
+                        Ok((
+                            snapshot.clone(),
+                            self.user_storage_fields(&snapshot),
+                            source,
+                        ))
                     })
                     .collect::<AuthResult<Vec<_>>>()
             })
             .await?;
-        let (users, _) = query.select_memory(users, |(snapshot, _)| {
-            (snapshot, &snapshot.additional_fields)
-        })?;
+        let (users, _) =
+            query.select_memory(users, |(snapshot, storage, _)| (snapshot, storage))?;
         let users = self
-            .output_user_refs(users.into_iter().map(|(_, source)| source).collect())
+            .output_user_refs(users.into_iter().map(|(_, _, source)| source).collect())
             .await?;
         query.begin_adapter_count(&self.model_fields)?;
         let total = self
             .raw("user", "count", |state| {
-                query.count_memory(state.users.snapshot()?.iter(), |snapshot| {
-                    (snapshot, &snapshot.additional_fields)
-                })
+                let rows = state
+                    .users
+                    .snapshot()?
+                    .into_iter()
+                    .map(|user| {
+                        let storage = self.user_storage_fields(&user);
+                        (user, storage)
+                    })
+                    .collect::<Vec<_>>();
+                query.count_memory(rows.iter(), |(user, storage)| (user, storage))
             })
             .await?;
         Ok((users, total))

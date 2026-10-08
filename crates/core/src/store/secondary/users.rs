@@ -107,7 +107,9 @@ impl<S: AuthSchema> SecondaryStore<S> {
         let count = tokens.len();
         let mut fields = FieldMap::from(user);
         let mut ordered = FieldMap::new();
-        let configured = self.config.user.user_adapter_fields();
+        let configured = self.config.user.user_field_schema_with_plugins(
+            &UserView::active_plugin_fields(&self.metadata).collect::<Vec<_>>(),
+        );
         // Runtime configuration omits unchanged native fields; emit their slots first and append only an implicit ID after other fields.
         for name in crate::user_fields::USER_FIELDS
             .iter()
@@ -285,6 +287,13 @@ impl<S: AuthSchema> UserStore<S> for SecondaryStore<S> {
         username: &str,
     ) -> AuthResult<Option<crate::wire::UserView>> {
         self.inner.get_user_by_username(username).await
+    }
+    async fn get_user_by_field_value(
+        &self,
+        field: &str,
+        value: &crate::FieldValue,
+    ) -> AuthResult<Option<crate::UserView>> {
+        self.inner.get_user_by_field_value(field, value).await
     }
     async fn get_user_by_phone_number(
         &self,

@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use better_auth_core::user_fields::{UserConfig, UserFieldConfig};
 use better_auth_core::{
     AuthContext, AuthInitContext, AuthPlugin, AuthRequest, AuthResponse, AuthResult, AuthRoute,
-    AuthSchema, AuthUser, BeforeRequestAction, FieldValue, HttpMethod,
+    AuthSchema, AuthUser, BeforeRequestAction, HttpMethod,
 };
 use serde_json::Value;
 
@@ -42,9 +42,12 @@ impl UsernamePlugin {
                 required: Some(false),
                 field_name: config.username_field_name.clone(),
                 transform: Some(FieldTransforms {
-                    input: Some(UserFieldTransform::new(move |value| match value {
-                        FieldValue::String(value) => config.normalize(&value).map(Into::into),
-                        value => Ok(value),
+                    input: Some(UserFieldTransform::new(move |value| {
+                        if value.is_string() {
+                            config.normalize(&value)
+                        } else {
+                            Ok(value)
+                        }
                     })),
                     ..Default::default()
                 }),
@@ -59,11 +62,12 @@ impl UsernamePlugin {
                     required: Some(false),
                     field_name: config.display_username_field_name.clone(),
                     transform: Some(FieldTransforms {
-                        input: Some(UserFieldTransform::new(move |value| match value {
-                            FieldValue::String(value) => {
-                                config.normalize_display(&value).map(Into::into)
+                        input: Some(UserFieldTransform::new(move |value| {
+                            if value.is_string() {
+                                config.normalize_display(&value)
+                            } else {
+                                Ok(value)
                             }
-                            value => Ok(value),
                         })),
                         ..Default::default()
                     }),
