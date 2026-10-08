@@ -59,7 +59,7 @@ pub(super) fn equals(
     value: &FieldValue,
     backend: DbBackend,
 ) -> AuthResult<SimpleExpr> {
-    if value.is_null() || value.is_undefined() {
+    if value.is_null() {
         return Ok(column.is_null());
     }
     let value = if let FieldValue::Array(values) = value {
@@ -74,4 +74,38 @@ pub(super) fn equals(
         super::record_bindings::parameter(value.clone(), backend)?
     };
     Ok(column.into_expr().eq(column.save_as(value)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::store::entities::api_key;
+    use sea_orm::{QueryFilter, QueryTrait};
+
+    #[test]
+    fn undefined_equality_keeps_the_driver_binding_instead_of_testing_for_null() -> AuthResult<()> {
+        use sea_orm::EntityTrait;
+
+        for backend in [DbBackend::Sqlite, DbBackend::Postgres, DbBackend::MySql] {
+            let undefined = api_key::Entity::find()
+                .filter(equals(
+                    api_key::Column::LastRefillAt,
+                    &FieldValue::Undefined,
+                    backend,
+                )?)
+                .build(backend)
+                .to_string();
+            let null = api_key::Entity::find()
+                .filter(equals(
+                    api_key::Column::LastRefillAt,
+                    &FieldValue::Null,
+                    backend,
+                )?)
+                .build(backend)
+                .to_string();
+            assert!(undefined.ends_with(" = NULL"), "{backend:?}: {undefined}");
+            assert!(null.ends_with(" IS NULL"), "{backend:?}: {null}");
+        }
+        Ok(())
+    }
 }

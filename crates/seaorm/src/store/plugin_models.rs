@@ -84,7 +84,7 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
     ) -> AuthResult<sea_orm::sea_query::SimpleExpr> {
         let column = self.plugin_column::<M>(role, name)?;
         let value = self.plugin_query_value(role, name, value)?;
-        if value.is_null() || value.is_undefined() {
+        if value.is_null() {
             return Ok(column.is_null());
         }
         let value =

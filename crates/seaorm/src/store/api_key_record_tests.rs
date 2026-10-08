@@ -147,3 +147,82 @@ async fn usage_null_guards_distinguish_json_null_from_sql_null() -> AuthResult<(
     }
     Ok(())
 }
+
+#[tokio::test]
+async fn undefined_refill_snapshot_does_not_match_a_null_timestamp() -> AuthResult<()> {
+    use better_auth_core::store::ConsumeApiKeyResult;
+    use better_auth_core::user_fields::{FieldTransforms, UserFieldTransform};
+
+    let database = Database::connect("sqlite::memory:")
+        .await
+        .map_err(map_db_err)?;
+    run_migrations(&database).await.map_err(map_db_err)?;
+    let mut store = SeaOrmStore::<BundledSchema>::new(
+        AuthConfig::new("a-secret-that-is-at-least-32-characters"),
+        database,
+    );
+    let at = Utc::now() - chrono::Duration::hours(1);
+    let _ = store
+        .create_api_key_record(FieldMap::from([
+            ("id".into(), "undefined-refill".into()),
+            ("referenceId".into(), "owner".into()),
+            ("key".into(), "undefined-refill-key".into()),
+            ("createdAt".into(), at.into()),
+            ("updatedAt".into(), at.into()),
+            ("remaining".into(), 0.0.into()),
+            ("refillInterval".into(), 1000.0.into()),
+            ("refillAmount".into(), 8.0.into()),
+        ]))
+        .await?;
+    let reader = store.clone();
+    let mut init = AuthInitContext::new(store.config.clone(), Arc::new(store.clone()));
+    init.register_model_fields(
+        EntityRole::ApiKey,
+        UserConfig {
+            additional_fields: Some(
+                [(
+                    "lastRefillAt".into(),
+                    UserFieldConfig {
+                        field_type: UserFieldType::Date,
+                        required: Some(false),
+                        transform: Some(FieldTransforms {
+                            output: Some(UserFieldTransform::new(|_| Ok(FieldValue::Undefined))),
+                            ..Default::default()
+                        }),
+                        ..Default::default()
+                    },
+                )]
+                .into(),
+            ),
+        },
+    )?;
+    store.model_fields = init.into_parts().plugin_fields;
+    let snapshot = store
+        .get_api_key_by_id("undefined-refill")
+        .await?
+        .ok_or_else(|| AuthError::internal("Expected the API Key refill snapshot"))?;
+    assert!(snapshot.last_refill_at.is_undefined());
+    assert!(matches!(
+        store.consume_api_key_usage(&snapshot, false).await?,
+        ConsumeApiKeyResult::UsageExhausted
+    ));
+    let persisted = reader
+        .get_api_key_by_id("undefined-refill")
+        .await?
+        .ok_or_else(|| AuthError::internal("Expected the unchanged API Key"))?;
+    assert_eq!(persisted.remaining, Some(0.0));
+    assert_eq!(persisted.last_refill_at, None);
+    let refilled = store
+        .write_api_key_usage(
+            &snapshot.id,
+            ApiKeyUsageWrite::Refill {
+                previous: FieldValue::Null,
+                remaining: 7.0,
+                at: Utc::now(),
+            },
+        )
+        .await?
+        .ok_or_else(|| AuthError::internal("Expected a null snapshot to match the refill guard"))?;
+    assert_eq!(refilled.remaining, Some(7.0));
+    Ok(())
+}

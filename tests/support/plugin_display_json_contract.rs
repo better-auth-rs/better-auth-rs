@@ -20,6 +20,8 @@ use std::{future::Future, sync::Arc};
 mod observation;
 #[path = "plugin_display_json_policies.rs"]
 mod policies;
+#[path = "plugin_primary_key_update.rs"]
+mod primary_key_update;
 pub(crate) use observation::{api_key_value, passkey_value};
 pub(crate) use policies::config;
 
@@ -468,6 +470,9 @@ where
     eprintln!(
         "display JSON contract boundaries: generated ID policy replaces forceAllowId; timestamps are checked against the real clock and storage; Memory Passkey retains its verified legacy credential and updatedAt envelope; field sets are compared without key order; JavaScript Error identity and driver diagnostic text/properties remain unpaired; backend={backend}, target={target:?}"
     );
+    if backend == "mysql" && target != Target::PasskeyAaguid {
+        primary_key_update::check(raw, target).await?;
+    }
     Ok(())
 }
 
