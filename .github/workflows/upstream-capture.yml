@@ -52,6 +52,13 @@ on:
       - compat-tests/reference-server/contracts/member-sort-stability-capture.mjs
       - compat-tests/reference-server/contracts/api-key-number-sort-capture.mjs
       - compat-tests/reference-server/contracts/api-key-date-usage-capture.mjs
+      - compat-tests/reference-server/contracts/api-key-fields-capture.mjs
+      - compat-tests/reference-server/contracts/native-plugin-replacements-capture.mjs
+      - compat-tests/reference-server/contracts/device-grant-capture.mjs
+      - compat-tests/reference-server/contracts/device-grant-database.mjs
+      - compat-tests/reference-server/contracts/device-grant-failures.mjs
+      - compat-tests/reference-server/contracts/device-grant-sql-capture.mjs
+      - compat-tests/reference-server/contracts/device-redemption.ts
       - compat-tests/reference-server/contracts/member-json-filter-capture.mjs
       - compat-tests/reference-server/contracts/oauth-proxy-max-age-capture.mjs
       - tests/fixtures/cookie-cache-cleanup.capture.mjs
@@ -65,9 +72,27 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - contract: member-json-filter
-            regressions: [memory-core-json, member-sort-stability]
-            backend: ''
+          - contract: api-key-date-usage
+            regressions: [api-key-fields, api-key-name-mapping, api-key-date-usage]
+            backend: postgres
+          - contract: api-key-date-usage
+            regressions: [api-key-fields, api-key-name-mapping, api-key-date-usage]
+            backend: mysql
+          - contract: native-plugin-replacements
+            regressions: [plugin-model-fields, plugin-output-capabilities]
+            backend: memory
+          - contract: native-plugin-replacements
+            regressions: [plugin-model-fields, plugin-output-capabilities]
+            backend: sqlite
+          - contract: device-grant-sql
+            regressions: [device-grant, device-redemption]
+            backend: sqlite
+          - contract: device-grant-sql
+            regressions: [device-grant, device-redemption]
+            backend: postgres
+          - contract: device-grant-sql
+            regressions: [device-grant, device-redemption]
+            backend: mysql
     runs-on: ubuntu-latest
     timeout-minutes: 10
     services:

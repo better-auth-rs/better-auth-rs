@@ -1,21 +1,15 @@
-import { Database } from "bun:sqlite";
 import { betterAuth } from "better-auth";
 import { deviceAuthorization, redeemDeviceCode } from "better-auth/plugins/device-authorization";
-import { memoryAdapter } from "better-auth/adapters/memory";
-import { getMigrations } from "better-auth/db/migration";
+import { withDeviceGrantDatabase } from "./device-grant-database.mjs";
 
-export async function captureDeviceRedemption() {
-  const backends = [];
-  for (const backend of ["memory", "sqlite"] as const) {
-    const memory: Record<string, any[]> = { user: [], session: [], account: [], verification: [], deviceCode: [] };
-    const db = backend === "sqlite" ? new Database(":memory:") : undefined;
+export async function captureDeviceRedemptionBackend(backend: string) {
     const options = {
-      database: db ?? memoryAdapter(memory), baseURL: "http://device-redemption.test",
+      baseURL: "http://device-redemption.test",
       secret: "ordinary-device-redemption-contract-at-least-32-characters",
       logger: { disabled: true }, telemetry: { enabled: false }, plugins: [deviceAuthorization()],
     };
-    if (db) await (await getMigrations(options)).runMigrations();
-    const context = await betterAuth(options).$context;
+    return await withDeviceGrantDatabase(backend, options, async (auth: ReturnType<typeof betterAuth>) => {
+    const context = await auth.$context;
     const { adapter } = context;
     const owner = await adapter.create<any>({ model: "user", data: {
       name: "Owner", email: "owner@device-redemption.test", emailVerified: false,
@@ -66,9 +60,13 @@ export async function captureDeviceRedemption() {
         lastPolledAt: remaining.lastPolledAt !== undefined && remaining.lastPolledAt !== null,
       } : null });
     }
-    backends.push({ backend, cases });
-    db?.close();
-  }
+    return { backend, cases };
+    });
+}
+
+export async function captureDeviceRedemption() {
+  const backends = [];
+  for (const backend of ["memory", "sqlite"]) backends.push(await captureDeviceRedemptionBackend(backend));
   return { version: (await Bun.file(new URL("../node_modules/@better-auth/core/package.json", import.meta.url)).json()).version, backends };
 }
 

@@ -43,7 +43,7 @@ async function captureBackend(backend, diagnostics) {
       const diagnostic = { backend, name };
       diagnostics.push(diagnostic);
       diagnostic.before = observeValue(await stored());
-      diagnostic.physicalBefore = observeValue(physicalRows());
+      diagnostic.physicalBefore = observeValue(await physicalRows());
       const where = [{ field: "id", value: identity }];
       let method;
       let payload;
@@ -100,7 +100,7 @@ async function captureBackend(backend, diagnostics) {
       } catch (error) {
         diagnostic.error = { name: error.name, message: error.message };
         diagnostic.events = observeValue(events.splice(0));
-        diagnostic.physicalAfter = observeValue(physicalRows());
+        diagnostic.physicalAfter = observeValue(await physicalRows());
         throw error;
       }
       diagnostic.result = observeValue(result);
@@ -110,22 +110,22 @@ async function captureBackend(backend, diagnostics) {
       const normalizedResult = rows.map(visible);
       const persisted = await stored();
       diagnostic.stored = observeValue(persisted);
-      diagnostic.physicalAfter = observeValue(physicalRows());
+      diagnostic.physicalAfter = observeValue(await physicalRows());
       operations.push({ name, input, events: diagnostic.events, result: normalizedResult, stored: persisted.map(visible) });
     }
     return { backend, operations };
   });
 }
 
-export async function captureApiKeyDateUsage({ diagnostics = [] } = {}) {
-  const backends = [];
-  for (const backend of ["memory", "sqlite"]) backends.push(await captureBackend(backend, diagnostics));
-  return { version, backends };
+export async function captureApiKeyDateUsage({ diagnostics = [], backends = ["memory", "sqlite"] } = {}) {
+  const observed = [];
+  for (const backend of backends) observed.push(await captureBackend(backend, diagnostics));
+  return { version, backends: observed };
 }
 
-export function assertApiKeyDateUsage(observed) {
+export function assertApiKeyDateUsage(observed, backends = ["memory", "sqlite"]) {
   assert.equal(observed.version, "1.7.6");
-  assert.deepEqual(observed.backends.map(({ backend }) => backend), ["memory", "sqlite"]);
+  assert.deepEqual(observed.backends.map(({ backend }) => backend), backends);
   for (const { backend, operations } of observed.backends) {
     assert.deepEqual(operations.map(({ name }) => name), operationNames);
     let before = [];
@@ -164,14 +164,16 @@ export function assertApiKeyDateUsage(observed) {
 }
 
 if (import.meta.main) {
-  const output = process.argv[2];
+  const [first, second] = process.argv.slice(2);
+  const output = second ?? first;
+  const backends = second === undefined ? ["memory", "sqlite"] : [first];
   assert.ok(output, "Pass the API Key Date usage fixture output path");
   const diagnostics = [];
   try {
-    const observed = await captureApiKeyDateUsage({ diagnostics });
+    const observed = await captureApiKeyDateUsage({ diagnostics, backends });
     writeFileSync(`${output}.raw.json`, `${JSON.stringify(observed, null, 2)}\n`);
     writeFileSync(`${output}.raw-diagnostics.json`, `${JSON.stringify(diagnostics, null, 2)}\n`);
-    assertApiKeyDateUsage(observed);
+    assertApiKeyDateUsage(observed, backends);
     writeFileSync(output, `${JSON.stringify(observed, null, 2)}\n`);
   } finally {
     writeFileSync(`${output}.raw-diagnostics.json`, `${JSON.stringify(diagnostics, null, 2)}\n`);

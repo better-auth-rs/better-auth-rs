@@ -5,6 +5,7 @@ import { apiKey } from "@better-auth/api-key";
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { getMigrations } from "better-auth/db/migration";
+import { captureFreshServerCatalog } from "./server-catalog-shared.mjs";
 
 const version = JSON.parse(readFileSync(new URL("../node_modules/@better-auth/core/package.json", import.meta.url), "utf8")).version;
 assert.equal(version, "1.7.6");
@@ -43,137 +44,152 @@ export const operationNames = [
 ];
 export const failureOperations = ["create", "update", "refill", "decrement", "start-window", "increment-window", "last-request", "updated-at"];
 
-export async function withFixture(backend, run, nameMapping) {
-  assert.ok(nameMapping === undefined || ["default", "empty", "renamed"].includes(nameMapping));
-  const memory = { user: [], session: [], account: [], verification: [], ordinary_api_key_fields: [] };
-  const sqlite = backend === "sqlite" ? new Database(":memory:") : undefined;
-  const options = fields => ({
-    database: sqlite ?? memoryAdapter(memory), baseURL: "http://api-key-fields.test",
-    secret: "ordinary-api-key-extra-fields-secret-at-least-32-characters",
-    logger: { disabled: true }, telemetry: { enabled: false },
-    plugins: [apiKey(), { id: "ordinary-api-key-additional-fields", schema: {
-      apikey: { modelName: "ordinary_api_key_fields", fields },
-    } }],
-  });
-  try {
-    if (sqlite) await (await getMigrations(options(policies(nameMapping)))).runMigrations();
-    const reader = (await betterAuth(options(policies(nameMapping))).$context).adapter;
-    const events = [];
-    const errors = { input: new Error("ordinary API Key input error"), output: new Error("ordinary API Key output error") };
-    let failure;
-    const fields = Object.fromEntries(Object.entries(policies(nameMapping)).map(([name, field]) => [name, {
-      ...field,
-      ...(name === "name" ? {
-        onUpdate() { events.push(["onUpdate", name]); return " Renewed "; },
-      } : {}),
-      ...(name === "revision" ? {
-        defaultValue() { events.push(["default", name]); return 1.5; },
-        onUpdate() { events.push(["onUpdate", name]); return 2.5; },
-      } : {}),
-      transform: {
-        input(value) {
-          events.push(["input", name, callbackValue(value)]);
-          if (name === (nameMapping === undefined ? "revision" : "name") && failure === "input") throw errors.input;
-          return ["name", "label"].includes(name) && typeof value === "string" ? value.trim() : value;
-        },
-        output(value) {
-          events.push(["output", name, callbackValue(value)]);
-          if (name === (nameMapping === undefined ? "label" : "name") && failure === "output") throw errors.output;
-          return ["name", "label"].includes(name) && typeof value === "string" ? `${value}:out` : value;
-        },
+const configuration = fields => ({
+  baseURL: "http://api-key-fields.test",
+  secret: "ordinary-api-key-extra-fields-secret-at-least-32-characters",
+  logger: { disabled: true }, telemetry: { enabled: false },
+  plugins: [apiKey(), { id: "ordinary-api-key-additional-fields", schema: {
+    apikey: { modelName: "ordinary_api_key_fields", fields },
+  } }],
+});
+
+async function runFixture(database, physicalRows, sqlite, run, nameMapping) {
+  const options = fields => ({ database, ...configuration(fields) });
+  const reader = (await betterAuth(options(policies(nameMapping))).$context).adapter;
+  const events = [];
+  const errors = { input: new Error("ordinary API Key input error"), output: new Error("ordinary API Key output error") };
+  let failure;
+  const fields = Object.fromEntries(Object.entries(policies(nameMapping)).map(([name, field]) => [name, {
+    ...field,
+    ...(name === "name" ? {
+      onUpdate() { events.push(["onUpdate", name]); return " Renewed "; },
+    } : {}),
+    ...(name === "revision" ? {
+      defaultValue() { events.push(["default", name]); return 1.5; },
+      onUpdate() { events.push(["onUpdate", name]); return 2.5; },
+    } : {}),
+    transform: {
+      input(value) {
+        events.push(["input", name, callbackValue(value)]);
+        if (name === (nameMapping === undefined ? "revision" : "name") && failure === "input") throw errors.input;
+        return ["name", "label"].includes(name) && typeof value === "string" ? value.trim() : value;
       },
-    }]));
-    const adapter = (await betterAuth(options(fields)).$context).adapter;
-    let identity;
-    let expectedUpdatedAt = createdAt;
-    const visible = row => {
-      if (row === null) return null;
-      assert.deepEqual(Object.keys(row).sort(), [...new Set([...nativeFields, ...Object.keys(policies(nameMapping))])].sort());
-      assert.equal(typeof row.id, "string");
-      assert.ok(row.id.length > 0);
-      if (identity === undefined) identity = row.id;
-      assert.equal(row.id, identity);
-      assert.equal(row.referenceId, "ordinary-owner");
-      assert.equal(row.key, "ordinary-stored-hash");
-      assert.equal(row.configId, "default");
-      assert.ok(row.createdAt instanceof Date);
-      assert.equal(row.createdAt.toISOString(), createdAt);
-      assert.ok(row.updatedAt instanceof Date);
-      assert.equal(row.updatedAt.toISOString(), expectedUpdatedAt);
-      const normalizedUpdate = expectedUpdatedAt === createdAt ? "<created-at>" : expectedUpdatedAt === updatedAt ? "<ordinary-updated-at>" : expectedUpdatedAt;
-      return json({ ...row, id: "<api-key-id>", createdAt: "<created-at>", updatedAt: normalizedUpdate });
-    };
-    const stored = async () => {
-      const rows = await reader.findMany({ model: "apikey", where: [{ field: "referenceId", value: "ordinary-owner" }] });
-      assert.ok(rows.length <= 1);
-      if (nameMapping !== undefined) {
-        const column = nameMapping === "renamed" ? "stored_name" : "name";
-        const physical = sqlite ? sqlite.query("SELECT * FROM ordinary_api_key_fields").all() : memory.ordinary_api_key_fields;
-        assert.equal(physical.length, rows.length);
-        if (sqlite) {
-          const columns = sqlite.query("PRAGMA table_info(ordinary_api_key_fields)").all().map(column => column.name);
-          assert.equal(columns.includes(column), true);
-          if (nameMapping === "renamed") assert.equal(columns.includes("name"), false);
-        }
-        for (const row of rows) {
-          const raw = physical.find(raw => raw.id === row.id);
-          assert.ok(raw);
-          assert.equal(Object.hasOwn(raw, column), true);
-          assert.equal(raw[column], row.name);
-          if (nameMapping === "renamed") assert.equal(Object.hasOwn(raw, "name"), false);
-        }
+      output(value) {
+        events.push(["output", name, callbackValue(value)]);
+        if (name === (nameMapping === undefined ? "label" : "name") && failure === "output") throw errors.output;
+        return ["name", "label"].includes(name) && typeof value === "string" ? `${value}:out` : value;
+      },
+    },
+  }]));
+  const adapter = (await betterAuth(options(fields)).$context).adapter;
+  let identity;
+  let expectedUpdatedAt = createdAt;
+  const visible = row => {
+    if (row === null) return null;
+    assert.deepEqual(Object.keys(row).sort(), [...new Set([...nativeFields, ...Object.keys(policies(nameMapping))])].sort());
+    assert.equal(typeof row.id, "string");
+    assert.ok(row.id.length > 0);
+    if (identity === undefined) identity = row.id;
+    assert.equal(row.id, identity);
+    assert.equal(row.referenceId, "ordinary-owner");
+    assert.equal(row.key, "ordinary-stored-hash");
+    assert.equal(row.configId, "default");
+    assert.ok(row.createdAt instanceof Date);
+    assert.equal(row.createdAt.toISOString(), createdAt);
+    assert.ok(row.updatedAt instanceof Date);
+    assert.equal(row.updatedAt.toISOString(), expectedUpdatedAt);
+    const normalizedUpdate = expectedUpdatedAt === createdAt ? "<created-at>" : expectedUpdatedAt === updatedAt ? "<ordinary-updated-at>" : expectedUpdatedAt;
+    return json({ ...row, id: "<api-key-id>", createdAt: "<created-at>", updatedAt: normalizedUpdate });
+  };
+  const stored = async () => {
+    const rows = await reader.findMany({ model: "apikey", where: [{ field: "referenceId", value: "ordinary-owner" }] });
+    assert.ok(rows.length <= 1);
+    if (nameMapping !== undefined) {
+      const column = nameMapping === "renamed" ? "stored_name" : "name";
+      const physical = await physicalRows();
+      assert.equal(physical.length, rows.length);
+      if (sqlite) {
+        const columns = sqlite.query("PRAGMA table_info(ordinary_api_key_fields)").all().map(column => column.name);
+        assert.equal(columns.includes(column), true);
+        if (nameMapping === "renamed") assert.equal(columns.includes("name"), false);
       }
-      return rows.map(visible);
-    };
-    const execute = async (operation, id) => {
-      const model = "apikey";
-      const where = [{ field: "id", value: id }];
-      const date = index => new Date(times[index]);
-      if (operation === "create") return [await adapter.create({ model, data: input(nameMapping) })];
-      if (operation === "get-id") return [await adapter.findOne({ model, where })];
-      if (operation === "get-hash") return [await adapter.findOne({ model, where: [{ field: "key", value: "ordinary-stored-hash" }] })];
-      if (operation === "list") return await adapter.findMany({ model, where: [{ field: "referenceId", value: "ordinary-owner" }] });
-      if (operation === "update") {
-        if (failure !== "input") expectedUpdatedAt = updatedAt;
-        return [await adapter.update({ model, where, update: { name: nameMapping === undefined ? "Desk-renamed" : " Desk-renamed ", label: " Revised ", updatedAt: new Date(updatedAt) } })];
+      for (const row of rows) {
+        const raw = physical.find(raw => raw.id === row.id);
+        assert.ok(raw);
+        assert.equal(Object.hasOwn(raw, column), true);
+        assert.equal(raw[column], row.name);
+        if (nameMapping === "renamed") assert.equal(Object.hasOwn(raw, "name"), false);
       }
-      if (operation === "last-request") return [await adapter.update({ model, where, update: { lastRequest: date(4) } })];
-      if (operation === "updated-at") {
-        if (failure !== "input") expectedUpdatedAt = times[5];
-        return [await adapter.update({ model, where, update: { updatedAt: date(5) } })];
-      }
-      let increment = {};
-      let set;
-      if (["decrement", "decrement-input-ignored"].includes(operation)) {
-        where.push({ field: "remaining", operator: "gt", value: 0 });
-        increment = { remaining: -1 };
-      } else if (["refill", "refill-miss"].includes(operation)) {
-        where.push({ field: "lastRefillAt", value: null });
-        set = { remaining: 8, lastRefillAt: date(0) };
-      } else if (["start-window", "start-window-miss", "reset-window"].includes(operation)) {
-        where.push(operation === "reset-window"
-          ? { field: "lastRequest", operator: "lte", value: date(1) }
-          : { field: "lastRequest", value: null });
-        set = { requestCount: 1, lastRequest: date(operation === "reset-window" ? 2 : 1) };
-      } else {
-        assert.ok(["increment-window", "increment-window-miss"].includes(operation));
-        where.push({ field: "lastRequest", operator: "gt", value: date(0) });
-        where.push({ field: "requestCount", operator: "lt", value: operation.endsWith("-miss") ? 2 : 3 });
-        increment = { requestCount: 1 };
-        set = { lastRequest: date(3) };
-      }
-      const row = await adapter.incrementOne({ model, where, increment, ...(set ? { set } : {}) });
-      return row === null ? [] : [row];
-    };
-    return await run({
-      execute, visible, stored, events, errors, adapter, reader,
-      createInput: () => input(nameMapping),
-      physicalRows: () => sqlite ? sqlite.query("SELECT * FROM ordinary_api_key_fields").all() : memory.ordinary_api_key_fields,
-      setFailure(value) { failure = value; },
-    });
-  } finally {
-    sqlite?.close();
+    }
+    return rows.map(visible);
+  };
+  const execute = async (operation, id) => {
+    const model = "apikey";
+    const where = [{ field: "id", value: id }];
+    const date = index => new Date(times[index]);
+    if (operation === "create") return [await adapter.create({ model, data: input(nameMapping) })];
+    if (operation === "get-id") return [await adapter.findOne({ model, where })];
+    if (operation === "get-hash") return [await adapter.findOne({ model, where: [{ field: "key", value: "ordinary-stored-hash" }] })];
+    if (operation === "list") return await adapter.findMany({ model, where: [{ field: "referenceId", value: "ordinary-owner" }] });
+    if (operation === "update") {
+      if (failure !== "input") expectedUpdatedAt = updatedAt;
+      return [await adapter.update({ model, where, update: { name: nameMapping === undefined ? "Desk-renamed" : " Desk-renamed ", label: " Revised ", updatedAt: new Date(updatedAt) } })];
+    }
+    if (operation === "last-request") return [await adapter.update({ model, where, update: { lastRequest: date(4) } })];
+    if (operation === "updated-at") {
+      if (failure !== "input") expectedUpdatedAt = times[5];
+      return [await adapter.update({ model, where, update: { updatedAt: date(5) } })];
+    }
+    let increment = {};
+    let set;
+    if (["decrement", "decrement-input-ignored"].includes(operation)) {
+      where.push({ field: "remaining", operator: "gt", value: 0 });
+      increment = { remaining: -1 };
+    } else if (["refill", "refill-miss"].includes(operation)) {
+      where.push({ field: "lastRefillAt", value: null });
+      set = { remaining: 8, lastRefillAt: date(0) };
+    } else if (["start-window", "start-window-miss", "reset-window"].includes(operation)) {
+      where.push(operation === "reset-window"
+        ? { field: "lastRequest", operator: "lte", value: date(1) }
+        : { field: "lastRequest", value: null });
+      set = { requestCount: 1, lastRequest: date(operation === "reset-window" ? 2 : 1) };
+    } else {
+      assert.ok(["increment-window", "increment-window-miss"].includes(operation));
+      where.push({ field: "lastRequest", operator: "gt", value: date(0) });
+      where.push({ field: "requestCount", operator: "lt", value: operation.endsWith("-miss") ? 2 : 3 });
+      increment = { requestCount: 1 };
+      set = { lastRequest: date(3) };
+    }
+    const row = await adapter.incrementOne({ model, where, increment, ...(set ? { set } : {}) });
+    return row === null ? [] : [row];
+  };
+  return await run({
+    execute, visible, stored, events, errors, adapter, reader,
+    createInput: () => input(nameMapping),
+    physicalRows,
+    setFailure(value) { failure = value; },
+  });
+}
+
+export async function withFixture(backend, run, nameMapping) {
+  assert.ok(["memory", "sqlite", "postgres", "mysql"].includes(backend));
+  assert.ok(nameMapping === undefined || ["default", "empty", "renamed"].includes(nameMapping));
+  if (backend === "memory") {
+    const memory = { user: [], session: [], account: [], verification: [], ordinary_api_key_fields: [] };
+    return await runFixture(memoryAdapter(memory), () => memory.ordinary_api_key_fields, undefined, run, nameMapping);
   }
+  if (backend === "sqlite") {
+    const database = new Database(":memory:");
+    try {
+      await (await getMigrations({ database, ...configuration(policies(nameMapping)) })).runMigrations();
+      return await runFixture(database, () => database.query("SELECT * FROM ordinary_api_key_fields").all(), database, run, nameMapping);
+    } finally {
+      database.close();
+    }
+  }
+  const captured = await captureFreshServerCatalog(backend, ["ordinary_api_key_fields"], configuration(policies(nameMapping)), context =>
+    runFixture(context.options.database, () => context.query("SELECT * FROM ordinary_api_key_fields ORDER BY id", []), undefined, run, nameMapping));
+  return captured.observation;
 }
 
 export async function captureApiKeyFieldOperations(backend, nameMapping) {
