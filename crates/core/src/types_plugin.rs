@@ -686,17 +686,21 @@ impl<T: AuthPasskey> From<&T> for Passkey {
 }
 
 /// Persisted SIWE wallet identity. Multiple chains can belong to one user.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct WalletAddress {
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub id: SchemaValue<String>,
     #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub user_id: SchemaValue<String>,
-    pub address: String,
-    pub chain_id: i64,
-    pub is_primary: bool,
-    #[serde(with = "crate::field_value::serde::date")]
-    pub created_at: crate::FieldDate,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub address: SchemaValue<String>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub chain_id: SchemaValue<f64>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub is_primary: SchemaValue<bool>,
+    #[serde(with = "crate::field_value::serde::schema_date")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub created_at: SchemaValue<crate::FieldDate>,
     /// Declared application fields returned by the adapter.
     #[serde(with = "crate::field_value::serde::map", default, flatten)]
     pub additional_fields: crate::FieldMap,

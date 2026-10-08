@@ -127,6 +127,8 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
                 | EntityRole::Passkey
                 | EntityRole::DeviceCode
                 | EntityRole::TwoFactor
+                | EntityRole::Jwk
+                | EntityRole::WalletAddress
         ) && **required != "id"
             || row_presence && **required == "active")
             && !idents.iter().any(|ident| ident == *required)

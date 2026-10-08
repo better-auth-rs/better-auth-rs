@@ -24,12 +24,15 @@ impl From<Model> for better_auth_core::Jwk {
         Self {
             additional_fields: Default::default(),
             id: model.id.into(),
-            public_key: model.public_key,
-            private_key: model.private_key,
-            created_at: model.created_at.into(),
-            expires_at: model.expires_at.map(Into::into),
-            alg: model.alg,
-            crv: model.crv,
+            public_key: model.public_key.into(),
+            private_key: model.private_key.into(),
+            created_at: better_auth_core::FieldDate::from(model.created_at).into(),
+            expires_at: model
+                .expires_at
+                .map(better_auth_core::FieldDate::from)
+                .into(),
+            alg: model.alg.into(),
+            crv: model.crv.into(),
         }
     }
 }

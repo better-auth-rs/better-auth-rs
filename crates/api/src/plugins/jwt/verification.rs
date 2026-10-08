@@ -1,9 +1,7 @@
 use super::*;
 use base64::{
     Engine as _, alphabet,
-    engine::{
-        DecodePaddingMode, GeneralPurpose, GeneralPurposeConfig, general_purpose::URL_SAFE_NO_PAD,
-    },
+    engine::{DecodePaddingMode, GeneralPurpose, GeneralPurposeConfig},
 };
 use josekit::jws::JwsVerifier;
 
@@ -66,7 +64,7 @@ impl JwtPlugin {
         let verified = verify_local(
             token,
             &keys,
-            self.config.algorithm,
+            Some(self.config.primary_algorithm()),
             issuer,
             audience.as_deref(),
             0,
@@ -93,31 +91,15 @@ pub(super) fn has_key_id(token: &str) -> bool {
     raw_header(token).is_some_and(|header| header.has_key_id())
 }
 
-#[serde_with::serde_as]
-#[derive(serde::Deserialize)]
-#[serde(transparent)]
-pub(super) struct Header(
-    // JSON property names may contain unpaired UTF-16 surrogates; serde's byte strings retain them.
-    #[serde_as(as = "std::collections::HashMap<serde_with::Bytes, _>")]
-    std::collections::HashMap<Vec<u8>, Box<serde_json::value::RawValue>>,
-);
+pub(super) struct Header(pub(super) FieldMap);
 
 impl Header {
     pub(super) fn has_key_id(&self) -> bool {
-        self.0
-            .get(b"kid".as_slice())
-            .is_some_and(|kid| match kid.get().as_bytes().first() {
-                Some(b'"') => kid.get() != "\"\"",
-                Some(b'[' | b'{') => true,
-                _ => serde_json::from_str::<Value>(kid.get())
-                    .is_ok_and(|value| crate::plugins::json_body::is_truthy(&value)),
-            })
+        self.0.get("kid").is_some_and(FieldValue::is_truthy)
     }
 
     pub(super) fn has_type(&self, expected: &str) -> bool {
-        self.0.get(b"typ".as_slice()).is_some_and(|typ| {
-            serde_json::from_str::<String>(typ.get()).is_ok_and(|typ| typ == expected)
-        })
+        self.0.get("typ").and_then(FieldValue::as_str) == Some(expected)
     }
 }
 
@@ -149,30 +131,40 @@ pub(super) fn raw_header(token: &str) -> Option<Header> {
     };
     let bytes = engine.decode(encoded).ok()?;
     let text = String::from_utf8_lossy(&bytes);
-    serde_json::from_str(text.strip_prefix('\u{feff}').unwrap_or(&text)).ok()
-}
-
-pub(super) fn protected_header(token: &str) -> Option<JwsHeader> {
-    let bytes = URL_SAFE_NO_PAD.decode(token.split('.').next()?).ok()?;
-    JwsHeader::from_bytes(&bytes).ok()
+    Some(Header(
+        FieldValue::parse_json(text.strip_prefix('\u{feff}').unwrap_or(&text))
+            .ok()?
+            .as_object()?
+            .clone(),
+    ))
 }
 
 pub(super) fn verify_local(
     token: &str,
     keys: &[better_auth_core::Jwk],
-    default_algorithm: JwtAlgorithm,
+    default_algorithm: Option<JwtAlgorithm>,
     issuer: Option<&str>,
     audience: Option<&[&str]>,
     tolerance: i64,
 ) -> Option<Map<String, Value>> {
-    let header = protected_header(token)?;
-    let key = keys.iter().find(|key| key.id.as_str() == header.key_id())?;
-    let algorithm = key.alg.as_deref().unwrap_or(default_algorithm.name());
-    if header.algorithm() != Some(algorithm) {
-        return None;
-    }
-    let public = Jwk::from_bytes(&key.public_key).ok()?;
-    let verifier: Box<dyn JwsVerifier> = match algorithm {
+    let header = raw_header(token)?;
+    let kid = header.0.get("kid")?;
+    let key = keys
+        .iter()
+        .find(|key| key.id.field_value().strict_equals(kid))?;
+    let algorithm = keys::algorithm(
+        key,
+        default_algorithm.map_or_else(
+            || header.0.get("alg").cloned().unwrap_or_default(),
+            |algorithm| algorithm.name().into(),
+        ),
+    );
+    let (algorithm, public) = keys::import(
+        keys::parse_json(&key.public_key.field_value()).ok()?,
+        &algorithm,
+    )
+    .ok()?;
+    let verifier: Box<dyn JwsVerifier> = match algorithm.as_str() {
         "EdDSA" => Box::new(jws::EdDSA.verifier_from_jwk(&public).ok()?),
         "RS256" => Box::new(jws::RS256.verifier_from_jwk(&public).ok()?),
         "ES256" => Box::new(jws::ES256.verifier_from_jwk(&public).ok()?),
@@ -180,8 +172,8 @@ pub(super) fn verify_local(
         "PS256" => Box::new(jws::PS256.verifier_from_jwk(&public).ok()?),
         _ => return None,
     };
-    // The JWT payload parser rejects claim types that upstream verification accepts.
-    let (payload, _) = josekit::jws::deserialize_compact(token, verifier.as_ref()).ok()?;
+    let protected = jose::header(token)?;
+    let payload = jose::verify(token, &protected, verifier.as_ref())?;
     let claims: Map<String, Value> = serde_json::from_slice(&payload).ok()?;
     if issuer.is_some_and(|issuer| claims.get("iss").and_then(Value::as_str) != Some(issuer)) {
         return None;

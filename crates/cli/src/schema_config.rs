@@ -17,6 +17,8 @@ mod native_empty_field_mapping_tests;
 #[cfg(test)]
 mod plugin_display_field_tests;
 #[cfg(test)]
+mod plugin_record_policy_tests;
+#[cfg(test)]
 mod two_factor_policy_tests;
 
 #[derive(Clone, Copy, Default, PartialEq, Eq, clap::ValueEnum)]
@@ -159,7 +161,12 @@ pub(crate) enum FieldType {
 fn native_policy_role(role: EntityRole) -> bool {
     matches!(
         role,
-        EntityRole::ApiKey | EntityRole::Passkey | EntityRole::DeviceCode | EntityRole::TwoFactor
+        EntityRole::ApiKey
+            | EntityRole::Passkey
+            | EntityRole::DeviceCode
+            | EntityRole::TwoFactor
+            | EntityRole::Jwk
+            | EntityRole::WalletAddress
     )
 }
 
@@ -497,26 +504,6 @@ impl Entity {
                 }
             }
             for (name, field) in &config.additional_fields {
-                if let Some(role @ (EntityRole::Jwk | EntityRole::WalletAddress)) = entity.role {
-                    let storage = resolve_field_name(field.field_name.as_deref(), name);
-                    if entity
-                        .fields
-                        .iter()
-                        .filter(|core| core.registry_column.is_some())
-                        .any(|core| {
-                            let rust = core.ident.to_string();
-                            [name.as_str(), storage].into_iter().any(|name| {
-                                name == rust
-                                    || name == rust.to_lower_camel_case()
-                                    || name == core.column
-                            })
-                        })
-                    {
-                        return Err(format!(
-                            "{role:?} additional field {name} cannot replace native field {storage}"
-                        ));
-                    }
-                }
                 if let Some((definition, existing)) = fields
                     .iter()
                     .zip(&mut entity.fields)

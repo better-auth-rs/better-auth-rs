@@ -49,7 +49,7 @@ import sys
 
 fixture = json.loads(Path("tests/fixtures/native-plugin-replacements-sqlite-1.7.6.json").read_text())
 for target in fixture["targets"]:
-    if target["model"] not in ("apikey", "passkey", "deviceCode", "twoFactor"):
+    if target["model"] not in ("apikey", "passkey", "deviceCode", "twoFactor", "jwks", "walletAddress"):
         continue
     fields = {
         target["field"]: {"type": target["type"], "required": False, "fieldName": target["column"]},
@@ -68,6 +68,10 @@ for configuration in "$schema_dir"/native_replacement_*.json; do
     plugin=device-authorization
   elif [[ "$target" == two-factor-* ]]; then
     plugin=two-factor
+  elif [[ "$target" == jwk-* ]]; then
+    plugin=jwt
+  elif [[ "$target" == wallet-* ]]; then
+    plugin=siwe
   fi
   schema="$schema_dir/native_replacement_${target}.rs"
   "$consumer_cli" generate --plugins "$plugin" --database sqlite --schema-config "$configuration" --output "$schema"

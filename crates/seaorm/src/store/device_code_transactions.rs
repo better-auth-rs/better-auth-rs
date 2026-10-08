@@ -21,30 +21,23 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
     }
 
     async fn create_device_code_record(&self, input: FieldMap) -> AuthResult<FieldMap> {
-        let row = self.store.insert_device_code(&self.tx, input).await?;
-        Ok(self
-            .store
-            .project_plugin_rows::<P::DeviceCode, FieldMap>(EntityRole::DeviceCode, vec![row])
-            .await?
-            .remove(0))
+        self.store
+            .create_plugin_record::<P::DeviceCode>(
+                &self.tx,
+                EntityRole::DeviceCode,
+                "deviceCode",
+                input,
+            )
+            .await
     }
 
     async fn get_device_code_record(
         &self,
         id: &SchemaValue<String>,
     ) -> AuthResult<Option<FieldMap>> {
-        let filter = self
-            .store
-            .plugin_id_filter::<P::DeviceCode>(EntityRole::DeviceCode, id)?;
-        let row = self.store.get_device_code_row(&self.tx, filter).await?;
-        Ok(self
-            .store
-            .project_plugin_rows::<P::DeviceCode, FieldMap>(
-                EntityRole::DeviceCode,
-                row.into_iter().collect(),
-            )
-            .await?
-            .pop())
+        self.store
+            .get_plugin_record::<P::DeviceCode>(&self.tx, EntityRole::DeviceCode, id)
+            .await
     }
 
     async fn update_device_code_record(
@@ -52,18 +45,15 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         id: &SchemaValue<String>,
         input: FieldMap,
     ) -> AuthResult<Option<FieldMap>> {
-        let row = self
-            .store
-            .update_device_code_row(&self.tx, id, input)
-            .await?;
-        Ok(self
-            .store
-            .project_plugin_rows::<P::DeviceCode, FieldMap>(
+        self.store
+            .update_plugin_record::<P::DeviceCode>(
+                &self.tx,
                 EntityRole::DeviceCode,
-                row.into_iter().collect(),
+                "deviceCode",
+                id,
+                input,
             )
-            .await?
-            .pop())
+            .await
     }
 
     async fn get_device_code_by_device_code(

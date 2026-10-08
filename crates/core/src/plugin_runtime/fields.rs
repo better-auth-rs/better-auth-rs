@@ -1,10 +1,8 @@
 mod declarations;
 mod device;
 mod input;
-mod jwk;
 mod models;
 mod record;
-mod wallet;
 
 use crate::id::AdapterIdInput;
 use crate::store::schema::{EntityRole, resolve_field_name};
@@ -173,9 +171,9 @@ impl ModelFields {
             EntityRole::ApiKey
             | EntityRole::Passkey
             | EntityRole::DeviceCode
-            | EntityRole::TwoFactor => {}
-            EntityRole::Jwk => jwk::validate_fields(&fields)?,
-            EntityRole::WalletAddress => wallet::validate_fields(&fields)?,
+            | EntityRole::TwoFactor
+            | EntityRole::Jwk
+            | EntityRole::WalletAddress => {}
             EntityRole::User
             | EntityRole::Session
             | EntityRole::Account

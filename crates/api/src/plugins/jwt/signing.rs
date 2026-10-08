@@ -2,7 +2,7 @@ use super::*;
 
 pub(super) struct ResolvedSigningKey {
     algorithm: String,
-    key_id: Option<String>,
+    key_id: FieldValue,
     signer: Box<dyn JwsSigner>,
 }
 
@@ -12,17 +12,10 @@ impl ResolvedSigningKey {
         payload: Map<String, Value>,
         options: &JwtSigningOptions,
     ) -> AuthResult<String> {
-        let mut header = JwsHeader::from_map(options.header.clone()).map_err(jose_error)?;
-        header.set_algorithm(&self.algorithm);
-        if let Some(id) = &self.key_id {
-            header.set_key_id(id);
-        }
-        josekit::jws::serialize_compact(
-            &serde_json::to_vec(&payload)?,
-            &header,
-            self.signer.as_ref(),
-        )
-        .map_err(jose_error)
+        let mut header = FieldMap::from_json(options.header.clone())?;
+        let _ = header.insert("alg".into(), self.algorithm.clone().into());
+        let _ = header.insert("kid".into(), self.key_id.clone());
+        jose::sign(&payload, header, self.signer.as_ref())
     }
 }
 
@@ -109,104 +102,82 @@ impl JwtPlugin {
         endpoint: &EndpointContext<'_, S>,
     ) -> AuthResult<ResolvedSigningKey> {
         let config = &endpoint.auth.config;
-        let selected =
-            if let Some(id) = &options.key_id {
-                let key = self
-                    .read_key(id, endpoint)
-                    .await?
-                    .ok_or_else(|| AuthError::config("Requested JWT signing key does not exist"))?;
-                if key.expires_at.as_ref().is_some_and(|expiry| {
-                    expiry.milliseconds() < Utc::now().timestamp_millis() as f64
-                }) || options.algorithm.is_some_and(|alg| {
-                    key.alg.as_deref().unwrap_or(self.config.algorithm.name()) != alg.name()
-                }) {
-                    return Err(AuthError::config(
-                        "Requested JWT signing key is expired or has a different algorithm",
-                    ));
+        let primary = self.config.primary_algorithm();
+        let mut selected = if let Some(id) = &options.key_id {
+            let key = self.read_key(id, endpoint).await?.ok_or_else(|| AuthError::config(format!("signJWT: signingKeyId \"{id}\" not found in JWKS. The key must be provisioned before it can be referenced.")))?;
+            if let Some(expected) = options.algorithm {
+                let alg = keys::algorithm(&key, primary.name().into());
+                if !alg.strict_equals(&expected.name().into()) {
+                    return Err(AuthError::config(format!(
+                        "signJWT: signingKeyId \"{id}\" has alg \"{}\" but signingAlgorithm was set to \"{}\".",
+                        alg.display_utf16()?
+                            .to_utf8()
+                            .map_err(|error| AuthError::internal(error.to_string()))?,
+                        expected.name()
+                    )));
                 }
-                Some(key)
+            }
+            Some(key)
+        } else {
+            let preferred = keys::latest(
+                self.read_keys(endpoint).await?.unwrap_or_default(),
+                Some(options.algorithm.unwrap_or(primary).name()),
+                primary.name(),
+            )?;
+            if preferred.is_some() || options.algorithm.is_some() {
+                preferred
             } else {
-                let mut keys = self.read_keys(endpoint).await?.unwrap_or_default();
-                keys.sort_by(|left, right| {
-                    right
-                        .created_at
-                        .milliseconds()
-                        .partial_cmp(&left.created_at.milliseconds())
-                        .unwrap_or(std::cmp::Ordering::Equal)
-                });
-                keys.retain(|key| {
-                    key.expires_at.as_ref().is_none_or(|expiry| {
-                        expiry.milliseconds() > Utc::now().timestamp_millis() as f64
-                    })
-                });
-                let preferred = keys
-                    .iter()
-                    .find(|key| {
-                        key.alg.as_deref().unwrap_or(self.config.algorithm.name())
-                            == options.algorithm.unwrap_or(self.config.algorithm).name()
-                    })
-                    .cloned();
-                if preferred.is_some() || options.algorithm.is_some() {
-                    preferred
-                } else {
-                    let mut fallback = self.read_keys(endpoint).await?.unwrap_or_default();
-                    fallback.retain(|key| {
-                        key.expires_at.as_ref().is_none_or(|expiry| {
-                            expiry.milliseconds() > Utc::now().timestamp_millis() as f64
-                        })
-                    });
-                    fallback.sort_by(|left, right| {
-                        right
-                            .created_at
-                            .milliseconds()
-                            .partial_cmp(&left.created_at.milliseconds())
-                            .unwrap_or(std::cmp::Ordering::Equal)
-                    });
-                    fallback.into_iter().next()
-                }
-            };
-        let key = match selected {
-            Some(key) => key,
-            None => {
-                let algorithm = options.algorithm.unwrap_or(self.config.algorithm);
-                let parameters = self
-                    .config
-                    .key_pair_configs
-                    .iter()
-                    .find(|config| config.algorithm == algorithm)
-                    .copied()
-                    .or_else(|| {
-                        (algorithm == self.config.algorithm).then_some(JwtKeyPairConfig {
-                            algorithm,
-                            modulus_length: self.config.modulus_length,
-                        })
-                    })
-                    .ok_or_else(|| {
-                        AuthError::config("Requested JWT algorithm is not configured")
-                    })?;
-                self.create_key_pair_in_endpoint(parameters, endpoint)
-                    .await?
+                keys::latest(
+                    self.read_keys(endpoint).await?.unwrap_or_default(),
+                    None,
+                    primary.name(),
+                )?
             }
         };
-        if (options.key_id.is_some() || options.algorithm.is_some())
-            && key
-                .expires_at
-                .as_ref()
-                .is_some_and(|expiry| expiry.milliseconds() < Utc::now().timestamp_millis() as f64)
+        if selected.is_none()
+            && let Some(algorithm) = options.algorithm
         {
-            return Err(AuthError::config("Requested JWT signing key is expired"));
+            let parameters = self
+                .config
+                .key_pair_configs
+                .iter()
+                .find(|config| config.algorithm == algorithm)
+                .copied()
+                .or_else(|| {
+                    (algorithm == primary).then_some(JwtKeyPairConfig {
+                        algorithm,
+                        modulus_length: self.config.modulus_length,
+                    })
+                })
+                .ok_or_else(|| AuthError::config("Requested JWT algorithm is not configured"))?;
+            selected = Some(
+                self.create_key_pair_in_endpoint(parameters, endpoint)
+                    .await?,
+            );
         }
-        let private = if self.config.disable_private_key_encryption {
-            key.private_key
-        } else {
-            crate::plugins::symmetric::decrypt(
-                config.encryption_secret(),
-                &serde_json::from_str::<String>(&key.private_key)?,
-            )?
+        let key = match selected {
+            Some(key) if !keys::expires_before(&key, Utc::now().timestamp_millis())? => key,
+            _ => {
+                if options.key_id.is_some() || options.algorithm.is_some() {
+                    return Err(AuthError::config(
+                        "signJWT: requested signing key is expired and an explicit kid/alg was provided; not auto-minting a replacement. Rotate the key explicitly.",
+                    ));
+                }
+                self.create_key(endpoint).await?
+            }
         };
-        let private = Jwk::from_bytes(private).map_err(jose_error)?;
-        let algorithm = key.alg.as_deref().unwrap_or(self.config.algorithm.name());
-        let signer: Box<dyn JwsSigner> = match algorithm {
+        let private = if self.config.disable_private_key_encryption {
+            key.private_key.field_value()
+        } else {
+            let ciphertext = keys::parse_json(&key.private_key.field_value())?;
+            crate::plugins::symmetric::decrypt_field(
+                config.encryption_secret(),
+                &ciphertext,
+            ).map_err(|_| AuthError::config("Failed to decrypt private key. Make sure the secret currently in use is the same as the one used to encrypt the private key. If you are using a different secret, either clean up your JWKS or disable private key encryption."))?.into()
+        };
+        let algorithm = keys::algorithm(&key, primary.name().into());
+        let (algorithm, private) = keys::import(keys::parse_json(&private)?, &algorithm)?;
+        let signer: Box<dyn JwsSigner> = match algorithm.as_str() {
             "EdDSA" => Box::new(jws::EdDSA.signer_from_jwk(&private).map_err(jose_error)?),
             "RS256" => Box::new(jws::RS256.signer_from_jwk(&private).map_err(jose_error)?),
             "ES256" => Box::new(jws::ES256.signer_from_jwk(&private).map_err(jose_error)?),
@@ -219,8 +190,8 @@ impl JwtPlugin {
             }
         };
         Ok(ResolvedSigningKey {
-            algorithm: algorithm.to_owned(),
-            key_id: key.id.as_str().map(str::to_owned),
+            algorithm,
+            key_id: key.id.field_value(),
             signer,
         })
     }

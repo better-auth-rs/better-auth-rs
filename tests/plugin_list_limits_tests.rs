@@ -81,8 +81,8 @@ async fn run<S: AuthSchema>(
         let key = store
             .create_jwk(CreateJwk {
                 additional_fields: Default::default(),
-                public_key: material.public_key.clone(),
-                private_key: material.private_key.clone(),
+                public_key: material.public_key.typed()?.clone(),
+                private_key: material.private_key.typed()?.clone(),
                 created_at: date(&format!("{}-01-01T00:00:00Z", 2000 + index))?.into(),
                 expires_at: Some(
                     date(if index == 0 {

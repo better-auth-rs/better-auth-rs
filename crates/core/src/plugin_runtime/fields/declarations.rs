@@ -52,6 +52,21 @@ impl ModelFields {
                 ("createdAt", Date, false),
                 ("aaguid", String, false),
             ],
+            EntityRole::Jwk => vec![
+                ("publicKey", String, true),
+                ("privateKey", String, true),
+                ("createdAt", Date, true),
+                ("expiresAt", Date, false),
+                ("alg", String, false),
+                ("crv", String, false),
+            ],
+            EntityRole::WalletAddress => vec![
+                ("userId", String, true),
+                ("address", String, true),
+                ("chainId", Number, true),
+                ("isPrimary", Boolean, false),
+                ("createdAt", Date, true),
+            ],
             EntityRole::TwoFactor => vec![
                 ("secret", String, true),
                 ("backupCodes", String, true),
@@ -151,6 +166,19 @@ impl ModelFields {
                     }
                     _ => {}
                 }
+            }
+        } else if role == EntityRole::WalletAddress {
+            if let Some(field) = fields.fields_mut().get_mut("isPrimary") {
+                field.required = None;
+                field.default_value = Some(false.into());
+            }
+            if let Some(field) = fields.fields_mut().get_mut("userId") {
+                field.index = Some(true);
+                field.references = Some(UserFieldReference {
+                    model: "user".into(),
+                    field: "id".into(),
+                    ..Default::default()
+                });
             }
         } else if role == EntityRole::Passkey
             && let Some(field) = fields.fields_mut().get_mut("userId")

@@ -145,3 +145,21 @@ target!(
     "two-factor-verified-boolean",
     TwoFactor
 );
+target!(
+    jwk_algorithm_array,
+    "BETTER_AUTH_NATIVE_REPLACEMENT_JWK_ALGORITHM_ARRAY_SCHEMA",
+    "jwk-algorithm-array",
+    Jwk
+);
+target!(
+    wallet_owner_number,
+    "BETTER_AUTH_NATIVE_REPLACEMENT_WALLET_OWNER_NUMBER_SCHEMA",
+    "wallet-owner-number",
+    WalletAddress
+);
+target!(
+    wallet_chain_number,
+    "BETTER_AUTH_NATIVE_REPLACEMENT_WALLET_CHAIN_NUMBER_SCHEMA",
+    "wallet-chain-number",
+    WalletAddress
+);

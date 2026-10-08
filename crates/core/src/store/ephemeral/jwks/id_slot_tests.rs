@@ -1,5 +1,4 @@
 use super::*;
-use crate::AuthRecordFields;
 use crate::id::{IdGeneration, IdGenerator};
 use crate::store::{JwksStore, WalletStore};
 use crate::user_fields::{FieldTransforms, UserConfig, UserFieldConfig, UserFieldTransform};
@@ -64,70 +63,36 @@ impl Model {
         label: &str,
         owner: &str,
     ) -> AuthResult<JsonValue> {
-        let additional_fields = [("label".into(), label.into())].into();
         let fields = match self {
-            Self::Jwk => store
-                .create_jwk(crate::CreateJwk {
-                    created_at: date()?,
-                    public_key: format!("public-{label}"),
-                    private_key: format!("private-{label}"),
-                    expires_at: None,
-                    alg: "EdDSA".into(),
-                    crv: None,
-                    additional_fields,
-                })
-                .await?
-                .field_values()?,
-            Self::Wallet => store
-                .create_wallet_address(crate::CreateWalletAddress {
-                    user_id: owner.into(),
-                    address: format!("slot-{label}"),
-                    chain_id: 1,
-                    is_primary: false,
-                    created_at: date()?,
-                    additional_fields,
-                })
-                .await?
-                .field_values()?,
+            Self::Jwk => store.create_jwk_record(self.data(label, owner)?).await?,
+            Self::Wallet => {
+                store
+                    .create_wallet_address_record(self.data(label, owner)?)
+                    .await?
+            }
         };
         observe_fields(fields, false)
     }
 
     async fn get(self, store: &EphemeralStore, id: &str) -> AuthResult<JsonValue> {
         let fields = match self {
-            Self::Jwk => required(store.get_jwk(id).await?)?.field_values()?,
-            // The Wallet API selects the same sole row by address and chain; this case compares output traversal, not ID filtering.
-            Self::Wallet => required(store.get_wallet_address("slot-selected", Some(1)).await?)?
-                .field_values()?,
+            Self::Jwk => required(store.get_jwk_record(&id.into()).await?)?,
+            Self::Wallet => required(store.get_wallet_address_record(&id.into()).await?)?,
         };
         observe_fields(fields, false)
     }
 
-    fn write_selected_id(self, store: &EphemeralStore) -> AuthResult<()> {
-        // The public JWK and Wallet APIs have no update operation. Inject the captured raw write to test projection timing only.
-        let id = store.memory_primary_id_query(&Value::from("00101"))?;
-        match self {
-            Self::Jwk => required(
+    async fn write_selected_id(self, store: &EphemeralStore) -> AuthResult<JsonValue> {
+        let update = [("id".into(), "00101".into())].into();
+        let row = match self {
+            Self::Jwk => store.update_jwk_record(&"1".into(), update).await?,
+            Self::Wallet => {
                 store
-                    .lock()?
-                    .jwks
-                    .first_ref(|row| row.id.field_value() == Value::Number(1.0))?,
-            )?
-            .write(|row| {
-                row.id = crate::SchemaValue::from_field(id);
-                Ok(())
-            }),
-            Self::Wallet => required(
-                store
-                    .lock()?
-                    .wallets
-                    .first_ref(|row| row.id.field_value() == Value::Number(1.0))?,
-            )?
-            .write(|row| {
-                row.id = crate::SchemaValue::from_field(id);
-                Ok(())
-            }),
-        }
+                    .update_wallet_address_record(&"1".into(), update)
+                    .await?
+            }
+        };
+        observe_fields(required(row)?, false)
     }
 }
 
@@ -191,13 +156,13 @@ fn observe_memory(store: &EphemeralStore) -> AuthResult<JsonValue> {
         .jwks
         .snapshot()?
         .iter()
-        .map(|row| observe_fields(row.field_values()?, true))
+        .map(|row| observe_fields(row.clone(), true))
         .collect::<AuthResult<Vec<_>>>()?;
     let wallets = state
         .wallets
         .snapshot()?
         .iter()
-        .map(|row| observe_fields(row.field_values()?, true))
+        .map(|row| observe_fields(row.clone(), true))
         .collect::<AuthResult<Vec<_>>>()?;
     assert!(state.accounts.snapshot()?.is_empty());
     assert!(state.sessions.snapshot()?.is_empty());
@@ -305,8 +270,7 @@ fn reader(
                             &events,
                             json!(["writer-update", input, observe_memory(&writer)?]),
                         )?;
-                        model.write_selected_id(&writer)?;
-                        let updated = model.get(&writer, "101").await?;
+                        let updated = model.write_selected_id(&writer).await?;
                         record(
                             &events,
                             json!(["writer-updated", updated, observe_memory(&writer)?]),

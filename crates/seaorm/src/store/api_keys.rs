@@ -43,42 +43,21 @@ where
     }
 
     async fn create_api_key_record(&self, input: FieldMap) -> AuthResult<FieldMap> {
-        let active = self
-            .prepare_plugin_fields::<P::ApiKey>(EntityRole::ApiKey, "apikey", input, true)
-            .await?;
-        let model = database_operation::<Entity<P::ApiKey>, _>(self.config(), "create", async {
-            active.insert_raw(self.connection()).await
-        })
-        .await?;
-        Ok(self
-            .project_plugin_rows::<P::ApiKey, FieldMap>(EntityRole::ApiKey, vec![model])
-            .await?
-            .remove(0))
+        self.create_plugin_record::<P::ApiKey>(
+            self.connection(),
+            EntityRole::ApiKey,
+            "apikey",
+            input,
+        )
+        .await
     }
 
     async fn get_api_key_record(
         &self,
         id: &better_auth_core::SchemaValue<String>,
     ) -> AuthResult<Option<FieldMap>> {
-        let filter = self.plugin_id_filter::<P::ApiKey>(EntityRole::ApiKey, id)?;
-        let row = database_operation::<Entity<P::ApiKey>, _>(self.config(), "findOne", async {
-            self.connection()
-                .query_one_raw(
-                    Entity::<P::ApiKey>::find()
-                        .filter(filter)
-                        .build(self.connection().get_database_backend()),
-                )
-                .await
-                .map_err(map_db_err)
-        })
-        .await?;
-        Ok(self
-            .project_plugin_rows::<P::ApiKey, FieldMap>(
-                EntityRole::ApiKey,
-                row.into_iter().collect(),
-            )
-            .await?
-            .pop())
+        self.get_plugin_record::<P::ApiKey>(self.connection(), EntityRole::ApiKey, id)
+            .await
     }
 
     async fn get_api_key_by_id(&self, id: &str) -> AuthResult<Option<ApiKey>> {
@@ -190,28 +169,14 @@ where
         id: &better_auth_core::SchemaValue<String>,
         input: FieldMap,
     ) -> AuthResult<Option<FieldMap>> {
-        let filter = self.plugin_id_filter::<P::ApiKey>(EntityRole::ApiKey, id)?;
-        let active = self
-            .prepare_plugin_fields::<P::ApiKey>(EntityRole::ApiKey, "apikey", input, false)
-            .await?;
-        let model = database_operation::<Entity<P::ApiKey>, _>(self.config(), "update", async {
-            super::updates::execute_update_returning_raw::<Entity<P::ApiKey>, _>(
-                self.connection(),
-                active
-                    .update(self.connection().get_database_backend())?
-                    .filter(filter.clone()),
-                filter,
-            )
-            .await
-        })
-        .await?;
-        Ok(self
-            .project_plugin_rows::<P::ApiKey, FieldMap>(
-                EntityRole::ApiKey,
-                model.into_iter().collect(),
-            )
-            .await?
-            .pop())
+        self.update_plugin_record::<P::ApiKey>(
+            self.connection(),
+            EntityRole::ApiKey,
+            "apikey",
+            id,
+            input,
+        )
+        .await
     }
 
     async fn write_api_key_usage(
@@ -322,16 +287,8 @@ where
     }
 
     async fn delete_api_key(&self, id: &better_auth_core::SchemaValue<String>) -> AuthResult<()> {
-        let filter = self.plugin_id_filter::<P::ApiKey>(EntityRole::ApiKey, id)?;
-        database_operation::<Entity<P::ApiKey>, _>(self.config(), "delete", async {
-            Entity::<P::ApiKey>::delete_many()
-                .filter(filter)
-                .exec(self.connection())
-                .await
-                .map(|_| ())
-                .map_err(map_db_err)
-        })
-        .await
+        self.delete_plugin_record::<P::ApiKey>(self.connection(), EntityRole::ApiKey, id)
+            .await
     }
 
     async fn delete_expired_api_keys(&self) -> AuthResult<usize> {

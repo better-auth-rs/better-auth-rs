@@ -31,26 +31,21 @@ where
     }
 
     async fn create_device_code_record(&self, input: FieldMap) -> AuthResult<FieldMap> {
-        let row = self.insert_device_code(self.connection(), input).await?;
-        Ok(self
-            .project_plugin_rows::<P::DeviceCode, FieldMap>(EntityRole::DeviceCode, vec![row])
-            .await?
-            .remove(0))
+        self.create_plugin_record::<P::DeviceCode>(
+            self.connection(),
+            EntityRole::DeviceCode,
+            "deviceCode",
+            input,
+        )
+        .await
     }
 
     async fn get_device_code_record(
         &self,
         id: &SchemaValue<String>,
     ) -> AuthResult<Option<FieldMap>> {
-        let filter = self.plugin_id_filter::<P::DeviceCode>(EntityRole::DeviceCode, id)?;
-        let row = self.get_device_code_row(self.connection(), filter).await?;
-        Ok(self
-            .project_plugin_rows::<P::DeviceCode, FieldMap>(
-                EntityRole::DeviceCode,
-                row.into_iter().collect(),
-            )
-            .await?
-            .pop())
+        self.get_plugin_record::<P::DeviceCode>(self.connection(), EntityRole::DeviceCode, id)
+            .await
     }
 
     async fn update_device_code_record(
@@ -58,16 +53,14 @@ where
         id: &SchemaValue<String>,
         input: FieldMap,
     ) -> AuthResult<Option<FieldMap>> {
-        let row = self
-            .update_device_code_row(self.connection(), id, input)
-            .await?;
-        Ok(self
-            .project_plugin_rows::<P::DeviceCode, FieldMap>(
-                EntityRole::DeviceCode,
-                row.into_iter().collect(),
-            )
-            .await?
-            .pop())
+        self.update_plugin_record::<P::DeviceCode>(
+            self.connection(),
+            EntityRole::DeviceCode,
+            "deviceCode",
+            id,
+            input,
+        )
+        .await
     }
 
     async fn get_device_code_by_device_code(

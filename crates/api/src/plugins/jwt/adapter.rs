@@ -22,9 +22,10 @@ impl JwtPlugin {
             .get::<Arc<JwtCallbacks<S>>>()
             .and_then(|callbacks| callbacks.get.as_ref())
         {
-            return Ok(callback(endpoint)
-                .await?
-                .and_then(|keys| keys.into_iter().find(|key| key.id == id)));
+            return Ok(callback(endpoint).await?.and_then(|keys| {
+                keys.into_iter()
+                    .find(|key| key.id.field_value().strict_equals(&id.into()))
+            }));
         }
         store(endpoint).get_jwk(id).await
     }
@@ -58,6 +59,20 @@ impl JwtPlugin {
             return callback(data, endpoint).await;
         }
         data.created_at = chrono::Utc::now().into();
-        store(endpoint).create_jwk(data).await
+        let mut fields = better_auth_core::FieldMap::from([("alg".into(), data.alg.into())]);
+        if let Some(curve) = data.crv {
+            let _ = fields.insert("crv".into(), curve.into());
+        }
+        fields.extend([
+            ("publicKey".into(), data.public_key.into()),
+            ("privateKey".into(), data.private_key.into()),
+            ("createdAt".into(), data.created_at.into()),
+        ]);
+        if let Some(expiry) = data.expires_at {
+            let _ = fields.insert("expiresAt".into(), expiry.into());
+        }
+        fields.extend(data.additional_fields);
+        use better_auth_core::FromFieldMap as _;
+        Jwk::from_field_values(store(endpoint).create_jwk_record(fields).await?)
     }
 }

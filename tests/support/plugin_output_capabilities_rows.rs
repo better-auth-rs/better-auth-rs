@@ -1,10 +1,10 @@
 use better_auth::__private_core::{
     AuthError, AuthResult, AuthSchema, AuthStore, CreateApiKey, CreateDeviceCode, CreateJwk,
-    CreatePasskey, CreateTwoFactor, CreateWalletAddress, FieldMap, FieldValue, Jwk, Passkey,
+    CreatePasskey, CreateTwoFactor, CreateWalletAddress, FieldMap, Jwk, Passkey,
     PasskeyCredentialState, PasskeyStorage, WalletAddress, wire::PasskeyView,
 };
 use better_auth::seaorm::sea_orm::entity::prelude::DateTimeUtc;
-use serde_json::{Value, json};
+use serde_json::Value;
 
 use super::{ADDRESS, DATE, EXTRA_DATE};
 
@@ -54,30 +54,19 @@ fn passkey_value(row: &Passkey, storage: PasskeyStorage) -> AuthResult<Value> {
     reason = "The observation rejects collisions between plugin columns and additional fields before serializing the complete row."
 )]
 fn jwk_value(row: &Jwk) -> AuthResult<Value> {
-    let mut fields = row.additional_fields.json()?;
+    let mut fields = row.additional_fields.clone();
     for (name, value) in [
-        ("id", json!(row.id)),
-        ("publicKey", json!(row.public_key)),
-        ("privateKey", json!(row.private_key)),
-        (
-            "createdAt",
-            json!(FieldValue::Date(row.created_at.clone()).json()?),
-        ),
-        (
-            "expiresAt",
-            json!(
-                row.expires_at
-                    .clone()
-                    .map_or(FieldValue::Null, FieldValue::Date)
-                    .json()?
-            ),
-        ),
-        ("alg", json!(row.alg)),
-        ("crv", json!(row.crv)),
+        ("id", row.id.field_value()),
+        ("publicKey", row.public_key.field_value()),
+        ("privateKey", row.private_key.field_value()),
+        ("createdAt", row.created_at.field_value()),
+        ("expiresAt", row.expires_at.field_value()),
+        ("alg", row.alg.field_value()),
+        ("crv", row.crv.field_value()),
     ] {
         assert!(fields.insert(name.into(), value).is_none());
     }
-    Ok(Value::Object(fields))
+    Ok(Value::Object(fields.json()?))
 }
 
 #[expect(
@@ -85,21 +74,18 @@ fn jwk_value(row: &Jwk) -> AuthResult<Value> {
     reason = "The observation rejects collisions between plugin columns and additional fields before serializing the complete row."
 )]
 fn wallet_value(row: &WalletAddress) -> AuthResult<Value> {
-    let mut fields = row.additional_fields.json()?;
+    let mut fields = row.additional_fields.clone();
     for (name, value) in [
-        ("id", json!(row.id)),
-        ("userId", json!(row.user_id)),
-        ("address", json!(row.address)),
-        ("chainId", json!(row.chain_id)),
-        ("isPrimary", json!(row.is_primary)),
-        (
-            "createdAt",
-            json!(FieldValue::Date(row.created_at.clone()).json()?),
-        ),
+        ("id", row.id.field_value()),
+        ("userId", row.user_id.field_value()),
+        ("address", row.address.field_value()),
+        ("chainId", row.chain_id.field_value()),
+        ("isPrimary", row.is_primary.field_value()),
+        ("createdAt", row.created_at.field_value()),
     ] {
         assert!(fields.insert(name.into(), value).is_none());
     }
-    Ok(Value::Object(fields))
+    Ok(Value::Object(fields.json()?))
 }
 
 pub(super) async fn create<S: AuthSchema>(

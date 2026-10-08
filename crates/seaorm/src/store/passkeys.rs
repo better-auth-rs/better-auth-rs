@@ -35,14 +35,13 @@ where
     }
 
     async fn create_passkey_record(&self, input: FieldMap) -> AuthResult<FieldMap> {
-        let active = self
-            .prepare_plugin_fields::<P::Passkey>(EntityRole::Passkey, "passkey", input, true)
-            .await?;
-        let row = self.insert_passkey(self.connection(), active).await?;
-        Ok(self
-            .project_plugin_rows::<P::Passkey, FieldMap>(EntityRole::Passkey, vec![row])
-            .await?
-            .remove(0))
+        self.create_plugin_record::<P::Passkey>(
+            self.connection(),
+            EntityRole::Passkey,
+            "passkey",
+            input,
+        )
+        .await
     }
 
     async fn update_passkey_record(
@@ -68,14 +67,8 @@ where
         &self,
         id: &better_auth_core::SchemaValue<String>,
     ) -> AuthResult<Option<FieldMap>> {
-        let row = self.get_passkey_row(id).await?;
-        Ok(self
-            .project_plugin_rows::<P::Passkey, FieldMap>(
-                EntityRole::Passkey,
-                row.into_iter().collect(),
-            )
-            .await?
-            .pop())
+        self.get_plugin_record::<P::Passkey>(self.connection(), EntityRole::Passkey, id)
+            .await
     }
 
     async fn get_passkey_by_id(&self, id: &str) -> AuthResult<Option<Passkey>> {
@@ -223,16 +216,11 @@ where
         Ok(self.project_passkey_models(vec![row]).await?.remove(0))
     }
     async fn delete_passkey(&self, id: &str) -> AuthResult<()> {
-        let filter =
-            self.plugin_id_filter::<P::Passkey>(EntityRole::Passkey, &id.to_owned().into())?;
-        database_operation::<Entity<P::Passkey>, _>(self.config(), "delete", async {
-            Entity::<P::Passkey>::delete_many()
-                .filter(filter)
-                .exec(self.connection())
-                .await
-                .map(|_| ())
-                .map_err(map_db_err)
-        })
+        self.delete_plugin_record::<P::Passkey>(
+            self.connection(),
+            EntityRole::Passkey,
+            &id.to_owned().into(),
+        )
         .await
     }
 }

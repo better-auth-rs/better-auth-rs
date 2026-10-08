@@ -80,23 +80,23 @@ impl Model {
                 .sessions
                 .snapshot()?
                 .into_iter()
-                .map(|row| row.id)
+                .map(|row| row.id.field_value())
                 .collect::<Vec<_>>(),
             Self::Jwk => state
                 .jwks
                 .snapshot()?
                 .into_iter()
-                .map(|row| row.id)
+                .map(|row| row.get("id").cloned().unwrap_or_default())
                 .collect(),
             Self::Wallet => state
                 .wallets
                 .snapshot()?
                 .into_iter()
-                .map(|row| row.id)
+                .map(|row| row.get("id").cloned().unwrap_or_default())
                 .collect(),
         };
         ids.iter()
-            .map(|id| observe(&id.field_value()))
+            .map(observe)
             .collect::<AuthResult<Vec<_>>>()
             .map(JsonValue::Array)
     }
@@ -391,7 +391,7 @@ async fn serial_session_string_id_updates_match_upstream_id_contract() -> AuthRe
 }
 
 #[tokio::test]
-async fn serial_jwk_padded_lookup_matches_upstream_lifecycle_prefix() -> AuthResult<()> {
+async fn serial_jwk_padded_lookup_matches_complete_upstream_lifecycle() -> AuthResult<()> {
     let fixture = fixture()?;
     let case = required(
         required(fixture.get("cases").and_then(JsonValue::as_array))?
@@ -415,17 +415,70 @@ async fn serial_jwk_padded_lookup_matches_upstream_lifecycle_prefix() -> AuthRes
         json!({"name":"read-padded-id", "result":observe_record(&read.id, &read.additional_fields)?,
         "after":Model::Jwk.raw_ids(&store)?}),
     );
+    let observe_fields = |fields: FieldMap| -> AuthResult<JsonValue> {
+        Ok(json!({
+            "id": observe(required(fields.get("id"))?)?,
+            "label": observe(required(fields.get("label"))?)?,
+        }))
+    };
+    for name in [
+        "update-padded-id",
+        "delete-padded-id",
+        "read-deleted-id",
+        "create-after-removal",
+        "read-all",
+    ] {
+        record(&events, json!(["operation", name]))?;
+        let result = match name {
+            "update-padded-id" => observe_fields(required(
+                store
+                    .update_jwk_record(&"001".into(), [("label".into(), "updated".into())].into())
+                    .await?,
+            )?)?,
+            "delete-padded-id" => {
+                store.delete_jwk_record(&"001".into()).await?;
+                json!({"type": "undefined"})
+            }
+            "read-deleted-id" => store
+                .get_jwk_record(&"001".into())
+                .await?
+                .map(observe_fields)
+                .transpose()?
+                .unwrap_or(JsonValue::Null),
+            "create-after-removal" => Model::Jwk.create(&store, "third").await?,
+            "read-all" => JsonValue::Array(
+                store
+                    .list_jwk_records()
+                    .await?
+                    .into_iter()
+                    .map(observe_fields)
+                    .collect::<AuthResult<_>>()?,
+            ),
+            _ => return Err(AuthError::internal("Unknown JWK lifecycle operation")),
+        };
+        operations
+            .push(json!({"name": name, "result": result, "after": Model::Jwk.raw_ids(&store)?}));
+    }
     let expected_operations = required(case.get("operations").and_then(JsonValue::as_array))?
-        .iter().take(3).map(|step| Ok(json!({
-            "name":required(step.get("name"))?, "result":captured_record(required(step.get("result"))?)?,
-            "after":captured_ids(step, "after", Model::Jwk)?,
-        }))).collect::<AuthResult<Vec<_>>>()?;
-    let expected_events = required(case.get("events").and_then(JsonValue::as_array))?
         .iter()
-        .take_while(|event| **event != json!(["operation", "update-padded-id"]))
-        .cloned()
-        .collect::<Vec<_>>();
-    // JwksStore exposes create and lookup. Generic update, delete, and ID reuse remain Bun-only.
+        .map(|step| {
+            let result = required(step.get("result"))?;
+            let result = if result.is_null() || result.get("type") == Some(&json!("undefined")) {
+                result.clone()
+            } else if let Some(rows) = result.as_array() {
+                JsonValue::Array(
+                    rows.iter()
+                        .map(captured_record)
+                        .collect::<AuthResult<_>>()?,
+                )
+            } else {
+                captured_record(result)?
+            };
+            Ok(json!({"name":required(step.get("name"))?, "result": result,
+                "after":captured_ids(step, "after", Model::Jwk)?}))
+        })
+        .collect::<AuthResult<Vec<_>>>()?;
+    let expected_events = required(case.get("events").and_then(JsonValue::as_array))?.clone();
     assert_eq!(operations, expected_operations);
     assert_eq!(take_events(&events)?, expected_events);
     Ok(())
@@ -453,28 +506,33 @@ async fn serial_wallet_owner_binding_matches_complete_upstream_rows() -> AuthRes
             additional_fields: [("label".into(), "first".into())].into(),
         })
         .await?;
-    let observe_row = |row: &crate::WalletAddress| -> AuthResult<JsonValue> {
-        row.field_values()?
-            .iter()
+    let observe_fields = |row: &FieldMap| -> AuthResult<JsonValue> {
+        row.iter()
             .map(|(name, value)| Ok((name.clone(), observe(value)?)))
             .collect::<AuthResult<serde_json::Map<_, _>>>()
             .map(JsonValue::Object)
     };
     let first = required(required(case.get("operations"))?.get(0))?;
-    assert_eq!(observe_row(&created)?, *required(first.get("result"))?);
+    assert_eq!(
+        observe_fields(&created.field_values()?)?,
+        *required(first.get("result"))?
+    );
     let raw = store
         .lock()?
         .wallets
         .snapshot()?
         .iter()
-        .map(observe_row)
+        .map(observe_fields)
         .collect::<AuthResult<Vec<_>>>()?;
     assert_eq!(
         json!(raw),
         *required(required(first.get("after"))?.get("walletAddress"))?
     );
     let read = required(store.get_wallet_address("serial-first", Some(1)).await?)?;
-    assert_eq!(observe_row(&read)?, observe_row(&created)?);
+    assert_eq!(
+        observe_fields(&read.field_values()?)?,
+        observe_fields(&created.field_values()?)?
+    );
     Ok(())
 }
 

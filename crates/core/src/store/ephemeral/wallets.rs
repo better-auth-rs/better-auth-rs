@@ -1,123 +1,69 @@
-use super::rows::RowRef;
 use super::*;
-use crate::store::schema::{EntityRole, resolve_field_name};
-use crate::user_fields::project_adapter_value;
-
-impl EphemeralStore {
-    async fn project_wallet(
-        &self,
-        mut snapshot: crate::types::WalletAddress,
-        source: RowRef<crate::types::WalletAddress>,
-    ) -> AuthResult<crate::types::WalletAddress> {
-        self.model_fields
-            .begin_id_output(EntityRole::WalletAddress)?;
-        let fields = self
-            .model_fields
-            .fields(EntityRole::WalletAddress)
-            .adapter_fields(&[]);
-        let mut output = FieldMap::new();
-        for (name, field) in fields.fields() {
-            if name == "id" {
-                snapshot.id = source.read(|row| Self::project_id(&row.id))?;
-                continue;
-            }
-            let value = source.read(|row| {
-                Ok(row
-                    .additional_fields
-                    .get(resolve_field_name(field.field_name.as_deref(), name))
-                    .cloned())
-            })?;
-            let value = project_adapter_value(
-                value.unwrap_or_default(),
-                field,
-                field.references_id(),
-                true,
-            )
-            .await?;
-            let _ = output.insert(name.to_owned(), value);
-        }
-        snapshot.additional_fields = output;
-        snapshot.user_id = Self::project_id(&snapshot.user_id)?;
-        Ok(snapshot)
-    }
-}
+use crate::store::schema::EntityRole;
+use crate::{FieldValue, FromFieldMap, SchemaValue, WalletAddress};
 
 #[async_trait]
 impl crate::store::WalletStore for EphemeralStore {
-    async fn get_wallet_address(
+    async fn create_wallet_address_record(&self, input: FieldMap) -> AuthResult<FieldMap> {
+        self.create_plugin_record(EntityRole::WalletAddress, input, Default::default())
+            .await
+    }
+
+    async fn get_wallet_address_record(
         &self,
-        address: &str,
-        chain_id: Option<i64>,
-    ) -> AuthResult<Option<crate::types::WalletAddress>> {
-        self.model_fields
-            .begin_id_query(EntityRole::WalletAddress)?;
+        id: &SchemaValue<String>,
+    ) -> AuthResult<Option<FieldMap>> {
+        self.get_plugin_record(EntityRole::WalletAddress, id).await
+    }
+
+    async fn update_wallet_address_record(
+        &self,
+        id: &SchemaValue<String>,
+        input: FieldMap,
+    ) -> AuthResult<Option<FieldMap>> {
+        self.update_plugin_record(EntityRole::WalletAddress, id, input, Default::default())
+            .await
+    }
+
+    async fn delete_wallet_address_record(&self, id: &SchemaValue<String>) -> AuthResult<()> {
+        self.delete_plugin_records(EntityRole::WalletAddress, id)
+            .await
+    }
+
+    async fn get_wallet_address_value(
+        &self,
+        address: &FieldValue,
+        chain_id: Option<&FieldValue>,
+    ) -> AuthResult<Option<WalletAddress>> {
+        let address =
+            self.plugin_query_value(EntityRole::WalletAddress, "address", address.clone())?;
+        let chain_id = chain_id
+            .map(|chain| {
+                self.plugin_query_value(EntityRole::WalletAddress, "chainId", chain.clone())
+            })
+            .transpose()?;
+        let schema = self.model_fields.plugin_fields(EntityRole::WalletAddress);
+        let address_column = schema.record_storage_key("address");
+        let chain_column = schema.record_storage_key("chainId");
         let selected = self
             .raw("walletAddress", "findOne", |state| {
-                state
-                    .wallets
-                    .first_ref(|wallet| {
-                        wallet.address == address
-                            && chain_id.is_none_or(|chain| chain == wallet.chain_id)
-                    })?
-                    .map(|source| {
-                        let snapshot = source.read(|row| Ok(row.clone()))?;
-                        Ok((snapshot, source))
+                state.wallets.first_ref(|row| {
+                    crate::query::field_matches_equality(
+                        row.get(address_column).unwrap_or(&FieldValue::Undefined),
+                        &address,
+                    ) && chain_id.as_ref().is_none_or(|chain| {
+                        crate::query::field_matches_equality(
+                            row.get(chain_column).unwrap_or(&FieldValue::Undefined),
+                            chain,
+                        )
                     })
-                    .transpose()
+                })
             })
             .await?;
-        match selected {
-            Some((snapshot, source)) => self.project_wallet(snapshot, source).await.map(Some),
-            None => Ok(None),
-        }
-    }
-    async fn create_wallet_address(
-        &self,
-        value: crate::types::CreateWalletAddress,
-    ) -> AuthResult<crate::types::WalletAddress> {
-        self.model_fields.begin_id_input(
-            EntityRole::WalletAddress,
-            crate::id::AdapterIdInput::default(),
-        )?;
-        let (additional_fields, id) = self
-            .model_fields
-            .fields(EntityRole::WalletAddress)
-            .create_adapter_storage_fields(
-                value.additional_fields,
-                || {
-                    let Some(policy) = self
-                        .model_fields
-                        .id_input_policy(EntityRole::WalletAddress)?
-                    else {
-                        return Ok(None);
-                    };
-                    self.config
-                        .advanced
-                        .database
-                        .generate_id()
-                        .adapter_id_with_policy("walletAddress", None, policy)
-                },
-                |_, field, value| self.memory_plugin_field_input(field, value),
-            )
-            .await?;
-        let mut value = crate::types::WalletAddress {
-            additional_fields,
-            id: id.map(crate::SchemaValue::Typed).unwrap_or_default(),
-            user_id: self.memory_reference_id_input(value.user_id.into())?,
-            address: value.address,
-            chain_id: value.chain_id,
-            is_primary: value.is_primary,
-            created_at: value.created_at,
-        };
-        let (snapshot, source) = self
-            .raw("walletAddress", "create", |state| {
-                if let Some(id) = self.next_serial_id(state.wallets.len()) {
-                    value.id = crate::SchemaValue::from_field(id);
-                }
-                let source = state.wallets.push_ref(value.clone());
-                Ok((value, source))
-            })
-            .await?;
-        self.project_wallet(snapshot, source).await
+        self.project_plugin_refs(EntityRole::WalletAddress, selected.into_iter().collect())
+            .await?
+            .pop()
+            .map(WalletAddress::from_field_values)
+            .transpose()
     }
 }

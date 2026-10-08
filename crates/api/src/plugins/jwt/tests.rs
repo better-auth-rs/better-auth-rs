@@ -3,7 +3,7 @@ use crate::plugins::test_helpers::create_test_context;
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use std::sync::Arc;
 
-fn header(token: &str) -> Value {
+pub(super) fn header(token: &str) -> Value {
     serde_json::from_slice(
         &URL_SAFE_NO_PAD
             .decode(token.split('.').next().unwrap())
@@ -446,12 +446,12 @@ async fn expired_signing_keys_rotate_and_public_grace_does_not_reactivate_them()
     assert_eq!(stored.len(), 2);
     for key in &stored {
         assert!(
-            serde_json::from_str::<Value>(&key.private_key)
+            serde_json::from_str::<Value>(key.private_key.typed().unwrap())
                 .unwrap()
                 .is_string()
         );
         assert!(
-            serde_json::from_str::<Value>(&key.public_key)
+            serde_json::from_str::<Value>(key.public_key.typed().unwrap())
                 .unwrap()
                 .get("d")
                 .is_none()

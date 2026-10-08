@@ -51,7 +51,7 @@ fn public(row: WalletAddress) -> TestResult<Value> {
     Ok(json!({
         "id": id.typed()?, "userId": user_id, "address": address,
         "chainId": chain_id, "isPrimary": is_primary,
-        "createdAt": date(created_at.to_datetime()?.ok_or("Expected a valid Wallet creation date")?),
+        "createdAt": date(created_at.typed()?.to_datetime()?.ok_or("Expected a valid Wallet creation date")?),
     }))
 }
 

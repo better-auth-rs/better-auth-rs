@@ -1,16 +1,17 @@
+#[cfg(test)]
+mod native_tests;
 mod request;
 use std::{future::Future, pin::Pin, sync::Arc};
 
-use better_auth_core::types::CreateWalletAddress;
 use better_auth_core::{
-    AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, AuthSchema, AuthSession,
-    AuthUser, CreateAccount, CreateUser, CreateVerification, RequestMeta,
+    AuthContext, AuthError, AuthRecordFields, AuthRequest, AuthResponse, AuthResult, AuthSchema,
+    AuthUser, CreateAccount, CreateUser, CreateVerification, FieldMap, FieldValue, RequestMeta,
 };
 use chrono::{DateTime, Duration, NaiveDate, Utc};
 use serde_json::{Value, json};
 use sha3::{Digest, Keccak256};
 
-use super::helpers::{SessionIssueError, issue_user_session};
+use super::helpers::{SessionIssueError, issue_selected_user_session_optional};
 
 type CallbackFuture<T> = Pin<Box<dyn Future<Output = AuthResult<T>> + Send>>;
 type NonceCallback = dyn Fn() -> CallbackFuture<String> + Send + Sync;
@@ -27,7 +28,7 @@ pub struct SiweVerification {
     /// EIP-55 checksum address parsed from the message.
     pub address: String,
     /// Positive chain identifier parsed from the message.
-    pub chain_id: i64,
+    pub chain_id: f64,
     /// Upstream CACAO context for application verifiers.
     pub cacao: Value,
 }
@@ -164,7 +165,7 @@ impl SiwePlugin {
         let Some(address) = parsed.address.and_then(checksum_address) else {
             return mismatch();
         };
-        let Some(chain_id) = parsed.chain_id.filter(|chain| *chain > 0) else {
+        let Some(chain_id) = parsed.chain_id.filter(|chain| *chain > 0.0) else {
             return mismatch();
         };
         if parsed
@@ -205,14 +206,22 @@ impl SiwePlugin {
         }
         let exact_wallet = ctx
             .database
-            .get_wallet_address(&address, Some(chain_id))
+            .get_wallet_address_value(&address.clone().into(), Some(&chain_id.into()))
             .await?;
         let wallet = match exact_wallet.as_ref() {
             Some(wallet) => Some(wallet.clone()),
-            None => ctx.database.get_wallet_address(&address, None).await?,
+            None => {
+                ctx.database
+                    .get_wallet_address_value(&address.clone().into(), None)
+                    .await?
+            }
         };
         let user = match wallet {
-            Some(wallet) => ctx.database.get_user_by_id_field(&wallet.user_id).await?,
+            Some(wallet) => {
+                ctx.database
+                    .get_user_by_id_value(&wallet.user_id.field_value())
+                    .await?
+            }
             None => None,
         };
         let new_user = user.is_none();
@@ -297,21 +306,27 @@ impl SiwePlugin {
         if new_user || exact_wallet.is_none() {
             let _ = ctx
                 .database
-                .create_wallet_address(CreateWalletAddress {
-                    additional_fields: Default::default(),
-                    user_id: user.id().typed()?.to_string(),
-                    address: address.clone(),
-                    chain_id,
-                    is_primary: new_user,
-                    created_at: Utc::now().into(),
-                })
+                .create_wallet_address_record(FieldMap::from([
+                    ("userId".into(), user.id().field_value()),
+                    ("address".into(), address.clone().into()),
+                    ("chainId".into(), chain_id.into()),
+                    ("isPrimary".into(), new_user.into()),
+                    (
+                        "createdAt".into(),
+                        better_auth_core::FieldDate::from(Utc::now()).into(),
+                    ),
+                ]))
                 .await?;
             let _ = ctx
                 .database
                 .create_account(CreateAccount {
                     user_id: user.id().into_owned(),
                     provider_id: "siwe".into(),
-                    account_id: (format!("{address}:{chain_id}")).into(),
+                    account_id: (format!(
+                        "{address}:{}",
+                        better_auth_core::schema_value::number_string(chain_id)
+                    ))
+                    .into(),
                     access_token: Default::default(),
                     refresh_token: Default::default(),
                     id_token: Default::default(),
@@ -324,21 +339,46 @@ impl SiwePlugin {
                 .await?;
         }
         let meta = RequestMeta::from_request_with_config(req, &ctx.config.advanced.ip_address);
-        let issued = issue_user_session(ctx, user.id().typed()?, meta.ip_address, meta.user_agent)
-            .await
-            .map_err(SessionIssueError::into_auth_error)?;
-        let manager = ctx.session_manager();
-        manager
-            .set_session_cookie(
-                req,
-                manager.internal_data(&issued.user, &issued.session).await?,
-                None,
-            )
+        let data = issue_selected_user_session_optional(
+            ctx,
+            FieldMap::from(user.clone()).into(),
+            &meta,
+            ctx.config.session.expires_in(),
+        )
+        .await
+        .map_err(SessionIssueError::into_auth_error)?;
+        let Some(data) = data else {
+            return Ok(AuthResponse::json(
+                500,
+                &json!({"message":"Internal Server Error","status":500}),
+            )?);
+        };
+        let token = data
+            .session
+            .field_values()?
+            .get("token")
+            .cloned()
+            .unwrap_or_default();
+        ctx.session_manager()
+            .set_native_session_cookie(req, data, None)
             .await?;
-        Ok(AuthResponse::json(
+        Ok(AuthResponse::native(
             200,
-            &json!({"token":issued.session.token(),"success":true,"user":{"id":user.id(),"walletAddress":address,"chainId":chain_id}}),
-        )?)
+            FieldMap::from([
+                ("token".into(), token),
+                ("success".into(), true.into()),
+                (
+                    "user".into(),
+                    FieldMap::from([
+                        ("id".into(), user.id().field_value()),
+                        ("walletAddress".into(), address.into()),
+                        ("chainId".into(), chain_id.into()),
+                    ])
+                    .into(),
+                ),
+            ])
+            .into(),
+        ))
     }
 }
 
@@ -405,7 +445,7 @@ fn checksum_address(address: &str) -> Option<String> {
 struct ParsedMessage<'a> {
     domain: Option<&'a str>,
     address: Option<&'a str>,
-    chain_id: Option<i64>,
+    chain_id: Option<f64>,
     nonce: Option<&'a str>,
     expiration_time: Option<&'a str>,
     not_before: Option<&'a str>,
@@ -428,16 +468,10 @@ impl<'a> ParsedMessage<'a> {
             if let Some((key, value)) = line.split_once(": ") {
                 match key {
                     "Chain ID" => {
-                        parsed.chain_id = value
-                            .trim()
-                            .parse::<f64>()
-                            .ok()
-                            .filter(|value| {
-                                value.fract() == 0.0
-                                    && *value < i64::MAX as f64
-                                    && *value >= i64::MIN as f64
-                            })
-                            .map(|value| value as i64)
+                        parsed.chain_id =
+                            better_auth_core::query::field_number(&FieldValue::from(value))
+                                .ok()
+                                .filter(|value| value.is_finite() && value.fract() == 0.0)
                     }
                     "Nonce" => parsed.nonce = Some(value),
                     "Expiration Time" => parsed.expiration_time = Some(value),
@@ -465,6 +499,13 @@ impl<S: AuthSchema> better_auth_core::AuthPlugin<S> for SiwePlugin {
             better_auth_core::AuthRoute::post("/siwe/verify", "verifySiweMessage")
                 .body_validator(move |req| request::verify(req, anonymous)),
         ]
+    }
+    async fn on_init(&self, ctx: &mut better_auth_core::AuthInitContext<S>) -> AuthResult<()> {
+        let role = better_auth_core::store::schema::EntityRole::WalletAddress;
+        ctx.register_model_fields(
+            role,
+            better_auth_core::plugin_runtime::ModelFields::plugin_native_fields(role),
+        )
     }
     async fn on_request(
         &self,

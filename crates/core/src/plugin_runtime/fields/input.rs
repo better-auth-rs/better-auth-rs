@@ -172,3 +172,32 @@ impl crate::UpdateTwoFactor {
         Ok(fields)
     }
 }
+
+impl crate::CreateJwk {
+    /// Convert generated key material through complete adapter declarations.
+    #[doc(hidden)]
+    pub fn into_adapter_fields(self) -> AuthResult<FieldMap> {
+        let mut fields = self.additional_fields;
+        put(&mut fields, "publicKey", self.public_key);
+        put(&mut fields, "privateKey", self.private_key);
+        put(&mut fields, "createdAt", self.created_at);
+        put(&mut fields, "expiresAt", self.expires_at);
+        put(&mut fields, "alg", self.alg);
+        put(&mut fields, "crv", self.crv);
+        Ok(fields)
+    }
+}
+
+impl crate::CreateWalletAddress {
+    /// Convert ordinary wallet input through complete adapter declarations.
+    #[doc(hidden)]
+    pub fn into_adapter_fields(self) -> AuthResult<FieldMap> {
+        let mut fields = self.additional_fields;
+        put(&mut fields, "userId", self.user_id);
+        put(&mut fields, "address", self.address);
+        put(&mut fields, "chainId", self.chain_id);
+        put(&mut fields, "isPrimary", self.is_primary);
+        put(&mut fields, "createdAt", self.created_at);
+        Ok(fields)
+    }
+}

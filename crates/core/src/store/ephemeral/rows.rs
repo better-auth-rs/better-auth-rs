@@ -307,13 +307,7 @@ row_id!(
     crate::Invitation,
     crate::Team,
     crate::OrganizationRole,
-    crate::TwoFactor,
-    crate::DeviceCode,
-    crate::ApiKey,
-    crate::Passkey,
     crate::TeamMember,
-    crate::Jwk,
-    crate::types::WalletAddress,
     crate::wire::SessionView
 );
 

@@ -1,8 +1,8 @@
 use crate::{SeaOrmPluginModel, schema::AuthSchema};
-use better_auth_core::store::schema::{EntityRole, core_fields, resolve_field_name};
-use better_auth_core::{AuthError, AuthResult, id::IdGeneration, user_fields::UserConfig};
-use better_auth_core::{FieldMap, FromFieldMap, SchemaField};
-use sea_orm::{ColumnTrait, DbBackend, ExprTrait, IdenStatic, QueryResult};
+use better_auth_core::store::schema::{EntityRole, resolve_field_name};
+use better_auth_core::{AuthError, AuthResult, id::IdGeneration};
+use better_auth_core::{FieldMap, FromFieldMap};
+use sea_orm::{ColumnTrait, DbBackend, ExprTrait, QueryResult};
 
 pub(super) type Write<M> = super::record_write::RecordWrite<Entity<M>>;
 
@@ -171,36 +171,6 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
     }
 }
 
-pub(super) fn record_fields<M: SeaOrmPluginModel>(
-    model: &M,
-    fields: &UserConfig,
-    backend: DbBackend,
-) -> AuthResult<better_auth_core::user_fields::AdapterRecord> {
-    let mut record = model.record_fields(fields)?;
-    record.map_storage_fields(
-        fields,
-        super::field_output::capabilities(backend),
-        |name, field| {
-            super::field_output::plugin_field_output(
-                super::field_output::column_value::<M::Entity>(model, M::column(name)?),
-                field,
-                backend,
-            )
-        },
-    )?;
-    Ok(record)
-}
-
-pub(super) fn set<M: SeaOrmPluginModel>(
-    active: &mut Write<M>,
-    name: &str,
-    value: impl SchemaField,
-    policy: &IdGeneration,
-) -> AuthResult<()> {
-    let fields = FieldMap::from_iter([(name.to_owned(), value.into_field())]);
-    apply::<M>(active, fields, policy)
-}
-
 pub(super) fn apply<M: SeaOrmPluginModel>(
     active: &mut Write<M>,
     mut fields: FieldMap,
@@ -228,36 +198,6 @@ pub(super) fn active<M: SeaOrmPluginModel>(
     Ok(active)
 }
 
-pub(super) async fn additional_fields<M: SeaOrmPluginModel>(
-    config: &UserConfig,
-    input: FieldMap,
-    policy: &IdGeneration,
-    backend: DbBackend,
-    create: bool,
-) -> AuthResult<Write<M>> {
-    let fields = config
-        .storage_fields_with_binding(input, create, |name, field, value| {
-            additional_field_input::<M>(name, field, value, policy, backend)
-        })
-        .await?;
-    additional_field_write::<M>(fields)
-}
-
-pub(super) async fn create_additional_fields<M: SeaOrmPluginModel>(
-    config: &UserConfig,
-    input: FieldMap,
-    policy: &IdGeneration,
-    backend: DbBackend,
-    generate_id: impl FnMut() -> AuthResult<Option<String>>,
-) -> AuthResult<(Write<M>, Option<String>)> {
-    let (fields, id) = config
-        .create_adapter_storage_fields(input, generate_id, |name, field, value| {
-            additional_field_input::<M>(name, field, value, policy, backend)
-        })
-        .await?;
-    Ok((additional_field_write::<M>(fields)?, id))
-}
-
 fn additional_field_input<M: SeaOrmPluginModel>(
     name: &str,
     field: &better_auth_core::user_fields::UserFieldConfig,
@@ -281,49 +221,6 @@ fn additional_field_input<M: SeaOrmPluginModel>(
         },
         backend,
     )
-}
-
-fn additional_field_write<M: SeaOrmPluginModel>(fields: FieldMap) -> AuthResult<Write<M>> {
-    let mut active = Write::<M>::default();
-    for (name, value) in fields {
-        active.field(M::column(&name)?, value);
-    }
-    Ok(active)
-}
-
-pub(super) fn validate_additional_field_columns<M: SeaOrmPluginModel>(
-    role: EntityRole,
-    fields: &UserConfig,
-) -> AuthResult<()> {
-    validate_field_columns(
-        &format!("{role:?} schema"),
-        fields,
-        M::column,
-        M::core_field_name,
-    )?;
-    for (name, field) in fields.fields() {
-        if name == "id" {
-            continue;
-        }
-        let storage = resolve_field_name(field.field_name.as_deref(), name);
-        for core in core_fields(role).iter().filter(|field| {
-            !(role == EntityRole::Passkey && matches!(field.name, "name" | "aaguid"))
-                && !(role == EntityRole::TwoFactor
-                    && M::two_factor_storage() == better_auth_core::TwoFactorStorage::Native
-                    && matches!(field.name, "created_at" | "updated_at"))
-                && !(role == EntityRole::Passkey
-                    && M::passkey_storage() == better_auth_core::PasskeyStorage::Native
-                    && matches!(field.name, "credential" | "updated_at"))
-        }) {
-            let column = M::column(core.name)?;
-            if [name.as_str(), storage].contains(&column.as_str()) {
-                return Err(AuthError::config(format!(
-                    "{role:?} additional field {name} cannot replace native column {storage}"
-                )));
-            }
-        }
-    }
-    Ok(())
 }
 
 /// Resolve configured policies before accepting writes to typed columns.

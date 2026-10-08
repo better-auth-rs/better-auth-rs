@@ -80,7 +80,13 @@ fn organization<M: SeaOrmOrganizationModel>(
 }
 
 fn plugin<M: SeaOrmPluginModel>(role: EntityRole, fields: &UserConfig) -> AuthResult<SchemaTable> {
-    if matches!(role, EntityRole::DeviceCode | EntityRole::TwoFactor) {
+    if matches!(
+        role,
+        EntityRole::DeviceCode
+            | EntityRole::TwoFactor
+            | EntityRole::Jwk
+            | EntityRole::WalletAddress
+    ) {
         let mut required = vec!["id"];
         if role == EntityRole::TwoFactor
             && M::two_factor_storage() == better_auth_core::TwoFactorStorage::Legacy
@@ -200,9 +206,9 @@ where
             EntityRole::TwoFactor => {
                 plugin::<P::TwoFactor>(role, &model_fields.plugin_fields(role))
             }
-            EntityRole::Jwk => plugin::<P::Jwk>(role, model_fields.fields(role)),
+            EntityRole::Jwk => plugin::<P::Jwk>(role, &model_fields.plugin_fields(role)),
             EntityRole::WalletAddress => {
-                plugin::<P::WalletAddress>(role, model_fields.fields(role))
+                plugin::<P::WalletAddress>(role, &model_fields.plugin_fields(role))
             }
             EntityRole::RateLimit => plugin::<P::RateLimit>(role, model_fields.fields(role)),
         })

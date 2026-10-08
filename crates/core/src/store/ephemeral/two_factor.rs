@@ -23,7 +23,7 @@ impl EphemeralStore {
         write: impl Fn(&mut FieldMap) + Send,
     ) -> AuthResult<Option<TwoFactor>> {
         let selected = self
-            .raw("twoFactor", operation, |state| {
+            .raw("twoFactor", operation, move |state| {
                 let matches = state.two_factors.try_select_refs(predicate)?;
                 let writes = if operation == "incrementOne" {
                     1

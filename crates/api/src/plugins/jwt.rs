@@ -3,12 +3,12 @@
 use crate::plugins::endpoint_context::EndpointContext;
 use better_auth_core::{
     AuthContext, AuthError, AuthInitContext, AuthPlugin, AuthRequest, AuthResponse, AuthResult,
-    AuthRoute, AuthSchema, CreateJwk, HttpMethod,
+    AuthRoute, AuthSchema, CreateJwk, FieldMap, FieldValue, HttpMethod,
 };
 use chrono::{Duration, Utc};
 use josekit::{
     jwk::{self, Jwk},
-    jws::{self, JwsHeader, JwsSigner},
+    jws::{self, JwsSigner},
 };
 use serde_json::{Map, Value, json};
 
@@ -16,6 +16,8 @@ mod adapter;
 mod cache;
 mod callbacks;
 mod claims;
+mod jose;
+mod keys;
 mod native;
 mod options;
 mod overrides;
@@ -103,9 +105,9 @@ pub struct JwtPluginConfig {
     /// Public discovery path.
     #[config(default = "/jwks".to_owned())]
     pub jwks_path: String,
-    /// Algorithm used for newly generated keys.
-    #[config(default = JwtAlgorithm::EdDsa)]
-    pub algorithm: JwtAlgorithm,
+    /// Algorithm used for newly generated keys. Omission uses EdDSA and preserves header fallback during cookie verification.
+    #[config(default = None)]
+    pub algorithm: Option<JwtAlgorithm>,
     /// Relative token lifetime or absolute expiration timestamp.
     #[config(default = JwtExpiration::After(Duration::minutes(15)), skip)]
     pub expiration_time: JwtExpiration,
@@ -134,6 +136,12 @@ pub struct JwtPlugin {
     config: JwtPluginConfig,
 }
 
+impl JwtPluginConfig {
+    fn primary_algorithm(&self) -> JwtAlgorithm {
+        self.algorithm.unwrap_or_default()
+    }
+}
+
 impl JwtPlugin {
     /// Set a relative duration, an absolute date, or a NumericDate in seconds.
     pub fn expiration_time(mut self, expiration: impl Into<JwtExpiration>) -> Self {
@@ -154,9 +162,19 @@ impl<S: AuthSchema> AuthPlugin<S> for JwtPlugin {
         ]
     }
     async fn on_init(&self, ctx: &mut AuthInitContext<S>) -> AuthResult<()> {
+        let role = better_auth_core::store::schema::EntityRole::Jwk;
+        ctx.register_model_fields(
+            role,
+            better_auth_core::plugin_runtime::ModelFields::plugin_native_fields(role),
+        )?;
         ctx.extensions.insert(self.config.clone());
         if self.config.custom_sign.is_some() && self.config.remote_url.is_none() {
             return Err(AuthError::config("custom_sign requires remote_url"));
+        }
+        if self.config.remote_url.is_some() && self.config.algorithm.is_none() {
+            return Err(AuthError::config(
+                "remote_url requires an explicit algorithm",
+            ));
         }
         if !self.config.jwks_path.starts_with('/') || self.config.jwks_path.contains("..") {
             return Err(AuthError::config(
@@ -292,7 +310,7 @@ impl JwtPlugin {
     ) -> AuthResult<better_auth_core::Jwk> {
         self.create_key_pair_in_endpoint(
             JwtKeyPairConfig {
-                algorithm: self.config.algorithm,
+                algorithm: self.config.primary_algorithm(),
                 modulus_length: self.config.modulus_length,
             },
             endpoint,
@@ -382,27 +400,40 @@ impl JwtPlugin {
             AuthError::internal("No key sets found. Make sure you have a key in your database.")
         })?;
         let mut public = Vec::new();
-        for key in keys.into_iter().filter(|key| {
-            key.expires_at.as_ref().is_none_or(|expiry| {
-                expiry.milliseconds() + self.config.grace_period.num_milliseconds() as f64
-                    > Utc::now().timestamp_millis() as f64
-            })
-        }) {
-            let mut value: Map<String, Value> = serde_json::from_str(&key.public_key)?;
-            let _ = value.entry("alg").or_insert_with(|| {
-                key.alg
-                    .unwrap_or_else(|| self.config.algorithm.name().to_owned())
-                    .into()
-            });
-            if let Some(curve) = key.crv {
-                let _ = value.entry("crv").or_insert(curve.into());
+        let now = Utc::now().timestamp_millis() as f64;
+        for key in keys {
+            let expiry = key.expires_at.field_value();
+            if expiry.is_truthy() {
+                let live = keys::date_millis(&expiry, "key.expiresAt")?
+                    + self.config.grace_period.num_milliseconds() as f64
+                    > now;
+                if !live {
+                    continue;
+                }
             }
-            if let Some(id) = key.id.json()? {
-                let _ = value.insert("kid".into(), id);
-            }
-            public.push(value);
+            let curve = key.crv.field_value();
+            let mut value = FieldMap::from([
+                (
+                    "alg".into(),
+                    keys::algorithm(&key, self.config.primary_algorithm().name().into()),
+                ),
+                (
+                    "crv".into(),
+                    if curve.is_null() {
+                        FieldValue::Undefined
+                    } else {
+                        curve
+                    },
+                ),
+            ]);
+            keys::spread(&mut value, keys::parse_json(&key.public_key.field_value())?);
+            let _ = value.insert("kid".into(), key.id.field_value());
+            public.push(FieldValue::from(value));
         }
-        Ok(AuthResponse::json(200, &json!({"keys": public}))?)
+        Ok(AuthResponse::native(
+            200,
+            FieldMap::from([("keys".into(), public.into())]).into(),
+        ))
     }
 }
 
@@ -417,5 +448,7 @@ fn jose_error(error: josekit::JoseError) -> AuthError {
     AuthError::internal(format!("JWT signing key: {error}"))
 }
 
+#[cfg(test)]
+mod native_tests;
 #[cfg(test)]
 mod tests;

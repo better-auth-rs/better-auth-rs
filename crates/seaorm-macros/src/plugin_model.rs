@@ -45,7 +45,12 @@ pub(super) fn generate(
     let mut raw_output = Vec::new();
     let dynamic_record = matches!(
         role,
-        EntityRole::ApiKey | EntityRole::Passkey | EntityRole::DeviceCode | EntityRole::TwoFactor
+        EntityRole::ApiKey
+            | EntityRole::Passkey
+            | EntityRole::DeviceCode
+            | EntityRole::TwoFactor
+            | EntityRole::Jwk
+            | EntityRole::WalletAddress
     );
     for field in &fields.named {
         let Some(ident) = &field.ident else { continue };
@@ -102,8 +107,6 @@ pub(super) fn generate(
             }
         } else if role == EntityRole::RateLimit && name == "count" {
             quote!(f64::from(self.#ident.to_owned()))
-        } else if role == EntityRole::WalletAddress && name == "chain_id" {
-            quote!(i64::from(self.#ident))
         } else if matches!(
             name.as_str(),
             "expires_at" | "last_polled_at" | "locked_until" | "created_at" | "updated_at"
@@ -115,11 +118,6 @@ pub(super) fn generate(
             }
         } else {
             quote!(self.#ident.to_owned())
-        };
-        let value = if role == EntityRole::WalletAddress && name == "user_id" {
-            quote!(#core_root::SchemaValue::from_field(#core_root::SchemaField::into_field(#value)))
-        } else {
-            value
         };
         output.push(quote!(#ident: #value,));
     }

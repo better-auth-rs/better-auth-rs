@@ -3,7 +3,8 @@ use better_auth::{
     __private_core::{AuthSchema, AuthStore, CreateUser, SchemaValue, store::schema::EntityRole},
     BetterAuth,
     plugins::{
-        DeviceAuthorizationPlugin, TwoFactorPlugin, api_key::ApiKeyPlugin, passkey::PasskeyPlugin,
+        DeviceAuthorizationPlugin, JwtPlugin, SiwePlugin, TwoFactorPlugin, api_key::ApiKeyPlugin,
+        passkey::PasskeyPlugin,
     },
 };
 use std::sync::Arc;
@@ -14,6 +15,8 @@ enum Model {
     Passkey,
     DeviceCode,
     TwoFactor,
+    Jwk,
+    WalletAddress,
 }
 
 struct Store<S: AuthSchema, F> {
@@ -35,6 +38,12 @@ where
             Model::Passkey => self.store.create_passkey_record(fields).await.map(Some),
             Model::DeviceCode => self.store.create_device_code_record(fields).await.map(Some),
             Model::TwoFactor => self.store.create_two_factor_record(fields).await.map(Some),
+            Model::Jwk => self.store.create_jwk_record(fields).await.map(Some),
+            Model::WalletAddress => self
+                .store
+                .create_wallet_address_record(fields)
+                .await
+                .map(Some),
         }
     }
 
@@ -45,6 +54,8 @@ where
             Model::Passkey => self.store.get_passkey_record(&id).await,
             Model::DeviceCode => self.store.get_device_code_record(&id).await,
             Model::TwoFactor => self.store.get_two_factor_record(&id).await,
+            Model::Jwk => self.store.get_jwk_record(&id).await,
+            Model::WalletAddress => self.store.get_wallet_address_record(&id).await,
         }
     }
 
@@ -55,6 +66,8 @@ where
             Model::Passkey => self.store.update_passkey_record(&id, fields).await,
             Model::DeviceCode => self.store.update_device_code_record(&id, fields).await,
             Model::TwoFactor => self.store.update_two_factor_record(&id, fields).await,
+            Model::Jwk => self.store.update_jwk_record(&id, fields).await,
+            Model::WalletAddress => self.store.update_wallet_address_record(&id, fields).await,
         }
     }
 
@@ -72,6 +85,16 @@ where
                     .await?
             }
             Model::TwoFactor => self.store.delete_two_factor(OWNER).await?,
+            Model::Jwk => {
+                self.store
+                    .delete_jwk_record(&SchemaValue::from_field(id))
+                    .await?
+            }
+            Model::WalletAddress => {
+                self.store
+                    .delete_wallet_address_record(&SchemaValue::from_field(id))
+                    .await?
+            }
         }
         Ok(None)
     }
@@ -98,6 +121,8 @@ where
         EntityRole::Passkey => Model::Passkey,
         EntityRole::DeviceCode => Model::DeviceCode,
         EntityRole::TwoFactor => Model::TwoFactor,
+        EntityRole::Jwk => Model::Jwk,
+        EntityRole::WalletAddress => Model::WalletAddress,
         _ => return Err(format!("Unsupported replacement model {}", target.model).into()),
     };
     let owner = raw
@@ -120,6 +145,12 @@ where
                 Model::Passkey => builder.plugin(PasskeyPlugin::new()),
                 Model::DeviceCode => builder.plugin(DeviceAuthorizationPlugin::new()),
                 Model::TwoFactor => builder.plugin(TwoFactorPlugin::new()),
+                Model::Jwk => builder.plugin(JwtPlugin::new()),
+                Model::WalletAddress => builder.plugin(SiwePlugin::new(
+                    "native-replacements.test",
+                    || async { Ok("native-replacement-nonce".into()) },
+                    |_| async { Ok(false) },
+                )),
             };
             let auth = builder.plugin(policy).build().await?;
             Ok(Store {

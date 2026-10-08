@@ -93,7 +93,7 @@ impl<S: AuthSchema> JwtCallOverrides<S> {
             let primary = jwks
                 .key_pair
                 .unwrap_or(JwtKeyPairConfig::new(JwtAlgorithm::EdDsa));
-            config.algorithm = primary.algorithm;
+            config.algorithm = jwks.key_pair.map(|parameters| parameters.algorithm);
             config.modulus_length = primary.modulus_length;
             config.key_pair_configs = jwks.key_pair_configs.unwrap_or_default();
             config.rotation_interval = jwks.rotation_interval;

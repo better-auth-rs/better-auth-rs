@@ -386,31 +386,62 @@ mod tests;
 
 #[async_trait]
 impl crate::store::JwksStore for EphemeralTransaction {
-    async fn get_jwk(&self, id: &str) -> AuthResult<Option<crate::Jwk>> {
-        crate::store::JwksStore::get_jwk(&self.store, id).await
+    async fn create_jwk_record(&self, input: crate::FieldMap) -> AuthResult<crate::FieldMap> {
+        self.store.create_jwk_record(input).await
     }
-    async fn list_jwks(&self) -> AuthResult<Vec<crate::Jwk>> {
-        crate::store::JwksStore::list_jwks(&self.store).await
+    async fn get_jwk_record(
+        &self,
+        id: &crate::SchemaValue<String>,
+    ) -> AuthResult<Option<crate::FieldMap>> {
+        self.store.get_jwk_record(id).await
     }
-    async fn create_jwk(&self, input: crate::CreateJwk) -> AuthResult<crate::Jwk> {
-        crate::store::JwksStore::create_jwk(&self.store, input).await
+    async fn update_jwk_record(
+        &self,
+        id: &crate::SchemaValue<String>,
+        input: crate::FieldMap,
+    ) -> AuthResult<Option<crate::FieldMap>> {
+        self.store.update_jwk_record(id, input).await
+    }
+    async fn delete_jwk_record(&self, id: &crate::SchemaValue<String>) -> AuthResult<()> {
+        self.store.delete_jwk_record(id).await
+    }
+    async fn list_jwk_records(&self) -> AuthResult<Vec<crate::FieldMap>> {
+        self.store.list_jwk_records().await
     }
 }
 
 #[async_trait]
 impl crate::store::WalletStore for EphemeralTransaction {
-    async fn get_wallet_address(
+    async fn create_wallet_address_record(
         &self,
-        address: &str,
-        chain_id: Option<i64>,
-    ) -> AuthResult<Option<crate::WalletAddress>> {
-        crate::store::WalletStore::get_wallet_address(&self.store, address, chain_id).await
+        input: crate::FieldMap,
+    ) -> AuthResult<crate::FieldMap> {
+        self.store.create_wallet_address_record(input).await
     }
-
-    async fn create_wallet_address(
+    async fn get_wallet_address_record(
         &self,
-        input: crate::CreateWalletAddress,
-    ) -> AuthResult<crate::WalletAddress> {
-        crate::store::WalletStore::create_wallet_address(&self.store, input).await
+        id: &crate::SchemaValue<String>,
+    ) -> AuthResult<Option<crate::FieldMap>> {
+        self.store.get_wallet_address_record(id).await
+    }
+    async fn update_wallet_address_record(
+        &self,
+        id: &crate::SchemaValue<String>,
+        input: crate::FieldMap,
+    ) -> AuthResult<Option<crate::FieldMap>> {
+        self.store.update_wallet_address_record(id, input).await
+    }
+    async fn delete_wallet_address_record(
+        &self,
+        id: &crate::SchemaValue<String>,
+    ) -> AuthResult<()> {
+        self.store.delete_wallet_address_record(id).await
+    }
+    async fn get_wallet_address_value(
+        &self,
+        address: &crate::FieldValue,
+        chain_id: Option<&crate::FieldValue>,
+    ) -> AuthResult<Option<crate::WalletAddress>> {
+        self.store.get_wallet_address_value(address, chain_id).await
     }
 }

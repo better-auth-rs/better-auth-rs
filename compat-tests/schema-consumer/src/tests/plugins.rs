@@ -467,8 +467,12 @@ async fn renamed_plugin_tables_preserve_authentication_and_atomic_storage() {
     assert_eq!(status, StatusCode::OK, "{jwks}");
     assert!(!jwks["keys"].as_array().unwrap().is_empty());
     let keys = auth.store().list_jwks().await.unwrap();
-    assert!(!keys[0].private_key.is_empty());
-    assert!(!jwks.to_string().contains(&keys[0].private_key));
+    assert!(!keys[0].private_key.typed().unwrap().is_empty());
+    assert!(
+        !jwks
+            .to_string()
+            .contains(keys[0].private_key.typed().unwrap())
+    );
     assert_eq!(
         generated::jwk::Entity::find()
             .count(&database)

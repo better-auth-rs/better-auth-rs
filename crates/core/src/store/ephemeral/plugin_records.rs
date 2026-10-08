@@ -13,6 +13,8 @@ impl State {
             EntityRole::Passkey => Ok(&self.passkeys),
             EntityRole::DeviceCode => Ok(&self.device_codes),
             EntityRole::TwoFactor => Ok(&self.two_factors),
+            EntityRole::Jwk => Ok(&self.jwks),
+            EntityRole::WalletAddress => Ok(&self.wallets),
             _ => Err(AuthError::config(format!(
                 "Plugin record storage is not implemented for {role:?}"
             ))),
@@ -25,6 +27,8 @@ impl State {
             EntityRole::Passkey => Ok(&mut self.passkeys),
             EntityRole::DeviceCode => Ok(&mut self.device_codes),
             EntityRole::TwoFactor => Ok(&mut self.two_factors),
+            EntityRole::Jwk => Ok(&mut self.jwks),
+            EntityRole::WalletAddress => Ok(&mut self.wallets),
             _ => Err(AuthError::config(format!(
                 "Plugin record storage is not implemented for {role:?}"
             ))),
@@ -38,6 +42,8 @@ fn model(role: EntityRole) -> AuthResult<&'static str> {
         EntityRole::Passkey => Ok("passkey"),
         EntityRole::DeviceCode => Ok("deviceCode"),
         EntityRole::TwoFactor => Ok("twoFactor"),
+        EntityRole::Jwk => Ok("jwks"),
+        EntityRole::WalletAddress => Ok("walletAddress"),
         _ => Err(AuthError::config(format!(
             "Plugin record storage is not implemented for {role:?}"
         ))),

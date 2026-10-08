@@ -1420,15 +1420,51 @@ pub trait TransactionStore<S: AuthSchema>: Send + Sync {
 
 #[async_trait]
 pub trait WalletStore: Send + Sync {
+    /// Create complete wallet fields through shared adapter policies.
+    async fn create_wallet_address_record(
+        &self,
+        input: crate::FieldMap,
+    ) -> AuthResult<crate::FieldMap>;
+    /// Read complete wallet fields by the adapter ID.
+    async fn get_wallet_address_record(
+        &self,
+        id: &crate::SchemaValue<String>,
+    ) -> AuthResult<Option<crate::FieldMap>>;
+    /// Apply a complete logical patch to a wallet record.
+    async fn update_wallet_address_record(
+        &self,
+        id: &crate::SchemaValue<String>,
+        input: crate::FieldMap,
+    ) -> AuthResult<Option<crate::FieldMap>>;
+    /// Delete wallet records selected by the adapter's ID query policy.
+    async fn delete_wallet_address_record(&self, id: &crate::SchemaValue<String>)
+    -> AuthResult<()>;
+    /// Find a wallet using native address and optional chain values.
+    async fn get_wallet_address_value(
+        &self,
+        address: &crate::FieldValue,
+        chain_id: Option<&crate::FieldValue>,
+    ) -> AuthResult<Option<crate::WalletAddress>>;
+    /// Find a wallet using ordinary Rust inputs.
     async fn get_wallet_address(
         &self,
         address: &str,
         chain_id: Option<i64>,
-    ) -> AuthResult<Option<crate::types::WalletAddress>>;
+    ) -> AuthResult<Option<crate::WalletAddress>> {
+        let chain_id = chain_id.map(crate::FieldValue::from);
+        self.get_wallet_address_value(&address.into(), chain_id.as_ref())
+            .await
+    }
+    /// Create a wallet using ordinary Rust inputs.
     async fn create_wallet_address(
         &self,
-        wallet: crate::types::CreateWalletAddress,
-    ) -> AuthResult<crate::types::WalletAddress>;
+        wallet: crate::CreateWalletAddress,
+    ) -> AuthResult<crate::WalletAddress> {
+        crate::FromFieldMap::from_field_values(
+            self.create_wallet_address_record(wallet.into_adapter_fields()?)
+                .await?,
+        )
+    }
 }
 
 /// Persistence for organization teams and team membership.
@@ -1622,12 +1658,44 @@ where
 /// Persistent signing keys shared by every JWT plugin instance.
 #[async_trait]
 pub trait JwksStore: Send + Sync {
+    /// Create complete key fields through shared adapter policies.
+    async fn create_jwk_record(&self, input: crate::FieldMap) -> AuthResult<crate::FieldMap>;
+    /// Read complete key fields before constructing a runtime record.
+    async fn get_jwk_record(
+        &self,
+        id: &crate::SchemaValue<String>,
+    ) -> AuthResult<Option<crate::FieldMap>>;
+    /// Apply a complete logical patch to a key record.
+    async fn update_jwk_record(
+        &self,
+        id: &crate::SchemaValue<String>,
+        input: crate::FieldMap,
+    ) -> AuthResult<Option<crate::FieldMap>>;
+    /// Delete records selected by the adapter's ID query policy.
+    async fn delete_jwk_record(&self, id: &crate::SchemaValue<String>) -> AuthResult<()>;
+    /// List complete key fields with the adapter's default limit and order.
+    async fn list_jwk_records(&self) -> AuthResult<Vec<crate::FieldMap>>;
     /// Read one signing key by its ID without applying a find-many limit.
-    async fn get_jwk(&self, id: &str) -> AuthResult<Option<crate::Jwk>>;
+    async fn get_jwk(&self, id: &str) -> AuthResult<Option<crate::Jwk>> {
+        self.get_jwk_record(&id.into())
+            .await?
+            .map(crate::FromFieldMap::from_field_values)
+            .transpose()
+    }
     /// List public and private key records, including expired keys retained for verification.
-    async fn list_jwks(&self) -> AuthResult<Vec<crate::Jwk>>;
+    async fn list_jwks(&self) -> AuthResult<Vec<crate::Jwk>> {
+        self.list_jwk_records()
+            .await?
+            .into_iter()
+            .map(crate::FromFieldMap::from_field_values)
+            .collect()
+    }
     /// Persist a generated signing key.
-    async fn create_jwk(&self, input: crate::CreateJwk) -> AuthResult<crate::Jwk>;
+    async fn create_jwk(&self, input: crate::CreateJwk) -> AuthResult<crate::Jwk> {
+        crate::FromFieldMap::from_field_values(
+            self.create_jwk_record(input.into_adapter_fields()?).await?,
+        )
+    }
 }
 
 pub async fn transaction<S, T, F>(store: &dyn AuthStore<S>, work: F) -> AuthResult<T>

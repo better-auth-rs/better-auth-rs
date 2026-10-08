@@ -32,7 +32,7 @@ mod values {
 pub(crate) type TestResult<T = ()> = Result<T, Box<dyn std::error::Error + Send + Sync>>;
 pub(crate) const ID: &str = "native-replacement-row";
 pub(crate) const OWNER: &str = "native-replacement-owner";
-pub(crate) const TARGETS: [&str; 9] = [
+pub(crate) const TARGETS: [&str; 12] = [
     "api-key-remaining-number",
     "api-key-remaining-string",
     "api-key-enabled-boolean",
@@ -42,6 +42,9 @@ pub(crate) const TARGETS: [&str; 9] = [
     "passkey-backup-boolean",
     "device-polling-number",
     "two-factor-verified-boolean",
+    "jwk-algorithm-array",
+    "wallet-owner-number",
+    "wallet-chain-number",
 ];
 
 pub(crate) fn observe(value: &FieldValue) -> AuthResult<Value> {

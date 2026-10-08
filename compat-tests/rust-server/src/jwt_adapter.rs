@@ -159,7 +159,7 @@ async fn run(base: &str, input: Value) -> AuthResult<Value> {
                 fields.sort();
                 events.lock().unwrap().push(json!({"event":"create","fields":fields,"date":true,"context":context(endpoint, native_context)?}));
                 if fail_create { return Err(AuthError::internal("JWT adapter create failed")); }
-                if no_store { return Ok(Jwk {id:"unstored-key".into(),public_key:data.public_key,private_key:data.private_key,created_at:data.created_at,expires_at:data.expires_at,alg:Some(data.alg),crv:data.crv,additional_fields:data.additional_fields}); }
+                if no_store { return Ok(Jwk {id:"unstored-key".into(),public_key:data.public_key.into(),private_key:data.private_key.into(),created_at:data.created_at.into(),expires_at:data.expires_at.into(),alg:Some(data.alg).into(),crv:data.crv.into(),additional_fields:data.additional_fields}); }
                 match endpoint.transaction {
                     Some(transaction) => transaction.create_jwk(data).await,
                     None => endpoint.auth.database.create_jwk(data).await,
@@ -201,11 +201,11 @@ async fn run(base: &str, input: Value) -> AuthResult<Value> {
                 } else {
                     chrono::Duration::minutes(15).into()
                 },
-                algorithm: if input["operation"] == "override" {
+                algorithm: Some(if input["operation"] == "override" {
                     JwtAlgorithm::Es256
                 } else {
                     JwtAlgorithm::EdDsa
-                },
+                }),
                 rotation_interval: (input["operation"] == "override")
                     .then(|| chrono::Duration::hours(1)),
                 ..Default::default()
@@ -301,7 +301,7 @@ async fn run(base: &str, input: Value) -> AuthResult<Value> {
                 let next = auth.jwt()?.sign(serde_json::from_value(json!({"sub":"next","iat":100}))?).await;
                 let next_failed = next.is_err();
                 let next_claims = next.ok().map(|token| decode(token.split('.').nth(1).unwrap()));
-                Ok(json!({"claims":claims,"algorithm":algorithm,"encrypted":serde_json::from_str::<Value>(&key.private_key)?.is_string(),"rotating":key.expires_at.is_some(),"firstEvents":first_events,"nextClaims":next_claims,"nextFailed":next_failed}))
+                Ok(json!({"claims":claims,"algorithm":algorithm,"encrypted":serde_json::from_str::<Value>(key.private_key.typed()?)?.is_string(),"rotating":key.expires_at.typed()?.is_some(),"firstEvents":first_events,"nextClaims":next_claims,"nextFailed":next_failed}))
             }
             "verify" => {
                 let header = input.get("header").cloned().unwrap_or_else(|| json!({"alg":"EdDSA","kid":"missing"}));
@@ -312,7 +312,7 @@ async fn run(base: &str, input: Value) -> AuthResult<Value> {
             "verify-claims" => {
                 auth.jwt()?.sign(serde_json::from_value(json!({"sub":"seed"}))?).await?;
                 let key = auth.store().list_jwks().await?.remove(0);
-                let private_key = josekit::jwk::Jwk::from_bytes(key.private_key).unwrap();
+                let private_key = josekit::jwk::Jwk::from_bytes(key.private_key.typed()?.as_bytes()).unwrap();
                 let mut payload = serde_json::Map::from_iter([("iss".into(), base.into()), ("aud".into(), base.into())]);
                 payload.extend(input["claims"].as_object().unwrap().clone());
                 let mut header = josekit::jws::JwsHeader::new();

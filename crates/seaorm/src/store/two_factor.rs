@@ -171,15 +171,8 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         &self,
         id: &SchemaValue<String>,
     ) -> AuthResult<Option<FieldMap>> {
-        let filter = self.plugin_id_filter::<P::TwoFactor>(EntityRole::TwoFactor, id)?;
-        let row = self.get_two_factor_row(filter).await?;
-        Ok(self
-            .project_plugin_rows::<P::TwoFactor, FieldMap>(
-                EntityRole::TwoFactor,
-                row.into_iter().collect(),
-            )
-            .await?
-            .pop())
+        self.get_plugin_record::<P::TwoFactor>(self.connection(), EntityRole::TwoFactor, id)
+            .await
     }
 
     async fn update_two_factor_record(

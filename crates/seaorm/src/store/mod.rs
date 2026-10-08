@@ -31,6 +31,7 @@ mod organizations;
 mod pagination;
 mod passkeys;
 mod plugin_models;
+mod plugin_records;
 mod plugin_rows;
 mod rate_limits;
 pub(crate) mod record_bindings;
