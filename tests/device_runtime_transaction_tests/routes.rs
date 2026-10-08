@@ -172,10 +172,27 @@ impl Fixture {
     )]
     async fn check(self, outcome: Outcome) -> AuthResult<()> {
         let start = Utc::now().timestamp_millis() as f64;
-        let response = self.auth.call_endpoint(HttpMethod::Post, "/device/token", EndpointInput {
+        let returned = self.auth.call_endpoint(HttpMethod::Post, "/device/token", EndpointInput {
             body: Some(json!({"grant_type":"urn:ietf:params:oauth:grant-type:device_code","device_code":DEVICE,"client_id":"client"})),
             ..Default::default()
-        }).await?;
+        }).await;
+        let response = match returned {
+            Ok(response) => {
+                assert!(
+                    outcome.error().is_none(),
+                    "{outcome:?} must reject native dispatch"
+                );
+                response
+            }
+            Err(error @ AuthError::Response(_)) => {
+                assert!(
+                    outcome.error().is_some(),
+                    "{outcome:?} must complete native dispatch"
+                );
+                error.to_auth_response()
+            }
+            Err(error) => return Err(error),
+        };
         let end = Utc::now().timestamp_millis() as f64;
         let body: Value = serde_json::from_slice(&response.body.bytes()?)?;
         let sessions = self.auth.store().get_user_sessions(OWNER).await?;

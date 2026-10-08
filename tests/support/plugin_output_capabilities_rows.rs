@@ -1,6 +1,6 @@
 use better_auth::__private_core::{
     AuthError, AuthResult, AuthSchema, AuthStore, CreateApiKey, CreateDeviceCode, CreateJwk,
-    CreatePasskey, CreateTwoFactor, CreateWalletAddress, FieldMap, Jwk, Passkey,
+    CreatePasskey, CreateTwoFactor, CreateWalletAddress, FieldMap, FieldValue, Jwk, Passkey,
     PasskeyCredentialState, PasskeyStorage, WalletAddress, wire::PasskeyView,
 };
 use better_auth::seaorm::sea_orm::entity::prelude::DateTimeUtc;
@@ -157,17 +157,22 @@ pub(super) async fn create<S: AuthSchema>(
                 })
                 .await?,
         )?,
-        "twoFactor" => serde_json::to_value(
-            store
-                .create_two_factor(CreateTwoFactor {
-                    user_id: owner.into(),
-                    secret: "ordinary-encrypted-secret".into(),
-                    backup_codes: "ordinary-encrypted-codes".into(),
-                    verified: false,
-                    additional_fields: input(),
-                })
-                .await?,
-        )?,
+        "twoFactor" => {
+            let mut additional_fields = input();
+            let _ = additional_fields.insert("failedVerificationCount".into(), 0.into());
+            let _ = additional_fields.insert("lockedUntil".into(), FieldValue::Null);
+            serde_json::to_value(
+                store
+                    .create_two_factor(CreateTwoFactor {
+                        user_id: owner.into(),
+                        secret: "ordinary-encrypted-secret".into(),
+                        backup_codes: "ordinary-encrypted-codes".into(),
+                        verified: false,
+                        additional_fields,
+                    })
+                    .await?,
+            )?
+        }
         "jwks" => jwk_value(
             &store
                 .create_jwk(CreateJwk {

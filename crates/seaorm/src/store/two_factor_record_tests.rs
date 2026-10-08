@@ -17,7 +17,7 @@ mod replacement {
     #[derive(Clone, Debug, PartialEq, DeriveEntityModel, crate::AuthEntity)]
     #[auth(role = "two_factor", native_two_factor)]
     #[sea_orm(table_name = "replacement_two_factor")]
-    pub struct Model {
+    pub(super) struct Model {
         #[sea_orm(primary_key, auto_increment = false)]
         pub id: String,
         pub secret: Option<f64>,
@@ -29,7 +29,7 @@ mod replacement {
     }
 
     #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-    pub enum Relation {}
+    pub(super) enum Relation {}
 
     impl ActiveModelBehavior for ActiveModel {}
 }
@@ -45,7 +45,7 @@ async fn replaced_columns_keep_dynamic_values_and_transformed_backup_cas() -> Au
     let database = Database::connect("sqlite::memory:")
         .await
         .map_err(map_db_err)?;
-    database
+    let _ = database
         .execute_unprepared(
             "CREATE TABLE replacement_two_factor (
             id TEXT PRIMARY KEY, secret REAL, user_id TEXT NOT NULL, verified TEXT,
@@ -215,7 +215,7 @@ async fn failure_increment_skips_input_and_checks_raw_count_before_locking() -> 
                             required: Some(false),
                             transform: Some(FieldTransforms {
                                 input: Some(UserFieldTransform::new(move |value| {
-                                    inputs.fetch_add(1, Ordering::SeqCst);
+                                    let _ = inputs.fetch_add(1, Ordering::SeqCst);
                                     Ok((better_auth_core::query::field_number(&value)? + 7.0)
                                         .into())
                                 })),
@@ -231,7 +231,7 @@ async fn failure_increment_skips_input_and_checks_raw_count_before_locking() -> 
                             required: Some(false),
                             transform: Some(FieldTransforms {
                                 input: Some(UserFieldTransform::new(move |value| {
-                                    locks.fetch_add(1, Ordering::SeqCst);
+                                    let _ = locks.fetch_add(1, Ordering::SeqCst);
                                     Ok(if value.is_null() {
                                         transformed_lock.clone().into()
                                     } else {
@@ -247,7 +247,7 @@ async fn failure_increment_skips_input_and_checks_raw_count_before_locking() -> 
                         "secret".into(),
                         UserFieldConfig {
                             on_update: Some(Arc::new(move || {
-                                factories.fetch_add(1, Ordering::SeqCst);
+                                let _ = factories.fetch_add(1, Ordering::SeqCst);
                                 Ok("updated by factory".into())
                             })),
                             ..Default::default()
@@ -261,7 +261,7 @@ async fn failure_increment_skips_input_and_checks_raw_count_before_locking() -> 
     store.model_fields = init.into_parts().plugin_fields;
     let callbacks = AtomicUsize::new(0);
     let deadline = || {
-        callbacks.fetch_add(1, Ordering::SeqCst);
+        let _ = callbacks.fetch_add(1, Ordering::SeqCst);
         Ok(FieldDate::from_milliseconds(2_000_000_000_000.0))
     };
     store

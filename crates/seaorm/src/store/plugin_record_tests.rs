@@ -19,7 +19,7 @@ mod keys {
     #[derive(Clone, Debug, PartialEq, DeriveEntityModel, crate::AuthEntity)]
     #[auth(role = "jwk")]
     #[sea_orm(table_name = "replacement_jwks")]
-    pub struct Model {
+    pub(super) struct Model {
         #[sea_orm(primary_key, auto_increment = false)]
         pub id: String,
         pub public_key: Option<f64>,
@@ -30,7 +30,7 @@ mod keys {
     }
 
     #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-    pub enum Relation {}
+    pub(super) enum Relation {}
     impl ActiveModelBehavior for ActiveModel {}
 }
 
@@ -40,7 +40,7 @@ mod wallets {
     #[derive(Clone, Debug, PartialEq, DeriveEntityModel, crate::AuthEntity)]
     #[auth(role = "wallet_address")]
     #[sea_orm(table_name = "replacement_wallets")]
-    pub struct Model {
+    pub(super) struct Model {
         #[sea_orm(primary_key, auto_increment = false)]
         pub id: String,
         #[auth(reference = false)]
@@ -52,7 +52,7 @@ mod wallets {
     }
 
     #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-    pub enum Relation {}
+    pub(super) enum Relation {}
     impl ActiveModelBehavior for ActiveModel {}
 }
 
@@ -62,7 +62,7 @@ mod merged_api_keys {
     #[derive(Clone, Debug, PartialEq, DeriveEntityModel, crate::AuthEntity)]
     #[auth(role = "api_key")]
     #[sea_orm(table_name = "merged_apikey")]
-    pub struct Model {
+    pub(super) struct Model {
         #[sea_orm(primary_key, auto_increment = false)]
         pub id: String,
         #[sea_orm(column_name = "shared")]
@@ -70,7 +70,7 @@ mod merged_api_keys {
     }
 
     #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-    pub enum Relation {}
+    pub(super) enum Relation {}
     impl ActiveModelBehavior for ActiveModel {}
 }
 
@@ -80,7 +80,7 @@ mod merged_passkeys {
     #[derive(Clone, Debug, PartialEq, DeriveEntityModel, crate::AuthEntity)]
     #[auth(role = "passkey", native_passkey)]
     #[sea_orm(table_name = "merged_passkey")]
-    pub struct Model {
+    pub(super) struct Model {
         #[sea_orm(primary_key, auto_increment = false)]
         pub id: String,
         #[sea_orm(column_name = "shared")]
@@ -88,7 +88,7 @@ mod merged_passkeys {
     }
 
     #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-    pub enum Relation {}
+    pub(super) enum Relation {}
     impl ActiveModelBehavior for ActiveModel {}
 }
 
@@ -118,7 +118,7 @@ async fn api_key_and_passkey_preflight_accepts_merged_columns_and_rejects_missin
         "CREATE TABLE merged_apikey (id TEXT NOT NULL PRIMARY KEY, shared TEXT)",
         "CREATE TABLE merged_passkey (id TEXT NOT NULL PRIMARY KEY, shared TEXT)",
     ] {
-        database
+        let _ = database
             .execute_unprepared(statement)
             .await
             .map_err(map_db_err)?;
@@ -173,7 +173,7 @@ async fn api_key_and_passkey_preflight_accepts_merged_columns_and_rejects_missin
     ] {
         assert_eq!(created.get("name"), Some(&material.into()));
     }
-    database
+    let _ = database
         .execute_unprepared("ALTER TABLE merged_passkey DROP COLUMN shared")
         .await
         .map_err(map_db_err)?;
@@ -226,7 +226,7 @@ async fn passkey_and_two_factor_preflight_keep_undeclared_legacy_envelope_column
         ("two_factor", "updated_at"),
     ];
     for (table, column) in missing {
-        database
+        let _ = database
             .execute_unprepared(&format!("ALTER TABLE {table} DROP COLUMN {column}"))
             .await
             .map_err(map_db_err)?;
@@ -268,7 +268,7 @@ async fn native_key_and_wallet_records_keep_dynamic_fields_and_transaction_bound
         "CREATE TABLE replacement_jwks (id TEXT PRIMARY KEY, public_key REAL, created_at TEXT, expires_at TEXT, alg TEXT, crv TEXT)",
         "CREATE TABLE replacement_wallets (id TEXT PRIMARY KEY, user_id REAL, address REAL, chain_id TEXT, is_primary TEXT, created_at TEXT)",
     ] {
-        database
+        let _ = database
             .execute_unprepared(statement)
             .await
             .map_err(map_db_err)?;

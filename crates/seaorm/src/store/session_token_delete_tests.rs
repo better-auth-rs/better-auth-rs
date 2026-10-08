@@ -91,7 +91,7 @@ async fn dynamic_token_deletion_keeps_native_query_values_and_hook_order() -> Au
                 active_organization_id: None,
             })
             .await?;
-        session::Entity::update_many()
+        let _ = session::Entity::update_many()
             .col_expr(session::Column::Token, Expr::value(r#"{"secret":7}"#))
             .filter(session::Column::Id.eq(created.id.typed()?.clone()))
             .exec(&database)

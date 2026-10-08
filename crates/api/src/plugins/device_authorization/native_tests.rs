@@ -14,9 +14,9 @@ use better_auth_core::{
     AuthConfig, AuthInitContext, AuthPlugin, CreateDeviceCode, CreateUser, FieldDate,
     session::NativeSessionData,
     store::{
-        AuthStore, EphemeralStore, MemoryCacheAdapter, SecondaryStorage, SecondaryStore,
-        StatelessSchema,
+        AuthStore, EphemeralStore, MemoryCacheAdapter, SecondaryStorage, StatelessSchema,
         database_hooks::{DatabaseHookContext, DatabaseHookUpdate, DatabaseHooks},
+        secondary::SecondaryStore,
     },
     user_fields::{FieldTransforms, UserFieldConfig, UserFieldTransform, UserFieldType},
     wire::SessionView,

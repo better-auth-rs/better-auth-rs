@@ -471,9 +471,9 @@ pub mod redis_adapter {
             let mut connection = self.connection.clone();
             let key = String::from_utf16_lossy(key.display_utf16()?.as_utf16());
             let mut command = redis::cmd("SET");
-            command.arg(key).arg(value);
+            let _ = command.arg(key).arg(value);
             if let Some(seconds) = ttl_seconds {
-                command
+                let _ = command
                     .arg("EX")
                     .arg(crate::schema_value::number_string(seconds));
             }

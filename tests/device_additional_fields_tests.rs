@@ -224,7 +224,7 @@ async fn device_field_preflight_tracks_only_declared_columns() -> AuthResult<()>
 }
 
 #[tokio::test]
-async fn device_registration_rejects_a_native_physical_column_alias() {
+async fn device_registration_accepts_a_native_physical_column_alias() {
     let (store, _) = fixture::sqlite(contract::config()).await;
     let fields = better_auth::config::UserConfig {
         additional_fields: Some(
@@ -244,5 +244,9 @@ async fn device_registration_rejects_a_native_physical_column_alias() {
         .plugin(contract::Fields(fields))
         .build()
         .await;
-    assert!(matches!(result, Err(AuthError::Config(_))));
+    assert!(
+        result.is_ok(),
+        "Shared native Device column: {:?}",
+        result.err()
+    );
 }

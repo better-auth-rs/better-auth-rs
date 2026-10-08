@@ -152,7 +152,8 @@ pub(super) fn value(row: &QueryResult, column: &str) -> AuthResult<FieldValue> {
             "CHAR" | "VARCHAR" | "TINYTEXT" | "TEXT" | "MEDIUMTEXT" | "LONGTEXT" | "ENUM"
             | "SET" => read!(row, String).into(),
             "JSON" => FieldValue::from_json(read!(row, serde_json::Value))?,
-            "TIMESTAMP" | "DATETIME" => local_date(read!(row, chrono::NaiveDateTime), column)?,
+            "TIMESTAMP" => read!(row, chrono::DateTime<chrono::Utc>).into(),
+            "DATETIME" => local_date(read!(row, chrono::NaiveDateTime), column)?,
             kind => {
                 return Err(error(
                     column,

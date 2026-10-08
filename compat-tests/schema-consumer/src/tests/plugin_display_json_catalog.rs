@@ -4,6 +4,7 @@ use better_auth::{
     AuthConfig, AuthRecordFields,
     config::{IdGeneration, IdGenerator},
     prelude::{ApiKey, CreateApiKey, UpdateApiKey},
+    seaorm::sea_orm::entity::prelude::DateTimeUtc,
 };
 
 mod sqlite {
@@ -154,15 +155,21 @@ where
 
     let long = store::<S, P>(database, "native-long-text");
     let text = |field| format!("{field}:{}", "x".repeat(300));
-    long.create_api_key(CreateApiKey {
+    let mut fields = CreateApiKey {
         name: Some(text("name")).into(),
         start: Some(text("start").into()),
         prefix: Some(text("prefix")),
         permissions: Some(text("permissions")),
-        metadata: Some(text("metadata")),
         ..input()
-    })
-    .await?;
+    }
+    .into_adapter_fields()?;
+    let date = FieldValue::from("2030-01-02T03:04:05.000Z".parse::<DateTimeUtc>()?);
+    fields.extend([
+        ("metadata".to_owned(), text("metadata").into()),
+        ("createdAt".to_owned(), date.clone()),
+        ("updatedAt".to_owned(), date),
+    ]);
+    let _ = long.create_api_key_record(fields).await?;
     let row = long
         .get_api_key_by_id("native-long-text")
         .await?

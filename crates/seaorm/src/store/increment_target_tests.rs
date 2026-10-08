@@ -9,7 +9,7 @@ mod targets {
 
     #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
     #[sea_orm(table_name = "increment_targets")]
-    pub struct Model {
+    pub(super) struct Model {
         #[sea_orm(primary_key, auto_increment = false)]
         pub id: String,
         pub remaining: i32,
@@ -17,7 +17,7 @@ mod targets {
     }
 
     #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-    pub enum Relation {}
+    pub(super) enum Relation {}
 
     impl ActiveModelBehavior for ActiveModel {}
 }
@@ -35,7 +35,7 @@ async fn numeric_id_matches_consume_one_quota_at_a_time() -> AuthResult<()> {
     let db = Database::connect("sqlite::memory:")
         .await
         .map_err(map_db_err)?;
-    db.execute_unprepared(
+    let _ = db.execute_unprepared(
         "CREATE TABLE increment_targets (id TEXT PRIMARY KEY, remaining INTEGER NOT NULL, enabled BOOLEAN NOT NULL);
          INSERT INTO increment_targets VALUES ('1', 1, true), ('01', 1, true), ('001', 1, false);",
     ).await.map_err(map_db_err)?;

@@ -689,7 +689,7 @@ fn gen_column_type(field: &AdditionalField) -> TokenStream {
         },
         "date" => quote! {
             match database.get_database_backend() {
-                sea_orm::DbBackend::Sqlite => { column.date(); }
+                sea_orm::DbBackend::Sqlite => { column.custom(Alias::new("date")); }
                 sea_orm::DbBackend::Postgres => { column.timestamp_with_time_zone(); }
                 sea_orm::DbBackend::MySql => { column.custom(Alias::new("timestamp(3)")); }
                 backend => return Err(sea_orm::DbErr::Custom(format!("Unsupported database backend: {backend:?}"))),

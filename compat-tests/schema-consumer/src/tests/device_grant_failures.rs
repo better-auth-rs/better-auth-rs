@@ -72,6 +72,21 @@ fn visible_device(rows: &Value, owner: &Value) -> TestResult<Value> {
         let row = row
             .as_object_mut()
             .ok_or("Expected a persisted Device object")?;
+        // Generated Entity snapshots use Rust member names; the upstream adapter returns logical field names.
+        for (member, field) in [
+            ("device_code", "deviceCode"),
+            ("user_code", "userCode"),
+            ("user_id", "userId"),
+            ("expires_at", "expiresAt"),
+            ("last_polled_at", "lastPolledAt"),
+            ("polling_interval", "pollingInterval"),
+            ("client_id", "clientId"),
+        ] {
+            let value = row
+                .remove(member)
+                .ok_or("Expected a generated Device member")?;
+            assert!(row.insert(field.into(), value).is_none());
+        }
         assert!(
             row.get("id")
                 .and_then(Value::as_str)
@@ -216,7 +231,7 @@ where
                 .as_array_mut()
                 .ok_or("Expected original Device rows")?;
             assert_eq!(rows.len(), 1);
-            rows[0]["userId"] = owner_id.clone();
+            rows[0]["user_id"] = owner_id.clone();
         }
         assert_eq!(
             current, &permitted,

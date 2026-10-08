@@ -318,7 +318,6 @@ mod record_tests;
 #[cfg(test)]
 mod start_tests {
     use super::super::record_bindings::utf16_string;
-    use super::*;
     use better_auth_core::ApiKeyStart;
     use sea_orm::DbBackend;
 

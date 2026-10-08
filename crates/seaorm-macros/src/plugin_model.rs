@@ -93,7 +93,12 @@ pub(super) fn generate(
         }
         let logical = registry::canonical_field_name(role, &name);
         core_columns.push(quote!(Column::#column => Some(#logical),));
-        raw_output.push(quote!((#logical.to_owned(), #stored_value),));
+        let logical_value = if name == "id" {
+            quote!(#core_root::FieldValue::String(self.#ident.to_string()))
+        } else {
+            stored_value
+        };
+        raw_output.push(quote!((#logical.to_owned(), #logical_value),));
         if dynamic_record {
             continue;
         }
