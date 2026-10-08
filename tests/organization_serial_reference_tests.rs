@@ -35,6 +35,7 @@ fn reference(trace: Option<Arc<Mutex<Vec<Value>>>>) -> UserFieldConfig {
         references: Some(UserFieldReference {
             model: "user".into(),
             field: "id".into(),
+            ..Default::default()
         }),
         default_value: Some(FieldValue::from(" 001 ")),
         on_update: Some(Arc::new(|| Ok(FieldValue::from(" 1 ")))),

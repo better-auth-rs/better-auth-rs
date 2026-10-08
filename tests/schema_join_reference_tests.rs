@@ -173,6 +173,7 @@ fn reference(model: &str) -> UserFieldReference {
     UserFieldReference {
         model: model.into(),
         field: "id".into(),
+        ..Default::default()
     }
 }
 

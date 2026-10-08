@@ -335,6 +335,7 @@ async fn verify_serial_coercion(database: DatabaseConnection) -> TestResult {
             references: Some(better_auth_core::user_fields::UserFieldReference {
                 model: "user".into(),
                 field: "id".into(),
+                ..Default::default()
             }),
             transform: Some(FieldTransforms {
                 input: Some(UserFieldTransform::new(move |value| {

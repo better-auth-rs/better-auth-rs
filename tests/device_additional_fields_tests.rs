@@ -98,6 +98,7 @@ async fn memory_serial_device_reference_reaches_output_as_a_number() -> AuthResu
                     references: Some(UserFieldReference {
                         model: "user".into(),
                         field: "id".into(),
+                        ..Default::default()
                     }),
                     transform: Some(FieldTransforms {
                         output: Some(UserFieldTransform::new(move |value| {

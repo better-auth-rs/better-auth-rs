@@ -24,6 +24,7 @@ impl From<Field> for UserFieldConfig {
             references: field.references.map(|reference| UserFieldReference {
                 model: reference.model,
                 field: reference.field,
+                ..Default::default()
             }),
             ..Default::default()
         }

@@ -19,6 +19,9 @@ use std::{path::Path, sync::Arc};
 #[path = "descriptor_authentication_tests.rs"]
 mod descriptor_authentication_tests;
 
+#[path = "native_boundary_tests.rs"]
+mod native_boundary_tests;
+
 mod native {
     use better_auth_seaorm::{
         AuthEntity,

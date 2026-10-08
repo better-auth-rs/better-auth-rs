@@ -1,4 +1,5 @@
 use super::*;
+use better_auth::config::{FieldReferenceAction, UserFieldReference};
 use better_auth::plugins::{api_key::ApiKeyPlugin, passkey::PasskeyPlugin};
 use better_auth_core::{SchemaValue, id::IdGeneration};
 
@@ -23,6 +24,10 @@ impl Model {
         }
     }
 
+    #[expect(
+        clippy::panic_in_result_fn,
+        reason = "The captured declaration must end with the extension field while fixture parsing errors propagate"
+    )]
     fn native_names(self) -> AuthResult<Vec<String>> {
         let fixture: Value = serde_json::from_str(include_str!(
             "../fixtures/native-plugin-replacements-memory-1.7.6.json"
@@ -32,13 +37,19 @@ impl Model {
             Self::Passkey => "passkey-backup-boolean",
         };
         let target = required(
-            required(fixture["targets"].as_array(), "Expected captured targets")?
-                .iter()
-                .find(|value| value["name"] == target),
+            required(
+                fixture.get("targets").and_then(Value::as_array),
+                "Expected captured targets",
+            )?
+            .iter()
+            .find(|value| value.get("name").and_then(Value::as_str) == Some(target)),
             "Expected captured native declaration",
         )?;
         let mut names = required(
-            target["declaration"]["fields"].as_array(),
+            target
+                .get("declaration")
+                .and_then(|value| value.get("fields"))
+                .and_then(Value::as_array),
             "Expected captured declaration order",
         )?
         .iter()
@@ -265,6 +276,10 @@ fn expected_events(model: Model, custom_first: bool, stage: &str) -> Vec<Value> 
 
 // The pinned get-tables merge keeps first insertion positions and replaces complete declarations.
 #[tokio::test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "The registration contract asserts complete records and callback order while propagating store errors"
+)]
 async fn native_plugin_registration_replaces_policies_without_moving_extension_or_id_slots()
 -> AuthResult<()> {
     for model in [Model::ApiKey, Model::Passkey] {
@@ -304,7 +319,7 @@ async fn native_plugin_registration_replaces_policies_without_moving_extension_o
                     expected_output.keys().collect::<Vec<_>>()
                 );
                 let stored = raw.plugin_storage_rows(model.role())?;
-                assert_eq!(stored, [expected_storage.clone()]);
+                assert_eq!(stored.as_slice(), std::slice::from_ref(&expected_storage));
                 assert_eq!(
                     required(stored.first(), "Expected physical row")?
                         .keys()
@@ -318,6 +333,114 @@ async fn native_plugin_registration_replaces_policies_without_moving_extension_o
                 trace_lock(&events)?.clear();
             }
         }
+    }
+    Ok(())
+}
+
+#[tokio::test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "The registration contract asserts declaration metadata while propagating initialization errors"
+)]
+async fn complete_declaration_replacement_preserves_then_clears_metadata() -> AuthResult<()> {
+    for model in [Model::ApiKey, Model::Passkey] {
+        let events = Events::default();
+        let mut initial = declarations(model, &events);
+        for name in ["id", model.field()] {
+            let field = required(initial.fields_mut().get_mut(name), "Expected initial field")?;
+            field.index = Some(true);
+            field.sortable = Some(false);
+            field.bigint = Some(true);
+            field.references = Some(UserFieldReference {
+                model: "user".into(),
+                field: "id".into(),
+                on_delete: Some(FieldReferenceAction::Restrict),
+            });
+        }
+        let names = model
+            .native_names()?
+            .into_iter()
+            .chain(["id".into(), "marker".into()])
+            .collect::<Vec<_>>();
+        for phase in 0..4 {
+            let mut context = AuthInitContext::new(Arc::new(config()), memory());
+            match model {
+                Model::ApiKey => {
+                    ApiKeyPlugin::builder()
+                        .build()
+                        .on_init(&mut context)
+                        .await?
+                }
+                Model::Passkey => PasskeyPlugin::new().on_init(&mut context).await?,
+            }
+            Fields(vec![(model.role(), initial.clone())])
+                .on_init(&mut context)
+                .await?;
+            if phase > 0 {
+                let replacement = UserFieldConfig {
+                    index: (phase == 1).then_some(false),
+                    sortable: (phase == 1).then_some(true),
+                    bigint: (phase == 1).then_some(false),
+                    references: (phase < 3).then(|| UserFieldReference {
+                        model: "organization".into(),
+                        field: "slug".into(),
+                        on_delete: (phase == 1).then_some(FieldReferenceAction::SetNull),
+                    }),
+                    ..Default::default()
+                };
+                Fields(vec![(model.role(), fields(model.field(), replacement))])
+                    .on_init(&mut context)
+                    .await?;
+            }
+            let registered = context.into_parts().plugin_fields;
+            let schema = registered.fields(model.role());
+            assert_eq!(schema.fields().keys().cloned().collect::<Vec<_>>(), names);
+            let field = required(
+                schema.fields().get(model.field()),
+                "Expected registered field",
+            )?;
+            assert_eq!(
+                (field.index, field.sortable, field.bigint),
+                match phase {
+                    0 => (Some(true), Some(false), Some(true)),
+                    1 => (Some(false), Some(true), Some(false)),
+                    _ => (None, None, None),
+                }
+            );
+            assert_eq!(
+                field.references.as_ref().map(|reference| (
+                    reference.model.as_str(),
+                    reference.field.as_str(),
+                    reference.on_delete,
+                )),
+                match phase {
+                    0 => Some(("user", "id", Some(FieldReferenceAction::Restrict))),
+                    1 => Some(("organization", "slug", Some(FieldReferenceAction::SetNull))),
+                    2 => Some(("organization", "slug", None)),
+                    _ => None,
+                }
+            );
+            if phase > 0 {
+                assert!(field.field_name.is_none());
+                assert!(field.default_value_fn.is_none());
+                assert!(field.on_update.is_none());
+                assert!(field.transform.is_none());
+            }
+
+            let declared_id = required(schema.fields().get("id"), "Expected declared ID field")?;
+            assert_eq!(
+                (declared_id.index, declared_id.sortable, declared_id.bigint),
+                (Some(true), Some(false), Some(true))
+            );
+            let adapter = schema.adapter_fields(&[]);
+            assert_eq!(adapter.fields().keys().cloned().collect::<Vec<_>>(), names);
+            let id = required(adapter.fields().get("id"), "Expected adapter ID field")?;
+            assert_eq!((id.index, id.sortable, id.bigint), (None, None, None));
+            assert!(id.references.is_none());
+            assert!(id.field_name.is_none());
+            assert!(id.transform.is_none());
+        }
+        assert!(trace_lock(&events)?.is_empty());
     }
     Ok(())
 }

@@ -20,7 +20,7 @@ pub(crate) struct State {
 pub(crate) type Shared = Arc<Mutex<State>>;
 
 impl State {
-    pub fn fail(&mut self, phase: &str) {
+    pub(crate) fn fail(&mut self, phase: &str) {
         self.failure = Some(phase.into());
         let error = format!("ordinary native {phase} error");
         self.error_pointer = error.as_ptr() as usize;

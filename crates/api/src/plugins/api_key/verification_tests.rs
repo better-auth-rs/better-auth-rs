@@ -4,6 +4,87 @@ use super::*;
 mod permissions;
 
 #[tokio::test]
+async fn cached_json_null_uses_database_fallback_or_rejects_without_consuming_usage() {
+    use better_auth_core::store::{MemoryCacheAdapter, SecondaryStorage};
+
+    for fallback_to_database in [false, true] {
+        let cache = Arc::new(MemoryCacheAdapter::new());
+        let plugin = ApiKeyPlugin::with_config(ApiKeyConfig {
+            storage: ApiKeyStorage::SecondaryStorage,
+            custom_storage: Some(cache.clone()),
+            fallback_to_database,
+            defer_updates: false,
+            ..Default::default()
+        });
+        let (ctx, _, session) = create_test_context_with_user().await;
+        let (id, key) = create_key_and_get_raw(
+            &plugin,
+            &ctx,
+            &session.token,
+            serde_json::json!({"name":"null-cache"}),
+        )
+        .await;
+        let config = plugin.resolve_configuration(None).unwrap();
+        let hash = ApiKeyPlugin::hash_key(&key);
+        let cache_key = format!("api-key:{hash}");
+        let id_key = format!("api-key:by-id:{id}");
+        let alias = cache.get(&id_key).await.unwrap();
+        cache
+            .set(&cache_key, &serde_json::Value::String("null".into()), None)
+            .await
+            .unwrap();
+        let result = plugin
+            .verify_api_key(
+                &VerifyApiKey {
+                    key: &key,
+                    config_id: None,
+                    permissions: None,
+                },
+                &ctx,
+            )
+            .await;
+        if fallback_to_database {
+            let verified = result.unwrap();
+            assert_eq!(verified.id, id);
+            assert_eq!(verified.request_count, Some(1.0));
+            let restored = storage::get_by_hash(config, &ctx, &hash)
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(restored.id, id);
+            assert_eq!(restored.request_count, verified.request_count);
+            assert_eq!(
+                cache.get(&cache_key).await.unwrap(),
+                cache.get(&id_key).await.unwrap()
+            );
+            assert_eq!(
+                ctx.database
+                    .get_api_key_by_id(&id)
+                    .await
+                    .unwrap()
+                    .unwrap()
+                    .request_count,
+                verified.request_count
+            );
+        } else {
+            assert!(matches!(
+                result,
+                Err(ApiKeyVerificationError::Validation(ApiKeyValidationError {
+                    code: ApiKeyErrorCode::InvalidApiKey,
+                    ..
+                }))
+            ));
+            assert_eq!(
+                cache.get(&cache_key).await.unwrap(),
+                Some(serde_json::Value::String("null".into()))
+            );
+            assert_eq!(cache.get(&id_key).await.unwrap(), alias);
+            assert!(ctx.database.get_api_key_by_id(&id).await.unwrap().is_none());
+        }
+    }
+}
+
+#[tokio::test]
 async fn cached_dynamic_enabled_values_control_verification_before_consuming_usage() {
     use better_auth_core::{
         FieldValue, SchemaValue,

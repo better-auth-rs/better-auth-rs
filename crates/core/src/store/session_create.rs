@@ -127,6 +127,7 @@ pub fn session_create_schema(
                 references: Some(UserFieldReference {
                     model: "user".into(),
                     field: "id".into(),
+                    ..Default::default()
                 }),
                 ..field(UserFieldType::String, true)
             },

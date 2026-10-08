@@ -336,6 +336,7 @@ fn json_display_declarations_accept_references_and_shared_columns() {
             references: Some(UserFieldReference {
                 model: "user".into(),
                 field: "id".into(),
+                ..Default::default()
             }),
             ..json_field()
         };

@@ -20,6 +20,7 @@ fn config() -> AuthConfig {
                 references: Some(UserFieldReference {
                     model: "account".into(),
                     field: "id".into(),
+                    ..Default::default()
                 }),
                 ..Default::default()
             },

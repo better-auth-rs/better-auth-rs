@@ -322,13 +322,19 @@ pub(crate) async fn issue_selected_user_session<S: better_auth_core::AuthSchema>
             .cloned()
             .unwrap_or_default(),
     );
-    if admin_plugin_enabled(ctx)
-        && user_id.is_truthy()?
-        && let Some(stored_user) = ctx.database.get_user_by_id_field(&user_id).await?
-    {
-        apply_session_ban(ctx, &user_id, &stored_user, None).await?;
-    }
-    let session = ctx
+    let session = issue_session_for_id(ctx, user_id, meta, expires_in).await?;
+    Ok(better_auth_core::session::NativeSessionData { user, session })
+}
+
+/// Apply session admission without replacing the supplied owner with a projected User ID.
+pub(crate) async fn issue_session_for_id<S: better_auth_core::AuthSchema>(
+    ctx: &AuthContext<S>,
+    user_id: better_auth_core::SchemaValue<String>,
+    meta: &better_auth_core::RequestMeta,
+    expires_in: chrono::Duration,
+) -> Result<better_auth_core::wire::SessionView, SessionIssueError> {
+    admit_session_for_id(ctx, &user_id, None).await?;
+    Ok(ctx
         .session_manager()
         .create_session_for_id_with_lifetime(
             user_id,
@@ -336,8 +342,25 @@ pub(crate) async fn issue_selected_user_session<S: better_auth_core::AuthSchema>
             meta.user_agent.clone(),
             expires_in,
         )
-        .await?;
-    Ok(better_auth_core::session::NativeSessionData { user, session })
+        .await?)
+}
+
+/// Apply the admin plugin's admission lookup through the active transaction.
+pub(crate) async fn admit_session_for_id<S: better_auth_core::AuthSchema>(
+    ctx: &AuthContext<S>,
+    user_id: &better_auth_core::SchemaValue<String>,
+    transaction: Option<&dyn better_auth_core::store::AuthTransaction<S>>,
+) -> Result<(), SessionIssueError> {
+    if admin_plugin_enabled(ctx) && user_id.is_truthy()? {
+        let stored_user = match transaction {
+            Some(tx) => tx.get_user_by_id_field(user_id).await?,
+            None => ctx.database.get_user_by_id_field(user_id).await?,
+        };
+        if let Some(stored_user) = stored_user {
+            apply_session_ban(ctx, user_id, &stored_user, transaction).await?;
+        }
+    }
+    Ok(())
 }
 
 /// Resolve the user and apply session admission through the active transaction.

@@ -93,6 +93,7 @@ fn configured_fields(name: &str, calls: &Arc<AtomicUsize>) -> UserConfig {
                         references: Some(UserFieldReference {
                             model: "user".into(),
                             field: "id".into(),
+                            ..Default::default()
                         }),
                         ..Default::default()
                     },

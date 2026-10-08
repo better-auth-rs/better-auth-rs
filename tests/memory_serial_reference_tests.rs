@@ -18,6 +18,7 @@ fn reference() -> UserFieldConfig {
         references: Some(UserFieldReference {
             model: "user".into(),
             field: "id".into(),
+            ..Default::default()
         }),
         ..Default::default()
     }

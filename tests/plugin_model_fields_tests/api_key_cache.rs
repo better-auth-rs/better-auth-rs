@@ -188,18 +188,24 @@ async fn contract<S: AuthSchema>(
         .collect();
         assert_eq!(*trace_lock(&events)?, expected_events);
         if mode == "fallback" {
-            trace_lock(&events)?.clear();
-            cache.delete(&format!("api-key:by-id:{id}")).await?;
-            let found = read(&auth, token, "/api-key/get", Some(json!({"id":id}))).await?;
-            assert_eq!(found.get("name"), Some(&json!(expected)));
-            assert_eq!(*trace_lock(&events)?, ["output:\"Mobile\""]);
-            if column.is_some() {
-                cached_name(cache.as_ref(), id, expected).await?;
+            for cached_value in [None, Some("null")] {
+                trace_lock(&events)?.clear();
+                let cache_key = format!("api-key:by-id:{id}");
+                match cached_value {
+                    Some(value) => cache.set(&cache_key, value, None).await?,
+                    None => cache.delete(&cache_key).await?,
+                }
+                let found = read(&auth, token, "/api-key/get", Some(json!({"id":id}))).await?;
+                assert_eq!(found.get("name"), Some(&json!(expected)));
+                assert_eq!(*trace_lock(&events)?, ["output:\"Mobile\""]);
+                if column.is_some() {
+                    cached_name(cache.as_ref(), id, expected).await?;
+                }
+                trace_lock(&events)?.clear();
+                let found = read(&auth, token, "/api-key/get", Some(json!({"id":id}))).await?;
+                assert_eq!(found.get("name"), Some(&json!(expected)));
+                assert!(trace_lock(&events)?.is_empty());
             }
-            trace_lock(&events)?.clear();
-            let found = read(&auth, token, "/api-key/get", Some(json!({"id":id}))).await?;
-            assert_eq!(found.get("name"), Some(&json!(expected)));
-            assert!(trace_lock(&events)?.is_empty());
         }
     }
     Ok(())

@@ -8,3 +8,6 @@ repository = { workspace = true }
 
 [lints]
 workspace = true
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }

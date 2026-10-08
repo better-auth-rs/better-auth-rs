@@ -118,6 +118,20 @@ record!(crate::types::Passkey, [
     credential => "credential",
 ], additional_fields);
 
+record!(crate::wire::PasskeyView, [
+    id => "id",
+    name => "name",
+    credential_id => "credentialID",
+    user_id => "userId",
+    public_key => "publicKey",
+    counter => "counter",
+    device_type => "deviceType",
+    backed_up => "backedUp",
+    transports => "transports",
+    created_at => "createdAt",
+    aaguid => "aaguid",
+], additional_fields);
+
 record!(crate::types::DeviceCode, [
     id => "id",
     device_code => "deviceCode",

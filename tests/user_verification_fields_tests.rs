@@ -229,6 +229,7 @@ async fn verification_uses_mapped_fields_and_transforms_serial_references_once()
             references: Some(UserFieldReference {
                 model: "user".into(),
                 field: "id".into(),
+                ..Default::default()
             }),
             transform: Some(FieldTransforms {
                 input: Some(UserFieldTransform::new(|value| {

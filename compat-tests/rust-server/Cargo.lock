@@ -666,6 +666,9 @@ dependencies = [
 [[package]]
 name = "better-auth-schema-registry"
 version = "1.0.0-alpha.3"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "better-auth-seaorm"

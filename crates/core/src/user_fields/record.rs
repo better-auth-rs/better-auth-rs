@@ -91,6 +91,7 @@ impl crate::config::AccountConfig {
                     references: Some(UserFieldReference {
                         model: "user".into(),
                         field: "id".into(),
+                        ..Default::default()
                     }),
                     ..field(UserFieldType::String, true)
                 },

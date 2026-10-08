@@ -19,6 +19,10 @@ use std::sync::{
 };
 
 #[tokio::test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "The authentication contract asserts complete results and callback inputs while propagating setup errors"
+)]
 async fn enabled_policies_reach_database_and_fallback_authentication_without_cache_reprojection()
 -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     for mode in ["database", "secondary", "fallback"] {
@@ -51,7 +55,7 @@ async fn enabled_policies_reach_database_and_fallback_authentication_without_cac
                                 })),
                                 output: Some(UserFieldTransform::new(move |value| {
                                     assert_eq!(value, FieldValue::Number(5.25));
-                                    count.fetch_add(1, Ordering::SeqCst);
+                                    let _ = count.fetch_add(1, Ordering::SeqCst);
                                     Ok(output.clone())
                                 })),
                             }),
@@ -156,6 +160,10 @@ async fn enabled_policies_reach_database_and_fallback_authentication_without_cac
 }
 
 #[tokio::test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "The declaration contract asserts configuration failures while propagating setup errors"
+)]
 async fn enabled_declarations_reject_native_and_physical_column_collisions() -> AuthResult<()> {
     for (enabled_column, other_name, other_column) in [
         ("key", "marker", "stored_marker"),

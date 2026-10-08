@@ -482,6 +482,7 @@ async fn unsupported_device_ownership_conditions_leave_the_entire_record_stored(
             references: Some(UserFieldReference {
                 model: "user".into(),
                 field: "email".into(),
+                ..Default::default()
             }),
             required: Some(false),
             ..Default::default()
@@ -664,6 +665,7 @@ async fn memory_device_ownership_sets_reject_unsupported_fields_before_callbacks
             references: Some(UserFieldReference {
                 model: "user".into(),
                 field: "email".into(),
+                ..Default::default()
             }),
             required: Some(false),
             ..Default::default()

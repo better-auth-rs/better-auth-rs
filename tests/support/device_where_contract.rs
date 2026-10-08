@@ -159,6 +159,7 @@ fn policies(trace: &Trace, owner_ref_type: &UserFieldType) -> UserConfig {
                             references: (name == "ownerRef").then(|| UserFieldReference {
                                 model: "user".into(),
                                 field: "id".into(),
+                                ..Default::default()
                             }),
                             transform: Some(FieldTransforms {
                                 input: Some(callback("input")),

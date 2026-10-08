@@ -63,6 +63,13 @@ impl ModelFields {
                         if role == EntityRole::ApiKey {
                             declaration.input = Some(false);
                         }
+                        if matches!(
+                            (role, name),
+                            (EntityRole::ApiKey, "configId" | "referenceId" | "key")
+                                | (EntityRole::Passkey, "userId" | "credentialID")
+                        ) {
+                            declaration.index = Some(true);
+                        }
                         (name.to_owned(), declaration)
                     })
                     .collect(),
@@ -102,6 +109,7 @@ impl ModelFields {
             field.references = Some(UserFieldReference {
                 model: "user".into(),
                 field: "id".into(),
+                ..Default::default()
             });
         }
         fields

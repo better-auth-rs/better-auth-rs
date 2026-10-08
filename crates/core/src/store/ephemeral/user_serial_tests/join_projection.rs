@@ -91,6 +91,7 @@ async fn member_joins_and_full_details_resolve_users_at_their_projection_stage()
                             references: Some(UserFieldReference {
                                 model: "user".into(),
                                 field: "id".into(),
+                                ..Default::default()
                             }),
                             transform: Some(FieldTransforms {
                                 output: Some(UserFieldTransform::new(|value| {

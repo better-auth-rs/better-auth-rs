@@ -1,6 +1,7 @@
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use better_auth_core::{
-    AuthContext, AuthError, AuthRequest, AuthResult, AuthSchema, CreatePasskey, CreateSession,
+    AuthContext, AuthError, AuthRecordFields, AuthRequest, AuthResult, AuthSchema, CreatePasskey,
+    CreateSession, FieldMap, FieldValue,
     entity::AuthUser,
     store::AuthTransaction,
     wire::{PasskeyView, UserView},
@@ -158,7 +159,7 @@ pub(super) async fn verify_registration_core<S: AuthSchema>(
     session_user: Option<UserView>,
     config: &PasskeyConfig,
     ctx: &AuthContext<S>,
-) -> PasskeyHandlerResult<(Value, Option<better_auth_core::session::SessionData>)> {
+) -> PasskeyHandlerResult<(FieldValue, Option<better_auth_core::session::SessionData>)> {
     let Some(origins) = resolve_origins(config, req) else {
         return response_message(400, "Failed to verify registration");
     };
@@ -273,23 +274,21 @@ pub(super) async fn verify_registration_core<S: AuthSchema>(
         } else {
             registration.persist(None).await?
         };
-        let mut result = serde_json::to_value(PasskeyView::from(&passkey))?;
+        let mut result = PasskeyView::from(&passkey).field_values()?;
         let token = if let Some((user, session)) = session {
-            if let Some(object) = result.as_object_mut() {
-                let _ = object.insert(
-                    "session".into(),
-                    serde_json::to_value(ctx.session_view(&session).await?)?,
-                );
-                let _ = object.insert(
-                    "user".into(),
-                    serde_json::to_value(ctx.user_view(&user).await?)?,
-                );
-            }
+            let _ = result.insert(
+                "session".into(),
+                FieldMap::from(ctx.session_view(&session).await?).into(),
+            );
+            let _ = result.insert(
+                "user".into(),
+                FieldMap::from(ctx.user_view(&user).await?).into(),
+            );
             Some(ctx.session_manager().internal_data(&user, &session).await?)
         } else {
             None
         };
-        Ok((result, token))
+        Ok((result.into(), token))
     }
     .await
     .map_err(|error| verification_error(error, true))?;
@@ -374,18 +373,18 @@ impl<S: AuthSchema> Registration<S> {
         } else {
             None
         };
+        let user_id = self.input.user_id.clone().into();
         let passkey = match transaction {
             Some(tx) => tx.create_passkey(self.input).await?,
             None => self.ctx.database.create_passkey(self.input).await?,
         };
         let session = if let Some(user) = user {
-            let _ =
-                crate::plugins::helpers::session_user(&self.ctx, user.id().typed()?, transaction)
-                    .await
-                    .map_err(crate::plugins::helpers::SessionIssueError::into_auth_error)?;
+            crate::plugins::helpers::admit_session_for_id(&self.ctx, &user_id, transaction)
+                .await
+                .map_err(crate::plugins::helpers::SessionIssueError::into_auth_error)?;
             let input = CreateSession {
                 additional_fields: Default::default(),
-                user_id: user.id().into_owned(),
+                user_id,
                 expires_at: (Utc::now() + self.ctx.config.session.expires_in()).into(),
                 ip_address: self.ctx.config.advanced.ip_address.resolve(&self.request),
                 user_agent: self.request.headers.get("user-agent").cloned(),

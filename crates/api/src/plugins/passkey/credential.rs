@@ -1,7 +1,10 @@
-use base64::{Engine, engine::general_purpose::STANDARD};
+use base64::{
+    Engine,
+    engine::{DecodePaddingMode, GeneralPurpose, GeneralPurposeConfig},
+};
 use better_auth_core::{
-    AuthError, AuthResult, PasskeyCredentialState, PasskeyStorage, UpdatePasskeyAuthentication,
-    entity::AuthPasskey,
+    AuthError, AuthResult, PasskeyCredentialState, PasskeyStorage, SchemaValue,
+    UpdatePasskeyAuthentication, Utf16String, entity::AuthPasskey,
 };
 use serde::{Deserialize, Serialize};
 use webauthn_rs_core::proto::{
@@ -42,14 +45,7 @@ impl WebAuthnCredential {
                 stored.cred
             }
             PasskeyStorage::Native => {
-                let public_key =
-                    STANDARD
-                        .decode(passkey.public_key().typed()?)
-                        .map_err(|error| {
-                            AuthError::internal(format!(
-                                "Invalid passkey public key encoding: {error}"
-                            ))
-                        })?;
+                let public_key = decode_public_key(passkey.public_key())?;
                 let public_key: serde_cbor_2::Value = serde_cbor_2::from_slice(&public_key)
                     .map_err(|error| {
                         AuthError::internal(format!("Invalid passkey public key CBOR: {error}"))
@@ -130,4 +126,39 @@ impl WebAuthnCredential {
             }),
         }
     }
+}
+
+fn decode_public_key(value: &SchemaValue<String>) -> AuthResult<Vec<u8>> {
+    let text = value.field_value().decode::<Utf16String>()?;
+    let units = text.as_utf16();
+    let alphabet = if units.contains(&u16::from(b'-')) || units.contains(&u16::from(b'_')) {
+        &base64::alphabet::URL_SAFE
+    } else {
+        &base64::alphabet::STANDARD
+    };
+    let decoder = GeneralPurpose::new(
+        alphabet,
+        GeneralPurposeConfig::new()
+            .with_decode_allow_trailing_bits(true)
+            .with_decode_padding_mode(DecodePaddingMode::Indifferent),
+    );
+    // Better Auth stops at padding, validates an orphan sextet, and discards its bits.
+    let bytes = units
+        .iter()
+        .take_while(|unit| **unit != u16::from(b'='))
+        .map(|unit| u8::try_from(*unit))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| {
+            AuthError::internal(format!("Invalid passkey public key encoding: {error}"))
+        })?;
+    let invalid =
+        |error| AuthError::internal(format!("Invalid passkey public key encoding: {error}"));
+    let bytes = match bytes.split_last() {
+        Some((last, prefix)) if bytes.len() % 4 == 1 => {
+            let _ = decoder.decode([*last, b'A', b'A', b'A']).map_err(invalid)?;
+            prefix
+        }
+        _ => &bytes,
+    };
+    decoder.decode(bytes).map_err(invalid)
 }

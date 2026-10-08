@@ -272,6 +272,7 @@ fn runtime_fields(output_calls: Arc<AtomicUsize>) -> OrganizationConfig {
                             .and_then(Value::as_str)
                             .unwrap()
                             .to_owned(),
+                        ..Default::default()
                     }),
                 ..Default::default()
             };

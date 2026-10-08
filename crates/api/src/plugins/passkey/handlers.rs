@@ -1,20 +1,21 @@
 use better_auth_core::entity::{AuthPasskey, AuthUser};
 use better_auth_core::wire::PasskeyView;
-use better_auth_core::{AuthContext, AuthError, AuthResult, CreateVerification, FieldValue};
+use better_auth_core::{
+    AuthContext, AuthError, AuthResult, CreateVerification, FieldMap, FieldValue, RequestMeta,
+};
 use chrono::{Duration, Utc};
 use serde_json::Value;
 use uuid::Uuid;
 use webauthn_rs_core::proto::{COSEAlgorithm, PublicKeyCredential};
 
 use crate::plugins::StatusResponse;
-use crate::plugins::helpers::{SessionIssueError, issue_user_session};
+use crate::plugins::helpers::{SessionIssueError, issue_session_for_id};
 
 use super::PasskeyConfig;
 use super::credential::WebAuthnCredential;
 use super::descriptors::credential_descriptors;
 use super::types::{
-    DeletePasskeyRequest, PasskeyResponse, SessionResponse, UpdatePasskeyRequest,
-    VerifyAuthenticationRequest,
+    DeletePasskeyRequest, PasskeyResponse, UpdatePasskeyRequest, VerifyAuthenticationRequest,
 };
 use super::webauthn::{
     AuthenticationChallenge, RegistrationChallenge, StoredAuthenticationState,
@@ -221,7 +222,7 @@ pub(super) async fn verify_authentication_core(
     ip_address: Option<String>,
     user_agent: Option<String>,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> PasskeyHandlerResult<(Value, better_auth_core::session::SessionData)> {
+) -> PasskeyHandlerResult<(FieldValue, better_auth_core::session::SessionData)> {
     let Some(origin) = resolve_origins(config, req) else {
         return response_message(400, "origin missing");
     };
@@ -358,27 +359,37 @@ pub(super) async fn verify_authentication_core(
         Err(_) => return passkey_authentication_failure(),
     };
 
-    let Some(user) = ctx
-        .database
-        .get_user_by_id_field(&passkey.user_id().into_owned())
-        .await?
-    else {
+    let user_id = passkey.user_id().into_owned();
+    let session = issue_session_for_id(
+        ctx,
+        user_id.clone(),
+        &RequestMeta {
+            ip_address,
+            user_agent,
+        },
+        ctx.config.session.expires_in(),
+    )
+    .await
+    .map_err(SessionIssueError::into_auth_error)
+    .map_err(|error| super::registration::verification_error(error, false))?;
+    let user = if user_id.is_truthy()? {
+        ctx.database
+            .get_user_by_id_field(&user_id)
+            .await
+            .map_err(|error| super::registration::verification_error(error, false))?
+    } else {
+        None
+    };
+    let Some(user) = user else {
         return response_message(500, "User not found");
     };
 
-    let session = match issue_user_session(ctx, user.id().typed()?, ip_address, user_agent)
-        .await
-        .map_err(SessionIssueError::into_auth_error)
-    {
-        Ok(issued) => issued.session,
-        Err(error) => return Err(error),
-    };
-
     Ok(PasskeyHandlerOutcome::Success((
-        serde_json::to_value(SessionResponse {
+        FieldMap::from(better_auth_core::session::SessionData {
             session: ctx.session_view(&session).await?,
             user: ctx.user_view(&user).await?,
-        })?,
+        })
+        .into(),
         ctx.session_manager().internal_data(&user, &session).await?,
     )))
 }

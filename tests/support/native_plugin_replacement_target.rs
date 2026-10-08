@@ -69,7 +69,7 @@ impl Target {
             .ok_or_else(|| AuthError::internal("Unknown native replacement phase"))?;
         Ok(match &self.field_type {
             UserFieldType::Number => (5.25 + phase as f64).into(),
-            UserFieldType::Boolean => (phase % 2 == 0).into(),
+            UserFieldType::Boolean => phase.is_multiple_of(2).into(),
             UserFieldType::String => format!("replacement-{label}").into(),
             UserFieldType::StringArray => vec!["replacement".into(), (*label).into()].into(),
             UserFieldType::Date => {

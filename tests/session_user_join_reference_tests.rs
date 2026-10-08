@@ -94,6 +94,7 @@ fn config(scenario: &str, joins: bool, events: Option<&Events>) -> AuthConfig {
                     .then(|| UserFieldReference {
                         model: "session".into(),
                         field: "id".into(),
+                        ..Default::default()
                     }),
                 unique: scenario
                     .starts_with("reverse-user-reference-unique")
@@ -105,6 +106,7 @@ fn config(scenario: &str, joins: bool, events: Option<&Events>) -> AuthConfig {
     let reference = UserFieldReference {
         model: "user".into(),
         field: "id".into(),
+        ..Default::default()
     };
     config.session.fields_mut().extend([
         (

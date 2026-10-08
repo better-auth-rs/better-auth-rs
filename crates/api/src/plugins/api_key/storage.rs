@@ -122,6 +122,7 @@ fn deserialize(value: Option<Value>) -> Option<ApiKey> {
     // Upstream treats malformed serialized cache entries as a cache miss.
     let parsed = FieldValue::parse_json(&value).ok()?;
     let mut fields = match parsed {
+        FieldValue::Null => return None,
         FieldValue::Object(fields) => fields.as_ref().clone(),
         FieldValue::Array(values) => values
             .iter()

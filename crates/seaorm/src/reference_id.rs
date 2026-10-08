@@ -253,6 +253,7 @@ mod tests {
                         references: Some(UserFieldReference {
                             model: "user".into(),
                             field: "id".into(),
+                            ..Default::default()
                         }),
                         transform: Some(better_auth_core::user_fields::FieldTransforms {
                             input: Some(better_auth_core::user_fields::UserFieldTransform::new(
@@ -328,6 +329,7 @@ mod tests {
                         references: Some(UserFieldReference {
                             model: "user".into(),
                             field: "id".into(),
+                            ..Default::default()
                         }),
                         transform: Some(FieldTransforms {
                             input: Some(UserFieldTransform::new(|value| {
@@ -404,6 +406,7 @@ mod tests {
                             references: Some(UserFieldReference {
                                 model: "user".into(),
                                 field: "id".into(),
+                                ..Default::default()
                             }),
                             ..Default::default()
                         },

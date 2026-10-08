@@ -90,6 +90,7 @@ async fn user_and_session_references_keep_aliases_bindings_and_single_output_tra
         references: Some(UserFieldReference {
             model: "user".into(),
             field: "id".into(),
+            ..Default::default()
         }),
         default_value: Some(1.0.into()),
         transform: Some(FieldTransforms {

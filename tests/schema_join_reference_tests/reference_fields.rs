@@ -18,6 +18,7 @@ fn field_reference(model: &str, field: &str) -> UserFieldConfig {
         references: Some(UserFieldReference {
             model: model.into(),
             field: field.into(),
+            ..Default::default()
         }),
         ..Default::default()
     }

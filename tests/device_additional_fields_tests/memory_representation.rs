@@ -95,6 +95,7 @@ fn policies(trace: Option<&Trace>) -> UserConfig {
                                 UserFieldReference {
                                     model: "user".into(),
                                     field: "id".into(),
+                                    ..Default::default()
                                 }
                             }),
                             transform,

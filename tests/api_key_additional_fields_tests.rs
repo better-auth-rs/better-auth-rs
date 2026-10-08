@@ -113,6 +113,10 @@ async fn secondary_api_key_fields_forward_policies_and_extra_values() -> AuthRes
 }
 
 #[tokio::test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "The declaration contract asserts successful initialization while propagating database errors"
+)]
 async fn api_key_additional_fields_accept_complete_native_and_alias_declarations()
 -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     for (name, column) in [

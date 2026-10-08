@@ -68,6 +68,7 @@ pub fn configure(config: &mut OrganizationConfig, profile: &str) {
         references: Some(UserFieldReference {
             model: "organization".into(),
             field: "id".into(),
+            ..Default::default()
         }),
         ..unconstrained.clone()
     };
@@ -125,6 +126,7 @@ pub fn configure(config: &mut OrganizationConfig, profile: &str) {
                 references: Some(UserFieldReference {
                     model: "user".into(),
                     field: "id".into(),
+                    ..Default::default()
                 }),
                 ..unconstrained.clone()
             },

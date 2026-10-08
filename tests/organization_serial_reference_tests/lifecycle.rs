@@ -12,6 +12,7 @@ pub(super) async fn observe(joins: bool) -> AuthResult<Value> {
                             references: Some(UserFieldReference {
                                 model: "organizationRole".into(),
                                 field: "id".into(),
+                                ..Default::default()
                             }),
                             ..reference(None)
                         },
@@ -23,6 +24,7 @@ pub(super) async fn observe(joins: bool) -> AuthResult<Value> {
                             references: Some(UserFieldReference {
                                 model: "user".into(),
                                 field: "id".into(),
+                                ..Default::default()
                             }),
                             ..Default::default()
                         },

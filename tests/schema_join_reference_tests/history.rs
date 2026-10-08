@@ -60,6 +60,7 @@ fn configured(sequence: &Sequence, events: &Events) -> AuthConfig {
                 references: Some(UserFieldReference {
                     model: "user".into(),
                     field: "missingUserField".into(),
+                    ..Default::default()
                 }),
                 ..Default::default()
             },

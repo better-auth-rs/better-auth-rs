@@ -81,6 +81,7 @@ fn config(reference: Option<&str>, joins: bool, events: Option<&Events>) -> Auth
                 references: Some(UserFieldReference {
                     model: "user".into(),
                     field: "id".into(),
+                    ..Default::default()
                 }),
                 ..field(events, "account", "userId")
             },
@@ -91,6 +92,7 @@ fn config(reference: Option<&str>, joins: bool, events: Option<&Events>) -> Auth
                 references: reference.map(|model| UserFieldReference {
                     model: model.into(),
                     field: "id".into(),
+                    ..Default::default()
                 }),
                 ..field(events, "account", "badgeId")
             },

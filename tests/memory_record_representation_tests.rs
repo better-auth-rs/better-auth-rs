@@ -109,6 +109,7 @@ fn fields(scenario: Scenario, events: Option<&Trace>) -> UserConfig {
                             references: reference.then(|| UserFieldReference {
                                 model: "user".into(),
                                 field: "id".into(),
+                                ..Default::default()
                             }),
                             transform,
                             ..Default::default()

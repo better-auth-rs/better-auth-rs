@@ -86,6 +86,7 @@ fn field(
             serde_json::from_value::<Reference>(value.clone()).map(|reference| UserFieldReference {
                 model: reference.model,
                 field: reference.field,
+                ..Default::default()
             })
         })
         .transpose()?;

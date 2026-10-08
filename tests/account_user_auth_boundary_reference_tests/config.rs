@@ -65,7 +65,7 @@ fn fields(
         let references = declaration.get("references").map(|reference| {
             let model = reference["model"].as_str().ok_or_else(|| AuthError::internal("Missing relation model"))?;
             let field = reference["field"].as_str().ok_or_else(|| AuthError::internal("Missing relation field"))?;
-            Ok::<_, AuthError>(UserFieldReference { model: model.into(), field: field.into() })
+            Ok::<_, AuthError>(UserFieldReference { model: model.into(), field: field.into(), ..Default::default() })
         }).transpose()?;
         let transform = events.map(|events| {
             let events = events.clone();

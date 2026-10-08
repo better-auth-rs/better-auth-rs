@@ -17,6 +17,7 @@ fn schema(trace: &Trace) -> UserConfig {
                             references: (name == "reference").then(|| UserFieldReference {
                                 model: "user".into(),
                                 field: "id".into(),
+                                ..Default::default()
                             }),
                             transform: Some(FieldTransforms {
                                 input: Some(UserFieldTransform::new(move |value| {
@@ -136,6 +137,7 @@ async fn literal_undefined_default_skips_binding_but_default_factory_runs() {
                         references: Some(UserFieldReference {
                             model: "user".into(),
                             field: "id".into(),
+                            ..Default::default()
                         }),
                         default_value: Some(Value::Undefined),
                         default_value_fn: factory

@@ -48,6 +48,7 @@ async fn memory_session_undefined_id_alias_matches_complete_upstream_observation
             references: Some(UserFieldReference {
                 model: "session".into(),
                 field: "id".into(),
+                ..Default::default()
             }),
             transform: Some(FieldTransforms {
                 input: Some(UserFieldTransform::new(move |value| {

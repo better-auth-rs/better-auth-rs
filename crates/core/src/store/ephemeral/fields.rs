@@ -262,6 +262,7 @@ impl EphemeralStore {
                     references: Some(crate::user_fields::UserFieldReference {
                         model: (*model).into(),
                         field: "id".into(),
+                        ..Default::default()
                     }),
                     ..Default::default()
                 });
@@ -515,6 +516,7 @@ async fn organization_id_slot_preserves_bound_zero_alias() {
                             references: Some(UserFieldReference {
                                 model: "organization".into(),
                                 field: "id".into(),
+                                ..Default::default()
                             }),
                             ..Default::default()
                         },

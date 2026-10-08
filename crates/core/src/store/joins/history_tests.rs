@@ -64,6 +64,7 @@ fn config(mode: &str) -> AuthConfig {
                 references: Some(UserFieldReference {
                     model: "account".into(),
                     field: "id".into(),
+                    ..Default::default()
                 }),
                 ..Default::default()
             }
@@ -77,6 +78,7 @@ fn config(mode: &str) -> AuthConfig {
                 references: Some(UserFieldReference {
                     model: "user".into(),
                     field: "missingUserField".into(),
+                    ..Default::default()
                 }),
                 ..Default::default()
             },

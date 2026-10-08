@@ -107,6 +107,10 @@ With the default `require_session: true`, both registration endpoints require a 
 
 ### Adapter field policies
 
+Registration keeps the selected target ID as the session owner. Authentication keeps the selected Passkey `userId`, creates the session after updating the counter, and then loads the User. A User output transform does not replace the session owner. Admin admission still applies before session creation. Native success responses retain dynamic values and UTF-16 strings until HTTP serialization.
+
+Native COSE public keys accept the upstream standard and URL-safe Base64 alphabets, optional padding, and termination at the first padding character. The decoded key must still pass COSE parsing and signature verification.
+
 Register native replacement declarations and application fields through `AuthInitContext::register_model_fields(EntityRole::Passkey, UserConfig)`. Register the plugin that supplies overrides after `PasskeyPlugin`. The shared `ModelFields` merge replaces each complete declaration and preserves upstream field order. Defaults, references, input and output transforms, and column mappings apply to every declared field through the same record and patch conversion. The adapter retains control of `id`.
 
 Use ordinary `CreatePasskey` and `UpdatePasskey` inputs for typed callers. Native runtime fields use `SchemaValue<T>` and retain missing, null, and cross-type values until a consumer requires a specific representation. Public views preserve those values until serialization. The `create_passkey_record`, `get_passkey_record`, and `update_passkey_record` methods accept or return logical `FieldMap` records through the same policies. These methods do not add undeclared Legacy credential fields.

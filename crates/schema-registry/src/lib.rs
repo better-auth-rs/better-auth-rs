@@ -1,7 +1,7 @@
 //! Authoritative field registry for better-auth entity schemas.
 //!
-//! Shared by the `AuthEntity` proc macro (for compile-time validation)
-//! and the CLI (for code generation). This is the single source of truth
+//! Shared by runtime configuration, the `AuthEntity` proc macro, and the CLI.
+//! This is the single source of truth
 //! for which fields belong to core vs which are plugin-provided.
 
 /// Resolve an omitted or empty configured field name without changing the declaration.
@@ -9,6 +9,26 @@ pub fn resolve_field_name<'a>(configured: Option<&'a str>, fallback: &'a str) ->
     configured
         .filter(|name| !name.is_empty())
         .unwrap_or(fallback)
+}
+
+/// Action applied when a referenced database row is deleted. Omission defaults to `Cascade`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum FieldReferenceAction {
+    /// Check the foreign key without applying an automatic row change.
+    #[serde(rename = "no action")]
+    NoAction,
+    /// Reject deletion while referencing rows exist.
+    Restrict,
+    /// Delete referencing rows with the referenced row.
+    #[default]
+    Cascade,
+    /// Set the referencing column to null.
+    #[serde(rename = "set null")]
+    SetNull,
+    /// Set the referencing column to its database default.
+    #[serde(rename = "set default")]
+    SetDefault,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

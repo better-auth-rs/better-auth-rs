@@ -24,6 +24,7 @@ mod output;
 mod record;
 mod transform;
 mod user_record;
+pub use better_auth_schema_registry::FieldReferenceAction;
 pub use transform::UserFieldTransform;
 pub(crate) use user_record::USER_FIELDS;
 
@@ -34,12 +35,14 @@ pub type UserFieldValidator = Arc<dyn Fn(Value) -> AuthResult<Value> + Send + Sy
 pub type UserFieldFactory = Arc<dyn Fn() -> AuthResult<Value> + Send + Sync>;
 
 /// Referenced model and logical field, shared with the application's migration configuration.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct UserFieldReference {
     /// Logical model name, or the literal name of an application-owned table.
     pub model: String,
     /// Logical field name, or the literal column name of an application-owned table.
     pub field: String,
+    /// Database action when the referenced row is deleted. Omission selects Cascade.
+    pub on_delete: Option<FieldReferenceAction>,
 }
 
 /// Storage type of an application user field.
@@ -91,6 +94,12 @@ pub struct UserFieldConfig {
     pub references: Option<UserFieldReference>,
     /// Unique foreign keys select one related row; omission permits a related page.
     pub unique: Option<bool>,
+    /// Declare a database index. Omission leaves the field unindexed.
+    pub index: Option<bool>,
+    /// Select sortable text storage when the adapter supports it.
+    pub sortable: Option<bool>,
+    /// Select bigint storage for a numeric field.
+    pub bigint: Option<bool>,
     /// Constant creation default.
     pub default_value: Option<Value>,
     /// Creation default factory.

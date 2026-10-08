@@ -151,6 +151,7 @@ pub(super) async fn reference_writes<
             references: Some(UserFieldReference {
                 model: "user".into(),
                 field: "id".into(),
+                ..Default::default()
             }),
             transform: Some(FieldTransforms {
                 input: Some(UserFieldTransform::new(move |value| {

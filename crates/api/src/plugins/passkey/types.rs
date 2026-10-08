@@ -37,12 +37,6 @@ pub(crate) struct UpdatePasskeyRequest {
 // -- Response helpers --
 
 #[derive(Debug, Serialize)]
-pub(crate) struct SessionResponse<S: Serialize> {
-    pub(crate) session: S,
-    pub(crate) user: better_auth_core::wire::UserView,
-}
-
-#[derive(Debug, Serialize)]
 pub(crate) struct PasskeyResponse {
     pub(super) passkey: PasskeyView,
 }

@@ -198,6 +198,7 @@ async fn configured_serial_session_owner_has_one_storage_and_output_value() -> A
                 references: Some(UserFieldReference {
                     model: "user".into(),
                     field: "id".into(),
+                    ..Default::default()
                 }),
                 transform: Some(FieldTransforms {
                     input: Some(UserFieldTransform::new(move |value| {
@@ -284,6 +285,7 @@ async fn preserved_serial_sessions_apply_owner_on_update_once_per_batch() -> Aut
                 references: Some(UserFieldReference {
                     model: "user".into(),
                     field: "id".into(),
+                    ..Default::default()
                 }),
                 on_update: Some(Arc::new(move || {
                     let _ = callback_calls.fetch_add(1, Ordering::Relaxed);
@@ -348,6 +350,7 @@ async fn serial_session_creation_defaults_override_core_before_explicit_fields()
                 references: Some(UserFieldReference {
                     model: "user".into(),
                     field: "id".into(),
+                    ..Default::default()
                 }),
                 default_value_fn: Some(Arc::new(move || {
                     let _ = callback_calls.fetch_add(1, Ordering::Relaxed);

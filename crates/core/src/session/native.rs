@@ -154,6 +154,7 @@ mod tests {
                 references: Some(UserFieldReference {
                     model: "session".into(),
                     field: "id".into(),
+                    ..Default::default()
                 }),
                 ..Default::default()
             },

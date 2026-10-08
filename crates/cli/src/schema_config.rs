@@ -1,3 +1,4 @@
+pub(crate) use better_auth_schema_registry::FieldReferenceAction as OnDelete;
 use better_auth_schema_registry::{canonical_field_name, resolve_field_name};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -115,20 +116,6 @@ pub(crate) struct Reference {
     pub model: String,
     pub field: String,
     pub on_delete: Option<OnDelete>,
-}
-
-#[derive(Clone, Copy, Default, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub(crate) enum OnDelete {
-    #[serde(rename = "no action")]
-    NoAction,
-    Restrict,
-    #[default]
-    Cascade,
-    #[serde(rename = "set null")]
-    SetNull,
-    #[serde(rename = "set default")]
-    SetDefault,
 }
 
 impl AdditionalField {

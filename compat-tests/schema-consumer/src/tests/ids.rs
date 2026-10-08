@@ -53,6 +53,7 @@ async fn core_writes<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPlugin
             references: Some(UserFieldReference {
                 model: "user".into(),
                 field: "id".into(),
+                ..Default::default()
             }),
             ..Default::default()
         },
@@ -65,6 +66,7 @@ async fn core_writes<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPlugin
             references: Some(UserFieldReference {
                 model: "user".into(),
                 field: "id".into(),
+                ..Default::default()
             }),
             ..Default::default()
         },
