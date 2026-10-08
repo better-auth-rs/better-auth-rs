@@ -15,8 +15,8 @@ mod verification;
 use crate::email::EmailProvider;
 use crate::error::{AuthError, AuthResult};
 pub use crate::user_fields::{
-    FieldReferenceAction, FieldTransforms, UserConfig, UserFieldConfig, UserFieldFactory,
-    UserFieldReference, UserFieldTransform, UserFieldType, UserFieldValidator,
+    FieldReferenceAction, FieldTransforms, FieldValidators, UserConfig, UserFieldConfig,
+    UserFieldFactory, UserFieldReference, UserFieldTransform, UserFieldType, UserFieldValidator,
 };
 use chrono::Duration;
 pub use cookie_cache::{CookieCacheVersion, CookieCacheVersionCallback};

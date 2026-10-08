@@ -278,6 +278,7 @@ impl MemberUser {
             fields.fields_mut().entry(logical).or_default().references = Some(UserFieldReference {
                 model: if *target == "users" { "user" } else { target }.into(),
                 field: "id".into(),
+                ..Default::default()
             });
         }
         fields.fields_mut().extend(configured.fields().clone());

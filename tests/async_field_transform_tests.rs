@@ -470,7 +470,10 @@ async fn synchronous_input_rejects_async_callbacks_while_organization_adapters_a
         .fields_mut()
         .get_mut("label")
         .ok_or_else(|| AuthError::internal("Fixture field missing"))?
-        .validator = Some(Arc::new(Ok));
+        .validator = Some(better_auth_core::user_fields::FieldValidators {
+        input: Some(Arc::new(Ok)),
+        ..Default::default()
+    });
     assert_eq!(config.parse_input(&input, true)?, input);
     assert_eq!(config.storage_fields(input.clone(), true).await?, input);
     Ok(())

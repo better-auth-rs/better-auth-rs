@@ -5,10 +5,10 @@ pub use better_auth_core::config::{
     Argon2Config, BearerConfig, CookieAttributes, CookieCacheConfig, CookieCacheRefresh,
     CookieCacheStrategy, CookieCacheVersion, CookieCacheVersionCallback, CookieOverride,
     CrossSubDomainConfig, ErrorPageColors, ErrorPageCustomization, ErrorPageFont, ErrorPageSize,
-    FieldTransforms, IpAddressConfig, JwtConfig, OAuthStateStrategy, PasswordConfig, SameSite,
-    SecretKey, SessionConfig, SessionFieldConfig, UserConfig, UserFieldConfig, UserFieldFactory,
-    UserFieldReference, UserFieldTransform, UserFieldType, UserFieldValidator, VersionedSecret,
-    core_paths, extract_origin,
+    FieldReferenceAction, FieldTransforms, FieldValidators, IpAddressConfig, JwtConfig,
+    OAuthStateStrategy, PasswordConfig, SameSite, SecretKey, SessionConfig, SessionFieldConfig,
+    UserConfig, UserFieldConfig, UserFieldFactory, UserFieldReference, UserFieldTransform,
+    UserFieldType, UserFieldValidator, VersionedSecret, core_paths, extract_origin,
 };
 
 pub use better_auth_core::config::{

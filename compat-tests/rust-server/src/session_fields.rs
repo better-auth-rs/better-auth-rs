@@ -34,10 +34,15 @@ pub(super) fn configure(profile: &str, config: &mut AuthConfig) {
             (
                 "validatedLabel".into(),
                 UserFieldConfig {
-                    validator: Some(Arc::new(|value| match value.as_str() {
-                        Some(value) if value.len() >= 2 => Ok(format!("{value}:validated").into()),
-                        _ => Err(AuthError::BadRequest("label too short".into())),
-                    })),
+                    validator: Some(better_auth::config::FieldValidators {
+                        input: Some(Arc::new(|value| match value.as_str() {
+                            Some(value) if value.len() >= 2 => {
+                                Ok(format!("{value}:validated").into())
+                            }
+                            _ => Err(AuthError::BadRequest("label too short".into())),
+                        })),
+                        ..Default::default()
+                    }),
                     transform: Some(FieldTransforms {
                         input: Some(suffix(":input")),
                         output: Some(suffix(":output")),

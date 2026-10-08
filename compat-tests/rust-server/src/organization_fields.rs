@@ -65,15 +65,18 @@ fn fields(label_column: &str) -> UserConfig {
                         field_type: UserFieldType::Number,
                         required: Some(false),
                         default_value: Some(Value::from(1)),
-                        validator: Some(Arc::new(|value| {
-                            if value.as_f64().is_some_and(|value| value >= 0.0) {
-                                Ok(value)
-                            } else {
-                                Err(better_auth::AuthError::bad_request(
-                                    "score must be nonnegative",
-                                ))
-                            }
-                        })),
+                        validator: Some(better_auth::config::FieldValidators {
+                            input: Some(Arc::new(|value| {
+                                if value.as_f64().is_some_and(|value| value >= 0.0) {
+                                    Ok(value)
+                                } else {
+                                    Err(better_auth::AuthError::bad_request(
+                                        "score must be nonnegative",
+                                    ))
+                                }
+                            })),
+                            ..Default::default()
+                        }),
                         ..Default::default()
                     },
                 ),

@@ -28,8 +28,17 @@ pub use better_auth_schema_registry::FieldReferenceAction;
 pub use transform::UserFieldTransform;
 pub(crate) use user_record::USER_FIELDS;
 
-/// Synchronous public input validator. Return the validated value or a public validation message.
+/// Synchronous field validator. Return the validated value or a validation error.
 pub type UserFieldValidator = Arc<dyn Fn(Value) -> AuthResult<Value> + Send + Sync>;
+
+/// Validator declarations retained with the complete field policy.
+#[derive(Clone, Default)]
+pub struct FieldValidators {
+    /// Validate public input before its route input transform.
+    pub input: Option<UserFieldValidator>,
+    /// Retain the output validator declaration; Better Auth 1.7.6 does not execute it.
+    pub output: Option<UserFieldValidator>,
+}
 
 /// Synchronous default or update factory. Errors stop field processing before persistence.
 pub type UserFieldFactory = Arc<dyn Fn() -> AuthResult<Value> + Send + Sync>;
@@ -106,8 +115,8 @@ pub struct UserFieldConfig {
     pub default_value_fn: Option<UserFieldFactory>,
     /// Produce a stored value when an update omits this field.
     pub on_update: Option<UserFieldFactory>,
-    /// Validate public input before persistence; takes precedence over the route input transform.
-    pub validator: Option<UserFieldValidator>,
+    /// Validator callbacks. An empty container preserves the absence of an input validator.
+    pub validator: Option<FieldValidators>,
     /// Field callbacks. `None` preserves omission; `Some(Default::default())` is an empty container.
     pub transform: Option<FieldTransforms>,
 }
@@ -141,6 +150,13 @@ impl UserFieldConfig {
     /// Whether public views include this field; defaults to true.
     pub fn returned(&self) -> bool {
         self.returned.unwrap_or(true)
+    }
+
+    /// Configured public input validator, without invoking the callback.
+    pub fn input_validator(&self) -> Option<&UserFieldValidator> {
+        self.validator
+            .as_ref()
+            .and_then(|validator| validator.input.as_ref())
     }
 
     /// Configured input callback, without invoking the callback.
@@ -219,7 +235,7 @@ impl UserConfig {
                     }
                     continue;
                 }
-                if let Some(validate) = &field.validator {
+                if let Some(validate) = field.input_validator() {
                     Some(
                         validate(value.clone()).map_err(|error| AuthError::FieldInput {
                             code: "VALIDATION_ERROR",

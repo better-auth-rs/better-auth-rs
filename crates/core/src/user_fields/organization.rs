@@ -327,9 +327,12 @@ mod tests {
                         UserFieldConfig {
                             required: Some(false),
                             field_name: Some("stored_label".into()),
-                            validator: Some(Arc::new(|_| {
-                                Err(AuthError::bad_request("must not run"))
-                            })),
+                            validator: Some(crate::user_fields::FieldValidators {
+                                input: Some(Arc::new(|_| {
+                                    Err(AuthError::bad_request("must not run"))
+                                })),
+                                ..Default::default()
+                            }),
                             transform: Some(FieldTransforms {
                                 input: Some(UserFieldTransform::new(|value| {
                                     Ok(json!(format!("{}:in", value.as_str().unwrap())))

@@ -132,16 +132,19 @@ pub fn configure(config: &mut better_auth::AuthConfig) {
                 UserFieldConfig {
                     field_type: UserFieldType::Number,
                     default_value: Some(1.into()),
-                    validator: Some(Arc::new(|value| {
-                        if value.as_f64().is_some_and(|score| score >= 0.0) {
-                            Ok(value)
-                        } else {
-                            Err(better_auth::AuthError::FieldInput {
-                                code: "VALIDATION_ERROR",
-                                message: "score must be nonnegative".into(),
-                            })
-                        }
-                    })),
+                    validator: Some(better_auth::config::FieldValidators {
+                        input: Some(Arc::new(|value| {
+                            if value.as_f64().is_some_and(|score| score >= 0.0) {
+                                Ok(value)
+                            } else {
+                                Err(better_auth::AuthError::FieldInput {
+                                    code: "VALIDATION_ERROR",
+                                    message: "score must be nonnegative".into(),
+                                })
+                            }
+                        })),
+                        ..Default::default()
+                    }),
                     ..Default::default()
                 },
             ),

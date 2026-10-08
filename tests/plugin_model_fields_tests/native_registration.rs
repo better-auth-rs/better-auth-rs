@@ -1,5 +1,7 @@
 use super::*;
-use better_auth::config::{FieldReferenceAction, UserFieldReference};
+use better_auth::config::{
+    FieldReferenceAction, FieldValidators, UserFieldReference, UserFieldValidator,
+};
 use better_auth::plugins::{api_key::ApiKeyPlugin, passkey::PasskeyPlugin};
 use better_auth_core::{SchemaValue, id::IdGeneration};
 
@@ -345,6 +347,13 @@ async fn native_plugin_registration_replaces_policies_without_moving_extension_o
 async fn complete_declaration_replacement_preserves_then_clears_metadata() -> AuthResult<()> {
     for model in [Model::ApiKey, Model::Passkey] {
         let events = Events::default();
+        let validator = |phase: &'static str, name: &'static str| {
+            let events = events.clone();
+            Arc::new(move |value: FieldValue| {
+                trace_lock(&events)?.push(json!([phase, name, value.json()?]));
+                Ok(value)
+            }) as UserFieldValidator
+        };
         let mut initial = declarations(model, &events);
         for name in ["id", model.field()] {
             let field = required(initial.fields_mut().get_mut(name), "Expected initial field")?;
@@ -355,6 +364,10 @@ async fn complete_declaration_replacement_preserves_then_clears_metadata() -> Au
                 model: "user".into(),
                 field: "id".into(),
                 on_delete: Some(FieldReferenceAction::Restrict),
+            });
+            field.validator = Some(FieldValidators {
+                input: Some(validator("validator-input", name)),
+                output: Some(validator("validator-output", name)),
             });
         }
         let names = model
@@ -425,6 +438,25 @@ async fn complete_declaration_replacement_preserves_then_clears_metadata() -> Au
                 assert!(field.default_value_fn.is_none());
                 assert!(field.on_update.is_none());
                 assert!(field.transform.is_none());
+                assert!(field.validator.is_none());
+            } else {
+                let original = required(
+                    initial
+                        .fields()
+                        .get(model.field())
+                        .and_then(|field| field.validator.as_ref()),
+                    "Expected initial validators",
+                )?;
+                let retained = required(field.validator.as_ref(), "Expected retained validators")?;
+                for (original, retained) in [
+                    (original.input.as_ref(), retained.input.as_ref()),
+                    (original.output.as_ref(), retained.output.as_ref()),
+                ] {
+                    assert!(Arc::ptr_eq(
+                        required(original, "Expected original validator")?,
+                        required(retained, "Expected retained validator")?,
+                    ));
+                }
             }
 
             let declared_id = required(schema.fields().get("id"), "Expected declared ID field")?;
@@ -432,6 +464,12 @@ async fn complete_declaration_replacement_preserves_then_clears_metadata() -> Au
                 (declared_id.index, declared_id.sortable, declared_id.bigint),
                 (Some(true), Some(false), Some(true))
             );
+            let id_validators = required(
+                declared_id.validator.as_ref(),
+                "Expected declared ID validators",
+            )?;
+            assert!(id_validators.input.is_some());
+            assert!(id_validators.output.is_some());
             let adapter = schema.adapter_fields(&[]);
             assert_eq!(adapter.fields().keys().cloned().collect::<Vec<_>>(), names);
             let id = required(adapter.fields().get("id"), "Expected adapter ID field")?;
@@ -439,6 +477,33 @@ async fn complete_declaration_replacement_preserves_then_clears_metadata() -> Au
             assert!(id.references.is_none());
             assert!(id.field_name.is_none());
             assert!(id.transform.is_none());
+            assert!(id.validator.is_none());
+            assert!(trace_lock(&events)?.is_empty());
+
+            let output = required(
+                adapter.fields().get(model.field()),
+                "Expected adapter native field",
+            )?
+            .adapter_output(7.25.into(), true)
+            .await?;
+            assert_eq!(
+                output,
+                if phase == 0 {
+                    FieldValue::from("7.25")
+                } else {
+                    FieldValue::from(7.25)
+                }
+            );
+            assert_eq!(
+                *trace_lock(&events)?,
+                if phase == 0 {
+                    vec![json!(["output", model.field(), 7.25])]
+                } else {
+                    Vec::<Value>::new()
+                },
+                "Adapter output must run only the transform and must not run either validator"
+            );
+            trace_lock(&events)?.clear();
         }
         assert!(trace_lock(&events)?.is_empty());
     }
