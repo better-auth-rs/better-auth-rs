@@ -10,7 +10,7 @@ mod wallet;
 use crate::id::AdapterIdInput;
 use crate::store::schema::{EntityRole, resolve_field_name};
 use crate::user_fields::{AdapterRecord, UserConfig, UserFieldType};
-use crate::{AuthConfig, AuthError, AuthResult, FieldMap, FieldValue as Value, SchemaValue};
+use crate::{AuthConfig, AuthError, AuthResult, FieldMap, FieldValue as Value};
 use indexmap::{IndexMap, IndexSet};
 use std::sync::{Arc, LazyLock, Mutex};
 
@@ -32,10 +32,6 @@ pub struct ModelFields {
 struct IdHistory {
     canonical: IndexSet<EntityRole>,
     input: IndexMap<EntityRole, AdapterIdInput>,
-}
-
-fn optional_string(fields: &mut FieldMap, name: &str) -> Option<SchemaValue<Option<String>>> {
-    fields.shift_remove(name).map(SchemaValue::from_field)
 }
 
 impl ModelFields {

@@ -44,7 +44,7 @@ impl DeviceCodeTransaction {
 #[derive(Clone)]
 pub(super) struct DeviceCodeConsumption {
     origin: Option<DeviceCodeOrigin>,
-    binding_fields: Vec<String>,
+    binding_fields: [String; 5],
     ownership_field: Option<String>,
 }
 
@@ -305,7 +305,7 @@ impl DeviceCodeStore for EphemeralStore {
             self.plugin_query_value(EntityRole::DeviceCode, "status", "approved".into())?;
         let (bindings, unchanged) = expected.consumption_bindings()?;
         let names = ["id", "deviceCode", "clientId", "userId", "status"];
-        let columns: Vec<_> = names.iter().map(|name| self.device_column(name)).collect();
+        let columns = names.map(|name| self.device_column(name));
         let row = self
             .raw("deviceCode", "consumeOne", |state| {
                 let mut selected = None;

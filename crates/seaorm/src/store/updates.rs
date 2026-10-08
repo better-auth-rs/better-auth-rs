@@ -1,11 +1,11 @@
 use sea_orm::{
-    ColumnTrait, ConnectionTrait, EntityTrait, FromQueryResult, Iden, Iterable, PrimaryKeyToColumn,
-    QueryFilter, QueryResult, QueryTrait,
+    ColumnTrait, ConnectionTrait, EntityTrait, FromQueryResult, Iden, IdenStatic, Iterable,
+    PrimaryKeyToColumn, QueryFilter, QueryResult, QuerySelect, QueryTrait,
     sea_query::{ExprTrait, Query, SimpleExpr},
 };
 
 use super::map_db_err;
-use crate::error::AuthResult;
+use crate::error::{AuthError, AuthResult};
 
 pub(super) async fn update_record_returning_one<E: EntityTrait, C: ConnectionTrait>(
     db: &C,
@@ -125,34 +125,65 @@ pub(super) async fn increment_returning_raw<E>(
 where
     E: EntityTrait,
 {
-    use sea_orm::{QuerySelect, TransactionTrait};
+    use sea_orm::TransactionTrait;
     if db.get_database_backend() != sea_orm::DbBackend::MySql {
-        return execute_returning_raw(db, query, reselect).await;
+        return increment_returning_raw_with_connection(db, query, filter, reselect).await;
     }
     let tx = db.begin().await.map_err(map_db_err)?;
-    let result = async {
-        if tx
-            .query_one_raw(
-                E::find()
-                    .filter(filter.clone())
-                    .lock_exclusive()
-                    .build(db.get_database_backend()),
-            )
-            .await
-            .map_err(map_db_err)?
-            .is_none()
-        {
-            return Ok(None);
-        }
-        execute_returning_raw(&tx, query, reselect).await
-    }
-    .await;
+    let result = increment_returning_raw_with_connection(&tx, query, filter, reselect).await;
     if result.is_ok() {
         tx.commit().await.map_err(map_db_err)?;
     } else {
         tx.rollback().await.map_err(map_db_err)?;
     }
     result
+}
+
+fn increment_target<E: EntityTrait>(primary: E::Column, filter: SimpleExpr) -> sea_orm::Select<E> {
+    E::find()
+        .select_only()
+        .column(primary)
+        .filter(filter)
+        .limit(1)
+}
+
+/// The caller must hold a transaction when the connection uses MySQL.
+pub(super) async fn increment_returning_raw_with_connection<E, C>(
+    db: &C,
+    query: sea_orm::UpdateMany<E>,
+    filter: SimpleExpr,
+    reselect: SimpleExpr,
+) -> AuthResult<Option<QueryResult>>
+where
+    E: EntityTrait,
+    C: ConnectionTrait,
+{
+    let primary = E::PrimaryKey::iter()
+        .next()
+        .ok_or_else(|| AuthError::config("An auth model requires a primary key"))?
+        .into_column();
+    let target = increment_target::<E>(primary, filter);
+    if db.get_database_backend() != sea_orm::DbBackend::MySql {
+        return execute_returning_raw(
+            db,
+            query.filter(primary.in_subquery(target.into_query())),
+            reselect,
+        )
+        .await;
+    }
+    let backend = db.get_database_backend();
+    let Some(target) = db
+        .query_one_raw(target.lock_exclusive().build(backend))
+        .await
+        .map_err(map_db_err)?
+    else {
+        return Ok(None);
+    };
+    let value = super::plugin_rows::value(&target, primary.as_str())?;
+    let value = super::record_bindings::Binding::for_column(primary, value).bind(backend)?;
+    let selected_id = primary.into_expr().eq(primary.save_as(value));
+    // Keep the original guards in UPDATE, then read by the locked ID even if SET changes the ID.
+    execute_returning_raw(db, query.filter(selected_id.clone()), selected_id).await
 }
 
 #[cfg(test)]
@@ -193,3 +224,7 @@ mod tests {
         Ok(())
     }
 }
+
+#[cfg(test)]
+#[path = "increment_target_tests.rs"]
+mod increment_target_tests;

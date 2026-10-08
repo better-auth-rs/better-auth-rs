@@ -1,6 +1,6 @@
+use super::SeaOrmTransaction;
 use super::instrumentation::database_operation;
 use super::plugin_models::Entity;
-use super::{SeaOrmTransaction, map_db_err};
 use crate::schema::AuthSchema;
 use crate::types::{CreateDeviceCode, DeviceCode, UpdateDeviceCode};
 use async_trait::async_trait;
@@ -8,7 +8,7 @@ use better_auth_core::{
     AuthResult, FieldMap, SchemaValue,
     store::{DeviceCodeStore, schema::EntityRole},
 };
-use sea_orm::{ConnectionTrait, EntityTrait, QueryFilter, QuerySelect, QueryTrait};
+use sea_orm::QueryFilter;
 
 #[async_trait]
 impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema>
@@ -130,34 +130,19 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         user_id: &SchemaValue<String>,
     ) -> AuthResult<bool> {
         let (query, guard, reselect) = self.store.prepare_device_code_claim(id, user_id).await?;
-        let row = database_operation::<Entity<P::DeviceCode>, _>(
-            self.store.config(),
-            "incrementOne",
-            async {
-                if self.tx.get_database_backend() == sea_orm::DbBackend::MySql
-                    && self
-                        .tx
-                        .query_one_raw(
-                            Entity::<P::DeviceCode>::find()
-                                .filter(guard.clone())
-                                .lock_exclusive()
-                                .build(self.tx.get_database_backend()),
-                        )
-                        .await
-                        .map_err(map_db_err)?
-                        .is_none()
-                {
-                    return Ok(None);
-                }
-                super::updates::execute_returning_raw::<Entity<P::DeviceCode>, _>(
-                    &self.tx,
-                    query.filter(guard),
-                    reselect,
-                )
-                .await
-            },
-        )
-        .await?;
+        let row =
+            database_operation::<Entity<P::DeviceCode>, _>(
+                self.store.config(),
+                "incrementOne",
+                async {
+                    super::updates::increment_returning_raw_with_connection::<
+                        Entity<P::DeviceCode>,
+                        _,
+                    >(&self.tx, query.filter(guard.clone()), guard, reselect)
+                    .await
+                },
+            )
+            .await?;
         Ok(!self
             .store
             .project_device_code_models(row.into_iter().collect())
