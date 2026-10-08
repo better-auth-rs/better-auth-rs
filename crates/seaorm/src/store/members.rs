@@ -17,31 +17,7 @@ use super::organization_models::{self as models, Entity, values};
 use super::{SeaOrmStore, map_db_err};
 use crate::SeaOrmOrganizationModel;
 use better_auth_core::{FieldValue, SchemaField};
-use sea_orm::sea_query::{Expr, ExprTrait, SimpleExpr};
-
-fn member_expression(
-    column: impl ColumnTrait,
-    field: &str,
-    config: &better_auth_core::user_fields::UserConfig,
-    backend: DatabaseBackend,
-) -> SimpleExpr {
-    if backend == DatabaseBackend::Sqlite
-        && config.fields().get(field).is_some_and(|field| {
-            matches!(
-                field.field_type,
-                better_auth_core::user_fields::UserFieldType::Json
-            )
-        })
-        && matches!(
-            column.def().get_column_type(),
-            sea_orm::ColumnType::Json | sea_orm::ColumnType::JsonBinary
-        )
-    {
-        Expr::cust_with_expr("json_extract(?, '$')", Expr::col(column))
-    } else {
-        Expr::col(column)
-    }
-}
+use sea_orm::sea_query::{Expr, ExprTrait};
 
 fn member_column<M: SeaOrmOrganizationModel>(
     field: &str,
@@ -94,7 +70,7 @@ fn apply_member_filter<M: SeaOrmOrganizationModel>(
                 | sea_orm::ColumnType::Char(_)
         ))
     .then_some(column);
-    let column = member_expression(column, field, config, backend);
+    let column = Expr::col(column);
     let field_type = config.fields().get(field).map(|field| &field.field_type);
     let normalize_number = |value: &Value| match value {
         Value::String(value) if matches!(field_type, Some(UserFieldType::Number)) => {
@@ -188,19 +164,13 @@ fn apply_member_sort<M: SeaOrmOrganizationModel>(
     query: Select<Entity<M>>,
     params: &ListOrganizationMembersParams,
     config: &better_auth_core::user_fields::UserConfig,
-    backend: DatabaseBackend,
 ) -> AuthResult<Select<Entity<M>>> {
     let column = params
         .sort_by
         .as_deref()
         .and_then(|field| member_column::<M>(field, config))
         .unwrap_or(M::column("created_at")?);
-    let column = member_expression(
-        column,
-        params.sort_by.as_deref().unwrap_or("createdAt"),
-        config,
-        backend,
-    );
+    let column = Expr::col(column);
     Ok(if params.sort_direction.as_deref() == Some("desc") {
         query.order_by_desc(column)
     } else {
@@ -432,7 +402,6 @@ where
             filtered_query,
             params,
             &self.organization_fields()?.member,
-            self.connection().get_database_backend(),
         )?;
         let (limit, offset) = super::pagination::sql_pagination(
             self.connection().get_database_backend(),

@@ -93,6 +93,23 @@ pub fn configure(config: &mut OrganizationConfig, profile: &str) {
         }),
         ..Default::default()
     };
+    let date_string = UserFieldConfig {
+        field_type: UserFieldType::String,
+        required: Some(false),
+        transform: Some(FieldTransforms {
+            input: Some(UserFieldTransform::new(|value| {
+                if !matches!(value, better_auth::FieldValue::Date(_)) {
+                    return Ok(value);
+                }
+                match value.json()? {
+                    Some(serde_json::Value::String(date)) => Ok(date.into()),
+                    _ => Err(better_auth::AuthError::internal("Invalid time value")),
+                }
+            })),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
     config.schema.member.fields_mut().extend([
         (
             "role".into(),
@@ -125,20 +142,8 @@ pub fn configure(config: &mut OrganizationConfig, profile: &str) {
                 ..Default::default()
             },
         ),
-        (
-            "createdAt".into(),
-            UserFieldConfig {
-                required: Some(false),
-                ..Default::default()
-            },
-        ),
-        (
-            "expiresAt".into(),
-            UserFieldConfig {
-                required: Some(false),
-                ..Default::default()
-            },
-        ),
+        ("createdAt".into(), date_string.clone()),
+        ("expiresAt".into(), date_string),
         (
             "inviterId".into(),
             UserFieldConfig {
