@@ -5,6 +5,7 @@
 )]
 
 use super::*;
+use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use better_auth_core::{
     Jwk as StoredJwk, SchemaValue,
     store::{AuthStore, EphemeralStore, StatelessSchema},
@@ -133,6 +134,43 @@ async fn numeric_key_id_signs_and_verifies_without_weakening_header_or_signature
         )
         .await?;
     assert!(plugin.verify(&token, None, &ctx).await?.is_some());
+    Ok(())
+}
+
+#[tokio::test]
+async fn unrelated_surrogate_property_names_and_object_kids_retain_adapter_reads() -> AuthResult<()>
+{
+    use better_auth_core::session::{SessionCookieContext, SessionCookieSigner};
+    let plugin = JwtPlugin::new().session_cookie_cache(true);
+    let (ctx, reads) = context(&plugin, vec![key(JwtAlgorithm::EdDsa)?]).await?;
+    let request = AuthRequest::new(HttpMethod::Get, "/get-session");
+    let verifier = ctx
+        .extensions
+        .get::<Arc<dyn SessionCookieSigner<StatelessSchema>>>()
+        .unwrap();
+    for source in [
+        r#"{"alg":"EdDSA","typ":"better-auth.session-cache+jwt","kid":"missing","\ud800":7}"#,
+        r#"{"alg":"EdDSA","typ":"better-auth.session-cache+jwt","kid":{"\ud800":7}}"#,
+    ] {
+        let token = format!("{}.e30.AA", URL_SAFE_NO_PAD.encode(source));
+        let before = reads.load(Ordering::SeqCst);
+        assert!(plugin.verify(&token, None, &ctx).await?.is_none());
+        assert_eq!(reads.load(Ordering::SeqCst), before + 1);
+        assert!(
+            verifier
+                .verify(
+                    &token,
+                    SessionCookieContext {
+                        request: &request,
+                        config: &ctx.config,
+                        transaction: None
+                    }
+                )
+                .await?
+                .is_none()
+        );
+        assert_eq!(reads.load(Ordering::SeqCst), before + 2);
+    }
     Ok(())
 }
 

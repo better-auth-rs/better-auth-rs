@@ -32,6 +32,25 @@ where
     )?;
     let table = M::Entity::default().table_name().to_owned();
     assert_eq!(Some(table.as_str()), expected["table"].as_str());
+    let target = contract::Target::from_fixture(&expected)?;
+    assert!(
+        !M::is_id_reference(&M::column(&target.column)?),
+        "{name} replacement must remove the inherited ID reference"
+    );
+    for reference in expected["catalog"]["catalog"]["foreignKeys"]
+        .as_array()
+        .ok_or("Missing native replacement foreign keys")?
+    {
+        if reference["to"] == "id" {
+            let column = reference["from"]
+                .as_str()
+                .ok_or("Missing native replacement reference column")?;
+            assert!(
+                M::is_id_reference(&M::column(column)?),
+                "{name}.{column} must retain its declared ID reference"
+            );
+        }
+    }
     let (catalog, ddl) = sqlite_catalog::observe(
         database,
         &table,

@@ -388,6 +388,10 @@ impl<S: AuthSchema> SessionManager<S> {
         })
     }
 
+    #[expect(
+        clippy::manual_async_fn,
+        reason = "The explicit Send return bound prevents generated consumers from expanding nested projection futures"
+    )]
     fn resolve_relations(
         &self,
         req: &AuthRequest,
@@ -396,7 +400,6 @@ impl<S: AuthSchema> SessionManager<S> {
     ) -> impl std::future::Future<
         Output = AuthResult<SessionResolution<SessionData<JoinValue<UserView>>>>,
     > + Send {
-        // Prove Send here instead of expanding the session pipeline in each request caller.
         async move {
             let raw = if req.path() == "/get-session" {
                 req.query.clone()

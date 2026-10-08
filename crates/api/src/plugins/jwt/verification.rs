@@ -91,15 +91,39 @@ pub(super) fn has_key_id(token: &str) -> bool {
     raw_header(token).is_some_and(|header| header.has_key_id())
 }
 
-pub(super) struct Header(pub(super) FieldMap);
+#[serde_with::serde_as]
+#[derive(serde::Deserialize)]
+#[serde(transparent)]
+pub(super) struct Header(
+    // Unknown JSON property names can contain unpaired surrogates and must not reject key lookup.
+    #[serde_as(as = "std::collections::HashMap<serde_with::Bytes, _>")]
+    std::collections::HashMap<Vec<u8>, Box<serde_json::value::RawValue>>,
+);
 
 impl Header {
     pub(super) fn has_key_id(&self) -> bool {
-        self.0.get("kid").is_some_and(FieldValue::is_truthy)
+        self.0
+            .get(b"kid".as_slice())
+            .is_some_and(|kid| match kid.get().as_bytes().first() {
+                Some(b'"') => kid.get() != "\"\"",
+                Some(b'[' | b'{') => true,
+                _ => serde_json::from_str::<Value>(kid.get())
+                    .is_ok_and(|value| crate::plugins::json_body::is_truthy(&value)),
+            })
     }
 
     pub(super) fn has_type(&self, expected: &str) -> bool {
-        self.0.get("typ").and_then(FieldValue::as_str) == Some(expected)
+        self.0.get(b"typ".as_slice()).is_some_and(|typ| {
+            serde_json::from_str::<String>(typ.get()).is_ok_and(|typ| typ == expected)
+        })
+    }
+
+    pub(super) fn field(&self, name: &str) -> AuthResult<FieldValue> {
+        self.0
+            .get(name.as_bytes())
+            .map_or(Ok(FieldValue::Undefined), |value| {
+                FieldValue::parse_json(value.get())
+            })
     }
 }
 
@@ -131,12 +155,7 @@ pub(super) fn raw_header(token: &str) -> Option<Header> {
     };
     let bytes = engine.decode(encoded).ok()?;
     let text = String::from_utf8_lossy(&bytes);
-    Some(Header(
-        FieldValue::parse_json(text.strip_prefix('\u{feff}').unwrap_or(&text))
-            .ok()?
-            .as_object()?
-            .clone(),
-    ))
+    serde_json::from_str(text.strip_prefix('\u{feff}').unwrap_or(&text)).ok()
 }
 
 pub(super) fn verify_local(
@@ -148,17 +167,15 @@ pub(super) fn verify_local(
     tolerance: i64,
 ) -> Option<Map<String, Value>> {
     let header = raw_header(token)?;
-    let kid = header.0.get("kid")?;
+    let kid = header.field("kid").ok()?;
     let key = keys
         .iter()
-        .find(|key| key.id.field_value().strict_equals(kid))?;
-    let algorithm = keys::algorithm(
-        key,
-        default_algorithm.map_or_else(
-            || header.0.get("alg").cloned().unwrap_or_default(),
-            |algorithm| algorithm.name().into(),
-        ),
-    );
+        .find(|key| key.id.field_value().strict_equals(&kid))?;
+    let fallback = match default_algorithm {
+        Some(algorithm) => algorithm.name().into(),
+        None => header.field("alg").ok()?,
+    };
+    let algorithm = keys::algorithm(key, fallback);
     let (algorithm, public) = keys::import(
         keys::parse_json(&key.public_key.field_value()).ok()?,
         &algorithm,

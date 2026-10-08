@@ -71,7 +71,7 @@ impl<S: AuthSchema> SessionCookieSigner<S> for CookieSigner<S> {
         token: &str,
         context: SessionCookieContext<'_, S>,
     ) -> AuthResult<Option<Map<String, Value>>> {
-        let Some(header) = jose::header(token).map(verification::Header) else {
+        let Some(header) = jose::header(token) else {
             return Ok(None);
         };
         if !header.has_type(TYPE) || !header.has_key_id() {

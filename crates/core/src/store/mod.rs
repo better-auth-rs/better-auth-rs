@@ -1645,7 +1645,6 @@ where
         + PasskeyStore
         + DeviceCodeStore
         + WalletStore
-        + WalletStore
         + JwksStore
         + RateLimitStore
         + TransactionStore<S>

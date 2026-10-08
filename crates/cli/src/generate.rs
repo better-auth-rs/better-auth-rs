@@ -264,15 +264,12 @@ fn gen_entity(entity: &Entity, generation: IdGeneration, config: &SchemaConfig) 
         } else {
             None
         };
-        let reference = if entity.role.is_some() && field.reference_override.is_some() {
+        let reference = (entity.role.is_some()
+            && (field.reference_override.is_some() || field.attributes.is_some()))
+        .then(|| {
             let reference = field.references_id(entity.registry_table);
-            Some(quote!(#[auth(reference = #reference)]))
-        } else {
-            (entity.role.is_some()
-                && field.attributes.is_some()
-                && field.references_id(entity.registry_table))
-            .then(|| quote!(#[auth(reference)]))
-        };
+            quote!(#[auth(reference = #reference)])
+        });
         quote! {
             #column_attr
             #serialized

@@ -15,13 +15,8 @@ pub(super) fn sign(
     let serialized = FieldValue::from(header)
         .stringify()?
         .ok_or_else(|| AuthError::internal("JOSE Header is not valid JSON"))?;
-    let header = FieldValue::parse_json(&serialized)?;
-    validate_header(
-        header
-            .as_object()
-            .ok_or_else(|| AuthError::internal("JOSE Header is not a JSON object"))?,
-        true,
-    )?;
+    let header = serde_json::from_str(&serialized)?;
+    validate_header(&header, true)?;
     let input = format!(
         "{}.{}",
         URL_SAFE_NO_PAD.encode(serialized),
@@ -31,25 +26,22 @@ pub(super) fn sign(
     Ok(format!("{input}.{}", URL_SAFE_NO_PAD.encode(signature)))
 }
 
-pub(super) fn header(token: &str) -> Option<FieldMap> {
+pub(super) fn header(token: &str) -> Option<verification::Header> {
     if token.split('.').count() != 3 {
         return None;
     }
     let bytes = decode(token.split('.').next()?)?;
     let text = std::str::from_utf8(&bytes).ok()?;
-    FieldValue::parse_json(text.strip_prefix('\u{feff}').unwrap_or(text))
-        .ok()?
-        .as_object()
-        .cloned()
+    serde_json::from_str(text.strip_prefix('\u{feff}').unwrap_or(text)).ok()
 }
 
 pub(super) fn verify(
     token: &str,
-    header: &FieldMap,
+    header: &verification::Header,
     verifier: &dyn JwsVerifier,
 ) -> Option<Vec<u8>> {
     validate_header(header, false).ok()?;
-    if header.get("alg").and_then(FieldValue::as_str) != Some(verifier.algorithm().name()) {
+    if header.field("alg").ok()?.as_str() != Some(verifier.algorithm().name()) {
         return None;
     }
     let (input, signature) = token.rsplit_once('.')?;
@@ -77,8 +69,9 @@ fn decode(value: &str) -> Option<Vec<u8>> {
     engine.decode(value).ok()
 }
 
-fn validate_header(header: &FieldMap, signing: bool) -> AuthResult<()> {
-    if let Some(critical) = header.get("crit") {
+fn validate_header(header: &verification::Header, signing: bool) -> AuthResult<()> {
+    let critical = header.field("crit")?;
+    if !critical.is_undefined() {
         let critical = critical.as_array().filter(|values| !values.is_empty()).ok_or_else(|| AuthError::internal("\"crit\" (Critical) Header Parameter MUST be an array of non-empty strings when present"))?;
         if signing
             && critical.iter().enumerate().any(|(index, value)| {
@@ -99,9 +92,12 @@ fn validate_header(header: &FieldMap, signing: bool) -> AuthResult<()> {
                     "Extension Header Parameter \"{name}\" is not recognized"
                 )));
             }
-            let encoded = header.get(name).ok_or_else(|| {
-                AuthError::internal(format!("Extension Header Parameter \"{name}\" is missing"))
-            })?;
+            let encoded = header.field(name)?;
+            if encoded.is_undefined() {
+                return Err(AuthError::internal(format!(
+                    "Extension Header Parameter \"{name}\" is missing"
+                )));
+            }
             match encoded.as_bool() {
                 Some(true) => {}
                 Some(false) => {
@@ -115,11 +111,7 @@ fn validate_header(header: &FieldMap, signing: bool) -> AuthResult<()> {
             }
         }
     }
-    if header
-        .get("alg")
-        .and_then(FieldValue::as_str)
-        .is_none_or(str::is_empty)
-    {
+    if header.field("alg")?.as_str().is_none_or(str::is_empty) {
         return Err(AuthError::internal(
             "JWS \"alg\" (Algorithm) Header Parameter missing or invalid",
         ));
