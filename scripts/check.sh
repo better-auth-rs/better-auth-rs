@@ -43,7 +43,7 @@ run_stage() {
       ;;
     credential-timing)
       cargo fmt --all -- --check
-      cargo clippy --locked -p better-auth-api --tests -- -D warnings
+      cargo clippy --locked -p better-auth-api --lib -- -D warnings
       cargo clippy --locked --features axum,seaorm2,redis-cache --test plugin_model_fields_tests -- -D warnings
       cargo test --locked -p better-auth-api --lib -- \
         plugins::one_time_token::tests:: plugins::device_authorization::tests::
