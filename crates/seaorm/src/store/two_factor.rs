@@ -37,7 +37,7 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
             &["updatedAt"][..]
         } {
             if !schema.fields().contains_key(*name) {
-                fields
+                let _ = fields
                     .entry((*name).into())
                     .or_insert_with(|| now.clone().into());
             }

@@ -147,9 +147,9 @@ run_stage() {
         ./compat-tests/reference-server/contracts/api-key-cache-batch.test.ts \
         ./compat-tests/reference-server/api-key-metadata.test.ts \
         ./compat-tests/reference-server/api-key-metadata-pages.test.ts
-      cargo clippy --locked --keep-going -p better-auth-core -p better-auth-api -p better-auth-seaorm -p better-auth-cli -- -D warnings
       # Collect independent failures while retaining a failing stage status.
       local plugin_status=0
+      cargo clippy --locked --keep-going -p better-auth-core -p better-auth-api -p better-auth-seaorm -p better-auth-cli -- -D warnings || plugin_status=1
       cargo clippy --locked --keep-going --features axum,seaorm2,redis-cache --test plugin_output_capabilities_tests --test async_field_transform_tests --test api_key_additional_fields_tests --test device_grant_tests --test organization_member_json_filter_reference_tests --test auth_entity_plugin_alias_tests --test plugin_model_fields_tests -- -D warnings || plugin_status=1
       cargo test --locked -p better-auth-cli schema_config || plugin_status=1
       cargo check --locked --manifest-path compat-tests/rust-server/Cargo.toml || plugin_status=1

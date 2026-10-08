@@ -101,21 +101,6 @@ where
         .map_err(map_db_err)
 }
 
-pub(super) async fn increment_returning_one<E>(
-    db: &sea_orm::DbConn,
-    query: sea_orm::UpdateMany<E>,
-    filter: SimpleExpr,
-    reselect: SimpleExpr,
-) -> AuthResult<Option<E::Model>>
-where
-    E: EntityTrait,
-{
-    increment_returning_raw(db, query, filter, reselect)
-        .await?
-        .map(|row| E::Model::from_query_result(&row, "").map_err(map_db_err))
-        .transpose()
-}
-
 pub(super) async fn increment_returning_raw<E>(
     db: &sea_orm::DbConn,
     query: sea_orm::UpdateMany<E>,

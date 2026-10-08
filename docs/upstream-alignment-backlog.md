@@ -6,6 +6,8 @@ Memory sorting CI 37782951606 at `581978b5` passed the complete twelve-scenario 
 
 ## Active capability gaps
 
+Plugin-fields CI 37804764693 at `76c0efbb` reached SeaORM production Clippy and found unused TwoFactor imports, an obsolete typed increment wrapper, and an unused entry result. These leftovers are removed or explicitly discarded. The stage now collects production lint failures with the later independent checks while retaining a failing exit status. The original log remains at `/private/tmp/better-auth-plugin-fields-37804764693-failed.log`; behavior acceptance is still pending.
+
 Plugin-fields CI 37804001640 at `ba8188d6` passed 167 upstream replay tests, then Clippy rejected the explicit Session `Send` return boundary as `manual_async_fn`. The boundary now has a local lint expectation with its generated-consumer reason. Independent review also repaired JWT Header parsing so unknown UTF-16 property names do not skip adapter reads, and CLI generation now emits explicit false reference metadata after a complete declaration replacement. Existing generated consumers verify removed and retained references across all twelve targets. The original CI log remains at `/private/tmp/better-auth-plugin-fields-37804001640-failed.log`. These repairs and Rust behavior acceptance remain pending.
 
 Plugin-fields CI 37802304390 at `94f482be` passed all 167 upstream replay tests, then stopped during production compilation. The TwoFactor Memory write closure borrowed a callback across the `Send` boundary. The closure now owns the callback, without adding a `Sync` requirement or changing write order. The original failure remains at `/private/tmp/better-auth-plugin-fields-37802304390-failed.log`. Rust behavior and generated-consumer acceptance remain pending.
