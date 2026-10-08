@@ -60,6 +60,9 @@ chacha20poly1305.workspace = true
 subtle.workspace = true
 regex.workspace = true
 futures-util = "0.3.34"
+rust_icu_ucol = { version = "5.8.0", default-features = false, features = ["renaming", "icu_version_in_env"] }
+rust_icu_ustring = { version = "5.8.0", default-features = false, features = ["renaming", "icu_version_in_env"] }
+rust_icu_sys = { version = "5.8.0", default-features = false, features = ["renaming", "icu_version_in_env"] }
 
 [features]
 default = []
@@ -68,3 +71,9 @@ axum = ["dep:axum"]
 
 [target.'cfg(target_os = "linux")'.dependencies]
 nix = { workspace = true, features = ["feature"] }
+
+[target."cfg(unix)".dependencies]
+libc = "0.2.190"
+
+[target."cfg(windows)".dependencies]
+windows-sys = { version = "0.61.2", features = ["Win32_Globalization"] }

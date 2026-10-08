@@ -4,6 +4,8 @@ use serde_json::{Value, json};
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
+mod contract;
+
 fn unconvertible_name() -> FieldValue {
     FieldMap::from_iter([("toString".into(), FieldValue::Number(0.0))]).into()
 }
@@ -74,7 +76,7 @@ async fn name_sort_preserves_conversion_errors_when_both_names_are_non_nullish()
                     .find_api_keys_by_reference("owner", Some(("name", direction)))
                     .await,
                 Err(AuthError::Internal(message))
-                    if message == "Cannot convert object to primitive value"
+                    if message == "No default value"
             ));
             assert_eq!(
                 store

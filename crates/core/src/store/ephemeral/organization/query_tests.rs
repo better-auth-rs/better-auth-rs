@@ -236,7 +236,7 @@ async fn member_queries_use_typed_storage_before_output_transforms() -> AuthResu
         params.filter_operator = Some(operator.into());
         let error = store.query_organization_members(&params).await.unwrap_err();
         assert!(matches!(error, AuthError::Internal(message)
-            if message == "Cannot convert object to primitive value"));
+            if message == "No default value"));
     }
     params.filter_field = None;
     params.filter_value = None;

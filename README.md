@@ -171,7 +171,7 @@ Custom `OAuthUserInfoHandler` implementations return `AuthResult<Option<OAuthUse
 - [Examples](examples/README.md), [contributing](CONTRIBUTING.md), and [alignment roadmap](ROADMAP.md)
 - [Compatibility harness](compat-tests/README.md); upstream behavior remains the source of truth
 
-Install [devenv](https://devenv.sh/getting-started/), then run `devenv test`. Local checks and CI use `scripts/check.sh`.
+Install [devenv](https://devenv.sh/getting-started/), then run `devenv test`. Local checks and CI use `scripts/check.sh`. The shell supplies ICU 78.3 for Memory string collation; external builds must configure the ICU library path and major version as described in [installation](docs/content/docs/installation.mdx).
 
 ## License
 

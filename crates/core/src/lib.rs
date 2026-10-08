@@ -34,6 +34,7 @@ pub use observability::{
     ExperimentalConfig, InstrumentationConfig, LogArgument, LogLevel, LogSink, LoggerConfig,
     TelemetryConfig,
 };
+mod memory_sort;
 pub mod openapi;
 pub mod plugin;
 pub mod plugin_runtime;

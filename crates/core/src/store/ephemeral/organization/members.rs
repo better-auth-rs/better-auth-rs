@@ -1,17 +1,6 @@
 use super::*;
 use crate::store::schema::resolve_field_name;
 
-fn compare_member_values(left: &Value, right: &Value) -> AuthResult<std::cmp::Ordering> {
-    match (left, right) {
-        (Value::Null | Value::Undefined, Value::Null | Value::Undefined) => {
-            Ok(std::cmp::Ordering::Equal)
-        }
-        (Value::Null | Value::Undefined, _) => Ok(std::cmp::Ordering::Less),
-        (_, Value::Null | Value::Undefined) => Ok(std::cmp::Ordering::Greater),
-        _ => Ok(crate::query::field_compare(left, right)?.unwrap_or(std::cmp::Ordering::Equal)),
-    }
-}
-
 #[async_trait]
 impl MemberStore for EphemeralStore {
     async fn get_member_with_user(
@@ -402,26 +391,9 @@ impl MemberStore for EphemeralStore {
         }
         let field = params.sort_by.as_deref().unwrap_or("createdAt");
         let descending = params.sort_direction.as_deref() == Some("desc");
-        let mut sort_error = None;
-        members.sort_by(|left, right| {
-            if sort_error.is_some() {
-                return std::cmp::Ordering::Equal;
-            }
-            match compare_member_values(
-                &value(left, field).unwrap_or(Value::Null),
-                &value(right, field).unwrap_or(Value::Null),
-            ) {
-                Ok(ordering) if descending => ordering.reverse(),
-                Ok(ordering) => ordering,
-                Err(error) => {
-                    sort_error = Some(error);
-                    std::cmp::Ordering::Equal
-                }
-            }
-        });
-        if let Some(error) = sort_error {
-            return Err(error);
-        }
+        crate::memory_sort::sort(&mut members, descending, |member| {
+            Ok(value(member, field).unwrap_or(Value::Null))
+        })?;
         let total = members.len();
         Ok((
             self.output_records(

@@ -82,7 +82,8 @@ run_stage() {
       cargo clippy --locked -p better-auth-core --lib -- -D warnings
       cargo test --locked -p better-auth-core --lib -- \
         store::ephemeral::api_keys::tests::sorting:: \
-        store::ephemeral::organization::query_tests::
+        store::ephemeral::organization::query_tests:: \
+        field_value::tests::
       cargo test --locked -p better-auth-api --lib plugins::api_key::tests::list_tests::
       bun --no-install test \
         ./compat-tests/reference-server/contracts/memory-sort.test.ts \

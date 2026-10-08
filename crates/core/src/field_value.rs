@@ -502,9 +502,7 @@ impl FieldValue {
             Self::Object(fields) => {
                 // Own fields cannot be callable; shadowing toString removes the ordinary primitive conversion.
                 if fields.contains_key("toString") {
-                    return Err(AuthError::internal(
-                        "Cannot convert object to primitive value",
-                    ));
+                    return Err(AuthError::internal("No default value"));
                 }
                 "[object Object]".into()
             }

@@ -97,72 +97,10 @@ impl ApiKeyStore for EphemeralStore {
                         Ok((snapshot, source))
                     })
                     .collect::<AuthResult<Vec<_>>>()?;
-                if let Some(("name", direction)) = sort.filter(|_| keys.len() > 1) {
-                    let mut named: Vec<_> = keys
-                        .into_iter()
-                        .map(|key| {
-                            let name = key.0.name.field_value();
-                            (name, key)
-                        })
-                        .collect();
-                    insertion_sort_by(&mut named, |left, right| {
-                        let order = compare_names(&left.0, &right.0)?;
-                        Ok(if direction == "desc" {
-                            order.reverse()
-                        } else {
-                            order
-                        })
+                if let Some((field, direction)) = sort.filter(|_| keys.len() > 1) {
+                    crate::memory_sort::sort(&mut keys, direction == "desc", |(key, _)| {
+                        sort_value(key, field)
                     })?;
-                    keys = named.into_iter().map(|(_, key)| key).collect();
-                } else if let Some((field @ ("enabled" | "rateLimitEnabled"), direction)) =
-                    sort.filter(|_| keys.len() > 1)
-                {
-                    let mut values = keys
-                        .into_iter()
-                        .map(|key| {
-                            let value = if field == "enabled" {
-                                &key.0.enabled
-                            } else {
-                                &key.0.rate_limit_enabled
-                            };
-                            Ok((value.field_value().decode::<Option<bool>>()?, key))
-                        })
-                        .collect::<AuthResult<Vec<_>>>()?;
-                    values.sort_by(|a, b| {
-                        let order = a.0.cmp(&b.0);
-                        if direction == "desc" {
-                            order.reverse()
-                        } else {
-                            order
-                        }
-                    });
-                    keys = values.into_iter().map(|(_, key)| key).collect();
-                } else if let Some((field, direction)) = sort.filter(|_| keys.len() > 1) {
-                    let compare = comparator(field)?;
-                    let directed = |left: &ApiKey, right: &ApiKey| {
-                        let order = compare(left, right);
-                        if direction == "desc" {
-                            order.reverse()
-                        } else {
-                            order
-                        }
-                    };
-                    if matches!(
-                        field,
-                        "start"
-                            | "prefix"
-                            | "referenceId"
-                            | "configId"
-                            | "permissions"
-                            | "metadata"
-                            | "key"
-                    ) {
-                        keys.sort_by(|left, right| directed(&left.0, &right.0));
-                    } else {
-                        insertion_sort_by(&mut keys, |left, right| {
-                            Ok(directed(&left.0, &right.0))
-                        })?;
-                    }
                 }
                 Ok(crate::query::paginate_memory(
                     keys,
@@ -395,48 +333,6 @@ impl ApiKeyStore for EphemeralStore {
     }
 }
 
-// Mixed values need not form a total order, and conversion errors must stop comparisons.
-// ponytail: O(n²) over all matching rows before pagination; use a subquadratic fallible stable sorter if large lists become costly.
-fn insertion_sort_by<T>(
-    values: &mut [T],
-    mut compare: impl FnMut(&T, &T) -> AuthResult<std::cmp::Ordering>,
-) -> AuthResult<()> {
-    #[expect(
-        clippy::indexing_slicing,
-        reason = "The outer range bounds current; current only decreases while positive"
-    )]
-    for index in 1..values.len() {
-        let mut current = index;
-        while current > 0 && compare(&values[current], &values[current - 1])?.is_lt() {
-            values.swap(current - 1, current);
-            current -= 1;
-        }
-    }
-    Ok(())
-}
-
-fn compare_names(left: &FieldValue, right: &FieldValue) -> AuthResult<std::cmp::Ordering> {
-    use std::cmp::Ordering;
-
-    Ok(match (left, right) {
-        (FieldValue::Null | FieldValue::Undefined, FieldValue::Null | FieldValue::Undefined) => {
-            Ordering::Equal
-        }
-        (FieldValue::Null | FieldValue::Undefined, _) => Ordering::Less,
-        (_, FieldValue::Null | FieldValue::Undefined) => Ordering::Greater,
-        (FieldValue::Date(left), FieldValue::Date(right)) => (left.milliseconds()
-            - right.milliseconds())
-        .partial_cmp(&0.0)
-        .unwrap_or(Ordering::Equal),
-        (FieldValue::Number(left), FieldValue::Number(right)) => {
-            (left - right).partial_cmp(&0.0).unwrap_or(Ordering::Equal)
-        }
-        (FieldValue::Bool(left), FieldValue::Bool(right)) => left.cmp(right),
-        // Ordinal UTF-16 comparison does not yet implement Memory locale collation.
-        _ => left.display_utf16()?.cmp(&right.display_utf16()?),
-    })
-}
-
 #[cfg(test)]
 mod tests {
     mod sorting;
@@ -623,58 +519,38 @@ mod tests {
     }
 }
 
-fn comparator(field: &str) -> AuthResult<fn(&ApiKey, &ApiKey) -> std::cmp::Ordering> {
+fn sort_value(key: &ApiKey, field: &str) -> AuthResult<FieldValue> {
+    fn optional<T: Into<FieldValue>>(value: Option<T>) -> FieldValue {
+        value.map_or(FieldValue::Null, Into::into)
+    }
+
     Ok(match field {
-        "id" => |a, b| match (a.id.field_value(), b.id.field_value()) {
-            (crate::FieldValue::String(a), crate::FieldValue::String(b)) => a.cmp(&b),
-            (crate::FieldValue::Number(a), crate::FieldValue::Number(b)) => (a - b)
-                .partial_cmp(&0.0)
-                .unwrap_or(std::cmp::Ordering::Equal),
-            _ => std::cmp::Ordering::Equal,
-        },
-        "start" => |a, b| a.start.cmp(&b.start),
-        "prefix" => |a, b| a.prefix.cmp(&b.prefix),
-        "referenceId" => |a, b| a.reference_id.cmp(&b.reference_id),
-        "configId" => |a, b| a.config_id.cmp(&b.config_id),
-        "createdAt" => |a, b| compare_dates(Some(&a.created_at), Some(&b.created_at)),
-        "updatedAt" => |a, b| compare_dates(Some(&a.updated_at), Some(&b.updated_at)),
-        "expiresAt" => |a, b| compare_dates(a.expires_at.as_ref(), b.expires_at.as_ref()),
-        "lastRequest" => |a, b| compare_dates(a.last_request.as_ref(), b.last_request.as_ref()),
-        "lastRefillAt" => {
-            |a, b| compare_dates(a.last_refill_at.as_ref(), b.last_refill_at.as_ref())
-        }
-        "permissions" => |a, b| a.permissions.cmp(&b.permissions),
-        "metadata" => |a, b| a.metadata.cmp(&b.metadata),
-        "key" => |a, b| a.key_hash.cmp(&b.key_hash),
-        "remaining" => |a, b| compare_numbers(a.remaining, b.remaining),
-        "requestCount" => |a, b| compare_numbers(a.request_count, b.request_count),
-        "rateLimitMax" => |a, b| compare_numbers(a.rate_limit_max, b.rate_limit_max),
-        "rateLimitTimeWindow" => {
-            |a, b| compare_numbers(a.rate_limit_time_window, b.rate_limit_time_window)
-        }
-        "refillAmount" => |a, b| compare_numbers(a.refill_amount, b.refill_amount),
-        "refillInterval" => |a, b| compare_numbers(a.refill_interval, b.refill_interval),
+        "id" => key.id.field_value(),
+        "name" => key.name.field_value(),
+        "enabled" => key.enabled.field_value(),
+        "rateLimitEnabled" => key.rate_limit_enabled.field_value(),
+        "start" => optional(key.start.clone()),
+        "prefix" => optional(key.prefix.clone()),
+        "referenceId" => key.reference_id.clone().into(),
+        "configId" => key.config_id.clone().into(),
+        "createdAt" => key.created_at.clone().into(),
+        "updatedAt" => key.updated_at.clone().into(),
+        "expiresAt" => optional(key.expires_at.clone()),
+        "lastRequest" => optional(key.last_request.clone()),
+        "lastRefillAt" => optional(key.last_refill_at.clone()),
+        "permissions" => optional(key.permissions.clone()),
+        "metadata" => optional(key.metadata.clone()),
+        "key" => key.key_hash.clone().into(),
+        "remaining" => optional(key.remaining),
+        "requestCount" => optional(key.request_count),
+        "rateLimitMax" => optional(key.rate_limit_max),
+        "rateLimitTimeWindow" => optional(key.rate_limit_time_window),
+        "refillAmount" => optional(key.refill_amount),
+        "refillInterval" => optional(key.refill_interval),
         _ => {
             return Err(AuthError::config(format!(
                 "Field {field} not found in model apikey"
             )));
         }
     })
-}
-
-fn compare_numbers(left: Option<f64>, right: Option<f64>) -> std::cmp::Ordering {
-    match (left, right) {
-        (Some(left), Some(right)) => (left - right)
-            .partial_cmp(&0.0)
-            .unwrap_or(std::cmp::Ordering::Equal),
-        (None, None) => std::cmp::Ordering::Equal,
-        (None, Some(_)) => std::cmp::Ordering::Less,
-        (Some(_), None) => std::cmp::Ordering::Greater,
-    }
-}
-
-fn compare_dates(left: Option<&FieldDate>, right: Option<&FieldDate>) -> std::cmp::Ordering {
-    left.map_or(0.0, FieldDate::milliseconds)
-        .partial_cmp(&right.map_or(0.0, FieldDate::milliseconds))
-        .unwrap_or(std::cmp::Ordering::Equal)
 }

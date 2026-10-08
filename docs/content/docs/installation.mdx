@@ -20,6 +20,8 @@ Follow the [quick-start guide](/docs/quick-start) to generate entities, initiali
 
 Builds require OpenSSL 3.0 or newer, including its development headers. OIDC ML-DSA verification requires OpenSSL 3.5 or newer. The `rustls` feature changes HTTP transport and retains this signature-verification dependency. The development shell supplies OpenSSL.
 
+Memory string sorting uses ICU 78.3 through the pre-generated `rust_icu` bindings. The development shell supplies ICU and sets `RUST_ICU_MAJOR_VERSION_NUMBER=78` and `RUST_ICU_LINK_SEARCH_DIR` to its library directory. Outside that shell, install ICU 78.3 and set these variables before running Cargo. The linked `icuuc`, `icui18n`, and `icudata` libraries must also be available when the application runs. Bindgen and Clang are not required.
+
 ## Feature flags
 
 | Feature | Description |

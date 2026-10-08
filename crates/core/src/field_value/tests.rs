@@ -35,7 +35,7 @@ fn ordinary_object_primitive_conversion_checks_only_the_selected_method() -> Aut
                 crate::query::field_compare(&FieldValue::Null, &value).map(drop),
             ] {
                 assert!(matches!(result, Err(AuthError::Internal(message))
-                    if message == "Cannot convert object to primitive value"));
+                    if message == "No default value"));
             }
         }
     }

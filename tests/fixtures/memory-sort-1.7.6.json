@@ -1065,6 +1065,294 @@
       ]
     ]
   },
+  "rawUtf16Comparisons": {
+    "values": [
+      {
+        "type": "utf16",
+        "value": [
+          55296
+        ]
+      },
+      {
+        "type": "utf16",
+        "value": [
+          56319
+        ]
+      },
+      {
+        "type": "utf16",
+        "value": [
+          56320
+        ]
+      },
+      {
+        "type": "utf16",
+        "value": [
+          57343
+        ]
+      },
+      "�",
+      "",
+      "😀",
+      {
+        "type": "utf16",
+        "value": [
+          55296,
+          120
+        ]
+      },
+      {
+        "type": "utf16",
+        "value": [
+          120,
+          56320
+        ]
+      },
+      {
+        "type": "utf16",
+        "value": [
+          55296,
+          55296
+        ]
+      },
+      {
+        "type": "utf16",
+        "value": [
+          56320,
+          55296
+        ]
+      },
+      "a\u0000b",
+      "a",
+      ""
+    ],
+    "signs": [
+      [
+        0,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        1,
+        -1,
+        1,
+        -1,
+        -1,
+        1,
+        1,
+        1
+      ],
+      [
+        1,
+        0,
+        -1,
+        -1,
+        -1,
+        -1,
+        1,
+        1,
+        1,
+        1,
+        -1,
+        1,
+        1,
+        1
+      ],
+      [
+        1,
+        1,
+        0,
+        -1,
+        -1,
+        -1,
+        1,
+        1,
+        1,
+        1,
+        -1,
+        1,
+        1,
+        1
+      ],
+      [
+        1,
+        1,
+        1,
+        0,
+        -1,
+        -1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      [
+        1,
+        1,
+        1,
+        1,
+        0,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      [
+        1,
+        1,
+        1,
+        1,
+        -1,
+        0,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      [
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        0,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        1
+      ],
+      [
+        1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        1,
+        0,
+        1,
+        -1,
+        -1,
+        1,
+        1,
+        1
+      ],
+      [
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        1,
+        -1,
+        0,
+        -1,
+        -1,
+        1,
+        1,
+        1
+      ],
+      [
+        1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        1,
+        1,
+        1,
+        0,
+        -1,
+        1,
+        1,
+        1
+      ],
+      [
+        1,
+        1,
+        1,
+        -1,
+        -1,
+        -1,
+        1,
+        1,
+        1,
+        1,
+        0,
+        1,
+        1,
+        1
+      ],
+      [
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        1,
+        -1,
+        -1,
+        -1,
+        -1,
+        0,
+        1,
+        1
+      ],
+      [
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        0,
+        1
+      ],
+      [
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        -1,
+        0
+      ]
+    ]
+  },
   "cases": [
     {
       "name": "strings",
@@ -10280,6 +10568,1908 @@
               "id": "word",
               "present": true,
               "value": "desk"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "utf16-strings",
+      "declaration": "string",
+      "seeds": [
+        {
+          "input": {
+            "id": "utf16-0",
+            "name": {
+              "type": "utf16",
+              "value": [
+                55296
+              ]
+            }
+          },
+          "result": {
+            "id": "utf16-0",
+            "present": true,
+            "value": {
+              "type": "utf16",
+              "value": [
+                55296
+              ]
+            }
+          },
+          "events": [
+            {
+              "phase": "input",
+              "value": {
+                "type": "utf16",
+                "value": [
+                  55296
+                ]
+              }
+            },
+            {
+              "phase": "output",
+              "value": {
+                "type": "utf16",
+                "value": [
+                  55296
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "input": {
+            "id": "utf16-1",
+            "name": {
+              "type": "utf16",
+              "value": [
+                56319
+              ]
+            }
+          },
+          "result": {
+            "id": "utf16-1",
+            "present": true,
+            "value": {
+              "type": "utf16",
+              "value": [
+                56319
+              ]
+            }
+          },
+          "events": [
+            {
+              "phase": "input",
+              "value": {
+                "type": "utf16",
+                "value": [
+                  56319
+                ]
+              }
+            },
+            {
+              "phase": "output",
+              "value": {
+                "type": "utf16",
+                "value": [
+                  56319
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "input": {
+            "id": "utf16-2",
+            "name": {
+              "type": "utf16",
+              "value": [
+                56320
+              ]
+            }
+          },
+          "result": {
+            "id": "utf16-2",
+            "present": true,
+            "value": {
+              "type": "utf16",
+              "value": [
+                56320
+              ]
+            }
+          },
+          "events": [
+            {
+              "phase": "input",
+              "value": {
+                "type": "utf16",
+                "value": [
+                  56320
+                ]
+              }
+            },
+            {
+              "phase": "output",
+              "value": {
+                "type": "utf16",
+                "value": [
+                  56320
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "input": {
+            "id": "utf16-3",
+            "name": {
+              "type": "utf16",
+              "value": [
+                57343
+              ]
+            }
+          },
+          "result": {
+            "id": "utf16-3",
+            "present": true,
+            "value": {
+              "type": "utf16",
+              "value": [
+                57343
+              ]
+            }
+          },
+          "events": [
+            {
+              "phase": "input",
+              "value": {
+                "type": "utf16",
+                "value": [
+                  57343
+                ]
+              }
+            },
+            {
+              "phase": "output",
+              "value": {
+                "type": "utf16",
+                "value": [
+                  57343
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "input": {
+            "id": "utf16-4",
+            "name": "�"
+          },
+          "result": {
+            "id": "utf16-4",
+            "present": true,
+            "value": "�"
+          },
+          "events": [
+            {
+              "phase": "input",
+              "value": "�"
+            },
+            {
+              "phase": "output",
+              "value": "�"
+            }
+          ]
+        },
+        {
+          "input": {
+            "id": "utf16-5",
+            "name": ""
+          },
+          "result": {
+            "id": "utf16-5",
+            "present": true,
+            "value": ""
+          },
+          "events": [
+            {
+              "phase": "input",
+              "value": ""
+            },
+            {
+              "phase": "output",
+              "value": ""
+            }
+          ]
+        },
+        {
+          "input": {
+            "id": "utf16-6",
+            "name": "😀"
+          },
+          "result": {
+            "id": "utf16-6",
+            "present": true,
+            "value": "😀"
+          },
+          "events": [
+            {
+              "phase": "input",
+              "value": "😀"
+            },
+            {
+              "phase": "output",
+              "value": "😀"
+            }
+          ]
+        },
+        {
+          "input": {
+            "id": "utf16-7",
+            "name": {
+              "type": "utf16",
+              "value": [
+                55296,
+                120
+              ]
+            }
+          },
+          "result": {
+            "id": "utf16-7",
+            "present": true,
+            "value": {
+              "type": "utf16",
+              "value": [
+                55296,
+                120
+              ]
+            }
+          },
+          "events": [
+            {
+              "phase": "input",
+              "value": {
+                "type": "utf16",
+                "value": [
+                  55296,
+                  120
+                ]
+              }
+            },
+            {
+              "phase": "output",
+              "value": {
+                "type": "utf16",
+                "value": [
+                  55296,
+                  120
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "input": {
+            "id": "utf16-8",
+            "name": {
+              "type": "utf16",
+              "value": [
+                120,
+                56320
+              ]
+            }
+          },
+          "result": {
+            "id": "utf16-8",
+            "present": true,
+            "value": {
+              "type": "utf16",
+              "value": [
+                120,
+                56320
+              ]
+            }
+          },
+          "events": [
+            {
+              "phase": "input",
+              "value": {
+                "type": "utf16",
+                "value": [
+                  120,
+                  56320
+                ]
+              }
+            },
+            {
+              "phase": "output",
+              "value": {
+                "type": "utf16",
+                "value": [
+                  120,
+                  56320
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "input": {
+            "id": "utf16-9",
+            "name": {
+              "type": "utf16",
+              "value": [
+                55296,
+                55296
+              ]
+            }
+          },
+          "result": {
+            "id": "utf16-9",
+            "present": true,
+            "value": {
+              "type": "utf16",
+              "value": [
+                55296,
+                55296
+              ]
+            }
+          },
+          "events": [
+            {
+              "phase": "input",
+              "value": {
+                "type": "utf16",
+                "value": [
+                  55296,
+                  55296
+                ]
+              }
+            },
+            {
+              "phase": "output",
+              "value": {
+                "type": "utf16",
+                "value": [
+                  55296,
+                  55296
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "input": {
+            "id": "utf16-10",
+            "name": {
+              "type": "utf16",
+              "value": [
+                56320,
+                55296
+              ]
+            }
+          },
+          "result": {
+            "id": "utf16-10",
+            "present": true,
+            "value": {
+              "type": "utf16",
+              "value": [
+                56320,
+                55296
+              ]
+            }
+          },
+          "events": [
+            {
+              "phase": "input",
+              "value": {
+                "type": "utf16",
+                "value": [
+                  56320,
+                  55296
+                ]
+              }
+            },
+            {
+              "phase": "output",
+              "value": {
+                "type": "utf16",
+                "value": [
+                  56320,
+                  55296
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "input": {
+            "id": "utf16-11",
+            "name": "a\u0000b"
+          },
+          "result": {
+            "id": "utf16-11",
+            "present": true,
+            "value": "a\u0000b"
+          },
+          "events": [
+            {
+              "phase": "input",
+              "value": "a\u0000b"
+            },
+            {
+              "phase": "output",
+              "value": "a\u0000b"
+            }
+          ]
+        },
+        {
+          "input": {
+            "id": "utf16-12",
+            "name": "a"
+          },
+          "result": {
+            "id": "utf16-12",
+            "present": true,
+            "value": "a"
+          },
+          "events": [
+            {
+              "phase": "input",
+              "value": "a"
+            },
+            {
+              "phase": "output",
+              "value": "a"
+            }
+          ]
+        },
+        {
+          "input": {
+            "id": "utf16-13",
+            "name": ""
+          },
+          "result": {
+            "id": "utf16-13",
+            "present": true,
+            "value": ""
+          },
+          "events": [
+            {
+              "phase": "input",
+              "value": ""
+            },
+            {
+              "phase": "output",
+              "value": ""
+            }
+          ]
+        }
+      ],
+      "stored": [
+        {
+          "id": "utf16-0",
+          "present": true,
+          "value": {
+            "type": "utf16",
+            "value": [
+              55296
+            ]
+          }
+        },
+        {
+          "id": "utf16-1",
+          "present": true,
+          "value": {
+            "type": "utf16",
+            "value": [
+              56319
+            ]
+          }
+        },
+        {
+          "id": "utf16-2",
+          "present": true,
+          "value": {
+            "type": "utf16",
+            "value": [
+              56320
+            ]
+          }
+        },
+        {
+          "id": "utf16-3",
+          "present": true,
+          "value": {
+            "type": "utf16",
+            "value": [
+              57343
+            ]
+          }
+        },
+        {
+          "id": "utf16-4",
+          "present": true,
+          "value": "�"
+        },
+        {
+          "id": "utf16-5",
+          "present": true,
+          "value": ""
+        },
+        {
+          "id": "utf16-6",
+          "present": true,
+          "value": "😀"
+        },
+        {
+          "id": "utf16-7",
+          "present": true,
+          "value": {
+            "type": "utf16",
+            "value": [
+              55296,
+              120
+            ]
+          }
+        },
+        {
+          "id": "utf16-8",
+          "present": true,
+          "value": {
+            "type": "utf16",
+            "value": [
+              120,
+              56320
+            ]
+          }
+        },
+        {
+          "id": "utf16-9",
+          "present": true,
+          "value": {
+            "type": "utf16",
+            "value": [
+              55296,
+              55296
+            ]
+          }
+        },
+        {
+          "id": "utf16-10",
+          "present": true,
+          "value": {
+            "type": "utf16",
+            "value": [
+              56320,
+              55296
+            ]
+          }
+        },
+        {
+          "id": "utf16-11",
+          "present": true,
+          "value": "a\u0000b"
+        },
+        {
+          "id": "utf16-12",
+          "present": true,
+          "value": "a"
+        },
+        {
+          "id": "utf16-13",
+          "present": true,
+          "value": ""
+        }
+      ],
+      "operations": [
+        {
+          "name": "unsorted",
+          "returned": true,
+          "rows": [
+            {
+              "id": "utf16-0",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  55296
+                ]
+              }
+            },
+            {
+              "id": "utf16-1",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  56319
+                ]
+              }
+            },
+            {
+              "id": "utf16-2",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  56320
+                ]
+              }
+            },
+            {
+              "id": "utf16-3",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  57343
+                ]
+              }
+            },
+            {
+              "id": "utf16-4",
+              "present": true,
+              "value": "�"
+            },
+            {
+              "id": "utf16-5",
+              "present": true,
+              "value": ""
+            },
+            {
+              "id": "utf16-6",
+              "present": true,
+              "value": "😀"
+            },
+            {
+              "id": "utf16-7",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  55296,
+                  120
+                ]
+              }
+            },
+            {
+              "id": "utf16-8",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  120,
+                  56320
+                ]
+              }
+            },
+            {
+              "id": "utf16-9",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  55296,
+                  55296
+                ]
+              }
+            },
+            {
+              "id": "utf16-10",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  56320,
+                  55296
+                ]
+              }
+            },
+            {
+              "id": "utf16-11",
+              "present": true,
+              "value": "a\u0000b"
+            },
+            {
+              "id": "utf16-12",
+              "present": true,
+              "value": "a"
+            },
+            {
+              "id": "utf16-13",
+              "present": true,
+              "value": ""
+            }
+          ],
+          "events": [
+            {
+              "phase": "output",
+              "value": {
+                "type": "utf16",
+                "value": [
+                  55296
+                ]
+              }
+            },
+            {
+              "phase": "output",
+              "value": {
+                "type": "utf16",
+                "value": [
+                  56319
+                ]
+              }
+            },
+            {
+              "phase": "output",
+              "value": {
+                "type": "utf16",
+                "value": [
+                  56320
+                ]
+              }
+            },
+            {
+              "phase": "output",
+              "value": {
+                "type": "utf16",
+                "value": [
+                  57343
+                ]
+              }
+            },
+            {
+              "phase": "output",
+              "value": "�"
+            },
+            {
+              "phase": "output",
+              "value": ""
+            },
+            {
+              "phase": "output",
+              "value": "😀"
+            },
+            {
+              "phase": "output",
+              "value": {
+                "type": "utf16",
+                "value": [
+                  55296,
+                  120
+                ]
+              }
+            },
+            {
+              "phase": "output",
+              "value": {
+                "type": "utf16",
+                "value": [
+                  120,
+                  56320
+                ]
+              }
+            },
+            {
+              "phase": "output",
+              "value": {
+                "type": "utf16",
+                "value": [
+                  55296,
+                  55296
+                ]
+              }
+            },
+            {
+              "phase": "output",
+              "value": {
+                "type": "utf16",
+                "value": [
+                  56320,
+                  55296
+                ]
+              }
+            },
+            {
+              "phase": "output",
+              "value": "a\u0000b"
+            },
+            {
+              "phase": "output",
+              "value": "a"
+            },
+            {
+              "phase": "output",
+              "value": ""
+            }
+          ],
+          "stored": [
+            {
+              "id": "utf16-0",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  55296
+                ]
+              }
+            },
+            {
+              "id": "utf16-1",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  56319
+                ]
+              }
+            },
+            {
+              "id": "utf16-2",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  56320
+                ]
+              }
+            },
+            {
+              "id": "utf16-3",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  57343
+                ]
+              }
+            },
+            {
+              "id": "utf16-4",
+              "present": true,
+              "value": "�"
+            },
+            {
+              "id": "utf16-5",
+              "present": true,
+              "value": ""
+            },
+            {
+              "id": "utf16-6",
+              "present": true,
+              "value": "😀"
+            },
+            {
+              "id": "utf16-7",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  55296,
+                  120
+                ]
+              }
+            },
+            {
+              "id": "utf16-8",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  120,
+                  56320
+                ]
+              }
+            },
+            {
+              "id": "utf16-9",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  55296,
+                  55296
+                ]
+              }
+            },
+            {
+              "id": "utf16-10",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  56320,
+                  55296
+                ]
+              }
+            },
+            {
+              "id": "utf16-11",
+              "present": true,
+              "value": "a\u0000b"
+            },
+            {
+              "id": "utf16-12",
+              "present": true,
+              "value": "a"
+            },
+            {
+              "id": "utf16-13",
+              "present": true,
+              "value": ""
+            }
+          ]
+        },
+        {
+          "name": "ascending",
+          "returned": true,
+          "rows": [
+            {
+              "id": "utf16-13",
+              "present": true,
+              "value": ""
+            },
+            {
+              "id": "utf16-6",
+              "present": true,
+              "value": "😀"
+            },
+            {
+              "id": "utf16-12",
+              "present": true,
+              "value": "a"
+            },
+            {
+              "id": "utf16-11",
+              "present": true,
+              "value": "a\u0000b"
+            },
+            {
+              "id": "utf16-8",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  120,
+                  56320
+                ]
+              }
+            },
+            {
+              "id": "utf16-0",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  55296
+                ]
+              }
+            },
+            {
+              "id": "utf16-7",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  55296,
+                  120
+                ]
+              }
+            },
+            {
+              "id": "utf16-9",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  55296,
+                  55296
+                ]
+              }
+            },
+            {
+              "id": "utf16-1",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  56319
+                ]
+              }
+            },
+            {
+              "id": "utf16-2",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  56320
+                ]
+              }
+            },
+            {
+              "id": "utf16-10",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  56320,
+                  55296
+                ]
+              }
+            },
+            {
+              "id": "utf16-3",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  57343
+                ]
+              }
+            },
+            {
+              "id": "utf16-5",
+              "present": true,
+              "value": ""
+            },
+            {
+              "id": "utf16-4",
+              "present": true,
+              "value": "�"
+            }
+          ],
+          "events": [
+            {
+              "phase": "output",
+              "value": ""
+            },
+            {
+              "phase": "output",
+              "value": "😀"
+            },
+            {
+              "phase": "output",
+              "value": "a"
+            },
+            {
+              "phase": "output",
+              "value": "a\u0000b"
+            },
+            {
+              "phase": "output",
+              "value": {
+                "type": "utf16",
+                "value": [
+                  120,
+                  56320
+                ]
+              }
+            },
+            {
+              "phase": "output",
+              "value": {
+                "type": "utf16",
+                "value": [
+                  55296
+                ]
+              }
+            },
+            {
+              "phase": "output",
+              "value": {
+                "type": "utf16",
+                "value": [
+                  55296,
+                  120
+                ]
+              }
+            },
+            {
+              "phase": "output",
+              "value": {
+                "type": "utf16",
+                "value": [
+                  55296,
+                  55296
+                ]
+              }
+            },
+            {
+              "phase": "output",
+              "value": {
+                "type": "utf16",
+                "value": [
+                  56319
+                ]
+              }
+            },
+            {
+              "phase": "output",
+              "value": {
+                "type": "utf16",
+                "value": [
+                  56320
+                ]
+              }
+            },
+            {
+              "phase": "output",
+              "value": {
+                "type": "utf16",
+                "value": [
+                  56320,
+                  55296
+                ]
+              }
+            },
+            {
+              "phase": "output",
+              "value": {
+                "type": "utf16",
+                "value": [
+                  57343
+                ]
+              }
+            },
+            {
+              "phase": "output",
+              "value": ""
+            },
+            {
+              "phase": "output",
+              "value": "�"
+            }
+          ],
+          "stored": [
+            {
+              "id": "utf16-0",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  55296
+                ]
+              }
+            },
+            {
+              "id": "utf16-1",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  56319
+                ]
+              }
+            },
+            {
+              "id": "utf16-2",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  56320
+                ]
+              }
+            },
+            {
+              "id": "utf16-3",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  57343
+                ]
+              }
+            },
+            {
+              "id": "utf16-4",
+              "present": true,
+              "value": "�"
+            },
+            {
+              "id": "utf16-5",
+              "present": true,
+              "value": ""
+            },
+            {
+              "id": "utf16-6",
+              "present": true,
+              "value": "😀"
+            },
+            {
+              "id": "utf16-7",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  55296,
+                  120
+                ]
+              }
+            },
+            {
+              "id": "utf16-8",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  120,
+                  56320
+                ]
+              }
+            },
+            {
+              "id": "utf16-9",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  55296,
+                  55296
+                ]
+              }
+            },
+            {
+              "id": "utf16-10",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  56320,
+                  55296
+                ]
+              }
+            },
+            {
+              "id": "utf16-11",
+              "present": true,
+              "value": "a\u0000b"
+            },
+            {
+              "id": "utf16-12",
+              "present": true,
+              "value": "a"
+            },
+            {
+              "id": "utf16-13",
+              "present": true,
+              "value": ""
+            }
+          ]
+        },
+        {
+          "name": "descending",
+          "returned": true,
+          "rows": [
+            {
+              "id": "utf16-4",
+              "present": true,
+              "value": "�"
+            },
+            {
+              "id": "utf16-5",
+              "present": true,
+              "value": ""
+            },
+            {
+              "id": "utf16-3",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  57343
+                ]
+              }
+            },
+            {
+              "id": "utf16-10",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  56320,
+                  55296
+                ]
+              }
+            },
+            {
+              "id": "utf16-2",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  56320
+                ]
+              }
+            },
+            {
+              "id": "utf16-1",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  56319
+                ]
+              }
+            },
+            {
+              "id": "utf16-9",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  55296,
+                  55296
+                ]
+              }
+            },
+            {
+              "id": "utf16-7",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  55296,
+                  120
+                ]
+              }
+            },
+            {
+              "id": "utf16-0",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  55296
+                ]
+              }
+            },
+            {
+              "id": "utf16-8",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  120,
+                  56320
+                ]
+              }
+            },
+            {
+              "id": "utf16-11",
+              "present": true,
+              "value": "a\u0000b"
+            },
+            {
+              "id": "utf16-12",
+              "present": true,
+              "value": "a"
+            },
+            {
+              "id": "utf16-6",
+              "present": true,
+              "value": "😀"
+            },
+            {
+              "id": "utf16-13",
+              "present": true,
+              "value": ""
+            }
+          ],
+          "events": [
+            {
+              "phase": "output",
+              "value": "�"
+            },
+            {
+              "phase": "output",
+              "value": ""
+            },
+            {
+              "phase": "output",
+              "value": {
+                "type": "utf16",
+                "value": [
+                  57343
+                ]
+              }
+            },
+            {
+              "phase": "output",
+              "value": {
+                "type": "utf16",
+                "value": [
+                  56320,
+                  55296
+                ]
+              }
+            },
+            {
+              "phase": "output",
+              "value": {
+                "type": "utf16",
+                "value": [
+                  56320
+                ]
+              }
+            },
+            {
+              "phase": "output",
+              "value": {
+                "type": "utf16",
+                "value": [
+                  56319
+                ]
+              }
+            },
+            {
+              "phase": "output",
+              "value": {
+                "type": "utf16",
+                "value": [
+                  55296,
+                  55296
+                ]
+              }
+            },
+            {
+              "phase": "output",
+              "value": {
+                "type": "utf16",
+                "value": [
+                  55296,
+                  120
+                ]
+              }
+            },
+            {
+              "phase": "output",
+              "value": {
+                "type": "utf16",
+                "value": [
+                  55296
+                ]
+              }
+            },
+            {
+              "phase": "output",
+              "value": {
+                "type": "utf16",
+                "value": [
+                  120,
+                  56320
+                ]
+              }
+            },
+            {
+              "phase": "output",
+              "value": "a\u0000b"
+            },
+            {
+              "phase": "output",
+              "value": "a"
+            },
+            {
+              "phase": "output",
+              "value": "😀"
+            },
+            {
+              "phase": "output",
+              "value": ""
+            }
+          ],
+          "stored": [
+            {
+              "id": "utf16-0",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  55296
+                ]
+              }
+            },
+            {
+              "id": "utf16-1",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  56319
+                ]
+              }
+            },
+            {
+              "id": "utf16-2",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  56320
+                ]
+              }
+            },
+            {
+              "id": "utf16-3",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  57343
+                ]
+              }
+            },
+            {
+              "id": "utf16-4",
+              "present": true,
+              "value": "�"
+            },
+            {
+              "id": "utf16-5",
+              "present": true,
+              "value": ""
+            },
+            {
+              "id": "utf16-6",
+              "present": true,
+              "value": "😀"
+            },
+            {
+              "id": "utf16-7",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  55296,
+                  120
+                ]
+              }
+            },
+            {
+              "id": "utf16-8",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  120,
+                  56320
+                ]
+              }
+            },
+            {
+              "id": "utf16-9",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  55296,
+                  55296
+                ]
+              }
+            },
+            {
+              "id": "utf16-10",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  56320,
+                  55296
+                ]
+              }
+            },
+            {
+              "id": "utf16-11",
+              "present": true,
+              "value": "a\u0000b"
+            },
+            {
+              "id": "utf16-12",
+              "present": true,
+              "value": "a"
+            },
+            {
+              "id": "utf16-13",
+              "present": true,
+              "value": ""
+            }
+          ]
+        },
+        {
+          "name": "ascending-page",
+          "returned": true,
+          "rows": [
+            {
+              "id": "utf16-6",
+              "present": true,
+              "value": "😀"
+            },
+            {
+              "id": "utf16-12",
+              "present": true,
+              "value": "a"
+            }
+          ],
+          "events": [
+            {
+              "phase": "output",
+              "value": "😀"
+            },
+            {
+              "phase": "output",
+              "value": "a"
+            }
+          ],
+          "stored": [
+            {
+              "id": "utf16-0",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  55296
+                ]
+              }
+            },
+            {
+              "id": "utf16-1",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  56319
+                ]
+              }
+            },
+            {
+              "id": "utf16-2",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  56320
+                ]
+              }
+            },
+            {
+              "id": "utf16-3",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  57343
+                ]
+              }
+            },
+            {
+              "id": "utf16-4",
+              "present": true,
+              "value": "�"
+            },
+            {
+              "id": "utf16-5",
+              "present": true,
+              "value": ""
+            },
+            {
+              "id": "utf16-6",
+              "present": true,
+              "value": "😀"
+            },
+            {
+              "id": "utf16-7",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  55296,
+                  120
+                ]
+              }
+            },
+            {
+              "id": "utf16-8",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  120,
+                  56320
+                ]
+              }
+            },
+            {
+              "id": "utf16-9",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  55296,
+                  55296
+                ]
+              }
+            },
+            {
+              "id": "utf16-10",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  56320,
+                  55296
+                ]
+              }
+            },
+            {
+              "id": "utf16-11",
+              "present": true,
+              "value": "a\u0000b"
+            },
+            {
+              "id": "utf16-12",
+              "present": true,
+              "value": "a"
+            },
+            {
+              "id": "utf16-13",
+              "present": true,
+              "value": ""
+            }
+          ]
+        },
+        {
+          "name": "descending-page",
+          "returned": true,
+          "rows": [
+            {
+              "id": "utf16-5",
+              "present": true,
+              "value": ""
+            },
+            {
+              "id": "utf16-3",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  57343
+                ]
+              }
+            }
+          ],
+          "events": [
+            {
+              "phase": "output",
+              "value": ""
+            },
+            {
+              "phase": "output",
+              "value": {
+                "type": "utf16",
+                "value": [
+                  57343
+                ]
+              }
+            }
+          ],
+          "stored": [
+            {
+              "id": "utf16-0",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  55296
+                ]
+              }
+            },
+            {
+              "id": "utf16-1",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  56319
+                ]
+              }
+            },
+            {
+              "id": "utf16-2",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  56320
+                ]
+              }
+            },
+            {
+              "id": "utf16-3",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  57343
+                ]
+              }
+            },
+            {
+              "id": "utf16-4",
+              "present": true,
+              "value": "�"
+            },
+            {
+              "id": "utf16-5",
+              "present": true,
+              "value": ""
+            },
+            {
+              "id": "utf16-6",
+              "present": true,
+              "value": "😀"
+            },
+            {
+              "id": "utf16-7",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  55296,
+                  120
+                ]
+              }
+            },
+            {
+              "id": "utf16-8",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  120,
+                  56320
+                ]
+              }
+            },
+            {
+              "id": "utf16-9",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  55296,
+                  55296
+                ]
+              }
+            },
+            {
+              "id": "utf16-10",
+              "present": true,
+              "value": {
+                "type": "utf16",
+                "value": [
+                  56320,
+                  55296
+                ]
+              }
+            },
+            {
+              "id": "utf16-11",
+              "present": true,
+              "value": "a\u0000b"
+            },
+            {
+              "id": "utf16-12",
+              "present": true,
+              "value": "a"
+            },
+            {
+              "id": "utf16-13",
+              "present": true,
+              "value": ""
             }
           ]
         }

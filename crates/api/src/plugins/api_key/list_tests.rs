@@ -415,7 +415,7 @@ async fn check_cached_object_conversion_errors(
                 .await
                 .unwrap_err();
                 assert!(matches!(error, AuthError::Internal(message)
-                    if message == "Cannot convert object to primitive value"));
+                    if message == "No default value"));
                 for (key, expected) in &stored {
                     assert_eq!(
                         SecondaryStorage::get(cache.as_ref(), key).await.unwrap(),

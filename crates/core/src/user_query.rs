@@ -647,31 +647,9 @@ impl<'a> PreparedUserQuery<'a> {
                 .filter(|value| !value.is_empty())
                 .unwrap_or("asc")
                 != "asc";
-            let mut error = None;
-            selected.sort_by(|left, right| {
-                if error.is_some() {
-                    return Ordering::Equal;
-                }
-                let compare = || {
-                    crate::query::field_compare(
-                        &self.memory_value(record(left), name)?,
-                        &self.memory_value(record(right), name)?,
-                    )
-                };
-                match compare() {
-                    Ok(order) => {
-                        let order = order.unwrap_or(Ordering::Equal);
-                        if descending { order.reverse() } else { order }
-                    }
-                    Err(failure) => {
-                        error = Some(failure);
-                        Ordering::Equal
-                    }
-                }
-            });
-            if let Some(error) = error {
-                return Err(error);
-            }
+            crate::memory_sort::sort(&mut selected, descending, |user| {
+                self.memory_value(record(user), name)
+            })?;
         }
         let total = selected.len();
         Ok((
