@@ -80,11 +80,14 @@ run_stage() {
     memory-sorting)
       cargo fmt --all -- --check
       cargo clippy --locked -p better-auth-core --lib -- -D warnings
-      cargo test --locked -p better-auth-core --lib store::ephemeral::api_keys::tests::sorting::
+      cargo test --locked -p better-auth-core --lib -- \
+        store::ephemeral::api_keys::tests::sorting:: \
+        store::ephemeral::organization::query_tests::
       cargo test --locked -p better-auth-api --lib plugins::api_key::tests::list_tests::
       bun --no-install test \
         ./compat-tests/reference-server/contracts/memory-sort.test.ts \
-        ./compat-tests/reference-server/contracts/memory-name-coercion.test.ts
+        ./compat-tests/reference-server/contracts/memory-name-coercion.test.ts \
+        ./compat-tests/reference-server/contracts/member-sort-stability.test.ts
       ;;
     plugin-display-values)
       cargo fmt --all -- --check
@@ -280,13 +283,14 @@ run_stage() {
         --test secondary_storage_hooks_tests --test background_transaction_tests \
         --test missing_user_transaction_tests
       cargo test --locked -p better-auth-api --lib plugins::two_factor::
-      cargo test --locked -p better-auth-core --lib -- plugin_runtime::fields::models::tests:: session::native::tests:: store::ephemeral::user_serial_tests:: store::ephemeral::sessions::live_output_tests::
+      cargo test --locked -p better-auth-core --lib -- plugin_runtime::fields::models::tests:: session::native::tests:: store::ephemeral::user_serial_tests:: store::ephemeral::sessions::live_output_tests:: store::ephemeral::id_slot_tests::sessions::
       bun --no-install test \
         ./compat-tests/reference-server/contracts/account-user-auth-boundary.test.ts \
         ./compat-tests/reference-server/contracts/account-user-auth-email.test.ts \
         ./compat-tests/reference-server/contracts/account-user-auth-secondary.test.ts \
         ./compat-tests/reference-server/contracts/session-user-join-reference.test.ts \
-        ./compat-tests/reference-server/contracts/custom-model-join-reference.test.ts
+        ./compat-tests/reference-server/contracts/custom-model-join-reference.test.ts \
+        ./compat-tests/reference-server/contracts/adapter-id-slot.test.ts
       ;;
     field-projection)
       cargo fmt --all -- --check

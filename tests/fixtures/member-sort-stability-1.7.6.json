@@ -1,0 +1,415 @@
+{
+  "version": "1.7.6",
+  "versions": {
+    "better-auth": "1.7.6",
+    "@better-auth/core": "1.7.6",
+    "@better-auth/memory-adapter": "1.7.6"
+  },
+  "backend": "memory",
+  "field": "createdAt",
+  "input": [
+    {
+      "id": "later-first",
+      "organizationId": "sort-organization",
+      "userId": "user-later-first",
+      "role": "member",
+      "createdAt": "2030-01-03T00:00:00.000Z"
+    },
+    {
+      "id": "earlier-first",
+      "organizationId": "sort-organization",
+      "userId": "user-earlier-first",
+      "role": "member",
+      "createdAt": "2030-01-01T00:00:00.000Z"
+    },
+    {
+      "id": "later-second",
+      "organizationId": "sort-organization",
+      "userId": "user-later-second",
+      "role": "member",
+      "createdAt": "2030-01-03T00:00:00.000Z"
+    },
+    {
+      "id": "earlier-second",
+      "organizationId": "sort-organization",
+      "userId": "user-earlier-second",
+      "role": "member",
+      "createdAt": "2030-01-01T00:00:00.000Z"
+    },
+    {
+      "id": "middle",
+      "organizationId": "sort-organization",
+      "userId": "user-middle",
+      "role": "member",
+      "createdAt": "2030-01-02T00:00:00.000Z"
+    }
+  ],
+  "created": [
+    {
+      "organizationId": "sort-organization",
+      "userId": "user-later-first",
+      "role": "member",
+      "createdAt": "2030-01-03T00:00:00.000Z",
+      "id": "later-first"
+    },
+    {
+      "organizationId": "sort-organization",
+      "userId": "user-earlier-first",
+      "role": "member",
+      "createdAt": "2030-01-01T00:00:00.000Z",
+      "id": "earlier-first"
+    },
+    {
+      "organizationId": "sort-organization",
+      "userId": "user-later-second",
+      "role": "member",
+      "createdAt": "2030-01-03T00:00:00.000Z",
+      "id": "later-second"
+    },
+    {
+      "organizationId": "sort-organization",
+      "userId": "user-earlier-second",
+      "role": "member",
+      "createdAt": "2030-01-01T00:00:00.000Z",
+      "id": "earlier-second"
+    },
+    {
+      "organizationId": "sort-organization",
+      "userId": "user-middle",
+      "role": "member",
+      "createdAt": "2030-01-02T00:00:00.000Z",
+      "id": "middle"
+    }
+  ],
+  "stored": [
+    {
+      "organizationId": "sort-organization",
+      "userId": "user-later-first",
+      "role": "member",
+      "createdAt": "2030-01-03T00:00:00.000Z",
+      "id": "later-first"
+    },
+    {
+      "organizationId": "sort-organization",
+      "userId": "user-earlier-first",
+      "role": "member",
+      "createdAt": "2030-01-01T00:00:00.000Z",
+      "id": "earlier-first"
+    },
+    {
+      "organizationId": "sort-organization",
+      "userId": "user-later-second",
+      "role": "member",
+      "createdAt": "2030-01-03T00:00:00.000Z",
+      "id": "later-second"
+    },
+    {
+      "organizationId": "sort-organization",
+      "userId": "user-earlier-second",
+      "role": "member",
+      "createdAt": "2030-01-01T00:00:00.000Z",
+      "id": "earlier-second"
+    },
+    {
+      "organizationId": "sort-organization",
+      "userId": "user-middle",
+      "role": "member",
+      "createdAt": "2030-01-02T00:00:00.000Z",
+      "id": "middle"
+    }
+  ],
+  "operations": [
+    {
+      "name": "ascending",
+      "direction": "asc",
+      "rows": [
+        {
+          "organizationId": "sort-organization",
+          "userId": "user-earlier-first",
+          "role": "member",
+          "createdAt": "2030-01-01T00:00:00.000Z",
+          "id": "earlier-first"
+        },
+        {
+          "organizationId": "sort-organization",
+          "userId": "user-earlier-second",
+          "role": "member",
+          "createdAt": "2030-01-01T00:00:00.000Z",
+          "id": "earlier-second"
+        },
+        {
+          "organizationId": "sort-organization",
+          "userId": "user-middle",
+          "role": "member",
+          "createdAt": "2030-01-02T00:00:00.000Z",
+          "id": "middle"
+        },
+        {
+          "organizationId": "sort-organization",
+          "userId": "user-later-first",
+          "role": "member",
+          "createdAt": "2030-01-03T00:00:00.000Z",
+          "id": "later-first"
+        },
+        {
+          "organizationId": "sort-organization",
+          "userId": "user-later-second",
+          "role": "member",
+          "createdAt": "2030-01-03T00:00:00.000Z",
+          "id": "later-second"
+        }
+      ],
+      "total": 5,
+      "stored": [
+        {
+          "organizationId": "sort-organization",
+          "userId": "user-later-first",
+          "role": "member",
+          "createdAt": "2030-01-03T00:00:00.000Z",
+          "id": "later-first"
+        },
+        {
+          "organizationId": "sort-organization",
+          "userId": "user-earlier-first",
+          "role": "member",
+          "createdAt": "2030-01-01T00:00:00.000Z",
+          "id": "earlier-first"
+        },
+        {
+          "organizationId": "sort-organization",
+          "userId": "user-later-second",
+          "role": "member",
+          "createdAt": "2030-01-03T00:00:00.000Z",
+          "id": "later-second"
+        },
+        {
+          "organizationId": "sort-organization",
+          "userId": "user-earlier-second",
+          "role": "member",
+          "createdAt": "2030-01-01T00:00:00.000Z",
+          "id": "earlier-second"
+        },
+        {
+          "organizationId": "sort-organization",
+          "userId": "user-middle",
+          "role": "member",
+          "createdAt": "2030-01-02T00:00:00.000Z",
+          "id": "middle"
+        }
+      ]
+    },
+    {
+      "name": "descending",
+      "direction": "desc",
+      "rows": [
+        {
+          "organizationId": "sort-organization",
+          "userId": "user-later-first",
+          "role": "member",
+          "createdAt": "2030-01-03T00:00:00.000Z",
+          "id": "later-first"
+        },
+        {
+          "organizationId": "sort-organization",
+          "userId": "user-later-second",
+          "role": "member",
+          "createdAt": "2030-01-03T00:00:00.000Z",
+          "id": "later-second"
+        },
+        {
+          "organizationId": "sort-organization",
+          "userId": "user-middle",
+          "role": "member",
+          "createdAt": "2030-01-02T00:00:00.000Z",
+          "id": "middle"
+        },
+        {
+          "organizationId": "sort-organization",
+          "userId": "user-earlier-first",
+          "role": "member",
+          "createdAt": "2030-01-01T00:00:00.000Z",
+          "id": "earlier-first"
+        },
+        {
+          "organizationId": "sort-organization",
+          "userId": "user-earlier-second",
+          "role": "member",
+          "createdAt": "2030-01-01T00:00:00.000Z",
+          "id": "earlier-second"
+        }
+      ],
+      "total": 5,
+      "stored": [
+        {
+          "organizationId": "sort-organization",
+          "userId": "user-later-first",
+          "role": "member",
+          "createdAt": "2030-01-03T00:00:00.000Z",
+          "id": "later-first"
+        },
+        {
+          "organizationId": "sort-organization",
+          "userId": "user-earlier-first",
+          "role": "member",
+          "createdAt": "2030-01-01T00:00:00.000Z",
+          "id": "earlier-first"
+        },
+        {
+          "organizationId": "sort-organization",
+          "userId": "user-later-second",
+          "role": "member",
+          "createdAt": "2030-01-03T00:00:00.000Z",
+          "id": "later-second"
+        },
+        {
+          "organizationId": "sort-organization",
+          "userId": "user-earlier-second",
+          "role": "member",
+          "createdAt": "2030-01-01T00:00:00.000Z",
+          "id": "earlier-second"
+        },
+        {
+          "organizationId": "sort-organization",
+          "userId": "user-middle",
+          "role": "member",
+          "createdAt": "2030-01-02T00:00:00.000Z",
+          "id": "middle"
+        }
+      ]
+    },
+    {
+      "name": "ascending-page",
+      "direction": "asc",
+      "offset": 1,
+      "limit": 3,
+      "rows": [
+        {
+          "organizationId": "sort-organization",
+          "userId": "user-earlier-second",
+          "role": "member",
+          "createdAt": "2030-01-01T00:00:00.000Z",
+          "id": "earlier-second"
+        },
+        {
+          "organizationId": "sort-organization",
+          "userId": "user-middle",
+          "role": "member",
+          "createdAt": "2030-01-02T00:00:00.000Z",
+          "id": "middle"
+        },
+        {
+          "organizationId": "sort-organization",
+          "userId": "user-later-first",
+          "role": "member",
+          "createdAt": "2030-01-03T00:00:00.000Z",
+          "id": "later-first"
+        }
+      ],
+      "total": 5,
+      "stored": [
+        {
+          "organizationId": "sort-organization",
+          "userId": "user-later-first",
+          "role": "member",
+          "createdAt": "2030-01-03T00:00:00.000Z",
+          "id": "later-first"
+        },
+        {
+          "organizationId": "sort-organization",
+          "userId": "user-earlier-first",
+          "role": "member",
+          "createdAt": "2030-01-01T00:00:00.000Z",
+          "id": "earlier-first"
+        },
+        {
+          "organizationId": "sort-organization",
+          "userId": "user-later-second",
+          "role": "member",
+          "createdAt": "2030-01-03T00:00:00.000Z",
+          "id": "later-second"
+        },
+        {
+          "organizationId": "sort-organization",
+          "userId": "user-earlier-second",
+          "role": "member",
+          "createdAt": "2030-01-01T00:00:00.000Z",
+          "id": "earlier-second"
+        },
+        {
+          "organizationId": "sort-organization",
+          "userId": "user-middle",
+          "role": "member",
+          "createdAt": "2030-01-02T00:00:00.000Z",
+          "id": "middle"
+        }
+      ]
+    },
+    {
+      "name": "descending-page",
+      "direction": "desc",
+      "offset": 1,
+      "limit": 3,
+      "rows": [
+        {
+          "organizationId": "sort-organization",
+          "userId": "user-later-second",
+          "role": "member",
+          "createdAt": "2030-01-03T00:00:00.000Z",
+          "id": "later-second"
+        },
+        {
+          "organizationId": "sort-organization",
+          "userId": "user-middle",
+          "role": "member",
+          "createdAt": "2030-01-02T00:00:00.000Z",
+          "id": "middle"
+        },
+        {
+          "organizationId": "sort-organization",
+          "userId": "user-earlier-first",
+          "role": "member",
+          "createdAt": "2030-01-01T00:00:00.000Z",
+          "id": "earlier-first"
+        }
+      ],
+      "total": 5,
+      "stored": [
+        {
+          "organizationId": "sort-organization",
+          "userId": "user-later-first",
+          "role": "member",
+          "createdAt": "2030-01-03T00:00:00.000Z",
+          "id": "later-first"
+        },
+        {
+          "organizationId": "sort-organization",
+          "userId": "user-earlier-first",
+          "role": "member",
+          "createdAt": "2030-01-01T00:00:00.000Z",
+          "id": "earlier-first"
+        },
+        {
+          "organizationId": "sort-organization",
+          "userId": "user-later-second",
+          "role": "member",
+          "createdAt": "2030-01-03T00:00:00.000Z",
+          "id": "later-second"
+        },
+        {
+          "organizationId": "sort-organization",
+          "userId": "user-earlier-second",
+          "role": "member",
+          "createdAt": "2030-01-01T00:00:00.000Z",
+          "id": "earlier-second"
+        },
+        {
+          "organizationId": "sort-organization",
+          "userId": "user-middle",
+          "role": "member",
+          "createdAt": "2030-01-02T00:00:00.000Z",
+          "id": "middle"
+        }
+      ]
+    }
+  ]
+}

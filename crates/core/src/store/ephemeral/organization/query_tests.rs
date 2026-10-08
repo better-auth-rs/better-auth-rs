@@ -248,3 +248,56 @@ async fn member_queries_use_typed_storage_before_output_transforms() -> AuthResu
     assert_eq!(members[0].user_id, "second");
     Ok(())
 }
+
+#[tokio::test]
+async fn member_sort_preserves_equal_dates_and_page_positions() -> AuthResult<()> {
+    #[derive(serde::Deserialize)]
+    struct Operation {
+        name: String,
+        direction: String,
+        limit: Option<f64>,
+        offset: Option<f64>,
+        rows: Vec<Member>,
+        total: usize,
+        stored: Vec<Member>,
+    }
+    #[derive(serde::Deserialize)]
+    struct Fixture {
+        input: Vec<Member>,
+        created: Vec<Member>,
+        stored: Vec<Member>,
+        operations: Vec<Operation>,
+    }
+    let fixture: Fixture = serde_json::from_str(include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/fixtures/member-sort-stability-1.7.6.json"
+    )))?;
+    let store = EphemeralStore::default();
+    let mut created = Vec::new();
+    for member in fixture.input {
+        created.push(store.insert_member(member).await?);
+    }
+    assert_eq!(created, fixture.created);
+    assert_eq!(store.lock()?.members.snapshot()?, fixture.stored);
+    for operation in fixture.operations {
+        let (members, total) = store
+            .query_organization_members(&ListOrganizationMembersParams {
+                organization_id: "sort-organization".into(),
+                sort_by: Some("createdAt".into()),
+                sort_direction: Some(operation.direction),
+                limit: operation.limit,
+                offset: operation.offset,
+                ..Default::default()
+            })
+            .await?;
+        assert_eq!(members, operation.rows, "{} rows", operation.name);
+        assert_eq!(total, operation.total, "{} total", operation.name);
+        assert_eq!(
+            store.lock()?.members.snapshot()?,
+            operation.stored,
+            "{} stored insertion order",
+            operation.name
+        );
+    }
+    Ok(())
+}

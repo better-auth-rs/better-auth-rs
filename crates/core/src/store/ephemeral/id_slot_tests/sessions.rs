@@ -34,7 +34,7 @@ fn expected_session(
         expires_at: date(EXPIRES_AT)?,
         token: observed.token.clone(),
         created_at: observed.created_at.clone(),
-        updated_at: observed.created_at.clone(),
+        updated_at: observed.updated_at.clone(),
         ip_address: Some("198.51.100.4".into()),
         user_agent: Some("id-slot-test".into()),
         user_id: "ordinary-owner".into(),
@@ -109,8 +109,11 @@ async fn memory_session_id_slot_nested_create_preserves_complete_runtime_records
         let outer = store.create_session(input("outer")?).await?;
         let inner = required(inner_result.get())?;
         let ended = Utc::now().timestamp_millis() as f64;
+        // Session creation reads the clock separately for createdAt and updatedAt.
         assert!((started..=ended).contains(&outer.created_at.milliseconds()));
         assert!((started..=ended).contains(&inner.created_at.milliseconds()));
+        assert!((started..=ended).contains(&outer.updated_at.milliseconds()));
+        assert!((started..=ended).contains(&inner.updated_at.milliseconds()));
         assert_ne!(outer.token, inner.token);
         let inner_id = if slot == "before-label" {
             "session-generated-2"

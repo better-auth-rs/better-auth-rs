@@ -400,6 +400,7 @@ impl MemberStore for EphemeralStore {
             members = selected;
         }
         let field = params.sort_by.as_deref().unwrap_or("createdAt");
+        let descending = params.sort_direction.as_deref() == Some("desc");
         let mut sort_error = None;
         members.sort_by(|left, right| {
             if sort_error.is_some() {
@@ -409,6 +410,7 @@ impl MemberStore for EphemeralStore {
                 &value(left, field).unwrap_or(Value::Null),
                 &value(right, field).unwrap_or(Value::Null),
             ) {
+                Ok(ordering) if descending => ordering.reverse(),
                 Ok(ordering) => ordering,
                 Err(error) => {
                     sort_error = Some(error);
@@ -418,9 +420,6 @@ impl MemberStore for EphemeralStore {
         });
         if let Some(error) = sort_error {
             return Err(error);
-        }
-        if params.sort_direction.as_deref() == Some("desc") {
-            members.reverse();
         }
         let total = members.len();
         Ok((
