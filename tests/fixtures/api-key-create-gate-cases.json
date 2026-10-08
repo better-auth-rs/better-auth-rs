@@ -1,0 +1,24 @@
+{
+  "errors": {
+    "UNAUTHORIZED_SESSION": {
+      "status": 401,
+      "body": { "code": "UNAUTHORIZED_SESSION", "message": "Unauthorized or invalid session" }
+    },
+    "ORGANIZATION_ID_REQUIRED": {
+      "status": 400,
+      "body": { "code": "ORGANIZATION_ID_REQUIRED", "message": "Organization ID is required for organization-owned API keys." }
+    },
+    "SERVER_ONLY_PROPERTY": {
+      "status": 400,
+      "body": { "code": "SERVER_ONLY_PROPERTY", "message": "The property you're trying to set can only be set from the server auth instance only." }
+    }
+  },
+  "cases": [
+    { "name": "organization and actor absent", "organization": true, "body": {}, "typed": "ORGANIZATION_ID_REQUIRED", "http": "ORGANIZATION_ID_REQUIRED" },
+    { "name": "empty organization and actor absent", "organization": true, "body": { "organizationId": "" }, "typed": "ORGANIZATION_ID_REQUIRED", "http": "ORGANIZATION_ID_REQUIRED" },
+    { "name": "organization present and actor absent", "organization": true, "body": { "organizationId": "machines" }, "typed": "UNAUTHORIZED_SESSION", "http": "UNAUTHORIZED_SESSION" },
+    { "name": "body actor precedes organization only over HTTP", "organization": true, "body": { "userId": "owner" }, "typed": "ORGANIZATION_ID_REQUIRED", "http": "UNAUTHORIZED_SESSION" },
+    { "name": "server property precedes organization only over HTTP", "organization": true, "body": { "permissions": {} }, "typed": "ORGANIZATION_ID_REQUIRED", "http": "SERVER_ONLY_PROPERTY" },
+    { "name": "user actor absent", "organization": false, "body": {}, "typed": "UNAUTHORIZED_SESSION", "http": "UNAUTHORIZED_SESSION" }
+  ]
+}

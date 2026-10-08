@@ -164,7 +164,7 @@ fn transaction_callbacks<S: AuthSchema>(
                     "callback must see the uncommitted user"
                 );
                 events.lock().unwrap().push("create");
-                tx.create_jwk(key).await
+                tx.create_jwk(key).await.map(Some)
             })
         })
 }

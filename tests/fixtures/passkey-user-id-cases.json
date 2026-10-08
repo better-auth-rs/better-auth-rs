@@ -1,0 +1,9 @@
+[
+  { "name": "string", "value": "7", "memoryMatches": 1, "sqliteMatches": 1, "registration": 200, "verification": 200, "sessionVerification": 200 },
+  { "name": "number", "value": 7, "memoryMatches": 0, "sqliteMatches": 1, "registration": 200, "verification": 200, "sessionVerification": 500 },
+  { "name": "false", "value": false, "memoryMatches": 0, "sqliteMatches": 0, "registration": 401 },
+  { "name": "null", "value": null, "memoryMatches": 0, "sqliteMatches": 0, "registration": 401 },
+  { "name": "undefined", "value": { "type": "undefined" }, "memoryMatches": 0, "registration": 401 },
+  { "name": "object", "value": { "owner": 7 }, "memoryMatches": 0, "registration": 200, "verification": 401, "sessionVerification": 401 },
+  { "name": "lone surrogate", "value": "\ud800", "memoryMatches": 0, "registration": 200, "verification": 200, "sessionVerification": 500 }
+]

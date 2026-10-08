@@ -61,7 +61,7 @@ pub(super) fn input(name: Option<&str>, hash: &str) -> CreateApiKey {
         rate_limit_max: Some(3.0),
         refill_interval: None,
         refill_amount: None,
-        permissions: None,
+        permissions: None.into(),
         metadata: None,
         enabled: true.into(),
     }

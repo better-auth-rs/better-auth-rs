@@ -131,16 +131,18 @@ impl PasskeyStore for EphemeralStore {
         .await
     }
 
-    async fn list_passkeys_by_user(&self, user_id: &str) -> AuthResult<Vec<Passkey>> {
+    async fn list_passkeys_by_user_value(&self, user_id: &FieldValue) -> AuthResult<Vec<Passkey>> {
         let schema = self.model_fields.plugin_fields(EntityRole::Passkey);
         let column = schema.record_storage_key("userId");
-        let value = self.plugin_query_value(EntityRole::Passkey, "userId", user_id.into())?;
+        let value = self.plugin_query_value(EntityRole::Passkey, "userId", user_id.clone())?;
         let selected = self
             .raw("passkey", "findMany", |state| {
                 Ok(crate::query::paginate_memory(
                     state.passkeys.select_refs(|row| {
-                        row.get(column)
-                            .is_some_and(|actual| actual.strict_equals(&value))
+                        crate::query::field_matches_equality(
+                            row.get(column).unwrap_or(&FieldValue::Undefined),
+                            &value,
+                        )
                     })?,
                     Some(self.config.advanced.database.find_many_limit()),
                     None,

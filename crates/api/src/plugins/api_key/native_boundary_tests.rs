@@ -108,7 +108,7 @@ async fn check_organization_reference(ctx: AuthContext<impl better_auth_core::Au
         .unwrap();
     let created = super::super::handlers::create_key_for_user(
         &CreateKeyRequest::default(),
-        "41",
+        &"41".into(),
         &ApiKeyPlugin::builder().build(),
         &ctx,
         None,

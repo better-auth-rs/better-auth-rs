@@ -647,6 +647,7 @@ pub(super) async fn process_oauth_sign_in(
                 endpoint.path = Some(callback_path(&request));
                 endpoint.session = admission_session;
                 endpoint.transaction = Some(tx);
+                let mut create_user = create_user.into_user_fields()?;
                 if let Err(error) =
                     crate::plugins::user_admission::validate_create(&create_user, source, &endpoint)
                         .await
@@ -654,9 +655,12 @@ pub(super) async fn process_oauth_sign_in(
                     return Err(error.into_auth_error());
                 }
                 apply_default_role(&context, &mut create_user);
-                let user = tx.create_user_optional(create_user).await?.ok_or_else(|| {
-                    AuthError::internal("Cannot read properties of null (reading 'id')")
-                })?;
+                let user = tx
+                    .create_user_fields_optional(create_user)
+                    .await?
+                    .ok_or_else(|| {
+                        AuthError::internal("Cannot read properties of null (reading 'id')")
+                    })?;
                 let account = tx
                     .create_account_optional(CreateAccount {
                         user_id: user.id().into_owned(),

@@ -35,7 +35,7 @@ API Key, Passkey, DeviceCode, TwoFactor, JWK, and WalletAddress runtime fields p
 
 Generate Passkey storage with `--plugins passkey` for the 11 standard columns, or add `--passkey-legacy-schema` to retain opaque credential storage. Bind the generated `AppPluginSchema`; see [Passkey storage modes](docs/content/docs/plugins/passkey.mdx#storage-modes) for typed inputs and application-owned migrations.
 
-Passkey authentication callbacks receive the output-projected `credential_id` as `SchemaValue<String>`. Use `.typed()?` for ordinary strings or `.field_value()` to retain replacement values; see [Passkey callbacks](docs/content/docs/plugins/passkey.mdx#registration-and-authentication-callbacks).
+Passkey authentication callbacks receive the output-projected `credential_id` as `SchemaValue<String>`. Registration user IDs and `CreatePasskey.user_id` also retain native values through `SchemaValue<String>`. Custom stores implement `list_passkeys_by_user_value`; the existing string method delegates to this boundary. Use `.typed()?` for operations that require ordinary strings or `.field_value()` to retain replacement values; see [Passkey callbacks](docs/content/docs/plugins/passkey.mdx#registration-and-authentication-callbacks).
 
 Generate TwoFactor storage with `--plugins two-factor` for the seven upstream columns and nullable verification fields. Use `--two-factor-legacy-schema` when regenerating the previous schema. Declare application columns with `twoFactor.additionalFields` and register matching runtime policies; see [TwoFactor storage](docs/content/docs/plugins/two-factor.mdx#storage) for the public `additional_fields` maps.
 

@@ -157,7 +157,7 @@ pub struct Passkey {
 pub struct CreatePasskey {
     /// Declared application fields before adapter input policies.
     pub additional_fields: crate::FieldMap,
-    pub user_id: String,
+    pub user_id: SchemaValue<String>,
     /// Omission and explicit null remain distinct during field input transforms.
     pub name: SchemaValue<Option<String>>,
     pub credential_id: String,
@@ -418,9 +418,8 @@ pub struct ApiKey {
 pub struct CreateApiKey {
     /// Declared application fields before adapter input policies.
     pub additional_fields: crate::FieldMap,
-    /// Owner of the key — a user id, or an organization id when the key's
-    /// configuration references organizations.
-    pub reference_id: String,
+    /// Owner before adapter policies: a User ID or an Organization ID.
+    pub reference_id: SchemaValue<String>,
     /// Name of the API-key configuration this key belongs to.
     pub config_id: String,
     /// Display name before adapter input policies, including JSON values or omission.
@@ -435,7 +434,8 @@ pub struct CreateApiKey {
     pub rate_limit_max: Option<f64>,
     pub refill_interval: Option<f64>,
     pub refill_amount: Option<f64>,
-    pub permissions: Option<String>,
+    /// Encoded permissions before adapter policies; omission permits declaration defaults.
+    pub permissions: SchemaValue<Option<String>>,
     pub metadata: Option<String>,
     /// Enabled value before adapter policies, including replacement types or omission.
     pub enabled: SchemaValue<bool>,

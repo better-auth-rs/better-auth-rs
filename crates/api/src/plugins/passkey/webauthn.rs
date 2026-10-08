@@ -36,6 +36,37 @@ pub(crate) struct StoredRegistrationState {
     pub state: RegistrationChallenge,
 }
 
+impl StoredRegistrationState {
+    pub(super) fn parse_json(text: &str) -> AuthResult<Self> {
+        use better_auth_core::{FieldValue, SchemaValue};
+        let value = FieldValue::parse_json(text)?;
+        let fields = value
+            .as_object()
+            .ok_or_else(|| AuthError::internal("Registration challenge must be an object"))?;
+        let user = fields
+            .get("user")
+            .and_then(FieldValue::as_object)
+            .ok_or_else(|| AuthError::internal("Registration challenge must contain a user"))?;
+        let field = |name| user.get(name).cloned().unwrap_or_default();
+        let json = |name| -> AuthResult<Value> {
+            Ok(fields
+                .get(name)
+                .unwrap_or(&FieldValue::Undefined)
+                .json()?
+                .unwrap_or(Value::Null))
+        };
+        Ok(Self {
+            user: super::PasskeyRegistrationUser {
+                id: SchemaValue::from_field(field("id")),
+                name: SchemaValue::from_field(field("name")),
+                display_name: SchemaValue::from_field(field("displayName")),
+            },
+            context: serde_json::from_value(json("context")?)?,
+            state: serde_json::from_value(json("state")?)?,
+        })
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct RegistrationChallenge {
     pub rs: RegistrationState,

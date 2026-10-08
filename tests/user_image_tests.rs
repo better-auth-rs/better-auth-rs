@@ -52,7 +52,7 @@ impl<S: AuthSchema> DatabaseHooks<S> for ImageHooks {
     ) -> AuthResult<
         better_auth_core::store::database_hooks::DatabaseHookUpdate<better_auth_core::FieldMap>,
     > {
-        self.record("create.before", row);
+        self.record("create.before", row.json()?);
         Ok(better_auth_core::store::database_hooks::DatabaseHookUpdate::Continue)
     }
 
@@ -72,7 +72,7 @@ impl<S: AuthSchema> DatabaseHooks<S> for ImageHooks {
         row: &mut better_auth_core::FieldMap,
         _: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<DatabaseHookUpdate<better_auth_core::FieldMap>> {
-        self.record("update.before", row);
+        self.record("update.before", row.json()?);
         if self.reject.load(Ordering::SeqCst) {
             return Err(AuthError::internal("image update rejected"));
         }

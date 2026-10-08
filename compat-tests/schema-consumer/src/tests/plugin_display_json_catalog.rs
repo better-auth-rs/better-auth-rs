@@ -74,7 +74,7 @@ fn input() -> CreateApiKey {
         rate_limit_max: None,
         remaining: None,
         expires_at: None,
-        permissions: None,
+        permissions: None.into(),
         metadata: None,
     }
 }
@@ -159,7 +159,7 @@ where
         name: Some(text("name")).into(),
         start: Some(text("start").into()),
         prefix: Some(text("prefix")),
-        permissions: Some(text("permissions")),
+        permissions: Some(text("permissions")).into(),
         ..input()
     }
     .into_adapter_fields()?;

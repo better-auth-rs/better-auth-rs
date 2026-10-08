@@ -476,7 +476,7 @@ async fn ready_account_rows_batch_multifield_owner_projection() {
     };
     let mut config = AuthConfig::default();
     for name in ["accessToken", "refreshToken"] {
-        config
+        let _ = config
             .account
             .additional_fields
             .insert(name.into(), field(name));

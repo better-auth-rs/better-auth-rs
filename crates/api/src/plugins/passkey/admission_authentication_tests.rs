@@ -11,11 +11,10 @@ use better_auth_core::{
     wire::{SessionView, UserView},
 };
 use std::sync::Mutex;
-use tracing::instrument::WithSubscriber;
 
 #[path = "admission_trace.rs"]
 mod trace;
-use trace::{AdmissionTrace, DatabaseSpans};
+use trace::AdmissionTrace;
 
 fn output(callback: UserFieldTransform) -> UserFieldConfig {
     UserFieldConfig {
@@ -176,9 +175,7 @@ impl MemoryFixture {
             Some(json!({"response": signed})),
             Some(&cookie),
         );
-        let result = route(&self.ctx, &request)
-            .with_subscriber(DatabaseSpans(self.trace.clone()))
-            .await;
+        let result = self.trace.capture(route(&self.ctx, &request)).await;
         let response = match result {
             Ok(response) => response,
             Err(error) => {

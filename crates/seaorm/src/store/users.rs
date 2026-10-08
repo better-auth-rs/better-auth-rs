@@ -194,18 +194,17 @@ where
         }
     }
 
-    pub(crate) async fn create_user_with_connection<C>(
+    pub(crate) async fn create_user_fields_with_connection<C>(
         &self,
         db: &C,
         tx: Option<super::HookTransaction<'_, S>>,
-        create_user: CreateUser,
+        fields: FieldMap,
     ) -> AuthResult<Option<better_auth_core::wire::UserView>>
     where
         C: ConnectionTrait,
     {
-        let mut prepared = better_auth_core::store::database_hooks::PreparedRecordWrite::new(
-            create_user.into_user_fields()?,
-        );
+        let mut prepared =
+            better_auth_core::store::database_hooks::PreparedRecordWrite::new(fields);
         let hook_context = self.hook_context(tx);
         for hook in self.hooks() {
             let outcome = better_auth_core::observability::database::with_database_hook(
@@ -432,7 +431,7 @@ where
         tx: super::HookTransaction<'_, S>,
         create_user: CreateUser,
     ) -> AuthResult<better_auth_core::wire::UserView> {
-        self.create_user_with_connection(tx.0, Some(tx), create_user)
+        self.create_user_fields_with_connection(tx.0, Some(tx), create_user.into_user_fields()?)
             .await?
             .ok_or_else(|| AuthError::internal("User creation returned no record"))
     }
@@ -484,11 +483,11 @@ where
             .ok_or_else(|| AuthError::internal("User creation returned no record"))
     }
 
-    async fn create_user_optional(
+    async fn create_user_fields_optional(
         &self,
-        create_user: CreateUser,
+        fields: FieldMap,
     ) -> AuthResult<Option<better_auth_core::wire::UserView>> {
-        self.create_user_with_connection(self.connection(), None, create_user)
+        self.create_user_fields_with_connection(self.connection(), None, fields)
             .await
     }
 

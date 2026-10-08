@@ -42,7 +42,7 @@ where
     assert!(!owner_id.is_empty());
     let input = CreatePasskey {
         additional_fields: Default::default(),
-        user_id: owner_id.clone(),
+        user_id: owner_id.clone().into(),
         name: Some("Personal key".to_owned()).into(),
         credential_id: "b3JkaW5hcnktcGFzc2tleQ".into(),
         public_key: "ordinary-storage-public-key".into(),
@@ -60,7 +60,7 @@ where
     let mut expected = Passkey {
         additional_fields: Default::default(),
         id: created.id.clone(),
-        user_id: input.user_id.into(),
+        user_id: input.user_id,
         name: input.name,
         public_key: input.public_key.into(),
         credential_id: input.credential_id.into(),

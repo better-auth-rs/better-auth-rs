@@ -34,51 +34,31 @@ impl UserView {
     /// Build an enumeration-safe signup response without adapter transforms or persistence.
     pub fn synthetic_output(
         data: FieldMap,
-        config: &super::UserConfig,
-        metadata: &MetadataMap,
+        adapter: &super::UserConfig,
+        endpoint: &super::UserConfig,
     ) -> AuthResult<FieldMap> {
+        let mut schema = adapter.user_field_schema();
+        schema.fields_mut().extend(endpoint.fields().clone());
         let mut output = FieldMap::new();
-        for name in [
-            "id",
-            "name",
-            "email",
-            "emailVerified",
-            "image",
-            "createdAt",
-            "updatedAt",
-        ] {
-            if let Some(value) = data.get(name) {
-                let _ = output.insert(name.into(), value.clone());
-            }
-        }
-        for (plugin, names) in PLUGIN_FIELDS {
-            if metadata.get(*plugin).and_then(serde_json::Value::as_bool) != Some(true) {
-                continue;
-            }
-            for name in *names {
-                let value = data.get(*name).cloned().unwrap_or_else(|| {
-                    if ["isAnonymous", "twoFactorEnabled", "banned"].contains(name) {
-                        Value::Bool(false)
-                    } else {
-                        Value::Null
-                    }
-                });
-                let _ = output.insert((*name).into(), value);
-            }
-        }
-        for (name, field) in config.fields() {
+        for (name, field) in schema.fields() {
             if !field.returned() {
-                let _ = output.remove(name);
                 continue;
             }
-            let value = match data.get(name) {
+            let value = match data.get(name).filter(|value| !value.is_undefined()) {
                 Some(value) => Some(value.clone()),
-                None => field.default_value()?,
+                None if field.default_value_fn.is_some() => field.default_value()?,
+                None => field
+                    .default_value
+                    .clone()
+                    .filter(|value| !value.is_undefined()),
             }
             .or_else(|| (field.required != Some(true)).then_some(Value::Null));
             if let Some(value) = value {
                 let _ = output.insert(name.clone(), value);
             }
+        }
+        if let Some(id) = data.get("id") {
+            let _ = output.insert("id".into(), id.clone());
         }
         Ok(output)
     }

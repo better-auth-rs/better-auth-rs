@@ -205,7 +205,8 @@ impl<'a, S: AuthSchema> TestUtilsApi<'a, S> {
         Ok(overrides)
     }
     /// Persist a user through admission and database hooks. A cancelled before hook returns `None`.
-    pub async fn save_user(&self, mut user: CreateUser) -> AuthResult<Option<UserView>> {
+    pub async fn save_user(&self, user: CreateUser) -> AuthResult<Option<UserView>> {
+        let mut user = user.into_user_fields()?;
         if let Some(endpoint) = self.endpoint {
             user_admission::validate_create(
                 &user,
@@ -235,13 +236,10 @@ impl<'a, S: AuthSchema> TestUtilsApi<'a, S> {
             .await
             .map_err(UserValidationRejection::into_auth_error)?;
         }
-        if let Some(email) = &mut user.email {
-            *email = email.to_lowercase();
-        }
         super::helpers::apply_default_role(self.auth, &mut user);
         match self.endpoint.and_then(|endpoint| endpoint.transaction) {
-            Some(tx) => tx.create_user_optional(user).await,
-            None => self.auth.database.create_user_optional(user).await,
+            Some(tx) => tx.create_user_fields_optional(user).await,
+            None => self.auth.database.create_user_fields_optional(user).await,
         }
     }
     /// Delete the user through the internal adapter's session and account cleanup.

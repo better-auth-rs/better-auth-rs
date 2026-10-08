@@ -23,7 +23,7 @@ async fn check_list_default_limit(ctx: &AuthContext<impl better_auth_core::AuthS
                 rate_limit_max: None,
                 refill_interval: None,
                 refill_amount: None,
-                permissions: None,
+                permissions: None.into(),
                 metadata: None,
             })
             .await

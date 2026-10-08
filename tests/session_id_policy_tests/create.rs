@@ -235,7 +235,10 @@ async fn check_history(database: &DatabaseConnection) -> TestResult {
                 stored.updated_at = updated_at;
                 stored.active_organization_id = Some("outer".into());
                 assert_eq!(result.id.typed()?, &stored.id);
-                assert_eq!(result.updated_at, updated_at.into());
+                assert_eq!(
+                    result.updated_at,
+                    better_auth_core::FieldDate::from(updated_at)
+                );
                 assert_eq!(
                     result.additional_fields.get("label"),
                     Some(&FieldValue::from("outer"))

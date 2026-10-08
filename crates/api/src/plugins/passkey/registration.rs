@@ -56,7 +56,9 @@ pub(super) async fn resolve_user<S: AuthSchema>(
     req: &AuthRequest,
     config: &PasskeyConfig,
 ) -> AuthResult<PasskeyRegistrationUser> {
-    if let Some(user) = registration_session(ctx, req, config).await? {
+    if let Some(user) = registration_session(ctx, req, config).await?
+        && user.id.is_truthy()?
+    {
         let name = user.email().field_value();
         let name = if name.is_truthy() {
             name
@@ -64,9 +66,16 @@ pub(super) async fn resolve_user<S: AuthSchema>(
             user.id.field_value()
         };
         return Ok(PasskeyRegistrationUser {
-            id: user.id.typed()?.clone(),
+            id: user.id.clone(),
             display_name: better_auth_core::SchemaValue::from_field(name.clone()),
             name: better_auth_core::SchemaValue::from_field(name),
+        });
+    }
+    if config.registration.require_session {
+        return Err(AuthError::Upstream {
+            status: 401,
+            code: "SESSION_REQUIRED",
+            message: "Passkey registration requires an authenticated session",
         });
     }
     let resolver = config.registration.resolve_user.as_ref().ok_or(AuthError::Upstream {
@@ -83,7 +92,7 @@ pub(super) async fn resolve_user<S: AuthSchema>(
         )
         .await
         .map_err(generation_error)?;
-    if user.id.is_empty() || !user.name.is_truthy()? {
+    if !user.id.is_truthy()? || !user.name.is_truthy()? {
         return Err(invalid_user());
     }
     Ok(user)
@@ -177,9 +186,7 @@ pub(super) async fn verify_registration_core<S: AuthSchema>(
     else {
         return response_message(400, "Challenge not found");
     };
-    let Ok(state) =
-        serde_json::from_str::<StoredRegistrationState>(&challenge.value.display_string()?)
-    else {
+    let Ok(state) = StoredRegistrationState::parse_json(&challenge.value.display_string()?) else {
         return response_message(400, "Challenge not found");
     };
     // Optional sessions are read after consuming the challenge, as in the upstream handler.
@@ -188,10 +195,10 @@ pub(super) async fn verify_registration_core<S: AuthSchema>(
     } else {
         optional_session(ctx, req).await?
     };
-    if session_user
-        .as_ref()
-        .is_some_and(|user| user.id != state.user.id)
-    {
+    if session_user.as_ref().is_some_and(|user| {
+        let id = user.id.field_value();
+        id.is_truthy() && !id.strict_equals(&state.user.id.field_value())
+    }) {
         return Err(forbidden_user());
     }
     let result = async {
@@ -322,6 +329,9 @@ impl<S: AuthSchema> Registration<S> {
             better_auth_core::wire::SessionView,
         )>,
     )> {
+        if !self.state.user.name.is_truthy()? {
+            self.state.user.name = self.state.user.id.clone();
+        }
         if let Some(hook) = &self.config.registration.after_verification {
             let users = Users {
                 ctx: &self.ctx,
@@ -338,14 +348,13 @@ impl<S: AuthSchema> Registration<S> {
                 )
                 .await?;
             if let Some(user_id) = result.user_id.filter(|id| !id.is_empty()) {
-                if self
-                    .session_user
-                    .as_ref()
-                    .is_some_and(|user| user.id != user_id)
-                {
+                if self.session_user.as_ref().is_some_and(|user| {
+                    let id = user.id.field_value();
+                    id.is_truthy() && !id.strict_equals(&FieldValue::from(user_id.as_str()))
+                }) {
                     return Err(forbidden_user());
                 }
-                self.input.user_id = user_id;
+                self.input.user_id = user_id.into();
             }
             if self.input.name.is_absent() {
                 self.input.name = result
@@ -356,17 +365,20 @@ impl<S: AuthSchema> Registration<S> {
                     .unwrap_or_default();
             }
         }
-        if self.input.user_id.is_empty() {
+        if !self.input.user_id.is_truthy()? {
             return Err(invalid_user());
         }
         let user = if self.body.create_session == Some(true) {
             Some(
                 match transaction {
-                    Some(tx) => tx.get_user_by_id(&self.input.user_id).await?,
+                    Some(tx) => {
+                        tx.get_user_by_id_value(&self.input.user_id.field_value())
+                            .await?
+                    }
                     None => {
                         self.ctx
                             .database
-                            .get_user_by_id(&self.input.user_id)
+                            .get_user_by_id_value(&self.input.user_id.field_value())
                             .await?
                     }
                 }
@@ -379,7 +391,7 @@ impl<S: AuthSchema> Registration<S> {
         } else {
             None
         };
-        let user_id = self.input.user_id.clone().into();
+        let user_id = self.input.user_id.clone();
         let passkey = match transaction {
             Some(tx) => tx.create_passkey_optional(self.input).await?,
             None => {

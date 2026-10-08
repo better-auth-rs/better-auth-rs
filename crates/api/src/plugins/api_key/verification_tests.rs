@@ -458,7 +458,7 @@ async fn organization_key_verifies_without_emulating_a_user_session() {
         .create_api_key(better_auth_core::CreateApiKey {
             additional_fields: Default::default(),
             // A colliding user ID must not turn an organization key into a user session.
-            reference_id: user.id.typed().unwrap().clone(),
+            reference_id: user.id.clone(),
             config_id: "default".to_owned(),
             key_hash,
             start: Some(start),
@@ -472,7 +472,7 @@ async fn organization_key_verifies_without_emulating_a_user_session() {
             rate_limit_max: None,
             refill_interval: None,
             refill_amount: None,
-            permissions: None,
+            permissions: None.into(),
             metadata: None,
         })
         .await

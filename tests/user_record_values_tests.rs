@@ -39,7 +39,7 @@ impl<S: AuthSchema> DatabaseHooks<S> for Trace {
         patch: &mut better_auth_core::FieldMap,
         _: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<DatabaseHookUpdate<better_auth_core::FieldMap>> {
-        self.lock()?.push(json!({"before":fields(patch)?}));
+        self.lock()?.push(json!({"before":fields(patch.json()?)?}));
         Ok(DatabaseHookUpdate::Continue)
     }
     async fn after_update_user(

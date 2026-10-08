@@ -66,14 +66,30 @@ pub(super) async fn generate_register_options_core(
         &ctx.config,
         &[ctx.config.base_url.as_static().unwrap_or("").to_owned()],
     )?;
-    let existing_passkeys = ctx.database.list_passkeys_by_user(&user.id).await?;
-    let user_name = passkey_name
-        .filter(|name| !name.is_empty())
-        .map_or_else(|| user.name.field_value(), Into::into);
+    let existing_passkeys = ctx
+        .database
+        .list_passkeys_by_user_value(&user.id.field_value())
+        .await?;
+    let user_name = passkey_name.filter(|name| !name.is_empty()).map_or_else(
+        || {
+            let name = user.name.field_value();
+            if name.is_truthy() {
+                name
+            } else {
+                user.id.field_value()
+            }
+        },
+        Into::into,
+    );
     let user_display_name = if user.display_name.is_truthy()? {
         user.display_name.field_value()
     } else {
-        user.name.field_value()
+        let name = user.name.field_value();
+        if name.is_truthy() {
+            name
+        } else {
+            user.id.field_value()
+        }
     };
     let users = super::callbacks::Users {
         ctx,
@@ -166,7 +182,7 @@ pub(super) async fn generate_authenticate_options_core<U: AuthUser>(
 
     let stored_passkeys = if let Some(user) = maybe_user {
         ctx.database
-            .list_passkeys_by_user(user.id().typed()?)
+            .list_passkeys_by_user_value(&user.id().field_value())
             .await?
     } else {
         Vec::new()
@@ -410,7 +426,7 @@ pub(super) async fn list_user_passkeys_core(
 ) -> AuthResult<Vec<PasskeyView>> {
     let passkeys = ctx
         .database
-        .list_passkeys_by_user(user.id().typed()?)
+        .list_passkeys_by_user_value(&user.id().field_value())
         .await?;
     Ok(passkeys.iter().map(PasskeyView::from).collect())
 }
@@ -420,15 +436,7 @@ pub(super) async fn delete_passkey_core(
     user: &impl AuthUser,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<StatusResponse> {
-    let passkey = ctx
-        .database
-        .get_passkey_by_id(&body.id)
-        .await?
-        .ok_or_else(|| AuthError::not_found("Passkey not found"))?;
-
-    if user.id() != passkey.user_id() {
-        return Err(AuthError::forbidden("Unauthorized"));
-    }
+    require_passkey_owner(&body.id, user, ctx, empty_unauthorized()).await?;
 
     ctx.database.delete_passkey(&body.id).await?;
     Ok(StatusResponse { status: true })
@@ -439,17 +447,17 @@ pub(super) async fn update_passkey_core(
     user: &impl AuthUser,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<PasskeyResponse> {
-    let passkey = ctx
-        .database
-        .get_passkey_by_id(&body.id)
-        .await?
-        .ok_or_else(|| AuthError::not_found("Passkey not found"))?;
-
-    if user.id() != passkey.user_id() {
-        return Err(AuthError::forbidden(
-            "You are not allowed to register this passkey",
-        ));
-    }
+    require_passkey_owner(
+        &body.id,
+        user,
+        ctx,
+        AuthError::Upstream {
+            status: 401,
+            code: "YOU_ARE_NOT_ALLOWED_TO_REGISTER_THIS_PASSKEY",
+            message: "You are not allowed to register this passkey",
+        },
+    )
+    .await?;
 
     let updated = ctx
         .database
@@ -459,4 +467,38 @@ pub(super) async fn update_passkey_core(
     Ok(PasskeyResponse {
         passkey: PasskeyView::from(&updated),
     })
+}
+
+fn empty_unauthorized() -> AuthError {
+    better_auth_core::AuthResponse::new(401)
+        .with_header("content-type", "application/json")
+        .into()
+}
+
+async fn require_passkey_owner(
+    id: &str,
+    user: &impl AuthUser,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+    forbidden: AuthError,
+) -> AuthResult<()> {
+    let owner = user.id().field_value();
+    if !owner.is_truthy() {
+        return Err(empty_unauthorized());
+    }
+    if id.is_empty() {
+        return Err(better_auth_core::AuthResponse::json(
+            400,
+            &serde_json::json!({ "message": "Missing required parameter: id" }),
+        )?
+        .into());
+    }
+    let passkey = ctx
+        .database
+        .get_passkey_by_id(id)
+        .await?
+        .ok_or_else(|| AuthError::not_found("Passkey not found"))?;
+    if !passkey.user_id().field_value().strict_equals(&owner) {
+        return Err(forbidden);
+    }
+    Ok(())
 }

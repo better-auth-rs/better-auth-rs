@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 
 use better_auth_core::entity::AuthUser;
 use better_auth_core::{AuthContext, AuthError, AuthResult, BeforeRequestAction};
-use better_auth_core::{AuthRequest, AuthResponse};
+use better_auth_core::{AuthRequest, AuthResponse, FieldValue};
 
 pub(super) mod handlers;
 pub(crate) mod storage;
@@ -734,34 +734,13 @@ impl ApiKeyPlugin {
         if original.is_some() && body.user_id.is_some() {
             return Err(api_key_error(ApiKeyErrorCode::UnauthorizedSession));
         }
-        let actor = session
-            .as_ref()
-            .and_then(|data| data.user.id.as_str())
-            .or_else(|| {
-                (!client || config.references == ApiKeyReferences::Organization)
-                    .then_some(body.user_id.as_deref())
-                    .flatten()
-            })
-            .filter(|id| !id.is_empty());
-        if config.references == ApiKeyReferences::User
-            && !client
-            && session.is_some()
-            && body
-                .user_id
-                .as_deref()
-                .filter(|id| !id.is_empty())
-                .is_some_and(|id| Some(id) != actor)
-        {
-            return Err(api_key_error(ApiKeyErrorCode::UnauthorizedSession));
-        }
-        // Organization selection precedes the actor check in the upstream handler.
-        if config.references == ApiKeyReferences::Organization
-            && body.organization_id.as_deref().is_none_or(str::is_empty)
-        {
-            return Err(api_key_error(ApiKeyErrorCode::OrganizationIdRequired));
-        }
-        let actor = actor.ok_or_else(|| api_key_error(ApiKeyErrorCode::UnauthorizedSession))?;
-        let response = create_key_for_user(&body, actor, self, ctx, original).await?;
+        let actor = create_key_actor(
+            &body,
+            config.references,
+            session.as_ref().map(|data| data.user.id.field_value()),
+            client,
+        )?;
+        let response = create_key_for_user(&body, &actor, self, ctx, original).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
 
@@ -775,7 +754,7 @@ impl ApiKeyPlugin {
             .query_string("id")?
             .ok_or_else(|| AuthError::bad_request("Query parameter 'id' is required"))?;
         let config_id = req.query_string("configId")?;
-        let response = get_key_core(id, config_id, user.id().typed()?, self, ctx).await?;
+        let response = get_key_core(id, config_id, user.id().field_value(), self, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
 
@@ -786,7 +765,7 @@ impl ApiKeyPlugin {
     ) -> AuthResult<AuthResponse> {
         let (user, _session) = ctx.require_session(req).await?;
         let query = ListKeysQuery::from_request(req)?;
-        let response = list_keys_core(user.id().typed()?, &query, self, ctx).await?;
+        let response = list_keys_core(user.id().field_value(), &query, self, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
 
@@ -807,23 +786,28 @@ impl ApiKeyPlugin {
                 .is_some_and(|context| context.is_http);
         let actor = session
             .as_ref()
-            .and_then(|data| data.user.id.as_str())
-            .or_else(|| (!client).then_some(body.user_id.as_deref()).flatten())
-            .filter(|id| !id.is_empty())
+            .map(|data| data.user.id.field_value())
+            .or_else(|| {
+                (!client)
+                    .then_some(body.user_id.as_deref())
+                    .flatten()
+                    .map(FieldValue::from)
+            })
+            .filter(FieldValue::is_truthy)
             .ok_or_else(|| api_key_error(ApiKeyErrorCode::UnauthorizedSession))?;
         if session.is_some()
             && body
                 .user_id
                 .as_deref()
                 .filter(|id| !id.is_empty())
-                .is_some_and(|id| id != actor)
+                .is_some_and(|id| !actor.strict_equals(&id.into()))
         {
             return Err(api_key_error(ApiKeyErrorCode::UnauthorizedSession));
         }
         let response = if client {
             update_key_core(&body, actor, self, ctx).await?
         } else {
-            update_key_for_user(&body, actor, self, ctx).await?
+            update_key_for_user(&body, &actor, self, ctx).await?
         };
         Ok(AuthResponse::json(200, &response)?)
     }
@@ -838,7 +822,7 @@ impl ApiKeyPlugin {
         if user.banned().is_truthy()? {
             return Err(AuthError::authentication_failed("User is banned"));
         }
-        let response = delete_key_core(&body, user.id().typed()?, self, ctx).await?;
+        let response = delete_key_core(&body, user.id().field_value(), self, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
 }

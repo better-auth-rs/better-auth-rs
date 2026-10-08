@@ -16,6 +16,8 @@ use crate::plugins::helpers::{SessionIssueError, issue_selected_user_session_opt
 mod callbacks;
 mod request;
 mod signup;
+#[cfg(test)]
+mod synthetic_tests;
 use super::username::request::SignInUsernameRequest;
 pub use callbacks::EmailPasswordCallbacks;
 use signup::sign_up_core;

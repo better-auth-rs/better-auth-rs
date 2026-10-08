@@ -43,7 +43,7 @@ async fn test_generate_register_options_sets_cookie_and_uses_query_name() {
     ctx.database
         .create_passkey(CreatePasskey {
             additional_fields: Default::default(),
-            user_id: user.id.typed().unwrap().clone(),
+            user_id: user.id.clone(),
             name: Some("Existing Key".to_string()).into(),
             credential_id: credential_id("cred-existing"),
             public_key: "public-key".to_string(),
@@ -129,7 +129,7 @@ async fn test_generate_authenticate_options_with_auth_lists_allow_credentials() 
     ctx.database
         .create_passkey(CreatePasskey {
             additional_fields: Default::default(),
-            user_id: user.id.typed().unwrap().clone(),
+            user_id: user.id.clone(),
             name: Some("Authenticator".to_string()).into(),
             credential_id: credential_id("cred-auth"),
             public_key: "public-key".to_string(),
@@ -252,7 +252,7 @@ async fn test_list_user_passkeys_matches_upstream_optional_fields() {
     ctx.database
         .create_passkey(CreatePasskey {
             additional_fields: Default::default(),
-            user_id: user.id.typed().unwrap().clone(),
+            user_id: user.id.clone(),
             name: None.into(),
             credential_id: credential_id("cred-list"),
             public_key: "public-key".to_string(),
@@ -303,7 +303,7 @@ async fn test_delete_passkey_non_owner_is_forbidden() {
         .database
         .create_passkey(CreatePasskey {
             additional_fields: Default::default(),
-            user_id: other.id.typed().unwrap().clone(),
+            user_id: other.id.clone(),
             name: Some("Other Key".to_string()).into(),
             credential_id: credential_id("cred-other-delete"),
             public_key: "public-key".to_string(),
@@ -325,8 +325,8 @@ async fn test_delete_passkey_non_owner_is_forbidden() {
     );
 
     let err = plugin.handle_delete_passkey(&req, &ctx).await.unwrap_err();
-    assert_eq!(err.status_code(), 403);
-    assert_eq!(err.to_string(), "Unauthorized");
+    assert_eq!(err.status_code(), 401);
+    assert!(err.to_auth_response().body.bytes().unwrap().is_empty());
 }
 
 #[tokio::test]
@@ -351,7 +351,7 @@ async fn test_update_passkey_non_owner_uses_ts_error_message() {
         .database
         .create_passkey(CreatePasskey {
             additional_fields: Default::default(),
-            user_id: other.id.typed().unwrap().clone(),
+            user_id: other.id.clone(),
             name: Some("Other Key".to_string()).into(),
             credential_id: credential_id("cred-other-update"),
             public_key: "public-key".to_string(),
@@ -376,7 +376,7 @@ async fn test_update_passkey_non_owner_uses_ts_error_message() {
     );
 
     let err = plugin.handle_update_passkey(&req, &ctx).await.unwrap_err();
-    assert_eq!(err.status_code(), 403);
+    assert_eq!(err.status_code(), 401);
     assert_eq!(
         err.to_string(),
         "You are not allowed to register this passkey"

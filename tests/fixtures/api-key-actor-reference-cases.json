@@ -1,0 +1,16 @@
+{
+  "owners": [
+    { "name": "number", "actor": 7, "other": "7", "cacheReference": "7", "sqliteReference": "7" },
+    { "name": "boolean", "actor": true, "other": "true", "cacheReference": "true", "sqliteReference": "1" },
+    { "name": "string", "actor": "7", "other": 7, "cacheReference": "7", "sqliteReference": "7" }
+  ],
+  "rejected": [
+    { "name": "null", "actor": null },
+    { "name": "false", "actor": false },
+    { "name": "zero", "actor": 0 },
+    { "name": "empty string", "actor": "" },
+    { "name": "missing" }
+  ],
+  "metadata": { "machine": { "labels": [7, true, null] } },
+  "permissions": { "machine": ["read"] }
+}

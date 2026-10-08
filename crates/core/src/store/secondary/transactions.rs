@@ -78,11 +78,11 @@ impl<S: AuthSchema> AuthTransaction<S> for Transaction<S> {
             runtime: self.runtime.clone(),
         })
     }
-    async fn create_user_optional(
+    async fn create_user_fields_optional(
         &self,
-        input: crate::CreateUser,
+        input: crate::FieldMap,
     ) -> AuthResult<Option<crate::wire::UserView>> {
-        self.inner.create_user_optional(input).await
+        self.inner.create_user_fields_optional(input).await
     }
     async fn create_session_with_writer(
         &self,

@@ -20,7 +20,7 @@ async fn options_consume_native_descriptors_without_utf16_loss_or_stricter_base6
     let passkey = raw
         .create_passkey(CreatePasskey {
             additional_fields: Default::default(),
-            user_id: user.id.typed().unwrap().clone(),
+            user_id: user.id.clone(),
             name: None.into(),
             credential_id: credential_id("existing"),
             public_key: "unused by options".into(),

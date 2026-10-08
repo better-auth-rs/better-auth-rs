@@ -83,12 +83,12 @@ async fn list_without_configuration_includes_all_user_configurations() {
     });
     server_key(&plugin, &ctx, &user_id, "default").await;
     server_key(&plugin, &ctx, &user_id, "secondary").await;
-    let list = list_keys_core(&user_id, &ListKeysQuery::default(), &plugin, &ctx)
+    let list = list_keys_core(user_id.as_str(), &ListKeysQuery::default(), &plugin, &ctx)
         .await
         .unwrap();
     assert_eq!(list.total, 2);
     let list = list_keys_core(
-        &user_id,
+        user_id.as_str(),
         &ListKeysQuery {
             config_id: Some("secondary".to_string()),
             ..Default::default()
@@ -101,7 +101,7 @@ async fn list_without_configuration_includes_all_user_configurations() {
     assert_eq!(list.total, 1);
     assert_eq!(list.api_keys[0].config_id, "secondary");
     let list = list_keys_core(
-        &user_id,
+        user_id.as_str(),
         &ListKeysQuery {
             config_id: Some("missing".to_string()),
             ..Default::default()
@@ -117,10 +117,15 @@ async fn list_without_configuration_includes_all_user_configurations() {
         .config_id("secondary".to_string())
         .build();
     assert_eq!(
-        list_keys_core(&user_id, &ListKeysQuery::default(), &no_default, &ctx)
-            .await
-            .unwrap()
-            .total,
+        list_keys_core(
+            user_id.as_str(),
+            &ListKeysQuery::default(),
+            &no_default,
+            &ctx
+        )
+        .await
+        .unwrap()
+        .total,
         2
     );
 }

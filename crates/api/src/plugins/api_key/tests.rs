@@ -754,6 +754,12 @@ mod list_tests;
 #[path = "native_boundary_tests.rs"]
 mod native_boundary_tests;
 
+#[path = "actor_reference_tests.rs"]
+mod actor_reference_tests;
+
+#[path = "permissions_input_tests.rs"]
+mod permissions_input_tests;
+
 #[tokio::test]
 async fn native_schema_rejects_nonfinite_numbers_before_storage() {
     let plugin = ApiKeyPlugin::builder().build();

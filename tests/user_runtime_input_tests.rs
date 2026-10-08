@@ -191,6 +191,16 @@ async fn native_user_input_replacements_reach_storage_and_after_hooks_once() -> 
                 contract::observe(&events[1].1[name])?,
                 contract::observe(expected)?
             );
+            let mut expected_record = input.clone();
+            let _ = expected_record.insert(name.into(), expected.clone());
+            let expected_record = contract::observe(&expected_record.into())?;
+            for record in [&result, &stored, &events[1].1] {
+                assert_eq!(
+                    contract::observe(&record.clone().into())?,
+                    expected_record,
+                    "complete record: create={create}, {name}"
+                );
+            }
         }
     }
     Ok(())
@@ -249,6 +259,13 @@ async fn user_hooks_merge_native_patches_without_revalidating_cross_type_fields(
                 contract::observe(&events[3].1[name])?,
                 contract::observe(value)?
             );
+        }
+        let mut expected_record = input.clone();
+        expected_record.extend(first.clone());
+        expected_record.extend(second.clone());
+        let expected_record = contract::observe(&expected_record.into())?;
+        for record in [&returned, &stored, &events[2].1, &events[3].1] {
+            assert_eq!(contract::observe(&record.clone().into())?, expected_record);
         }
         assert_eq!(
             contract::observe(&events[0].1["email"])?,

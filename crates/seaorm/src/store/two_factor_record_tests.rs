@@ -11,6 +11,10 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
 };
 
+#[expect(
+    unreachable_pub,
+    reason = "SeaORM derives require public fixture entity types"
+)]
 mod replacement {
     use sea_orm::entity::prelude::*;
 

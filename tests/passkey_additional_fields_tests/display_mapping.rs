@@ -209,7 +209,7 @@ impl<'a, S: AuthSchema> Fixture<'a, S> {
 
     fn input(&self) -> CreatePasskey {
         CreatePasskey {
-            user_id: self.owner.clone(),
+            user_id: self.owner.clone().into(),
             name: Some(" Desk ".into()).into(),
             credential_id: "ordinary-credential".into(),
             public_key: "ordinary-public-key".into(),

@@ -423,17 +423,22 @@ impl<S: AuthSchema> ApiKeyStore for SecondaryStore<S> {
     async fn get_api_key_by_hash(&self, hash: &str) -> AuthResult<Option<ApiKey>> {
         self.inner.get_api_key_by_hash(hash).await
     }
-    async fn find_api_keys_by_reference(
+    async fn find_api_keys_by_reference_value(
         &self,
-        reference_id: &str,
+        reference_id: &crate::FieldValue,
         sort: Option<(&str, &str)>,
     ) -> AuthResult<Vec<ApiKey>> {
         self.inner
-            .find_api_keys_by_reference(reference_id, sort)
+            .find_api_keys_by_reference_value(reference_id, sort)
             .await
     }
-    async fn count_api_keys_by_reference(&self, reference_id: &str) -> AuthResult<u64> {
-        self.inner.count_api_keys_by_reference(reference_id).await
+    async fn count_api_keys_by_reference_value(
+        &self,
+        reference_id: &crate::FieldValue,
+    ) -> AuthResult<u64> {
+        self.inner
+            .count_api_keys_by_reference_value(reference_id)
+            .await
     }
     async fn update_api_key(
         &self,
@@ -507,8 +512,11 @@ impl<S: AuthSchema> PasskeyStore for SecondaryStore<S> {
     ) -> AuthResult<Option<Passkey>> {
         self.inner.get_passkey_by_credential_id(credential_id).await
     }
-    async fn list_passkeys_by_user(&self, user_id: &str) -> AuthResult<Vec<Passkey>> {
-        self.inner.list_passkeys_by_user(user_id).await
+    async fn list_passkeys_by_user_value(
+        &self,
+        user_id: &crate::FieldValue,
+    ) -> AuthResult<Vec<Passkey>> {
+        self.inner.list_passkeys_by_user_value(user_id).await
     }
     async fn update_passkey_authentication(
         &self,

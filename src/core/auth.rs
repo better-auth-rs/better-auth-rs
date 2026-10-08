@@ -235,6 +235,11 @@ impl<S: AuthSchema> AuthBuilder<S> {
 
         let config = init_context.config.clone();
         let mut init_parts = init_context.into_parts();
+        init_parts
+            .extensions
+            .insert(better_auth_core::plugin_runtime::ApplicationUserFields(
+                config.user.clone(),
+            ));
         let mut context = AuthContext::new(config.clone(), store.clone());
         init_parts.apply_request_runtime(&mut context);
         let (adapter_config, endpoint_config, mut model_fields) =

@@ -77,7 +77,7 @@ pub trait ApiKeyValidator: Send + Sync {
 pub trait ApiKeyDefaultPermissions: Send + Sync {
     async fn permissions(
         &self,
-        reference_id: &str,
+        reference_id: &better_auth_core::FieldValue,
         ctx: ApiKeyEndpoint<'_>,
     ) -> AuthResult<ApiKeyPermissions>;
 }

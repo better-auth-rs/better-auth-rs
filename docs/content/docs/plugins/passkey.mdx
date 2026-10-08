@@ -95,7 +95,9 @@ The callback types are exported from `better_auth::plugins::passkey`:
 
 Each callback receives a `PasskeyEndpoint` with the request, parsed body, global configuration, application extensions, plugin metadata and a typed user adapter. The user adapter supports lookup by ID or email, creation, update and deletion. These methods use the active transaction during registration. The callback interface does not expose the upstream arbitrary-model adapter.
 
-`PasskeyRegistrationUser.name` and `display_name` use `SchemaValue<String>` and `SchemaValue<Option<String>>`. Ordinary resolver values use `.into()`. Session-derived values retain the selected User email or ID fallback through registration options and callbacks; a cross-type value does not become a display string during option construction.
+`PasskeyRegistrationUser.id`, `name`, and `display_name` use `SchemaValue<String>`, `SchemaValue<String>`, and `SchemaValue<Option<String>>`. `CreatePasskey.user_id` also uses `SchemaValue<String>`. Ordinary inputs use `.into()`. Session-derived values retain the selected User email or ID fallback through registration options and callbacks; a cross-type value does not become a display string during option construction. Registration requires a truthy account ID, while authentication options and lists query the supplied native ID. The WebAuthn user handle is generated independently. The registration challenge preserves the account ID through JSON, and verification compares the restored ID with the current session using strict equality. Objects with equal contents do not establish ownership after this JSON round trip. The verification hook's optional ID override remains a nonempty string.
+
+Custom `PasskeyStore` implementations must implement `list_passkeys_by_user_value(&FieldValue)` with their native query binding. The existing `list_passkeys_by_user(&str)` method delegates to this boundary. Keep field mappings, reference conversion, query limits, and adapter null semantics in the native method; do not narrow its input through `.typed()?` or stringify the owner.
 
 `PasskeyUsers::create_user` and `PasskeyUsers::update_user` return `AuthResult<Option<UserView>>`. Handle `None` before consuming the user. Cancellation or a completed write with no returned row remains distinct from a callback or adapter error.
 
@@ -116,6 +118,8 @@ With the default `require_session: true`, both registration endpoints require a 
 ### Adapter field policies
 
 Registration keeps the selected target ID as the session owner. Authentication keeps the selected Passkey `userId`, creates the session after updating the counter, and then loads the User. A User output transform does not replace the session owner. Admin admission still applies before session creation. Native success responses retain dynamic values and UTF-16 strings until HTTP serialization.
+
+Passkey updates and deletions require a truthy session User ID and strict equality with the selected Passkey `userId`. A numeric ID does not own a string ID, even when the SQL query treats those values as equal. Objects with equal contents do not establish ownership. Rejected owners receive HTTP 401, and the stored credential remains unchanged. A missing Passkey receives `PASSKEY_NOT_FOUND` with HTTP 404.
 
 Native COSE public keys accept the upstream standard and URL-safe Base64 alphabets, optional padding, and termination at the first padding character. The decoded key must still pass COSE parsing and signature verification.
 

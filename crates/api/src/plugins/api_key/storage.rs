@@ -7,8 +7,8 @@ use better_auth_core::store::SecondaryStorage;
 #[cfg(test)]
 use better_auth_core::wire::ApiKeyView;
 use better_auth_core::{
-    ApiKey, AuthContext, AuthError, AuthRecordFields, AuthResult, CreateApiKey, FieldMap,
-    FieldValue, FromFieldMap, UpdateApiKey,
+    ApiKey, AuthContext, AuthError, AuthRecordFields, AuthResult, FieldMap, FieldValue,
+    FromFieldMap, UpdateApiKey,
 };
 use chrono::Utc;
 use futures_util::{FutureExt, StreamExt, future, stream};
@@ -373,62 +373,30 @@ async fn get(
 pub(super) async fn create(
     config: &ApiKeyConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-    input: CreateApiKey,
+    mut fields: FieldMap,
 ) -> AuthResult<Option<ApiKey>> {
+    let created_at = now();
+    fields.extend([
+        ("createdAt".into(), created_at.clone().into()),
+        ("updatedAt".into(), created_at.into()),
+        ("lastRefillAt".into(), FieldValue::Null),
+        ("lastRequest".into(), FieldValue::Null),
+    ]);
     let key = if config.storage == ApiKeyStorage::Database || config.fallback_to_database {
-        let created_at = now();
-        let mut fields = input.into_adapter_fields()?;
-        fields.extend([
-            ("createdAt".into(), created_at.clone().into()),
-            ("updatedAt".into(), created_at.into()),
-            ("lastRefillAt".into(), FieldValue::Null),
-            ("lastRequest".into(), FieldValue::Null),
-        ]);
         ctx.database
             .create_api_key_record(fields)
             .await?
             .map(ApiKey::from_field_values)
             .transpose()?
     } else {
-        let created_at = now();
-        Some(ApiKey {
-            additional_fields: Default::default(),
-            id: ctx
-                .config
-                .advanced
-                .generate_id("apikey", None)?
-                .filter(|id| !id.is_empty())
-                .unwrap_or_else(|| better_auth_core::id::random_id(None))
-                .into(),
-            name: input.name,
-            start: (input.start).into(),
-            prefix: (input.prefix).into(),
-            key_hash: (input.key_hash).into(),
-            reference_id: (input.reference_id).into(),
-            config_id: (input.config_id).into(),
-            refill_interval: (input.refill_interval).into(),
-            refill_amount: (input.refill_amount).into(),
-            last_refill_at: (None).into(),
-            enabled: input.enabled,
-            rate_limit_enabled: input.rate_limit_enabled.into(),
-            rate_limit_time_window: (input.rate_limit_time_window).into(),
-            rate_limit_max: (input.rate_limit_max).into(),
-            request_count: (Some(0.0)).into(),
-            remaining: (input.remaining).into(),
-            last_request: (None).into(),
-            expires_at: (input.expires_at).into(),
-            created_at: (created_at.clone()).into(),
-            updated_at: (created_at).into(),
-            permissions: (input.permissions).into(),
-            metadata: better_auth_core::SchemaValue::from_field(
-                input
-                    .metadata
-                    .as_deref()
-                    .map(FieldValue::parse_json)
-                    .transpose()?
-                    .unwrap_or(FieldValue::Null),
-            ),
-        })
+        let id = ctx
+            .config
+            .advanced
+            .generate_id("apikey", None)?
+            .filter(|id| !id.is_empty())
+            .unwrap_or_else(|| better_auth_core::id::random_id(None));
+        let _ = fields.insert("id".into(), id.into());
+        Some(ApiKey::from_field_values(fields)?)
     };
     if config.storage == ApiKeyStorage::SecondaryStorage {
         let key = key.as_ref().ok_or_else(|| {
@@ -567,7 +535,7 @@ pub(super) async fn delete_for_verification(
 pub(super) async fn list_groups(
     configurations: &[&ApiKeyConfig],
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-    reference: &str,
+    reference: &FieldValue,
     sort: Option<(&str, &str)>,
 ) -> AuthResult<Vec<FieldValue>> {
     let first_error = OnceLock::new();
@@ -590,13 +558,13 @@ pub(super) async fn list(
     reference: &str,
     sort: Option<(&str, &str)>,
 ) -> AuthResult<Vec<FieldValue>> {
-    list_groups(&[config], ctx, reference, sort).await
+    list_groups(&[config], ctx, &reference.into(), sort).await
 }
 
 async fn list_in_batch(
     config: &ApiKeyConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-    reference: &str,
+    reference: &FieldValue,
     sort: Option<(&str, &str)>,
     first_error: &OnceLock<AuthError>,
 ) -> Option<Vec<FieldValue>> {
@@ -608,7 +576,7 @@ async fn list_in_batch(
             let ids = batch.observe(
                 reference::read(
                     storage.as_ref(),
-                    &format!("api-key:by-ref:{reference}").into(),
+                    &batch.observe(cache_key("api-key:by-ref:", reference))?,
                 )
                 .await,
             )?;
@@ -671,10 +639,10 @@ async fn list_in_batch(
     }
     let (keys, total) = tokio::join!(
         ctx.database
-            .find_api_keys_by_reference(reference, sort)
+            .find_api_keys_by_reference_value(reference, sort)
             .map(|result| batch.observe(result)),
         ctx.database
-            .count_api_keys_by_reference(reference)
+            .count_api_keys_by_reference_value(reference)
             .map(|result| batch.observe(result)),
     );
     let mut keys = keys?;
@@ -712,8 +680,8 @@ async fn list_in_batch(
             .into();
         batch.observe(
             storage
-                .set(
-                    &format!("api-key:by-ref:{reference}"),
+                .set_native(
+                    &batch.observe(cache_key("api-key:by-ref:", reference))?,
                     &batch.observe(reference::stringify(&ids))?,
                     None,
                 )

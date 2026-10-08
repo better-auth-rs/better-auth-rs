@@ -55,11 +55,11 @@ impl AuthTransaction<StatelessSchema> for EphemeralTransaction {
             store: self.store.clone(),
         })
     }
-    async fn create_user_optional(
+    async fn create_user_fields_optional(
         &self,
-        input: crate::CreateUser,
+        input: crate::FieldMap,
     ) -> AuthResult<Option<crate::wire::UserView>> {
-        self.store.create_user_optional(input).await
+        self.store.create_user_fields_optional(input).await
     }
     async fn before_create_runtime_session_optional(
         &self,

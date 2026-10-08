@@ -99,11 +99,11 @@ fn field(output: Option<UserFieldTransform>, alias: bool) -> UserFieldConfig {
 
 fn seed_fields() -> OrganizationFields {
     let mut fields = OrganizationFields::default();
-    fields
+    let _ = fields
         .member
         .fields_mut()
         .insert("label".into(), field(None, true));
-    fields
+    let _ = fields
         .team
         .fields_mut()
         .insert("label".into(), field(None, true));
@@ -149,7 +149,7 @@ async fn update_name<S: AuthSchema>(
 ) -> AuthResult<()> {
     match kind {
         Kind::Organization => {
-            store
+            let _ = store
                 .update_organization(
                     id,
                     UpdateOrganization {
@@ -160,7 +160,7 @@ async fn update_name<S: AuthSchema>(
                 .await?;
         }
         Kind::Team => {
-            store
+            let _ = store
                 .update_team(
                     id,
                     UpdateTeam {
@@ -201,10 +201,10 @@ async fn check_case<S: AuthSchema, T: AuthStore<S> + Clone + 'static>(store: T, 
         let org = store.create_organization(input).await.unwrap();
         let org_id = org.id.typed().unwrap().clone();
         let mut input = CreateMember::new(&org_id, &owner, "member");
-        input
+        let _ = input
             .additional_fields
             .insert("label".into(), format!("{name}-member").into());
-        store.create_member(input).await.unwrap();
+        let _ = store.create_member(input).await.unwrap();
         let parent = first_org.get_or_insert(org_id).clone();
         let team = store
             .create_team(CreateTeam {
@@ -217,7 +217,7 @@ async fn check_case<S: AuthSchema, T: AuthStore<S> + Clone + 'static>(store: T, 
             })
             .await
             .unwrap();
-        store
+        let _ = store
             .add_team_member(&team.id, &owner, None)
             .await
             .unwrap()
@@ -260,13 +260,13 @@ async fn check_case<S: AuthSchema, T: AuthStore<S> + Clone + 'static>(store: T, 
                     return Ok(value);
                 }
                 let text = state.text(value.as_str().unwrap());
-                state.event("name", &text);
+                let _ = state.event("name", &text);
                 if mode == "async" {
                     state.wait(usize::from(text != "A")).await?;
                 }
                 if mode == "read" && text == "A" {
                     update_name(&store, kind, &ids[1], "B-after").await?;
-                    state.event("display-update", "B-after");
+                    let _ = state.event("display-update", "B-after");
                 }
                 if mode == "output-error" && text == "A" {
                     return Err(failure());
@@ -304,13 +304,13 @@ async fn check_case<S: AuthSchema, T: AuthStore<S> + Clone + 'static>(store: T, 
                     return Ok(value);
                 }
                 let text = state.text(value.as_str().unwrap());
-                state.event("member", &text);
+                let _ = state.event("member", &text);
                 if mode == "parent-async" {
                     state.wait(usize::from(text != "A-member")).await?;
                 }
                 if mode == "parent-read" && text == "A-member" {
                     update_name(&store, kind, &ids[0], "A-before").await?;
-                    state.event("member-display-update", "A-before");
+                    let _ = state.event("member-display-update", "A-before");
                 }
                 Ok(value)
             }
@@ -322,7 +322,7 @@ async fn check_case<S: AuthSchema, T: AuthStore<S> + Clone + 'static>(store: T, 
                 return Ok(value);
             }
             let text = state.text(value.as_str().unwrap());
-            state.event("member", &text);
+            let _ = state.event("member", &text);
             if mode == "parent-error" && text == "A-member" {
                 return Err(failure());
             }
@@ -330,7 +330,7 @@ async fn check_case<S: AuthSchema, T: AuthStore<S> + Clone + 'static>(store: T, 
         })
     };
     let mut fields = seed_fields();
-    fields
+    let _ = fields
         .member
         .fields_mut()
         .insert("label".into(), field(Some(parent), true));
@@ -340,10 +340,10 @@ async fn check_case<S: AuthSchema, T: AuthStore<S> + Clone + 'static>(store: T, 
         &mut fields.team
     };
     target.fields_mut().clear();
-    target
+    let _ = target
         .fields_mut()
         .insert("name".into(), field(Some(first), false));
-    target.fields_mut().insert(
+    let _ = target.fields_mut().insert(
         if kind == Kind::Organization {
             "logo"
         } else {
@@ -359,10 +359,10 @@ async fn check_case<S: AuthSchema, T: AuthStore<S> + Clone + 'static>(store: T, 
                 [started.recv().await.unwrap(), started.recv().await.unwrap()],
                 [0, 1]
             );
-            state.event("controller", "both-started");
+            let _ = state.event("controller", "both-started");
             release_b.send(()).unwrap();
             finished.recv().await.unwrap();
-            state.event("controller", "release-first");
+            let _ = state.event("controller", "release-first");
             release_a.send(()).unwrap();
         }
     };
@@ -496,7 +496,7 @@ async fn sqlite_join_continuations_match_pinned_ordinary_contracts() {
             schema.create_table_from_entity(models::team::Entity),
             schema.create_table_from_entity(models::team_member::Entity),
         ] {
-            db.execute(&statement).await.unwrap();
+            let _ = db.execute(&statement).await.unwrap();
         }
         let store = SeaOrmStore::<BundledSchema>::new(AuthConfig::default(), db)
             .with_organization_schema::<models::Models>();

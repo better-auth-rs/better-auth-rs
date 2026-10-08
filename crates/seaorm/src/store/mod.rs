@@ -390,13 +390,13 @@ where
         })
     }
 
-    async fn create_user_optional(
+    async fn create_user_fields_optional(
         &self,
-        input: better_auth_core::CreateUser,
+        input: better_auth_core::FieldMap,
     ) -> AuthResult<Option<better_auth_core::wire::UserView>> {
         let record = self
             .store
-            .create_user_with_connection(&self.tx, Some((&self.tx, self)), input)
+            .create_user_fields_with_connection(&self.tx, Some((&self.tx, self)), input)
             .await?;
         Ok(record)
     }

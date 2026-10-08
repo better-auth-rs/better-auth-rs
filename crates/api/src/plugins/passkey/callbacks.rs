@@ -77,11 +77,12 @@ impl<S: AuthSchema> PasskeyUsers for Users<'_, S> {
             None => self.ctx.database.delete_user(id).await,
         }
     }
-    async fn create_user(&self, mut user: CreateUser) -> AuthResult<Option<UserView>> {
+    async fn create_user(&self, user: CreateUser) -> AuthResult<Option<UserView>> {
+        let mut user = user.into_user_fields()?;
         crate::plugins::helpers::apply_default_role(self.ctx, &mut user);
         let user = match self.transaction {
-            Some(tx) => tx.create_user_optional(user).await?,
-            None => self.ctx.database.create_user_optional(user).await?,
+            Some(tx) => tx.create_user_fields_optional(user).await?,
+            None => self.ctx.database.create_user_fields_optional(user).await?,
         };
         match user {
             Some(user) => self.ctx.internal_user_view(&user).await.map(Some),
@@ -110,7 +111,9 @@ impl<'a> PasskeyEndpoint<'a> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PasskeyRegistrationUser {
-    pub id: String,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    pub id: SchemaValue<String>,
+    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
     pub name: better_auth_core::SchemaValue<String>,
     #[serde(
         default,

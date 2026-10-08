@@ -177,7 +177,7 @@ impl Runtime {
         } else {
             user
         };
-        let updated = user.updated_at.milliseconds() as i64;
+        let updated = user.updated_at.date_milliseconds()? as i64;
         if enabled {
             assert!((update_started..=Utc::now().timestamp_millis()).contains(&updated));
         }

@@ -212,6 +212,100 @@ async fn sqlite_core_registration_keeps_application_adapter_precedence() -> Auth
 }
 
 #[tokio::test]
+async fn builder_retains_application_user_fields_before_plugin_merge() -> AuthResult<()> {
+    for application_enabled in [false, true] {
+        let mut config = config();
+        let default = |value: &'static str| UserFieldConfig {
+            default_value: Some(value.into()),
+            ..Default::default()
+        };
+        if application_enabled {
+            config.user.fields_mut().extend([
+                ("last".into(), default("application-last")),
+                ("shared".into(), default("application-shared")),
+                ("2".into(), default("two")),
+                ("1".into(), default("one")),
+                ("absent".into(), UserFieldConfig::default()),
+            ]);
+        }
+        let defaults = Arc::new(Mutex::new(0));
+        let observed_defaults = defaults.clone();
+        let mut plugin = fields("pluginOnly", default("plugin-only"));
+        let _ = plugin.fields_mut().insert(
+            "shared".into(),
+            UserFieldConfig {
+                default_value_fn: Some(Arc::new(move || {
+                    *trace_lock(&observed_defaults)? += 1;
+                    Ok("plugin-shared".into())
+                })),
+                ..Default::default()
+            },
+        );
+        let auth = BetterAuth::new(config)
+            .store_arc(memory())
+            .plugin(Fields(vec![(EntityRole::User, plugin)]))
+            .build()
+            .await?;
+        let context = auth.context();
+        let declarations = &required(
+            context
+                .extensions
+                .get::<better_auth_core::plugin_runtime::ApplicationUserFields>(),
+            "Builder did not retain application user declarations",
+        )?
+        .0;
+        let expected_names: &[&str] = if application_enabled {
+            &["last", "shared", "2", "1", "absent"]
+        } else {
+            &[]
+        };
+        assert_eq!(
+            declarations
+                .fields()
+                .keys()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+            expected_names
+        );
+        assert_eq!(
+            declarations
+                .fields()
+                .get("shared")
+                .and_then(|field| field.default_value.as_ref()),
+            application_enabled.then_some(&FieldValue::from("application-shared"))
+        );
+        let parsed = context.parse_user_input(&Default::default(), true)?;
+        assert_eq!(
+            parsed.get("shared"),
+            Some(&FieldValue::from("plugin-shared"))
+        );
+        assert_eq!(
+            parsed.get("pluginOnly"),
+            Some(&FieldValue::from("plugin-only"))
+        );
+        let selected = context.select_application_user_fields(&parsed);
+        let expected: FieldMap = if application_enabled {
+            [
+                ("1".into(), "one".into()),
+                ("2".into(), "two".into()),
+                ("last".into(), "application-last".into()),
+                ("shared".into(), "plugin-shared".into()),
+            ]
+            .into()
+        } else {
+            FieldMap::new()
+        };
+        assert_eq!(selected, expected);
+        assert_eq!(
+            selected.keys().collect::<Vec<_>>(),
+            expected.keys().collect::<Vec<_>>()
+        );
+        assert_eq!(*trace_lock(&defaults)?, 1);
+    }
+    Ok(())
+}
+
+#[tokio::test]
 async fn native_replacements_initialize_while_unsupported_model_roles_fail() {
     let cases = [
         (

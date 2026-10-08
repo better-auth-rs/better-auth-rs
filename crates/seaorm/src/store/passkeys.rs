@@ -115,7 +115,10 @@ where
             .pop())
     }
 
-    async fn list_passkeys_by_user(&self, user_id: &str) -> AuthResult<Vec<Passkey>> {
+    async fn list_passkeys_by_user_value(
+        &self,
+        user_id: &better_auth_core::FieldValue,
+    ) -> AuthResult<Vec<Passkey>> {
         let models =
             database_operation::<Entity<P::Passkey>, _>(self.config(), "findMany", async {
                 self.connection()
@@ -124,7 +127,7 @@ where
                             .filter(self.plugin_equals::<P::Passkey>(
                                 EntityRole::Passkey,
                                 "userId",
-                                user_id.into(),
+                                user_id.clone(),
                             )?)
                             .limit(super::pagination::default_limit(
                                 self.config(),

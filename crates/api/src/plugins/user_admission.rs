@@ -2,8 +2,8 @@
 
 use super::endpoint_context::EndpointContext;
 use async_trait::async_trait;
+use better_auth_core::FieldMap;
 use better_auth_core::{AuthError, AuthResponse, AuthResult, AuthSchema, CreateUser};
-use better_auth_core::{FieldMap, FieldValue};
 use serde::Serialize;
 use serde_json::Value;
 use std::sync::Arc;
@@ -169,91 +169,26 @@ pub(crate) async fn validate<S: AuthSchema>(
 }
 
 pub(crate) async fn validate_create<S: AuthSchema>(
-    input: &CreateUser,
+    input: &FieldMap,
     source: UserValidationSource,
     endpoint: &EndpointContext<'_, S>,
 ) -> Result<(), UserValidationRejection> {
-    if endpoint
-        .auth
-        .extensions
-        .get::<Arc<dyn ValidateUserInfo<S>>>()
-        .is_none()
-    {
-        return Ok(());
-    }
-    let mut user = input.additional_fields.clone();
-    for (name, field) in [("name", &input.name), ("image", &input.image)] {
-        let value = field.field_value();
-        if value.is_undefined() {
-            continue;
-        }
-        let _ = user.insert(name.into(), value);
-    }
-    for (name, value) in [
-        ("id", input.id.as_ref()),
-        ("email", input.email.as_ref()),
-        ("phoneNumber", input.phone_number.as_ref()),
-        ("role", input.role.as_ref()),
-    ] {
-        if let Some(value) = value {
-            let _ = user.insert(
-                name.into(),
-                FieldValue::String(if name == "email" {
-                    value.to_lowercase()
-                } else {
-                    value.clone()
-                }),
-            );
-        }
-    }
-    for (name, value) in [
-        ("username", &input.username),
-        ("displayUsername", &input.display_username),
-    ] {
-        if let Some(value) = value {
-            let _ = user.insert(
-                name.into(),
-                value
-                    .clone()
-                    .map(FieldValue::String)
-                    .unwrap_or(FieldValue::Null),
-            );
-        }
-    }
-    for (name, value) in [
-        ("banned", input.banned),
-        ("emailVerified", input.email_verified),
-        ("isAnonymous", input.is_anonymous),
-        ("phoneNumberVerified", input.phone_number_verified),
-    ] {
-        if let Some(value) = value {
-            let _ = user.insert(name.into(), FieldValue::Bool(value));
-        }
-    }
-    if let Some(value) = &input.ban_reason {
-        let _ = user.insert("banReason".into(), value.clone().into());
-    }
-    if let Some(value) = &input.ban_expires {
-        let _ = user.insert("banExpires".into(), FieldValue::Date(value.clone()));
-    }
-    if let Some(value) = &input.metadata {
-        let _ = user.insert("metadata".into(), value.clone());
-    }
-    let now = chrono::Utc::now();
-    let _ = user.entry("createdAt".into()).or_insert(FieldValue::Date(
-        input.created_at.clone().unwrap_or_else(|| now.into()),
-    ));
-    let _ = user.entry("updatedAt".into()).or_insert(FieldValue::Date(
-        input.updated_at.clone().unwrap_or_else(|| now.into()),
-    ));
-    validate(UserValidationData { user, source }, endpoint).await
+    validate(
+        UserValidationData {
+            user: input.clone(),
+            source,
+        },
+        endpoint,
+    )
+    .await
 }
 
 pub(crate) async fn create_user_optional<S: AuthSchema>(
-    mut input: CreateUser,
+    input: CreateUser,
     method: &str,
     endpoint: &EndpointContext<'_, S>,
 ) -> AuthResult<Option<better_auth_core::wire::UserView>> {
+    let mut input = input.into_user_fields()?;
     validate_create(
         &input,
         UserValidationSource::new(method, UserValidationAction::CreateUser),
@@ -263,7 +198,17 @@ pub(crate) async fn create_user_optional<S: AuthSchema>(
     .map_err(UserValidationRejection::into_auth_error)?;
     super::helpers::apply_default_role(endpoint.auth, &mut input);
     match endpoint.transaction {
-        Some(transaction) => transaction.create_user_optional(input).await,
-        None => endpoint.auth.database.create_user_optional(input).await,
+        Some(transaction) => transaction.create_user_fields_optional(input).await,
+        None => {
+            endpoint
+                .auth
+                .database
+                .create_user_fields_optional(input)
+                .await
+        }
     }
 }
+
+#[cfg(test)]
+#[path = "user_admission_tests.rs"]
+mod tests;

@@ -248,11 +248,11 @@ impl<S: AuthSchema> UserStore<S> for SecondaryStore<S> {
         self.queue_user_session_refresh(user.clone(), None).await?;
         Ok(user)
     }
-    async fn create_user_optional(
+    async fn create_user_fields_optional(
         &self,
-        input: CreateUser,
+        input: crate::FieldMap,
     ) -> AuthResult<Option<crate::wire::UserView>> {
-        self.inner.create_user_optional(input).await
+        self.inner.create_user_fields_optional(input).await
     }
     async fn create_user(&self, input: CreateUser) -> AuthResult<crate::wire::UserView> {
         self.inner.create_user(input).await

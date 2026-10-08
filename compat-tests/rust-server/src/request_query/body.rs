@@ -188,7 +188,9 @@ impl<S: AuthSchema> DatabaseHooks<S> for BodyTrace {
         &self,
         _: &mut better_auth_core::FieldMap,
         context: &DatabaseHookContext<'_, S>,
-    ) -> AuthResult<better_auth_core::store::database_hooks::DatabaseHookUpdate<better_auth_core::FieldMap>> {
+    ) -> AuthResult<
+        better_auth_core::store::database_hooks::DatabaseHookUpdate<better_auth_core::FieldMap>,
+    > {
         self.record("user.before", context.request.as_ref(), None);
         Ok(better_auth_core::store::database_hooks::DatabaseHookUpdate::Continue)
     }
@@ -353,7 +355,7 @@ impl better_auth::plugins::SendMagicLink for BodyTrace {
 impl better_auth::plugins::api_key::ApiKeyDefaultPermissions for BodyTrace {
     async fn permissions(
         &self,
-        _: &str,
+        _: &better_auth::FieldValue,
         _: better_auth::plugins::api_key::ApiKeyEndpoint<'_>,
     ) -> AuthResult<better_auth::plugins::api_key::ApiKeyPermissions> {
         self.current("key.permissions", None);

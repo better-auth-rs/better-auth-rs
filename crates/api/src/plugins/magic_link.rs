@@ -256,7 +256,8 @@ impl MagicLinkPlugin {
                 let mut user = CreateUser::new()
                     .with_email(proof.email)
                     .with_name(proof.name.unwrap_or_default())
-                    .with_email_verified(true);
+                    .with_email_verified(true)
+                    .into_user_fields()?;
 
                 let endpoint = super::endpoint_context::EndpointContext::new(
                     Some(req),
@@ -289,7 +290,7 @@ impl MagicLinkPlugin {
                     return Ok(redirect(target));
                 }
                 apply_default_role(ctx, &mut user);
-                let Some(user) = ctx.database.create_user_optional(user).await? else {
+                let Some(user) = ctx.database.create_user_fields_optional(user).await? else {
                     return Ok(error_redirect(error_callback, "failed_to_create_user"));
                 };
                 user

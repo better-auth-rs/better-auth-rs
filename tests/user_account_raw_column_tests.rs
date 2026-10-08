@@ -27,8 +27,11 @@ use std::sync::{Arc, Mutex};
 )]
 mod contract;
 
+#[path = "support/user_account_raw_server.rs"]
+mod server;
+
 type Events = Arc<Mutex<Vec<Value>>>;
-type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
+type TestResult<T = ()> = Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
 fn config(cases: &Value, joins: bool, reject: bool, events: &Events) -> AuthConfig {
     let mut config = AuthConfig::default();
@@ -76,11 +79,16 @@ fn config(cases: &Value, joins: bool, reject: bool, events: &Events) -> AuthConf
     config
 }
 
-async fn seed(database: &DatabaseConnection) -> TestResult {
+async fn seed_records(database: &DatabaseConnection) -> TestResult {
+    let cases: Value =
+        serde_json::from_str(include_str!("fixtures/user-account-raw-column-cases.json"))?;
+    let date: chrono::DateTime<chrono::Utc> = cases["seedDate"].as_str().unwrap().parse()?;
     let writer = SeaOrmStore::<BundledSchema>::new(AuthConfig::default(), database.clone());
     let _ = writer
         .create_user(CreateUser {
             id: Some(contract::OWNER.into()),
+            created_at: Some(date.into()),
+            updated_at: Some(date.into()),
             ..CreateUser::new()
                 .with_name("Owner")
                 .with_email(contract::EMAIL)
@@ -94,9 +102,16 @@ async fn seed(database: &DatabaseConnection) -> TestResult {
             account_id: "subject".into(),
             access_token: Some("stored-token".into()).into(),
             password: Some("stored-password".into()).into(),
+            created_at: date.into(),
+            updated_at: date.into(),
             ..Default::default()
         })
         .await?;
+    Ok(())
+}
+
+async fn seed(database: &DatabaseConnection) -> TestResult {
+    seed_records(database).await?;
     let _ = database
         .execute_unprepared(
             "UPDATE users SET email_verified = 'stored-boolean', created_at = 'not-a-date'",
@@ -122,7 +137,41 @@ async fn snapshot(database: &DatabaseConnection) -> TestResult<Value> {
             &row.try_get::<String>("", "snapshot")?,
         )?);
     }
-    Ok(rows.into())
+    Ok(json!({"selected": rows, "complete": server::complete_storage(database).await?}))
+}
+
+fn expected_record(cases: &Value, fields: &Value, model: &str) -> Value {
+    let mut expected = cases["records"][model].clone();
+    for field in fields
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|field| field["model"] == model)
+    {
+        expected[field["name"].as_str().unwrap()] = field["expected"].clone();
+    }
+    expected
+}
+
+fn assert_complete_record(
+    cases: &Value,
+    fields: &Value,
+    model: &str,
+    record: &FieldMap,
+    label: &str,
+) -> TestResult {
+    let expected = expected_record(cases, fields, model);
+    assert_eq!(
+        contract::observe(&record.clone().into())?,
+        expected,
+        "{label} complete {model}"
+    );
+    assert_eq!(
+        record.keys().collect::<Vec<_>>(),
+        expected.as_object().unwrap().keys().collect::<Vec<_>>(),
+        "{label} complete {model} key order"
+    );
+    Ok(())
 }
 
 async fn read(
@@ -229,6 +278,7 @@ async fn sqlite_raw_user_and_account_columns_reach_callbacks_before_any_typed_de
                     );
                 } else {
                     for (model, record) in result? {
+                        assert_complete_record(&cases, &cases["fields"], model, &record, name)?;
                         for field in cases["fields"]
                             .as_array()
                             .unwrap()

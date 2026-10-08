@@ -40,6 +40,9 @@ impl UsernamePlugin {
             "username".into(),
             UserFieldConfig {
                 required: Some(false),
+                sortable: Some(true),
+                unique: Some(true),
+                returned: Some(true),
                 field_name: config.username_field_name.clone(),
                 transform: Some(FieldTransforms {
                     input: Some(UserFieldTransform::new(move |value| {

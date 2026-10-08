@@ -78,7 +78,7 @@ async fn serial_session_update_ids_reach_the_numeric_column_after_conversion() -
             .one(&database)
             .await?
             .ok_or("Numeric Session update did not persist")?;
-        assert_eq!(row.token, created.token);
+        assert_eq!(&row.token, created.token.typed()?);
         assert_eq!(row.ip_address, Some(format!("input:{input}")));
     }
     Ok(())
@@ -251,7 +251,7 @@ async fn verify_mode(database: DatabaseConnection, mode: IdGeneration) -> TestRe
     );
     assert!(
         auth.store()
-            .get_session(rolled_back.token.typed()?)
+            .get_session(&rolled_back.token)
             .await?
             .is_none()
     );

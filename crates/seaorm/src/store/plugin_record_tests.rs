@@ -13,6 +13,10 @@ use better_auth_core::{
 use sea_orm::Database;
 use std::sync::Arc;
 
+#[expect(
+    unreachable_pub,
+    reason = "SeaORM derives require public fixture entity types"
+)]
 mod keys {
     use sea_orm::entity::prelude::*;
 
@@ -34,6 +38,10 @@ mod keys {
     impl ActiveModelBehavior for ActiveModel {}
 }
 
+#[expect(
+    unreachable_pub,
+    reason = "SeaORM derives require public fixture entity types"
+)]
 mod wallets {
     use sea_orm::entity::prelude::*;
 
@@ -56,6 +64,10 @@ mod wallets {
     impl ActiveModelBehavior for ActiveModel {}
 }
 
+#[expect(
+    unreachable_pub,
+    reason = "SeaORM derives require public fixture entity types"
+)]
 mod merged_api_keys {
     use sea_orm::entity::prelude::*;
 
@@ -74,6 +86,10 @@ mod merged_api_keys {
     impl ActiveModelBehavior for ActiveModel {}
 }
 
+#[expect(
+    unreachable_pub,
+    reason = "SeaORM derives require public fixture entity types"
+)]
 mod merged_passkeys {
     use sea_orm::entity::prelude::*;
 

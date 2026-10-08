@@ -52,7 +52,7 @@ async fn seed_native(
         .database
         .create_passkey(CreatePasskey {
             additional_fields: Default::default(),
-            user_id: owner.id.typed()?.clone(),
+            user_id: owner.id.clone(),
             name: Some("Native authenticator".into()).into(),
             public_key: STANDARD.encode(&authenticator.cose),
             credential_id: URL_SAFE_NO_PAD.encode(CREDENTIAL_ID),

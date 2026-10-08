@@ -221,7 +221,10 @@ impl UserConfig {
         for (name, field) in self.fields() {
             let value = if let Some(value) = input.get(name) {
                 if !field.input() {
-                    if create && let Some(default) = field.default_value()? {
+                    if create
+                        && field.has_storage_default()
+                        && let Some(default) = field.default_value()?
+                    {
                         let _ = parsed.insert(name.clone(), default);
                         continue;
                     }
@@ -233,7 +236,9 @@ impl UserConfig {
                     }
                     continue;
                 }
-                if let Some(validate) = field.input_validator() {
+                if value.is_undefined() {
+                    Some(value.clone())
+                } else if let Some(validate) = field.input_validator() {
                     Some(
                         validate(value.clone()).map_err(|error| AuthError::FieldInput {
                             code: "VALIDATION_ERROR",
@@ -246,8 +251,8 @@ impl UserConfig {
                     Some(value.clone())
                 }
             } else if create {
-                if let Some(default) = field.default_value()? {
-                    Some(default)
+                if field.has_storage_default() {
+                    field.default_value()?
                 } else if field.required == Some(true) {
                     return Err(AuthError::FieldInput {
                         code: "MISSING_FIELD",
@@ -259,7 +264,7 @@ impl UserConfig {
             } else {
                 continue;
             };
-            if let Some(value) = value.filter(|value| !value.is_undefined()) {
+            if let Some(value) = value {
                 let _ = parsed.insert(name.clone(), value);
             }
         }

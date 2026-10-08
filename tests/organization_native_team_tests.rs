@@ -226,8 +226,10 @@ async fn scenario<S: AuthSchema>(
         })
         .await?;
     let trusted = string(case, "mode")? == "trusted";
-    let headers = (!trusted).then(|| {
-        HashMap::from([(
+    let headers = if trusted {
+        None
+    } else {
+        Some(HashMap::from([(
             "cookie".into(),
             format!(
                 "better-auth.session_token={}",
@@ -236,8 +238,8 @@ async fn scenario<S: AuthSchema>(
                     auth.config().signing_secret()
                 )
             ),
-        )])
-    });
+        )]))
+    };
     let mut body = json!({"name":"New","label":"sent","ignored":true});
     if trusted && let Some(body) = body.as_object_mut() {
         let _ = body.insert("organizationId".into(), json!("org"));

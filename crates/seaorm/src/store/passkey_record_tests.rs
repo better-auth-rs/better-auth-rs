@@ -46,7 +46,7 @@ async fn raw_passkey_records_exclude_undeclared_legacy_fields() -> AuthResult<()
     let created = store
         .create_passkey(CreatePasskey {
             additional_fields: Default::default(),
-            user_id: owner,
+            user_id: owner.into(),
             name: Some("Before".into()).into(),
             credential_id: "legacy-credential-id".into(),
             public_key: "public-key".into(),

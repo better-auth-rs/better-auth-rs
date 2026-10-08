@@ -1,8 +1,30 @@
 import { expect, test } from "bun:test";
 import { betterAuth } from "better-auth";
 import { username } from "better-auth/plugins";
+import { parseInputData } from "better-auth/db";
 import { cases, observe, options, owner, revive, user } from "./user-runtime-contract";
 import inputCases from "../../../tests/fixtures/user-runtime-input-cases.json";
+
+test("Public input keeps own undefined and skips validators and transforms only for undefined input", () => {
+  for (const action of ["create", "update"] as const) {
+    const events: string[] = [];
+    const fields = {
+      ownValidator: { type: "string", validator: { input: { "~standard": { validate() { throw new Error("undefined validator ran"); } } } } },
+      ownTransform: { type: "string", transform: { input() { throw new Error("undefined transform ran"); } } },
+      validated: { type: "string", validator: { input: { "~standard": { validate() { events.push("validator"); return { value: undefined }; } } } } },
+      transformed: { type: "string", transform: { input() { events.push("transform"); return undefined; } } },
+      factory: { type: "string", defaultValue() { events.push("factory"); return undefined; } },
+      literal: { type: "string", required: false, defaultValue: undefined },
+    };
+    const parsed = parseInputData({ ownValidator: undefined, ownTransform: undefined, validated: "input", transformed: "input" }, { action, fields });
+    const expected = Object.assign(Object.create(null), { ownValidator: undefined, ownTransform: undefined, validated: undefined, transformed: undefined });
+    if (action === "create") expected.factory = undefined;
+    expect(parsed).toStrictEqual(expected);
+    expect(Object.keys(parsed)).toStrictEqual(Object.keys(expected));
+    expect(events).toStrictEqual(action === "create" ? ["validator", "transform", "factory"] : ["validator", "transform"]);
+  }
+  expect(() => parseInputData({}, { action: "create", fields: { required: { type: "string", required: true, defaultValue: undefined } } })).toThrow("required is required");
+});
 
 for (const create of [true, false]) {
   for (const sample of inputCases.usernames) {
@@ -61,6 +83,10 @@ for (const create of [true, false]) {
       expect(events.map(event => event[0])).toStrictEqual(["before", "after"]);
       expect(observe(events[0][1][field.name])).toStrictEqual(observe(input[field.name]));
       expect(observe(events[1][1][field.name])).toStrictEqual(observe(expected));
+      const expectedRecord = observe({ ...input, [field.name]: expected });
+      expect(observe(result)).toStrictEqual(expectedRecord);
+      expect(observe(memory.user[0])).toStrictEqual(expectedRecord);
+      expect(observe(events[1][1])).toStrictEqual(expectedRecord);
     });
   }
 
@@ -87,6 +113,10 @@ for (const create of [true, false]) {
       expect(observe(memory.user[0][name])).toStrictEqual(observe(value));
       expect(observe(events[2][1][name])).toStrictEqual(observe(value));
       expect(observe(events[3][1][name])).toStrictEqual(observe(value));
+    }
+    const expectedRecord = observe({ ...input, ...first, ...second });
+    for (const record of [result, memory.user[0], events[2][1], events[3][1]]) {
+      expect(observe(record)).toStrictEqual(expectedRecord);
     }
     expect(events[0][1].email).toBe(input.email);
     expect(observe(events[1][1].email)).toStrictEqual(observe(create ? first.email : input.email));

@@ -158,12 +158,17 @@ pub trait AuthTransaction<S: AuthSchema>:
     /// Create a user while preserving cancellation and the active transaction.
     async fn create_user_optional(
         &self,
-        _input: CreateUser,
+        input: CreateUser,
     ) -> AuthResult<Option<crate::wire::UserView>> {
-        Err(AuthError::config(
-            "The store must support nullable transactional user creation",
-        ))
+        self.create_user_fields_optional(input.into_user_fields()?)
+            .await
     }
+    /// Create a user from prepared internal-adapter fields without repeating input preparation.
+    /// Preserve this transaction and the complete database-hook lifecycle.
+    async fn create_user_fields_optional(
+        &self,
+        input: crate::FieldMap,
+    ) -> AuthResult<Option<crate::wire::UserView>>;
     /// Preserve a nullable Account creation result in this transaction.
     async fn create_account_optional(
         &self,
@@ -443,12 +448,17 @@ pub trait UserStore<S: AuthSchema>: Send + Sync {
     /// Return None when a before-create hook cancels the write.
     async fn create_user_optional(
         &self,
-        _input: CreateUser,
+        input: CreateUser,
     ) -> AuthResult<Option<crate::wire::UserView>> {
-        Err(AuthError::config(
-            "The store must support nullable user creation",
-        ))
+        self.create_user_fields_optional(input.into_user_fields()?)
+            .await
     }
+    /// Create a user from prepared internal-adapter fields without repeating input preparation.
+    /// Run the same database hooks, adapter policies, write, and after hooks as convenience creation.
+    async fn create_user_fields_optional(
+        &self,
+        input: crate::FieldMap,
+    ) -> AuthResult<Option<crate::wire::UserView>>;
     async fn get_user_by_id(&self, id: &str) -> AuthResult<Option<crate::wire::UserView>>;
     /// Query the adapter ID field without the internal adapter's falsy-ID guard.
     /// Pure secondary session creation uses this lookup before publishing its user snapshot.
@@ -1443,9 +1453,26 @@ pub trait ApiKeyStore: Send + Sync {
         &self,
         reference_id: &str,
         sort: Option<(&str, &str)>,
+    ) -> AuthResult<Vec<ApiKey>> {
+        self.find_api_keys_by_reference_value(&reference_id.into(), sort)
+            .await
+    }
+    /// Query a native reference value through the selected field declaration.
+    async fn find_api_keys_by_reference_value(
+        &self,
+        reference_id: &crate::FieldValue,
+        sort: Option<(&str, &str)>,
     ) -> AuthResult<Vec<ApiKey>>;
     /// Count all matching API keys without applying the adapter's default limit.
-    async fn count_api_keys_by_reference(&self, reference_id: &str) -> AuthResult<u64>;
+    async fn count_api_keys_by_reference(&self, reference_id: &str) -> AuthResult<u64> {
+        self.count_api_keys_by_reference_value(&reference_id.into())
+            .await
+    }
+    /// Count a native reference value through the selected field declaration.
+    async fn count_api_keys_by_reference_value(
+        &self,
+        reference_id: &crate::FieldValue,
+    ) -> AuthResult<u64>;
     async fn update_api_key(
         &self,
         id: &crate::SchemaValue<String>,
@@ -1542,7 +1569,15 @@ pub trait PasskeyStore: Send + Sync {
         &self,
         credential_id: &str,
     ) -> AuthResult<Option<Passkey>>;
-    async fn list_passkeys_by_user(&self, user_id: &str) -> AuthResult<Vec<Passkey>>;
+    /// Query an ordinary string owner through the native-value path.
+    async fn list_passkeys_by_user(&self, user_id: &str) -> AuthResult<Vec<Passkey>> {
+        self.list_passkeys_by_user_value(&user_id.into()).await
+    }
+    /// Query the native owner value without string coercion.
+    async fn list_passkeys_by_user_value(
+        &self,
+        user_id: &crate::FieldValue,
+    ) -> AuthResult<Vec<Passkey>>;
     async fn update_passkey_authentication(
         &self,
         id: &crate::SchemaValue<String>,

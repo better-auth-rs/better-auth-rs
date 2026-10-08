@@ -28,6 +28,7 @@ impl DatabaseHooks<StatelessSchema> for AfterCreate {
 fn account(id: &str, password: &str) -> AccountView {
     AccountView {
         additional_fields: Default::default(),
+        field_order: Default::default(),
         id: id.into(),
         account_id: id.into(),
         provider_id: "credential".into(),

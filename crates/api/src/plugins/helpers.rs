@@ -3,7 +3,7 @@
 //! Extracted to avoid duplicating common patterns across plugins (DRY).
 
 use better_auth_core::entity::AuthUser;
-use better_auth_core::{AuthContext, AuthError, AuthRequest, AuthResult, CreateUser, UpdateUser};
+use better_auth_core::{AuthContext, AuthError, AuthRequest, AuthResult, FieldMap, UpdateUser};
 use chrono::Utc;
 
 mod user_input;
@@ -70,7 +70,7 @@ pub async fn get_owned_api_key(
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     config: &crate::plugins::api_key::ApiKeyConfig,
     key_id: &str,
-    user_id: &str,
+    user_id: &better_auth_core::FieldValue,
     action: &str,
 ) -> AuthResult<better_auth_core::ApiKey> {
     use crate::plugins::api_key::{ApiKeyReferences, config_id_matches};
@@ -86,7 +86,7 @@ pub async fn get_owned_api_key(
 
     match config.references {
         ApiKeyReferences::User => {
-            if api_key.reference_id != user_id {
+            if !api_key.reference_id.field_value().strict_equals(user_id) {
                 return Err(AuthError::not_found("API Key not found"));
             }
         }
@@ -108,7 +108,7 @@ pub async fn get_owned_api_key(
 /// upstream's `checkOrgApiKeyPermission`.
 pub async fn require_org_api_key_permission(
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-    user_id: &str,
+    user_id: &better_auth_core::FieldValue,
     organization_id: &str,
     action: &str,
 ) -> AuthResult<()> {
@@ -117,7 +117,7 @@ pub async fn require_org_api_key_permission(
 
 async fn require_org_api_key_permission_value(
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-    user_id: &str,
+    user_id: &better_auth_core::FieldValue,
     organization_id: &better_auth_core::FieldValue,
     action: &str,
 ) -> AuthResult<()> {
@@ -141,7 +141,7 @@ async fn require_org_api_key_permission_value(
 
     let Some(member) = ctx
         .database
-        .get_member_value(organization_id, &user_id.into())
+        .get_member_value(organization_id, user_id)
         .await?
     else {
         return Err(api_key_error(ApiKeyErrorCode::UserNotMemberOfOrganization));
@@ -219,21 +219,18 @@ pub async fn user_has_password(
     Ok(get_credential_password_hash(ctx, user).await?.is_some())
 }
 
-/// Apply the configured default admin role to a new user when the caller
-/// didn't set an explicit role.
+/// Apply the configured default admin role when the input has no role property.
 pub fn apply_default_role(
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-    create_user: &mut CreateUser,
+    fields: &mut FieldMap,
 ) {
-    if create_user.role.is_some() {
-        return;
-    }
-
     if let Some(default_role) = ctx
         .get_metadata("admin.default_role")
         .and_then(|value| value.as_str())
     {
-        create_user.role = Some(default_role.to_string());
+        let _ = fields
+            .entry("role".into())
+            .or_insert_with(|| default_role.into());
     }
 }
 

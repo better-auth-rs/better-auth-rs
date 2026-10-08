@@ -12,15 +12,17 @@ use better_auth_core::{
     wire::UserView,
 };
 use serde_json::{Value, json};
-use std::sync::{
-    Arc, Mutex,
-    atomic::{AtomicBool, Ordering},
+use std::{
+    future::Future,
+    pin::Pin,
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 
 type UpdateUserFn = Arc<
-    dyn Fn(UpdateUser) -> futures_util::future::BoxFuture<'static, AuthResult<UserView>>
-        + Send
-        + Sync,
+    dyn Fn(UpdateUser) -> Pin<Box<dyn Future<Output = AuthResult<UserView>> + Send>> + Send + Sync,
 >;
 
 #[derive(Default)]

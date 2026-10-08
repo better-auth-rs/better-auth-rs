@@ -152,7 +152,10 @@ async fn check_update(
         .ok_or("Session update returned no row")?;
     assert_eq!(result.id.typed()?, expected);
     assert_eq!(result.token, "updated-token");
-    assert_eq!(result.updated_at, updated_at.into());
+    assert_eq!(
+        result.updated_at,
+        better_auth_core::FieldDate::from(updated_at)
+    );
     assert_eq!(
         result.additional_fields.get("label"),
         Some(&FieldValue::from("after"))

@@ -180,12 +180,13 @@ run_stage() {
       local create_status=0
       cargo clippy --workspace --locked --features axum,seaorm2,redis-cache -- -D warnings || create_status=1
       # Compile all callers once before commands that would repeat the same compilation failure.
-      if cargo build --workspace --locked --tests --profile test --features axum,seaorm2,redis-cache --keep-going; then
+      if cargo check --workspace --locked --tests --features axum,seaorm2,redis-cache --keep-going; then
         cargo test --locked --no-fail-fast -p better-auth-core -p better-auth-api -p better-auth-seaorm --lib -- \
           session verification database_hooks lifecycle transaction create_readback user_fields user_query wire:: \
           user_column_defaults \
           user_view_preserves_adapter_order_through_cache_and_visibility \
-          plugins::jwt:: plugins::passkey:: plugins::organization:: plugins::test_utils:: \
+          plugins::jwt:: plugins::api_key:: plugins::passkey:: plugins::organization:: plugins::test_utils:: \
+          plugins::user_admission:: \
           plugins::admin:: plugins::email_verification:: plugins::email_password:: \
           plugins::two_factor:: plugins::user_management:: plugins::oauth:: || create_status=1
         cargo test --locked --no-fail-fast --features axum,seaorm2,redis-cache \
@@ -206,6 +207,7 @@ run_stage() {
           --test nullable_user_update_tests --test sql_user_string_output_tests --test sql_user_extra_output_tests \
           --test username_runtime_tests --test email_normalization_tests || create_status=1
         cargo test --locked --features axum,seaorm2,redis-cache --test mysql_create_readback_tests -- --ignored || create_status=1
+        cargo test --locked --features axum,seaorm2,redis-cache --test user_account_raw_column_tests -- --ignored || create_status=1
         cargo test --locked -p better-auth-cli --test generate || create_status=1
         ./scripts/consumer-check.sh --lib --test session_native_values --test user_session_fields || create_status=1
         COMPAT_TEST_PROFILE=passkey-first,passkey-options,email-otp,email-otp-options,magic-link,signup-verification,admin-options,crypto-database,crypto-cookie,identity-context \
@@ -218,6 +220,12 @@ run_stage() {
       bun --no-install test ./compat-tests/reference-server/contracts/user-runtime-output.test.ts \
         ./compat-tests/reference-server/contracts/user-runtime-cache.test.ts \
         ./compat-tests/reference-server/contracts/user-runtime-input.test.ts \
+        ./compat-tests/reference-server/contracts/user-admission-input.test.ts \
+        ./compat-tests/reference-server/contracts/user-synthetic-output.test.ts \
+        ./compat-tests/reference-server/contracts/api-key-actor-reference.test.ts \
+        ./compat-tests/reference-server/contracts/api-key-create-gate.test.ts \
+        ./compat-tests/reference-server/contracts/api-key-permissions-input.test.ts \
+        ./compat-tests/reference-server/contracts/passkey-user-id.test.ts \
         ./compat-tests/reference-server/contracts/user-account-raw-column.test.ts \
         ./compat-tests/reference-server/contracts/account-owner-batch.test.ts \
         ./compat-tests/reference-server/contracts/account-duplicates.test.ts \

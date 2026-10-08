@@ -36,14 +36,12 @@ pub struct SyntheticUserInput {
 /// Customize a synthetic signup user before the public user schema filters the response.
 pub type CustomSyntheticUser = dyn Fn(SyntheticUserInput) -> AuthResult<FieldMap> + Send + Sync;
 
-type SignUpResult = SignUpResponse;
-
 pub(super) fn synthetic_response<S: AuthSchema>(
     body: &SignUpRequest,
     create: &CreateUser,
     config: &EmailPasswordConfig,
     ctx: &AuthContext<S>,
-) -> AuthResult<SignUpResult> {
+) -> AuthResult<SignUpResponse> {
     let now = better_auth_core::FieldDate::from(chrono::Utc::now());
     let mut core = FieldMap::from_iter([
         ("name".into(), body.name.clone().into()),
@@ -62,28 +60,19 @@ pub(super) fn synthetic_response<S: AuthSchema>(
     let data = if let Some(factory) = &config.custom_synthetic_user {
         factory(SyntheticUserInput {
             core_fields: core,
-            additional_fields: create.additional_fields.clone(),
+            additional_fields: ctx.select_application_user_fields(&create.additional_fields),
             id,
         })?
     } else {
         core.extend(create.additional_fields.clone());
-        for (name, value) in [
-            ("username", create.username.as_ref()),
-            ("displayUsername", create.display_username.as_ref()),
-        ] {
-            if let Some(value) = value {
-                let _ = core.insert(name.into(), value.clone().into_field());
-            }
-        }
-        if let Some(phone) = &create.phone_number {
-            let _ = core.insert("phoneNumber".into(), phone.clone().into());
-        }
         let _ = core.insert("id".into(), id.into());
         core
     };
+    let mut user = UserView::synthetic_output(data, ctx.adapter_user_fields(), &ctx.config.user)?;
+    ctx.config.user.filter_returned_fields(&mut user);
     Ok(SignUpResponse {
         token: better_auth_core::FieldValue::Null,
-        user: UserView::synthetic_output(data, &ctx.config.user, &ctx.metadata)?,
+        user,
     })
 }
 
@@ -96,7 +85,7 @@ pub(super) async fn sign_up_core<S: AuthSchema>(
     config: &EmailPasswordConfig,
     req: &AuthRequest,
     ctx: &AuthContext<S>,
-) -> AuthResult<SignUpResult> {
+) -> AuthResult<SignUpResponse> {
     if !config.enable_signup {
         return Err(AuthError::forbidden("User registration is not enabled"));
     }
@@ -160,7 +149,6 @@ pub(super) async fn sign_up_core<S: AuthSchema>(
     let password_hash =
         password_utils::hash_password(ctx.password_policy.hasher.as_ref(), &body.password).await?;
     let synthetic_create = create_user.clone();
-    apply_default_role(ctx, &mut create_user);
     let auto_sign_in = config.auto_sign_in() && !config.require_email_verification;
     let meta = RequestMeta::from_request_with_config(req, &ctx.config.advanced.ip_address);
     let expires_in = if body.remember_me == Some(false) {
@@ -171,7 +159,6 @@ pub(super) async fn sign_up_core<S: AuthSchema>(
     let ip_address = meta.ip_address.clone();
     let user_agent = meta.user_agent.clone();
     let database = ctx.database.clone();
-    let transaction_database = database.clone();
     let user_config = ctx.config.user.clone();
     let adapter_user_config = ctx.adapter_user_fields().clone();
     let user_metadata = ctx.metadata.clone();
@@ -182,145 +169,157 @@ pub(super) async fn sign_up_core<S: AuthSchema>(
     let dont_remember = body.remember_me == Some(false);
     let admission_context = ctx.clone();
     let admission_request = req.clone();
-    let mut admission_input = synthetic_create.clone();
-    admission_input.email_verified = Some(false);
-    let result: Option<SignUpResult> =
-        better_auth_core::store::transaction(database.as_ref(), move |tx| {
-            let _database = transaction_database.clone();
-            Box::pin(async move {
-                let mut endpoint = crate::plugins::endpoint_context::EndpointContext::new(
-                    Some(&admission_request),
-                    better_auth_core::FieldValue::from_json(endpoint_body)?,
-                    &admission_context,
-                );
-                endpoint.transaction = Some(tx);
-                let admitted = crate::plugins::user_admission::validate_create(
-                    &admission_input,
+    let signup_body = body.clone();
+    let signup_config = config.clone();
+    better_auth_core::store::transaction(database.as_ref(), move |tx| {
+        Box::pin(async move {
+            let mut endpoint = crate::plugins::endpoint_context::EndpointContext::new(
+                Some(&admission_request),
+                better_auth_core::FieldValue::from_json(endpoint_body)?,
+                &admission_context,
+            );
+            endpoint.transaction = Some(tx);
+            let creation = async {
+                let mut create_user = create_user.into_user_fields()?;
+                // Signup supplies an image property even when the HTTP body omits the value.
+                let _ = create_user
+                    .entry("image".into())
+                    .or_insert(better_auth_core::FieldValue::Undefined);
+                let _ = create_user.insert("emailVerified".into(), false.into());
+                crate::plugins::user_admission::validate_create(
+                    &create_user,
                     crate::plugins::user_admission::UserValidationSource::new(
                         "email-password",
                         crate::plugins::user_admission::UserValidationAction::CreateUser,
                     ),
                     &endpoint,
                 )
-                .await;
-                if let Err(error) = admitted {
-                    if protect_enumeration {
-                        return Ok(None);
-                    }
-                    return Err(error.into_auth_error());
-                }
-                let user = match tx.create_user_optional(create_user).await {
-                    Ok(Some(user)) => user,
-                    Ok(None) => {
-                        return Err(AuthError::Upstream {
-                            status: 400,
-                            code: "FAILED_TO_CREATE_USER",
-                            message: "Failed to create user",
-                        });
-                    }
-                    Err(error) if protect_enumeration && error.status_code() == 403 => {
-                        return Ok(None);
-                    }
-                    Err(AuthError::Database(_)) => {
-                        return Err(AuthError::UnprocessableEntity(
-                            "Failed to create user".to_string(),
-                        ));
-                    }
-                    Err(error) => return Err(error),
-                };
-
-                let _ = tx
-                    .create_account_optional(CreateAccount {
-                        user_id: user.id().into_owned(),
-                        account_id: user.id().into_owned(),
-                        provider_id: ("credential".to_string()).into(),
-                        access_token: Default::default(),
-                        refresh_token: Default::default(),
-                        id_token: Default::default(),
-                        access_token_expires_at: Default::default(),
-                        refresh_token_expires_at: Default::default(),
-                        scope: Default::default(),
-                        password: (Some(password_hash.clone()))
-                            .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
-                            .unwrap_or_default(),
-                        ..Default::default()
+                .await
+                .map_err(
+                    crate::plugins::user_admission::UserValidationRejection::into_auth_error,
+                )?;
+                apply_default_role(&admission_context, &mut create_user);
+                tx.create_user_fields_optional(create_user)
+                    .await?
+                    .ok_or(AuthError::Upstream {
+                        status: 400,
+                        code: "FAILED_TO_CREATE_USER",
+                        message: "Failed to create user",
                     })
+            }
+            .await;
+            let user = match creation {
+                Ok(user) => user,
+                Err(error) if error.is_api_error() => {
+                    if protect_enumeration && error.status_code() == 403 {
+                        return synthetic_response(
+                            &signup_body,
+                            &synthetic_create,
+                            &signup_config,
+                            &admission_context,
+                        );
+                    }
+                    return Err(error);
+                }
+                Err(error) => {
+                    admission_context.config.logger.error(
+                        "Failed to create user",
+                        &[better_auth_core::observability::LogArgument::Error(&error)],
+                    );
+                    return Err(AuthError::Upstream {
+                        status: 422,
+                        code: "FAILED_TO_CREATE_USER",
+                        message: "Failed to create user",
+                    });
+                }
+            };
+
+            let _ = tx
+                .create_account_optional(CreateAccount {
+                    user_id: user.id().into_owned(),
+                    account_id: user.id().into_owned(),
+                    provider_id: ("credential".to_string()).into(),
+                    access_token: Default::default(),
+                    refresh_token: Default::default(),
+                    id_token: Default::default(),
+                    access_token_expires_at: Default::default(),
+                    refresh_token_expires_at: Default::default(),
+                    scope: Default::default(),
+                    password: (Some(password_hash.clone()))
+                        .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
+                        .unwrap_or_default(),
+                    ..Default::default()
+                })
+                .await?;
+
+            if let Some(verification) = EmailVerificationPlugin::from_context(&admission_context) {
+                verification
+                    .send_verification_on_sign_up(
+                        &user,
+                        require_email_verification,
+                        signup_callback_url.as_deref(),
+                        &endpoint,
+                    )
                     .await?;
+            }
 
-                if let Some(verification) =
-                    EmailVerificationPlugin::from_context(&admission_context)
-                {
-                    verification
-                        .send_verification_on_sign_up(
-                            &user,
-                            require_email_verification,
-                            signup_callback_url.as_deref(),
-                            &endpoint,
-                        )
-                        .await?;
-                }
+            if auto_sign_in {
+                let session = tx
+                    .create_session_optional(CreateSession {
+                        inherited_fields: Default::default(),
+                        additional_fields: Default::default(),
+                        user_id: user.id().into_owned(),
+                        expires_at: (chrono::Utc::now() + expires_in).into(),
+                        ip_address,
+                        user_agent,
+                        impersonated_by: None,
+                        active_organization_id: None,
+                    })
+                    .await?
+                    .ok_or(AuthError::Upstream {
+                        status: 400,
+                        code: "FAILED_TO_CREATE_SESSION",
+                        message: "Failed to create session",
+                    })?;
+                let token = session.token().field_value();
 
-                if auto_sign_in {
-                    let session = tx
-                        .create_session_optional(CreateSession {
-                            inherited_fields: Default::default(),
-                            additional_fields: Default::default(),
-                            user_id: user.id().into_owned(),
-                            expires_at: (chrono::Utc::now() + expires_in).into(),
-                            ip_address,
-                            user_agent,
-                            impersonated_by: None,
-                            active_organization_id: None,
-                        })
-                        .await?
-                        .ok_or(AuthError::Upstream {
-                            status: 400,
-                            code: "FAILED_TO_CREATE_SESSION",
-                            message: "Failed to create session",
-                        })?;
-                    let token = session.token().field_value();
-
-                    let manager = admission_context.session_manager();
-                    let data = manager.internal_data(&user, &session).await?;
-                    manager
-                        .set_session_cookie_in_transaction(
-                            &admission_request,
-                            data,
-                            Some(dont_remember),
-                            tx,
-                        )
-                        .await?;
-                    Ok(Some(SignUpResponse {
-                        token,
-                        user: UserView::with_field_policies(
-                            &user,
-                            &adapter_user_config,
-                            &user_config,
-                            &user_metadata,
-                            supports_native_json,
-                        )
-                        .await?
-                        .into(),
-                    }))
-                } else {
-                    Ok(Some(SignUpResponse {
-                        token: better_auth_core::FieldValue::Null,
-                        user: UserView::with_field_policies(
-                            &user,
-                            &adapter_user_config,
-                            &user_config,
-                            &user_metadata,
-                            supports_native_json,
-                        )
-                        .await?
-                        .into(),
-                    }))
-                }
-            })
+                let manager = admission_context.session_manager();
+                let data = manager.internal_data(&user, &session).await?;
+                manager
+                    .set_session_cookie_in_transaction(
+                        &admission_request,
+                        data,
+                        Some(dont_remember),
+                        tx,
+                    )
+                    .await?;
+                Ok(SignUpResponse {
+                    token,
+                    user: UserView::with_field_policies(
+                        &user,
+                        &adapter_user_config,
+                        &user_config,
+                        &user_metadata,
+                        supports_native_json,
+                    )
+                    .await?
+                    .into(),
+                })
+            } else {
+                Ok(SignUpResponse {
+                    token: better_auth_core::FieldValue::Null,
+                    user: UserView::with_field_policies(
+                        &user,
+                        &adapter_user_config,
+                        &user_config,
+                        &user_metadata,
+                        supports_native_json,
+                    )
+                    .await?
+                    .into(),
+                })
+            }
         })
-        .await?;
-    let Some(response) = result else {
-        return synthetic_response(body, &synthetic_create, config, ctx);
-    };
-    Ok(response)
+    })
+    .await
 }

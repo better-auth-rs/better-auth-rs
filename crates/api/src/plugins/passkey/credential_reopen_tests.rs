@@ -25,6 +25,9 @@ mod native_boundary_tests;
 #[path = "admission_authentication_tests.rs"]
 mod admission_authentication_tests;
 
+#[path = "user_id_tests.rs"]
+mod user_id_tests;
+
 mod native {
     use better_auth_seaorm::{
         AuthEntity,
@@ -152,6 +155,7 @@ async fn route(
         "/passkey/verify-authentication" => {
             plugin.handle_verify_authentication(request, &ctx).await?
         }
+        "/passkey/list-user-passkeys" => plugin.handle_list_user_passkeys(request, &ctx).await?,
         "/passkey/update-passkey" => plugin.handle_update_passkey(request, &ctx).await?,
         "/passkey/delete-passkey" => plugin.handle_delete_passkey(request, &ctx).await?,
         _ => return Err(AuthError::internal("Unknown Passkey fixture route")),
@@ -303,17 +307,16 @@ async fn native_sqlite_credential_authenticates_after_reopen() -> TestResult {
     let mut advanced = initial;
     advanced.counter = 1.into();
     assert_eq!(fixture.stored().await?, advanced);
-    for (path, body, message) in [
+    for (path, body, expected) in [
         (
             "/passkey/update-passkey",
             json!({"id":advanced.id,"name":"Hijacked"}),
-            "You are not allowed to register this passkey",
+            Some(json!({
+                "code": "YOU_ARE_NOT_ALLOWED_TO_REGISTER_THIS_PASSKEY",
+                "message": "You are not allowed to register this passkey"
+            })),
         ),
-        (
-            "/passkey/delete-passkey",
-            json!({"id":advanced.id}),
-            "Unauthorized",
-        ),
+        ("/passkey/delete-passkey", json!({"id":advanced.id}), None),
     ] {
         let result = fixture
             .route(&request(
@@ -327,8 +330,13 @@ async fn native_sqlite_credential_authenticates_after_reopen() -> TestResult {
             Err(error) => error,
             Ok(_) => return Err("A different owner changed the persisted credential".into()),
         };
-        assert_eq!(error.status_code(), 403);
-        assert_eq!(error.to_string(), message);
+        assert_eq!(error.status_code(), 401);
+        let body = error.to_auth_response().body.bytes()?.into_owned();
+        if let Some(expected) = expected {
+            assert_eq!(serde_json::from_slice::<Value>(&body)?, expected);
+        } else {
+            assert!(body.is_empty());
+        }
         assert_eq!(fixture.stored().await?, advanced);
     }
     fixture.close().await?;
@@ -409,7 +417,7 @@ async fn native_authentication_uses_projected_counter_relational_semantics() -> 
     let passkey = raw
         .create_passkey(CreatePasskey {
             additional_fields: Default::default(),
-            user_id: owner.id.typed()?.clone(),
+            user_id: owner.id.clone(),
             name: None.into(),
             public_key: STANDARD.encode(&authenticator.cose),
             credential_id: URL_SAFE_NO_PAD.encode(CREDENTIAL_ID),

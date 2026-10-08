@@ -60,6 +60,10 @@ impl<S: AuthSchema> PluginRuntime<S> {
 #[derive(Clone)]
 pub struct AdapterUserFields(pub UserConfig);
 
+/// Application user declarations before plugin field policies are merged.
+#[derive(Clone)]
+pub struct ApplicationUserFields(pub UserConfig);
+
 pub fn resolve_user_fields(
     application: &UserConfig,
     plugins: UserConfig,

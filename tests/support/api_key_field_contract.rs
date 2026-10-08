@@ -169,7 +169,7 @@ pub(crate) fn input() -> CreateApiKey {
         rate_limit_max: Some(3.0),
         refill_interval: Some(60_000.0),
         refill_amount: Some(10.0),
-        permissions: None,
+        permissions: None.into(),
         metadata: None,
         enabled: true.into(),
         additional_fields: [

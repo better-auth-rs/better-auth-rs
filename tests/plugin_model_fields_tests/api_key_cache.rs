@@ -3,7 +3,6 @@ use better_auth::plugins::api_key::{ApiKeyConfig, ApiKeyPlugin, ApiKeyStorage};
 use better_auth::server_api::{CreateKeyOptions, EndpointInput, UpdateKeyOptions};
 use better_auth_core::{
     HttpMethod,
-    entity::AuthSession,
     store::{MemoryCacheAdapter, SecondaryStorage},
 };
 

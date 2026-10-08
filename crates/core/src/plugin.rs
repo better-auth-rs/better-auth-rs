@@ -620,6 +620,21 @@ impl<S: AuthSchema> AuthContext<S> {
             )
     }
 
+    /// Select parsed application fields without executing field policies again.
+    pub fn select_application_user_fields(&self, parsed: &crate::FieldMap) -> crate::FieldMap {
+        let application = self
+            .extensions
+            .get::<crate::plugin_runtime::ApplicationUserFields>()
+            .map_or(&self.config.user, |fields| &fields.0);
+        let mut selected: crate::FieldMap = application
+            .fields()
+            .keys()
+            .filter_map(|name| parsed.get(name).map(|value| (name.clone(), value.clone())))
+            .collect();
+        selected.sort_property_order();
+        selected
+    }
+
     /// User policy used by the adapter before public output filtering.
     pub fn adapter_user_fields(&self) -> &crate::user_fields::UserConfig {
         self.extensions

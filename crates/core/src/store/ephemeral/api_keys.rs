@@ -82,9 +82,9 @@ impl ApiKeyStore for EphemeralStore {
         .await
     }
 
-    async fn find_api_keys_by_reference(
+    async fn find_api_keys_by_reference_value(
         &self,
-        reference_id: &str,
+        reference_id: &FieldValue,
         sort: Option<(&str, &str)>,
     ) -> AuthResult<Vec<ApiKey>> {
         let schema = self
@@ -93,14 +93,16 @@ impl ApiKeyStore for EphemeralStore {
             .adapter_fields(&[]);
         let column = schema.record_storage_key("referenceId");
         let reference =
-            self.plugin_query_value(EntityRole::ApiKey, "referenceId", reference_id.into())?;
+            self.plugin_query_value(EntityRole::ApiKey, "referenceId", reference_id.clone())?;
         let rows = self
             .raw("apikey", "findMany", |state| {
                 let mut keys: Vec<_> = state
                     .api_keys
                     .select_refs(|key| {
-                        key.get(column)
-                            .is_some_and(|value| value.strict_equals(&reference))
+                        crate::query::field_matches_equality(
+                            key.get(column).unwrap_or(&FieldValue::Undefined),
+                            &reference,
+                        )
                     })?
                     .into_iter()
                     .map(|source| {
@@ -136,19 +138,24 @@ impl ApiKeyStore for EphemeralStore {
             .await
     }
 
-    async fn count_api_keys_by_reference(&self, reference_id: &str) -> AuthResult<u64> {
+    async fn count_api_keys_by_reference_value(
+        &self,
+        reference_id: &FieldValue,
+    ) -> AuthResult<u64> {
         let schema = self.model_fields.plugin_fields(EntityRole::ApiKey);
         let column = schema.record_storage_key("referenceId");
         let reference =
-            self.plugin_query_value(EntityRole::ApiKey, "referenceId", reference_id.into())?;
+            self.plugin_query_value(EntityRole::ApiKey, "referenceId", reference_id.clone())?;
         self.raw("apikey", "count", |state| {
             Ok(state
                 .api_keys
                 .snapshot()?
                 .iter()
                 .filter(|key| {
-                    key.get(column)
-                        .is_some_and(|value| value.strict_equals(&reference))
+                    crate::query::field_matches_equality(
+                        key.get(column).unwrap_or(&FieldValue::Undefined),
+                        &reference,
+                    )
                 })
                 .count() as u64)
         })
@@ -353,7 +360,7 @@ mod tests {
             rate_limit_max: Some(1.0),
             refill_interval: None,
             refill_amount: None,
-            permissions: None,
+            permissions: None.into(),
             metadata: None,
             enabled: true.into(),
         }

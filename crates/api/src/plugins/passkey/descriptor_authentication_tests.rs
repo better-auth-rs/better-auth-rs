@@ -28,7 +28,7 @@ async fn native_authentication_accepts_utf16_transport_hints_and_rejects_non_str
     let passkey = raw
         .create_passkey(CreatePasskey {
             additional_fields: Default::default(),
-            user_id: owner.id.typed()?.clone(),
+            user_id: owner.id.clone(),
             name: None.into(),
             public_key: STANDARD.encode(&authenticator.cose),
             credential_id: URL_SAFE_NO_PAD.encode(CREDENTIAL_ID),

@@ -286,8 +286,8 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             .await?
             .ok_or_else(|| AuthError::forbidden("user creation returned no record"))
     }
-    async fn create_user_optional(&self, create_user: CreateUser) -> AuthResult<Option<UserView>> {
-        let mut prepared = PreparedRecordWrite::new(create_user.into_user_fields()?);
+    async fn create_user_fields_optional(&self, fields: FieldMap) -> AuthResult<Option<UserView>> {
+        let mut prepared = PreparedRecordWrite::new(fields);
         let transaction = EphemeralTransaction {
             store: self.clone(),
         };

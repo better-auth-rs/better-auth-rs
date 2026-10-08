@@ -48,14 +48,17 @@ fn update_name(name: &str) -> UpdateUser {
 impl MissingUpdateHooks {
     async fn before<S: AuthSchema>(
         &self,
-        update: &UpdateUser,
+        update: &better_auth_core::FieldMap,
         transaction: Option<&dyn AuthTransaction<S>>,
-    ) -> AuthResult<DatabaseHookUpdate<UpdateUser>> {
+    ) -> AuthResult<DatabaseHookUpdate<better_auth_core::FieldMap>> {
         if matches!(self.scenario, Scenario::Cancel) {
             return Ok(DatabaseHookUpdate::Cancel);
         }
         if matches!(self.scenario, Scenario::NestedBeforeError)
-            && update.name.typed().unwrap().as_deref() == Some("outer")
+            && update
+                .get("name")
+                .and_then(better_auth_core::FieldValue::as_str)
+                == Some("outer")
         {
             let result = transaction
                 .unwrap()

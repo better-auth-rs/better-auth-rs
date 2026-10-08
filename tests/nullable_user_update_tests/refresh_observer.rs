@@ -78,10 +78,8 @@ impl<S: AuthSchema> DatabaseHooks<S> for Hooks {
         context: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<DatabaseHookUpdate<better_auth_core::FieldMap>> {
         assert!(context.request.is_none());
-        assert_eq!(
-            serde_json::to_value(data)?,
-            serde_json::to_value(super::super::update("Updated"))?
-        );
+        let data = Value::Object(data.json()?);
+        assert_eq!(data, serde_json::to_value(super::super::update("Updated"))?);
         self.recorder.push(
             json!({"kind": "hook.before", "data": {"name": data.get("name")}, "context": null}),
         );

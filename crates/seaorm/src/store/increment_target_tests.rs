@@ -4,6 +4,10 @@ use sea_orm::{
     sea_query::{Alias, Expr},
 };
 
+#[expect(
+    unreachable_pub,
+    reason = "SeaORM derives require public fixture entity types"
+)]
 mod targets {
     use sea_orm::entity::prelude::*;
 

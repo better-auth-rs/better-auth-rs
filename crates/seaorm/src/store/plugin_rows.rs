@@ -13,6 +13,8 @@ use std::sync::Arc;
 
 use crate::SeaOrmPluginModel;
 
+mod drivers;
+
 #[derive(Debug, Clone)]
 pub(super) struct SqlRow {
     row: Arc<QueryResult>,
@@ -220,11 +222,13 @@ pub(super) fn value(row: &QueryResult, column: &str) -> AuthResult<FieldValue> {
             "INT8" => read!(row, i64).to_string().into(),
             "FLOAT4" => f64::from(read!(row, f32)).into(),
             "FLOAT8" => read!(row, f64).into(),
+            "NUMERIC" => drivers::postgres_numeric(raw, column)?,
             "TEXT" | "VARCHAR" | "BPCHAR" | "NAME" => read!(row, String).into(),
             "UUID" => read!(row, uuid::Uuid).to_string().into(),
             "JSON" | "JSONB" => FieldValue::from_json(read!(row, serde_json::Value))?,
             "TIMESTAMPTZ" => read!(row, chrono::DateTime<chrono::Utc>).into(),
             "TIMESTAMP" => local_date(read!(row, chrono::NaiveDateTime), column)?,
+            "DATE" => drivers::postgres_date(raw, column)?,
             kind => {
                 return Err(error(
                     column,
@@ -237,6 +241,10 @@ pub(super) fn value(row: &QueryResult, column: &str) -> AuthResult<FieldValue> {
         let raw = row
             .try_get_raw(column)
             .map_err(|cause| error(column, cause))?;
+        // SQLx classifies binary zero dates as NULL; mysql2 query parsing retains calendar overflow.
+        if raw.type_info().name() == "DATE" {
+            return drivers::mysql_date(raw, column);
+        }
         if raw.is_null() {
             return Ok(FieldValue::Null);
         }
@@ -258,6 +266,7 @@ pub(super) fn value(row: &QueryResult, column: &str) -> AuthResult<FieldValue> {
             "BIGINT UNSIGNED" => (read!(row, u64) as f64).into(),
             "FLOAT" => f64::from(read!(row, f32)).into(),
             "DOUBLE" => read!(row, f64).into(),
+            "DECIMAL" => drivers::mysql_decimal(raw, column)?,
             "CHAR" | "VARCHAR" | "TINYTEXT" | "TEXT" | "MEDIUMTEXT" | "LONGTEXT" | "ENUM"
             | "SET" => read!(row, String).into(),
             "JSON" => FieldValue::from_json(read!(row, serde_json::Value))?,

@@ -103,7 +103,7 @@ fn api_input(name: FieldValue) -> CreateApiKey {
         rate_limit_max: Some(3.0),
         remaining: Some(10.0),
         expires_at: None,
-        permissions: None,
+        permissions: None.into(),
         metadata: Some("null".into()),
     }
 }

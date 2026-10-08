@@ -1,5 +1,22 @@
 {
   "version": "1.7.6",
+  "seedDate": "2030-01-02T03:04:05.000Z",
+  "records": {
+    "user": {
+      "name": "Owner", "email": "owner@runtime.test", "emailVerified": false, "image": null,
+      "createdAt": { "type": "date", "value": "2030-01-02T03:04:05.000Z" },
+      "updatedAt": { "type": "date", "value": "2030-01-02T03:04:05.000Z" },
+      "id": "runtime-owner"
+    },
+    "account": {
+      "accountId": "subject", "providerId": "provider", "userId": "runtime-owner",
+      "accessToken": "stored-token", "refreshToken": null, "idToken": null,
+      "accessTokenExpiresAt": null, "refreshTokenExpiresAt": null, "scope": null, "password": "stored-password",
+      "createdAt": { "type": "date", "value": "2030-01-02T03:04:05.000Z" },
+      "updatedAt": { "type": "date", "value": "2030-01-02T03:04:05.000Z" },
+      "id": "runtime-account"
+    }
+  },
   "fields": [
     { "model": "user", "name": "email", "type": "string", "raw": "owner@runtime.test", "replacement": 7, "expected": 7 },
     { "model": "user", "name": "emailVerified", "type": "boolean", "raw": "stored-boolean", "expected": "stored-boolean" },
@@ -13,5 +30,67 @@
     { "name": "account", "models": ["account"] },
     { "name": "owner", "models": ["account", "user"] },
     { "name": "accounts", "models": ["user", "account"] }
+  ],
+  "serverFields": [
+    { "model": "user", "name": "name", "type": "string", "source": "numeric", "replacement": 7, "expected": 7 },
+    { "model": "user", "name": "createdAt", "type": "date", "source": "date" },
+    { "model": "account", "name": "accessToken", "type": "string", "source": "numeric", "replacement": {}, "expected": {} },
+    { "model": "account", "name": "accessTokenExpiresAt", "type": "date", "source": "date" }
+  ],
+  "serverCases": [
+    {
+      "name": "large-precision",
+      "numeric": "-12345678901234567890123456789012345.123456789012345678901234567890",
+      "expectedNumeric": { "postgres": "-12345678901234567890123456789012345.123456789012345678901234567890", "mysql": "-12345678901234567890123456789012345.123456789012345678901234567890" },
+      "date": "2030-01-02", "expectedDate": { "localDate": "2030-01-02" }
+    },
+    {
+      "name": "tiny-decimal",
+      "numeric": "0.000000000000000000000000000001",
+      "expectedNumeric": { "postgres": "0.000000000000000000000000000001", "mysql": "0.000000000000000000000000000001" },
+      "date": "2000-02-29", "expectedDate": { "localDate": "2000-02-29" }
+    },
+    {
+      "name": "display-scale",
+      "numeric": "12.3400",
+      "expectedNumeric": { "postgres": "12.3400", "mysql": "12.340000000000000000000000000000" },
+      "date": "1970-01-01", "expectedDate": { "localDate": "1970-01-01" }
+    },
+    {
+      "name": "zero-scale",
+      "numeric": "0.0000",
+      "expectedNumeric": { "postgres": "0.0000", "mysql": "0.000000000000000000000000000000" },
+      "date": "0099-01-02", "expectedDate": { "postgres": { "localDate": "0099-01-02" }, "mysql": { "localDate": "1999-01-02" } }
+    },
+    {
+      "name": "null",
+      "numeric": null, "expectedNumeric": { "postgres": null, "mysql": null },
+      "date": null, "expectedDate": null
+    },
+    {
+      "name": "postgres-nan-infinity", "backend": "postgres",
+      "numeric": "NaN", "expectedNumeric": { "postgres": "NaN" },
+      "date": "infinity", "expectedDate": { "type": "number", "value": "Infinity" }
+    },
+    {
+      "name": "postgres-positive-infinity", "backend": "postgres",
+      "numeric": "Infinity", "expectedNumeric": { "postgres": "Infinity" },
+      "date": "-infinity", "expectedDate": { "type": "number", "value": "-Infinity" }
+    },
+    {
+      "name": "postgres-negative-infinity", "backend": "postgres",
+      "numeric": "-Infinity", "expectedNumeric": { "postgres": "-Infinity" },
+      "date": "300000-01-01", "expectedDate": { "type": "date", "value": "Invalid Date" }
+    },
+    {
+      "name": "mysql-zero-date", "backend": "mysql",
+      "numeric": "0", "expectedNumeric": { "mysql": "0.000000000000000000000000000000" },
+      "date": "0000-00-00", "expectedDate": { "localDate": "1899-11-30" }
+    },
+    {
+      "name": "mysql-zero-day", "backend": "mysql",
+      "numeric": "-1", "expectedNumeric": { "mysql": "-1.000000000000000000000000000000" },
+      "date": "2030-01-00", "expectedDate": { "localDate": "2029-12-31" }
+    }
   ]
 }

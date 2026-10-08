@@ -32,7 +32,7 @@ test.delete_user(user.id.typed()?).await?;
 # }
 ```
 
-`create_user` generates a draft without writing to storage. The configured ID generator runs even when the draft has an explicit ID. Supplied creation and update dates are retained. `save_user` applies admission and database hooks, lowercases the email address, and returns `None` when a before hook cancels creation or the adapter completes creation without a returned record. An after-hook error propagates after the record is committed.
+`create_user` generates a draft without writing to storage. The configured ID generator runs even when the draft has an explicit ID. Supplied creation and update dates are retained. `save_user` prepares the complete input and lowercases the effective email before admission. Admission and database hooks share those prepared fields and date handles. `save_user` returns `None` when a before hook cancels creation or the adapter completes creation without a returned record. An after-hook error propagates after the record is committed.
 
 `login` checks that the user exists and creates one session. The result contains the session, user, raw signed Cookie request header, browser-cookie data, and token. `TestLogin.token` uses `SchemaValue<String>` and retains native output replacements through cookie signing. `get_auth_headers` and `get_cookies` each create a separate session without first checking the user. `TestAuthOptions.session` accepts a `FieldMap` for plugin and application fields, preserving native values through field callbacks. Standard session fields such as ID, token, dates, and IP address are ignored.
 

@@ -283,7 +283,7 @@ async fn file_sqlite_connections_consume_quota_without_lock_upgrade_errors()
             let key = store
                 .create_api_key(CreateApiKey {
                     additional_fields: Default::default(),
-                    reference_id: "owner".to_string(),
+                    reference_id: "owner".into(),
                     config_id: "default".to_string(),
                     name: None.into(),
                     prefix: None,
@@ -296,7 +296,7 @@ async fn file_sqlite_connections_consume_quota_without_lock_upgrade_errors()
                     rate_limit_max: Some(2.5),
                     refill_interval: None,
                     refill_amount: None,
-                    permissions: None,
+                    permissions: None.into(),
                     metadata: None,
                     enabled: true.into(),
                 })

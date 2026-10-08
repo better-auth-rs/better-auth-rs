@@ -296,7 +296,7 @@ pub(super) async fn reference_writes<
             rate_limit_max: None,
             refill_interval: None,
             refill_amount: None,
-            permissions: None,
+            permissions: None.into(),
             metadata: None,
             enabled: true.into(),
         })

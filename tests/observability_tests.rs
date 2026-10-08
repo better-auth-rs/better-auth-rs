@@ -667,7 +667,7 @@ struct Lifecycle;
 impl DatabaseHooks<S> for Lifecycle {
     async fn before_create_user(
         &self,
-        _: &mut better_auth::__private_core::CreateUser,
+        _: &mut better_auth_core::FieldMap,
         _: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<
         better_auth_core::store::database_hooks::DatabaseHookUpdate<better_auth_core::FieldMap>,
@@ -1126,9 +1126,9 @@ mod sqlite {
         async fn before_update_user(
             &self,
             _: &better_auth_core::FieldValue,
-            _: &UpdateUser,
+            _: &mut better_auth_core::FieldMap,
             _: &SeaOrmHookContext<'_, Tables>,
-        ) -> AuthResult<DatabaseHookUpdate<UpdateUser>> {
+        ) -> AuthResult<DatabaseHookUpdate<better_auth_core::FieldMap>> {
             Ok(DatabaseHookUpdate::Continue)
         }
         async fn after_update_user(
@@ -1685,7 +1685,7 @@ fn api_key_input() -> better_auth_core::CreateApiKey {
         rate_limit_max: Some(1.0),
         refill_interval: None,
         refill_amount: None,
-        permissions: None,
+        permissions: None.into(),
         metadata: None,
     }
 }

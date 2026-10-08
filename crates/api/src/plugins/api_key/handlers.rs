@@ -43,23 +43,13 @@ impl ApiKeyPlugin {
             )
         })?;
         let config = self.resolve_configuration(body.config_id.as_deref())?;
-        if config.references == super::ApiKeyReferences::User
-            && let Some((session, _)) = &session
-            && body
-                .user_id
-                .as_ref()
-                .is_some_and(|user_id| !user_id.is_empty() && session.user_id != user_id.as_str())
-        {
-            return Err(super::api_key_error(
-                super::ApiKeyErrorCode::UnauthorizedSession,
-            ));
-        }
-        let user_id = session
-            .as_ref()
-            .and_then(|(session, _)| session.user_id.as_str())
-            .or(body.user_id.as_deref().filter(|id| !id.is_empty()))
-            .ok_or_else(|| super::api_key_error(super::ApiKeyErrorCode::UnauthorizedSession))?;
-        create_key_for_user(body, user_id, self, ctx, None).await
+        let user_id = create_key_actor(
+            body,
+            config.references,
+            session.as_ref().map(|(_, user)| user.id.field_value()),
+            false,
+        )?;
+        create_key_for_user(body, &user_id, self, ctx, None).await
     }
 
     /// Update a key on behalf of `body.user_id` from trusted server code.
@@ -93,11 +83,14 @@ impl ApiKeyPlugin {
                 "API key body validator returned a different input type",
             )
         })?;
-        if let Some((session, _)) = &session
-            && body
-                .user_id
-                .as_ref()
-                .is_some_and(|user_id| !user_id.is_empty() && session.user_id != user_id.as_str())
+        if let Some((_, user)) = &session
+            && body.user_id.as_ref().is_some_and(|user_id| {
+                !user_id.is_empty()
+                    && !user
+                        .id
+                        .field_value()
+                        .strict_equals(&user_id.as_str().into())
+            })
         {
             return Err(super::api_key_error(
                 super::ApiKeyErrorCode::UnauthorizedSession,
@@ -105,11 +98,50 @@ impl ApiKeyPlugin {
         }
         let user_id = session
             .as_ref()
-            .and_then(|(session, _)| session.user_id.as_str())
-            .or(body.user_id.as_deref().filter(|id| !id.is_empty()))
+            .map(|(_, user)| user.id.field_value())
+            .or_else(|| body.user_id.as_deref().map(Into::into))
+            .filter(FieldValue::is_truthy)
             .ok_or_else(|| super::api_key_error(super::ApiKeyErrorCode::UnauthorizedSession))?;
-        update_key_for_user(body, user_id, self, ctx).await
+        update_key_for_user(body, &user_id, self, ctx).await
     }
+}
+
+pub(super) fn create_key_actor(
+    body: &CreateKeyRequest,
+    references: super::ApiKeyReferences,
+    session_actor: Option<FieldValue>,
+    client: bool,
+) -> AuthResult<FieldValue> {
+    if references == super::ApiKeyReferences::Organization
+        && body.organization_id.as_deref().is_none_or(str::is_empty)
+    {
+        return Err(super::api_key_error(
+            super::ApiKeyErrorCode::OrganizationIdRequired,
+        ));
+    }
+    if references == super::ApiKeyReferences::User
+        && !client
+        && let Some(actor) = &session_actor
+        && body
+            .user_id
+            .as_deref()
+            .filter(|id| !id.is_empty())
+            .is_some_and(|id| !actor.strict_equals(&id.into()))
+    {
+        return Err(super::api_key_error(
+            super::ApiKeyErrorCode::UnauthorizedSession,
+        ));
+    }
+    session_actor
+        .filter(FieldValue::is_truthy)
+        .or_else(|| {
+            (!client || references == super::ApiKeyReferences::Organization)
+                .then_some(body.user_id.as_deref())
+                .flatten()
+                .map(FieldValue::from)
+        })
+        .filter(FieldValue::is_truthy)
+        .ok_or_else(|| super::api_key_error(super::ApiKeyErrorCode::UnauthorizedSession))
 }
 
 pub(super) fn validate_client_create(body: &CreateKeyRequest) -> AuthResult<()> {
@@ -130,14 +162,14 @@ pub(super) fn validate_client_create(body: &CreateKeyRequest) -> AuthResult<()> 
 
 pub(super) async fn create_key_for_user(
     body: &CreateKeyRequest,
-    user_id: &str,
+    user_id: &FieldValue,
     plugin: &ApiKeyPlugin,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     request: Option<&better_auth_core::AuthRequest>,
 ) -> AuthResult<CreateKeyResponse> {
     let config = plugin.resolve_configuration(body.config_id.as_deref())?;
     let reference_id = match config.references {
-        super::ApiKeyReferences::User => user_id.to_string(),
+        super::ApiKeyReferences::User => user_id.clone(),
         super::ApiKeyReferences::Organization => {
             let organization_id = body
                 .organization_id
@@ -148,7 +180,7 @@ pub(super) async fn create_key_for_user(
                 })?;
             helpers::require_org_api_key_permission(ctx, user_id, organization_id, "create")
                 .await?;
-            organization_id.to_string()
+            organization_id.into()
         }
     };
 
@@ -210,7 +242,7 @@ pub(super) async fn create_key_for_user(
     };
     let input = CreateApiKey {
         additional_fields: Default::default(),
-        reference_id,
+        reference_id: SchemaValue::from_field(reference_id),
         config_id: config.config_id.clone(),
         name: body.name.clone().into(),
         prefix: body.prefix.clone().or_else(|| config.prefix.clone()),
@@ -231,7 +263,9 @@ pub(super) async fn create_key_for_user(
             .or(dynamic_permissions.as_ref())
             .or(config.default_permissions.as_ref())
             .map(serde_json::to_string)
-            .transpose()?,
+            .transpose()?
+            .map(|permissions| SchemaValue::Typed(Some(permissions)))
+            .unwrap_or_default(),
         metadata: Some(
             body.metadata
                 .as_ref()
@@ -241,7 +275,7 @@ pub(super) async fn create_key_for_user(
         ),
         enabled: true.into(),
     };
-    let api_key = super::storage::create(config, ctx, input)
+    let api_key = super::storage::create(config, ctx, input.into_adapter_fields()?)
         .await?
         .ok_or_else(|| {
             better_auth_core::AuthError::internal(
@@ -289,28 +323,32 @@ fn expiration_date(seconds: Option<f64>) -> AuthResult<Option<better_auth_core::
 pub(crate) async fn get_key_core(
     id: &str,
     config_id: Option<&str>,
-    user_id: impl AsRef<str>,
+    user_id: impl Into<FieldValue>,
     plugin: &ApiKeyPlugin,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<ApiKeyView> {
     let config = plugin.resolve_configuration(config_id)?;
-    let api_key = helpers::get_owned_api_key(ctx, config, id, user_id.as_ref(), "read").await?;
+    let api_key = helpers::get_owned_api_key(ctx, config, id, &user_id.into(), "read").await?;
     plugin.maybe_delete_expired(ctx).await;
     super::metadata::single(ApiKeyView::from(&api_key), config, ctx).await
 }
 
 pub(crate) async fn list_keys_core(
-    user_id: impl AsRef<str>,
+    user_id: impl Into<FieldValue>,
     query: &ListKeysQuery,
     plugin: &ApiKeyPlugin,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<ListKeysResponse> {
+    let user_id = user_id.into();
     let organization_id = query.organization_id.as_deref().filter(|id| !id.is_empty());
     if let Some(organization_id) = organization_id {
-        helpers::require_org_api_key_permission(ctx, user_id.as_ref(), organization_id, "read")
-            .await?;
+        helpers::require_org_api_key_permission(ctx, &user_id, organization_id, "read").await?;
     }
-    let reference_id = query.organization_id.as_deref().unwrap_or(user_id.as_ref());
+    let reference_id = query
+        .organization_id
+        .as_deref()
+        .map(FieldValue::from)
+        .unwrap_or(user_id);
     let references = if organization_id.is_some() {
         super::ApiKeyReferences::Organization
     } else {
@@ -336,11 +374,10 @@ pub(crate) async fn list_keys_core(
         .as_deref()
         .filter(|field| !field.is_empty())
         .map(|field| (field, query.sort_direction.as_deref().unwrap_or("asc")));
-    let mut keys = super::storage::list_groups(&configurations, ctx, reference_id, sort).await?;
+    let mut keys = super::storage::list_groups(&configurations, ctx, &reference_id, sort).await?;
     if config_id.is_none() {
         super::storage::deduplicate(&mut keys)?;
     }
-    let reference_value = FieldValue::from(reference_id);
     let mut views: Vec<ApiKeyView> = keys
         .iter()
         // Primitive results can consume a deduplication slot, but cannot name an owner.
@@ -358,7 +395,8 @@ pub(crate) async fn list_keys_core(
             key_references == references
                 && fields
                     .get("referenceId")
-                    .is_some_and(|value| value.strict_equals(&reference_value))
+                    .unwrap_or(&FieldValue::Undefined)
+                    .strict_equals(&reference_id)
                 && config_id.is_none_or(|id| super::config_id_matches(&key_config_id, id))
         })
         .map(|fields| ApiKeyView::from_api_key_fields(fields.clone()))
@@ -383,14 +421,15 @@ pub(crate) async fn list_keys_core(
 
 pub(crate) async fn update_key_core(
     body: &UpdateKeyRequest,
-    user_id: impl AsRef<str>,
+    user_id: impl Into<FieldValue>,
     plugin: &ApiKeyPlugin,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<ApiKeyView> {
+    let user_id = user_id.into();
     if body
         .user_id
         .as_deref()
-        .is_some_and(|id| !id.is_empty() && id != user_id.as_ref())
+        .is_some_and(|id| !id.is_empty() && !user_id.strict_equals(&id.into()))
     {
         return Err(super::api_key_error(
             super::ApiKeyErrorCode::UnauthorizedSession,
@@ -408,12 +447,12 @@ pub(crate) async fn update_key_core(
             super::ApiKeyErrorCode::ServerOnlyProperty,
         ));
     }
-    update_key_for_user(body, user_id.as_ref(), plugin, ctx).await
+    update_key_for_user(body, &user_id, plugin, ctx).await
 }
 
 pub(super) async fn update_key_for_user(
     body: &UpdateKeyRequest,
-    user_id: &str,
+    user_id: &FieldValue,
     plugin: &ApiKeyPlugin,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<ApiKeyView> {
@@ -484,13 +523,13 @@ pub(super) async fn update_key_for_user(
 
 pub(crate) async fn delete_key_core(
     body: &DeleteKeyRequest,
-    user_id: impl AsRef<str>,
+    user_id: impl Into<FieldValue>,
     plugin: &ApiKeyPlugin,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<serde_json::Value> {
     let config = plugin.resolve_configuration(body.config_id.as_deref())?;
     let api_key =
-        helpers::get_owned_api_key(ctx, config, &body.key_id, user_id.as_ref(), "delete").await?;
+        helpers::get_owned_api_key(ctx, config, &body.key_id, &user_id.into(), "delete").await?;
     super::storage::delete(config, ctx, &api_key).await?;
     plugin.maybe_delete_expired(ctx).await;
     Ok(serde_json::json!({ "success": true }))

@@ -275,13 +275,13 @@ impl ApiKeyValidator for ApiKeyCallbacks {
 impl ApiKeyDefaultPermissions for ApiKeyCallbacks {
     async fn permissions(
         &self,
-        reference_id: &str,
+        reference_id: &better_auth::FieldValue,
         ctx: ApiKeyEndpoint<'_>,
     ) -> AuthResult<ApiKeyPermissions> {
         tokio::task::yield_now().await;
         let mut state = self.state.lock().unwrap();
         state.events.push(
-            json!({"event":"permissions","configId":self.config_id,"referenceId":reference_id,
+            json!({"event":"permissions","configId":self.config_id,"referenceId":reference_id.json()?,
             "path":ctx.path,"hasRequest":ctx.request.is_some(),"name":ctx.body.get("name"),
             "expiresIn":ctx.body.get("expiresIn"),"remaining":ctx.body.get("remaining")}),
         );

@@ -96,16 +96,16 @@ where
             .pop())
     }
 
-    async fn find_api_keys_by_reference(
+    async fn find_api_keys_by_reference_value(
         &self,
-        reference_id: &str,
+        reference_id: &FieldValue,
         sort: Option<(&str, &str)>,
     ) -> AuthResult<Vec<ApiKey>> {
         let models = database_operation::<Entity<P::ApiKey>, _>(self.config(), "findMany", async {
             let mut query = Entity::<P::ApiKey>::find().filter(self.plugin_equals::<P::ApiKey>(
                 EntityRole::ApiKey,
                 "referenceId",
-                reference_id.into(),
+                reference_id.clone(),
             )?);
             if let Some((field, direction)) = sort {
                 query = query.order_by(
@@ -133,13 +133,16 @@ where
         self.project_api_key_models(models).await
     }
 
-    async fn count_api_keys_by_reference(&self, reference_id: &str) -> AuthResult<u64> {
+    async fn count_api_keys_by_reference_value(
+        &self,
+        reference_id: &FieldValue,
+    ) -> AuthResult<u64> {
         database_operation::<Entity<P::ApiKey>, _>(self.config(), "count", async {
             Entity::<P::ApiKey>::find()
                 .filter(self.plugin_equals::<P::ApiKey>(
                     EntityRole::ApiKey,
                     "referenceId",
-                    reference_id.into(),
+                    reference_id.clone(),
                 )?)
                 .count(self.connection())
                 .await
