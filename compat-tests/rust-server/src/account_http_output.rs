@@ -142,7 +142,10 @@ async fn run(input: Input) -> AuthResult<Value> {
         "cookie".into(),
         format!(
             "better-auth.session_token={}",
-            better_auth_core::utils::cookie_utils::sign_cookie_value(&session.token, secret)
+            better_auth_core::utils::cookie_utils::sign_cookie_value(
+                session.token.typed()?,
+                secret
+            )
         ),
     );
     request

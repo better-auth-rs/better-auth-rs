@@ -194,7 +194,7 @@ impl SeaOrmHooks<Schema> for Hooks {
     }
     async fn after_create_account(
         &self,
-        data: &AccountView,
+        data: Option<&AccountView>,
         ctx: &SeaOrmHookContext<'_, Schema>,
     ) -> AuthResult<()> {
         self.after("account", "create", serde_json::to_value(data)?, ctx)
@@ -233,7 +233,7 @@ impl SeaOrmHooks<Schema> for Hooks {
     }
     async fn after_create_verification(
         &self,
-        data: &VerificationView,
+        data: Option<&VerificationView>,
         ctx: &SeaOrmHookContext<'_, Schema>,
     ) -> AuthResult<()> {
         self.after("verification", "create", serde_json::to_value(data)?, ctx)
@@ -549,7 +549,7 @@ impl Fixture {
             })
             .await?;
         let cookie = better_auth_core::utils::cookie_utils::sign_cookie_value(
-            &session.token,
+            session.token.typed()?,
             "account-verification-field-fixture-secret-thirty-two-characters",
         );
         let mut request = AuthRequest::new(HttpMethod::Get, "/list-accounts");

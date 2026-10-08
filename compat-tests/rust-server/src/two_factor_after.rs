@@ -172,7 +172,7 @@ macro_rules! hooks {
     ($hooks:ident,$context:ident,$control:ident)=>{
         #[better_auth::database_hooks]
         impl<S:AuthSchema> $hooks<S> for Trace {
-            async fn after_create_session(&self,_:&better_auth_core::wire::SessionView,_:&$context<'_,S>)->AuthResult<()> {self.event(json!({"phase":"session-created"}));Ok(())}
+            async fn after_create_session(&self,_:Option<&better_auth_core::wire::SessionView>,_:&$context<'_,S>)->AuthResult<()> {self.event(json!({"phase":"session-created"}));Ok(())}
             async fn before_delete_session(&self,_:&better_auth_core::wire::SessionView,_:&$context<'_,S>)->AuthResult<$control> {
                 self.event(json!({"phase":"session-delete-before"}));
                 if { let state=self.0.lock().unwrap(); state.active && state.mode=="delete-error" } {return Err(AuthError::internal("session deletion rejected"));}

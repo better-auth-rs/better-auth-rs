@@ -77,7 +77,7 @@ struct Hooks(Arc<Mutex<Vec<&'static str>>>);
 impl SeaOrmHooks<Schema> for Hooks {
     async fn after_create_verification(
         &self,
-        _: &VerificationView,
+        _: Option<&VerificationView>,
         _: &SeaOrmHookContext<'_, Schema>,
     ) -> AuthResult<()> {
         self.0.lock().unwrap().push("after");

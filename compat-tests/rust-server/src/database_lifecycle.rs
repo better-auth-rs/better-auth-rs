@@ -53,9 +53,9 @@ fn stored_session_view(session: &Session) -> Value {
 fn session_view(session: &better_auth_core::SessionView) -> Value {
     json!({"id":session.id,"token":session.token,"userId":session.user_id,
         "label":session.additional_fields.get("label").map(FieldValue::json).transpose().unwrap(),
-        "createdAt":FieldValue::Date(session.created_at.clone()).json().unwrap(),
-        "updatedAt":FieldValue::Date(session.updated_at.clone()).json().unwrap(),
-        "expiresAt":FieldValue::Date(session.expires_at.clone()).json().unwrap()})
+        "createdAt":session.created_at.field_value().json().unwrap(),
+        "updatedAt":session.updated_at.field_value().json().unwrap(),
+        "expiresAt":session.expires_at.field_value().json().unwrap()})
 }
 
 #[derive(Default)]
@@ -302,7 +302,7 @@ impl SeaOrmHooks<Schema> for Events {
     }
     async fn before_update_session(
         &self,
-        _: &str,
+        _: &FieldValue,
         patch: &SessionUpdate,
         _: &SeaOrmHookContext<'_, Schema>,
     ) -> AuthResult<DatabaseHookUpdate<SessionUpdate>> {

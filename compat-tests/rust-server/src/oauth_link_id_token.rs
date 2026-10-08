@@ -250,7 +250,7 @@ impl SeaOrmHooks<TestSchema> for OAuthLinkIdTokenFixture {
     }
     async fn after_create_account(
         &self,
-        _: &better_auth_core::wire::AccountView,
+        _: Option<&better_auth_core::wire::AccountView>,
         ctx: &SeaOrmHookContext<'_, TestSchema>,
     ) -> AuthResult<()> {
         self.hook("account.create.after", ctx)

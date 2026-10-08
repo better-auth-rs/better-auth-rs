@@ -81,12 +81,12 @@ impl JwtFixture {
                             Ok(json!({"token": plugin.sign_with_options(body["payload"].as_object().unwrap().clone(), &options, ctx).await?}))
                         }
                         "expired" => {
-                            let key = JwtPlugin::new().rotation_interval(chrono::Duration::seconds(-1)).create_key_pair(JwtKeyPairConfig::new(JwtAlgorithm::EdDsa), ctx).await?;
+                            let key = JwtPlugin::new().rotation_interval(chrono::Duration::seconds(-1)).create_key_pair(JwtKeyPairConfig::new(JwtAlgorithm::EdDsa), ctx).await?.ok_or_else(|| better_auth::AuthError::internal("Cannot read properties of null (reading 'id')"))?;
                             Ok(json!({"kid": key.id}))
                         }
                         "rotate" => {
                             let target = if fixture.profile == "jwt-remote" { fixture.remote.as_ref() } else { ctx };
-                            let key = JwtPlugin::new().create_key_pair(JwtKeyPairConfig::new(JwtAlgorithm::EdDsa), target).await?;
+                            let key = JwtPlugin::new().create_key_pair(JwtKeyPairConfig::new(JwtAlgorithm::EdDsa), target).await?.ok_or_else(|| better_auth::AuthError::internal("Cannot read properties of null (reading 'id')"))?;
                             Ok(json!({"kid": key.id}))
                         }
                         "revoke" => { ctx.database.delete_session(body["token"].as_str().unwrap()).await?; Ok(json!({"status": true})) }

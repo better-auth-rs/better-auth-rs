@@ -163,7 +163,7 @@ macro_rules! hooks {
                 self.record("user.before", context.request.as_ref(), Some(user.additional_fields.get("lastLoginMethod").map(FieldValue::json).transpose()?.flatten().unwrap_or(Value::Null)));
                 Ok($control::Continue)
             }
-            async fn after_create_user(&self, _: &better_auth_core::wire::UserView, context: &$context<'_,S>) -> AuthResult<()> { self.record("user.after", context.request.as_ref(), None); Ok(()) }
+            async fn after_create_user(&self, _: Option<&better_auth_core::wire::UserView>, context: &$context<'_,S>) -> AuthResult<()> { self.record("user.after", context.request.as_ref(), None); Ok(()) }
             async fn before_update_user(&self, $($id: &FieldValue,)? user: &UpdateUser, context: &$context<'_,S>) -> AuthResult<DatabaseHookUpdate<UpdateUser>> {
                 self.record("user.update", context.request.as_ref(), Some(user.additional_fields.get("lastLoginMethod").map(FieldValue::json).transpose()?.flatten().unwrap_or(Value::Null)));
                 if self.fails("update") { return Err(rejected()); }
@@ -175,7 +175,7 @@ macro_rules! hooks {
                 if self.fails("session") { return Err(rejected()); }
                 Ok(DatabaseHookUpdate::Continue)
             }
-            async fn after_create_session(&self, _: &better_auth_core::wire::SessionView, context: &$context<'_,S>) -> AuthResult<()> { self.record("session.after", context.request.as_ref(), None); Ok(()) }
+            async fn after_create_session(&self, _: Option<&better_auth_core::wire::SessionView>, context: &$context<'_,S>) -> AuthResult<()> { self.record("session.after", context.request.as_ref(), None); Ok(()) }
         }
     };
 }

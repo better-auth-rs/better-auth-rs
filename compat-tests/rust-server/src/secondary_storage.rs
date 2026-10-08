@@ -159,7 +159,7 @@ impl<S: AuthSchema> SeaOrmHooks<S> for Events {
     }
     async fn after_create_session(
         &self,
-        _: &better_auth_core::wire::SessionView,
+        _: Option<&better_auth_core::wire::SessionView>,
         _: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()> {
         self.push("session.create.after");
@@ -191,7 +191,7 @@ impl<S: AuthSchema> SeaOrmHooks<S> for Events {
     }
     async fn after_create_verification(
         &self,
-        _: &better_auth_core::wire::VerificationView,
+        _: Option<&better_auth_core::wire::VerificationView>,
         _: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()> {
         self.push("verification.create.after");

@@ -194,7 +194,7 @@ impl<S: AuthSchema> DatabaseHooks<S> for BodyTrace {
     }
     async fn after_create_user(
         &self,
-        _: &better_auth_core::wire::UserView,
+        _: Option<&better_auth_core::wire::UserView>,
         context: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
         self.record("user.after", context.request.as_ref(), None);
@@ -211,7 +211,7 @@ impl<S: AuthSchema> DatabaseHooks<S> for BodyTrace {
     }
     async fn after_create_session(
         &self,
-        _: &better_auth_core::wire::SessionView,
+        _: Option<&better_auth_core::wire::SessionView>,
         context: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
         self.record("session.after", context.request.as_ref(), None);

@@ -158,7 +158,7 @@ async fn setup_user_with_account(
         .create_session(&user, None, None)
         .await
         .unwrap();
-    let token = session.token().to_string();
+    let token = session.token().typed().unwrap().to_string();
 
     (user_id, token, account.id.typed().unwrap().to_string())
 }
@@ -972,7 +972,11 @@ async fn test_get_access_token_rejects_cookie_for_the_wrong_user() {
     let oauth_plugin = OAuthPlugin::with_config(oauth_config);
 
     let mut req = AuthRequest::new(HttpMethod::Post, "/get-access-token");
-    set_session_and_account_cookies(&mut req, other_session.token(), &account_cookie);
+    set_session_and_account_cookies(
+        &mut req,
+        other_session.token().typed().unwrap(),
+        &account_cookie,
+    );
 
     req.body = Some(json!({"useAccountCookie": true}).to_string().into_bytes());
     let result = oauth_plugin.on_request(&req, &ctx).await;
@@ -1265,8 +1269,10 @@ async fn test_unlink_non_last_account_always_allowed() {
     );
     req.headers
         .insert("content-type".to_string(), "application/json".to_string());
-    req.headers
-        .insert("cookie".to_string(), session_cookie(session.token()));
+    req.headers.insert(
+        "cookie".to_string(),
+        session_cookie(session.token().typed().unwrap()),
+    );
 
     let result = plugin.on_request(&req, &ctx).await;
 

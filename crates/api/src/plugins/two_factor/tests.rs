@@ -260,7 +260,10 @@ async fn test_verify_existing_session_factor_enables_two_factor_and_reissues_ses
     let queued = request.take_response_headers().unwrap();
     let set_cookie_headers: Vec<_> = queued.get_all("set-cookie").collect();
     assert_eq!(response.user.two_factor_enabled, Some(false));
-    assert_eq!(response.token.as_str(), Some(session.token.as_str()));
+    assert_eq!(
+        response.token.as_str(),
+        Some(session.token.typed().unwrap().as_str())
+    );
     assert_eq!(set_cookie_headers.len(), 1);
     assert!(
         ctx.database

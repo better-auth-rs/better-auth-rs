@@ -346,7 +346,13 @@ async fn run(base: &str, input: Value) -> AuthResult<Value> {
     };
     let lifetime = sessions
         .first()
-        .map(|session| session.expires_at.milliseconds() - session.created_at.milliseconds())
+        .map(|session| {
+            Ok::<_, AuthError>(
+                session.expires_at.field_value().date_milliseconds()?
+                    - session.created_at.field_value().date_milliseconds()?,
+            )
+        })
+        .transpose()?
         .map(|ms| ((ms + 500.0) / 1000.0).trunc());
     let old_exists = if let Some(id) = old_id {
         Some(store.get_user_by_id(&id).await?.is_some())

@@ -319,7 +319,7 @@ impl<S: AuthSchema> SeaOrmHooks<S> for PasskeyOptions {
     }
     async fn after_create_session(
         &self,
-        _: &better_auth_core::wire::SessionView,
+        _: Option<&better_auth_core::wire::SessionView>,
         _: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()> {
         self.event(json!({"event": "session.after"}));

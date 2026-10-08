@@ -82,10 +82,14 @@ impl DatabaseHooks<StatelessSchema> for Hooks {
     }
     async fn after_create_user(
         &self,
-        user: &UserView,
+        user: Option<&UserView>,
         ctx: &DatabaseHookContext<'_, StatelessSchema>,
     ) -> AuthResult<()> {
-        self.record("user.after", user.email.as_deref(), ctx);
+        self.record(
+            "user.after",
+            user.and_then(|user| user.email.as_deref()),
+            ctx,
+        );
         Ok(())
     }
     async fn before_create_session(
@@ -98,7 +102,7 @@ impl DatabaseHooks<StatelessSchema> for Hooks {
     }
     async fn after_create_session(
         &self,
-        _: &SessionView,
+        _: Option<&SessionView>,
         ctx: &DatabaseHookContext<'_, StatelessSchema>,
     ) -> AuthResult<()> {
         self.record("session.after", None, ctx);

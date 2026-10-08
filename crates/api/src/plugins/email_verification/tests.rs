@@ -976,7 +976,7 @@ async fn test_verify_email_errors_preserve_status_codes_redirect_queries_and_fra
         ),
         (
             changed_email.as_str(),
-            Some(other_session.token.as_str()),
+            Some(other_session.token.typed().unwrap().as_str()),
             "INVALID_USER",
             "Invalid user",
         ),

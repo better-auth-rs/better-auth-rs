@@ -86,7 +86,7 @@ async fn fixture(config: Arc<AuthConfig>) -> Fixture {
         ctx,
         user_id: user.id().typed().unwrap().to_string(),
         account_id: account.id.typed().unwrap().to_string(),
-        token: session.token().to_string(),
+        token: session.token().typed().unwrap().to_string(),
     }
 }
 
