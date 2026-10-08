@@ -4,7 +4,7 @@ use serde_json::Value;
 
 mod runtime;
 pub(crate) use runtime::parse_field_json;
-pub use runtime::{parse_client_json, safe_parse_field};
+pub use runtime::{parse_client_json, parse_native_json, safe_parse_field};
 
 mod stringify;
 pub use stringify::{array_index, stringify};

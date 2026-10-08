@@ -1,7 +1,7 @@
 #[cfg(test)]
 use std::collections::BTreeMap;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, OnceLock};
 
 use better_auth_core::store::SecondaryStorage;
 #[cfg(test)]
@@ -11,7 +11,7 @@ use better_auth_core::{
     FieldValue, FromFieldMap, UpdateApiKey,
 };
 use chrono::Utc;
-use futures_util::{StreamExt, TryFutureExt, future, stream};
+use futures_util::{FutureExt, StreamExt, future, stream};
 #[cfg(test)]
 use serde_json::Value;
 
@@ -19,9 +19,49 @@ use super::ApiKeyConfig;
 
 const STORAGE_CONCURRENCY: usize = 10;
 
+struct StorageBatch<'a> {
+    first_error: &'a OnceLock<AuthError>,
+    failed: AtomicBool,
+}
+
+impl<'a> StorageBatch<'a> {
+    fn new(first_error: &'a OnceLock<AuthError>) -> Self {
+        Self {
+            first_error,
+            failed: AtomicBool::new(false),
+        }
+    }
+
+    fn observe<T>(&self, result: AuthResult<T>) -> Option<T> {
+        match result {
+            Ok(value) => Some(value),
+            Err(error) => {
+                self.failed.store(true, Ordering::Relaxed);
+                let _ = self.first_error.set(error);
+                None
+            }
+        }
+    }
+
+    fn failed(&self) -> bool {
+        self.failed.load(Ordering::Relaxed)
+    }
+}
+
+fn complete_batch<T>(
+    first_error: OnceLock<AuthError>,
+    outcomes: impl IntoIterator<Item = Option<T>>,
+) -> AuthResult<Vec<T>> {
+    match first_error.into_inner() {
+        Some(error) => Err(error),
+        None => Ok(outcomes.into_iter().flatten().collect()),
+    }
+}
+
 mod usage;
 pub(super) use usage::consume;
 mod reference;
+pub(super) use reference::property as list_field;
 use reference::{cache_key, modify_reference};
 #[cfg(test)]
 mod batch_tests;
@@ -117,11 +157,15 @@ fn serialize(key: &ApiKey) -> AuthResult<String> {
 }
 
 fn deserialize(value: Option<FieldValue>) -> Option<ApiKey> {
-    let FieldValue::String(value) = value? else {
+    ApiKey::from_field_values(deserialize_fields(value)?).ok()
+}
+
+fn deserialize_fields(value: Option<FieldValue>) -> Option<FieldMap> {
+    let value @ (FieldValue::String(_) | FieldValue::Utf16String(_)) = value? else {
         return None;
     };
     // Upstream treats malformed serialized cache entries as a cache miss.
-    let parsed = FieldValue::parse_json(&value).ok()?;
+    let parsed = better_auth_core::utils::json::parse_native_json(&value).ok()?;
     let mut fields = match parsed {
         FieldValue::Null => return None,
         FieldValue::Object(fields) => fields.as_ref().clone(),
@@ -168,7 +212,7 @@ fn deserialize(value: Option<FieldValue>) -> Option<ApiKey> {
         };
         let _ = fields.insert(name.into(), value);
     }
-    ApiKey::from_field_values(fields).ok()
+    Some(fields)
 }
 
 async fn cached(storage: &dyn SecondaryStorage, key: &str) -> AuthResult<Option<ApiKey>> {
@@ -182,51 +226,67 @@ async fn cached_native(
     Ok(deserialize(storage.get_native(key).await?))
 }
 
+async fn cached_native_fields(
+    storage: &dyn SecondaryStorage,
+    key: &FieldValue,
+) -> AuthResult<Option<FieldMap>> {
+    Ok(deserialize_fields(storage.get_native(key).await?))
+}
+
 pub(super) async fn put(
     storage: &dyn SecondaryStorage,
     key: &ApiKey,
     fallback: bool,
 ) -> AuthResult<()> {
-    put_with_failure_flag(storage, key, fallback, None).await
+    let first_error = OnceLock::new();
+    let batch = StorageBatch::new(&first_error);
+    let outcome = put_in_batch(storage, key, fallback, &batch).await;
+    complete_batch(first_error, [outcome]).map(|_| ())
 }
 
-async fn put_with_failure_flag(
+async fn put_in_batch(
     storage: &dyn SecondaryStorage,
     key: &ApiKey,
     fallback: bool,
-    failed: Option<&AtomicBool>,
-) -> AuthResult<()> {
-    let value = serialize(key)?;
-    let ttl = ttl(key)?;
-    let hashed = cache_key("api-key:", &key.key_hash.field_value())?;
-    let id = cache_key("api-key:by-id:", &key.id.field_value())?;
-    let reference = cache_key("api-key:by-ref:", &key.reference_id.field_value())?;
+    batch: &StorageBatch<'_>,
+) -> Option<()> {
+    let value = batch.observe(serialize(key))?;
+    let ttl = batch.observe(ttl(key))?;
+    let hashed = batch.observe(cache_key("api-key:", &key.key_hash.field_value()))?;
+    let id = batch.observe(cache_key("api-key:by-id:", &key.id.field_value()))?;
+    let reference = batch.observe(cache_key(
+        "api-key:by-ref:",
+        &key.reference_id.field_value(),
+    ))?;
     let ttl = ttl.map(|seconds| seconds as f64);
     if fallback {
-        // Stop a list refill when an IO fails, even while another write for this key is pending.
-        let stop_batch = |_: &AuthError| {
-            if let Some(failed) = failed {
-                failed.store(true, Ordering::Relaxed);
-            }
-        };
+        // Record failures before draining peers so later failures cannot replace the first error.
         let (hashed, id, reference) = tokio::join!(
             storage
                 .set_native(&hashed, &value, ttl)
-                .inspect_err(stop_batch),
-            storage.set_native(&id, &value, ttl).inspect_err(stop_batch),
-            storage.delete_native(&reference).inspect_err(stop_batch)
+                .map(|result| batch.observe(result)),
+            storage
+                .set_native(&id, &value, ttl)
+                .map(|result| batch.observe(result)),
+            storage
+                .delete_native(&reference)
+                .map(|result| batch.observe(result))
         );
         hashed?;
         id?;
         reference
     } else {
         let (hashed, id) = tokio::join!(
-            storage.set_native(&hashed, &value, ttl),
-            storage.set_native(&id, &value, ttl)
+            storage
+                .set_native(&hashed, &value, ttl)
+                .map(|result| batch.observe(result)),
+            storage
+                .set_native(&id, &value, ttl)
+                .map(|result| batch.observe(result))
         );
         hashed?;
         id?;
-        modify_reference(storage, key, true).await
+        batch.observe(modify_reference(storage, key, true).await)
     }
 }
 
@@ -238,25 +298,25 @@ async fn remove_cached(
     let hashed = cache_key("api-key:", &key.key_hash.field_value())?;
     let id = cache_key("api-key:by-id:", &key.id.field_value())?;
     let reference = cache_key("api-key:by-ref:", &key.reference_id.field_value())?;
-    if fallback {
-        let (hashed, id, reference) = tokio::join!(
-            storage.delete_native(&hashed),
-            storage.delete_native(&id),
-            storage.delete_native(&reference)
-        );
-        hashed?;
-        id?;
-        reference
-    } else {
-        let (hashed, id, reference) = tokio::join!(
-            storage.delete_native(&hashed),
-            storage.delete_native(&id),
-            modify_reference(storage, key, false)
-        );
-        hashed?;
-        id?;
-        reference
-    }
+    let first_error = OnceLock::new();
+    let batch = StorageBatch::new(&first_error);
+    let reference = async {
+        if fallback {
+            storage.delete_native(&reference).await
+        } else {
+            modify_reference(storage, key, false).await
+        }
+    };
+    let (hashed, id, reference) = tokio::join!(
+        storage
+            .delete_native(&hashed)
+            .map(|result| batch.observe(result)),
+        storage
+            .delete_native(&id)
+            .map(|result| batch.observe(result)),
+        reference.map(|result| batch.observe(result))
+    );
+    complete_batch(first_error, [hashed, id, reference]).map(|_| ())
 }
 
 pub(crate) async fn get_by_id(
@@ -489,61 +549,118 @@ pub(super) async fn delete_for_verification(
     Ok(())
 }
 
+pub(super) async fn list_groups(
+    configurations: &[&ApiKeyConfig],
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+    reference: &str,
+    sort: Option<(&str, &str)>,
+) -> AuthResult<Vec<FieldValue>> {
+    let first_error = OnceLock::new();
+    let groups = futures_util::future::join_all(
+        configurations
+            .iter()
+            .map(|config| list_in_batch(config, ctx, reference, sort, &first_error)),
+    )
+    .await;
+    Ok(complete_batch(first_error, groups)?
+        .into_iter()
+        .flatten()
+        .collect())
+}
+
+#[cfg(test)]
 pub(super) async fn list(
     config: &ApiKeyConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     reference: &str,
     sort: Option<(&str, &str)>,
-) -> AuthResult<Vec<ApiKey>> {
+) -> AuthResult<Vec<FieldValue>> {
+    list_groups(&[config], ctx, reference, sort).await
+}
+
+async fn list_in_batch(
+    config: &ApiKeyConfig,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+    reference: &str,
+    sort: Option<(&str, &str)>,
+    first_error: &OnceLock<AuthError>,
+) -> Option<Vec<FieldValue>> {
+    // A failed group stops its own workers; independent groups keep running.
+    let batch = StorageBatch::new(first_error);
     let storage = backend(config, ctx);
     if config.storage == ApiKeyStorage::SecondaryStorage {
         if let Some(storage) = storage {
-            let ids = reference::read(
-                storage.as_ref(),
-                &format!("api-key:by-ref:{reference}").into(),
-            )
-            .await?;
-            if !config.fallback_to_database || reference::has_entries(&ids)? {
-                let ids = reference::items(&ids)?;
-                let failed = AtomicBool::new(false);
-                let mut results = stream::iter(ids.into_iter().enumerate())
-                    .take_while(|_| future::ready(!failed.load(Ordering::Relaxed)))
-                    .map(|(index, id)| {
-                        let failed = &failed;
-                        async move {
-                            let result = async {
-                                cached_native(storage.as_ref(), &cache_key("api-key:by-id:", &id)?)
-                                    .await
-                            }
-                            .await;
-                            if result.is_err() {
-                                failed.store(true, Ordering::Relaxed);
-                            }
-                            result.map(|key| (index, key))
+            let ids = batch.observe(
+                reference::read(
+                    storage.as_ref(),
+                    &format!("api-key:by-ref:{reference}").into(),
+                )
+                .await,
+            )?;
+            if !config.fallback_to_database || batch.observe(reference::has_entries(&ids))? {
+                let mut keys = match batch.observe(reference::items(&ids))? {
+                    reference::Items::Complete(values) => values,
+                    reference::Items::Indexed { count, concurrency } => {
+                        let indices = std::iter::successors(Some(0.0), |index| Some(index + 1.0))
+                            .take_while(|index| *index < count);
+                        let mut results = stream::iter(indices)
+                            .take_while(|_| future::ready(!batch.failed()))
+                            .map(|index| {
+                                let batch = &batch;
+                                let ids = &ids;
+                                async move {
+                                    let result = async {
+                                        let id = list_field(
+                                            ids,
+                                            &better_auth_core::schema_value::number_string(index),
+                                        )?;
+                                        cached_native_fields(
+                                            storage.as_ref(),
+                                            &cache_key("api-key:by-id:", &id)?,
+                                        )
+                                        .await
+                                    }
+                                    .await;
+                                    batch.observe(result).map(|key| (index, key))
+                                }
+                            })
+                            .buffer_unordered(concurrency)
+                            // Keep started callbacks in this request's scope. Unlike a JS promise,
+                            // the Rust result waits for these peers before returning the first error.
+                            .collect::<Vec<_>>()
+                            .await
+                            .into_iter()
+                            .flatten()
+                            .collect::<Vec<_>>();
+                        if batch.failed() {
+                            return None;
                         }
-                    })
-                    .buffer_unordered(STORAGE_CONCURRENCY)
-                    // Keep started callbacks in this request's scope. Unlike a JS promise,
-                    // the Rust result waits for these peers before returning the first error.
-                    .collect::<Vec<_>>()
-                    .await
-                    .into_iter()
-                    .collect::<AuthResult<Vec<_>>>()?;
-                results.sort_unstable_by_key(|(index, _)| *index);
-                let mut keys: Vec<_> = results.into_iter().filter_map(|(_, key)| key).collect();
+                        results.sort_unstable_by(|(left, _), (right, _)| left.total_cmp(right));
+                        results
+                            .into_iter()
+                            .filter_map(|(_, key)| key)
+                            .map(FieldValue::from)
+                            .collect()
+                    }
+                };
+                keys.retain(|key| !key.is_null() && !key.is_undefined());
                 if let Some((field, direction)) = sort {
-                    sort_keys(&mut keys, field, Some(direction))?;
+                    batch.observe(sort_keys(&mut keys, field, Some(direction)))?;
                 }
-                return Ok(keys);
+                return Some(keys);
             }
         }
         if !config.fallback_to_database {
-            return Ok(Vec::new());
+            return Some(Vec::new());
         }
     }
     let (keys, total) = tokio::join!(
-        ctx.database.find_api_keys_by_reference(reference, sort),
-        ctx.database.count_api_keys_by_reference(reference),
+        ctx.database
+            .find_api_keys_by_reference(reference, sort)
+            .map(|result| batch.observe(result)),
+        ctx.database
+            .count_api_keys_by_reference(reference)
+            .map(|result| batch.observe(result)),
     );
     let mut keys = keys?;
     // The public endpoint recomputes total from these rows, but upstream still
@@ -553,17 +670,12 @@ pub(super) async fn list(
         && !keys.is_empty()
         && let Some(storage) = storage
     {
-        let failed = AtomicBool::new(false);
         let mut results = stream::iter(keys.into_iter().enumerate())
-            .take_while(|_| future::ready(!failed.load(Ordering::Relaxed)))
+            .take_while(|_| future::ready(!batch.failed()))
             .map(|(index, key)| {
-                let failed = &failed;
+                let batch = &batch;
                 async move {
-                    let result =
-                        put_with_failure_flag(storage.as_ref(), &key, true, Some(failed)).await;
-                    if result.is_err() {
-                        failed.store(true, Ordering::Relaxed);
-                    }
+                    let result = put_in_batch(storage.as_ref(), &key, true, batch).await;
                     result.map(|()| (index, key))
                 }
             })
@@ -571,7 +683,11 @@ pub(super) async fn list(
             .collect::<Vec<_>>()
             .await
             .into_iter()
-            .collect::<AuthResult<Vec<_>>>()?;
+            .flatten()
+            .collect::<Vec<_>>();
+        if batch.failed() {
+            return None;
+        }
         results.sort_unstable_by_key(|(index, _)| *index);
         keys = results.into_iter().map(|(_, key)| key).collect();
         let ids: FieldValue = keys
@@ -579,28 +695,28 @@ pub(super) async fn list(
             .map(|key| key.id.field_value())
             .collect::<Vec<_>>()
             .into();
-        storage
-            .set(
-                &format!("api-key:by-ref:{reference}"),
-                &reference::stringify(&ids)?,
-                None,
-            )
-            .await?;
+        batch.observe(
+            storage
+                .set(
+                    &format!("api-key:by-ref:{reference}"),
+                    &batch.observe(reference::stringify(&ids))?,
+                    None,
+                )
+                .await,
+        )?;
     }
-    Ok(keys)
+    batch.observe(
+        keys.into_iter()
+            .map(|key| key.field_values().map(FieldValue::from))
+            .collect(),
+    )
 }
 
-fn sort_keys(keys: &mut [ApiKey], sort_by: &str, direction: Option<&str>) -> AuthResult<()> {
+fn sort_keys(keys: &mut [FieldValue], sort_by: &str, direction: Option<&str>) -> AuthResult<()> {
     use std::cmp::Ordering::{Equal, Greater, Less};
     let mut values = keys
         .iter()
-        .map(|key| {
-            Ok(key
-                .field_values()?
-                .get(sort_by)
-                .cloned()
-                .unwrap_or_default())
-        })
+        .map(|key| list_field(key, sort_by))
         .collect::<AuthResult<Vec<_>>>()?;
     let compare = |left: &FieldValue, right: &FieldValue| -> AuthResult<std::cmp::Ordering> {
         let ordering = match (left, right) {
@@ -634,19 +750,22 @@ fn sort_keys(keys: &mut [ApiKey], sort_by: &str, direction: Option<&str>) -> Aut
     Ok(())
 }
 
-pub(super) fn deduplicate(keys: &mut Vec<ApiKey>) {
+pub(super) fn deduplicate(keys: &mut Vec<FieldValue>) -> AuthResult<()> {
     let mut ids = Vec::new();
-    keys.retain(|key| {
-        let id = key.id.field_value();
+    let mut unique = Vec::with_capacity(keys.len());
+    for key in keys.drain(..) {
+        let id = list_field(&key, "id")?;
         if ids
             .iter()
             .any(|seen: &FieldValue| seen.same_value_zero(&id))
         {
-            return false;
+            continue;
         }
         ids.push(id);
-        true
-    });
+        unique.push(key);
+    }
+    *keys = unique;
+    Ok(())
 }
 
 #[cfg(test)]

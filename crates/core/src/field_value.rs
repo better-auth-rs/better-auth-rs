@@ -98,6 +98,18 @@ impl FieldMap {
         self.0.shift_remove(name)
     }
 
+    /// Preserve source property order, then append remaining fields.
+    pub(crate) fn in_field_order(mut self, order: &[String]) -> Self {
+        let mut fields = Self::new();
+        for name in order {
+            if let Some(value) = self.remove(name) {
+                let _ = fields.insert(name.clone(), value);
+            }
+        }
+        fields.extend(self);
+        fields
+    }
+
     /// Import object fields at a JSON boundary without reviving Date strings.
     pub fn from_json(fields: ::serde_json::Map<String, JsonValue>) -> AuthResult<Self> {
         fields

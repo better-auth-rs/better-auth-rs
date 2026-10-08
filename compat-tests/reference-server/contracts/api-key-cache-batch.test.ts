@@ -2,8 +2,8 @@ import { expect, test } from "bun:test";
 import { betterAuth } from "better-auth";
 import { apiKey } from "@better-auth/api-key";
 
-type Mode = "get" | "refill";
-type Slot = "get" | "hash" | "id";
+type Mode = "get" | "refill" | "remove";
+type Slot = "get" | "hash" | "id" | "reference";
 const COUNT = 12;
 const FIRST = Array.from({ length: 10 }, (_, index) => index);
 const FINISH_ORDER = [...FIRST].reverse().concat([11, 10]);
@@ -13,6 +13,7 @@ class BatchGate {
   readonly finishes: number[] = [];
   readonly rows = Array.from({ length: COUNT }, () => ({
     started: Promise.withResolvers<void>(),
+    ready: Promise.withResolvers<void>(),
     finished: Promise.withResolvers<void>(),
     slots: new Map<Slot, ReturnType<typeof Promise.withResolvers<void>>>(),
     completed: 0,
@@ -34,6 +35,8 @@ class BatchGate {
     }
     const barrier = Promise.withResolvers<void>();
     row.slots.set(slot, barrier);
+    const width = this.mode === "get" ? 1 : this.mode === "refill" ? 2 : 3;
+    if (row.slots.size === width) row.ready.resolve();
     this.maximumCalls = Math.max(this.maximumCalls, ++this.activeCalls);
     try {
       await barrier.promise;
@@ -42,7 +45,7 @@ class BatchGate {
       this.activeCalls--;
       this.completedCalls++;
       row.completed++;
-      if (row.completed === (this.mode === "get" ? 1 : 2)) {
+      if (row.completed === width) {
         this.activeRows--;
         this.finishes.push(index);
         row.finished.resolve();
@@ -74,6 +77,7 @@ async function fixture(fallbackToDatabase: boolean) {
   const values = new Map<string, string>();
   const keyRows = new Map<string, number>();
   const indexWrites: { ids: string[]; completedCalls: number; activeRows: number }[] = [];
+  const removalChanges: [string, string | null][] = [];
   let gate: BatchGate | undefined;
   const customStorage = {
     get(key: string) {
@@ -84,6 +88,12 @@ async function fixture(fallbackToDatabase: boolean) {
       return Promise.resolve(values.get(key) ?? null);
     },
     set(key: string, value: string) {
+      if (gate?.mode === "remove") {
+        return gate.run(0, "reference", () => {
+          removalChanges.push([key, value]);
+          values.set(key, value);
+        });
+      }
       if (gate?.mode === "refill") {
         if (key.startsWith("api-key:by-ref:")) {
           indexWrites.push({ ids: JSON.parse(value), completedCalls: gate.completedCalls, activeRows: gate.activeRows });
@@ -98,6 +108,13 @@ async function fixture(fallbackToDatabase: boolean) {
       return Promise.resolve();
     },
     delete(key: string) {
+      if (gate?.mode === "remove") {
+        const slot = key.startsWith("api-key:by-ref:") ? "reference" : key.startsWith("api-key:by-id:") ? "id" : "hash";
+        return gate.run(0, slot, () => {
+          removalChanges.push([key, null]);
+          values.delete(key);
+        });
+      }
       values.delete(key);
       return Promise.resolve();
     },
@@ -126,7 +143,8 @@ async function fixture(fallbackToDatabase: boolean) {
   const refKey = `api-key:by-ref:${signup.response.user.id}`;
   const list = () => auth.api.listApiKeys({ headers });
   return {
-    values, ids, names, refKey, indexWrites, list,
+    values, ids, names, refKey, indexWrites, removalChanges, list,
+    remove: (keyId: string) => auth.api.deleteApiKey({ headers, body: { keyId }, asResponse: true }),
     async arm(mode: Mode) {
       if (mode === "get" && fallbackToDatabase) await list();
       if (mode === "refill") values.clear();
@@ -202,6 +220,79 @@ for (const [mode, fallback] of [["get", false], ["get", true], ["refill", true]]
     if (mode === "refill") {
       expect(data.values.has(`api-key:by-id:${data.ids[1]}`)).toBe(true);
       expect(data.values.has(data.refKey)).toBe(false);
+    }
+  });
+}
+
+test("refill preserves the first rejection across writes and keys while peers finish", async () => {
+  const data = await fixture(true);
+  const gate = await data.arm("refill");
+  const first = new Error("first by-id rejection");
+  const laterPeer = new TypeError("later peer rejection");
+  const laterHash = new RangeError("later hashed-key rejection");
+  const outcome = data.list().then(result => result, error => error);
+  await gate.firstWave();
+  gate.rows[0].slots.get("id")!.reject(first);
+  expect(await outcome).toBe(first);
+  gate.release(1);
+  await gate.rows[1].finished.promise;
+  gate.rows[2].slots.get("id")!.reject(laterPeer);
+  gate.release(2);
+  await gate.rows[2].finished.promise;
+  gate.rows[0].slots.get("hash")!.reject(laterHash);
+  for (const index of FIRST) gate.release(index);
+  await Promise.all(FIRST.map(index => gate.rows[index].finished.promise));
+  expect(await outcome).toBe(first);
+  expect(gate.starts).toEqual(FIRST);
+  expect(gate.finishes.toSorted((a, b) => a - b)).toEqual(FIRST);
+  expect(gate.maximumRows).toBe(10);
+  expect(gate.maximumCalls).toBe(20);
+  expect(gate.completedCalls).toBe(20);
+  expect(gate.activeRows).toBe(0);
+  expect(data.indexWrites).toEqual([]);
+  expect(data.values.has(`api-key:by-id:${data.ids[1]}`)).toBe(true);
+  expect(data.values.has(data.refKey)).toBe(false);
+});
+
+for (const fallback of [false, true]) {
+  test(`removal retains the first failure and completed cache changes (fallback=${fallback})`, async () => {
+    const data = await fixture(fallback);
+    data.values.set(data.refKey, JSON.stringify(data.ids));
+    const initial = [...data.values];
+    for (const firstSlot of ["id", "reference"] as const) {
+      data.values.clear();
+      for (const [key, value] of initial) data.values.set(key, value);
+      data.removalChanges.length = 0;
+      const gate = await data.arm("remove");
+      const first = new Error("first removal failure");
+      const later = new TypeError("later removal failure");
+      const pending = data.remove(data.ids[0]);
+      await gate.rows[0].ready.promise;
+      expect([...gate.rows[0].slots.keys()].toSorted()).toStrictEqual(["hash", "id", "reference"]);
+      gate.rows[0].slots.get(firstSlot)!.reject(first);
+      const response = await pending;
+      expect(response.status).toBe(500);
+      expect(await response.json()).toStrictEqual({ message: first.message });
+      expect(gate.completedCalls).toBe(1);
+      expect(data.removalChanges).toStrictEqual([]);
+      gate.rows[0].slots.get("hash")!.reject(later);
+      const successful = firstSlot === "id" ? "reference" : "id";
+      gate.rows[0].slots.get(successful)!.resolve();
+      await gate.rows[0].finished.promise;
+      const expected = new Map(initial);
+      const changedKey = successful === "reference" ? data.refKey : `api-key:by-id:${data.ids[0]}`;
+      const changedValue = successful === "reference" && !fallback ? JSON.stringify(data.ids.slice(1)) : null;
+      if (changedValue === null) expected.delete(changedKey);
+      else expected.set(changedKey, changedValue);
+      expect([...data.values]).toStrictEqual([...expected]);
+      expect(data.removalChanges).toStrictEqual([[changedKey, changedValue]]);
+      expect(data.indexWrites).toStrictEqual([]);
+      expect(gate.starts).toStrictEqual([0]);
+      expect(gate.finishes).toStrictEqual([0]);
+      expect(gate.completedCalls).toBe(3);
+      expect(gate.maximumCalls).toBe(3);
+      expect(gate.activeCalls).toBe(0);
+      expect(gate.activeRows).toBe(0);
     }
   });
 }

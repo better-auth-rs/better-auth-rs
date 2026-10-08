@@ -1,4 +1,6 @@
-use better_auth_core::{AuthContext, AuthResult, CreateApiKey, UpdateApiKey};
+use better_auth_core::{
+    AuthContext, AuthResult, CreateApiKey, FieldValue, SchemaValue, UpdateApiKey,
+};
 
 use super::ApiKeyPlugin;
 use super::types::*;
@@ -328,30 +330,33 @@ pub(crate) async fn list_keys_core(
         .as_deref()
         .filter(|field| !field.is_empty())
         .map(|field| (field, query.sort_direction.as_deref().unwrap_or("asc")));
-    let groups = futures_util::future::join_all(
-        configurations
-            .into_iter()
-            .map(|config| super::storage::list(config, ctx, reference_id, sort)),
-    )
-    .await;
-    let groups: Vec<_> = groups.into_iter().collect::<AuthResult<_>>()?;
-    let mut keys: Vec<_> = groups.into_iter().flatten().collect();
-    super::storage::deduplicate(&mut keys);
+    let mut keys = super::storage::list_groups(&configurations, ctx, reference_id, sort).await?;
+    if config_id.is_none() {
+        super::storage::deduplicate(&mut keys)?;
+    }
+    let reference_value = FieldValue::from(reference_id);
     let mut views: Vec<ApiKeyView> = keys
         .iter()
-        .filter(|key| {
+        // Primitive results can consume a deduplication slot, but cannot name an owner.
+        .filter_map(FieldValue::as_object)
+        .filter(|fields| {
+            let key_config_id = SchemaValue::<String>::from_field(
+                fields.get("configId").cloned().unwrap_or_default(),
+            );
             let key_references = plugin
                 .configurations
                 .iter()
-                .find(|config| super::config_id_matches(&key.config_id, &config.config_id))
+                .find(|config| super::config_id_matches(&key_config_id, &config.config_id))
                 .map(|config| config.references)
                 .unwrap_or_default();
             key_references == references
-                && key.reference_id == reference_id
-                && config_id.is_none_or(|id| super::config_id_matches(&key.config_id, id))
+                && fields
+                    .get("referenceId")
+                    .is_some_and(|value| value.strict_equals(&reference_value))
+                && config_id.is_none_or(|id| super::config_id_matches(&key_config_id, id))
         })
-        .map(ApiKeyView::from)
-        .collect();
+        .map(|fields| ApiKeyView::from_api_key_fields(fields.clone()))
+        .collect::<AuthResult<_>>()?;
 
     let total = views.len();
     if let Some(offset) = query.offset {

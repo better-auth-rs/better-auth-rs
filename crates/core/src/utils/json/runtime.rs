@@ -1,5 +1,6 @@
 use crate::{AuthError, AuthResult, FieldDate, FieldMap, FieldValue, Utf16String};
 use serde_json::value::RawValue;
+use std::borrow::Cow;
 use std::sync::OnceLock;
 
 pub(crate) fn parse_field_json(text: &str) -> AuthResult<FieldValue> {
@@ -27,15 +28,50 @@ pub(crate) fn parse_field_json(text: &str) -> AuthResult<FieldValue> {
     }
 }
 
+fn utf16_json_source(text: &Utf16String) -> AuthResult<String> {
+    let mut source = String::new();
+    let mut quoted = false;
+    let mut escaped = false;
+    for unit in char::decode_utf16(text.as_utf16().iter().copied()) {
+        match unit {
+            Ok(character) => {
+                source.push(character);
+                if escaped {
+                    escaped = false;
+                } else if quoted && character == '\\' {
+                    escaped = true;
+                } else if character == '"' {
+                    quoted = !quoted;
+                }
+            }
+            Err(error) => {
+                // JSON source permits unpaired surrogates only in unescaped string content.
+                if !quoted || escaped {
+                    return Err(AuthError::internal("Invalid JSON source"));
+                }
+                use std::fmt::Write as _;
+                write!(source, "\\u{:04x}", error.unpaired_surrogate())
+                    .map_err(|error| AuthError::internal(error.to_string()))?;
+            }
+        }
+    }
+    Ok(source)
+}
+
+/// Apply JSON.parse string conversion while preserving unpaired UTF-16 string values.
+/// Object names containing unpaired surrogates remain unsupported by FieldMap.
+pub fn parse_native_json(value: &FieldValue) -> AuthResult<FieldValue> {
+    match value {
+        FieldValue::String(text) => FieldValue::parse_json(text),
+        _ => FieldValue::parse_json(&utf16_json_source(&value.display_utf16()?)?),
+    }
+}
+
 /// Decode permissions and legacy metadata with upstream safeJSONParse behavior.
 pub fn safe_parse_field(value: &FieldValue) -> FieldValue {
     let parsed = match value {
         FieldValue::Undefined | FieldValue::Null => return FieldValue::Null,
-        FieldValue::String(text) => FieldValue::parse_json(text),
-        FieldValue::Utf16String(text) => text
-            .to_utf8()
-            .map_err(|error| AuthError::internal(error.to_string()))
-            .and_then(|text| FieldValue::parse_json(&text)),
+        FieldValue::String(_) | FieldValue::Utf16String(_) => parse_native_json(value),
         value => Ok(value.clone()),
     };
     match parsed {
@@ -86,13 +122,11 @@ fn patterns() -> &'static [regex::Regex; 3] {
 /// Decode the strict client parser used by the API key metadata schema.
 pub fn parse_client_json(value: FieldValue) -> AuthResult<FieldValue> {
     let text = match &value {
-        FieldValue::String(text) => text.as_str(),
-        FieldValue::Utf16String(text) => {
-            return match text.to_utf8() {
-                Ok(text) => parse_client_json(text.into()),
-                Err(_) => Err(AuthError::internal("[better-json] Invalid JSON")),
-            };
-        }
+        FieldValue::String(text) => Cow::Borrowed(text.as_str()),
+        FieldValue::Utf16String(text) => Cow::Owned(
+            utf16_json_source(text)
+                .map_err(|_| AuthError::internal("[better-json] Invalid JSON"))?,
+        ),
         _ => return Ok(value),
     };
     let text =
@@ -152,6 +186,88 @@ fn client_date(text: &str) -> Option<FieldDate> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn native_json_source_preserves_utf16_values_and_parser_policies() -> AuthResult<()> {
+        let text: FieldValue = Utf16String::from_units(
+            r#"{"units":[""#
+                .encode_utf16()
+                .chain([0xd800, 0xd83d, 0xde00, 0xdc00])
+                .chain(
+                    r#"","\udfff"],"date":"2026-01-02T03:04:05Z","number":1e400}"#.encode_utf16(),
+                )
+                .collect(),
+        )
+        .into();
+        let expected_units: FieldValue = vec![
+            Utf16String::from_units(vec![0xd800, 0xd83d, 0xde00, 0xdc00]).into(),
+            Utf16String::from_units(vec![0xdfff]).into(),
+        ]
+        .into();
+        for (parsed, revived) in [
+            (parse_native_json(&text)?, false),
+            (safe_parse_field(&text), true),
+            (parse_client_json(text.clone())?, true),
+        ] {
+            let fields = parsed
+                .as_object()
+                .ok_or_else(|| AuthError::internal("Expected parsed object"))?;
+            assert_eq!(fields.get("units"), Some(&expected_units));
+            assert!(
+                matches!(fields.get("number"), Some(FieldValue::Number(number)) if number.is_infinite())
+            );
+            assert_eq!(
+                matches!(fields.get("date"), Some(FieldValue::Date(_))),
+                revived
+            );
+            if !revived {
+                assert_eq!(fields.get("date"), Some(&"2026-01-02T03:04:05Z".into()));
+            }
+        }
+        for (units, expected) in [
+            (vec![34, 92, 92, 0xd800, 34], vec![92, 0xd800]),
+            (vec![34, 92, 34, 0xd800, 34], vec![34, 0xd800]),
+        ] {
+            assert_eq!(
+                parse_native_json(&Utf16String::from_units(units).into())?,
+                Utf16String::from_units(expected).into()
+            );
+        }
+        assert_eq!(parse_native_json(&FieldValue::Null)?, FieldValue::Null);
+        assert_eq!(parse_native_json(&true.into())?, true.into());
+        assert_eq!(parse_native_json(&17.0.into())?, 17.0.into());
+        Ok(())
+    }
+
+    #[test]
+    fn native_json_source_rejects_invalid_escapes_and_preserves_pollution_checks() {
+        for units in [
+            vec![34, 92, 0xd800, 34],
+            vec![0xd800],
+            vec![34, 92, 117, 0xd800, 34],
+            vec![34, 0xd800, 34, 34],
+            vec![34, 0xd800, 10, 34],
+        ] {
+            let text = Utf16String::from_units(units).into();
+            assert!(parse_native_json(&text).is_err());
+            assert_eq!(safe_parse_field(&text), FieldValue::Null);
+            assert!(parse_client_json(text).is_err());
+        }
+        let text: FieldValue = Utf16String::from_units(
+            r#"{"constructor":""#
+                .encode_utf16()
+                .chain([0xd800])
+                .chain(r#""}"#.encode_utf16())
+                .collect(),
+        )
+        .into();
+        assert!(parse_native_json(&text).is_ok());
+        assert!(matches!(
+            parse_client_json(text),
+            Err(AuthError::Internal(message))
+                if message == "[better-json] Potential prototype pollution attempt detected"
+        ));
+    }
 
     #[test]
     fn strict_metadata_and_safe_permissions_keep_distinct_parse_policies() -> AuthResult<()> {

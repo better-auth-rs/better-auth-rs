@@ -22,21 +22,19 @@ pub(super) async fn read(
 ) -> AuthResult<FieldValue> {
     Ok(match storage.get_native(key).await? {
         // The upstream catch applies only to JSON.parse, not to later method calls.
-        Some(FieldValue::String(text)) => {
-            FieldValue::parse_json(&text).unwrap_or_else(|_| Vec::<FieldValue>::new().into())
-        }
-        Some(FieldValue::Utf16String(_)) => {
-            // ponytail: Parse raw UTF-16 JSON text when the shared parser accepts unpaired code units.
-            return Err(AuthError::internal(
-                "API key cache JSON text requires UTF-16 parsing support",
-            ));
+        Some(value @ (FieldValue::String(_) | FieldValue::Utf16String(_))) => {
+            better_auth_core::utils::json::parse_native_json(&value)
+                .unwrap_or_else(|_| Vec::<FieldValue>::new().into())
         }
         Some(value @ FieldValue::Array(_)) => value,
         _ => Vec::<FieldValue>::new().into(),
     })
 }
 
-fn property(value: &FieldValue, name: &str) -> AuthResult<FieldValue> {
+pub(in crate::plugins::api_key) fn property(
+    value: &FieldValue,
+    name: &str,
+) -> AuthResult<FieldValue> {
     Ok(match value {
         FieldValue::Null | FieldValue::Undefined => {
             let kind = if value.is_null() { "null" } else { "undefined" };
@@ -69,7 +67,12 @@ pub(super) fn has_entries(value: &FieldValue) -> AuthResult<bool> {
     Ok(field_number(&property(value, "length")?)? > 0.0)
 }
 
-pub(super) fn items(value: &FieldValue) -> AuthResult<Vec<FieldValue>> {
+pub(super) enum Items {
+    Complete(Vec<FieldValue>),
+    Indexed { count: f64, concurrency: usize },
+}
+
+pub(super) fn items(value: &FieldValue) -> AuthResult<Items> {
     let length = property(value, "length")?;
     let count = field_number(&length)?;
     if length.is_number()
@@ -77,19 +80,17 @@ pub(super) fn items(value: &FieldValue) -> AuthResult<Vec<FieldValue>> {
     {
         return Err(AuthError::internal("Invalid array length"));
     }
-    if !length.is_number()
-        && (count.is_nan() || count < 1.0)
-        && !length.is_null()
-        && !length.is_undefined()
-    {
-        // ponytail: Preserve new Array(length)'s untouched element when the list boundary supports raw cache results.
-        return Err(AuthError::internal(
-            "API key cache list requires native results for a nonnumeric length",
-        ));
+    if length.is_number() && count == 0.0 {
+        return Ok(Items::Complete(Vec::new()));
     }
-    (0..count.ceil() as usize)
-        .map(|index| property(value, &index.to_string()))
-        .collect()
+    if count.is_nan() || count < 1.0 {
+        // A nonnumeric Array constructor argument remains an element when no worker starts.
+        return Ok(Items::Complete(vec![length]));
+    }
+    Ok(Items::Indexed {
+        count,
+        concurrency: count.min(super::STORAGE_CONCURRENCY as f64).floor() as usize,
+    })
 }
 
 fn next(value: FieldValue, id: &FieldValue, insert: bool) -> AuthResult<FieldValue> {

@@ -411,6 +411,7 @@ if [[ $# -eq 0 ]]; then
 fi
 server_catalog_tests=(
   ./compat-tests/reference-server/consumer-contracts/api-key-date-usage.test.ts
+  ./compat-tests/reference-server/consumer-contracts/mysql-create-readback.test.ts
   ./compat-tests/reference-server/consumer-contracts/device-grant-sql.test.ts
   ./compat-tests/reference-server/consumer-contracts/device-where.test.ts \
   ./compat-tests/reference-server/consumer-contracts/device-where-transactions.test.ts

@@ -1,4 +1,5 @@
 use super::*;
+pub(super) use better_auth_core::utils::json::parse_native_json as parse_json;
 use better_auth_core::{FieldMap, FieldValue};
 
 pub(super) fn algorithm(key: &better_auth_core::Jwk, fallback: FieldValue) -> FieldValue {
@@ -80,37 +81,6 @@ pub(super) fn date_millis(value: &FieldValue, expression: &str) -> AuthResult<f6
                 format!("{expression}.getTime is not a function")
             })
         })
-}
-
-pub(super) fn parse_json(value: &FieldValue) -> AuthResult<FieldValue> {
-    let text = value.display_utf16()?;
-    let mut source = String::new();
-    let mut quoted = false;
-    let mut escaped = false;
-    for unit in char::decode_utf16(text.as_utf16().iter().copied()) {
-        match unit {
-            Ok(character) => {
-                source.push(character);
-                if escaped {
-                    escaped = false;
-                } else if quoted && character == '\\' {
-                    escaped = true;
-                } else if character == '"' {
-                    quoted = !quoted;
-                }
-            }
-            Err(error) => {
-                // JSON source can contain an unpaired surrogate inside a quoted string.
-                if !quoted || escaped {
-                    return Err(AuthError::internal("Invalid JSON source"));
-                }
-                use std::fmt::Write as _;
-                write!(source, "\\u{:04x}", error.unpaired_surrogate())
-                    .map_err(|error| AuthError::internal(error.to_string()))?;
-            }
-        }
-    }
-    FieldValue::parse_json(&source)
 }
 
 pub(super) fn spread(fields: &mut FieldMap, value: FieldValue) {

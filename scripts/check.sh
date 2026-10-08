@@ -135,6 +135,7 @@ run_stage() {
         ./compat-tests/reference-server/contracts/api-key-fields.test.ts \
         ./compat-tests/reference-server/contracts/api-key-date-usage.test.ts \
         ./compat-tests/reference-server/consumer-contracts/api-key-date-usage.test.ts \
+        ./compat-tests/reference-server/consumer-contracts/mysql-create-readback.test.ts \
         ./compat-tests/reference-server/contracts/native-plugin-replacements.test.ts \
         ./compat-tests/reference-server/contracts/native-atomic-update.test.ts \
         ./compat-tests/reference-server/contracts/passkey-projected-id.test.ts \
@@ -156,7 +157,7 @@ run_stage() {
       cargo test --locked -p better-auth-cli schema_config || plugin_status=1
       cargo check --locked --manifest-path compat-tests/rust-server/Cargo.toml || plugin_status=1
       for package in better-auth-core better-auth-api better-auth-seaorm; do
-        cargo test --locked --no-fail-fast -p "$package" --lib -- api_key passkey device two_factor session_token_delete native_cookie store::session_create::tests:: store::cache::tests:: store::secondary:: utils::date::tests:: id_slot_tests::plugin_credentials query::dynamic_value_tests utils::json::runtime jwt jwk wallet siwe user_fields::record::tests:: ordinary_object_primitive_conversion_checks_only_the_selected_method member_queries_use_typed_storage_before_output_transforms store::updates:: store::record_bindings::tests:: field_value::serde::tests:: store::value_filter::tests:: schema_value::tests:: || plugin_status=1
+        cargo test --locked --no-fail-fast -p "$package" --lib -- api_key passkey device two_factor session_token_delete native_cookie store::session_create::tests:: store::cache::tests:: store::secondary:: utils::date::tests:: id_slot_tests::plugin_credentials query::dynamic_value_tests utils::json::runtime wire::api_key_view::tests:: jwt jwk wallet siwe user_fields::record::tests:: ordinary_object_primitive_conversion_checks_only_the_selected_method member_queries_use_typed_storage_before_output_transforms store::updates:: store::record_bindings::tests:: field_value::serde::tests:: store::value_filter::tests:: schema_value::tests:: || plugin_status=1
       done
       cargo test --locked --no-fail-fast --features axum,seaorm2,redis-cache \
         --test async_field_transform_tests --test api_key_additional_fields_tests --test passkey_additional_fields_tests \
@@ -173,6 +174,19 @@ run_stage() {
       cargo test --locked --features axum,seaorm2,redis-cache --test plugin_model_fields_tests -- api_key:: api_key_cache:: passkey aaguid:: native_registration:: device_ownership:: device_redemption:: presence:: presence_cache:: core::native_replacements_initialize_while_unsupported_model_roles_fail || plugin_status=1
       ./scripts/consumer-check.sh --test generated_plugin_catalog -- --include-ignored api_key_additional_fields native_plugin_replacements device plugin_display_json || plugin_status=1
       return "$plugin_status"
+      ;;
+    api-key-cache)
+      cargo fmt --all -- --check
+      local cache_status=0
+      bun --no-install test \
+        ./compat-tests/reference-server/contracts/api-key-cache-batch.test.ts \
+        ./compat-tests/reference-server/contracts/api-key-cache-sort.test.ts || cache_status=1
+      cargo clippy --locked -p better-auth-core -p better-auth-api --lib -- -D warnings || cache_status=1
+      cargo test --locked -p better-auth-core --lib -- \
+        utils::json::runtime:: field_value:: schema_value:: wire::api_key_view::tests:: || cache_status=1
+      cargo test --locked -p better-auth-api --lib -- \
+        plugins::api_key:: plugins::jwt:: || cache_status=1
+      return "$cache_status"
       ;;
     runtime-values)
       bun --no-install test \

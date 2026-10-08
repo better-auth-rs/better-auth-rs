@@ -5,7 +5,7 @@ fn field<T: SchemaField>(value: &T) -> crate::FieldValue {
 }
 
 macro_rules! record {
-    ($type:ty, [$($field:ident => $name:literal),* $(,)?], $($extra:ident)?) => {
+    ($type:ty, [$($field:ident => $name:literal),* $(,)?], $($extra:ident)? $(; order: $order:ident)? $(; omit: [$($omit:literal),*])?) => {
         impl AuthRecordFields for $type {
             fn field_values(&self) -> AuthResult<FieldMap> {
                 let fields = FieldMap::from_iter([
@@ -13,9 +13,20 @@ macro_rules! record {
                 ]);
                 $(let fields = {
                     let mut fields = fields;
+                    fields.retain(|name, value| !value.is_undefined() || self.$order.contains(name));
+                    fields
+                };)?
+                $(let fields = {
+                    let mut fields = fields;
                     fields.extend(self.$extra.clone());
                     fields
                 };)?
+                $(let fields = {
+                    let mut fields = fields;
+                    $(let _ = fields.remove($omit);)*
+                    fields
+                };)?
+                $(let fields = fields.in_field_order(&self.$order);)?
                 Ok(fields)
             }
 
@@ -28,9 +39,12 @@ macro_rules! record {
         }
         impl FromFieldMap for $type {
             fn from_field_values(mut fields: FieldMap) -> AuthResult<Self> {
+                $($(let _ = fields.remove($omit);)*)?
+                $(let $order = fields.keys().cloned().collect();)?
                 Ok(Self {
                     $($field: fields.remove($name).unwrap_or_default().decode()?,)*
                     $($extra: fields,)?
+                    $($order,)?
                 })
             }
         }
@@ -156,6 +170,30 @@ record!(crate::types::ApiKey, [
     permissions => "permissions",
     metadata => "metadata",
 ], additional_fields);
+
+record!(crate::wire::ApiKeyView, [
+    id => "id",
+    name => "name",
+    start => "start",
+    prefix => "prefix",
+    reference_id => "referenceId",
+    config_id => "configId",
+    refill_interval => "refillInterval",
+    refill_amount => "refillAmount",
+    last_refill_at => "lastRefillAt",
+    enabled => "enabled",
+    rate_limit_enabled => "rateLimitEnabled",
+    rate_limit_time_window => "rateLimitTimeWindow",
+    rate_limit_max => "rateLimitMax",
+    request_count => "requestCount",
+    remaining => "remaining",
+    last_request => "lastRequest",
+    expires_at => "expiresAt",
+    created_at => "createdAt",
+    updated_at => "updatedAt",
+    permissions => "permissions",
+    metadata => "metadata",
+], additional_fields; order: field_order; omit: ["key"]);
 
 record!(crate::types::WalletAddress, [
     id => "id",
