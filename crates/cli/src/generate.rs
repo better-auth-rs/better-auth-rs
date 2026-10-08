@@ -822,8 +822,12 @@ fn gen_indexes(entity: &Entity, database: Database) -> Vec<TokenStream> {
             matches!(field.registry_column, Some("device_code" | "user_code"))
                 && columns.as_slice() == [field.column.as_str()]
         });
-        let name = if device_index {
-            native_field_index_name(table, &columns.join("_"), true)
+        let declared_index = entity.fields.iter().any(|field| {
+            field.attributes.as_ref().is_some_and(|attributes| attributes.index)
+                && !unique && columns.as_slice() == [field.column.as_str()]
+        });
+        let name = if device_index || declared_index {
+            native_field_index_name(table, &columns.join("_"), unique)
         } else if let Some(field) = native_index {
             native_field_index_name(table, &field.column, false)
         } else {

@@ -1,5 +1,6 @@
 use better_auth_core::{
-    ApiKey, DeviceCode, Invitation, InvitationStatus, Member, Organization, Passkey, TwoFactor,
+    ApiKey, DeviceCode, Invitation, InvitationStatus, Member, Organization, Passkey, SchemaValue,
+    TwoFactor,
 };
 
 use crate::store::entities;
@@ -77,26 +78,26 @@ impl From<&entities::api_key::Model> for ApiKey {
             additional_fields: Default::default(),
             id: model.id.clone().into(),
             name: model.name.clone().into(),
-            start: model.start.clone().map(Into::into),
-            prefix: model.prefix.clone(),
-            key_hash: model.key_hash.clone(),
-            reference_id: model.reference_id.clone(),
-            config_id: model.config_id.clone(),
-            refill_interval: model.refill_interval,
-            refill_amount: model.refill_amount,
-            last_refill_at: model.last_refill_at.map(Into::into),
+            start: model.start.clone().map(Into::into).into(),
+            prefix: model.prefix.clone().into(),
+            key_hash: model.key_hash.clone().into(),
+            reference_id: model.reference_id.clone().into(),
+            config_id: model.config_id.clone().into(),
+            refill_interval: model.refill_interval.into(),
+            refill_amount: model.refill_amount.into(),
+            last_refill_at: model.last_refill_at.map(Into::into).into(),
             enabled: model.enabled.into(),
             rate_limit_enabled: model.rate_limit_enabled.into(),
-            rate_limit_time_window: model.rate_limit_time_window,
-            rate_limit_max: model.rate_limit_max,
-            request_count: model.request_count,
-            remaining: model.remaining,
-            last_request: model.last_request.map(Into::into),
-            expires_at: model.expires_at.map(Into::into),
-            created_at: better_auth_core::FieldDate::from(model.created_at),
-            updated_at: better_auth_core::FieldDate::from(model.updated_at),
-            permissions: model.permissions.clone(),
-            metadata: model.metadata.clone(),
+            rate_limit_time_window: model.rate_limit_time_window.into(),
+            rate_limit_max: model.rate_limit_max.into(),
+            request_count: model.request_count.into(),
+            remaining: model.remaining.into(),
+            last_request: model.last_request.map(Into::into).into(),
+            expires_at: model.expires_at.map(Into::into).into(),
+            created_at: model.created_at.into(),
+            updated_at: model.updated_at.into(),
+            permissions: model.permissions.clone().into(),
+            metadata: model.metadata.clone().into(),
         }
     }
 }
@@ -107,13 +108,13 @@ impl From<&entities::passkey::Model> for Passkey {
             additional_fields: Default::default(),
             id: model.id.clone().into(),
             name: model.name.clone().into(),
-            public_key: model.public_key.clone(),
+            public_key: model.public_key.clone().into(),
             user_id: model.user_id.clone().into(),
-            credential_id: model.credential_id.clone(),
-            counter: u64::try_from(model.counter).unwrap_or_default(),
-            device_type: model.device_type.clone(),
-            backed_up: model.backed_up,
-            transports: model.transports.clone(),
+            credential_id: model.credential_id.clone().into(),
+            counter: SchemaValue::from_field(model.counter.into()),
+            device_type: model.device_type.clone().into(),
+            backed_up: model.backed_up.into(),
+            transports: model.transports.clone().into(),
             created_at: Some(better_auth_core::FieldDate::from(model.created_at)).into(),
             updated_at: better_auth_core::FieldDate::from(model.updated_at).into(),
             aaguid: model.aaguid.clone().into(),
@@ -137,5 +138,36 @@ impl From<&entities::device_code::Model> for DeviceCode {
             client_id: model.client_id.clone().into(),
             scope: model.scope.clone().into(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bundled_passkey_conversion_preserves_negative_counter() {
+        let at = chrono::Utc::now();
+        let model = entities::passkey::Model {
+            id: "passkey".into(),
+            name: None,
+            public_key: "public-key".into(),
+            user_id: "owner".into(),
+            credential_id: "credential-id".into(),
+            counter: -7,
+            device_type: "singleDevice".into(),
+            backed_up: false,
+            transports: None,
+            credential: "credential".into(),
+            aaguid: None,
+            created_at: at,
+            updated_at: at,
+        };
+
+        let passkey = Passkey::from(&model);
+        assert_eq!(
+            passkey.counter.field_value(),
+            better_auth_core::FieldValue::Number(-7.0)
+        );
     }
 }

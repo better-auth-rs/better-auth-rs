@@ -2,7 +2,7 @@ use crate::{SeaOrmPluginModel, schema::AuthSchema};
 use better_auth_core::store::schema::{EntityRole, core_fields, resolve_field_name};
 use better_auth_core::{AuthError, AuthResult, id::IdGeneration, user_fields::UserConfig};
 use better_auth_core::{FieldMap, FromFieldMap, SchemaField};
-use sea_orm::{ColumnTrait, ConnectionTrait, DbBackend, ExprTrait, IdenStatic, QueryResult};
+use sea_orm::{ColumnTrait, DbBackend, ExprTrait, IdenStatic, QueryResult};
 
 pub(super) type Write<M> = super::record_write::RecordWrite<Entity<M>>;
 

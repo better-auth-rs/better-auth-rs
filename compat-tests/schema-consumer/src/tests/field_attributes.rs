@@ -74,6 +74,7 @@ async fn generated_attributes_enforce_indexes_references_and_delete_actions() {
     database.execute_unprepared("INSERT INTO app_organizations (id, display_name, slug, implicitRequired, lookup, unique_code, created_at, updated_at) VALUES ('nullable-fields', 'Nullable', 'nullable', 'present', NULL, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)").await.unwrap();
 
     let mut indexes = BTreeMap::<Vec<String>, Vec<bool>>::new();
+    let mut index_names = BTreeMap::<Vec<String>, Vec<String>>::new();
     for row in database
         .query_all_raw(statement("PRAGMA index_list(app_organizations)"))
         .await
@@ -81,13 +82,14 @@ async fn generated_attributes_enforce_indexes_references_and_delete_actions() {
     {
         let name: String = row.try_get("", "name").unwrap();
         let unique: i64 = row.try_get("", "unique").unwrap();
-        let columns = database
+        let columns: Vec<String> = database
             .query_all_raw(statement(format!("PRAGMA index_info('{name}')")))
             .await
             .unwrap()
             .into_iter()
             .map(|row| row.try_get("", "name").unwrap())
             .collect();
+        index_names.entry(columns.clone()).or_default().push(name);
         indexes.entry(columns).or_default().push(unique != 0);
     }
     assert_eq!(
@@ -98,6 +100,14 @@ async fn generated_attributes_enforce_indexes_references_and_delete_actions() {
     assert_eq!(indexes.get(&vec!["unique_code".into()]), Some(&vec![true]));
     assert!(!indexes.contains_key(&vec!["sorted".into()]));
     assert!(!indexes.contains_key(&vec!["slug".into()]));
+    assert_eq!(
+        index_names.get(&vec!["display_name".into()]),
+        Some(&vec!["app_organizations_display_name_idx".into()])
+    );
+    assert_eq!(
+        index_names.get(&vec!["lookup".into()]),
+        Some(&vec!["app_organizations_lookup_idx".into()])
+    );
 
     let member_keys = database
         .query_all_raw(statement("PRAGMA foreign_key_list(app_members)"))

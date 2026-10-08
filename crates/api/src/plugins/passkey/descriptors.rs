@@ -2,7 +2,9 @@ use base64::{
     Engine,
     engine::{DecodePaddingMode, GeneralPurpose, GeneralPurposeConfig},
 };
-use better_auth_core::{AuthError, AuthPasskey, AuthResult, FieldMap, FieldValue, Utf16String};
+use better_auth_core::{
+    AuthError, AuthPasskey, AuthResult, FieldMap, FieldValue, SchemaValue, Utf16String,
+};
 use webauthn_rs_core::proto::CredentialID;
 
 use super::webauthn::parse_transports_csv;
@@ -71,7 +73,7 @@ pub(super) fn credential_descriptors(
             if !id.is_string() {
                 return Err(AuthError::internal("input.replace is not a function"));
             }
-            let text = id.display_string()?;
+            let text = SchemaValue::<String>::from_field(id).display_string()?;
             let normalized = text.replace('=', "");
             if !normalized
                 .bytes()
