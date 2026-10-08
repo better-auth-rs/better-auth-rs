@@ -136,25 +136,14 @@ impl<S: AuthSchema> SessionManager<S> {
         )
         .await?;
         view.visible_fields = Some(
-            [
-                ("admin.enabled", "impersonatedBy"),
-                ("organization.enabled", "activeOrganizationId"),
-                ("organization.teams_enabled", "activeTeamId"),
-            ]
-            .into_iter()
-            .filter(|(plugin, _)| {
-                self.user_metadata
-                    .get(*plugin)
-                    .and_then(serde_json::Value::as_bool)
-                    == Some(true)
-            })
-            .filter(|(_, name)| {
-                session
-                    .field_presence()
-                    .is_none_or(|fields| fields.contains(*name))
-            })
-            .map(|(_, name)| name.to_owned())
-            .collect(),
+            SessionView::active_plugin_fields(&self.user_metadata)
+                .filter(|name| {
+                    session
+                        .field_presence()
+                        .is_none_or(|fields| fields.contains(*name))
+                })
+                .map(str::to_owned)
+                .collect(),
         );
         Ok(view)
     }

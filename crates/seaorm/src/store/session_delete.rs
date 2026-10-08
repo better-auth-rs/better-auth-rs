@@ -2,7 +2,7 @@ use super::instrumentation::database_operation;
 use chrono::Utc;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, Condition, ConnectionTrait, EntityTrait, QueryFilter,
-    QuerySelect,
+    QuerySelect, sea_query::ExprTrait,
 };
 
 use crate::SeaOrmStore;
@@ -37,7 +37,10 @@ where
             .begin_id_query(better_auth_core::store::schema::EntityRole::Session)?;
         let now = Utc::now();
         if preserve {
-            condition = condition.add(S::Session::expires_at_column().gt(now));
+            let now = super::record_bindings::Binding::Date(now.into())
+                .bind(db.get_database_backend())?;
+            let expires_at = S::Session::expires_at_column();
+            condition = condition.add(expires_at.into_expr().gt(expires_at.save_as(now)));
         }
         let snapshot = database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
             self.config(),

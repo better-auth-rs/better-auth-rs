@@ -190,16 +190,16 @@ where
             self.config(),
             "findOne",
             async {
+                let now = super::record_bindings::Binding::Date(Utc::now().into())
+                    .bind(self.connection().get_database_backend())?;
+                let expires_at = S::Verification::expires_at_column();
                 <S::Verification as SeaOrmVerificationModel>::Entity::find()
                     .filter(
                         <S::Verification as SeaOrmVerificationModel>::identifier_column()
                             .eq(identifier),
                     )
                     .filter(<S::Verification as SeaOrmVerificationModel>::value_column().eq(value))
-                    .filter(
-                        <S::Verification as SeaOrmVerificationModel>::expires_at_column()
-                            .gt(Utc::now()),
-                    )
+                    .filter(expires_at.into_expr().gt(expires_at.save_as(now)))
                     .one(self.connection())
                     .await
                     .map_err(map_db_err)
@@ -221,12 +221,12 @@ where
             self.config(),
             "findOne",
             async {
+                let now = super::record_bindings::Binding::Date(Utc::now().into())
+                    .bind(self.connection().get_database_backend())?;
+                let expires_at = S::Verification::expires_at_column();
                 <S::Verification as SeaOrmVerificationModel>::Entity::find()
                     .filter(<S::Verification as SeaOrmVerificationModel>::value_column().eq(value))
-                    .filter(
-                        <S::Verification as SeaOrmVerificationModel>::expires_at_column()
-                            .gt(Utc::now()),
-                    )
+                    .filter(expires_at.into_expr().gt(expires_at.save_as(now)))
                     .one(self.connection())
                     .await
                     .map_err(map_db_err)
@@ -251,15 +251,15 @@ where
             self.config(),
             "findOne",
             async {
+                let now = super::record_bindings::Binding::Date(Utc::now().into())
+                    .bind(self.connection().get_database_backend())?;
+                let expires_at = S::Verification::expires_at_column();
                 <S::Verification as SeaOrmVerificationModel>::Entity::find()
                     .filter(
                         <S::Verification as SeaOrmVerificationModel>::identifier_column()
                             .eq(identifier),
                     )
-                    .filter(
-                        <S::Verification as SeaOrmVerificationModel>::expires_at_column()
-                            .gt(Utc::now()),
-                    )
+                    .filter(expires_at.into_expr().gt(expires_at.save_as(now)))
                     .one(self.connection())
                     .await
                     .map_err(map_db_err)
@@ -344,8 +344,10 @@ where
         connection: &C,
         tx: Option<super::HookTransaction<'_, S>>,
     ) -> AuthResult<(usize, Vec<VerificationView>)> {
-        let now = Utc::now();
-        let filter = <S::Verification as SeaOrmVerificationModel>::expires_at_column().lt(now);
+        let now = super::record_bindings::Binding::Date(Utc::now().into())
+            .bind(connection.get_database_backend())?;
+        let expires_at = S::Verification::expires_at_column();
+        let filter = expires_at.into_expr().lt(expires_at.save_as(now));
         // Only the upstream deleteMany snapshot is best-effort. Hook and write errors propagate.
         let snapshot: AuthResult<Vec<VerificationView>> = async {
             match database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(

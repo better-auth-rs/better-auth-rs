@@ -183,6 +183,21 @@ impl<T: AuthSession> From<&T> for SessionView {
 }
 
 impl SessionView {
+    pub(crate) fn active_plugin_fields(
+        metadata: &crate::plugin::MetadataMap,
+    ) -> impl Iterator<Item = &'static str> + '_ {
+        [
+            ("admin.enabled", "impersonatedBy"),
+            ("organization.enabled", "activeOrganizationId"),
+            ("organization.teams_enabled", "activeTeamId"),
+        ]
+        .into_iter()
+        .filter(move |(plugin, _)| {
+            metadata.get(*plugin).and_then(serde_json::Value::as_bool) == Some(true)
+        })
+        .map(|(_, field)| field)
+    }
+
     /// Apply current public visibility without materializing absent cached fields.
     pub fn filter_returned_fields(&mut self, config: &crate::config::SessionConfig) {
         self.additional_fields.retain(|name, _| {

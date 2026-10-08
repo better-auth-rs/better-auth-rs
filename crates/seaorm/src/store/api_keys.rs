@@ -392,9 +392,12 @@ where
 
     async fn delete_expired_api_keys(&self) -> AuthResult<usize> {
         database_operation::<Entity<P::ApiKey>, _>(self.config(), "deleteMany", async {
+            let now = super::record_bindings::Binding::Date(Utc::now().into())
+                .bind(self.connection().get_database_backend())?;
+            let expires_at = P::ApiKey::column("expires_at")?;
             Entity::<P::ApiKey>::delete_many()
-                .filter(P::ApiKey::column("expires_at")?.is_not_null())
-                .filter(P::ApiKey::column("expires_at")?.lt(Utc::now()))
+                .filter(expires_at.is_not_null())
+                .filter(expires_at.into_expr().lt(expires_at.save_as(now)))
                 .exec(self.connection())
                 .await
                 .map(|result| result.rows_affected as usize)

@@ -49,20 +49,14 @@ impl<S: AuthSchema> SecondaryStore<S> {
         )
         .await?;
         view.visible_fields = Some(
-            [
-                ("admin.enabled", "impersonatedBy"),
-                ("organization.enabled", "activeOrganizationId"),
-                ("organization.teams_enabled", "activeTeamId"),
-            ]
-            .into_iter()
-            .filter(|(plugin, _)| self.metadata.get(*plugin).and_then(Value::as_bool) == Some(true))
-            .filter(|(_, field)| {
-                session
-                    .field_presence()
-                    .is_none_or(|fields| fields.contains(*field))
-            })
-            .map(|(_, field)| field.to_owned())
-            .collect(),
+            SessionView::active_plugin_fields(&self.metadata)
+                .filter(|field| {
+                    session
+                        .field_presence()
+                        .is_none_or(|fields| fields.contains(*field))
+                })
+                .map(str::to_owned)
+                .collect(),
         );
         let mut fields: FieldMap = view.into();
         if !self.database_sessions() {

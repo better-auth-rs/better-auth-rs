@@ -20,6 +20,7 @@ pub struct ModelFields {
     schema_models: Option<Vec<(EntityRole, &'static str)>>,
     custom_models: IndexMap<String, (String, UserConfig)>,
     user_plugin_fields: Vec<&'static str>,
+    session_plugin_fields: Vec<&'static str>,
     native_fields: IndexMap<EntityRole, IndexSet<String>>,
     organization_output_order: IndexMap<EntityRole, Vec<String>>,
     organization: Option<crate::organization_fields::OrganizationFields>,
@@ -129,12 +130,20 @@ impl ModelFields {
         self.schema_models = Some(config.models());
         self.user_plugin_fields =
             crate::wire::UserView::active_plugin_fields(&config.metadata).collect();
+        self.session_plugin_fields =
+            crate::wire::SessionView::active_plugin_fields(&config.metadata).collect();
     }
 
     /// Read native User fields owned by active plugins before adapter output projection.
     #[doc(hidden)]
     pub fn user_plugin_fields(&self) -> &[&'static str] {
         &self.user_plugin_fields
+    }
+
+    /// Read native Session fields owned by active plugins before adapter output projection.
+    #[doc(hidden)]
+    pub fn session_plugin_fields(&self) -> &[&'static str] {
+        &self.session_plugin_fields
     }
 
     pub(crate) fn organization_join_schema(&self, config: &AuthConfig) -> Self {

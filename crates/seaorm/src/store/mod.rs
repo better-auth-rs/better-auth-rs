@@ -37,6 +37,7 @@ mod record_write;
 mod runtime;
 mod schema_preflight;
 mod session_delete;
+mod session_output;
 mod sessions;
 mod team_capacity;
 mod team_invitation;

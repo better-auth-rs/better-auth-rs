@@ -10,7 +10,9 @@ use async_trait::async_trait;
 use better_auth_core::{AuthResult, store::InvitationStore};
 use better_auth_core::{FieldValue, SchemaField};
 use chrono::Utc;
-use sea_orm::{ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QuerySelect};
+use sea_orm::{
+    ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QuerySelect, sea_query::ExprTrait,
+};
 
 #[async_trait]
 impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> InvitationStore
@@ -86,6 +88,9 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> I
         email: &str,
     ) -> AuthResult<Option<Invitation>> {
         let config = self.organization_fields()?.invitation;
+        let now = super::record_bindings::Binding::Date(Utc::now().into())
+            .bind(self.connection().get_database_backend())?;
+        let expires_at = O::Invitation::column("expires_at")?;
         let row = Entity::<O::Invitation>::find()
             .filter(O::Invitation::column("organization_id")?.eq_id(
                 organization_id,
@@ -93,7 +98,7 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> I
             )?)
             .filter(O::Invitation::column("email")?.eq(email.to_lowercase()))
             .filter(O::Invitation::column("status")?.eq("pending"))
-            .filter(O::Invitation::column("expires_at")?.gt(Utc::now()))
+            .filter(expires_at.into_expr().gt(expires_at.save_as(now)))
             .one(self.connection())
             .await
             .map_err(map_db_err)?;
@@ -162,13 +167,16 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> I
         &self,
         organization_id: &str,
     ) -> AuthResult<i64> {
+        let now = super::record_bindings::Binding::Date(Utc::now().into())
+            .bind(self.connection().get_database_backend())?;
+        let expires_at = O::Invitation::column("expires_at")?;
         Entity::<O::Invitation>::find()
             .filter(O::Invitation::column("organization_id")?.eq_id(
                 organization_id,
                 self.config().advanced.database.generate_id(),
             )?)
             .filter(O::Invitation::column("status")?.eq("pending"))
-            .filter(O::Invitation::column("expires_at")?.gt(Utc::now()))
+            .filter(expires_at.into_expr().gt(expires_at.save_as(now)))
             .count(self.connection())
             .await
             .map(|count| count as i64)

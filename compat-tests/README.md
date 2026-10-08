@@ -52,7 +52,7 @@ The option profiles also cover API Key generators, getters, validators, dynamic 
 
 `organization-invitation-teams` verifies replacement `teamId` values through truthiness checks, before-create hook inputs, adapter joining, persistence, and runtime failures without partial writes.
 
-Secondary-storage profiles exercise session snapshots, cache misses, revocation, preserved database rows, transaction rollback, verification updates, and concurrent consumption. Verification identifier profiles cover hashing, custom functions, prefix selection, and legacy plaintext records with and without secondary storage. The three `session-fields` profiles compare defaults, validators, transforms, `onUpdate`, visibility, and JSON fields with database storage, secondary storage, and both together.
+Secondary-storage profiles exercise session snapshots, cache misses, revocation, preserved database rows, transaction rollback, verification updates, and concurrent consumption. SQL Session output selects fields from enabled plugin schemas before creating new snapshots. Existing cookie snapshots retain their original fields until the scenario requests a database read. Verification identifier profiles cover hashing, custom functions, prefix selection, and legacy plaintext records with and without secondary storage. The three `session-fields` profiles compare defaults, validators, transforms, `onUpdate`, visibility, and JSON fields with database storage, secondary storage, and both together.
 
 The four `cookie-version-*` profiles compare asynchronous version callbacks, hidden-field visibility, invalidation after revocation, and callback failures for Compact, JWT, JWE, and plugin-signed JWT caches against the upstream runtime.
 
