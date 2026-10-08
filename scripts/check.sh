@@ -136,14 +136,16 @@ run_stage() {
         ./compat-tests/reference-server/contracts/api-key-expiration.test.ts \
         ./compat-tests/reference-server/contracts/api-key-cache-sort.test.ts \
         ./compat-tests/reference-server/contracts/organization-query-limits.test.ts \
+        ./compat-tests/reference-server/contracts/member-json-filter.test.ts \
         ./compat-tests/reference-server/contracts/api-key-cache-batch.test.ts \
         ./compat-tests/reference-server/api-key-metadata.test.ts \
         ./compat-tests/reference-server/api-key-metadata-pages.test.ts
       cargo clippy --locked -p better-auth-core -p better-auth-api -p better-auth-seaorm -- -D warnings
-      cargo clippy --locked --features axum,seaorm2,redis-cache --test plugin_output_capabilities_tests --test api_key_additional_fields_tests --test auth_entity_plugin_alias_tests --test plugin_model_fields_tests -- -D warnings
+      cargo clippy --locked --features axum,seaorm2,redis-cache --test plugin_output_capabilities_tests --test api_key_additional_fields_tests --test organization_member_json_filter_reference_tests --test auth_entity_plugin_alias_tests --test plugin_model_fields_tests -- -D warnings
       cargo test --locked -p better-auth-core -p better-auth-api -p better-auth-seaorm --lib -- api_key jwt user_fields::record::tests:: ordinary_object_primitive_conversion_checks_only_the_selected_method member_queries_use_typed_storage_before_output_transforms
       cargo test --locked --features axum,seaorm2,redis-cache \
         --test api_key_additional_fields_tests --test passkey_additional_fields_tests \
+        --test organization_member_json_filter_reference_tests \
         --test two_factor_additional_fields_tests --test device_additional_fields_tests \
         --test jwk_additional_fields_tests --test wallet_additional_fields_tests \
         --test auth_entity_plugin_alias_tests \

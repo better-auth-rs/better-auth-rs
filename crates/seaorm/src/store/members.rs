@@ -96,10 +96,27 @@ fn apply_member_filter<M: SeaOrmOrganizationModel>(
             super::record_bindings::parameter(value, backend)
         };
     let operator = params.filter_operator.as_deref().unwrap_or("eq");
+    if matches!(operator, "in" | "not_in") && value.as_array().is_none() {
+        return Err(better_auth_core::AuthError::internal(
+            "Value must be an array",
+        ));
+    }
+    let json_value = config
+        .fields()
+        .get(field)
+        .filter(|field| {
+            !id_field
+                && field.references.is_none()
+                && matches!(field.field_type, UserFieldType::Json)
+        })
+        .map(|field| super::value_filter::adapter_query_value(value.clone(), value, field, backend))
+        .transpose()?;
+    let value = json_value.as_ref().unwrap_or(value);
     if matches!(operator, "in" | "not_in") {
+        // The adapter serializes the complete JSON value before Kysely constructs membership lists.
         let values = value
             .as_array()
-            .ok_or_else(|| better_auth_core::AuthError::internal("Value must be an array"))?;
+            .unwrap_or_else(|| std::slice::from_ref(value));
         let number_strings = matches!(field_type, Some(UserFieldType::Number))
             && values.iter().all(|value| {
                 value

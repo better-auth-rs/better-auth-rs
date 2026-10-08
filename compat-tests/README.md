@@ -176,6 +176,8 @@ bash compat-tests/client-tests/run-against-both.sh all
 
 `organization-callbacks` compares lifecycle hook arguments, data overrides, dynamic limits, metadata, and server-only member creation. `organization-custom-team` verifies custom default-team creation. Failed invitation acceptance must preserve the upstream compensation updates without creating organization or team memberships.
 
+The `member-json-filter` contract compares additional JSON Member fields through the upstream organization adapter. Its SQLite pairing covers whole-array equality and membership, internal object equality, pagination totals, callbacks, and unchanged storage. Run the pairing with the existing `plugin-fields` stage. Memory membership errors remain upstream observations.
+
 `organization-metadata` compares raw test-helper storage on Memory and SQLite. Raw strings and SQL NULL retain their values; Memory accepts raw objects, while SQLite rejects them. Normal create and update responses decode metadata, and later reads retain the stored JSON text. Rust persistence tests separately retain the explicit JSON-model contract.
 
 Run each profile with the existing dual-runtime harness:
