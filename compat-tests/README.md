@@ -13,6 +13,10 @@ The `Upstream fixture capture` workflow runs each selected capture twice and req
 
 Use `devenv shell -- ./scripts/check.sh credential-timing` for One Time Token hashing deadlines and Device polling guards. The stage runs the targeted Rust regressions and strict upstream replays. The upstream captures use a fixed clock; Rust checks actual hashing intervals and token consumption without injecting a production clock.
 
+Use `devenv shell -- ./scripts/check.sh memory-sorting` for Memory API Key ordering and stable Member ordering. Member pairing checks equal timestamps in both directions and the resulting page positions. Locale and arbitrary mixed-value ordering retain the boundaries in the alignment inventory.
+
+Full CI continues independent check stages after a check fails, provided compatibility dependency installation succeeded. Any failed stage still fails the workflow. Cancellation stops the remaining stages.
+
 Run `./scripts/check.sh cookie-attributes` inside devenv for focused cookie checks. The stage replays the complete `cookie-attribute-mutation-1.7.6.json` document and runs the related Rust serializer, chunk, LastLogin, expiration, lifetime, and cleanup regressions. The replay compares serialized JSON bytes without rewriting the fixture. Rust compares all captured wire headers in order and checks attribute values before and after writes. JavaScript object identity, property order, own-undefined distinctions, and HTTP `statusText` remain upstream observations; see the [alignment inventory](../docs/upstream-alignment-backlog.md) for the exact boundaries.
 
 Use `devenv shell -- ./scripts/check.sh oauth-duration` for token-duration changes. The stage runs the HTTP pairing first, followed by fixed-clock helpers and strict upstream replay. The stage includes production and targeted test Clippy and reuses the `provider-options` Rust cache. Use `provider-options` for broader provider changes. Only `all` qualifies for master integration.

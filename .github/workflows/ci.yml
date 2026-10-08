@@ -139,36 +139,37 @@ jobs:
             compat-tests/rust-server/target
             compat-tests/schema-consumer/target
       - name: Install locked compatibility dependencies
+        id: dependencies
         run: devenv shell -- ./scripts/check.sh dependencies
       - name: Check formatting
-        if: env.CHECK_STAGE == 'all'
+        if: ${{ !cancelled() && env.CHECK_STAGE == 'all' && steps.dependencies.outcome == 'success' }}
         run: devenv shell -- ./scripts/check.sh format
       - name: Lint default features
-        if: env.CHECK_STAGE == 'all'
+        if: ${{ !cancelled() && env.CHECK_STAGE == 'all' && steps.dependencies.outcome == 'success' }}
         run: devenv shell -- ./scripts/check.sh lint-default
       - name: Lint integration features
-        if: env.CHECK_STAGE == 'all'
+        if: ${{ !cancelled() && env.CHECK_STAGE == 'all' && steps.dependencies.outcome == 'success' }}
         run: devenv shell -- ./scripts/check.sh lint-features
       - name: Test workspace
-        if: env.CHECK_STAGE == 'all'
+        if: ${{ !cancelled() && env.CHECK_STAGE == 'all' && steps.dependencies.outcome == 'success' }}
         run: devenv shell -- ./scripts/check.sh workspace-tests
       - name: Check Rustls configuration
-        if: env.CHECK_STAGE == 'all'
+        if: ${{ !cancelled() && env.CHECK_STAGE == 'all' && steps.dependencies.outcome == 'success' }}
         run: devenv shell -- ./scripts/check.sh rustls
       - name: Build Rustdoc
-        if: env.CHECK_STAGE == 'all'
+        if: ${{ !cancelled() && env.CHECK_STAGE == 'all' && steps.dependencies.outcome == 'success' }}
         run: devenv shell -- ./scripts/check.sh rustdoc
       - name: Check generated consumer and databases
-        if: env.CHECK_STAGE == 'all'
+        if: ${{ !cancelled() && env.CHECK_STAGE == 'all' && steps.dependencies.outcome == 'success' }}
         run: devenv shell -- ./scripts/check.sh consumer
       - name: Check fullstack example
-        if: env.CHECK_STAGE == 'all'
+        if: ${{ !cancelled() && env.CHECK_STAGE == 'all' && steps.dependencies.outcome == 'success' }}
         run: devenv shell -- ./scripts/check.sh fullstack
       - name: Check quick-start guide
-        if: env.CHECK_STAGE == 'all'
+        if: ${{ !cancelled() && env.CHECK_STAGE == 'all' && steps.dependencies.outcome == 'success' }}
         run: devenv shell -- ./scripts/check.sh quick-start
       - name: Check upstream alignment
-        if: env.CHECK_STAGE == 'all'
+        if: ${{ !cancelled() && env.CHECK_STAGE == 'all' && steps.dependencies.outcome == 'success' }}
         run: devenv shell -- ./scripts/check.sh alignment
       - name: Capture upstream telemetry environment
         if: env.CHECK_STAGE == 'telemetry'
