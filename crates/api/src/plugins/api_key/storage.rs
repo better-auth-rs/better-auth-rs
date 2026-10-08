@@ -1,8 +1,7 @@
 #[cfg(test)]
 use std::collections::BTreeMap;
-use std::collections::HashMap;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, OnceLock, Weak};
 
 use better_auth_core::store::SecondaryStorage;
 #[cfg(test)]
@@ -13,8 +12,8 @@ use better_auth_core::{
 };
 use chrono::Utc;
 use futures_util::{StreamExt, TryFutureExt, future, stream};
+#[cfg(test)]
 use serde_json::Value;
-use tokio::sync::Mutex;
 
 use super::ApiKeyConfig;
 
@@ -22,6 +21,8 @@ const STORAGE_CONCURRENCY: usize = 10;
 
 mod usage;
 pub(super) use usage::consume;
+mod reference;
+use reference::{cache_key, modify_reference};
 #[cfg(test)]
 mod batch_tests;
 
@@ -115,8 +116,8 @@ fn serialize(key: &ApiKey) -> AuthResult<String> {
         .ok_or_else(|| AuthError::internal("API key cache serialization omitted the record"))
 }
 
-fn deserialize(value: Option<Value>) -> Option<ApiKey> {
-    let Value::String(value) = value? else {
+fn deserialize(value: Option<FieldValue>) -> Option<ApiKey> {
+    let FieldValue::String(value) = value? else {
         return None;
     };
     // Upstream treats malformed serialized cache entries as a cache miss.
@@ -171,59 +172,14 @@ fn deserialize(value: Option<Value>) -> Option<ApiKey> {
 }
 
 async fn cached(storage: &dyn SecondaryStorage, key: &str) -> AuthResult<Option<ApiKey>> {
-    Ok(deserialize(storage.get(key).await?))
+    cached_native(storage, &key.into()).await
 }
 
-fn reference_ids(value: Option<Value>) -> Vec<better_auth_core::SchemaValue<String>> {
-    let value = match value {
-        Some(Value::String(value)) => serde_json::from_str(&value).ok(),
-        value => value,
-    };
-    value
-        .and_then(|value| serde_json::from_value(value).ok())
-        .unwrap_or_default()
-}
-
-async fn modify_reference(
+async fn cached_native(
     storage: &dyn SecondaryStorage,
-    key: &ApiKey,
-    insert: bool,
-) -> AuthResult<()> {
-    // The upstream reference-list lock only coordinates writers in this process.
-    // Cache-only quota remains non-atomic; database fallback provides guarded quota.
-    let index = format!("api-key:by-ref:{}", key.reference_id.display_string()?);
-    static LOCKS: OnceLock<std::sync::Mutex<HashMap<String, Weak<Mutex<()>>>>> = OnceLock::new();
-    let lock = {
-        let mut locks = LOCKS
-            .get_or_init(Default::default)
-            .lock()
-            .map_err(|_| AuthError::internal("API key reference-list lock poisoned"))?;
-        locks.retain(|_, lock| lock.strong_count() > 0);
-        match locks.get(&index).and_then(Weak::upgrade) {
-            Some(lock) => lock,
-            None => {
-                let lock = Arc::new(Mutex::new(()));
-                let _ = locks.insert(index.clone(), Arc::downgrade(&lock));
-                lock
-            }
-        }
-    };
-    let _guard = lock.lock().await;
-    let mut ids = reference_ids(storage.get(&index).await?);
-    if insert {
-        if !ids.contains(&key.id) {
-            ids.push(key.id.clone());
-        }
-    } else {
-        ids.retain(|id| id != &key.id);
-    }
-    if ids.is_empty() {
-        storage.delete(&index).await
-    } else {
-        storage
-            .set(&index, &serde_json::to_string(&ids)?, None)
-            .await
-    }
+    key: &FieldValue,
+) -> AuthResult<Option<ApiKey>> {
+    Ok(deserialize(storage.get_native(key).await?))
 }
 
 pub(super) async fn put(
@@ -242,9 +198,10 @@ async fn put_with_failure_flag(
 ) -> AuthResult<()> {
     let value = serialize(key)?;
     let ttl = ttl(key)?;
-    let hashed = format!("api-key:{}", key.key_hash.display_string()?);
-    let id = format!("api-key:by-id:{}", key.id.display_string()?);
-    let reference = format!("api-key:by-ref:{}", key.reference_id.display_string()?);
+    let hashed = cache_key("api-key:", &key.key_hash.field_value())?;
+    let id = cache_key("api-key:by-id:", &key.id.field_value())?;
+    let reference = cache_key("api-key:by-ref:", &key.reference_id.field_value())?;
+    let ttl = ttl.map(|seconds| seconds as f64);
     if fallback {
         // Stop a list refill when an IO fails, even while another write for this key is pending.
         let stop_batch = |_: &AuthError| {
@@ -253,17 +210,19 @@ async fn put_with_failure_flag(
             }
         };
         let (hashed, id, reference) = tokio::join!(
-            storage.set(&hashed, &value, ttl).inspect_err(stop_batch),
-            storage.set(&id, &value, ttl).inspect_err(stop_batch),
-            storage.delete(&reference).inspect_err(stop_batch)
+            storage
+                .set_native(&hashed, &value, ttl)
+                .inspect_err(stop_batch),
+            storage.set_native(&id, &value, ttl).inspect_err(stop_batch),
+            storage.delete_native(&reference).inspect_err(stop_batch)
         );
         hashed?;
         id?;
         reference
     } else {
         let (hashed, id) = tokio::join!(
-            storage.set(&hashed, &value, ttl),
-            storage.set(&id, &value, ttl)
+            storage.set_native(&hashed, &value, ttl),
+            storage.set_native(&id, &value, ttl)
         );
         hashed?;
         id?;
@@ -276,22 +235,22 @@ async fn remove_cached(
     key: &ApiKey,
     fallback: bool,
 ) -> AuthResult<()> {
-    let hashed = format!("api-key:{}", key.key_hash.display_string()?);
-    let id = format!("api-key:by-id:{}", key.id.display_string()?);
-    let reference = format!("api-key:by-ref:{}", key.reference_id.display_string()?);
+    let hashed = cache_key("api-key:", &key.key_hash.field_value())?;
+    let id = cache_key("api-key:by-id:", &key.id.field_value())?;
+    let reference = cache_key("api-key:by-ref:", &key.reference_id.field_value())?;
     if fallback {
         let (hashed, id, reference) = tokio::join!(
-            storage.delete(&hashed),
-            storage.delete(&id),
-            storage.delete(&reference)
+            storage.delete_native(&hashed),
+            storage.delete_native(&id),
+            storage.delete_native(&reference)
         );
         hashed?;
         id?;
         reference
     } else {
         let (hashed, id, reference) = tokio::join!(
-            storage.delete(&hashed),
-            storage.delete(&id),
+            storage.delete_native(&hashed),
+            storage.delete_native(&id),
             modify_reference(storage, key, false)
         );
         hashed?;
@@ -539,8 +498,13 @@ pub(super) async fn list(
     let storage = backend(config, ctx);
     if config.storage == ApiKeyStorage::SecondaryStorage {
         if let Some(storage) = storage {
-            let ids = reference_ids(storage.get(&format!("api-key:by-ref:{reference}")).await?);
-            if !ids.is_empty() || !config.fallback_to_database {
+            let ids = reference::read(
+                storage.as_ref(),
+                &format!("api-key:by-ref:{reference}").into(),
+            )
+            .await?;
+            if !config.fallback_to_database || reference::has_entries(&ids)? {
+                let ids = reference::items(&ids)?;
                 let failed = AtomicBool::new(false);
                 let mut results = stream::iter(ids.into_iter().enumerate())
                     .take_while(|_| future::ready(!failed.load(Ordering::Relaxed)))
@@ -548,11 +512,8 @@ pub(super) async fn list(
                         let failed = &failed;
                         async move {
                             let result = async {
-                                cached(
-                                    storage.as_ref(),
-                                    &format!("api-key:by-id:{}", id.display_string()?),
-                                )
-                                .await
+                                cached_native(storage.as_ref(), &cache_key("api-key:by-id:", &id)?)
+                                    .await
                             }
                             .await;
                             if result.is_err() {
@@ -613,11 +574,15 @@ pub(super) async fn list(
             .collect::<AuthResult<Vec<_>>>()?;
         results.sort_unstable_by_key(|(index, _)| *index);
         keys = results.into_iter().map(|(_, key)| key).collect();
-        let ids: Vec<_> = keys.iter().map(|key| &key.id).collect();
+        let ids: FieldValue = keys
+            .iter()
+            .map(|key| key.id.field_value())
+            .collect::<Vec<_>>()
+            .into();
         storage
             .set(
                 &format!("api-key:by-ref:{reference}"),
-                &serde_json::to_string(&ids)?,
+                &reference::stringify(&ids)?,
                 None,
             )
             .await?;
@@ -705,7 +670,7 @@ mod tests {
                 cached["enabled"] = flag.clone();
                 cached["rateLimitEnabled"] = flag.clone();
             }
-            let key = deserialize(Some(Value::String(cached.to_string())))
+            let key = deserialize(Some(FieldValue::String(cached.to_string())))
                 .ok_or_else(|| AuthError::internal("The nullable cache entry must decode"))?;
             assert_eq!(key.enabled.field_value(), expected);
             assert_eq!(key.rate_limit_enabled.field_value(), expected);
@@ -713,7 +678,7 @@ mod tests {
             assert_eq!(key.rate_limit_enabled.is_truthy()?, truthy);
             let serialized = serialize(&key)?;
             let stored: Value = serde_json::from_str(&serialized)?;
-            let restored = deserialize(Some(Value::String(serialized)))
+            let restored = deserialize(Some(FieldValue::String(serialized)))
                 .ok_or_else(|| AuthError::internal("The serialized cache entry must decode"))?;
             assert_eq!(restored.enabled.field_value(), expected);
             assert_eq!(restored.rate_limit_enabled.field_value(), expected);
@@ -730,7 +695,7 @@ mod tests {
     #[test]
     fn cache_codec_preserves_unpaired_start_and_structured_metadata() {
         let cached = r#"{"id":"key-id","key":"hash","referenceId":"owner","configId":null,"start":"\ud83d","enabled":true,"rateLimitEnabled":false,"createdAt":"2026-10-01T00:00:00.000Z","updatedAt":"2026-10-01T00:00:00.000Z","metadata":{"purpose":"device"}}"#;
-        let key = deserialize(Some(Value::String(cached.into()))).unwrap();
+        let key = deserialize(Some(FieldValue::String(cached.into()))).unwrap();
         assert_eq!(
             key.start.typed().unwrap().as_ref().unwrap().as_utf16(),
             &[0xd83d]
@@ -748,9 +713,9 @@ mod tests {
             fields.get("metadata").unwrap().get(),
             r#"{"purpose":"device"}"#
         );
-        let restored = deserialize(Some(Value::String(serialized))).unwrap();
+        let restored = deserialize(Some(FieldValue::String(serialized))).unwrap();
         assert_eq!(restored.start, key.start);
         assert_eq!(restored.metadata, key.metadata);
-        assert!(deserialize(Some(Value::String("malformed".into()))).is_none());
+        assert!(deserialize(Some(FieldValue::String("malformed".into()))).is_none());
     }
 }
