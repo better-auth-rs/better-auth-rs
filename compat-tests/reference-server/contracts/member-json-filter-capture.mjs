@@ -20,12 +20,18 @@ const members = [
   { id: "member-c", userId: "user-c", role: "member", settings: null },
 ].map(row => ({ ...row, organizationId, createdAt: instant }));
 const json = value => JSON.parse(JSON.stringify(value));
-export const operationNames = ["array-eq", "array-in", "array-not-in", "object-eq"];
+export const operationNames = ["array-eq", "array-in", "array-not-in", "object-eq", "scalar-not-in"];
 // The object control uses the Organization adapter because the public query schema rejects object values.
-const inputs = ["eq", "in", "not_in", "eq"].map((operator, index) => ({
-  organizationId, limit: index === 2 ? 1 : 10, offset: 0, sortBy: "id", sortOrder: "asc",
-  filter: { field: field.name, value: index === 3 ? { control: true } : ["red", "blue"], operator },
-}));
+const inputs = [
+  ...["eq", "in", "not_in", "eq"].map((operator, index) => ({
+    organizationId, limit: index === 2 ? 1 : 10, offset: 0, sortBy: "id", sortOrder: "asc",
+    filter: { field: field.name, value: index === 3 ? { control: true } : ["red", "blue"], operator },
+  })),
+  {
+    organizationId, limit: 1, offset: 0, sortBy: "id", sortOrder: "asc",
+    filter: { field: field.name, value: '["red","blue"]', operator: "not_in" },
+  },
+];
 
 async function captureBackend(backend, diagnostics) {
   const memory = Object.fromEntries(tables.map(model => [model, []]));
@@ -132,17 +138,18 @@ export function assertMemberJsonFilter(observed, diagnostics) {
       assert.deepEqual(input, inputs[index]);
       assert.deepEqual(persisted, stored);
       assert.deepEqual(diagnostic.operations[index].after, diagnostic.operations[index].before);
-      if (backend === "memory" && ["array-in", "array-not-in"].includes(name)) {
+      if (backend === "memory" && ["array-in", "array-not-in", "scalar-not-in"].includes(name)) {
         assert.equal(result, null);
         assert.deepEqual(error, { name: "Error", message: "Value must be an array" });
         assert.deepEqual(events, []);
         continue;
       }
       assert.equal(error, null);
-      const row = members[name === "array-not-in" || name === "object-eq" ? 1 : 0];
+      const isNotIn = ["array-not-in", "scalar-not-in"].includes(name);
+      const row = members[isNotIn || name === "object-eq" ? 1 : 0];
       assert.deepEqual(result, { members: [{ ...row, user: {
         id: row.userId, name: row.userId, email: `${row.userId}@member-json-filter.test`, image: null,
-      } }], total: name === "array-not-in" ? 2 : 1 });
+      } }], total: isNotIn ? 2 : 1 });
       assert.deepEqual(events, [["output", "settings", JSON.stringify(row.settings)]]);
     }
   }
