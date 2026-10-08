@@ -36,9 +36,9 @@ impl JwtPlugin {
         issuer: Option<&str>,
         endpoint: &EndpointContext<'_, S>,
     ) -> AuthResult<Option<Map<String, Value>>> {
-        if !has_key_id(token) {
+        let Some(header) = raw_header(token).filter(Header::has_key_id) else {
             return Ok(None);
-        }
+        };
         let keys = match self.read_keys(endpoint).await {
             Ok(Some(keys)) => keys,
             Ok(None) => return Ok(None),
@@ -63,6 +63,7 @@ impl JwtPlugin {
             .or_else(|| ctx.config.base_url.as_static().map(|base| vec![base]));
         let verified = verify_local(
             token,
+            &header,
             &keys,
             Some(self.config.primary_algorithm()),
             issuer,
@@ -87,10 +88,6 @@ pub(super) fn verification_body(token: &str, issuer: Option<&str>) -> Value {
     body.into()
 }
 
-pub(super) fn has_key_id(token: &str) -> bool {
-    raw_header(token).is_some_and(|header| header.has_key_id())
-}
-
 #[serde_with::serde_as]
 #[derive(serde::Deserialize)]
 #[serde(transparent)]
@@ -107,8 +104,7 @@ impl Header {
             .is_some_and(|kid| match kid.get().as_bytes().first() {
                 Some(b'"') => kid.get() != "\"\"",
                 Some(b'[' | b'{') => true,
-                _ => serde_json::from_str::<Value>(kid.get())
-                    .is_ok_and(|value| crate::plugins::json_body::is_truthy(&value)),
+                _ => FieldValue::parse_json(kid.get()).is_ok_and(|value| value.is_truthy()),
             })
     }
 
@@ -160,13 +156,13 @@ pub(super) fn raw_header(token: &str) -> Option<Header> {
 
 pub(super) fn verify_local(
     token: &str,
+    header: &Header,
     keys: &[better_auth_core::Jwk],
     default_algorithm: Option<JwtAlgorithm>,
     issuer: Option<&str>,
     audience: Option<&[&str]>,
     tolerance: i64,
 ) -> Option<Map<String, Value>> {
-    let header = raw_header(token)?;
     let kid = header.field("kid").ok()?;
     let key = keys
         .iter()
@@ -181,6 +177,10 @@ pub(super) fn verify_local(
         &algorithm,
     )
     .ok()?;
+    // WebCrypto requires a public key for verification; josekit also accepts private JWK material.
+    if public.parameter("d").is_some() {
+        return None;
+    }
     let verifier: Box<dyn JwsVerifier> = match algorithm.as_str() {
         "EdDSA" => Box::new(jws::EdDSA.verifier_from_jwk(&public).ok()?),
         "RS256" => Box::new(jws::RS256.verifier_from_jwk(&public).ok()?),

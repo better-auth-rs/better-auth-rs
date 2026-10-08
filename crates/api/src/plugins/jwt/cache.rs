@@ -101,6 +101,7 @@ impl<S: AuthSchema> SessionCookieSigner<S> for CookieSigner<S> {
         };
         let payload = verification::verify_local(
             token,
+            &header,
             &keys,
             self.plugin.config.algorithm,
             Some(issuer(&runtime)),

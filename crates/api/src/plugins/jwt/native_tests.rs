@@ -138,8 +138,23 @@ async fn numeric_key_id_signs_and_verifies_without_weakening_header_or_signature
 }
 
 #[tokio::test]
-async fn unrelated_surrogate_property_names_and_object_kids_retain_adapter_reads() -> AuthResult<()>
-{
+async fn native_public_key_import_rejects_private_material() -> AuthResult<()> {
+    let mut row = key(JwtAlgorithm::EdDsa)?;
+    let plugin = JwtPlugin::new().disable_private_key_encryption(true);
+    let (ctx, _) = context(&plugin, vec![row.clone()]).await?;
+    let token = plugin
+        .sign(serde_json::from_value(json!({"sub":"owner"}))?, &ctx)
+        .await?;
+    assert!(plugin.verify(&token, None, &ctx).await?.is_some());
+    row.public_key = row.private_key.clone();
+    let (ctx, reads) = context(&plugin, vec![row]).await?;
+    assert!(plugin.verify(&token, None, &ctx).await?.is_none());
+    assert_eq!(reads.load(Ordering::SeqCst), 1);
+    Ok(())
+}
+
+#[tokio::test]
+async fn native_header_values_retain_adapter_reads() -> AuthResult<()> {
     use better_auth_core::session::{SessionCookieContext, SessionCookieSigner};
     let plugin = JwtPlugin::new().session_cookie_cache(true);
     let (ctx, reads) = context(&plugin, vec![key(JwtAlgorithm::EdDsa)?]).await?;
@@ -151,6 +166,8 @@ async fn unrelated_surrogate_property_names_and_object_kids_retain_adapter_reads
     for source in [
         r#"{"alg":"EdDSA","typ":"better-auth.session-cache+jwt","kid":"missing","\ud800":7}"#,
         r#"{"alg":"EdDSA","typ":"better-auth.session-cache+jwt","kid":{"\ud800":7}}"#,
+        r#"{"alg":"EdDSA","typ":"better-auth.session-cache+jwt","kid":1e309}"#,
+        r#"{"alg":"EdDSA","typ":"better-auth.session-cache+jwt","kid":-1e309}"#,
     ] {
         let token = format!("{}.e30.AA", URL_SAFE_NO_PAD.encode(source));
         let before = reads.load(Ordering::SeqCst);
@@ -171,6 +188,52 @@ async fn unrelated_surrogate_property_names_and_object_kids_retain_adapter_reads
         );
         assert_eq!(reads.load(Ordering::SeqCst), before + 2);
     }
+    Ok(())
+}
+
+#[tokio::test]
+async fn cookie_verification_retains_its_decoder_and_original_protected_bytes() -> AuthResult<()> {
+    use better_auth_core::session::{SessionCookieContext, SessionCookieSigner};
+    let row = key(JwtAlgorithm::EdDsa)?;
+    let private = Jwk::from_bytes(row.private_key.typed()?).map_err(jose_error)?;
+    let signer = jws::EdDSA.signer_from_jwk(&private).map_err(jose_error)?;
+    let plugin = JwtPlugin::new().session_cookie_cache(true);
+    let (ctx, reads) = context(&plugin, vec![row]).await?;
+    let request = AuthRequest::new(HttpMethod::Get, "/get-session");
+    let verifier = ctx
+        .extensions
+        .get::<Arc<dyn SessionCookieSigner<StatelessSchema>>>()
+        .unwrap();
+    let cookie_context = || SessionCookieContext {
+        request: &request,
+        config: &ctx.config,
+        transaction: None,
+    };
+    let header = URL_SAFE_NO_PAD
+        .encode(r#"{"alg":"EdDSA","kid":17,"typ":"better-auth.session-cache+jwt","\ud800":7}"#);
+    let now = Utc::now().timestamp();
+    let payload = json!({"user":{"id":"owner"},"session":{"token":"session-token"},"sub":"owner","sid":"session-token","iss":ctx.config.base_url.as_static().unwrap(),"aud":"better-auth:session-cache","iat":now,"exp":now + 60});
+    let input = format!(
+        " \t{header} .{}",
+        URL_SAFE_NO_PAD.encode(serde_json::to_vec(&payload)?)
+    );
+    let signature = URL_SAFE_NO_PAD.encode(signer.sign(input.as_bytes()).map_err(jose_error)?);
+    let token = format!("{input}.{signature}");
+    assert_eq!(
+        verifier.verify(&token, cookie_context()).await?.unwrap(),
+        payload.as_object().unwrap().clone()
+    );
+    assert_eq!(reads.load(Ordering::SeqCst), 1);
+    let tampered = token.replace(" \t", "").replace(" .", ".");
+    assert!(
+        verifier
+            .verify(&tampered, cookie_context())
+            .await?
+            .is_none()
+    );
+    assert_eq!(reads.load(Ordering::SeqCst), 2);
+    assert!(plugin.verify(&token, None, &ctx).await?.is_none());
+    assert_eq!(reads.load(Ordering::SeqCst), 2);
     Ok(())
 }
 

@@ -1,4 +1,4 @@
-use super::json_storage_tests::model_fields;
+use super::json_storage_tests::{model_fields, reference_policy};
 use super::*;
 use quote::ToTokens;
 use serde_json::json;
@@ -189,7 +189,10 @@ fn plugin_display_fields_generate_declared_storage_types_and_aliases() {
                         attribute_value(field, "serde", "rename").as_deref(),
                         Some(column)
                     );
-                    assert!(!field.attrs.iter().any(|attr| attr.path().is_ident("auth")));
+                    assert_eq!(
+                        reference_policy(field).expect("configured display field reference policy"),
+                        Some(false)
+                    );
                 }
                 for (model, name) in [(&api_key, "key_hash"), (&passkey, "public_key")] {
                     assert_eq!(

@@ -2,7 +2,10 @@ use super::*;
 use crate::store::{bundled_schema::BundledSchema, entities};
 use better_auth_core::{
     AuthConfig, AuthError, AuthInitContext, FieldValue,
-    store::{JwksStore, WalletStore},
+    store::{
+        ApiKeyStore, JwksStore, PasskeyStore, WalletStore,
+        schema::{SchemaCheckError, SchemaConfiguration, SchemaFinding},
+    },
     user_fields::{
         FieldTransforms, UserConfig, UserFieldConfig, UserFieldTransform, UserFieldType,
     },
@@ -53,12 +56,198 @@ mod wallets {
     impl ActiveModelBehavior for ActiveModel {}
 }
 
+mod merged_api_keys {
+    use sea_orm::entity::prelude::*;
+
+    #[derive(Clone, Debug, PartialEq, DeriveEntityModel, crate::AuthEntity)]
+    #[auth(role = "api_key")]
+    #[sea_orm(table_name = "merged_apikey")]
+    pub struct Model {
+        #[sea_orm(primary_key, auto_increment = false)]
+        pub id: String,
+        #[sea_orm(column_name = "shared")]
+        pub config_id: Option<String>,
+    }
+
+    #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+    pub enum Relation {}
+    impl ActiveModelBehavior for ActiveModel {}
+}
+
+mod merged_passkeys {
+    use sea_orm::entity::prelude::*;
+
+    #[derive(Clone, Debug, PartialEq, DeriveEntityModel, crate::AuthEntity)]
+    #[auth(role = "passkey", native_passkey)]
+    #[sea_orm(table_name = "merged_passkey")]
+    pub struct Model {
+        #[sea_orm(primary_key, auto_increment = false)]
+        pub id: String,
+        #[sea_orm(column_name = "shared")]
+        pub name: Option<String>,
+    }
+
+    #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+    pub enum Relation {}
+    impl ActiveModelBehavior for ActiveModel {}
+}
+
 fn field(field_type: UserFieldType) -> UserFieldConfig {
     UserFieldConfig {
         field_type,
         required: Some(false),
         ..Default::default()
     }
+}
+
+#[tokio::test]
+async fn api_key_and_passkey_preflight_accepts_merged_columns_and_rejects_missing_storage()
+-> AuthResult<()> {
+    type Plugins = crate::PluginModels<
+        merged_api_keys::Model,
+        entities::device_code::Model,
+        merged_passkeys::Model,
+    >;
+    let database = Database::connect("sqlite::memory:")
+        .await
+        .map_err(map_db_err)?;
+    super::super::migrator::run_migrations(&database)
+        .await
+        .map_err(map_db_err)?;
+    for statement in [
+        "CREATE TABLE merged_apikey (id TEXT NOT NULL PRIMARY KEY, shared TEXT)",
+        "CREATE TABLE merged_passkey (id TEXT NOT NULL PRIMARY KEY, shared TEXT)",
+    ] {
+        database
+            .execute_unprepared(statement)
+            .await
+            .map_err(map_db_err)?;
+    }
+    let mut store = SeaOrmStore::<BundledSchema>::new(
+        AuthConfig::new("a-secret-that-is-at-least-32-characters"),
+        database.clone(),
+    )
+    .with_plugin_schema::<Plugins>();
+    let mut init = AuthInitContext::new(store.config.clone(), Arc::new(store.clone()));
+    for role in [EntityRole::ApiKey, EntityRole::Passkey] {
+        let mut fields = better_auth_core::plugin_runtime::ModelFields::plugin_native_fields(role);
+        for declaration in fields.fields_mut().values_mut() {
+            *declaration = UserFieldConfig {
+                field_name: Some("shared".into()),
+                ..field(UserFieldType::String)
+            };
+        }
+        init.register_model_fields(role, fields)?;
+    }
+    store.model_fields = init.into_parts().plugin_fields;
+    let settings = SchemaConfiguration {
+        config: store.config.clone(),
+        plugins: vec!["api-key", "passkey"],
+        metadata: Default::default(),
+        secondary_storage: false,
+        database_rate_limit: false,
+    };
+    let check = store
+        .create_schema_check(&settings)?
+        .ok_or_else(|| AuthError::internal("Expected the SQLite schema check"))?;
+    check.check().await?;
+    for (created, material) in [
+        (
+            store
+                .create_api_key_record(FieldMap::from([
+                    ("id".into(), "key".into()),
+                    ("key".into(), "key-material".into()),
+                ]))
+                .await?,
+            "key-material",
+        ),
+        (
+            store
+                .create_passkey_record(FieldMap::from([
+                    ("id".into(), "passkey".into()),
+                    ("credentialID".into(), "credential-material".into()),
+                ]))
+                .await?,
+            "credential-material",
+        ),
+    ] {
+        assert_eq!(created.get("name"), Some(&material.into()));
+    }
+    database
+        .execute_unprepared("ALTER TABLE merged_passkey DROP COLUMN shared")
+        .await
+        .map_err(map_db_err)?;
+    store.invalidate_schema_check();
+    let Err(AuthError::SchemaCheck(error)) = check.check().await else {
+        return Err(AuthError::internal(
+            "Expected a missing merged column error",
+        ));
+    };
+    let SchemaCheckError::Mismatch(error) = error.as_ref() else {
+        return Err(AuthError::internal("Expected a schema mismatch"));
+    };
+    assert_eq!(
+        error.findings,
+        vec![SchemaFinding::MissingColumn {
+            table: "merged_passkey".into(),
+            column: "shared".into(),
+        }]
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn passkey_and_two_factor_preflight_keep_undeclared_legacy_envelope_columns() -> AuthResult<()>
+{
+    let database = Database::connect("sqlite::memory:")
+        .await
+        .map_err(map_db_err)?;
+    super::super::migrator::run_migrations(&database)
+        .await
+        .map_err(map_db_err)?;
+    let store = SeaOrmStore::<BundledSchema>::new(
+        AuthConfig::new("a-secret-that-is-at-least-32-characters"),
+        database.clone(),
+    );
+    let check = store
+        .create_schema_check(&SchemaConfiguration {
+            config: store.config.clone(),
+            plugins: vec!["passkey", "two-factor"],
+            metadata: Default::default(),
+            secondary_storage: false,
+            database_rate_limit: false,
+        })?
+        .ok_or_else(|| AuthError::internal("Expected the SQLite schema check"))?;
+    check.check().await?;
+    let missing = [
+        ("passkeys", "credential"),
+        ("passkeys", "updated_at"),
+        ("two_factor", "created_at"),
+        ("two_factor", "updated_at"),
+    ];
+    for (table, column) in missing {
+        database
+            .execute_unprepared(&format!("ALTER TABLE {table} DROP COLUMN {column}"))
+            .await
+            .map_err(map_db_err)?;
+    }
+    store.invalidate_schema_check();
+    let Err(AuthError::SchemaCheck(error)) = check.check().await else {
+        return Err(AuthError::internal("Expected missing legacy column errors"));
+    };
+    let SchemaCheckError::Mismatch(error) = error.as_ref() else {
+        return Err(AuthError::internal("Expected a schema mismatch"));
+    };
+    assert_eq!(
+        error.findings,
+        missing
+            .map(|(table, column)| SchemaFinding::MissingColumn {
+                table: table.into(),
+                column: column.into(),
+            })
+            .to_vec()
+    );
+    Ok(())
 }
 
 #[tokio::test]

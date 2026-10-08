@@ -80,43 +80,29 @@ fn organization<M: SeaOrmOrganizationModel>(
 }
 
 fn plugin<M: SeaOrmPluginModel>(role: EntityRole, fields: &UserConfig) -> AuthResult<SchemaTable> {
-    if matches!(
-        role,
-        EntityRole::DeviceCode
-            | EntityRole::TwoFactor
-            | EntityRole::Jwk
-            | EntityRole::WalletAddress
-    ) {
-        let mut required = vec!["id"];
-        if role == EntityRole::TwoFactor
-            && M::two_factor_storage() == better_auth_core::TwoFactorStorage::Legacy
-        {
-            for (logical, physical) in [("createdAt", "created_at"), ("updatedAt", "updated_at")] {
-                if !fields.fields().contains_key(logical) {
-                    required.push(physical);
-                }
-            }
+    let mut required = if role == EntityRole::RateLimit {
+        core_fields(role).iter().map(|field| field.name).collect()
+    } else {
+        vec!["id"]
+    };
+    let legacy = match role {
+        EntityRole::Passkey if M::passkey_storage() == better_auth_core::PasskeyStorage::Legacy => {
+            &[("credential", "credential"), ("updatedAt", "updated_at")][..]
         }
-        return Ok(model::<M::Entity>(columns(
-            required,
-            fields,
-            M::column,
-            &[],
-            Vec::new(),
-        )?));
+        EntityRole::TwoFactor
+            if M::two_factor_storage() == better_auth_core::TwoFactorStorage::Legacy =>
+        {
+            &[("createdAt", "created_at"), ("updatedAt", "updated_at")][..]
+        }
+        _ => &[],
+    };
+    for (logical, physical) in legacy {
+        if !fields.fields().contains_key(*logical) {
+            required.push(*physical);
+        }
     }
     Ok(model::<M::Entity>(columns(
-        core_fields(role)
-            .iter()
-            .filter(|field| {
-                !(role == EntityRole::Passkey
-                    && M::passkey_storage() == better_auth_core::PasskeyStorage::Native
-                    && matches!(field.name, "credential" | "updated_at"))
-                    && !(role == EntityRole::Passkey
-                        && matches!(field.name, "name" | "aaguid")
-                        && fields.fields().contains_key(field.name))
-            })
-            .map(|field| field.name),
+        required,
         fields,
         M::column,
         &[],
@@ -198,11 +184,11 @@ where
             EntityRole::OrganizationRole => {
                 organization::<O::OrganizationRole>(role, &organization_fields.organization_role)
             }
-            EntityRole::ApiKey => plugin::<P::ApiKey>(role, model_fields.fields(role)),
+            EntityRole::ApiKey => plugin::<P::ApiKey>(role, &model_fields.plugin_fields(role)),
             EntityRole::DeviceCode => {
                 plugin::<P::DeviceCode>(role, &model_fields.plugin_fields(role))
             }
-            EntityRole::Passkey => plugin::<P::Passkey>(role, model_fields.fields(role)),
+            EntityRole::Passkey => plugin::<P::Passkey>(role, &model_fields.plugin_fields(role)),
             EntityRole::TwoFactor => {
                 plugin::<P::TwoFactor>(role, &model_fields.plugin_fields(role))
             }

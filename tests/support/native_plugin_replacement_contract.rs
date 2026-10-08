@@ -63,21 +63,7 @@ pub(crate) fn fixture(path: &std::path::Path, backend: &str, name: &str) -> Test
             .iter()
             .map(|target| target["name"].as_str())
             .collect::<Vec<_>>(),
-        [
-            "api-key-remaining-number",
-            "api-key-remaining-string",
-            "api-key-enabled-boolean",
-            "api-key-enabled-number",
-            "api-key-expiry-date",
-            "passkey-counter-string",
-            "passkey-backup-boolean",
-            "device-polling-number",
-            "two-factor-verified-boolean",
-            "jwk-algorithm-array",
-            "wallet-owner-number",
-            "wallet-chain-number",
-        ]
-        .map(Some)
+        TARGETS.map(Some)
     );
     for value in targets {
         let _ = Target::from_fixture(value)?;

@@ -548,7 +548,7 @@ async fn finalization_preserves_selected_native_owner_token_and_cookie() -> Test
         Some(&FieldValue::from("Selected Native Owner"))
     );
     let published = fixture.request.new_session()?.unwrap();
-    assert_eq!(published.user_field("id"), 17.0.into());
+    assert_eq!(published.user_field("id"), &FieldValue::from(17.0));
     assert_eq!(
         published.session.field_values()?.get("userId"),
         Some(&17.0.into())

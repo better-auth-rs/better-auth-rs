@@ -33,6 +33,24 @@ pub(super) fn model_fields(source: &str, name: &str) -> BTreeMap<String, syn::Fi
         .collect()
 }
 
+pub(super) fn reference_policy(field: &syn::Field) -> syn::Result<Option<bool>> {
+    let mut policy = None;
+    for attribute in field
+        .attrs
+        .iter()
+        .filter(|attribute| attribute.path().is_ident("auth"))
+    {
+        attribute.parse_nested_meta(|meta| {
+            if !meta.path.is_ident("reference") {
+                return Err(meta.error("expected reference policy"));
+            }
+            policy = Some(meta.value()?.parse::<syn::LitBool>()?.value);
+            Ok(())
+        })?;
+    }
+    Ok(policy)
+}
+
 #[test]
 #[expect(
     clippy::expect_used,
@@ -91,23 +109,14 @@ fn sqlite_json_storage_changes_only_fresh_nonreference_application_fields() {
                     .to_string()
                     .contains("stored_settings")
         }));
-        assert!(
-            !settings
-                .attrs
-                .iter()
-                .any(|attribute| attribute.path().is_ident("auth"))
+        assert_eq!(
+            reference_policy(settings).expect("configured field reference policy"),
+            Some(false)
         );
-        assert!(
-            organization["display_reference"]
-                .attrs
-                .iter()
-                .any(|attribute| {
-                    attribute.path().is_ident("auth")
-                        && attribute
-                            .to_token_stream()
-                            .to_string()
-                            .contains("reference")
-                })
+        assert_eq!(
+            reference_policy(&organization["display_reference"])
+                .expect("configured ID reference policy"),
+            Some(true)
         );
         assert_eq!(
             model_fields(&source, "team")["name"]
