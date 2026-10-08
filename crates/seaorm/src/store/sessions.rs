@@ -7,9 +7,9 @@ use sea_orm::{
 };
 
 use better_auth_core::id::AdapterIdInput;
+use better_auth_core::session::SessionData;
 use better_auth_core::store::schema::EntityRole;
 use better_auth_core::store::{SessionStore, SessionUpdateWriter};
-use better_auth_core::session::SessionData;
 
 use crate::error::{AuthError, AuthResult};
 use crate::hooks::{DatabaseHookUpdate, SessionUpdate};
