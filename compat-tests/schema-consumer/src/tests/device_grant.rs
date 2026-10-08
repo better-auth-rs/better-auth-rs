@@ -85,7 +85,7 @@ async fn check_redemption<S: AuthSchema>(
                 .with_email("owner@device-redemption.test"),
         )
         .await?;
-    let owner = owner.id().typed()?.clone();
+    let owner = owner.id().typed()?.clone().into_owned();
     let mut cases = Vec::new();
     for mode in ["success", "authorization error", "preparation error"] {
         cases.push(redemption::observe(auth.context(), None, mode, &owner).await?);
@@ -138,6 +138,7 @@ async fn check(database: &DatabaseConnection, backend: DbBackend, case: &Case) -
         DbBackend::Sqlite => generated!(sqlite),
         DbBackend::Postgres => generated!(postgres),
         DbBackend::MySql => generated!(mysql),
+        _ => return Err(format!("Unsupported Device grant backend {backend:?}").into()),
     }
     Ok(())
 }

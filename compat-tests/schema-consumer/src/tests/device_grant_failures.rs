@@ -210,7 +210,7 @@ where
             .get("deviceCode")
             .ok_or("Missing current Device rows")?;
         let mut permitted = original.clone();
-        let owner_id = owner.id().json()?;
+        let owner_id = owner.id().json()?.ok_or("Missing Device owner ID")?;
         if failure == contract::Failure::GetVerificationContext {
             let rows = permitted
                 .as_array_mut()
