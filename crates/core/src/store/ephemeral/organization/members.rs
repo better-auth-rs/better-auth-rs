@@ -331,11 +331,12 @@ impl MemberStore for EphemeralStore {
                     return Ok(true);
                 };
                 if matches!(operator, "in" | "not_in") {
-                    let contains = expected.as_array().is_some_and(|values| {
-                        values
-                            .iter()
-                            .any(|expected| actual.same_value_zero(expected))
-                    });
+                    let values = expected
+                        .as_array()
+                        .ok_or_else(|| AuthError::internal("Value must be an array"))?;
+                    let contains = values
+                        .iter()
+                        .any(|expected| actual.same_value_zero(expected));
                     return Ok(if operator == "in" {
                         contains
                     } else {

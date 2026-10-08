@@ -2,8 +2,9 @@
 
 use better_auth_core::{
     AuthError, AuthResult, AuthSchema, AuthStore, Member, MemberUserView,
-    store::ListOrganizationMembersParams,
+    store::{EphemeralStore, ListOrganizationMembersParams},
 };
+use better_auth_seaorm::sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::sync::Arc;
@@ -86,8 +87,11 @@ async fn query<S: AuthSchema>(store: &dyn AuthStore<S>, input: &Input) -> AuthRe
     Ok(json!({ "members": joined, "total": total }))
 }
 
-#[tokio::test]
-async fn sqlite_member_json_filters_match_upstream() -> AuthResult<()> {
+async fn contract<S: AuthSchema>(
+    reader: Arc<dyn AuthStore<S>>,
+    database: Option<&DatabaseConnection>,
+    backend: &str,
+) -> AuthResult<()> {
     let fixture: Fixture =
         serde_json::from_str(include_str!("fixtures/member-json-filter-1.7.6.json"))?;
     assert_eq!(fixture.version, "1.7.6");
@@ -106,9 +110,10 @@ async fn sqlite_member_json_filters_match_upstream() -> AuthResult<()> {
     let expected = fixture
         .backends
         .iter()
-        .find(|entry| entry.get("backend").and_then(Value::as_str) == Some("sqlite"))
-        .ok_or_else(|| AuthError::internal("SQLite Member JSON filter fixture is missing"))?;
-    let (reader, database) = storage::sqlite().await?;
+        .find(|entry| entry.get("backend").and_then(Value::as_str) == Some(backend))
+        .ok_or_else(|| {
+            AuthError::internal(format!("{backend} Member JSON filter fixture is missing"))
+        })?;
     reader.configure_organization_fields(policies::fields(None))?;
     let store =
         reader.with_runtime(Arc::new(policies::config()), Vec::new(), Default::default())?;
@@ -121,7 +126,10 @@ async fn sqlite_member_json_filters_match_upstream() -> AuthResult<()> {
         events.take()?.is_empty(),
         "The storage reader has no callbacks"
     );
-    let before = storage::physical(&database).await?;
+    let before = match database {
+        Some(database) => Some(storage::physical(database).await?),
+        None => None,
+    };
     let mut operations = Vec::new();
     for (name, operator, value, limit) in [
         ("array-eq", "eq", json!(["red", "blue"]), 10),
@@ -141,26 +149,38 @@ async fn sqlite_member_json_filters_match_upstream() -> AuthResult<()> {
                 operator,
             },
         };
-        let result = query(store.as_ref(), &input).await?;
+        let (result, error) = match query(store.as_ref(), &input).await {
+            Ok(result) => (result, Value::Null),
+            Err(AuthError::Internal(message)) => {
+                (Value::Null, json!({ "name": "Error", "message": message }))
+            }
+            Err(error) => return Err(error),
+        };
         let query_events = events.take()?;
         let persisted = storage::members(reader.as_ref()).await?;
         assert!(
             events.take()?.is_empty(),
             "{name}: the reader has no callbacks"
         );
-        assert_eq!(storage::physical(&database).await?, before, "{name}");
+        if let Some(database) = database {
+            assert_eq!(
+                Some(storage::physical(database).await?),
+                before,
+                "{backend}: {name}"
+            );
+        }
         operations.push(json!({
             "name": name,
             "input": input,
             "result": result,
-            "error": null,
+            "error": error,
             "events": query_events,
             "stored": persisted,
         }));
     }
     assert_eq!(
         json!({
-            "backend": "sqlite",
+            "backend": backend,
             "created": created,
             "seedEvents": seed_events,
             "stored": stored,
@@ -169,4 +189,17 @@ async fn sqlite_member_json_filters_match_upstream() -> AuthResult<()> {
         *expected
     );
     Ok(())
+}
+
+#[tokio::test]
+async fn sqlite_member_json_filters_match_upstream() -> AuthResult<()> {
+    let (reader, database) = storage::sqlite().await?;
+    contract(reader, Some(&database), "sqlite").await
+}
+
+#[tokio::test]
+async fn memory_member_json_filters_match_upstream() -> AuthResult<()> {
+    let reader = Arc::new(EphemeralStore::new(Arc::new(policies::config())));
+    // The Memory store exposes complete Member rows, but no raw all-table snapshot.
+    contract(reader, None, "memory").await
 }
