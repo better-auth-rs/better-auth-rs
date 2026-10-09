@@ -11,7 +11,6 @@ use better_auth_core::{
 };
 use better_auth_core::{FieldMap, FieldValue, SchemaField, store::schema::EntityRole};
 use chrono::Utc;
-use sea_orm::sea_query::ExprTrait;
 use sea_orm::{Condition, EntityTrait, FromQueryResult, PaginatorTrait, QueryFilter, QuerySelect};
 
 impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema>
@@ -207,25 +206,33 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
         organization_id: &better_auth_core::FieldValue,
         names: &[String],
     ) -> AuthResult<Vec<OrganizationRole>> {
-        let names = names.iter().try_fold(
-            Condition::any().add(sea_orm::sea_query::Expr::val(false).eq(true)),
-            |condition, name| {
-                Ok::<_, better_auth_core::AuthError>(condition.add(
-                    self.organization_field_equals::<O::OrganizationRole>(
-                        EntityRole::OrganizationRole,
-                        "role",
-                        &name.as_str().into(),
-                    )?,
-                ))
-            },
+        let organization = self.bind_organization_query_field(
+            EntityRole::OrganizationRole,
+            "organizationId",
+            organization_id,
         )?;
-        let rows = Entity::<O::OrganizationRole>::find()
-            .filter(self.organization_field_equals::<O::OrganizationRole>(
+        let names = self.bind_organization_query_field(
+            EntityRole::OrganizationRole,
+            "role",
+            &FieldValue::Array(names.iter().map(|name| name.as_str().into()).collect()),
+        )?;
+        let (organization_column, organization) = self
+            .resolve_organization_query_field::<O::OrganizationRole>(
                 EntityRole::OrganizationRole,
-                "organizationId",
-                organization_id,
+                organization,
+            )?;
+        let (role_column, names) = self.resolve_organization_query_field::<O::OrganizationRole>(
+            EntityRole::OrganizationRole,
+            names,
+        )?;
+        let backend = self.connection().get_database_backend();
+        let rows = Entity::<O::OrganizationRole>::find()
+            .filter(super::value_filter::equals(
+                organization_column,
+                &organization,
+                backend,
             )?)
-            .filter(names)
+            .filter(super::value_filter::is_in(role_column, &names, backend)?)
             .limit(super::pagination::default_limit(
                 self.config(),
                 self.connection().get_database_backend(),

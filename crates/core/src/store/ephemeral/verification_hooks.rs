@@ -1,4 +1,5 @@
 use super::hooks::CommittedWrite;
+use super::rows::{RecordSource, RowRef};
 use super::*;
 use crate::store::database_hooks::{DatabaseHookControl, PreparedRecordWrite, VerificationUpdate};
 
@@ -43,15 +44,11 @@ impl EphemeralStore {
                         Ok(())
                     })?;
                 }
-                rows.first()
-                    .map(|row| row.read(|record| Ok(record.clone())))
-                    .transpose()
+                Ok(rows.into_iter().next())
             })
             .await?;
         let record = futures_util::future::OptionFuture::from(
-            record
-                .as_ref()
-                .map(|record| self.output_verification(record)),
+            record.map(|record| self.output_verification(RecordSource::Live(record))),
         )
         .await
         .transpose()?;
@@ -67,12 +64,7 @@ impl EphemeralStore {
     ) -> AuthResult<usize> {
         let rows: Vec<_> = self
             .raw("verification", "findMany", |state| {
-                let mut matched = Vec::new();
-                for row in state.verifications.snapshot()? {
-                    if predicate(&row)? {
-                        matched.push(row);
-                    }
-                }
+                let matched = state.verifications.try_select_refs(&predicate)?;
                 Ok(crate::query::paginate_memory(
                     matched,
                     Some(if many {
@@ -89,12 +81,15 @@ impl EphemeralStore {
 
     pub(super) async fn finish_verification_delete(
         &self,
-        rows: Vec<FieldMap>,
+        rows: Vec<RowRef<FieldMap>>,
         predicate: impl Fn(&FieldMap) -> AuthResult<bool> + Send + Sync,
         many: bool,
     ) -> AuthResult<usize> {
         // Single and batch delete both catch snapshot output errors; only batch still deletes on an empty snapshot.
-        let rows = self.output_verifications(&rows).await.unwrap_or_default();
+        let rows = self
+            .output_verifications(rows.into_iter().map(RecordSource::Live).collect())
+            .await
+            .unwrap_or_default();
         if !many && rows.is_empty() {
             return Ok(0);
         }
@@ -148,8 +143,8 @@ impl EphemeralStore {
             return Ok(None);
         };
         // Preserve numeric Serial IDs and deterministic reservation IDs before output projection.
-        let id = record.get("id").cloned().unwrap_or_default();
-        let snapshot = self.output_verification(&record).await?;
+        let id = record.read(|row| Ok(row.get("id").cloned().unwrap_or_default()))?;
+        let snapshot = self.output_verification(RecordSource::Live(record)).await?;
         if value.is_some_and(|value| snapshot.value != value) {
             return Ok(None);
         }
@@ -184,7 +179,9 @@ impl EphemeralStore {
         else {
             return Ok(None);
         };
-        let consumed = self.output_verification(&consumed).await?;
+        let consumed = self
+            .output_verification(RecordSource::Snapshot(Box::new(consumed)))
+            .await?;
         let bound_identifier = self.verification_query("identifier", identifier)?;
         self.raw("verification", "deleteMany", |state| {
             state.verifications.retain(|row| {

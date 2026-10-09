@@ -81,21 +81,7 @@ fn ownership_predicate(
                 .into_iter()
                 .map(|value| candidate(lower(value), backend))
                 .collect::<AuthResult<Vec<_>>>()?;
-            if values.is_empty() {
-                // Preserve native empty-set SQL; SeaQuery otherwise replaces the predicate with a constant.
-                column.binary(
-                    BinOper::Custom(if query.operator == WhereOperator::In {
-                        "IN"
-                    } else {
-                        "NOT IN"
-                    }),
-                    SimpleExpr::Tuple(values),
-                )
-            } else if query.operator == WhereOperator::In {
-                column.is_in(values)
-            } else {
-                column.is_not_in(values)
-            }
+            super::value_filter::membership(column, values, query.operator == WhereOperator::NotIn)
         }
         WhereOperator::Lt => column.lt(candidate(query.value, backend)?),
         WhereOperator::Lte => column.lte(candidate(query.value, backend)?),
@@ -141,6 +127,8 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         ownership: &DeviceCodeOwnership,
     ) -> AuthResult<Option<QueryResult>> {
         let policy = self.config().advanced.database.generate_id();
+        let selected_id =
+            self.bind_plugin_query_field(EntityRole::DeviceCode, "id", expected.id.field_value())?;
         let user = self.plugin_column::<P::DeviceCode>(EntityRole::DeviceCode, "userId")?;
         let (mut query, field, original) = self
             .model_fields
@@ -148,6 +136,10 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         let backend = connection.get_database_backend();
         query.value =
             super::value_filter::adapter_query_value(query.value, &original, field, backend)?;
+        let approved =
+            self.bind_plugin_query_field(EntityRole::DeviceCode, "status", "approved".into())?;
+        let selected_id =
+            self.resolve_plugin_equals::<P::DeviceCode>(EntityRole::DeviceCode, selected_id)?;
         let fields = self
             .model_fields
             .plugin_fields(EntityRole::DeviceCode)
@@ -158,7 +150,7 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
                 .to_owned();
         let ownership = ownership_predicate(P::DeviceCode::column(&query.field)?, query, backend)?;
         let (bindings, unchanged) = expected.consumption_bindings()?;
-        let mut filter = Condition::all();
+        let mut filter = Condition::all().add(selected_id);
         for name in ["id", "deviceCode", "clientId", "userId", "status"] {
             let value = bindings.get(name).ok_or_else(|| {
                 AuthError::internal(format!("Device consumption binding {name} is missing"))
@@ -168,11 +160,7 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         }
         let filter = filter
             .add(user.is_not_null())
-            .add(self.plugin_equals::<P::DeviceCode>(
-                EntityRole::DeviceCode,
-                "status",
-                "approved".into(),
-            )?)
+            .add(self.resolve_plugin_equals::<P::DeviceCode>(EntityRole::DeviceCode, approved)?)
             .add(ownership)
             .add(Expr::value(unchanged));
         database_operation::<Entity<P::DeviceCode>, _>(self.config(), "consumeOne", async {

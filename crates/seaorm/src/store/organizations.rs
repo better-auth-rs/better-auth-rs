@@ -1,4 +1,3 @@
-use super::id_filter::IdColumn;
 use super::{
     SeaOrmStore, map_db_err,
     organization_models::{self as models, Entity, values},
@@ -90,28 +89,28 @@ where
     }
     async fn delete_organization_records(&self, id: &str) -> AuthResult<()> {
         let _ = Entity::<O::Member>::delete_many()
-            .filter(O::Member::column("organization_id")?.eq_id(
-                id,
-                self.config().advanced.database.generate_id(),
-                self.connection().get_database_backend(),
+            .filter(self.organization_field_equals::<O::Member>(
+                better_auth_core::store::schema::EntityRole::Member,
+                "organizationId",
+                &id.into(),
             )?)
             .exec(self.connection())
             .await
             .map_err(map_db_err)?;
         let _ = Entity::<O::Invitation>::delete_many()
-            .filter(O::Invitation::column("organization_id")?.eq_id(
-                id,
-                self.config().advanced.database.generate_id(),
-                self.connection().get_database_backend(),
+            .filter(self.organization_field_equals::<O::Invitation>(
+                better_auth_core::store::schema::EntityRole::Invitation,
+                "organizationId",
+                &id.into(),
             )?)
             .exec(self.connection())
             .await
             .map_err(map_db_err)?;
         let _ = Entity::<O::Organization>::delete_many()
-            .filter(O::Organization::column("id")?.eq_id(
-                id,
-                self.config().advanced.database.generate_id(),
-                self.connection().get_database_backend(),
+            .filter(self.organization_field_equals::<O::Organization>(
+                better_auth_core::store::schema::EntityRole::Organization,
+                "id",
+                &id.into(),
             )?)
             .exec(self.connection())
             .await
@@ -184,20 +183,7 @@ where
     }
 
     async fn get_organization_by_id(&self, id: &str) -> AuthResult<Option<Organization>> {
-        let config = self.organization_fields()?.organization;
-        let row = models::find::<O::Organization, _>(
-            self.connection(),
-            id,
-            self.config().advanced.database.generate_id(),
-        )
-        .await?;
-        match row {
-            Some(row) => row
-                .record(&config, self.connection().get_database_backend())
-                .await
-                .map(Some),
-            None => Ok(None),
-        }
+        self.get_organization_by_id_value(&id.into()).await
     }
 
     async fn get_organization_by_id_value(
@@ -218,9 +204,11 @@ where
         slug: &FieldValue,
     ) -> AuthResult<Option<Organization>> {
         let config = self.organization_fields()?.organization;
-        let column = O::Organization::column("slug")?;
-        let filter =
-            super::value_filter::equals(column, slug, self.connection().get_database_backend())?;
+        let filter = self.organization_field_equals::<O::Organization>(
+            better_auth_core::store::schema::EntityRole::Organization,
+            "slug",
+            slug,
+        )?;
         let row = Entity::<O::Organization>::find()
             .filter(filter)
             .one(self.connection())
@@ -237,11 +225,20 @@ where
 
     async fn list_organizations_by_ids(&self, ids: &[String]) -> AuthResult<Vec<Organization>> {
         let config = self.organization_fields()?.organization;
+        let bound = self.bind_organization_query_field(
+            better_auth_core::store::schema::EntityRole::Organization,
+            "id",
+            &FieldValue::Array(ids.iter().map(|id| id.as_str().into()).collect()),
+        )?;
+        let (column, value) = self.resolve_organization_query_field::<O::Organization>(
+            better_auth_core::store::schema::EntityRole::Organization,
+            bound,
+        )?;
         models::project::<O::Organization>(
             Entity::<O::Organization>::find()
-                .filter(O::Organization::column("id")?.is_in_ids(
-                    ids.iter().cloned(),
-                    self.config().advanced.database.generate_id(),
+                .filter(super::value_filter::is_in(
+                    column,
+                    &value,
                     self.connection().get_database_backend(),
                 )?)
                 .all(self.connection())
@@ -287,60 +284,42 @@ where
         {
             let _ = core.insert("metadata".into(), value);
         }
-        let active = models::active::<O::Organization>(
+        self.update_organization_model::<O::Organization>(
+            self.connection(),
+            better_auth_core::store::schema::EntityRole::Organization,
+            id,
             core,
             update.additional_fields,
             &config,
-            false,
-            self.connection().get_database_backend(),
-            self.config().advanced.database.generate_id(),
         )
-        .await?;
-        let _ = active
-            .update(self.connection().get_database_backend())?
-            .filter(super::value_filter::equals_id(
-                O::Organization::column("id")?,
-                id,
-                self.config().advanced.database.generate_id(),
-                self.connection().get_database_backend(),
-            )?)
-            .exec(self.connection())
-            .await
-            .map_err(map_db_err)?;
-        let updated_id = update
-            .id
-            .map(FieldValue::from)
-            .unwrap_or_else(|| id.clone());
-        self.get_organization_by_id_value(&updated_id)
-            .await?
-            .ok_or_else(|| AuthError::not_found("Organization not found"))
+        .await
     }
 
     async fn delete_organization(&self, id: &str) -> AuthResult<()> {
         let tx = self.connection().begin().await.map_err(map_db_err)?;
         let _ = Entity::<O::Member>::delete_many()
-            .filter(O::Member::column("organization_id")?.eq_id(
-                id,
-                self.config().advanced.database.generate_id(),
-                self.connection().get_database_backend(),
+            .filter(self.organization_field_equals::<O::Member>(
+                better_auth_core::store::schema::EntityRole::Member,
+                "organizationId",
+                &id.into(),
             )?)
             .exec(&tx)
             .await
             .map_err(map_db_err)?;
         let _ = Entity::<O::Invitation>::delete_many()
-            .filter(O::Invitation::column("organization_id")?.eq_id(
-                id,
-                self.config().advanced.database.generate_id(),
-                self.connection().get_database_backend(),
+            .filter(self.organization_field_equals::<O::Invitation>(
+                better_auth_core::store::schema::EntityRole::Invitation,
+                "organizationId",
+                &id.into(),
             )?)
             .exec(&tx)
             .await
             .map_err(map_db_err)?;
         let _ = Entity::<O::Organization>::delete_many()
-            .filter(O::Organization::column("id")?.eq_id(
-                id,
-                self.config().advanced.database.generate_id(),
-                self.connection().get_database_backend(),
+            .filter(self.organization_field_equals::<O::Organization>(
+                better_auth_core::store::schema::EntityRole::Organization,
+                "id",
+                &id.into(),
             )?)
             .exec(&tx)
             .await
@@ -427,11 +406,10 @@ impl<
         id: &FieldValue,
     ) -> AuthResult<Option<Organization>> {
         let row = Entity::<O::Organization>::find()
-            .filter(super::value_filter::equals_id(
-                O::Organization::column("id")?,
+            .filter(self.organization_field_equals::<O::Organization>(
+                better_auth_core::store::schema::EntityRole::Organization,
+                "id",
                 id,
-                self.config().advanced.database.generate_id(),
-                self.connection().get_database_backend(),
             )?)
             .one(db)
             .await

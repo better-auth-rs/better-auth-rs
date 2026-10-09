@@ -209,7 +209,7 @@ run_stage() {
           --test user_input_policy_tests --test protected_function_tests \
           --test user_verification_fields_tests --test user_record_values_tests \
           --test account_owner_batch_tests --test account_identity_tests --test account_native_selector_tests --test account_batch_update_tests \
-          --test account_verification_update_fields_tests --test verification_field_queries_tests --test query_binding_order_tests \
+          --test account_verification_update_fields_tests --test verification_field_queries_tests --test verification_live_output_tests --test query_binding_order_tests \
           --test verification_transaction_delete_tests \
           --test account_user_selected_relations_reference_tests \
           --test native_core_join_tests --test native_memory_join_tests --test session_user_join_reference_tests \
@@ -223,6 +223,7 @@ run_stage() {
         cargo test --locked --features axum,seaorm2,redis-cache --test user_account_raw_column_tests -- --ignored || create_status=1
         cargo test --locked --features axum,seaorm2,redis-cache --test account_verification_update_fields_tests -- --ignored || create_status=1
         cargo test --locked --features axum,seaorm2,redis-cache --test verification_transaction_delete_tests -- --ignored || create_status=1
+        cargo test --locked --features axum,seaorm2,redis-cache --test query_binding_order_tests -- --ignored || create_status=1
         cargo test --locked -p better-auth-cli --test generate || create_status=1
         ./scripts/consumer-check.sh --lib --test session_native_values --test user_session_fields || create_status=1
         if cargo build --locked --manifest-path compat-tests/rust-server/Cargo.toml; then
@@ -237,6 +238,7 @@ run_stage() {
       fi
       bun --no-install test ./compat-tests/reference-server/consumer-contracts/mysql-create-readback.test.ts \
         ./compat-tests/reference-server/consumer-contracts/update-fields-server.test.ts \
+        ./compat-tests/reference-server/consumer-contracts/organization-role-empty-in.test.ts \
         ./compat-tests/reference-server/consumer-contracts/verification-consume-hooks-server.test.ts || create_status=1
       bun --no-install test ./compat-tests/reference-server/contracts/email-verification-claims.test.ts \
         ./compat-tests/reference-server/contracts/email-verification-payload.test.ts \
@@ -259,6 +261,7 @@ run_stage() {
         ./compat-tests/reference-server/contracts/account-owner-batch.test.ts \
         ./compat-tests/reference-server/contracts/account-verification-update-fields.test.ts \
         ./compat-tests/reference-server/contracts/verification-field-queries.test.ts \
+        ./compat-tests/reference-server/contracts/verification-live-output.test.ts \
         ./compat-tests/reference-server/contracts/query-binding-order.test.ts \
         ./compat-tests/reference-server/contracts/verification-consume-hooks.test.ts \
         ./compat-tests/reference-server/contracts/endpoint-content-type.test.ts \

@@ -209,6 +209,7 @@ impl ModelFields {
         self.declare_native_fields(EntityRole::Organization, fields.organization.clone());
         if teams_enabled {
             self.declare_native_fields(EntityRole::Team, fields.team.clone());
+            self.declare_native_fields(EntityRole::TeamMember, UserConfig::default());
         }
         self.declare_native_fields(EntityRole::Member, fields.member.clone());
         self.declare_native_fields(EntityRole::Invitation, fields.invitation.clone());

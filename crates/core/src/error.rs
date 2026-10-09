@@ -128,6 +128,10 @@ pub enum AuthError {
     #[error("{0}")]
     TypeError(String),
 
+    /// A native value is outside a runtime constructor's accepted range.
+    #[error("{0}")]
+    RangeError(String),
+
     #[error("Internal server error: {0}")]
     Internal(String),
 
@@ -156,6 +160,7 @@ impl AuthError {
                 .unwrap_or_else(|| self.to_string()),
             Self::Internal(message)
             | Self::TypeError(message)
+            | Self::RangeError(message)
             | Self::Config(message)
             | Self::PasswordHash(message) => message.clone(),
             _ => self.to_string(),
@@ -226,6 +231,7 @@ impl AuthError {
             | Self::Plugin { .. }
             | Self::Internal(_)
             | Self::TypeError(_)
+            | Self::RangeError(_)
             | Self::DataClone
             | Self::PasswordHash(_)
             | Self::Jwt(_) => false,
@@ -286,6 +292,7 @@ impl AuthError {
             | Self::Plugin { .. }
             | Self::Internal(_)
             | Self::TypeError(_)
+            | Self::RangeError(_)
             | Self::DataClone
             | Self::PasswordHash(_)
             | Self::Jwt(_) => 500,

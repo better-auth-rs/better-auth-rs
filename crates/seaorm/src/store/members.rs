@@ -39,18 +39,16 @@ fn member_column<M: SeaOrmOrganizationModel>(
     .ok()
 }
 
-fn apply_member_filter<M: SeaOrmOrganizationModel>(
-    mut query: Select<Entity<M>>,
+fn bind_member_filter(
     params: &ListOrganizationMembersParams,
     config: &better_auth_core::user_fields::UserConfig,
     backend: DatabaseBackend,
     policy: &better_auth_core::id::IdGeneration,
     runtime: &better_auth_core::plugin_runtime::ModelFields,
-) -> AuthResult<Select<Entity<M>>> {
-    use better_auth_core::FieldValue as Value;
+) -> AuthResult<Option<(super::value_filter::BoundQueryField, bool)>> {
     let (Some(field), Some(value)) = (params.filter_field.as_deref(), params.filter_value.as_ref())
     else {
-        return Ok(query);
+        return Ok(None);
     };
     let operator = params.filter_operator.as_deref().unwrap_or("eq");
     if operator == "in" && value.as_array().is_none() {
@@ -71,7 +69,7 @@ fn apply_member_filter<M: SeaOrmOrganizationModel>(
             .fields()
             .get(logical)
             .is_some_and(|field| field.references_id());
-    let (column, bound) = super::value_filter::bind_query_field(
+    let bound = super::value_filter::bind_factory_query_field(
         runtime,
         better_auth_core::store::schema::EntityRole::Member,
         &schema,
@@ -80,6 +78,25 @@ fn apply_member_filter<M: SeaOrmOrganizationModel>(
         policy,
         backend,
     )?;
+    Ok(Some((bound, id_field)))
+}
+
+fn apply_member_filter<M: SeaOrmOrganizationModel>(
+    mut query: Select<Entity<M>>,
+    params: &ListOrganizationMembersParams,
+    config: &better_auth_core::user_fields::UserConfig,
+    backend: DatabaseBackend,
+    policy: &better_auth_core::id::IdGeneration,
+    bound: Option<(super::value_filter::BoundQueryField, bool)>,
+) -> AuthResult<Select<Entity<M>>> {
+    use better_auth_core::FieldValue as Value;
+    let Some((bound, id_field)) = bound else {
+        return Ok(query);
+    };
+    let operator = params.filter_operator.as_deref().unwrap_or("eq");
+    let schema = better_auth_core::store::MemberUser::field_schema(config);
+    let (column, bound) =
+        bound.resolve(better_auth_core::store::schema::EntityRole::Member, &schema)?;
     let column = M::column(&column)?;
     let value = &bound;
     let id_column = (id_field
@@ -103,11 +120,11 @@ fn apply_member_filter<M: SeaOrmOrganizationModel>(
             .as_array()
             .unwrap_or_else(|| std::slice::from_ref(value));
         let values = values.iter().map(convert).collect::<AuthResult<Vec<_>>>()?;
-        return Ok(query.filter(if operator == "in" {
-            column.is_in(values)
-        } else {
-            column.is_not_in(values)
-        }));
+        return Ok(query.filter(super::value_filter::membership(
+            column,
+            values,
+            operator == "not_in",
+        )));
     }
     let raw_value = value;
     let value = convert(value)?;
@@ -214,16 +231,13 @@ where
         organization_id: &str,
         user_id: &str,
     ) -> AuthResult<Option<better_auth_core::store::MemberUser>> {
-        let query = Entity::<O::Member>::find()
-            .filter(O::Member::column("organization_id")?.eq_id(
-                organization_id,
-                self.config().advanced.database.generate_id(),
-                self.connection().get_database_backend(),
-            )?)
-            .filter(O::Member::column("user_id")?.eq_id(
-                user_id,
-                self.config().advanced.database.generate_id(),
-                self.connection().get_database_backend(),
+        let query =
+            Entity::<O::Member>::find().filter(self.organization_fields_equal::<O::Member>(
+                better_auth_core::store::schema::EntityRole::Member,
+                [
+                    ("organizationId", &organization_id.into()),
+                    ("userId", &user_id.into()),
+                ],
             )?);
         self.read_member_user(query, false).await
     }
@@ -232,18 +246,10 @@ where
         organization_id: &FieldValue,
         user_id: &FieldValue,
     ) -> AuthResult<Option<better_auth_core::store::MemberUser>> {
-        let query = Entity::<O::Member>::find()
-            .filter(super::value_filter::equals_id(
-                O::Member::column("organization_id")?,
-                organization_id,
-                self.config().advanced.database.generate_id(),
-                self.connection().get_database_backend(),
-            )?)
-            .filter(super::value_filter::equals_id(
-                O::Member::column("user_id")?,
-                user_id,
-                self.config().advanced.database.generate_id(),
-                self.connection().get_database_backend(),
+        let query =
+            Entity::<O::Member>::find().filter(self.organization_fields_equal::<O::Member>(
+                better_auth_core::store::schema::EntityRole::Member,
+                [("organizationId", organization_id), ("userId", user_id)],
             )?);
         self.read_member_user(query, false).await
     }
@@ -251,25 +257,23 @@ where
         &self,
         id: &str,
     ) -> AuthResult<Option<better_auth_core::store::MemberUser>> {
-        let query = Entity::<O::Member>::find().filter(O::Member::column("id")?.eq_id(
-            id,
-            self.config().advanced.database.generate_id(),
-            self.connection().get_database_backend(),
-        )?);
+        let query =
+            Entity::<O::Member>::find().filter(self.organization_field_equals::<O::Member>(
+                better_auth_core::store::schema::EntityRole::Member,
+                "id",
+                &id.into(),
+            )?);
         self.read_member_user(query, true).await
     }
 
     async fn get_member(&self, organization_id: &str, user_id: &str) -> AuthResult<Option<Member>> {
         let row = Entity::<O::Member>::find()
-            .filter(O::Member::column("organization_id")?.eq_id(
-                organization_id,
-                self.config().advanced.database.generate_id(),
-                self.connection().get_database_backend(),
-            )?)
-            .filter(O::Member::column("user_id")?.eq_id(
-                user_id,
-                self.config().advanced.database.generate_id(),
-                self.connection().get_database_backend(),
+            .filter(self.organization_fields_equal::<O::Member>(
+                better_auth_core::store::schema::EntityRole::Member,
+                [
+                    ("organizationId", &organization_id.into()),
+                    ("userId", &user_id.into()),
+                ],
             )?)
             .one(self.connection())
             .await
@@ -297,10 +301,10 @@ where
 
     async fn get_member_by_id(&self, id: &str) -> AuthResult<Option<Member>> {
         let row = Entity::<O::Member>::find()
-            .filter(O::Member::column("id")?.eq_id(
-                id,
-                self.config().advanced.database.generate_id(),
-                self.connection().get_database_backend(),
+            .filter(self.organization_field_equals::<O::Member>(
+                better_auth_core::store::schema::EntityRole::Member,
+                "id",
+                &id.into(),
             )?)
             .one(self.connection())
             .await
@@ -325,13 +329,13 @@ where
         member_id: &better_auth_core::FieldValue,
         role: &str,
     ) -> AuthResult<Member> {
-        models::update_value::<O::Member, _>(
+        self.update_organization_model::<O::Member>(
             self.connection(),
+            better_auth_core::store::schema::EntityRole::Member,
             member_id,
             values([("role", (role).to_owned().into_field())]),
             Default::default(),
             &self.organization_fields()?.member,
-            self.config().advanced.database.generate_id(),
         )
         .await
     }
@@ -386,11 +390,10 @@ where
         organization_id: &better_auth_core::FieldValue,
     ) -> AuthResult<Vec<Member>> {
         let rows = Entity::<O::Member>::find()
-            .filter(super::value_filter::equals_id(
-                O::Member::column("organization_id")?,
+            .filter(self.organization_field_equals::<O::Member>(
+                better_auth_core::store::schema::EntityRole::Member,
+                "organizationId",
                 organization_id,
-                self.config().advanced.database.generate_id(),
-                self.connection().get_database_backend(),
             )?)
             .order_by_asc(O::Member::column("created_at")?)
             .all(self.connection())
@@ -408,19 +411,34 @@ where
         &self,
         params: &ListOrganizationMembersParams,
     ) -> AuthResult<(Vec<Member>, usize)> {
-        let base_query =
-            Entity::<O::Member>::find().filter(self.organization_field_equals::<O::Member>(
-                better_auth_core::store::schema::EntityRole::Member,
-                "organizationId",
-                &params.organization_id.field_value(),
-            )?);
+        let organization = self.bind_organization_query_field(
+            better_auth_core::store::schema::EntityRole::Member,
+            "organizationId",
+            &params.organization_id.field_value(),
+        )?;
+        let filter = bind_member_filter(
+            params,
+            &self.organization_fields()?.member,
+            self.connection().get_database_backend(),
+            self.config().advanced.database.generate_id(),
+            &self.model_fields,
+        )?;
+        let (column, value) = self.resolve_organization_query_field::<O::Member>(
+            better_auth_core::store::schema::EntityRole::Member,
+            organization,
+        )?;
+        let base_query = Entity::<O::Member>::find().filter(super::value_filter::equals(
+            column,
+            &value,
+            self.connection().get_database_backend(),
+        )?);
         let filtered_query = apply_member_filter::<O::Member>(
             base_query,
             params,
             &self.organization_fields()?.member,
             self.connection().get_database_backend(),
             self.config().advanced.database.generate_id(),
-            &self.model_fields,
+            filter,
         )?;
         let total = filtered_query
             .clone()
@@ -481,12 +499,13 @@ where
     }
     async fn count_organization_owners(&self, organization_id: &str) -> AuthResult<i64> {
         Entity::<O::Member>::find()
-            .filter(O::Member::column("organization_id")?.eq_id(
-                organization_id,
-                self.config().advanced.database.generate_id(),
-                self.connection().get_database_backend(),
+            .filter(self.organization_fields_equal::<O::Member>(
+                better_auth_core::store::schema::EntityRole::Member,
+                [
+                    ("organizationId", &organization_id.into()),
+                    ("role", &"owner".into()),
+                ],
             )?)
-            .filter(O::Member::column("role")?.eq("owner"))
             .count(self.connection())
             .await
             .map(|count| count as i64)
@@ -584,6 +603,13 @@ mod tests {
                     filter_operator: Some(operator.into()),
                     ..Default::default()
                 };
+                let filter = super::bind_member_filter(
+                    &params,
+                    &UserConfig::default(),
+                    sea_orm::DbBackend::Sqlite,
+                    &IdGeneration::Random,
+                    &better_auth_core::plugin_runtime::ModelFields::default(),
+                )?;
                 let query = super::apply_member_filter::<member::Model>(
                     member::Entity::find()
                         .select_only()
@@ -592,7 +618,7 @@ mod tests {
                     &UserConfig::default(),
                     sea_orm::DbBackend::Sqlite,
                     &IdGeneration::Random,
-                    &better_auth_core::plugin_runtime::ModelFields::default(),
+                    filter,
                 )?;
                 let rows = database
                     .query_all_raw(query.build(sea_orm::DbBackend::Sqlite))
@@ -736,17 +762,9 @@ impl<
         user_id: &FieldValue,
     ) -> AuthResult<Option<Member>> {
         let row = Entity::<O::Member>::find()
-            .filter(super::value_filter::equals_id(
-                O::Member::column("organization_id")?,
-                organization_id,
-                self.config().advanced.database.generate_id(),
-                self.connection().get_database_backend(),
-            )?)
-            .filter(super::value_filter::equals_id(
-                O::Member::column("user_id")?,
-                user_id,
-                self.config().advanced.database.generate_id(),
-                self.connection().get_database_backend(),
+            .filter(self.organization_fields_equal::<O::Member>(
+                better_auth_core::store::schema::EntityRole::Member,
+                [("organizationId", organization_id), ("userId", user_id)],
             )?)
             .one(db)
             .await
@@ -769,11 +787,10 @@ impl<
         organization_id: &FieldValue,
     ) -> AuthResult<i64> {
         Entity::<O::Member>::find()
-            .filter(super::value_filter::equals_id(
-                O::Member::column("organization_id")?,
+            .filter(self.organization_field_equals::<O::Member>(
+                better_auth_core::store::schema::EntityRole::Member,
+                "organizationId",
                 organization_id,
-                self.config().advanced.database.generate_id(),
-                self.connection().get_database_backend(),
             )?)
             .count(db)
             .await
@@ -854,26 +871,19 @@ impl<
                     O::Team::column("member_count")?,
                     Expr::col(O::Team::column("member_count")?),
                 )
-                .filter(self.organization_field_equals::<O::Team>(
-                    better_auth_core::store::schema::EntityRole::Team,
-                    "id",
+                .filter(super::value_filter::equals_id(
+                    O::Team::column("id")?,
                     &team.id.field_value(),
+                    self.config().advanced.database.generate_id(),
+                    self.connection().get_database_backend(),
                 )?)
                 .exec(db)
                 .await
                 .map_err(map_db_err)?;
             let deleted = Entity::<O::TeamMember>::delete_many()
-                .filter(super::value_filter::equals_id(
-                    O::TeamMember::column("team_id")?,
-                    &team.id.field_value(),
-                    self.config().advanced.database.generate_id(),
-                    db.get_database_backend(),
-                )?)
-                .filter(super::value_filter::equals_id(
-                    O::TeamMember::column("user_id")?,
-                    user_id,
-                    self.config().advanced.database.generate_id(),
-                    db.get_database_backend(),
+                .filter(self.organization_fields_equal::<O::TeamMember>(
+                    better_auth_core::store::schema::EntityRole::TeamMember,
+                    [("teamId", &team.id.field_value()), ("userId", user_id)],
                 )?)
                 .exec(db)
                 .await

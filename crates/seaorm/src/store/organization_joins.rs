@@ -1,7 +1,5 @@
 use super::{
-    SeaOrmStore,
-    id_filter::IdColumn,
-    map_db_err,
+    SeaOrmStore, map_db_err,
     organization_models::{self as models, Entity},
 };
 use crate::schema::AuthSchema;
@@ -161,21 +159,20 @@ where
         let fields = self.organization_fields()?;
         let backend = self.connection().get_database_backend();
         let predicate = match input.organization {
-            OrganizationKey::Id(id) => O::Organization::column("id")?.eq_id(
-                id,
-                self.config().advanced.database.generate_id(),
-                backend,
+            OrganizationKey::Id(id) => self.organization_field_equals::<O::Organization>(
+                better_auth_core::store::schema::EntityRole::Organization,
+                "id",
+                &id.into(),
             )?,
-            OrganizationKey::IdValue(id) => super::value_filter::equals_id(
-                O::Organization::column("id")?,
+            OrganizationKey::IdValue(id) => self.organization_field_equals::<O::Organization>(
+                better_auth_core::store::schema::EntityRole::Organization,
+                "id",
                 id,
-                self.config().advanced.database.generate_id(),
-                self.connection().get_database_backend(),
             )?,
-            OrganizationKey::Slug(slug) => super::value_filter::equals(
-                O::Organization::column("slug")?,
+            OrganizationKey::Slug(slug) => self.organization_field_equals::<O::Organization>(
+                better_auth_core::store::schema::EntityRole::Organization,
+                "slug",
                 &slug.into(),
-                backend,
             )?,
         };
         let query = Entity::<O::Organization>::find().filter(predicate).limit(1);
@@ -402,11 +399,10 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPluginSchema> SeaOrmSt
         user_id: &better_auth_core::FieldValue,
     ) -> AuthResult<Vec<better_auth_core::Team>> {
         let parent = Entity::<O::TeamMember>::find()
-            .filter(super::value_filter::equals_id(
-                O::TeamMember::column("user_id")?,
+            .filter(self.organization_field_equals::<O::TeamMember>(
+                better_auth_core::store::schema::EntityRole::TeamMember,
+                "userId",
                 user_id,
-                self.config().advanced.database.generate_id(),
-                self.connection().get_database_backend(),
             )?)
             .limit(super::pagination::default_limit(
                 self.config(),
@@ -438,10 +434,10 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPluginSchema> SeaOrmSt
         let fields = self.organization_fields()?;
         let backend = self.connection().get_database_backend();
         let parent = Entity::<O::Invitation>::find()
-            .filter(super::value_filter::equals(
-                O::Invitation::column("email")?,
+            .filter(self.organization_field_equals::<O::Invitation>(
+                better_auth_core::store::schema::EntityRole::Invitation,
+                "email",
                 &email.to_lowercase().into(),
-                backend,
             )?)
             .limit(super::pagination::default_limit(
                 self.config(),

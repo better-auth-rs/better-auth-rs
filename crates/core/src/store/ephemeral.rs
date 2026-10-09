@@ -59,6 +59,7 @@ mod plugin_records;
 #[cfg(test)]
 mod protected_function_tests;
 mod rate_limits;
+mod record_projection;
 mod rows;
 mod runtime;
 #[cfg(test)]
@@ -76,6 +77,8 @@ mod user_runtime_input_tests;
 mod user_serial_tests;
 mod users;
 mod verification_hooks;
+#[cfg(test)]
+mod verification_live_output_tests;
 mod verifications;
 mod wallets;
 

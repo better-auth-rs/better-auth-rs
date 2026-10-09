@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { betterAuth } from "better-auth";
 import { createAuthEndpoint, createAuthMiddleware } from "better-auth/api";
 import { admin, organization } from "better-auth/plugins";
-import { APIError, kAPIErrorHeaderSymbol } from "better-call";
+import { APIError, kAPIErrorHeaderSymbol, toResponse } from "better-call";
 
 const errorBody = { code: "FIXTURE_ERROR", message: "fixture rejection" };
 const fields = (headers?: HeadersInit) => Object.fromEntries(new Headers(headers));
@@ -442,9 +442,9 @@ test("native returned values retain identity and materialize by their actual typ
   }
 });
 
-// Bun 1.4.2 permits these Response bodies; standard Fetch rejects every non-null body.
+// Bun 1.4.2 permits these Response bodies. Construction does not assert HTTP transport behavior.
 // Source: oven-sh/bun@744846f844374847c902b5e7fd59b4342a51ef99, src/runtime/webcore/Response.rs constructor.
-for (const status of [204, 205, 304]) {
+for (const status of [101, 204, 205, 304]) {
   for (const [name, value, text, nullBody] of [
     ["undefined", undefined, "", true],
     ["null", null, "null", false],
@@ -452,7 +452,7 @@ for (const status of [204, 205, 304]) {
     ["false", false, "false", false],
     ["zero", 0, "0", false],
   ] as const) {
-    test(`Bun HTTP materialization preserves ${name} at status ${status}`, async () => {
+    test(`Bun Response construction preserves ${name} at status ${status}`, async () => {
       const auth = betterAuth({
         baseURL: "http://value-contract.test", secret: "value-contract-secret-at-least-32-characters",
         logger: { disabled: true }, telemetry: { enabled: false },
@@ -471,6 +471,47 @@ for (const status of [204, 205, 304]) {
     });
   }
 }
+
+test("Bun Response construction preserves explicit body identity and rejects invalid status with RangeError", async () => {
+  for (const status of [101, 200, 204, 205, 304, 599]) {
+    const response = new Response("", { status, headers: { "content-type": "text/plain" } });
+    const body = response.body;
+    expect(body).not.toBeNull();
+    expect(response.bodyUsed).toBe(false);
+    expect(toResponse(response)).toBe(response);
+    expect(response.body).toBe(body);
+    expect(response.status).toBe(status);
+    expect(fields(response.headers)).toStrictEqual({ "content-type": "text/plain" });
+    expect([...new Uint8Array(await response.arrayBuffer())]).toStrictEqual([]);
+  }
+  for (const status of [0, 100, 102, 199, 600, 65535]) {
+    const value = { retained: true };
+    const observed: unknown[] = [];
+    const auth = betterAuth({
+      baseURL: "http://value-contract.test", secret: "value-contract-secret-at-least-32-characters",
+      logger: { disabled: true }, telemetry: { enabled: false },
+      hooks: { after: createAuthMiddleware(async ctx => { observed.push(ctx.context.returned); }) },
+      plugins: [{ id: "invalid-status-contract", endpoints: { invalidStatusContract: createAuthEndpoint("/invalid-status-contract", { method: "GET" }, async ctx => { ctx.setStatus(status); return value; }) } }],
+    });
+    const native = await auth.api.invalidStatusContract({ returnHeaders: true, returnStatus: true });
+    expect(native.response).toBe(value);
+    expect(native.status).toBe(status);
+    expect(fields(native.headers)).toStrictEqual({});
+    let thrown: unknown;
+    try {
+      await auth.api.invalidStatusContract({ asResponse: true });
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(RangeError);
+    expect(thrown).not.toBeInstanceOf(APIError);
+    expect((thrown as Error).name).toBe("RangeError");
+    expect((thrown as Error).message).toBe(`The status provided (${status}) must be 101 or in the range of [200, 599]`);
+    expect(observed).toHaveLength(2);
+    expect(observed[0]).toBe(value);
+    expect(observed[1]).toBe(value);
+  }
+});
 
 test("update-session rejects invalid updates as native API errors and HTTP 400", async () => {
   const now = new Date();

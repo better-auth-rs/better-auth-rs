@@ -1,5 +1,5 @@
 use super::hooks::CommittedWrite;
-use super::sessions::SessionSource;
+use super::rows::RecordSource;
 use super::sessions::session_token_matches;
 use super::*;
 use crate::store::database_hooks::{DatabaseHookControl, PreparedRecordWrite, SessionUpdate};
@@ -84,7 +84,7 @@ impl EphemeralStore {
                         Ok(())
                     })?;
                 }
-                Ok(sources.into_iter().next().map(SessionSource::Live))
+                Ok(sources.into_iter().next().map(RecordSource::Live))
             })
             .await?;
         futures_util::future::OptionFuture::from(session.map(|row| self.output_session(row)))
@@ -161,7 +161,7 @@ impl EphemeralStore {
                             .sessions
                             .try_select_refs(matches)?
                             .into_iter()
-                            .map(SessionSource::Live)
+                            .map(RecordSource::Live)
                             .collect(),
                         Some(self.config.advanced.database.find_many_limit()),
                         None,

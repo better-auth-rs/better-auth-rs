@@ -84,7 +84,7 @@ impl BoundQueryField {
     }
 }
 
-fn bind_factory_query_field(
+pub(super) fn bind_factory_query_field(
     runtime: &better_auth_core::plugin_runtime::ModelFields,
     role: EntityRole,
     configured: &UserConfig,
@@ -272,15 +272,36 @@ pub(super) fn is_in(
     let values = value
         .as_array()
         .unwrap_or_else(|| std::slice::from_ref(value));
-    in_bindings(
-        column,
+    let values = super::record_bindings::bind(
+        backend,
         values
             .iter()
             .cloned()
             .map(super::record_bindings::Binding::Raw)
             .collect(),
-        backend,
-    )
+    )?;
+    Ok(membership(
+        column.into_expr(),
+        values
+            .into_iter()
+            .map(|value| column.save_as(value))
+            .collect(),
+        false,
+    ))
+}
+
+pub(super) fn membership(column: SimpleExpr, values: Vec<SimpleExpr>, negated: bool) -> SimpleExpr {
+    if values.is_empty() {
+        // Kysely preserves empty-set SQL; SeaQuery otherwise replaces the predicate with a constant.
+        column.binary(
+            sea_orm::sea_query::BinOper::Custom(if negated { "NOT IN" } else { "IN" }),
+            SimpleExpr::Tuple(values),
+        )
+    } else if negated {
+        column.is_not_in(values)
+    } else {
+        column.is_in(values)
+    }
 }
 
 pub(super) fn is_in_native(

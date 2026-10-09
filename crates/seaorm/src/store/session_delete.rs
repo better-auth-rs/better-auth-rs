@@ -32,16 +32,6 @@ where
         super::value_filter::equals(column, &value, backend)
     }
 
-    pub(super) fn session_tokens_filter(
-        &self,
-        tokens: &[String],
-        backend: DbBackend,
-    ) -> AuthResult<sea_orm::sea_query::SimpleExpr> {
-        let bound = self.bind_session_tokens(tokens, backend)?;
-        let (column, value) = self.resolve_session_query_field(bound)?;
-        super::value_filter::is_in(column, &value, backend)
-    }
-
     pub(super) fn bind_session_tokens(
         &self,
         tokens: &[String],
@@ -56,21 +46,12 @@ where
         self.bind_session_query_field("token", &tokens, backend)
     }
 
-    pub(super) fn session_user_filter(
+    pub(super) fn resolve_session_live_filter(
         &self,
-        user_id: &FieldValue,
+        bound: super::value_filter::BoundQueryField,
         backend: DbBackend,
     ) -> AuthResult<sea_orm::sea_query::SimpleExpr> {
-        let (column, value) = self.session_query_field("userId", user_id, backend)?;
-        super::value_filter::equals(column, &value, backend)
-    }
-
-    pub(super) fn session_live_filter(
-        &self,
-        now: &FieldValue,
-        backend: DbBackend,
-    ) -> AuthResult<sea_orm::sea_query::SimpleExpr> {
-        let (column, value) = self.session_query_field("expiresAt", now, backend)?;
+        let (column, value) = self.resolve_session_query_field(bound)?;
         let value = super::record_bindings::parameter(value, backend)?;
         Ok(column.into_expr().gt(column.save_as(value)))
     }
@@ -135,9 +116,7 @@ where
          -> AuthResult<Condition> {
             let mut condition = resolve(bound)?;
             if let Some(live) = live {
-                let (column, value) = self.resolve_session_query_field(live)?;
-                let value = super::record_bindings::parameter(value, backend)?;
-                condition = condition.add(column.into_expr().gt(column.save_as(value)));
+                condition = condition.add(self.resolve_session_live_filter(live, backend)?);
             }
             Ok(condition)
         };

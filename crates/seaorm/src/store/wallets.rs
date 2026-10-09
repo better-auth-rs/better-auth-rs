@@ -130,18 +130,20 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         address: &FieldValue,
         chain_id: Option<&FieldValue>,
     ) -> AuthResult<Option<WalletAddress>> {
-        let query =
-            Entity::<P::WalletAddress>::find().filter(self.plugin_equals::<P::WalletAddress>(
-                EntityRole::WalletAddress,
-                "address",
-                address.clone(),
-            )?);
+        let address =
+            self.bind_plugin_query_field(EntityRole::WalletAddress, "address", address.clone())?;
+        let chain_id = chain_id
+            .map(|value| {
+                self.bind_plugin_query_field(EntityRole::WalletAddress, "chainId", value.clone())
+            })
+            .transpose()?;
+        let query = Entity::<P::WalletAddress>::find().filter(
+            self.resolve_plugin_equals::<P::WalletAddress>(EntityRole::WalletAddress, address)?,
+        );
         let query = match chain_id {
-            Some(value) => query.filter(self.plugin_equals::<P::WalletAddress>(
-                EntityRole::WalletAddress,
-                "chainId",
-                value.clone(),
-            )?),
+            Some(value) => query.filter(
+                self.resolve_plugin_equals::<P::WalletAddress>(EntityRole::WalletAddress, value)?,
+            ),
             None => query,
         };
         let row =

@@ -1,8 +1,9 @@
 //! Native joins retain child row references selected by the original raw query.
 
 use super::account_joins::{native_relation, user_value};
+use super::rows::RecordSource;
 use super::rows::RowRef;
-use super::sessions::{SessionSource, session_token_matches, session_tokens_match};
+use super::sessions::{session_token_matches, session_tokens_match};
 use super::*;
 use crate::session::SessionData;
 use crate::store::JoinValue;
@@ -142,7 +143,7 @@ impl EphemeralStore {
                         .into_iter()
                         .map(|source| {
                             if !native {
-                                return Ok((SessionSource::Live(source), None));
+                                return Ok((RecordSource::Live(source), None));
                             }
                             let session = source.read(|session| Ok(session.clone()))?;
                             let value = session.get(&relation.from).cloned().unwrap_or_default();
@@ -155,7 +156,7 @@ impl EphemeralStore {
                                 self.config.advanced.database.find_many_limit(),
                                 |user| user.id.field_value(),
                             )?;
-                            Ok((SessionSource::Snapshot(Box::new(session)), Some(users)))
+                            Ok((RecordSource::Snapshot(Box::new(session)), Some(users)))
                         })
                         .collect::<AuthResult<Vec<_>>>()
                 },
@@ -166,6 +167,7 @@ impl EphemeralStore {
         self.output_sessions_batches_then(sessions, |ready| {
             let users = &users;
             let fields = &fields;
+            let relation = &relation;
             async move {
                 let mut selected = Vec::with_capacity(ready.len());
                 for (index, session) in &ready {
@@ -176,7 +178,7 @@ impl EphemeralStore {
                         Some(user) => user.clone(),
                         None => {
                             self.fallback_join_users(
-                                &relation,
+                                relation,
                                 (EntityRole::Session, "session", fields),
                                 &session.field_values()?,
                             )

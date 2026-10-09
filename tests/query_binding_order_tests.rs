@@ -18,6 +18,11 @@ use std::sync::{
 
 type Trace = Arc<Mutex<Vec<&'static str>>>;
 
+#[path = "query_binding_order_tests/empty_in.rs"]
+mod empty_in;
+#[path = "query_binding_order_tests/multiple_conditions.rs"]
+mod multiple_conditions;
+
 fn date() -> FieldDate {
     FieldDate::from_milliseconds(1_893_456_001_000.0)
 }

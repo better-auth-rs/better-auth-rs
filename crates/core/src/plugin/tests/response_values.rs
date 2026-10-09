@@ -347,25 +347,91 @@ async fn native_values_and_http_bodies_match_the_pinned_response_contract() -> A
 }
 
 #[test]
-fn materialization_preserves_fetch_status_constraints_and_binary_boundaries() -> AuthResult<()> {
-    // shortcut: Bun permits these bodies; replace Fetch constraints when the response host boundary is aligned.
-    for status in [204, 205, 304] {
-        let native = AuthResponse::native(status, FieldValue::Undefined)
-            .into_http_response()?
-            .into_http_response()?;
-        assert!(matches!(native.body, ResponseBody::Empty));
-        assert!(AuthResponse::new(status).into_http_response().is_ok());
-        for body in [FieldValue::Null, "".into(), false.into(), 0.0.into()] {
-            assert!(matches!(
-                AuthResponse::native(status, body).into_http_response(),
-                Err(crate::AuthError::TypeError(_))
-            ));
+fn materialization_preserves_bun_status_and_body_construction() -> AuthResult<()> {
+    for status in [101, 200, 204, 205, 304, 599] {
+        for (value, bytes, null_body) in [
+            (FieldValue::Undefined, "", true),
+            (FieldValue::Null, "null", false),
+            ("".into(), "", false),
+            (false.into(), "false", false),
+            (0.0.into(), "0", false),
+        ] {
+            let native = AuthResponse::native(status, value.clone());
+            same_body(&native.body, &ResponseBody::Native(value));
+            assert_eq!(native.native_status(), NativeResponseStatus::Value(status));
+            assert!(native.headers.is_empty());
+            let response = native.into_http_response()?;
+            for response in [response.clone(), response.into_http_response()?] {
+                assert_eq!(response.status, status);
+                assert!(!response.is_native());
+                assert_eq!(
+                    response.headers.into_iter().collect::<Vec<_>>(),
+                    vec![("content-type".into(), "application/json".into())]
+                );
+                assert_eq!(matches!(response.body, ResponseBody::Empty), null_body);
+                assert_eq!(response.body.bytes()?.as_ref(), bytes.as_bytes());
+            }
         }
-        assert!(AuthResponse::text(status, "").into_http_response().is_err());
+        assert!(matches!(
+            AuthResponse::new(status).into_http_response()?.body,
+            ResponseBody::Empty
+        ));
+        let explicit = AuthResponse::text(status, "").into_http_response()?;
+        assert_eq!(explicit.status, status);
+        assert!(matches!(explicit.body, ResponseBody::Bytes(ref bytes) if bytes.is_empty()));
+        assert_eq!(
+            explicit.headers.into_iter().collect::<Vec<_>>(),
+            vec![("content-type".into(), "text/plain".into())]
+        );
     }
-    for status in [0, 199, 600] {
-        assert!(AuthResponse::new(status).into_http_response().is_err());
+    Ok(())
+}
+
+#[tokio::test]
+async fn invalid_response_status_preserves_native_values_and_range_errors() -> AuthResult<()> {
+    let config = crate::test_store::test_config();
+    let context = AuthContext::new(config.clone(), Arc::new(EphemeralStore::new(config)));
+    let route = AuthRoute::get("/invalid-response-status", "invalidResponseStatus");
+    let dispatcher =
+        EndpointDispatcher::new(Arc::new(vec![]), EndpointHooks::default(), [route.clone()]);
+    let value: FieldValue = FieldMap::from([("retained".into(), true.into())]).into();
+    for status in [0, 100, 102, 199, 600, u16::MAX] {
+        let request = AuthRequest::new(HttpMethod::Get, "/invalid-response-status");
+        let output = AuthResponse::native(status, value.clone());
+        let native = dispatcher
+            .native(
+                request.clone(),
+                route.clone(),
+                &context,
+                move |_| async move { Ok(output) },
+            )
+            .await?;
+        assert_eq!(native.native_status(), NativeResponseStatus::Value(status));
+        same_body(&native.body, &ResponseBody::Native(value.clone()));
+        let mut request = request;
+        let error = dispatcher
+            .run(&mut request, true, &context, None, move |_| async move {
+                Ok(native)
+            })
+            .await
+            .unwrap_err();
+        let message =
+            format!("The status provided ({status}) must be 101 or in the range of [200, 599]");
+        assert!(matches!(&error, crate::AuthError::RangeError(actual) if actual == &message));
+        assert_eq!(error.to_string(), message);
+        assert_eq!(error.instrumentation_message(), message);
+        assert!(!error.is_api_error());
+        assert_eq!(error.status_code(), 500);
+        let response = error.to_http_response()?;
+        assert_eq!(response.status, 500);
+        assert!(response.headers.is_empty());
+        assert!(matches!(response.body, ResponseBody::Empty));
     }
+    Ok(())
+}
+
+#[test]
+fn materialization_preserves_binary_and_utf16_boundaries() -> AuthResult<()> {
     for body in [
         ResponseBody::Binary(Arc::from([1, 2])),
         ResponseBody::Blob(Arc::new(ResponseBlob::new(vec![1, 2], ""))),

@@ -18,6 +18,21 @@ pub(super) struct Rows<T>(Vec<Arc<Mutex<T>>>);
 #[derive(Clone)]
 pub(super) struct RowRef<T>(Arc<Mutex<T>>);
 
+#[derive(Clone)]
+pub(super) enum RecordSource {
+    Live(RowRef<FieldMap>),
+    Snapshot(Box<FieldMap>),
+}
+
+impl RecordSource {
+    pub(super) fn read<T>(&self, read: impl FnOnce(&FieldMap) -> AuthResult<T>) -> AuthResult<T> {
+        match self {
+            Self::Live(source) => source.read(read),
+            Self::Snapshot(record) => read(record),
+        }
+    }
+}
+
 impl<T> RowRef<T> {
     pub(super) fn same_row(&self, other: &Self) -> bool {
         Arc::ptr_eq(&self.0, &other.0)

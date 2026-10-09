@@ -1,5 +1,5 @@
 use crate::SeaOrmOrganizationModel;
-use better_auth_core::store::schema::resolve_field_name;
+use better_auth_core::store::schema::{EntityRole, resolve_field_name};
 use better_auth_core::{AuthError, AuthResult, user_fields::UserConfig};
 use better_auth_core::{FieldMap, FieldValue};
 use sea_orm::{
@@ -11,16 +11,118 @@ pub(super) type Entity<M> = <M as SeaOrmOrganizationModel>::Entity;
 impl<S: crate::schema::AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema>
     super::SeaOrmStore<S, O, P>
 {
+    pub(super) fn organization_query_schema(&self, role: EntityRole) -> AuthResult<UserConfig> {
+        if role == EntityRole::TeamMember {
+            Ok(self.model_fields.plugin_fields(role))
+        } else {
+            self.organization_fields()?.query_schema_for(role)
+        }
+    }
+
+    pub(super) fn bind_organization_query_field(
+        &self,
+        role: EntityRole,
+        name: &str,
+        value: &FieldValue,
+    ) -> AuthResult<super::value_filter::BoundQueryField> {
+        self.bind_query_field(
+            role,
+            &self.organization_query_schema(role)?,
+            name,
+            value,
+            self.connection().get_database_backend(),
+        )
+    }
+
+    pub(super) fn resolve_organization_query_field<M: SeaOrmOrganizationModel>(
+        &self,
+        role: EntityRole,
+        bound: super::value_filter::BoundQueryField,
+    ) -> AuthResult<(M::Column, FieldValue)> {
+        let (column, value) = bound.resolve(role, &self.organization_query_schema(role)?)?;
+        Ok((M::column(&column)?, value))
+    }
+
+    pub(super) fn organization_fields_equal<'a, M: SeaOrmOrganizationModel>(
+        &self,
+        role: EntityRole,
+        selectors: impl IntoIterator<Item = (&'a str, &'a FieldValue)>,
+    ) -> AuthResult<sea_orm::Condition> {
+        let selectors = selectors
+            .into_iter()
+            .map(|(name, value)| self.bind_organization_query_field(role, name, value))
+            .collect::<AuthResult<Vec<_>>>()?;
+        selectors
+            .into_iter()
+            .try_fold(sea_orm::Condition::all(), |condition, bound| {
+                let (column, value) = self.resolve_organization_query_field::<M>(role, bound)?;
+                Ok(condition.add(super::value_filter::equals(
+                    column,
+                    &value,
+                    self.connection().get_database_backend(),
+                )?))
+            })
+    }
+
     pub(super) fn organization_field_equals<M: SeaOrmOrganizationModel>(
         &self,
         role: better_auth_core::store::schema::EntityRole,
         name: &str,
         value: &FieldValue,
     ) -> AuthResult<sea_orm::sea_query::SimpleExpr> {
-        let fields = self.organization_fields()?.query_schema_for(role)?;
         let backend = self.connection().get_database_backend();
-        let (column, bound) = self.query_field_binding(role, &fields, name, value, backend)?;
-        super::value_filter::equals(M::column(&column)?, &bound, backend)
+        let bound = self.bind_organization_query_field(role, name, value)?;
+        let (column, value) = self.resolve_organization_query_field::<M>(role, bound)?;
+        super::value_filter::equals(column, &value, backend)
+    }
+
+    pub(super) async fn find_organization_model<M: SeaOrmOrganizationModel>(
+        &self,
+        conn: &impl ConnectionTrait,
+        role: EntityRole,
+        id: &FieldValue,
+    ) -> AuthResult<Option<M>> {
+        Entity::<M>::find()
+            .filter(self.organization_field_equals::<M>(role, "id", id)?)
+            .one(conn)
+            .await
+            .map_err(super::map_db_err)
+    }
+
+    pub(super) async fn update_organization_model<M: SeaOrmOrganizationModel>(
+        &self,
+        conn: &impl ConnectionTrait,
+        role: EntityRole,
+        id: &FieldValue,
+        core: FieldMap,
+        input: FieldMap,
+        config: &UserConfig,
+    ) -> AuthResult<M::Record> {
+        let selector = self.bind_organization_query_field(role, "id", id)?;
+        let active = active::<M>(
+            core,
+            input,
+            config,
+            false,
+            conn.get_database_backend(),
+            self.config().advanced.database.generate_id(),
+        )
+        .await?;
+        let (column, value) = self.resolve_organization_query_field::<M>(role, selector)?;
+        let filter = super::value_filter::equals(column, &value, conn.get_database_backend())?;
+        let row = super::updates::execute_update_returning_raw::<Entity<M>, _>(
+            conn,
+            active
+                .update_returning(conn.get_database_backend())?
+                .filter(filter.clone()),
+            filter,
+        )
+        .await?
+        .ok_or_else(|| AuthError::not_found("Organization record not found"))?;
+        M::from_query_result(&row, "")
+            .map_err(super::map_db_err)?
+            .record(config, conn.get_database_backend())
+            .await
     }
 }
 
@@ -151,66 +253,6 @@ pub(super) async fn insert<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
     .ok_or_else(|| AuthError::internal("Organization record creation returned no record"))?
     .record(config, conn.get_database_backend())
     .await
-}
-
-pub(super) async fn find<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
-    conn: &C,
-    id: &str,
-    policy: &better_auth_core::id::IdGeneration,
-) -> AuthResult<Option<M>> {
-    find_value::<M, _>(conn, &id.into(), policy).await
-}
-
-pub(super) async fn find_value<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
-    conn: &C,
-    id: &FieldValue,
-    policy: &better_auth_core::id::IdGeneration,
-) -> AuthResult<Option<M>> {
-    Entity::<M>::find()
-        .filter(super::value_filter::equals_id(
-            M::column("id")?,
-            id,
-            policy,
-            conn.get_database_backend(),
-        )?)
-        .one(conn)
-        .await
-        .map_err(super::map_db_err)
-}
-
-pub(super) async fn update_value<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
-    conn: &C,
-    id: &FieldValue,
-    core: FieldMap,
-    input: FieldMap,
-    config: &UserConfig,
-    policy: &better_auth_core::id::IdGeneration,
-) -> AuthResult<M::Record> {
-    let active = active::<M>(
-        core,
-        input,
-        config,
-        false,
-        conn.get_database_backend(),
-        policy,
-    )
-    .await?;
-    let _ = active
-        .update(conn.get_database_backend())?
-        .filter(super::value_filter::equals_id(
-            M::column("id")?,
-            id,
-            policy,
-            conn.get_database_backend(),
-        )?)
-        .exec(conn)
-        .await
-        .map_err(super::map_db_err)?;
-    find_value::<M, _>(conn, id, policy)
-        .await?
-        .ok_or_else(|| better_auth_core::AuthError::not_found("Organization record not found"))?
-        .record(config, conn.get_database_backend())
-        .await
 }
 
 pub(super) async fn project<M: SeaOrmOrganizationModel>(

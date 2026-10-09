@@ -9,6 +9,23 @@ use sea_orm::{
     sea_query::{Expr, ExprTrait, SimpleExpr},
 };
 
+async fn find_stored_team<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
+    conn: &C,
+    id: &FieldValue,
+    policy: &better_auth_core::id::IdGeneration,
+) -> AuthResult<Option<M>> {
+    Entity::<M>::find()
+        .filter(super::value_filter::equals_id(
+            M::column("id")?,
+            id,
+            policy,
+            conn.get_database_backend(),
+        )?)
+        .one(conn)
+        .await
+        .map_err(super::map_db_err)
+}
+
 async fn update<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
     conn: &C,
     id: &FieldValue,
@@ -29,7 +46,7 @@ async fn update<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
         update = update.filter(condition);
     }
     let changed = update.exec(conn).await.map_err(map_db_err)?.rows_affected > 0;
-    if changed && let Some(row) = models::find_value::<M, _>(conn, id, policy).await? {
+    if changed && let Some(row) = find_stored_team::<M, _>(conn, id, policy).await? {
         let _ = row.record(fields, conn.get_database_backend()).await?;
     }
     Ok(changed)
@@ -66,7 +83,7 @@ pub(super) async fn reserve<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
         .map_err(map_db_err)?
         .rows_affected
         > 0;
-    if changed && let Some(row) = models::find_value::<M, _>(conn, id, policy).await? {
+    if changed && let Some(row) = find_stored_team::<M, _>(conn, id, policy).await? {
         let _ = row.record(fields, conn.get_database_backend()).await?;
     }
     update::<M, _>(

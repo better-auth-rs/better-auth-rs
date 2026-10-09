@@ -1,4 +1,5 @@
 use super::hooks::CommittedWrite;
+use super::rows::{RecordSource, RowRef};
 use super::*;
 use crate::store::{
     VerificationCreateWriter,
@@ -9,16 +10,17 @@ use crate::{id::AdapterIdInput, store::schema::EntityRole};
 impl EphemeralStore {
     pub(super) async fn output_verifications(
         &self,
-        records: &[FieldMap],
+        records: Vec<RecordSource>,
     ) -> AuthResult<Vec<VerificationView>> {
-        if !records.is_empty() {
-            self.model_fields
-                .begin_id_output(EntityRole::Verification)?;
-        }
-        let schema = self.config.verification.field_schema().adapter_fields(&[]);
-        let order = schema.fields().keys().cloned().collect::<Vec<_>>();
-        Ok(schema
-            .project_memory_records(records)
+        let schema = self.config.verification.field_schema();
+        let order = schema
+            .adapter_fields(&[])
+            .fields()
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>();
+        Ok(self
+            .project_record_sources(EntityRole::Verification, &schema, records)
             .await?
             .into_iter()
             .map(|fields| VerificationView::from_adapter_fields(fields.in_field_order(&order)))
@@ -27,12 +29,9 @@ impl EphemeralStore {
 
     pub(super) async fn output_verification(
         &self,
-        record: &FieldMap,
+        record: RecordSource,
     ) -> AuthResult<VerificationView> {
-        Ok(self
-            .output_verifications(std::slice::from_ref(record))
-            .await?
-            .remove(0))
+        Ok(self.output_verifications(vec![record]).await?.remove(0))
     }
 
     pub(super) fn verification_query(
@@ -128,7 +127,7 @@ impl EphemeralStore {
     pub(super) async fn latest_verification_record(
         &self,
         identifier: &str,
-    ) -> AuthResult<Option<FieldMap>> {
+    ) -> AuthResult<Option<RowRef<FieldMap>>> {
         let bound_identifier = self.verification_query("identifier", identifier)?;
         let mut records = self
             .raw("verification", "findMany", |state| {
@@ -147,10 +146,7 @@ impl EphemeralStore {
                     .unwrap_or_default())
             })
         })?;
-        records
-            .first()
-            .map(|row| row.read(|record| Ok(record.clone())))
-            .transpose()
+        Ok(records.into_iter().next())
     }
 }
 
@@ -223,18 +219,31 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
                     .iter()
                     .any(|row| row.get("id").and_then(Value::as_str) == Some(id))
                 {
-                    return Ok(false);
+                    return Ok(None);
                 }
-                state.verifications.push(record.clone());
-                Ok(true)
+                Ok(Some(state.verifications.push_ref(record)))
             })
             .await?;
-        if !inserted {
+        let Some(inserted) = inserted else {
             return Ok(false);
-        }
-        // Reservation catches create errors and then reads the existing row through the adapter again.
-        if self.output_verification(&record).await.is_err() {
-            let _ = self.output_verification(&record).await?;
+        };
+        // A failed create projection can remove or replace the inserted row before this lookup.
+        if let Err(error) = self.output_verification(RecordSource::Live(inserted)).await {
+            let bound = self.verification_query("id", id)?;
+            let found = self
+                .raw("verification", "findOne", |state| {
+                    state.verifications.first_ref(|record| {
+                        record
+                            .get("id")
+                            .unwrap_or(&Value::Undefined)
+                            .strict_equals(&bound)
+                    })
+                })
+                .await?;
+            let Some(found) = found else {
+                return Err(error);
+            };
+            let _ = self.output_verification(RecordSource::Live(found)).await?;
             return Ok(false);
         }
         Ok(true)
@@ -266,15 +275,15 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
         let mut record = self
             .verification_storage_fields(input.fields()?, true, None)
             .await?;
-        self.raw("verification", "create", |state| {
-            if let Some(id) = self.next_serial_id(state.verifications.len()) {
-                let _ = record.insert("id".into(), id);
-            }
-            state.verifications.push(record.clone());
-            Ok(())
-        })
-        .await?;
-        let projected = self.output_verification(&record).await?;
+        let source = self
+            .raw("verification", "create", |state| {
+                if let Some(id) = self.next_serial_id(state.verifications.len()) {
+                    let _ = record.insert("id".into(), id);
+                }
+                Ok(state.verifications.push_ref(record))
+            })
+            .await?;
+        let projected = self.output_verification(RecordSource::Live(source)).await?;
         if let Some(writer) = writer {
             writer(projected.fields()?).await?;
         }
@@ -292,7 +301,7 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
     ) -> AuthResult<Option<VerificationView>> {
         let record = self.latest_verification_record(identifier).await?;
         futures_util::future::OptionFuture::from(
-            record.as_ref().map(|row| self.output_verification(row)),
+            record.map(|row| self.output_verification(RecordSource::Live(row))),
         )
         .await
         .transpose()
@@ -306,26 +315,19 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
         let bound_value = self.verification_query("value", value)?;
         let record = self
             .raw("verification", "findOne", |state| {
-                Ok(state
-                    .verifications
-                    .snapshot()?
-                    .iter()
-                    .find(|row| {
-                        self.verification_field(row, "identifier")
+                state.verifications.first_ref(|row| {
+                    self.verification_field(row, "identifier")
+                        .unwrap_or(&Value::Undefined)
+                        .strict_equals(&bound_identifier)
+                        && self
+                            .verification_field(row, "value")
                             .unwrap_or(&Value::Undefined)
-                            .strict_equals(&bound_identifier)
-                            && self
-                                .verification_field(row, "value")
-                                .unwrap_or(&Value::Undefined)
-                                .strict_equals(&bound_value)
-                    })
-                    .cloned())
+                            .strict_equals(&bound_value)
+                })
             })
             .await?;
         futures_util::future::OptionFuture::from(
-            record
-                .as_ref()
-                .map(|record| self.output_verification(record)),
+            record.map(|record| self.output_verification(RecordSource::Live(record))),
         )
         .await
         .transpose()
@@ -334,22 +336,15 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
         let bound_value = self.verification_query("value", value)?;
         let record = self
             .raw("verification", "findOne", |state| {
-                Ok(state
-                    .verifications
-                    .snapshot()?
-                    .iter()
-                    .find(|row| {
-                        self.verification_field(row, "value")
-                            .unwrap_or(&Value::Undefined)
-                            .strict_equals(&bound_value)
-                    })
-                    .cloned())
+                state.verifications.first_ref(|row| {
+                    self.verification_field(row, "value")
+                        .unwrap_or(&Value::Undefined)
+                        .strict_equals(&bound_value)
+                })
             })
             .await?;
         futures_util::future::OptionFuture::from(
-            record
-                .as_ref()
-                .map(|record| self.output_verification(record)),
+            record.map(|record| self.output_verification(RecordSource::Live(record))),
         )
         .await
         .transpose()
@@ -361,22 +356,15 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
         let bound_identifier = self.verification_query("identifier", identifier)?;
         let record = self
             .raw("verification", "findOne", |state| {
-                Ok(state
-                    .verifications
-                    .snapshot()?
-                    .iter()
-                    .find(|row| {
-                        self.verification_field(row, "identifier")
-                            .unwrap_or(&Value::Undefined)
-                            .strict_equals(&bound_identifier)
-                    })
-                    .cloned())
+                state.verifications.first_ref(|row| {
+                    self.verification_field(row, "identifier")
+                        .unwrap_or(&Value::Undefined)
+                        .strict_equals(&bound_identifier)
+                })
             })
             .await?;
         futures_util::future::OptionFuture::from(
-            record
-                .as_ref()
-                .map(|record| self.output_verification(record)),
+            record.map(|record| self.output_verification(RecordSource::Live(record))),
         )
         .await
         .transpose()
@@ -436,14 +424,14 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
                     .find(|stored| stored.as_str() == Some(id))
                     .cloned()
                     .unwrap_or(bound_id);
-                let rows = records
-                    .into_iter()
-                    .filter(|row| {
+                let rows = state
+                    .verifications
+                    .first_ref(|row| {
                         row.get("id")
                             .unwrap_or(&Value::Undefined)
                             .strict_equals(&id)
-                    })
-                    .take(1)
+                    })?
+                    .into_iter()
                     .collect();
                 Ok((id, rows))
             })

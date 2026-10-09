@@ -231,19 +231,16 @@ impl AuthResponse {
 
     /// Materialize HTTP bytes and headers after endpoint hooks finish.
     /// Native results keep endpoint headers separate from explicit response headers.
+    /// Match the pinned Bun Response constructor; the HTTP transport owns wire restrictions.
     pub fn into_http_response(mut self) -> crate::AuthResult<Self> {
-        if !(200..=599).contains(&self.status) {
-            return Err(crate::AuthError::type_error(
-                "Response status must be between 200 and 599",
-            ));
+        if self.status != 101 && !(200..=599).contains(&self.status) {
+            return Err(crate::AuthError::RangeError(format!(
+                "The status provided ({}) must be 101 or in the range of [200, 599]",
+                self.status
+            )));
         }
         if self.native_output && matches!(self.body, crate::ResponseBody::Bytes(_)) {
             self.body = crate::ResponseBody::Native(self.body.field_value()?);
-        }
-        if matches!(self.status, 204 | 205 | 304) && !self.body.is_null_body() {
-            return Err(crate::AuthError::type_error(
-                "Response status does not permit a body",
-            ));
         }
         if self.native_output {
             // Better-call strips request and transport headers from native endpoint output before HTTP serialization.

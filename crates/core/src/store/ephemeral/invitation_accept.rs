@@ -1,4 +1,5 @@
-use super::sessions::{SessionSource, session_token_matches};
+use super::rows::RecordSource;
+use super::sessions::session_token_matches;
 use super::*;
 use crate::store::TeamMemberLimits;
 use crate::{SchemaValue, TeamMember};
@@ -319,7 +320,7 @@ impl EphemeralStore {
             let cookie = if let Some(patch) = &team_patch {
                 fields.extend(patch.clone());
                 Some(
-                    self.output_session(SessionSource::Snapshot(Box::new(fields.clone())))
+                    self.output_session(RecordSource::Snapshot(Box::new(fields.clone())))
                         .await?,
                 )
             } else {
@@ -359,7 +360,7 @@ impl EphemeralStore {
                 .await?;
             fields.extend(patch);
             let _ = self
-                .output_session(SessionSource::Snapshot(Box::new(fields.clone())))
+                .output_session(RecordSource::Snapshot(Box::new(fields.clone())))
                 .await?;
         }
         let mut state = self.lock()?;

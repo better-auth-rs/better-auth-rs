@@ -245,11 +245,16 @@ where
         only_active: bool,
     ) -> AuthResult<Vec<SessionSnapshot>> {
         let backend = self.connection().get_database_backend();
+        let tokens = self.bind_session_tokens(tokens, backend)?;
+        let live = only_active
+            .then(|| self.bind_session_query_field("expiresAt", &Utc::now().into(), backend))
+            .transpose()?;
+        let (column, value) = self.resolve_session_query_field(tokens)?;
         let mut condition = Condition::all()
-            .add(self.session_tokens_filter(tokens, backend)?)
+            .add(super::value_filter::is_in(column, &value, backend)?)
             .add_option(S::Session::active_column().map(|column| column.eq(true)));
-        if only_active {
-            condition = condition.add(self.session_live_filter(&Utc::now().into(), backend)?);
+        if let Some(live) = live {
+            condition = condition.add(self.resolve_session_live_filter(live, backend)?);
         }
         let relation = SessionData::resolve_schema(
             self.config(),
@@ -342,9 +347,15 @@ where
         )>,
     > {
         let backend = self.connection().get_database_backend();
-        let mut condition = Condition::all().add(self.session_user_filter(user_id, backend)?);
-        if only_active {
-            condition = condition.add(self.session_live_filter(&Utc::now().into(), backend)?);
+        let user_id = self.bind_session_query_field("userId", user_id, backend)?;
+        let live = only_active
+            .then(|| self.bind_session_query_field("expiresAt", &Utc::now().into(), backend))
+            .transpose()?;
+        let (column, value) = self.resolve_session_query_field(user_id)?;
+        let mut condition =
+            Condition::all().add(super::value_filter::equals(column, &value, backend)?);
+        if let Some(live) = live {
+            condition = condition.add(self.resolve_session_live_filter(live, backend)?);
         }
         match database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
             self.config(),

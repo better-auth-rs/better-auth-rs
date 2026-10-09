@@ -8,7 +8,8 @@ use better_auth_core::{AuthError, AuthResult, Invitation, Member, store::schema:
 use better_auth_core::{FieldValue, SchemaField};
 use chrono::Utc;
 use sea_orm::{
-    ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, TransactionTrait, sea_query::Expr,
+    ColumnTrait, EntityTrait, FromQueryResult, PaginatorTrait, QueryFilter, TransactionTrait,
+    sea_query::{Expr, ExprTrait},
 };
 
 impl<S, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> SeaOrmStore<S, O, P>
@@ -53,6 +54,9 @@ where
         status: &str,
     ) -> AuthResult<Option<Invitation>> {
         let config = self.organization_fields()?.invitation;
+        let id = self.bind_organization_query_field(EntityRole::Invitation, "id", id)?;
+        let from =
+            self.bind_organization_query_field(EntityRole::Invitation, "status", &from.into())?;
         let active = models::active::<O::Invitation>(
             values([("status", status.to_owned().into_field())]),
             Default::default(),
@@ -62,29 +66,27 @@ where
             self.config().advanced.database.generate_id(),
         )
         .await?;
+        let backend = self.connection().get_database_backend();
+        let (id_column, id) =
+            self.resolve_organization_query_field::<O::Invitation>(EntityRole::Invitation, id)?;
+        let (status_column, from) =
+            self.resolve_organization_query_field::<O::Invitation>(EntityRole::Invitation, from)?;
+        let id = super::value_filter::equals(id_column, &id, backend)?;
+        let condition = id
+            .clone()
+            .and(super::value_filter::equals(status_column, &from, backend)?);
         let tx = self.connection().begin().await.map_err(map_db_err)?;
-        let changed = active
-            .update(self.connection().get_database_backend())?
-            .filter(super::value_filter::equals_id(
-                O::Invitation::column("id")?,
-                id,
-                self.config().advanced.database.generate_id(),
-                self.connection().get_database_backend(),
-            )?)
-            .filter(O::Invitation::column("status")?.eq(from))
-            .exec(&tx)
-            .await
-            .map_err(map_db_err)?;
-        let row = if changed.rows_affected == 0 {
-            None
-        } else {
-            models::find_value::<O::Invitation, _>(
+        let row =
+            super::updates::increment_returning_raw_with_connection::<Entity<O::Invitation>, _>(
                 &tx,
+                active.update(backend)?.filter(condition.clone()),
+                condition,
                 id,
-                self.config().advanced.database.generate_id(),
             )
-            .await?
-        };
+            .await?;
+        let row = row
+            .map(|row| O::Invitation::from_query_result(&row, "").map_err(map_db_err))
+            .transpose()?;
         tx.commit().await.map_err(map_db_err)?;
         // Output transforms run after the claim is committed, before the member transaction starts.
         match row {
@@ -124,12 +126,7 @@ where
                         O::Team::column("member_count")?,
                         Expr::col(O::Team::column("member_count")?),
                     )
-                    .filter(super::value_filter::equals_id(
-                        O::Team::column("id")?,
-                        &team_value,
-                        self.config().advanced.database.generate_id(),
-                        self.connection().get_database_backend(),
-                    )?)
+                    .filter(super::value_filter::equals_id(O::Team::column("id")?, &team_value, self.config().advanced.database.generate_id(), self.connection().get_database_backend())?)
                     .filter(self.organization_field_equals::<O::Team>(
                         EntityRole::Team,
                         "organizationId",
@@ -143,29 +140,13 @@ where
                 }
                 let maximum = maximum.maximum(team_id, &invitation.organization_id.field_value()).await?;
                 let existing = Entity::<O::TeamMember>::find()
-                    .filter(super::value_filter::equals_id(
-                        O::TeamMember::column("team_id")?,
-                        &team_value,
-                        self.config().advanced.database.generate_id(),
-                        self.connection().get_database_backend(),
-                    )?)
-                    .filter(super::value_filter::equals_id(
-                        O::TeamMember::column("user_id")?,
-                        user_id,
-                        self.config().advanced.database.generate_id(),
-                        self.connection().get_database_backend(),
-                    )?)
+                    .filter(self.organization_fields_equal::<O::TeamMember>(better_auth_core::store::schema::EntityRole::TeamMember, [("teamId", &team_value), ("userId", user_id)])?)
                     .one(&tx)
                     .await
                     .map_err(map_db_err)?;
                 if existing.is_none() {
                     let count = Entity::<O::TeamMember>::find()
-                        .filter(super::value_filter::equals_id(
-                            O::TeamMember::column("team_id")?,
-                            &team_value,
-                            self.config().advanced.database.generate_id(),
-                            self.connection().get_database_backend(),
-                        )?)
+                        .filter(self.organization_field_equals::<O::TeamMember>(better_auth_core::store::schema::EntityRole::TeamMember, "teamId", &team_value)?)
                         .count(&tx)
                         .await
                         .map_err(map_db_err)?;

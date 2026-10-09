@@ -1,5 +1,5 @@
 use super::hooks::CommittedWrite;
-use super::rows::RowRef;
+use super::rows::RecordSource;
 use super::*;
 use crate::store::database_hooks::{DatabaseHookControl, SessionUpdate};
 use crate::store::schema::EntityRole;
@@ -7,29 +7,15 @@ use crate::store::schema::resolve_field_name;
 #[cfg(test)]
 use crate::user_fields::{FieldTransforms, UserFieldTransform};
 
-pub(super) enum SessionSource {
-    Live(RowRef<FieldMap>),
-    Snapshot(Box<FieldMap>),
-}
-
-impl SessionSource {
-    fn read<T>(&self, read: impl FnOnce(&FieldMap) -> AuthResult<T>) -> AuthResult<T> {
-        match self {
-            Self::Live(source) => source.read(read),
-            Self::Snapshot(row) => read(row),
-        }
-    }
-}
-
 impl EphemeralStore {
-    pub(super) async fn output_session(&self, session: SessionSource) -> AuthResult<SessionView> {
+    pub(super) async fn output_session(&self, session: RecordSource) -> AuthResult<SessionView> {
         // Projection preserves the one input row.
         Ok(self.output_sessions(vec![session]).await?.remove(0))
     }
 
     pub(super) async fn output_sessions(
         &self,
-        sessions: Vec<SessionSource>,
+        sessions: Vec<RecordSource>,
     ) -> AuthResult<Vec<SessionView>> {
         self.output_sessions_batches_then(sessions, |ready| std::future::ready(Ok(ready)))
             .await
@@ -37,7 +23,7 @@ impl EphemeralStore {
 
     pub(super) async fn output_sessions_batches_then<R: Send, F>(
         &self,
-        sessions: Vec<SessionSource>,
+        sessions: Vec<RecordSource>,
         complete: impl Fn(Vec<(usize, SessionView)>) -> F + Sync,
     ) -> AuthResult<Vec<R>>
     where
@@ -172,7 +158,7 @@ impl EphemeralStore {
                 if let Some(id) = self.next_serial_id(state.sessions.len()) {
                     let _ = storage.insert("id".into(), id);
                 }
-                Ok(SessionSource::Live(state.sessions.push_ref(storage)))
+                Ok(RecordSource::Live(state.sessions.push_ref(storage)))
             })
             .await?;
         self.output_session(source).await
@@ -410,7 +396,7 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
                 Ok(state
                     .sessions
                     .first_ref(|row| session_token_matches(row, &column, &token))?
-                    .map(SessionSource::Live))
+                    .map(RecordSource::Live))
             })
             .await?;
         futures_util::future::OptionFuture::from(
@@ -524,7 +510,7 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
                             })
                         })?
                         .into_iter()
-                        .map(SessionSource::Live)
+                        .map(RecordSource::Live)
                         .collect(),
                     Some(self.config.advanced.database.find_many_limit()),
                     None,
@@ -567,7 +553,7 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
                     Ok(state
                         .sessions
                         .first_ref(|row| session_token_matches(row, &column, &converted))?
-                        .map(SessionSource::Live))
+                        .map(RecordSource::Live))
                 })
                 .await?;
             match session {

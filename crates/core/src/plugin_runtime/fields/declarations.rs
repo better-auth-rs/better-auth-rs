@@ -31,6 +31,12 @@ impl ModelFields {
                 ("createdAt", Date, true),
                 ("updatedAt", Date, false),
             ],
+            EntityRole::TeamMember => vec![
+                ("teamId", String, true),
+                ("userId", String, true),
+                ("membershipKey", String, false),
+                ("createdAt", Date, false),
+            ],
             EntityRole::Member => vec![
                 ("organizationId", String, true),
                 ("userId", String, true),
@@ -155,6 +161,7 @@ impl ModelFields {
             role,
             EntityRole::Organization
                 | EntityRole::Team
+                | EntityRole::TeamMember
                 | EntityRole::Member
                 | EntityRole::Invitation
                 | EntityRole::OrganizationRole
@@ -175,15 +182,29 @@ impl ModelFields {
                         });
                         declaration.index = Some(true);
                     }
-                    (EntityRole::Member, "userId") | (EntityRole::Invitation, "inviterId") => {
+                    (EntityRole::Member | EntityRole::TeamMember, "userId")
+                    | (EntityRole::Invitation, "inviterId") => {
                         declaration.references = Some(UserFieldReference {
                             model: "user".into(),
                             field: "id".into(),
                             ..Default::default()
                         });
-                        if role == EntityRole::Member {
+                        if matches!(role, EntityRole::Member | EntityRole::TeamMember) {
                             declaration.index = Some(true);
                         }
+                    }
+                    (EntityRole::TeamMember, "teamId") => {
+                        declaration.references = Some(UserFieldReference {
+                            model: "team".into(),
+                            field: "id".into(),
+                            ..Default::default()
+                        });
+                        declaration.index = Some(true);
+                    }
+                    (EntityRole::TeamMember, "membershipKey") => {
+                        declaration.unique = Some(true);
+                        declaration.input = Some(false);
+                        declaration.returned = Some(false);
                     }
                     (EntityRole::Team, "memberCount") => {
                         declaration.default_value = Some(0.into());

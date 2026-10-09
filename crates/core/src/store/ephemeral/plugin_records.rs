@@ -1,9 +1,8 @@
 use super::{
     EphemeralStore, State,
-    rows::{RowRef, Rows},
+    rows::{RecordSource, RowRef, Rows},
 };
 use crate::store::schema::EntityRole;
-use crate::user_fields::{project_adapter_value, project_source_fields_then};
 use crate::{AuthError, AuthRecordFields, AuthResult, FieldMap, FieldValue, SchemaValue};
 
 impl State {
@@ -75,40 +74,10 @@ impl EphemeralStore {
         role: EntityRole,
         sources: Vec<RowRef<FieldMap>>,
     ) -> AuthResult<Vec<FieldMap>> {
-        if !sources.is_empty() {
-            self.model_fields.begin_id_output(role)?;
-        }
-        let schema = self.model_fields.plugin_fields(role).adapter_fields(&[]);
-        let mut rows: Vec<_> = sources
-            .into_iter()
-            .map(|source| (FieldMap::new(), source))
-            .collect();
-        project_source_fields_then(
-            &mut rows,
-            schema.fields(),
-            |(_, source), name, field| {
-                source.read(|row| {
-                    Ok(row
-                        .get(crate::store::schema::resolve_field_name(
-                            field.field_name.as_deref(),
-                            name,
-                        ))
-                        .cloned()
-                        .unwrap_or_default())
-                })
-            },
-            |(output, _), name, field, value| {
-                Box::pin(async move {
-                    let value = if name == "id" {
-                        Self::project_id(&SchemaValue::from_field(value))?.into_field_value()
-                    } else {
-                        project_adapter_value(value, field, field.references_id(), true).await?
-                    };
-                    let _ = output.insert(name.to_owned(), value);
-                    Ok(())
-                })
-            },
-            |_, (output, _)| Ok(std::mem::take(output)),
+        self.project_record_sources(
+            role,
+            &self.model_fields.plugin_fields(role),
+            sources.into_iter().map(RecordSource::Live).collect(),
         )
         .await
     }
