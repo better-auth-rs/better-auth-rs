@@ -97,7 +97,7 @@ async fn lock_uses_projected_counter_but_retains_physical_atomic_guard() -> Auth
                 .into(),
             ),
         },
-    )?;
+    );
     let factor = store.create_two_factor(settings()).await?;
     let deadlines = AtomicUsize::new(0);
     store
@@ -161,7 +161,7 @@ async fn backup_cas_applies_input_mapping_and_retains_commit_after_output_error(
                 .into(),
             ),
         },
-    )?;
+    );
     let factor = store.create_two_factor(settings()).await?;
     fail.store(true, Ordering::SeqCst);
     let result = store
@@ -230,7 +230,7 @@ async fn backup_cas_rejects_transformed_empty_set_before_storage_or_output() -> 
                         .into(),
                     ),
                 },
-            )?;
+            );
             let previous = if matches_guard {
                 factor.backup_codes.field_value()
             } else {

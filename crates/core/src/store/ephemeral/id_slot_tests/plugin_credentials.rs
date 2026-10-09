@@ -98,7 +98,7 @@ async fn memory_plugin_id_slot_reads_primary_key_at_its_position() -> AuthResult
                 UserConfig {
                     additional_fields: Some([("label".into(), UserFieldConfig::default())].into()),
                 },
-            )?;
+            );
             let mut expected = model
                 .create(&writer, [("label".into(), "selected".into())].into())
                 .await?;
@@ -128,7 +128,7 @@ async fn memory_plugin_id_slot_reads_primary_key_at_its_position() -> AuthResult
             );
             let mut reader = EphemeralStore::new(writer.config.clone());
             reader.state = writer.state.clone();
-            reader.model_fields.register(model.role(), fields)?;
+            reader.model_fields.register(model.role(), fields);
             let output = required(model.read(&reader, "1".into()).await?)?;
             let _ = expected.insert(
                 "id".into(),
@@ -323,7 +323,7 @@ async fn memory_plugin_typed_reads_preserve_raw_output_values_and_presence() -> 
                         .into(),
                     ),
                 },
-            )?;
+            );
             let mut input = FieldMap::from([
                 ("id".into(), "selected".into()),
                 (model.field().into(), "stored-name".into()),

@@ -290,7 +290,7 @@ async fn check(
         UserFieldTransform::new(move |value| {
             assert!(
                 value.strict_equals(
-                    &captured
+                    &*captured
                         .lock()
                         .map_err(|_| AuthError::internal("Captured relation lock poisoned"))?
                 )

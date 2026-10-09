@@ -38,7 +38,7 @@ async fn enabled_callbacks_preserve_earlier_fields_and_read_later_live_fields() 
             };
             store
                 .model_fields
-                .register(EntityRole::ApiKey, fields.clone())?;
+                .register(EntityRole::ApiKey, fields.clone());
             let seed = store
                 .create_api_key(CreateApiKey {
                     name: Some("before".into()).into(),
@@ -88,9 +88,7 @@ async fn enabled_callbacks_preserve_earlier_fields_and_read_later_live_fields() 
                 input: None,
                 output: Some(output),
             });
-            store
-                .model_fields
-                .register(EntityRole::ApiKey, projection)?;
+            store.model_fields.register(EntityRole::ApiKey, projection);
             let result = store.get_api_key_by_id_value(&seed.id).await;
             if fail_output {
                 assert!(
@@ -165,7 +163,7 @@ async fn enabled_replacements_preserve_nonboolean_input_storage_and_output() -> 
                     .into(),
                 ),
             },
-        )?;
+        );
         let key = store
             .create_api_key(CreateApiKey {
                 enabled: SchemaValue::from_field(input_value),

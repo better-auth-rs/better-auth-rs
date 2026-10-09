@@ -296,7 +296,7 @@ fn reader(
         UserConfig {
             additional_fields: Some(fields.into()),
         },
-    )?;
+    );
     let store = Arc::new(store);
     set_target(&target, &store)?;
     Ok(store)
@@ -370,7 +370,7 @@ async fn capture(model: Model, slot: &str, operation: &str) -> AuthResult<JsonVa
                 .into(),
             ),
         },
-    )?;
+    );
     let writer = Arc::new(writer);
     set_target(&target, &writer)?;
     let mut setup = Vec::new();

@@ -113,34 +113,11 @@ impl<'de> Deserialize<'de> for ApiKeyView {
     }
 }
 
-impl<T: AuthApiKey> From<&T> for ApiKeyView {
-    fn from(key: &T) -> Self {
-        let additional_fields = key.additional_fields().cloned().unwrap_or_default();
-        Self {
-            field_order: additional_fields.keys().cloned().collect(),
-            additional_fields,
-            id: key.id().into_owned(),
-            name: key.name().clone(),
-            start: key.start().clone(),
-            prefix: key.prefix().clone(),
-            reference_id: key.reference_id().clone(),
-            config_id: key.config_id().clone(),
-            refill_interval: key.refill_interval().clone(),
-            refill_amount: key.refill_amount().clone(),
-            last_refill_at: key.last_refill_at().clone(),
-            enabled: key.enabled().clone(),
-            rate_limit_enabled: key.rate_limit_enabled().clone(),
-            rate_limit_time_window: key.rate_limit_time_window().clone(),
-            rate_limit_max: key.rate_limit_max().clone(),
-            request_count: key.request_count().clone(),
-            remaining: key.remaining().clone(),
-            last_request: key.last_request().clone(),
-            expires_at: key.expires_at().clone(),
-            created_at: key.created_at().clone(),
-            updated_at: key.updated_at().clone(),
-            permissions: permissions(key.permissions().field_value()),
-            metadata: key.metadata().field_value(),
-        }
+impl<T: AuthApiKey> TryFrom<&T> for ApiKeyView {
+    type Error = crate::AuthError;
+
+    fn try_from(key: &T) -> AuthResult<Self> {
+        Self::from_api_key_fields(key.field_values()?)
     }
 }
 
@@ -258,7 +235,7 @@ mod tests {
         let _ = stored
             .additional_fields
             .insert("key".into(), "shadow-hash".into());
-        let projected = ApiKeyView::from(&stored);
+        let projected = ApiKeyView::try_from(&stored)?;
         for view in [decoded, native, mutated, projected] {
             assert!(!view.field_values()?.contains_key("key"));
             assert_eq!(

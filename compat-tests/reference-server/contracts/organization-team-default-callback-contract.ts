@@ -57,7 +57,7 @@ for (const backend of ["memory", "sqlite"] as const) {
               team: { fields: { name: { type: "string", transform: { output(value) {
                 events.push(["team.name", "output", value]); return value;
               } } } } },
-            }],
+            } }],
           });
           const organizationView = {
             id: "organization-a", name: "Created Organization", slug: "created", logo: null, metadata: {}, createdAt: date(0),

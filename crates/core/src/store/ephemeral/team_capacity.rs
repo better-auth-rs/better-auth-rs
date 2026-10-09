@@ -420,7 +420,7 @@ mod tests {
                         .into(),
                     ),
                 },
-            )?;
+            );
             let task = tokio::spawn({
                 let store = store.clone();
                 let id = team.id.clone();

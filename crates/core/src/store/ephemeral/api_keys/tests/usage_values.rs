@@ -45,7 +45,7 @@ async fn atomic_setters_reject_transformed_empty_updates_but_plain_updates_remai
                 .collect(),
             ),
         },
-    )?;
+    );
     let at = Utc::now();
     for write in [
         ApiKeyUsageWrite::Refill {
@@ -156,7 +156,7 @@ async fn memory_usage_binds_replaced_guards_and_applies_set_after_increment() ->
                 .into(),
             ),
         },
-    )?;
+    );
     let _ = store
         .create_api_key_record(FieldMap::from([
             ("id".into(), "key".into()),

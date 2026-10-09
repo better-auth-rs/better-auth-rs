@@ -299,7 +299,7 @@ impl ApiKeyPlugin {
                 return Err(ApiKeyErrorCode::UsageExceeded.into());
             }
         };
-        Ok(ApiKeyView::from(updated.as_ref()))
+        Ok(ApiKeyView::try_from(updated.as_ref())?)
     }
 
     pub(super) async fn api_key_session(

@@ -1,78 +1,7 @@
 name: Upstream fixture capture
 
 on:
-  push:
-    branches: [codex/upstream-capture]
-    paths:
-      - .github/workflows/upstream-capture.yml
-      - compat-tests/reference-server/package.json
-      - compat-tests/reference-server/bun.lock
-      - compat-tests/reference-server/contracts/protected-function-*.mjs
-      - compat-tests/reference-server/contracts/user-verification-cleanup-*.mjs
-      - compat-tests/reference-server/contracts/jwt-native-session-capture.mjs
-      - compat-tests/reference-server/contracts/oauth-native-session-capture.mjs
-      - compat-tests/reference-server/contracts/session-management-native-capture.mjs
-      - compat-tests/reference-server/contracts/team-member-catalog-capture.mjs
-      - compat-tests/schema-consumer/team-member-catalog-config.json
-      - compat-tests/reference-server/contracts/server-catalog-shared.mjs
-      - compat-tests/reference-server/contracts/device-where-capture.mjs
-      - compat-tests/reference-server/contracts/device-where-scenarios.mjs
-      - compat-tests/reference-server/contracts/device-where-transactions-capture.mjs
-      - compat-tests/reference-server/contracts/memory-transaction-values-capture.mjs
-      - compat-tests/reference-server/contracts/user-serial-create-order-capture.mjs
-      - compat-tests/reference-server/contracts/account-verification-serial-primary-capture.mjs
-      - compat-tests/reference-server/contracts/native-json-driver-capture.mjs
-      - compat-tests/reference-server/contracts/session-jwk-wallet-rate-limit-serial-capture.mjs
-      - compat-tests/reference-server/contracts/session-live-output-capture.mjs
-      - compat-tests/reference-server/contracts/adapter-id-slot-capture.mjs
-      - compat-tests/reference-server/contracts/plugin-display-json-capture.mjs
-      - compat-tests/reference-server/contracts/api-key-catalog-capture.mjs
-      - compat-tests/reference-server/contracts/secondary-user-refresh-capture.mjs
-      - compat-tests/reference-server/contracts/secondary-user-refresh-values-capture.mjs
-      - compat-tests/reference-server/contracts/memory-sort-capture.mjs
-      - compat-tests/reference-server/contracts/organization-member-join-reference-capture.mjs
-      - compat-tests/reference-server/contracts/account-user-selected-relations-capture.mjs
-      - compat-tests/reference-server/contracts/account-user-selected-relations.test.ts
-      - compat-tests/reference-server/contracts/account-user-auth-boundary-capture.mjs
-      - compat-tests/reference-server/contracts/account-user-auth-boundary-override.mjs
-      - compat-tests/reference-server/contracts/account-user-auth-email-capture.mjs
-      - compat-tests/reference-server/contracts/account-user-auth-secondary-capture.mjs
-      - compat-tests/reference-server/contracts/api-key-number-name-capture.mjs
-      - compat-tests/reference-server/contracts/api-key-number-name-order-capture.mjs
-      - compat-tests/reference-server/contracts/telemetry-fields-unique-capture.mjs
-      - compat-tests/reference-server/contracts/email-verification-duration-capture.mjs
-      - compat-tests/reference-server/contracts/passkey-shared-display-capture.mjs
-      - compat-tests/reference-server/contracts/cookie-attribute-mutation-capture.mjs
-      - compat-tests/reference-server/contracts/session-user-join-reference-capture.mjs
-      - compat-tests/reference-server/contracts/device-where-references-capture.mjs
-      - compat-tests/reference-server/contracts/device-reference-sets-capture.mjs
-      - compat-tests/reference-server/contracts/device-reference-values-capture.mjs
-      - compat-tests/reference-server/contracts/device-reference-defaults-capture.mjs
-      - compat-tests/reference-server/contracts/email-verification-payload-capture.mjs
-      - compat-tests/reference-server/contracts/email-verification-claims-capture.mjs
-      - compat-tests/reference-server/contracts/oauth-token-duration-capture.mjs
-      - compat-tests/reference-server/contracts/memory-name-coercion-capture.mjs
-      - compat-tests/reference-server/contracts/custom-model-join-reference-capture.mjs
-      - compat-tests/reference-server/contracts/account-user-auth-boundary.test.ts
-      - compat-tests/reference-server/contracts/totp-period-nan-capture.mjs
-      - compat-tests/reference-server/contracts/totp-counter-capture.mjs
-      - compat-tests/reference-server/contracts/one-time-token-expiry-capture.mjs
-      - compat-tests/reference-server/contracts/device-polling-capture.mjs
-      - compat-tests/reference-server/contracts/member-sort-stability-capture.mjs
-      - compat-tests/reference-server/contracts/api-key-number-sort-capture.mjs
-      - compat-tests/reference-server/contracts/api-key-date-usage-capture.mjs
-      - compat-tests/reference-server/contracts/api-key-fields-capture.mjs
-      - compat-tests/reference-server/contracts/native-plugin-replacements-capture.mjs
-      - compat-tests/reference-server/contracts/mysql-create-readback-capture.mjs
-      - compat-tests/reference-server/contracts/mysql-create-lifecycle-capture.mjs
-      - compat-tests/reference-server/contracts/device-grant-capture.mjs
-      - compat-tests/reference-server/contracts/device-grant-database.mjs
-      - compat-tests/reference-server/contracts/device-grant-failures.mjs
-      - compat-tests/reference-server/contracts/device-grant-sql-capture.mjs
-      - compat-tests/reference-server/contracts/device-redemption.ts
-      - compat-tests/reference-server/contracts/member-json-filter-capture.mjs
-      - compat-tests/reference-server/contracts/oauth-proxy-max-age-capture.mjs
-      - tests/fixtures/cookie-cache-cleanup.capture.mjs
+  workflow_dispatch:
 
 permissions:
   contents: read

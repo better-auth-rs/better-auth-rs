@@ -193,7 +193,7 @@ fn store(case: &Value, events: &Events) -> AuthResult<EphemeralStore> {
                 .collect(),
             ),
         },
-    )?;
+    );
     Ok(store)
 }
 

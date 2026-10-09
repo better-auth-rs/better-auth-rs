@@ -282,7 +282,7 @@ pub(super) async fn create_key_for_user(
                 "Cannot read properties of null (reading 'permissions')",
             )
         })?;
-    let mut api_key = ApiKeyView::from(&api_key);
+    let mut api_key = ApiKeyView::try_from(&api_key)?;
     // Upstream returns supplied falsy metadata at creation, but stores null.
     api_key.metadata = better_auth_core::FieldValue::from_json(
         body.metadata.clone().unwrap_or(serde_json::Value::Null),
@@ -330,7 +330,7 @@ pub(crate) async fn get_key_core(
     let config = plugin.resolve_configuration(config_id)?;
     let api_key = helpers::get_owned_api_key(ctx, config, id, &user_id.into(), "read").await?;
     plugin.maybe_delete_expired(ctx).await;
-    super::metadata::single(ApiKeyView::from(&api_key), config, ctx).await
+    super::metadata::single(ApiKeyView::try_from(&api_key)?, config, ctx).await
 }
 
 pub(crate) async fn list_keys_core(
@@ -521,7 +521,7 @@ pub(super) async fn update_key_for_user(
     };
     let updated = super::storage::update(config, ctx, api_key, update).await?;
     plugin.maybe_delete_expired(ctx).await;
-    super::metadata::single(ApiKeyView::from(&updated), config, ctx).await
+    super::metadata::single(ApiKeyView::try_from(&updated)?, config, ctx).await
 }
 
 pub(crate) async fn delete_key_core(

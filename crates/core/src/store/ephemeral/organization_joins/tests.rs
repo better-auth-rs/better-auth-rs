@@ -123,7 +123,7 @@ async fn native_user_team_joins_group_duplicate_parent_ids_before_projection() -
             UserConfig {
                 additional_fields: Some(fields),
             },
-        )?;
+        );
         let members = vec![member("team-a")?, member("team-b")?];
         let teams = vec![
             team("team-a", "Team A", true),
@@ -229,7 +229,7 @@ async fn team_details_null_query_matches_missing_id_without_coercing_native_join
                             .into(),
                         ),
                     },
-                )?;
+                );
                 let mut parent = team("unused", "No typed ID", true);
                 if missing_id {
                     let _ = parent.shift_remove("id");

@@ -191,10 +191,10 @@ fn configured_store(
         Model::Session => store.session_config.additional_fields = fields.additional_fields,
         Model::Jwk => store
             .model_fields
-            .register(crate::store::schema::EntityRole::Jwk, fields)?,
+            .register(crate::store::schema::EntityRole::Jwk, fields),
         Model::Wallet => store
             .model_fields
-            .register(crate::store::schema::EntityRole::WalletAddress, fields)?,
+            .register(crate::store::schema::EntityRole::WalletAddress, fields),
     }
     let store = Arc::new(store);
     target

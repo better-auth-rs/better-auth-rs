@@ -9,7 +9,7 @@ Run the commands below inside `devenv shell`, or prefix each command with
 
 The reference contract gate includes `contracts/telemetry-options.test.ts`. The test compares the pinned upstream telemetry projection with `tests/fixtures/telemetry-options-1.7.6.json` and does not write the fixture. Run `bun test compat-tests/reference-server/contracts/telemetry-options.test.ts` from the repository root for this contract alone. To regenerate the fixture explicitly, run `TELEMETRY_REFERENCE_OUTPUT=tests/fixtures/telemetry-options-1.7.6.json node compat-tests/reference-server/contracts/telemetry-options.mjs` inside the project devenv.
 
-The `Upstream fixture capture` workflow runs each selected capture twice and requires byte-identical JSON before generating `SHA256SUMS`. Artifacts retain both documents and logs, including failed comparisons. Import a fixture only after its capture job succeeds and the source commit and checksum match.
+Dispatch the `Upstream fixture capture` workflow explicitly after selecting its contract matrix. Pushes do not recapture existing fixtures. The workflow runs each selected capture twice and requires byte-identical JSON before generating `SHA256SUMS`. Artifacts retain both documents and logs, including failed comparisons. Import a fixture only after its capture job succeeds and the source commit and checksum match.
 
 Use `devenv shell -- ./scripts/check.sh credential-timing` for One Time Token hashing deadlines and Device polling guards. The stage runs the targeted Rust regressions and strict upstream replays. The upstream captures use a fixed clock; Rust checks actual hashing intervals and token consumption without injecting a production clock.
 

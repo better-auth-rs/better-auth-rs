@@ -18,7 +18,7 @@ async fn claim_rejects_transformed_empty_owner_before_storage_or_output() -> Aut
             UserConfig {
                 additional_fields: Some([("userId".into(), owner.clone())].into()),
             },
-        )?;
+        );
         let _ = store
             .create_device_code_record(
                 [
@@ -52,7 +52,7 @@ async fn claim_rejects_transformed_empty_owner_before_storage_or_output() -> Aut
             UserConfig {
                 additional_fields: Some([("userId".into(), owner)].into()),
             },
-        )?;
+        );
         let result = if transactional {
             let id = id.clone();
             transaction(&store, move |tx| {

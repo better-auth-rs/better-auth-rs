@@ -86,7 +86,7 @@ async fn json_api_key_name_projects_after_reading_raw_storage() -> AuthResult<()
                     ..json_field()
                 },
             )]),
-        )?;
+        );
         let key = store.create_api_key(api_key(supplied)).await?;
         assert_eq!(key.name.field_value(), expected);
         assert_eq!(
@@ -130,7 +130,7 @@ async fn json_api_key_name_distinguishes_omission_from_explicit_null() -> AuthRe
                 ..json_field()
             },
         )]),
-    )?;
+    );
     let omitted = store.create_api_key(api_key(Value::Undefined)).await?;
     let explicit_null = store.create_api_key(api_key(Value::Null)).await?;
     assert_eq!(omitted.name.field_value(), default);
@@ -174,7 +174,7 @@ async fn json_api_key_name_failures_preserve_the_write_boundary() -> AuthResult<
                     ..json_field()
                 },
             )]),
-        )?;
+        );
         let error = store
             .create_api_key(api_key(Value::Null))
             .await
@@ -218,7 +218,7 @@ async fn json_api_key_name_callback_omission_does_not_become_null() -> AuthResul
                     ..json_field()
                 },
             )]),
-        )?;
+        );
         let key = store.create_api_key(api_key(Value::Null)).await?;
         assert!(key.name.is_undefined());
         let raw = store
@@ -265,7 +265,7 @@ async fn json_passkey_display_updates_preserve_credential_state() -> AuthResult<
                 },
             ),
         ]),
-    )?;
+    );
     let original_aaguid: Value = FieldMap::from_iter([("device".into(), 1.into())]).into();
     let key = store
         .create_passkey(CreatePasskey {
@@ -340,21 +340,38 @@ fn json_display_declarations_accept_references_and_shared_columns() {
             }),
             ..json_field()
         };
-        assert!(models.register(role, fields([(name, referenced)])).is_ok());
+        models.register(role, fields([(name, referenced)]));
+        assert_eq!(
+            models.fields(role).fields()[name]
+                .references
+                .as_ref()
+                .map(|reference| reference.model.as_str()),
+            Some("user")
+        );
         let replacement = UserFieldConfig {
             field_name: Some(reserved.into()),
             ..json_field()
         };
-        assert!(models.register(role, fields([(name, replacement)])).is_ok());
+        models.register(role, fields([(name, replacement)]));
+        assert_eq!(
+            models.fields(role).fields()[name].field_name.as_deref(),
+            Some(reserved)
+        );
+        assert!(models.fields(role).fields()[name].references.is_none());
         let mapped = UserFieldConfig {
             field_name: Some("stored_display".into()),
             ..json_field()
         };
-        assert!(
-            models
-                .register(role, fields([(name, mapped.clone())]))
-                .is_ok()
+        models.register(role, fields([(name, mapped.clone())]));
+        models.register(role, fields([("other", mapped)]));
+        let registered = models.fields(role).fields();
+        assert_eq!(
+            registered[name].field_name.as_deref(),
+            Some("stored_display")
         );
-        assert!(models.register(role, fields([("other", mapped)])).is_ok());
+        assert_eq!(
+            registered["other"].field_name.as_deref(),
+            Some("stored_display")
+        );
     }
 }
