@@ -11,6 +11,7 @@ on:
       - compat-tests/reference-server/contracts/user-verification-cleanup-*.mjs
       - compat-tests/reference-server/contracts/jwt-native-session-capture.mjs
       - compat-tests/reference-server/contracts/oauth-native-session-capture.mjs
+      - compat-tests/reference-server/contracts/session-management-native-capture.mjs
       - compat-tests/reference-server/contracts/server-catalog-shared.mjs
       - compat-tests/reference-server/contracts/device-where-capture.mjs
       - compat-tests/reference-server/contracts/device-where-scenarios.mjs
@@ -80,8 +81,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - contract: email-verification-claims
-            regressions: [email-verification-payload]
+          - contract: session-management-native
+            regressions: []
             backend: ''
     runs-on: ubuntu-latest
     timeout-minutes: 10
