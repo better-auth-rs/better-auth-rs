@@ -14,7 +14,7 @@ impl<S: crate::schema::AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate:
 {
     pub(super) fn organization_field_equals<M: SeaOrmOrganizationModel>(
         &self,
-        role: better_auth_schema_registry::EntityRole,
+        role: better_auth_core::store::schema::EntityRole,
         name: &str,
         value: &FieldValue,
     ) -> AuthResult<sea_orm::sea_query::SimpleExpr> {

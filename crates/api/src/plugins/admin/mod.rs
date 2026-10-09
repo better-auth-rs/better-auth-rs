@@ -4,6 +4,7 @@ use better_auth_core::session::NativeSessionData;
 use better_auth_core::utils::cookie_utils::{
     create_clear_cookie, create_session_like_cookie, related_cookie_name,
 };
+use better_auth_core::{AuthSession, AuthUser};
 use better_auth_core::{AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult};
 
 pub mod access;

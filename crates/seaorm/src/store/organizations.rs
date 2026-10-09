@@ -355,7 +355,7 @@ where
         let config = self.organization_fields()?;
         let rows = Entity::<O::Member>::find()
             .filter(self.organization_field_equals::<O::Member>(
-                better_auth_schema_registry::EntityRole::Member,
+                better_auth_core::store::schema::EntityRole::Member,
                 "userId",
                 user_id,
             )?)
