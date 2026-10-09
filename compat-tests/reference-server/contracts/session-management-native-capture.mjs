@@ -158,11 +158,15 @@ async function captureCase(scenario) {
     headers.set("cookie", signed);
     if (scenario.source === "cookie") {
       const seeded = await auth.api.getSession({ headers, returnHeaders: true, returnStatus: true });
-      assert.equal(seeded.status, 200);
+      assert.ok(Object.hasOwn(seeded, "status"));
+      assert.ok(seeded.response && typeof seeded.response === "object");
       assert.equal(seeded.response.session.token, "7");
       const cookies = seeded.headers.getSetCookie();
       assert.ok(cookies.some(value => value.startsWith(`${context.authCookies.sessionData.name}=`)));
-      cacheSetup = { response: observeValue(seeded.response), headers: headerValues(seeded.headers) };
+      cacheSetup = {
+        response: observeValue(seeded.response), nativeStatus: observeValue(seeded.status),
+        status: new Response(null, { status: seeded.status }).status, headers: headerValues(seeded.headers),
+      };
       headers.set("cookie", [signed, ...cookies.map(value => value.split(";", 1)[0])].join("; "));
     }
     if (scenario.revoked) await context.adapter.delete({ model: "session", where: [{ field: "token", value: "7" }] });
@@ -173,7 +177,11 @@ async function captureCase(scenario) {
   let result;
   try {
     const response = await auth.api[api]({ headers, ...(body === undefined ? {} : { body }), returnHeaders: true, returnStatus: true });
-    result = { ...returned(response.response), status: response.status, headers: headerValues(response.headers) };
+    assert.ok(Object.hasOwn(response, "status"));
+    result = {
+      ...returned(response.response), nativeStatus: observeValue(response.status),
+      status: new Response(null, { status: response.status }).status, headers: headerValues(response.headers),
+    };
   } catch (error) {
     if (error instanceof assert.AssertionError) throw error;
     assert.ok(error instanceof Error);
