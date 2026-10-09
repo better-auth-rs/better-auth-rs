@@ -285,7 +285,7 @@ enum ResolvedTwoFactorState {
         data: Box<NativeSessionData>,
         key: String,
     },
-    Pending(PendingTwoFactorState),
+    Pending(Box<PendingTwoFactorState>),
 }
 
 pub(crate) struct TrustedDeviceCheck {
@@ -752,12 +752,14 @@ async fn resolve_two_factor_state<S: better_auth_core::AuthSchema>(
     let dont_remember = read_signed_cookie(req, DONT_REMEMBER_COOKIE_SUFFIX, ctx)?
         .is_some_and(|value| !value.is_empty());
 
-    Ok(ResolvedTwoFactorState::Pending(PendingTwoFactorState {
-        user: ctx.internal_user_view(&user).await?,
-        key: identifier,
-        dont_remember,
-        expires_at: verification.expires_at,
-    }))
+    Ok(ResolvedTwoFactorState::Pending(Box::new(
+        PendingTwoFactorState {
+            user: ctx.internal_user_view(&user).await?,
+            key: identifier,
+            dont_remember,
+            expires_at: verification.expires_at,
+        },
+    )))
 }
 
 async fn verify_existing_session_factor(

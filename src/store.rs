@@ -10,6 +10,5 @@ pub use better_auth_core::store::{
     AccountOwner, AuthStore, AuthTransaction, CacheAdapter, EphemeralStore, InvitationOrganization,
     JoinValue, MemoryCacheAdapter, OrganizationRoleKey, RateLimitRecord, RateLimitStore,
     RuntimeStore, SecondaryStorage, SessionCreateWriter, SessionUpdateWriter, StatelessSchema,
-    StoreCapabilities, UserAccounts, VerificationCleanup, VerificationCreateWriter,
-    VerificationSessionCleanup, transaction,
+    StoreCapabilities, UserAccounts, VerificationCreateWriter, transaction,
 };

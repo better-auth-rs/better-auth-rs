@@ -317,7 +317,8 @@ pub(super) async fn verify_totp_core(
                 ));
             }
             update_enrollment.await?;
-            finalize_pending_two_factor(pending, req, body.trust_device.unwrap_or(false), ctx).await
+            finalize_pending_two_factor(*pending, req, body.trust_device.unwrap_or(false), ctx)
+                .await
         }
     }
 }
@@ -494,7 +495,8 @@ pub(super) async fn verify_otp_core(
                     message: "Failed to create session",
                 });
             }
-            finalize_pending_two_factor(pending, req, body.trust_device.unwrap_or(false), ctx).await
+            finalize_pending_two_factor(*pending, req, body.trust_device.unwrap_or(false), ctx)
+                .await
         }
     }
 }
@@ -642,7 +644,8 @@ pub(super) async fn verify_backup_code_core(
                     Vec::new(),
                 ));
             }
-            finalize_pending_two_factor(pending, req, body.trust_device.unwrap_or(false), ctx).await
+            finalize_pending_two_factor(*pending, req, body.trust_device.unwrap_or(false), ctx)
+                .await
         }
     }
 }

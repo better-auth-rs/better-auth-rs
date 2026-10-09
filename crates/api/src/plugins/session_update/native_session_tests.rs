@@ -237,7 +237,7 @@ async fn device_primitive_users_reach_state_guards_without_claiming_or_disclosin
             .request(user.clone(), HttpMethod::Get, "/device", Value::Null)
             .await?;
         req.query = Some(json!({"user_code":"ABCD2345"}));
-        let response = plugin.handle_request(&req, &fixture.ctx).await?.unwrap();
+        let response = plugin.on_request(&req, &fixture.ctx).await?.unwrap();
         assert_eq!(
             body(&response),
             json!({"user_code":"ABCD2345","status":"pending"})
@@ -250,7 +250,7 @@ async fn device_primitive_users_reach_state_guards_without_claiming_or_disclosin
                 json!({"userCode":"ABCD2345"}),
             )
             .await?;
-        let response = plugin.handle_request(&req, &fixture.ctx).await?.unwrap();
+        let response = plugin.on_request(&req, &fixture.ctx).await?.unwrap();
         assert_eq!(response.status, 400);
         assert_eq!(body(&response)["error"], "invalid_request");
         assert_eq!(
@@ -276,7 +276,7 @@ async fn device_primitive_users_reach_state_guards_without_claiming_or_disclosin
             json!({"userCode":"ABCD2345"}),
         )
         .await?;
-    let response = plugin.handle_request(&req, &fixture.ctx).await?.unwrap();
+    let response = plugin.on_request(&req, &fixture.ctx).await?.unwrap();
     assert_eq!(response.status, 403);
     assert_eq!(body(&response)["error"], "access_denied");
     assert_eq!(
@@ -300,7 +300,7 @@ async fn device_primitive_users_reach_state_guards_without_claiming_or_disclosin
             json!({"userCode":"ABCD2345"}),
         )
         .await?;
-    let response = plugin.handle_request(&req, &fixture.ctx).await?.unwrap();
+    let response = plugin.on_request(&req, &fixture.ctx).await?.unwrap();
     assert_eq!(response.status, 400);
     assert_eq!(
         body(&response)["error_description"],
@@ -352,7 +352,7 @@ async fn phone_update_binds_native_actor_and_consumes_otp_before_user_failure() 
                 }),
             )
             .await?;
-        let result = plugin.handle_request(&req, &fixture.ctx).await;
+        let result = plugin.on_request(&req, &fixture.ctx).await;
         if actor.is_truthy() {
             let response = result?.unwrap();
             assert_eq!(response.status, 200);
@@ -412,11 +412,7 @@ async fn two_factor_primitive_users_preserve_sender_payload_and_branch_order() -
             )
             .await?;
         assert_eq!(
-            plugin
-                .handle_request(&req, &fixture.ctx)
-                .await?
-                .unwrap()
-                .status,
+            plugin.on_request(&req, &fixture.ctx).await?.unwrap().status,
             200
         );
         let (observed, code) = outbox.0.lock().unwrap().last().unwrap().clone();
@@ -441,7 +437,7 @@ async fn two_factor_primitive_users_preserve_sender_payload_and_branch_order() -
                 json!({"password":"password"}),
             )
             .await?;
-        let error = plugin.handle_request(&req, &fixture.ctx).await.unwrap_err();
+        let error = plugin.on_request(&req, &fixture.ctx).await.unwrap_err();
         assert_eq!(error.status_code(), 400);
         assert_eq!(error.to_string(), "Two factor isn't enabled");
     }
@@ -455,7 +451,7 @@ async fn two_factor_primitive_users_preserve_sender_payload_and_branch_order() -
         .await?;
     assert_eq!(
         plugin
-            .handle_request(&req, &fixture.ctx)
+            .on_request(&req, &fixture.ctx)
             .await
             .unwrap_err()
             .error_payload()
@@ -493,7 +489,7 @@ async fn two_factor_native_actor_keeps_backup_code_cas_and_response_fields() -> 
                 json!({"code":"used","disableSession":true}),
             )
             .await?;
-        let result = plugin.handle_request(&req, &fixture.ctx).await;
+        let result = plugin.on_request(&req, &fixture.ctx).await;
         if success {
             let response = result?.unwrap();
             assert_eq!(
@@ -594,7 +590,7 @@ async fn consumers_read_real_many_relationships_without_a_typed_user_gate() -> A
         );
         assert_eq!(
             factor
-                .handle_request(&req, &ctx)
+                .on_request(&req, &ctx)
                 .await
                 .unwrap_err()
                 .status_code(),
@@ -606,7 +602,7 @@ async fn consumers_read_real_many_relationships_without_a_typed_user_gate() -> A
         };
         fixture.device(None).await?;
         let req = request("/device/approve", json!({"userCode":"ABCD2345"}));
-        let response = device.handle_request(&req, &ctx).await?.unwrap();
+        let response = device.on_request(&req, &ctx).await?.unwrap();
         assert_eq!(response.status, 400);
         assert_eq!(body(&response)["error"], "invalid_request");
         let _ = ctx
@@ -624,7 +620,7 @@ async fn consumers_read_real_many_relationships_without_a_typed_user_gate() -> A
         );
         assert_eq!(
             phone
-                .handle_request(&req, &ctx)
+                .on_request(&req, &ctx)
                 .await
                 .unwrap_err()
                 .error_payload()

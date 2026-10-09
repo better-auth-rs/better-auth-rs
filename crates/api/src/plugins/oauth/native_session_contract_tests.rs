@@ -616,7 +616,8 @@ impl Normalize {
             }
             FieldValue::Date(_) => {
                 let mut value = native(value)?.as_object().unwrap().clone();
-                let _ = value.insert("value".into(), self.value(value.get("value").unwrap())?);
+                let normalized = self.value(value.get("value").unwrap())?;
+                let _ = value.insert("value".into(), normalized);
                 value.into()
             }
             FieldValue::Array(values) => values

@@ -25,7 +25,6 @@ use url::Url;
 
 use crate::plugins::endpoint_context::EndpointContext;
 use crate::plugins::helpers::{SessionIssueError, issue_selected_user_session_optional};
-use better_auth_core::entity::AuthUser;
 use better_auth_core::{
     AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, DatabaseError, DeviceCode,
     FieldMap, FieldValue, RequestMeta, SchemaValue, UpdateDeviceCode,

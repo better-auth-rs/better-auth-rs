@@ -59,12 +59,12 @@ async fn challenge_database_failures_preserve_upstream_errors_and_cookie_expiry(
             .await
             .unwrap();
     }
-    let state = ResolvedTwoFactorState::Pending(PendingTwoFactorState {
+    let state = ResolvedTwoFactorState::Pending(Box::new(PendingTwoFactorState {
         user,
         key: "failure-challenge".into(),
         dont_remember: false,
         expires_at: (Utc::now() + Duration::minutes(5)).into(),
-    });
+    }));
     let req = AuthRequest::new(HttpMethod::Post, "/two-factor/verify-totp");
     let failure = begin_attempt(&state, &req, &ctx).await.err().unwrap();
     assert!(matches!(

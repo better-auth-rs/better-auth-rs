@@ -171,10 +171,7 @@ async fn change_email_spreads_raw_users_and_keeps_the_original_callback_session(
                 json!({"newEmail":"NEW@native-user.test"}),
             )
             .await?;
-        let response = management
-            .handle_request(&req, &fixture.ctx)
-            .await?
-            .unwrap();
+        let response = management.on_request(&req, &fixture.ctx).await?.unwrap();
         assert_eq!(response.status, 200);
         let mut expected = user.enumerable_fields();
         let _ = expected.insert("email".into(), "new@native-user.test".into());
@@ -233,7 +230,7 @@ async fn deletion_hooks_receive_raw_users_before_required_id_access() -> AuthRes
         let req = fixture
             .request(user.clone(), HttpMethod::Post, "/delete-user", json!({}))
             .await?;
-        let result = plugin.handle_request(&req, &fixture.ctx).await;
+        let result = plugin.on_request(&req, &fixture.ctx).await;
         if user.is_null() {
             assert_eq!(
                 result.unwrap_err().to_string(),
@@ -299,7 +296,7 @@ async fn deletion_callback_consumes_mismatched_native_tokens_without_deleting() 
             )
             .await?;
         req.query = Some(json!({"token":"strict"}));
-        let error = plugin.handle_request(&req, &fixture.ctx).await.unwrap_err();
+        let error = plugin.on_request(&req, &fixture.ctx).await.unwrap_err();
         assert_eq!(error.status_code(), 404);
         assert_eq!(error.to_string(), "Invalid token");
         assert!(trace.0.lock().unwrap().is_empty());
@@ -374,11 +371,7 @@ async fn deletion_confirmation_keeps_raw_sender_payload_and_deletes_the_native_o
         )
         .await?;
     assert_eq!(
-        plugin
-            .handle_request(&req, &fixture.ctx)
-            .await?
-            .unwrap()
-            .status,
+        plugin.on_request(&req, &fixture.ctx).await?.unwrap().status,
         200
     );
     let (observed, token, url) = sent.lock().unwrap().clone().unwrap();
@@ -405,7 +398,7 @@ async fn deletion_confirmation_keeps_raw_sender_payload_and_deletes_the_native_o
         )
         .await?;
     req.query = Some(json!({"token":token,"callbackURL":""}));
-    let response = plugin.handle_request(&req, &fixture.ctx).await?.unwrap();
+    let response = plugin.on_request(&req, &fixture.ctx).await?.unwrap();
     assert_eq!(response.status, 200);
     assert_eq!(
         *trace.0.lock().unwrap(),
@@ -515,10 +508,7 @@ async fn real_many_user_relationships_reach_change_and_delete_consumers() -> Aut
             "/change-email",
             json!({"newEmail":"changed@native-user.test"}),
         );
-        assert_eq!(
-            plugin.handle_request(&req, &ctx).await?.unwrap().status,
-            200
-        );
+        assert_eq!(plugin.on_request(&req, &ctx).await?.unwrap().status, 200);
         let published = req.new_session()?.unwrap();
         assert!(published.user_field("id").is_undefined());
         assert_eq!(
@@ -532,10 +522,7 @@ async fn real_many_user_relationships_reach_change_and_delete_consumers() -> Aut
             user.id.field_value()
         );
         let req = request("/delete-user", json!({}));
-        assert_eq!(
-            plugin.handle_request(&req, &ctx).await?.unwrap().status,
-            200
-        );
+        assert_eq!(plugin.on_request(&req, &ctx).await?.unwrap().status, 200);
         let trace = trace.0.lock().unwrap().clone();
         assert_eq!(trace.len(), 2);
         assert_eq!(trace[0].0, "before");
