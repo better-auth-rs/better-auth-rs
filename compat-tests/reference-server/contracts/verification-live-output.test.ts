@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { betterAuth, type BetterAuthOptions } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { getMigrations } from "better-auth/db/migration";
-import { getCurrentAdapter } from "@better-auth/core/context";
+import { getCurrentAdapter, runWithTransaction } from "@better-auth/core/context";
 import { getWithHooks } from "../node_modules/better-auth/dist/db/with-hooks.mjs";
 import { base, date, row, stored } from "./verification-consume-hooks-contract";
 
@@ -12,10 +12,11 @@ type Backend = "memory" | "sqlite";
 const original = () => row("target", "subject", "before");
 const changed = () => ({ ...original(), value: "after", updatedAt: date(1) });
 
-async function setup(backend: Backend) {
+async function setup(backend: Backend, serial = false) {
   const memory = { user: [], account: [], session: [], verification: [] };
   const sqlite = backend === "sqlite" ? new Database(":memory:") : undefined;
   const options = base(sqlite ?? memoryAdapter(memory));
+  if (serial) options.advanced = { database: { generateId: "serial" } };
   if (sqlite) await (await getMigrations(options)).runMigrations();
   const writer = await betterAuth(options).$context;
   return {
@@ -24,6 +25,103 @@ async function setup(backend: Backend) {
     expectedStorage: (value: Record<string, unknown>) => sqlite ? stored("sqlite", value) : value,
     close: () => sqlite?.close(),
   };
+}
+
+for (const serial of [false, true]) {
+  for (const decoy of [false, true]) {
+    test(`memory Verification consumes the projected ${serial ? "Serial" : "default"} ID ${decoy ? "with" : "without"} a string collision`, async () => {
+      const fixture = await setup("memory", serial);
+      try {
+        const inputs = [
+          { ...original(), id: 7 },
+          ...(decoy ? [row("7", "decoy", "other")] : []),
+          row("retained", "retained", "keep"),
+        ];
+        const physical = inputs.map((value, index) => ({ ...value, id: serial ? index + 1 : value.id }));
+        for (const value of inputs) {
+          await fixture.writer.adapter.create({ model: "verification", data: value, forceAllowId: true });
+        }
+        expect(fixture.storage()).toStrictEqual(physical);
+        const events: unknown[] = [];
+        const reader = await betterAuth({
+          ...fixture.options,
+          databaseHooks: { verification: { delete: {
+            async before(value) { events.push(["before", structuredClone(value)]); },
+            async after(value) { events.push(["after", structuredClone(value)]); },
+          } } },
+        }).$context;
+        const selected = serial ? { ...original(), id: "1" } : decoy ? row("7", "decoy", "other") : null;
+        expect(await reader.internalAdapter.consumeVerificationValue("subject")).toStrictEqual(selected);
+        expect(events).toStrictEqual([
+          ["before", { ...original(), id: serial ? "1" : "7" }],
+          ...(selected ? [["after", selected]] : []),
+        ]);
+        expect(fixture.storage()).toStrictEqual(serial ? physical.slice(1) : decoy ? physical.slice(2) : physical);
+      } finally { fixture.close(); }
+    });
+  }
+}
+
+for (const [idFirst, moveInHook] of [[true, false], [false, false], [false, true]]) {
+  test(`memory Verification consumes the ID projected ${idFirst ? "before" : "after"} a ${moveInHook ? "hook" : "projection"} writer`, async () => {
+    const fixture = await setup("memory");
+    try {
+      const retained = row("retained", "retained", "keep");
+      await fixture.writer.adapter.create({ model: "verification", data: original(), forceAllowId: true });
+      await fixture.writer.adapter.create({ model: "verification", data: retained, forceAllowId: true });
+      const events: unknown[] = [];
+      let calls = 0;
+      const fields: NonNullable<NonNullable<BetterAuthOptions["verification"]>["additionalFields"]> = {};
+      if (idFirst) fields.id = { type: "string" };
+      fields.probe = { type: "string", fieldName: "value", transform: { async output(value) {
+        events.push(["probe", value]);
+        if (++calls === 1 && !moveInHook) {
+          const tx = await getCurrentAdapter(fixture.writer.adapter);
+          const updated = await tx.update({ model: "verification", where: [{ field: "identifier", value: "subject" }], update: { id: "moved", updatedAt: date(0) } });
+          events.push(["write", structuredClone(updated)]);
+        }
+        return value;
+      } } };
+      if (!idFirst) fields.id = { type: "string" };
+      const reader = await betterAuth({
+        ...fixture.options,
+        verification: { additionalFields: fields },
+        databaseHooks: { verification: { delete: {
+          async before(value) {
+            events.push(["before", structuredClone(value)]);
+            if (moveInHook) {
+              const tx = await getCurrentAdapter(fixture.writer.adapter);
+              const updated = await tx.update({ model: "verification", where: [{ field: "identifier", value: "subject" }], update: { id: "moved", updatedAt: date(0) } });
+              events.push(["write", structuredClone(updated)]);
+            }
+          },
+          async after(value) { events.push(["after", structuredClone(value)]); },
+        } } },
+      }).$context;
+      const consumed = !idFirst && !moveInHook;
+      const changed = { ...original(), id: "moved", probe: "before" };
+      const snapshot = { ...changed, id: consumed ? "moved" : "target" };
+      const trace: unknown[] = moveInHook ? [
+        ["probe", "before"], ["before", snapshot], ["probe", "before"], ["write", changed],
+      ] : [
+        ["probe", "before"], ["probe", "before"], ["write", changed], ["before", snapshot],
+      ];
+      if (consumed) trace.push(["probe", "before"]);
+      const result = await runWithTransaction(reader.adapter, async () => {
+        const result = await reader.internalAdapter.consumeVerificationValue("subject");
+        expect(events).toStrictEqual(trace);
+        expect(fixture.storage()).toStrictEqual([original(), retained]);
+        return result;
+      });
+      expect(result).toStrictEqual(consumed ? changed : null);
+      if (consumed) trace.push(["after", changed]);
+      expect(events).toStrictEqual(trace);
+      expect(fixture.storage()).toStrictEqual([
+        retained,
+        ...(consumed ? [] : [{ ...original(), id: "moved" }]),
+      ]);
+    } finally { fixture.close(); }
+  });
 }
 
 for (const backend of ["memory", "sqlite"] as const) {

@@ -142,8 +142,6 @@ impl EphemeralStore {
         let Some(record) = self.latest_verification_record(identifier).await? else {
             return Ok(None);
         };
-        // Preserve numeric Serial IDs and deterministic reservation IDs before output projection.
-        let id = record.read(|row| Ok(row.get("id").cloned().unwrap_or_default()))?;
         let snapshot = self.output_verification(RecordSource::Live(record)).await?;
         if value.is_some_and(|value| snapshot.value != value) {
             return Ok(None);
@@ -165,8 +163,7 @@ impl EphemeralStore {
                 return Ok(None);
             }
         }
-        self.model_fields
-            .begin_id_query(crate::store::schema::EntityRole::Verification)?;
+        let id = self.verification_query("id", snapshot.id.field_value())?;
         let Some(consumed) = self
             .raw("verification", "consumeOne", |state| {
                 state.verifications.remove_first(|row| {
