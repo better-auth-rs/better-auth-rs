@@ -165,6 +165,7 @@ async fn seed(store: &EphemeralStore) -> AuthResult<()> {
         let _ = store.create_organization(organization).await?;
         let _ = store
             .insert_member(Member {
+                field_order: Default::default(),
                 id: format!("member-{suffix}").into(),
                 organization_id: format!("organization-{suffix}").into(),
                 user_id: "user-a".into(),

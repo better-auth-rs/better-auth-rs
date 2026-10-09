@@ -132,9 +132,12 @@ impl EphemeralStore {
                             )?;
                             let source = RecordSource::joined(
                                 session,
-                                self.model_fields
-                                    .storage_model_name(EntityRole::User, "user"),
-                                users.raw_value(),
+                                [(
+                                    self.model_fields
+                                        .storage_model_name(EntityRole::User, "user")
+                                        .to_owned(),
+                                    users.raw_value(),
+                                )],
                             );
                             Ok((source, Some(users)))
                         })

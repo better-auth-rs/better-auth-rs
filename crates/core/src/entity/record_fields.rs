@@ -66,7 +66,7 @@ record!(crate::types::Member, [
     user_id => "userId",
     role => "role",
     created_at => "createdAt",
-], additional_fields);
+], additional_fields; order: field_order);
 
 record!(crate::types::Invitation, [
     team_id => "teamId",
@@ -78,7 +78,7 @@ record!(crate::types::Invitation, [
     inviter_id => "inviterId",
     expires_at => "expiresAt",
     created_at => "createdAt",
-], additional_fields);
+], additional_fields; order: field_order);
 
 record!(crate::wire::InvitationView, [
     team_id => "teamId",
@@ -90,7 +90,7 @@ record!(crate::wire::InvitationView, [
     inviter_id => "inviterId",
     expires_at => "expiresAt",
     created_at => "createdAt",
-], additional_fields);
+], additional_fields; order: field_order);
 
 record!(crate::types::Team, [
     id => "id",

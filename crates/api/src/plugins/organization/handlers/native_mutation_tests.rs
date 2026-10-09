@@ -225,9 +225,9 @@ async fn mutation_hooks_keep_session_user_identity_and_committed_failure_effects
         .unwrap();
     assert_eq!(
         serde_json::to_value(deleted).unwrap(),
-        serde_json::to_value(crate::plugins::organization::fields::organization(
-            &stored, &ctx
-        ))
+        serde_json::to_value(
+            crate::plugins::organization::fields::organization(&stored, &ctx).unwrap()
+        )
         .unwrap()
     );
     assert!(

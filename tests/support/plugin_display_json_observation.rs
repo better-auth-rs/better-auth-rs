@@ -2,7 +2,7 @@ use super::*;
 
 pub(crate) fn api_key_value(row: &ApiKey) -> AuthResult<Value> {
     let mut result = serde_json::to_value(
-        better_auth::__private_core::wire::ApiKeyView::try_from(row)?,
+        better_auth::__private_core::wire::ApiKeyView::try_from_api_key(row)?,
     )?;
     result["key"] = json!(row.key_hash);
     result["name"] = values::observe(&row.name.field_value())?;

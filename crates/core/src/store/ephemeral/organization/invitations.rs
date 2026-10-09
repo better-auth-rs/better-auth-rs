@@ -4,6 +4,7 @@ use super::*;
 impl InvitationStore for EphemeralStore {
     async fn create_invitation(&self, mut input: CreateInvitation) -> AuthResult<Invitation> {
         let mut invitation = Invitation {
+            field_order: Default::default(),
             additional_fields: Default::default(),
             id: input.id.map(crate::SchemaValue::Typed).unwrap_or_default(),
             organization_id: input.organization_id,

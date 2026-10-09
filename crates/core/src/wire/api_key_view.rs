@@ -113,10 +113,9 @@ impl<'de> Deserialize<'de> for ApiKeyView {
     }
 }
 
-impl<T: AuthApiKey> TryFrom<&T> for ApiKeyView {
-    type Error = crate::AuthError;
-
-    fn try_from(key: &T) -> AuthResult<Self> {
+impl ApiKeyView {
+    /// Project a stored key through native fields and propagate dynamic read errors.
+    pub fn try_from_api_key(key: &impl AuthApiKey) -> AuthResult<Self> {
         Self::from_api_key_fields(key.field_values()?)
     }
 }
@@ -235,7 +234,7 @@ mod tests {
         let _ = stored
             .additional_fields
             .insert("key".into(), "shadow-hash".into());
-        let projected = ApiKeyView::try_from(&stored)?;
+        let projected = ApiKeyView::try_from_api_key(&stored)?;
         for view in [decoded, native, mutated, projected] {
             assert!(!view.field_values()?.contains_key("key"));
             assert_eq!(

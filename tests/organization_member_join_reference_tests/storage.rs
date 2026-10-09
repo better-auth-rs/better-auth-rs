@@ -98,6 +98,7 @@ pub(super) async fn seed<S: AuthSchema>(
     );
     let _ = store
         .insert_member(Member {
+            field_order: Default::default(),
             id: "member-a".into(),
             organization_id: "organization-a".into(),
             user_id: "user-a".into(),

@@ -8,7 +8,7 @@ use better_auth_core::{
     user_fields::{AdapterRecord, UserConfig},
     wire::SessionView,
 };
-use sea_orm::{ConnectionTrait, DbBackend, IdenStatic};
+use sea_orm::{ConnectionTrait, DbBackend, EntityName, IdenStatic};
 
 use crate::error::{AuthError, AuthResult};
 use crate::schema::{AuthSchema, SeaOrmSessionModel, SeaOrmUserModel};
@@ -147,6 +147,26 @@ where
             &FieldMap::new(),
         );
         let records = self.session_records(rows, &schema, backend)?;
+        let user_fields = self.user_field_schema().adapter_fields(&[]);
+        let entity = <S::User as SeaOrmUserModel>::Entity::default();
+        let physical = self
+            .model_fields
+            .storage_model_name(EntityRole::User, entity.table_name());
+        let records = records
+            .into_iter()
+            .zip(users)
+            .map(|(record, users)| {
+                Ok(record.with_storage_property(
+                    physical,
+                    super::joins::raw_relation_value(
+                        users,
+                        &user_fields,
+                        many,
+                        S::User::field_column,
+                    )?,
+                ))
+            })
+            .collect::<AuthResult<Vec<_>>>()?;
         schema
             .project_adapter_records_batches_then(
                 records,

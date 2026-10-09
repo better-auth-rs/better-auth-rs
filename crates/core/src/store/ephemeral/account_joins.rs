@@ -105,9 +105,12 @@ impl EphemeralStore {
                     )?;
                     let source = RecordSource::joined(
                         FieldMap::from(user),
-                        self.model_fields
-                            .storage_model_name(EntityRole::Account, "account"),
-                        accounts.raw_value(),
+                        [(
+                            self.model_fields
+                                .storage_model_name(EntityRole::Account, "account")
+                                .to_owned(),
+                            accounts.raw_value(),
+                        )],
                     );
                     Ok(Some((source, accounts)))
                 })
@@ -230,9 +233,12 @@ impl EphemeralStore {
                         )?;
                         let source = RecordSource::joined(
                             account,
-                            self.model_fields
-                                .storage_model_name(EntityRole::User, "user"),
-                            users.raw_value(),
+                            [(
+                                self.model_fields
+                                    .storage_model_name(EntityRole::User, "user")
+                                    .to_owned(),
+                                users.raw_value(),
+                            )],
                         );
                         selected.push((source, users));
                         if selected.len() == 2 {

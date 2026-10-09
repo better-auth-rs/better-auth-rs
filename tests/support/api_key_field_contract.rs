@@ -92,7 +92,7 @@ pub(super) struct Fixture<S: AuthSchema> {
     reason = "The contract asserts complete API Key serialization and propagates serialization errors"
 )]
 pub(crate) fn adapter_value(row: &ApiKey) -> AuthResult<Value> {
-    let public = serde_json::to_value(ApiKeyView::try_from(row)?)?;
+    let public = serde_json::to_value(ApiKeyView::try_from_api_key(row)?)?;
     let mut value = serde_json::to_value(row)?;
     let object = value.as_object_mut().expect("flattened API Key record");
     // JavaScript represents integral f64 values as integer JSON numbers.

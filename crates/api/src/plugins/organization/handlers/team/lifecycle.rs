@@ -78,7 +78,7 @@ pub(super) async fn create(
         .get_organization_by_id_value(&org)
         .await?
         .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
-    let organization_view = fields::organization(&organization, ctx);
+    let organization_view = fields::organization(&organization, ctx)?;
     let created_at = chrono::Utc::now();
     let mut data = OrganizationTeamDraft {
         id: additional_fields
@@ -177,7 +177,7 @@ pub(super) async fn remove(
         .get_organization_by_id_value(&org)
         .await?
         .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
-    let organization_view = fields::organization(&organization, ctx);
+    let organization_view = fields::organization(&organization, ctx)?;
     let event = OrganizationTeamEvent {
         team: &team,
         user: session.as_ref().map(|session| &session.user),

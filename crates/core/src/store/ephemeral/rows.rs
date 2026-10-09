@@ -25,9 +25,12 @@ pub(super) enum RecordSource {
 }
 
 impl RecordSource {
-    pub(super) fn joined(mut parent: FieldMap, name: &str, relation: FieldValue) -> Self {
+    pub(super) fn joined(
+        mut parent: FieldMap,
+        relations: impl IntoIterator<Item = (String, FieldValue)>,
+    ) -> Self {
         // Native adapters attach relations to a shallow parent copy before field output.
-        let _ = parent.insert(name.to_owned(), relation);
+        parent.extend(relations);
         Self::Snapshot(Box::new(parent))
     }
 

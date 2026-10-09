@@ -28,6 +28,7 @@ impl From<&entities::organization::Model> for Organization {
 impl From<&entities::member::Model> for Member {
     fn from(model: &entities::member::Model) -> Self {
         Self {
+            field_order: Default::default(),
             additional_fields: Default::default(),
             id: model.id.clone().into(),
             organization_id: model.organization_id.clone().into(),
@@ -41,6 +42,7 @@ impl From<&entities::member::Model> for Member {
 impl From<&entities::invitation::Model> for Invitation {
     fn from(model: &entities::invitation::Model) -> Self {
         Self {
+            field_order: Default::default(),
             additional_fields: Default::default(),
             id: model.id.clone().into(),
             organization_id: model.organization_id.clone().into(),

@@ -49,34 +49,39 @@ impl EphemeralStore {
                         .iter()
                         .map(|row| row.read(|row| Ok(row.clone())))
                         .collect::<AuthResult<Vec<_>>>()?;
-                    let Some(group) =
-                        native_relationships(snapshots, &state.team_members, relation, limit)?
+                    let Some(mut group) =
+                        native_relationships(snapshots, &[(&state.team_members, relation, limit)])?
                             .into_iter()
                             .next()
                     else {
                         return Ok(None);
                     };
-                    Ok(Some((None, Some(group.parent), Some(group.children))))
+                    let children = group.children.remove(0);
+                    let source = RecordSource::joined(
+                        group.parent,
+                        [(
+                            self.model_fields
+                                .storage_model_name(EntityRole::TeamMember, "teamMember")
+                                .to_owned(),
+                            raw_relation(&children, relation.many),
+                        )],
+                    );
+                    Ok(Some((source, Some(children))))
                 } else {
                     let Some(source) = parents.into_iter().next() else {
                         return Ok(None);
                     };
-                    Ok(Some((Some(source), None, None)))
+                    Ok(Some((RecordSource::Live(source), None)))
                 }
             })
             .await?;
-        let Some((source, snapshot, members)) = selected else {
+        let Some((source, members)) = selected else {
             return Ok(None);
         };
-        let parent: FieldMap = if let Some(snapshot) = snapshot {
-            self.output_record(EntityRole::Team, snapshot).await?
-        } else {
-            self.output_record_refs(EntityRole::Team, source.into_iter().collect())
-                .await?
-                .into_iter()
-                .next()
-                .ok_or_else(|| AuthError::internal("Team projection lost its selected row"))?
-        };
+        let parent = self
+            .project_record_sources(EntityRole::Team, &team_fields, vec![source])
+            .await?
+            .remove(0);
         let members = if let Some(relation) = relation {
             let members = if let Some(members) = members {
                 members

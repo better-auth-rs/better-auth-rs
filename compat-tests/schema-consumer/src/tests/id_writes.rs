@@ -383,6 +383,7 @@ async fn database_mode_preserves_distinct_text_reference_ids() {
     }
     let member = store
         .insert_member(Member {
+            field_order: Default::default(),
             id: "literal-member".into(),
             organization_id: "0x2".into(),
             user_id: "0x1".into(),

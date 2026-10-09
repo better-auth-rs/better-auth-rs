@@ -101,7 +101,7 @@ let auth = BetterAuth::<AppAuthSchema>::new(config)
 
 `fallback_to_database` keeps database rows authoritative. A cache miss loads the database row and restores both cache indexes. Writes update the database before refreshing the cache. Cache I/O errors propagate; the runtime does not treat an I/O failure as a miss. Verification commits each guarded quota and rate-limit write separately, then updates the timestamp and refreshes the cache. A later database failure preserves earlier committed writes. A cache write failure can therefore follow a successful database mutation. If a database row disappears after a cached ownership lookup, update returns the unchanged cached snapshot, matching the upstream null-update result.
 
-Convert stored keys with `ApiKeyView::try_from(&key)?`. The view uses the shared native field projection, retains source property order and omission, propagates dynamic read errors, and excludes the stored credential hash.
+Convert stored keys with `ApiKeyView::try_from_api_key(&key)?`. The view uses the shared native field projection, retains source property order and omission, propagates dynamic read errors, and excludes the stored credential hash.
 
 Register native replacement declarations and application fields through `AuthInitContext::register_model_fields(EntityRole::ApiKey, UserConfig)`. `ModelFields` merges complete declarations in upstream schema order. A replacement removes the previous default, transform, reference, and mapping unless the replacement declares them. Replacement declarations retain their original positions; new integer property names follow JavaScript enumeration order. The adapter-owned ID policy replaces application ID attributes at the existing ID position.
 

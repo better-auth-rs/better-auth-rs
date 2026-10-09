@@ -520,29 +520,6 @@ impl EphemeralStore {
             .collect()
     }
 
-    pub(super) async fn output_records_batches_then<T: MemoryOrganizationRecord, R: Send, F>(
-        &self,
-        role: EntityRole,
-        values: Vec<FieldMap>,
-        complete: impl Fn(Vec<(usize, T)>) -> F + Sync,
-    ) -> AuthResult<Vec<R>>
-    where
-        F: std::future::Future<Output = AuthResult<Vec<(usize, R)>>> + Send,
-    {
-        let schema = self.field_config(role)?;
-        let records = values
-            .into_iter()
-            .map(|value| record_output(value).with_id_output(&self.model_fields, role))
-            .collect();
-        schema
-            .organization_output_memory_records_batches_then(
-                records,
-                |_, fields| decode_record(fields),
-                complete,
-            )
-            .await
-    }
-
     pub(super) async fn output_record<T: MemoryOrganizationRecord + Send>(
         &self,
         role: EntityRole,

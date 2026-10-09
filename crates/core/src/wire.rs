@@ -521,8 +521,11 @@ impl<T: AuthOrganization> From<&T> for OrganizationView {
 }
 
 /// Public invitation response shape.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InvitationView {
+    /// Source property order, independent of the current typed values.
+    #[serde(skip)]
+    pub field_order: Vec<String>,
     #[serde(with = "crate::field_value::serde::map", flatten)]
     pub additional_fields: crate::FieldMap,
 
@@ -553,20 +556,25 @@ pub struct InvitationView {
     pub created_at: SchemaValue<crate::FieldDate>,
 }
 
-impl<T: AuthInvitation> From<&T> for InvitationView {
-    fn from(inv: &T) -> Self {
-        Self {
-            additional_fields: inv.projected_fields().cloned().unwrap_or_default(),
-            id: inv.id().into_owned(),
-            organization_id: inv.organization_id().clone(),
-            email: inv.email().clone(),
-            role: inv.role().clone(),
-            status: inv.status().clone(),
-            inviter_id: inv.inviter_id().clone(),
-            team_id: inv.team_id().clone(),
-            expires_at: inv.expires_at().clone(),
-            created_at: inv.created_at().clone(),
-        }
+impl InvitationView {
+    /// Preserve native fields and source property order from the invitation output.
+    pub fn try_from_invitation(invitation: &impl AuthInvitation) -> crate::AuthResult<Self> {
+        crate::FromFieldMap::from_field_values(invitation.field_values()?)
+    }
+}
+
+impl PartialEq for InvitationView {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+            && self.organization_id == other.organization_id
+            && self.email == other.email
+            && self.role == other.role
+            && self.status == other.status
+            && self.inviter_id == other.inviter_id
+            && self.team_id == other.team_id
+            && self.expires_at == other.expires_at
+            && self.created_at == other.created_at
+            && self.additional_fields == other.additional_fields
     }
 }
 

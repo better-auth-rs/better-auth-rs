@@ -68,6 +68,7 @@ impl<S: AuthSchema> TestOrganizationApi<'_, S> {
         role: Option<&str>,
     ) -> AuthResult<Member> {
         let member = Member {
+            field_order: Default::default(),
             id: self.api.generate_id("member")?.into(),
             organization_id: organization_id.into().into(),
             user_id: user_id.into().into(),

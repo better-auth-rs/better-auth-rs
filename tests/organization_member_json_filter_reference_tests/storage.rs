@@ -115,6 +115,7 @@ pub(super) async fn seed<S: AuthSchema>(store: &dyn AuthStore<S>) -> AuthResult<
         created.push(
             store
                 .insert_member(Member {
+                    field_order: Default::default(),
                     id: format!("member-{suffix}").into(),
                     organization_id: ORGANIZATION_ID.into(),
                     user_id: format!("user-{suffix}").into(),

@@ -1,5 +1,5 @@
 use better_auth_core::AuthRecordFields;
-use better_auth_core::entity::{AuthInvitation, AuthMember, AuthOrganization, AuthUser};
+use better_auth_core::entity::{AuthInvitation, AuthMember, AuthUser};
 use better_auth_core::error::{AuthError, AuthResult};
 use better_auth_core::plugin::AuthContext;
 use better_auth_core::session::NativeSessionData;
@@ -167,7 +167,7 @@ pub(crate) async fn invite_member_core(
         .get_organization_by_id_value(&org_id)
         .await?
         .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
-    let organization_view = crate::plugins::organization::fields::organization(&organization, ctx);
+    let organization_view = crate::plugins::organization::fields::organization(&organization, ctx)?;
     let expires_at = config.invitation_expires_at(chrono::Utc::now())?;
     let is_resend = existing.is_some() && resend;
     let invitation = if let Some(existing) = existing.as_ref().filter(|_| resend) {
@@ -317,7 +317,7 @@ pub(crate) async fn invite_member_core(
             .await?
     };
     let invitation = crate::plugins::organization::fields::invitation_snapshot(invitation, config);
-    let invitation_view = InvitationView::from(&invitation);
+    let invitation_view = InvitationView::try_from_invitation(&invitation)?;
     let mut endpoint = crate::plugins::endpoint_context::EndpointContext::new(
         request,
         better_auth_core::FieldValue::from_json(serde_json::to_value(body)?)?,
@@ -393,6 +393,7 @@ pub(crate) async fn get_invitation_core(
         .await?
         .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
 
+    let organization_view = crate::plugins::organization::fields::organization(&organization, ctx)?;
     let inviter = ctx
         .database
         .get_member_with_user_value(
@@ -406,9 +407,9 @@ pub(crate) async fn get_invitation_core(
     let inviter_email = inviter.user.email;
 
     Ok(Some(GetInvitationResponse {
-        invitation: InvitationView::from(&invitation),
-        organization_name: organization.name().clone(),
-        organization_slug: organization.slug().clone(),
+        invitation: InvitationView::try_from_invitation(&invitation)?,
+        organization_name: organization_view.name,
+        organization_slug: organization_view.slug,
         inviter_email,
     }))
 }
@@ -436,7 +437,10 @@ pub(crate) async fn list_invitations_core(
         .database
         .list_organization_invitations_value(&org_id)
         .await?;
-    Ok(invitations.iter().map(InvitationView::from).collect())
+    invitations
+        .iter()
+        .map(InvitationView::try_from_invitation)
+        .collect()
 }
 
 pub(crate) async fn list_user_invitations_core(
@@ -472,14 +476,16 @@ pub(crate) async fn list_user_invitations_core(
     let pending = all_invitations
         .into_iter()
         .filter(|row| row.invitation.status == InvitationStatus::Pending)
-        .map(|row| UserInvitationResponse {
-            invitation: InvitationView::from(&row.invitation),
-            organization_name: row
-                .organization
-                .map(|organization| organization.name)
-                .unwrap_or_default(),
+        .map(|row| {
+            Ok(UserInvitationResponse {
+                invitation: InvitationView::try_from_invitation(&row.invitation)?,
+                organization_name: row
+                    .organization
+                    .map(|organization| organization.name)
+                    .unwrap_or_default(),
+            })
         })
-        .collect();
+        .collect::<AuthResult<Vec<_>>>()?;
 
     Ok(pending)
 }
@@ -528,7 +534,7 @@ pub(crate) async fn accept_invitation_core(
         .get_organization_by_id_value(&invitation.organization_id.field_value())
         .await?
         .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
-    let organization_view = crate::plugins::organization::fields::organization(&organization, ctx);
+    let organization_view = crate::plugins::organization::fields::organization(&organization, ctx)?;
     let limit = config
         .member_limit(OrganizationUser {
             organization: &organization_view,
@@ -581,8 +587,8 @@ pub(crate) async fn accept_invitation_core(
     }
     Ok((
         AcceptInvitationResponse {
-            invitation: InvitationView::from(&accepted),
-            member: BasicMemberResponse::from_member(&member),
+            invitation: InvitationView::try_from_invitation(&accepted)?,
+            member: BasicMemberResponse::try_from_member(&member)?,
         },
         snapshot,
     ))
@@ -623,7 +629,7 @@ pub(crate) async fn reject_invitation_core(
         .get_organization_by_id_value(&invitation.organization_id.field_value())
         .await?
         .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
-    let organization_view = crate::plugins::organization::fields::organization(&organization, ctx);
+    let organization_view = crate::plugins::organization::fields::organization(&organization, ctx)?;
     let event = OrganizationInvitationEvent {
         invitation: &invitation,
         user: &session.user,
@@ -646,7 +652,7 @@ pub(crate) async fn reject_invitation_core(
             .await?;
     }
     Ok(AcceptInvitationResponse {
-        invitation: InvitationView::from(&updated_invitation),
+        invitation: InvitationView::try_from_invitation(&updated_invitation)?,
         member: None,
     })
 }
@@ -693,7 +699,7 @@ pub(crate) async fn cancel_invitation_core(
         .get_organization_by_id_value(&invitation.organization_id.field_value())
         .await?
         .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
-    let organization_view = crate::plugins::organization::fields::organization(&organization, ctx);
+    let organization_view = crate::plugins::organization::fields::organization(&organization, ctx)?;
     let event = OrganizationInvitationEvent {
         invitation: &invitation,
         user: &session.user,
@@ -715,7 +721,7 @@ pub(crate) async fn cancel_invitation_core(
             })
             .await?;
     }
-    Ok(InvitationView::from(&updated_invitation))
+    InvitationView::try_from_invitation(&updated_invitation)
 }
 
 // ---------------------------------------------------------------------------
@@ -750,7 +756,7 @@ pub async fn handle_get_invitation(
         })?;
     let query = crate::plugins::query_input::parse::<GetInvitationQuery>(&req.query)?;
     match get_invitation_core(&query, &session, config, ctx).await? {
-        Some(response) => AuthResponse::json(None, &response),
+        Some(response) => Ok(AuthResponse::native(None, response.field_values()?.into())),
         None => Err(AuthResponse::json(
             400,
             &serde_json::json!({ "message": "Invitation not found!" }),
@@ -766,7 +772,15 @@ pub async fn handle_list_invitations(
     let session = require_native_session(req, ctx).await?;
     let query = crate::plugins::query_input::parse::<ListInvitationsQuery>(&req.query)?;
     let invitations = list_invitations_core(&query, &session, ctx).await?;
-    AuthResponse::json(None, &invitations)
+    let invitations = invitations
+        .iter()
+        .map(|invitation| {
+            invitation
+                .field_values()
+                .map(better_auth_core::FieldValue::from)
+        })
+        .collect::<AuthResult<Vec<_>>>()?;
+    Ok(AuthResponse::native(None, invitations.into()))
 }
 
 pub async fn handle_list_user_invitations(
@@ -788,7 +802,15 @@ pub async fn handle_list_user_invitations(
         ));
     }
     let invitations = list_user_invitations_core(session.as_ref(), email, ctx).await?;
-    AuthResponse::json(None, &invitations)
+    let invitations = invitations
+        .iter()
+        .map(|invitation| {
+            invitation
+                .field_values()
+                .map(better_auth_core::FieldValue::from)
+        })
+        .collect::<AuthResult<Vec<_>>>()?;
+    Ok(AuthResponse::native(None, invitations.into()))
 }
 
 pub async fn handle_accept_invitation(
@@ -799,7 +821,7 @@ pub async fn handle_accept_invitation(
     let session = require_native_session(req, ctx).await?;
     let body: AcceptInvitationRequest = super::super::request::read(req, &config.schema)?;
     let (response, snapshot) = accept_invitation_core(&body, &session, config, ctx).await?;
-    let response = AuthResponse::json(None, &response)?;
+    let response = AuthResponse::native(None, response.field_values()?.into());
     if let Some(snapshot) = snapshot {
         let manager = ctx.session_manager();
         // Upstream writes the team cookie before updating the active organization in the transaction.
@@ -825,7 +847,7 @@ pub async fn handle_reject_invitation(
     let session = require_native_session(req, ctx).await?;
     let body: RejectInvitationRequest = super::super::request::read(req, &config.schema)?;
     let response = reject_invitation_core(&body, &session, config, ctx).await?;
-    AuthResponse::json(None, &response)
+    Ok(AuthResponse::native(None, response.field_values()?.into()))
 }
 
 pub async fn handle_cancel_invitation(
@@ -836,7 +858,7 @@ pub async fn handle_cancel_invitation(
     let session = require_native_session(req, ctx).await?;
     let body: CancelInvitationRequest = super::super::request::read(req, &config.schema)?;
     let response = cancel_invitation_core(&body, &session, config, ctx).await?;
-    AuthResponse::json(None, &response)
+    Ok(AuthResponse::native(None, response.field_values()?.into()))
 }
 
 #[cfg(test)]

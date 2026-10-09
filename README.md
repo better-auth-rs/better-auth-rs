@@ -165,7 +165,7 @@ Passwords use Better Auth's scrypt format by default. The [password guide](docs/
 | `seaorm2` | SeaORM store, entity derives, and SQLite/PostgreSQL/MySQL drivers |
 | `redis-cache` | Asynchronous Redis secondary storage for sessions, verifications, and atomic rate-limit counters |
 
-Use `ApiKeyView::try_from(&key)?` to create a public API key view; the conversion preserves source fields and propagates dynamic read errors.
+Use `ApiKeyView::try_from_api_key(&key)?`, `InvitationView::try_from_invitation(&invitation)?`, and `BasicMemberResponse::try_from_member(&member)?` for native public views. The conversions preserve source fields and propagate dynamic read errors.
 
 API Key, Passkey, DeviceCode, TwoFactor, JWK, and WalletAddress merge complete native and application field declarations through `ModelFields`. Both adapters apply the same record and patch policies before runtime record construction; Memory retains live field reads and SQL retains query snapshots. Native runtime fields preserve dynamic values through `SchemaValue<T>`, while ordinary typed inputs remain available. Generate matching columns with the CLI schema configuration. See [plugin field policies](docs/content/docs/concepts/plugins.mdx#register-adapter-field-policies) and the [alignment inventory](docs/upstream-alignment-backlog.md) for acceptance and remaining differences.
 

@@ -186,7 +186,7 @@ impl OrganizationPlugin {
             })?;
         let org_id = organization.id.field_value();
         let organization_view =
-            crate::plugins::organization::fields::organization(&organization, ctx);
+            crate::plugins::organization::fields::organization(&organization, ctx)?;
         let user_value = FieldValue::from(user.field_values()?);
         let event = OrganizationUser {
             user: &user_value,

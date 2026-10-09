@@ -1,9 +1,9 @@
 use better_auth_core::{
     AuthResult, FieldMap, UserView,
     store::schema::{EntityRole, resolve_field_name},
-    user_fields::UserConfig,
+    user_fields::{AdapterRecord, UserConfig},
 };
-use sea_orm::{ConnectionTrait, IdenStatic};
+use sea_orm::{ConnectionTrait, DbBackend, IdenStatic};
 
 use crate::{SeaOrmUserModel, schema::AuthSchema};
 
@@ -26,19 +26,33 @@ where
         db: &impl ConnectionTrait,
     ) -> AuthResult<Vec<UserView>> {
         let backend = db.get_database_backend();
-        let fields = self.user_field_schema().adapter_fields(&[]);
         let records = rows
             .iter()
-            .map(|row| {
-                row.record::<<S::User as SeaOrmUserModel>::Entity>(
-                    &fields,
-                    backend,
-                    S::User::id_column(),
-                    S::User::field_column,
-                )
-                .map(|record| record.with_id_output(&self.model_fields, EntityRole::User))
-            })
+            .map(|row| self.user_record(row, backend))
             .collect::<AuthResult<Vec<_>>>()?;
+        self.output_user_records(records, backend).await
+    }
+
+    pub(super) fn user_record(
+        &self,
+        row: &SqlRow,
+        backend: DbBackend,
+    ) -> AuthResult<AdapterRecord> {
+        row.record::<<S::User as SeaOrmUserModel>::Entity>(
+            &self.user_field_schema().adapter_fields(&[]),
+            backend,
+            S::User::id_column(),
+            S::User::field_column,
+        )
+        .map(|record| record.with_id_output(&self.model_fields, EntityRole::User))
+    }
+
+    pub(super) async fn output_user_records(
+        &self,
+        records: Vec<AdapterRecord>,
+        backend: DbBackend,
+    ) -> AuthResult<Vec<UserView>> {
+        let fields = self.user_field_schema().adapter_fields(&[]);
         fields
             .project_adapter_records_with_capabilities(
                 records,

@@ -278,7 +278,7 @@ pub(crate) async fn remove_member_core(
         .get_organization_by_id_value(&org_id)
         .await?
         .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
-    let organization_view = crate::plugins::organization::fields::organization(&organization, ctx);
+    let organization_view = crate::plugins::organization::fields::organization(&organization, ctx)?;
     let target_user = ctx
         .database
         .get_user_by_id_value(&target_member.user_id.field_value())
@@ -295,7 +295,7 @@ pub(crate) async fn remove_member_core(
     }
     let response = RemovedMemberResponse {
         member: RemovedMember {
-            member: BasicMemberResponse::from_member(&target_member),
+            member: BasicMemberResponse::try_from_member(&target_member)?,
             user: body
                 .member_id_or_email
                 .contains('@')
@@ -479,7 +479,7 @@ pub(crate) async fn update_member_role_core(
         .get_organization_by_id_value(&org_id)
         .await?
         .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
-    let organization_view = crate::plugins::organization::fields::organization(&organization, ctx);
+    let organization_view = crate::plugins::organization::fields::organization(&organization, ctx)?;
     let target_user = ctx
         .database
         .get_user_by_id_value(&target_member.user_id.field_value())
@@ -519,7 +519,7 @@ pub(crate) async fn update_member_role_core(
             )
             .await?;
     }
-    Ok(BasicMemberResponse::from_member(&updated))
+    BasicMemberResponse::try_from_member(&updated)
 }
 
 // ---------------------------------------------------------------------------

@@ -758,7 +758,7 @@ mod tests {
                 .ok_or_else(|| AuthError::internal("The serialized cache entry must decode"))?;
             assert_eq!(restored.enabled.field_value(), expected);
             assert_eq!(restored.rate_limit_enabled.field_value(), expected);
-            let view = serde_json::to_value(ApiKeyView::try_from(&restored)?)?;
+            let view = serde_json::to_value(ApiKeyView::try_from_api_key(&restored)?)?;
             for value in [stored, view] {
                 assert_eq!(value.get("enabled"), flag.as_ref());
                 assert_eq!(value.get("rateLimitEnabled"), flag.as_ref());

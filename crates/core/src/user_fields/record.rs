@@ -26,6 +26,13 @@ impl AdapterRecord {
         }
     }
 
+    /// Attach a raw physical property before configured output policies read the record.
+    #[doc(hidden)]
+    pub fn with_storage_property(mut self, name: &str, value: Value) -> Self {
+        let _ = self.storage.insert(name.to_owned(), value);
+        self
+    }
+
     /// Replace the runtime ID policy when this row starts output conversion.
     #[doc(hidden)]
     pub fn with_id_output(
@@ -360,24 +367,6 @@ impl UserConfig {
         self.organization_output_records_batches_with_json(
             records,
             |_| supports_native_json,
-            decode,
-            complete,
-        )
-        .await
-    }
-
-    pub(crate) async fn organization_output_memory_records_batches_then<V: Send, R: Send, F>(
-        &self,
-        records: Vec<AdapterRecord>,
-        decode: impl Fn(usize, FieldMap) -> AuthResult<V> + Sync,
-        complete: impl Fn(Vec<(usize, V)>) -> F + Sync,
-    ) -> AuthResult<Vec<R>>
-    where
-        F: std::future::Future<Output = AuthResult<Vec<(usize, R)>>> + Send,
-    {
-        self.organization_output_records_batches_with_json(
-            records,
-            UserFieldConfig::references_id,
             decode,
             complete,
         )

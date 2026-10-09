@@ -348,6 +348,9 @@ pub struct RemovedMember {
 
 #[derive(Debug, Serialize)]
 pub struct BasicMemberResponse {
+    /// Source property order, independent of the current typed values.
+    #[serde(skip)]
+    pub field_order: Vec<String>,
     #[serde(flatten)]
     #[serde(with = "better_auth_core::field_value::serde::map")]
     pub additional_fields: better_auth_core::FieldMap,
@@ -538,15 +541,17 @@ impl MemberResponse {
 }
 
 impl BasicMemberResponse {
-    pub fn from_member(member: &impl AuthMember) -> Self {
-        Self {
-            additional_fields: member.projected_fields().cloned().unwrap_or_default(),
-            id: member.id().into_owned(),
-            organization_id: member.organization_id().clone(),
-            user_id: member.user_id().clone(),
-            role: member.role().clone(),
-            created_at: member.created_at().clone(),
-        }
+    pub fn try_from_member(member: &impl AuthMember) -> better_auth_core::AuthResult<Self> {
+        let member = better_auth_core::Member::try_from_member(member)?;
+        Ok(Self {
+            field_order: member.field_order,
+            additional_fields: member.additional_fields,
+            id: member.id,
+            organization_id: member.organization_id,
+            user_id: member.user_id,
+            role: member.role,
+            created_at: member.created_at,
+        })
     }
 }
 

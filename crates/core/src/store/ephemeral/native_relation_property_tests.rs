@@ -424,7 +424,8 @@ async fn check(
                 .get(value_field)
                 .and_then(FieldValue::as_str)
                 .ok_or_else(|| AuthError::internal("Expected child label"))?;
-            let _ = child.insert(value_field.into(), format!("visible:{value}").into());
+            let value = format!("visible:{value}");
+            let _ = child.insert(value_field.into(), value.into());
         }
         let _ = expected.insert(child_model.into(), joined(many, &projected));
         assert_eq!(StructuredCloneContext::new().clone_map(&output)?, expected);

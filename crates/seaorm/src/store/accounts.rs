@@ -1,7 +1,7 @@
 use super::instrumentation::database_operation;
 use async_trait::async_trait;
 use chrono::Utc;
-use sea_orm::{ConnectionTrait, DbBackend, EntityTrait, QueryFilter, QuerySelect};
+use sea_orm::{ConnectionTrait, DbBackend, EntityName, EntityTrait, QueryFilter, QuerySelect};
 
 use better_auth_core::id::AdapterIdInput;
 use better_auth_core::store::schema::EntityRole;
@@ -334,6 +334,26 @@ where
     {
         let backend = self.connection().get_database_backend();
         let fields = self.config().account.field_schema();
+        let user_fields = self.user_field_schema().adapter_fields(&[]);
+        let entity = <S::User as SeaOrmUserModel>::Entity::default();
+        let physical = self
+            .model_fields
+            .storage_model_name(EntityRole::User, entity.table_name());
+        let records = records
+            .into_iter()
+            .zip(users)
+            .map(|(record, users)| {
+                Ok(record.with_storage_property(
+                    physical,
+                    super::joins::raw_relation_value(
+                        users,
+                        &user_fields,
+                        many,
+                        S::User::field_column,
+                    )?,
+                ))
+            })
+            .collect::<AuthResult<Vec<_>>>()?;
         fields
             .project_adapter_records_batches_then(
                 records,

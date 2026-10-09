@@ -2,7 +2,7 @@ use super::instrumentation::database_operation;
 use async_trait::async_trait;
 use better_auth_core::id::AdapterIdInput;
 use better_auth_core::store::schema::EntityRole;
-use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QuerySelect};
+use sea_orm::{ColumnTrait, ConnectionTrait, EntityName, EntityTrait, QueryFilter, QuerySelect};
 
 use better_auth_core::store::{ResolvedJoin, UserStore};
 use better_auth_core::{FieldMap, FieldValue};
@@ -605,7 +605,27 @@ where
             };
             (record, None)
         };
-        let user = self.output_user(&record, self.connection()).await?;
+        let user = if let Some(accounts) = &native_accounts {
+            let entity = <S::Account as SeaOrmAccountModel>::Entity::default();
+            let physical = self
+                .model_fields
+                .storage_model_name(EntityRole::Account, entity.table_name());
+            let raw = super::joins::raw_relation_value(
+                accounts,
+                &self.config().account.field_schema().adapter_fields(&[]),
+                relation.many,
+                S::Account::field_column,
+            )?;
+            let backend = self.connection().get_database_backend();
+            let record = self
+                .user_record(&record, backend)?
+                .with_storage_property(physical, raw);
+            self.output_user_records(vec![record], backend)
+                .await?
+                .remove(0)
+        } else {
+            self.output_user(&record, self.connection()).await?
+        };
         let records = if let Some(records) = native_accounts {
             records
         } else {

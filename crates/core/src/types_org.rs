@@ -28,8 +28,11 @@ pub struct Organization {
 }
 
 /// Organization member
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Member {
+    /// Source property order, independent of the current typed values.
+    #[serde(skip)]
+    pub field_order: Vec<String>,
     /// Application fields projected by the configured member schema.
     #[serde(with = "crate::field_value::serde::map", flatten)]
     pub additional_fields: crate::FieldMap,
@@ -83,8 +86,11 @@ impl std::fmt::Display for InvitationStatus {
 }
 
 /// Organization invitation
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Invitation {
+    /// Source property order, independent of the current typed values.
+    #[serde(skip)]
+    pub field_order: Vec<String>,
     /// Application fields projected by the configured invitation schema.
     #[serde(with = "crate::field_value::serde::map", flatten)]
     pub additional_fields: crate::FieldMap,
@@ -124,6 +130,21 @@ impl Invitation {
     /// Check if the invitation has expired
     pub fn is_expired(&self) -> crate::AuthResult<bool> {
         self.expires_at.is_before(Utc::now())
+    }
+}
+
+impl PartialEq for Invitation {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+            && self.organization_id == other.organization_id
+            && self.email == other.email
+            && self.role == other.role
+            && self.status == other.status
+            && self.inviter_id == other.inviter_id
+            && self.team_id == other.team_id
+            && self.expires_at == other.expires_at
+            && self.created_at == other.created_at
+            && self.additional_fields == other.additional_fields
     }
 }
 
@@ -300,16 +321,21 @@ impl AuthMember for Member {
     }
 }
 
-impl<T: AuthMember> From<&T> for Member {
-    fn from(member: &T) -> Self {
-        Self {
-            additional_fields: member.projected_fields().cloned().unwrap_or_default(),
-            id: member.id().into_owned(),
-            organization_id: member.organization_id().clone(),
-            user_id: member.user_id().clone(),
-            role: member.role().clone(),
-            created_at: member.created_at().clone(),
-        }
+impl PartialEq for Member {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+            && self.organization_id == other.organization_id
+            && self.user_id == other.user_id
+            && self.role == other.role
+            && self.created_at == other.created_at
+            && self.additional_fields == other.additional_fields
+    }
+}
+
+impl Member {
+    /// Preserve the source field values and property order.
+    pub fn try_from_member(member: &impl AuthMember) -> crate::AuthResult<Self> {
+        <Self as crate::FromFieldMap>::from_field_values(member.field_values()?)
     }
 }
 
@@ -347,19 +373,9 @@ impl AuthInvitation for Invitation {
     }
 }
 
-impl<T: AuthInvitation> From<&T> for Invitation {
-    fn from(invitation: &T) -> Self {
-        Self {
-            additional_fields: invitation.projected_fields().cloned().unwrap_or_default(),
-            id: invitation.id().into_owned(),
-            organization_id: invitation.organization_id().clone(),
-            email: invitation.email().clone(),
-            role: invitation.role().clone(),
-            status: invitation.status().clone(),
-            inviter_id: invitation.inviter_id().clone(),
-            team_id: invitation.team_id().clone(),
-            expires_at: invitation.expires_at().clone(),
-            created_at: invitation.created_at().clone(),
-        }
+impl Invitation {
+    /// Preserve native fields and source property order from the invitation output.
+    pub fn try_from_invitation(invitation: &impl AuthInvitation) -> crate::AuthResult<Self> {
+        crate::FromFieldMap::from_field_values(invitation.field_values()?)
     }
 }

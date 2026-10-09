@@ -112,7 +112,7 @@ pub(crate) async fn create_organization_core(
     let mut organization = ctx.database.create_organization(org_data).await?;
     organization.metadata = super::super::native_json::metadata(organization.metadata, true)?;
     let organization_view =
-        crate::plugins::organization::fields::created_organization(&organization, ctx);
+        crate::plugins::organization::fields::created_organization(&organization, ctx)?;
 
     let mut member_data = OrganizationMemberDraft {
         additional_fields: Default::default(),
@@ -208,7 +208,7 @@ pub(crate) async fn create_organization_core(
     Ok((
         CreateOrganizationResponse {
             organization: response,
-            members: vec![BasicMemberResponse::from_member(&member)],
+            members: vec![BasicMemberResponse::try_from_member(&member)?],
         },
         default_team_id,
     ))
@@ -300,7 +300,7 @@ pub(crate) async fn update_organization_core(
     if let Some(hooks) = &config.hooks {
         hooks
             .after_update_organization(
-                &crate::plugins::organization::fields::created_organization(&updated, ctx),
+                &crate::plugins::organization::fields::created_organization(&updated, ctx)?,
                 actor,
             )
             .await?;
@@ -367,7 +367,7 @@ pub(crate) async fn delete_organization_core(
         .get_organization_by_id(&body.organization_id)
         .await?
         .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
-    let organization_view = crate::plugins::organization::fields::organization(&organization, ctx);
+    let organization_view = crate::plugins::organization::fields::organization(&organization, ctx)?;
 
     let event = OrganizationUser {
         organization: &organization_view,
@@ -387,10 +387,7 @@ pub(crate) async fn delete_organization_core(
             .after_delete_organization(event, OrganizationEndpoint::new(ctx, request))
             .await?;
     }
-    Ok(crate::plugins::organization::fields::organization(
-        &organization,
-        ctx,
-    ))
+    Ok(organization_view)
 }
 
 pub(crate) async fn list_organizations_core(
@@ -466,7 +463,7 @@ pub(crate) async fn get_full_organization_core(
         ));
     }
     Ok(Some(FullOrganizationResponse {
-        organization: crate::plugins::organization::fields::organization(&organization, ctx),
+        organization: crate::plugins::organization::fields::organization(&organization, ctx)?,
         members: details
             .members
             .iter()
@@ -475,8 +472,8 @@ pub(crate) async fn get_full_organization_core(
         invitations: details
             .invitations
             .iter()
-            .map(InvitationView::from)
-            .collect(),
+            .map(InvitationView::try_from_invitation)
+            .collect::<AuthResult<Vec<_>>>()?,
         teams: details.teams.map(|teams| {
             teams
                 .into_iter()
@@ -610,7 +607,7 @@ pub(crate) async fn set_active_organization_core(
     Ok(Some(crate::plugins::organization::fields::organization(
         &organization,
         ctx,
-    )))
+    )?))
 }
 
 pub(crate) async fn leave_organization_core(
@@ -811,7 +808,7 @@ pub async fn handle_get_organization(
     }
     AuthResponse::json(
         None,
-        &crate::plugins::organization::fields::organization(&organization, ctx),
+        &crate::plugins::organization::fields::organization(&organization, ctx)?,
     )
 }
 

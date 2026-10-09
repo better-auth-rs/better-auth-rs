@@ -17,6 +17,8 @@ mod details;
 mod duplicate_ids;
 #[path = "team_member_invitation.rs"]
 mod invitation;
+#[path = "invitation_response.rs"]
+mod invitation_response;
 #[path = "team_member_joins.rs"]
 mod joins;
 #[path = "team_member_recovery.rs"]

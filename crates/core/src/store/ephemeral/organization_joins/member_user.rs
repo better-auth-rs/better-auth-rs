@@ -1,6 +1,6 @@
 use super::*;
 
-use super::super::account_joins::user_value;
+use super::super::account_joins::{native_relation, user_value};
 
 fn selected_users(
     state: &State,
@@ -39,53 +39,49 @@ impl EphemeralStore {
                 let Some(member) = selected else {
                     return Ok(None);
                 };
-                let native_member = native
-                    .then(|| member.read(|row| Ok(row.clone())))
-                    .transpose()?;
-                let users = if let Some(snapshot) = &native_member {
-                    let storage = snapshot;
-                    let selected = selected_users(
-                        state,
-                        (&join.logical_to, &join.to),
-                        &storage.get(&join.from).cloned().unwrap_or_default(),
+                let (source, users) = if native {
+                    let parent = member.read(|row| Ok(row.clone()))?;
+                    let users = native_relation(
+                        selected_users(
+                            state,
+                            (&join.logical_to, &join.to),
+                            &parent.get(&join.from).cloned().unwrap_or_default(),
+                        )?,
+                        join,
+                        limit,
+                        |user| user.id.field_value(),
                     )?;
-                    let mut page = Vec::new();
-                    let mut seen = Vec::new();
-                    for user in selected {
-                        if page.len() as f64 >= if join.many { limit } else { 1.0 } {
-                            break;
-                        }
-                        if join.many {
-                            let id = user.read(|user| Ok(user.id.field_value()))?;
-                            if seen.iter().any(|seen: &Value| seen.same_value_zero(&id)) {
-                                continue;
-                            }
-                            seen.push(id);
-                        }
-                        page.push(user);
-                    }
-                    Some(page)
+                    let source = RecordSource::joined(
+                        parent,
+                        [(
+                            self.model_fields
+                                .storage_model_name(EntityRole::User, "user")
+                                .to_owned(),
+                            users.raw_value(),
+                        )],
+                    );
+                    (source, Some(users))
                 } else {
-                    None
+                    (RecordSource::Live(member), None)
                 };
-                Ok(Some((member, native_member, users)))
+                Ok(Some((source, users)))
             })
             .await?
         };
-        let Some((member, native_member, native_users)) = selected else {
+        let Some((source, native_users)) = selected else {
             return Ok(None);
         };
-        let member: Member = match native_member {
-            Some(member) => self.output_member(member).await?,
-            None => self
-                .output_record_refs(EntityRole::Member, vec![member])
-                .await?
-                .into_iter()
-                .next()
-                .ok_or_else(|| AuthError::internal("Member projection lost its selected row"))?,
-        };
+        let mut parent = self
+            .project_record_sources(
+                EntityRole::Member,
+                &self.field_config(EntityRole::Member)?,
+                vec![source],
+            )
+            .await?
+            .remove(0);
         let users = match native_users {
-            Some(users) => users,
+            Some(JoinValue::One(user)) => user.into_iter().collect(),
+            Some(JoinValue::Many(users)) => users,
             None => {
                 let from = join.fallback_from(
                     (
@@ -95,11 +91,7 @@ impl EphemeralStore {
                     ),
                     &self.model_fields,
                 )?;
-                let value = member
-                    .field_values()?
-                    .get(&from)
-                    .cloned()
-                    .unwrap_or_default();
+                let value = parent.get(&from).cloned().unwrap_or_default();
                 if value.is_null() || value.is_undefined() {
                     Vec::new()
                 } else {
@@ -137,6 +129,12 @@ impl EphemeralStore {
                     .map(crate::MemberUserView::from_user),
             );
         }
-        MemberUser::finish(&join, member, projected, require_user)
+        let _ = parent.shift_remove("user");
+        MemberUser::finish(
+            &join,
+            Member::from_field_values(parent)?,
+            projected,
+            require_user,
+        )
     }
 }

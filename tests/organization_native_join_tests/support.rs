@@ -252,6 +252,7 @@ pub async fn seed<S: AuthSchema>(store: &impl AuthStore<S>) {
         let _ = store.create_organization(input).await.unwrap();
         let _ = store
             .insert_member(Member {
+                field_order: Default::default(),
                 id: format!("member-{suffix}").into(),
                 organization_id: format!("organization-{suffix}").into(),
                 user_id: "user-a".into(),
@@ -306,6 +307,7 @@ pub async fn seed<S: AuthSchema>(store: &impl AuthStore<S>) {
     }
     let _ = store
         .insert_member(Member {
+            field_order: Default::default(),
             id: "member-a-other".into(),
             organization_id: "organization-a".into(),
             user_id: "user-b".into(),

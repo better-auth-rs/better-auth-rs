@@ -169,6 +169,26 @@ pub(super) fn native_child_fields(
     Ok(output)
 }
 
+pub(super) fn raw_relation_value<C: IdenStatic>(
+    rows: &[SqlRow],
+    fields: &UserConfig,
+    many: bool,
+    column: impl Fn(&str) -> AuthResult<C>,
+) -> AuthResult<FieldValue> {
+    let mut values = rows
+        .iter()
+        .map(|row| {
+            native_child_fields(fields, |name, _| row.value(column(name)?.as_str()))
+                .map(FieldValue::from)
+        })
+        .collect::<AuthResult<Vec<_>>>()?;
+    Ok(if many {
+        values.into()
+    } else {
+        values.pop().unwrap_or(FieldValue::Null)
+    })
+}
+
 // Current core callers have no sort. An ordered caller must order both query levels explicitly.
 pub(super) fn joined_query<P: EntityTrait, C: EntityTrait>(
     parent: Select<P>,

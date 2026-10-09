@@ -262,7 +262,7 @@ pub(crate) async fn handle_team_request(
                 .await?
                 .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
             let organization_view =
-                crate::plugins::organization::fields::organization(&organization, ctx);
+                crate::plugins::organization::fields::organization(&organization, ctx)?;
             let event = OrganizationTeamEvent {
                 team: &team,
                 user: Some(&data.user),
@@ -523,7 +523,7 @@ pub(crate) async fn handle_team_request(
                 .await?
                 .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
             let organization_view =
-                crate::plugins::organization::fields::organization(&organization, ctx);
+                crate::plugins::organization::fields::organization(&organization, ctx)?;
             let target_user = ctx
                 .database
                 .get_user_by_id(&body.user_id)

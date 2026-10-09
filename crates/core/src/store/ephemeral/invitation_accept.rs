@@ -337,6 +337,7 @@ impl EphemeralStore {
             None
         };
         let member = Member {
+            field_order: Default::default(),
             additional_fields: Default::default(),
             id: Default::default(),
             organization_id: invitation.organization_id.clone(),

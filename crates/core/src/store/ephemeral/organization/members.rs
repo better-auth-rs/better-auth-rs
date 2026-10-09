@@ -80,6 +80,7 @@ impl MemberStore for EphemeralStore {
 
     async fn create_member(&self, input: CreateMember) -> AuthResult<Member> {
         let member = Member {
+            field_order: Default::default(),
             additional_fields: Default::default(),
             id: Default::default(),
             organization_id: input.organization_id,

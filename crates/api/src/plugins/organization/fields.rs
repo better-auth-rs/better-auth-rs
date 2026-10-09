@@ -1,7 +1,7 @@
 use super::types::OrganizationResponse;
 use better_auth_core::{
-    AuthContext, AuthSchema, Team, entity::AuthOrganization,
-    organization_fields::OrganizationFields,
+    AuthContext, AuthResult, AuthSchema, FromFieldMap, Organization, StructuredCloneContext, Team,
+    entity::AuthOrganization, organization_fields::OrganizationFields,
 };
 use serde_json::Value;
 
@@ -144,23 +144,33 @@ pub(super) fn invitation_snapshot(
 pub(super) fn organization(
     organization: &impl AuthOrganization,
     ctx: &AuthContext<impl AuthSchema>,
-) -> OrganizationResponse {
-    let mut response = OrganizationResponse::from_organization(organization);
-    if let Some(fields) = ctx.extensions.get::<OrganizationFields>() {
-        fields
+) -> AuthResult<OrganizationResponse> {
+    let mut fields = organization.field_values()?;
+    if let Some(plugin) = ctx.extensions.get::<super::OrganizationPlugin>()
+        && plugin
+            .config
+            .schema
             .organization
-            .filter_returned_fields(&mut response.additional_fields);
+            .additional_fields
+            .is_some()
+    {
+        fields = StructuredCloneContext::new().clone_map(&fields)?;
+        plugin
+            .config
+            .schema
+            .organization
+            .filter_returned_fields(&mut fields);
     }
-    response
+    Ok(OrganizationResponse::from_organization(
+        &Organization::from_field_values(fields)?,
+    ))
 }
 
 pub(super) fn created_organization(
     organization: &impl AuthOrganization,
     ctx: &AuthContext<impl AuthSchema>,
-) -> OrganizationResponse {
-    let mut response = self::organization(organization, ctx);
-    response.metadata = organization.metadata().clone();
-    response
+) -> AuthResult<OrganizationResponse> {
+    self::organization(organization, ctx)
 }
 
 pub(super) fn team(
