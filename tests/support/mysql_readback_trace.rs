@@ -139,7 +139,7 @@ fn jwk_sql(expected: &Value) -> (String, Value) {
         "select * from `readback_jwks` where `id` = ? limit ?" => {
             let predicate = if parameters[0].is_number() {
                 assert_eq!(parameters.remove(0), json!(1), "captured serial ID");
-                "`readback_jwks`.`id` = 1"
+                "`readback_jwks`.`id` = (1)"
             } else { "`readback_jwks`.`id` = ?" };
             format!("SELECT {} FROM `readback_jwks` WHERE {predicate} LIMIT ?", projection("readback_jwks", &JWK_COLUMNS))
         },
@@ -261,9 +261,8 @@ fn lifecycle_sql(expected: &Value) -> (String, Value) {
     ];
     let sql = match expected["sql"].as_str().expect("captured lifecycle SQL") {
         "insert into `user` (`name`, `email`, `emailVerified`, `image`, `createdAt`, `updatedAt`, `id`) values (?, ?, ?, ?, ?, ?, ?)" => {
-            assert_eq!(parameters[2], json!(1), "upstream MySQL boolean input encoding");
-            parameters[2] = json!(true);
-            "INSERT INTO `user` (`name`, `email`, `emailVerified`, `image`, `createdAt`, `updatedAt`, `id`) VALUES (?, ?, ?, ?, ?, ?, ?)".to_owned()
+            assert_eq!(parameters.remove(2), json!(1), "upstream MySQL boolean input encoding");
+            "INSERT INTO `user` (`name`, `email`, `emailVerified`, `image`, `createdAt`, `updatedAt`, `id`) VALUES (?, ?, 1, ?, ?, ?, ?)".to_owned()
         },
         "insert into `session` (`expiresAt`, `token`, `createdAt`, `updatedAt`, `ipAddress`, `userAgent`, `userId`, `id`) values (?, ?, ?, ?, ?, ?, ?, ?)" => "INSERT INTO `session` (`expiresAt`, `token`, `createdAt`, `updatedAt`, `ipAddress`, `userAgent`, `userId`, `id`) VALUES (?, ?, ?, ?, ?, ?, ?, ?)".to_owned(),
         "insert into `verification` (`identifier`, `value`, `expiresAt`, `createdAt`, `updatedAt`, `id`) values (?, ?, ?, ?, ?, ?)" => "INSERT INTO `verification` (`identifier`, `value`, `expiresAt`, `createdAt`, `updatedAt`, `id`) VALUES (?, ?, ?, ?, ?, ?)".to_owned(),

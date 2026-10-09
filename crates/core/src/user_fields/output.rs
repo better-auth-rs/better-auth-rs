@@ -63,23 +63,15 @@ impl UserView {
     /// Apply current `returned` restrictions to cached fields without repeating adapter transforms.
     /// Upstream keeps fields from disabled plugins until the cache expires or its version changes.
     pub(crate) fn filter_cached_fields(&mut self, config: &super::UserConfig) -> AuthResult<()> {
-        *self = crate::StructuredCloneContext::new()
-            .clone_map(&FieldMap::from(self.clone()))?
-            .try_into()?;
-        for (name, field) in config.fields() {
-            if field.returned() {
-                continue;
-            }
-            if let Some(fields) = &mut self.visible_fields {
-                let _ = fields.remove(name);
-            }
-        }
-        self.additional_fields.retain(|name, _| {
+        let mut fields =
+            crate::StructuredCloneContext::new().clone_map(&FieldMap::from(self.clone()))?;
+        fields.retain(|name, _| {
             config
                 .fields()
                 .get(name)
                 .is_none_or(|field| field.returned())
         });
+        *self = fields.try_into()?;
         Ok(())
     }
 
@@ -201,41 +193,27 @@ impl UserView {
                 .map(|user| {
                     let mut view = Self::from_model(user)?;
                     if user.projected_fields().is_none() {
-                        view.field_order = config
-                            .user_field_schema()
+                        let plugins: Vec<_> = Self::active_plugin_fields(metadata).collect();
+                        let fields = config
+                            .user_field_schema_with_plugins(&plugins)
                             .adapter_fields(&[])
                             .fields()
                             .keys()
                             .cloned()
-                            .collect();
-                    }
-                    view.visible_fields = Some(
-                        Self::active_plugin_fields(metadata)
-                            .filter(|name| {
-                                user.field_presence()
-                                    .is_none_or(|fields| fields.contains(*name))
-                            })
-                            .map(str::to_owned)
-                            .chain(
-                                [
-                                    "id",
-                                    "name",
-                                    "email",
-                                    "emailVerified",
-                                    "image",
-                                    "createdAt",
-                                    "updatedAt",
-                                ]
-                                .into_iter()
+                            .collect::<Vec<_>>();
+                        view.visible_fields = Some(
+                            fields
+                                .iter()
                                 .filter(|name| {
                                     user.field_presence()
-                                        .is_none_or(|fields| fields.contains(*name))
+                                        .is_none_or(|fields| fields.contains(name.as_str()))
                                 })
-                                .map(str::to_owned),
-                            )
-                            .collect(),
-                    );
-                    view.additional_fields.clear();
+                                .cloned()
+                                .collect(),
+                        );
+                        view.field_order = fields;
+                        view.additional_fields.clear();
+                    }
                     let model = if !config.fields().is_empty() && user.projected_fields().is_none()
                     {
                         Some(user.field_values()?)
@@ -250,14 +228,13 @@ impl UserView {
                 config.fields(),
                 |(user, view, model), name, field| {
                     Box::pin(async move {
+                        if user.projected_fields().is_some() {
+                            return Ok(());
+                        }
                         if !view.field_order.iter().any(|field| field == name) {
                             view.field_order.push(name.into());
                         }
-                        let value = if let Some(projected) = user.projected_fields() {
-                            view.native_field_value(name)
-                                .or_else(|| projected.get(name).cloned())
-                                .unwrap_or_default()
-                        } else {
+                        let value = {
                             let storage_name =
                                 resolve_field_name(field.field_name.as_deref(), name);
                             let value = if Self::NATIVE_FIELDS.contains(&name) {
@@ -359,7 +336,7 @@ macro_rules! user_fields {
                 Ok(Self {
                     field_order: fields.keys().cloned().collect(),
                     $($field: SchemaValue::from_field(fields.remove($name).unwrap_or_default()),)*
-                    metadata: fields.remove("metadata").unwrap_or(Value::Null),
+                    metadata: fields.remove("metadata").unwrap_or_default(),
                     visible_fields,
                     additional_fields: fields,
                 })
@@ -368,9 +345,7 @@ macro_rules! user_fields {
 
         impl AuthRecordFields for UserView {
             fn field_values(&self) -> AuthResult<FieldMap> {
-                let mut fields = FieldMap::from(self.clone());
-                let _ = fields.insert("metadata".into(), self.metadata.clone());
-                Ok(fields.in_field_order(&self.field_order))
+                Ok(FieldMap::from(self.clone()))
             }
 
             fn structured_clone(&self, context: &mut crate::StructuredCloneContext) -> AuthResult<Self> {

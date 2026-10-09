@@ -236,7 +236,7 @@ where
     ) -> AuthResult<better_auth_core::wire::SessionView> {
         self.create_session_with_connection(tx.0, Some(tx), create_session, None)
             .await?
-            .ok_or_else(|| AuthError::internal("Session creation returned no record"))
+            .ok_or_else(|| AuthError::forbidden("session creation returned no record"))
     }
 
     pub(super) async fn update_session_with_connection(

@@ -16,7 +16,7 @@ pub(super) fn check_permissions(
     let mut resources: Vec<_> = required.iter().collect();
     resources.sort_by_key(|(name, _)| array_index(name).map_or((true, 0), |index| (false, index)));
     for (resource, requested) in resources {
-        let Some(allowed) = property(&permissions, resource).filter(AllowedActions::is_truthy)
+        let Some(allowed) = property(&permissions, resource)?.filter(AllowedActions::is_truthy)
         else {
             return Ok(false);
         };
@@ -58,7 +58,7 @@ pub(super) fn check_permissions(
 }
 
 // Upstream reads ordinary properties, including inherited methods, before calling includes.
-// These variants retain that observation without making functions valid stored field values.
+// These variants retain that observation without fabricating JavaScript function properties.
 enum AllowedActions {
     Value(FieldValue),
     TruthyWithoutIncludes,
@@ -94,46 +94,53 @@ fn includes_error() -> AuthError {
     AuthError::internal("allowedActions.includes is not a function")
 }
 
-fn property(permissions: &FieldValue, name: &str) -> Option<AllowedActions> {
+fn property(permissions: &FieldValue, name: &str) -> AuthResult<Option<AllowedActions>> {
     match permissions {
         FieldValue::Object(fields) => {
             if let Some(value) = fields.get(name) {
-                return Some(AllowedActions::Value(value.clone()));
+                return Ok(Some(AllowedActions::Value(value.clone())));
             }
         }
         FieldValue::Array(values) => {
             if name == "length" {
-                return Some(AllowedActions::Value((values.len() as f64).into()));
+                return Ok(Some(AllowedActions::Value((values.len() as f64).into())));
             }
             if let Some(index) = array_index(name) {
-                return values
+                return Ok(values
                     .get(index as usize)
                     .cloned()
-                    .map(AllowedActions::Value);
+                    .map(AllowedActions::Value));
             }
         }
         FieldValue::String(_) | FieldValue::Utf16String(_) => {
-            let units = field_string_units(permissions)?;
+            let Some(units) = field_string_units(permissions) else {
+                return Ok(None);
+            };
             if name == "length" {
-                return Some(AllowedActions::Value((units.len() as f64).into()));
+                return Ok(Some(AllowedActions::Value((units.len() as f64).into())));
             }
             if let Some(index) = array_index(name) {
-                return units.get(index as usize).map(|unit| {
+                return Ok(units.get(index as usize).map(|unit| {
                     AllowedActions::Value(Utf16String::from_units(vec![*unit]).into())
-                });
+                }));
             }
         }
-        FieldValue::Null | FieldValue::Undefined => return None,
+        FieldValue::Function(_) => {
+            return Err(AuthError::internal(
+                "JavaScript function properties are unavailable for this Rust field callback",
+            ));
+        }
+        FieldValue::Null | FieldValue::Undefined => return Ok(None),
         FieldValue::Bool(_) | FieldValue::Number(_) | FieldValue::Date(_) => {}
     }
     if name == "__proto__" {
-        return Some(match permissions {
+        return Ok(Some(match permissions {
             FieldValue::Array(_) => AllowedActions::Value(Vec::<FieldValue>::new().into()),
             FieldValue::String(_) | FieldValue::Utf16String(_) => AllowedActions::StringPrototype,
             _ => AllowedActions::TruthyWithoutIncludes,
-        });
+        }));
     }
-    inherited_method(permissions, name).then_some(AllowedActions::TruthyWithoutIncludes)
+    Ok(inherited_method(permissions, name).then_some(AllowedActions::TruthyWithoutIncludes))
 }
 
 fn inherited_method(value: &FieldValue, name: &str) -> bool {
@@ -291,5 +298,39 @@ fn inherited_method(value: &FieldValue, name: &str) -> bool {
                 | "toUTCString"
         ),
         _ => false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use better_auth_core::{FieldFunction, FieldMap, user_fields::UserFieldFactory};
+    use serde_json::json;
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+
+    #[test]
+    fn function_permissions_preserve_property_and_action_boundaries() {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let observed = calls.clone();
+        let factory: UserFieldFactory = Arc::new(move || {
+            let _ = observed.fetch_add(1, Ordering::SeqCst);
+            Ok(FieldValue::Undefined)
+        });
+        let function = FieldValue::from(FieldFunction::from(factory));
+        assert!(matches!(
+            check_permissions(&function, &json!({"name":["read"]})),
+            Err(AuthError::Internal(message))
+                if message == "JavaScript function properties are unavailable for this Rust field callback"
+        ));
+        let permissions = FieldValue::from(FieldMap::from([("documents".into(), function)]));
+        assert!(matches!(
+            check_permissions(&permissions, &json!({"documents":["read"]})),
+            Err(AuthError::Internal(message))
+                if message == "allowedActions.includes is not a function"
+        ));
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
     }
 }

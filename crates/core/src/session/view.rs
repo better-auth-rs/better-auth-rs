@@ -231,26 +231,56 @@ impl SessionView {
 
 impl PartialEq for SessionView {
     fn eq(&self, other: &Self) -> bool {
-        self.visible_fields == other.visible_fields
-            && self.id == other.id
-            && self.token == other.token
-            && self.expires_at == other.expires_at
-            && self.created_at == other.created_at
-            && self.updated_at == other.updated_at
-            && self.ip_address == other.ip_address
-            && self.user_agent == other.user_agent
-            && self.user_id == other.user_id
-            && self.impersonated_by == other.impersonated_by
-            && self.active_organization_id == other.active_organization_id
-            && self.active_team_id == other.active_team_id
-            && self.active == other.active
-            && self.additional_fields == other.additional_fields
+        self.active == other.active && FieldMap::from(self.clone()) == FieldMap::from(other.clone())
     }
 }
 
 #[cfg(test)]
 mod native_field_tests {
     use super::*;
+
+    #[test]
+    fn equality_preserves_enumerable_presence_and_private_liveness() -> AuthResult<()> {
+        let mut left = SessionView::from_field_values(FieldMap::from([
+            ("id".into(), "session".into()),
+            ("token".into(), "token".into()),
+        ]))?;
+        let mut right = SessionView::from_field_values(FieldMap::from([
+            ("token".into(), "token".into()),
+            ("id".into(), "session".into()),
+        ]))?;
+        assert_eq!(
+            FieldMap::from(left.clone())
+                .keys()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+            ["id", "token"],
+        );
+        assert_eq!(
+            FieldMap::from(right.clone())
+                .keys()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+            ["token", "id"],
+        );
+        right.impersonated_by = Some("non-enumerable-storage-value".into()).into();
+        assert_eq!(left, right);
+        let _ = left
+            .additional_fields
+            .insert("extra".into(), FieldValue::Undefined);
+        assert_ne!(left, right);
+        let _ = right
+            .additional_fields
+            .insert("extra".into(), FieldValue::Null);
+        assert_ne!(left, right);
+        let _ = right
+            .additional_fields
+            .insert("extra".into(), FieldValue::Undefined);
+        assert_eq!(left, right);
+        right.active = true;
+        assert_ne!(left, right);
+        Ok(())
+    }
 
     #[test]
     fn session_fields_preserve_native_values_omission_and_source_order() -> AuthResult<()> {

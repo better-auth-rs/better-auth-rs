@@ -211,9 +211,13 @@ run_stage() {
         cargo test --locked --features axum,seaorm2,redis-cache --test user_account_raw_column_tests -- --ignored || create_status=1
         cargo test --locked -p better-auth-cli --test generate || create_status=1
         ./scripts/consumer-check.sh --lib --test session_native_values --test user_session_fields || create_status=1
-        COMPAT_TEST_PROFILE=passkey-first,passkey-options,email-otp,email-otp-options,magic-link,signup-verification,admin-options,crypto-database,crypto-cookie,identity-context \
-          cargo test --locked --test client_compat_tests -- --ignored --nocapture --exact --test-threads=1 \
-          configuration_client_compat phase1_client_compat phase2_client_compat phase3_client_compat || create_status=1
+        if cargo build --locked --manifest-path compat-tests/rust-server/Cargo.toml; then
+          COMPAT_TEST_PROFILE=passkey-first,passkey-options,email-otp,email-otp-options,magic-link,signup-verification,admin-options,crypto-database,crypto-cookie,identity-context \
+            cargo test --locked --test client_compat_tests -- --ignored --nocapture --exact --test-threads=1 \
+            configuration_client_compat phase1_client_compat phase2_client_compat phase3_client_compat || create_status=1
+        else
+          create_status=1
+        fi
       else
         create_status=1
       fi

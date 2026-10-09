@@ -317,7 +317,32 @@ async fn missing_update_results_reach_hooks_before_strict_store_errors() {
 
 #[tokio::test]
 async fn optional_runtime_fields_preserve_absence_then_explicit_null() {
-    let store = EphemeralStore::default();
+    use crate::user_fields::{UserFieldConfig, UserFieldType};
+
+    let mut config = AuthConfig::default();
+    for (name, field_type) in [
+        ("banReason", UserFieldType::String),
+        ("banExpires", UserFieldType::Date),
+    ] {
+        let _ = config.user.fields_mut().insert(
+            name.into(),
+            UserFieldConfig {
+                field_type,
+                required: Some(false),
+                ..Default::default()
+            },
+        );
+    }
+    for name in ["impersonatedBy", "activeOrganizationId", "activeTeamId"] {
+        let _ = config.session.fields_mut().insert(
+            name.into(),
+            UserFieldConfig {
+                required: Some(false),
+                ..Default::default()
+            },
+        );
+    }
+    let store = EphemeralStore::new(Arc::new(config));
     let user = store.create_user(CreateUser::new()).await.unwrap();
     let raw = serde_json::to_value(&user).unwrap();
     for field in ["image", "banReason", "banExpires"] {

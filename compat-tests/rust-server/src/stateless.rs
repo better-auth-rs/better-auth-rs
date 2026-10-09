@@ -71,7 +71,15 @@ impl DatabaseHooks<StatelessSchema> for Hooks {
     ) -> AuthResult<
         better_auth_core::store::database_hooks::DatabaseHookUpdate<better_auth_core::FieldMap>,
     > {
-        self.record("user.before", json!(user.get("email")), ctx);
+        self.record(
+            "user.before",
+            user.get("email")
+                .map(better_auth_core::FieldValue::json)
+                .transpose()?
+                .flatten()
+                .unwrap_or(Value::Null),
+            ctx,
+        );
         Ok(better_auth_core::store::database_hooks::DatabaseHookUpdate::Continue)
     }
     async fn after_create_user(

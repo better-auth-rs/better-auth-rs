@@ -143,7 +143,7 @@ impl UserView {
             metadata: model
                 .get(T::serialized_field_name("metadata"))
                 .cloned()
-                .unwrap_or(crate::FieldValue::Null),
+                .unwrap_or_default(),
         })
     }
 }
@@ -673,6 +673,79 @@ mod tests {
         assert_eq!(json["emailVerified"], true);
         assert_eq!(json["displayUsername"], "Ada");
         assert_eq!(json["twoFactorEnabled"], true);
+    }
+
+    #[tokio::test]
+    async fn projected_user_keeps_declared_native_and_unknown_fields_without_repeating_transforms()
+    -> crate::AuthResult<()> {
+        use crate::user_fields::{
+            FieldTransforms, UserConfig, UserFieldConfig, UserFieldTransform,
+        };
+        use crate::{FieldMap, FieldValue};
+
+        let source = FieldMap::from([
+            ("role".into(), false.into()),
+            (
+                "metadata".into(),
+                FieldMap::from([("nested".into(), 7.0.into())]).into(),
+            ),
+            ("unknown".into(), vec![FieldValue::Null].into()),
+            ("private".into(), "secret".into()),
+            ("id".into(), "owner".into()),
+        ]);
+        let config = UserConfig {
+            additional_fields: Some(
+                [
+                    (
+                        "role".into(),
+                        UserFieldConfig {
+                            transform: Some(FieldTransforms {
+                                output: Some(UserFieldTransform::new(|_| {
+                                    Err(crate::AuthError::internal(
+                                        "Adapter output must run only once",
+                                    ))
+                                })),
+                                ..Default::default()
+                            }),
+                            ..Default::default()
+                        },
+                    ),
+                    ("metadata".into(), UserFieldConfig::default()),
+                    ("missing".into(), UserFieldConfig::default()),
+                    (
+                        "private".into(),
+                        UserFieldConfig {
+                            returned: Some(false),
+                            ..Default::default()
+                        },
+                    ),
+                ]
+                .into(),
+            ),
+        };
+        let user = UserView::try_from(source.clone())?;
+        let internal = UserView::with_internal_fields(&user, &config, &Default::default()).await?;
+        assert_eq!(FieldMap::from(internal.clone()), source);
+        let public = UserView::with_fields(&internal, &config, &Default::default()).await?;
+        let mut expected = source;
+        let _ = expected.remove("private");
+        let actual = FieldMap::from(public);
+        assert_eq!(actual, expected);
+        assert_eq!(
+            actual.keys().collect::<Vec<_>>(),
+            expected.keys().collect::<Vec<_>>()
+        );
+        let mut hidden = config;
+        for name in ["id", "role", "metadata"] {
+            hidden.fields_mut().entry(name.into()).or_default().returned = Some(false);
+            let _ = expected.remove(name);
+        }
+        let public = UserView::with_fields(&internal, &hidden, &Default::default()).await?;
+        assert!(matches!(AuthUser::id(&public), SchemaValue::Undefined));
+        assert!(matches!(AuthUser::role(&public), SchemaValue::Undefined));
+        assert!(public.metadata.is_undefined());
+        assert_eq!(crate::AuthRecordFields::field_values(&public)?, expected);
+        Ok(())
     }
 
     #[tokio::test]

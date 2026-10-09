@@ -16,7 +16,11 @@ async fn create_admin_context() -> (
     UserView,
     SessionView,
 ) {
-    let ctx = test_helpers::create_test_context().await;
+    let ctx = test_helpers::create_test_context_with_plugins(
+        test_helpers::create_test_config(),
+        &[&AdminPlugin::new()],
+    )
+    .await;
 
     let admin = test_helpers::create_user(
         &ctx,
@@ -70,7 +74,34 @@ fn set_cookie_value(resp: &AuthResponse, name: &str) -> Option<String> {
 
 #[tokio::test]
 async fn test_custom_admin_role_can_use_permission_engine() {
-    let ctx = test_helpers::create_test_context().await;
+    let plugin = AdminPlugin::with_config(AdminConfig {
+        admin_roles: Some(vec!["superadmin".to_string()]),
+        roles: Some(HashMap::from([(
+            "superadmin".to_string(),
+            RolePermissions::new()
+                .allow(
+                    "user",
+                    [
+                        "create",
+                        "list",
+                        "set-role",
+                        "ban",
+                        "impersonate",
+                        "delete",
+                        "set-password",
+                        "get",
+                        "update",
+                    ],
+                )
+                .allow("session", ["list", "revoke", "delete"]),
+        )])),
+        ..Default::default()
+    });
+    let ctx = test_helpers::create_test_context_with_plugins(
+        test_helpers::create_test_config(),
+        &[&plugin],
+    )
+    .await;
     let database = ctx.database.clone();
 
     let admin = database
@@ -106,30 +137,6 @@ async fn test_custom_admin_role_can_use_permission_engine() {
         )
         .await
         .unwrap();
-
-    let plugin = AdminPlugin::with_config(AdminConfig {
-        admin_roles: Some(vec!["superadmin".to_string()]),
-        roles: Some(HashMap::from([(
-            "superadmin".to_string(),
-            RolePermissions::new()
-                .allow(
-                    "user",
-                    [
-                        "create",
-                        "list",
-                        "set-role",
-                        "ban",
-                        "impersonate",
-                        "delete",
-                        "set-password",
-                        "get",
-                        "update",
-                    ],
-                )
-                .allow("session", ["list", "revoke", "delete"]),
-        )])),
-        ..Default::default()
-    });
 
     let req = make_request(
         HttpMethod::Get,

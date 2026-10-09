@@ -132,7 +132,9 @@ pub(super) async fn complete_storage(database: &DatabaseConnection) -> TestResul
         let rows = database
             .query_all_raw(Statement::from_string(
                 backend,
-                format!("SELECT {expression} AS record FROM {table} AS stored ORDER BY id"),
+                format!(
+                    "SELECT {expression} AS record FROM {table} AS {quote}stored{quote} ORDER BY id"
+                ),
             ))
             .await?
             .iter()

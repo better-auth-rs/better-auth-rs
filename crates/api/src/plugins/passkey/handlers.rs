@@ -105,9 +105,9 @@ pub(super) async fn generate_register_options_core(
         .iter()
         .map(super::descriptors::CredentialDescriptor::registration_id)
         .collect::<AuthResult<Vec<_>>>()?;
-    // Display labels do not participate in verification. Populate the output with the retained native values below.
+    // WebAuthn requires nonempty labels; the response replaces these internal labels with the native values below.
     let builder = webauthn
-        .new_challenge_register_builder(Uuid::new_v4().as_bytes(), "", "")
+        .new_challenge_register_builder(Uuid::new_v4().as_bytes(), "user", "user")
         .map_err(|error| {
             AuthError::internal(format!("Failed to generate register options: {error}"))
         })?

@@ -78,7 +78,8 @@ impl Events {
         value: &FieldValue,
         output: String,
     ) -> AuthResult<FieldValue> {
-        let value = value.display_string()?;
+        let value =
+            better_auth::SchemaValue::<String>::from_field(value.clone()).display_string()?;
         self.0
             .lock()
             .unwrap()
@@ -95,7 +96,8 @@ struct Validator {
 #[async_trait]
 impl UsernameValidator for Validator {
     async fn validate(&self, value: &FieldValue) -> AuthResult<bool> {
-        let value = value.display_string()?;
+        let value =
+            better_auth::SchemaValue::<String>::from_field(value.clone()).display_string()?;
         let (prefix, control) = if self.display {
             ("display-validate", "displayValidator")
         } else {
@@ -166,12 +168,28 @@ fn configure(profile: &str, events: &Events) -> UsernameConfig {
         }));
         let trace = events.clone();
         config.username_normalization = UsernameNormalization::Custom(Arc::new(move |value| {
-            trace.normalize("normalize", value, format!("n{}", value.display_string()?))
+            trace.normalize(
+                "normalize",
+                value,
+                format!(
+                    "n{}",
+                    better_auth::SchemaValue::<String>::from_field(value.clone())
+                        .display_string()?
+                ),
+            )
         }));
         let trace = events.clone();
         config.display_username_normalization =
             UsernameNormalization::Custom(Arc::new(move |value| {
-                trace.normalize("display", value, format!("d{}", value.display_string()?))
+                trace.normalize(
+                    "display",
+                    value,
+                    format!(
+                        "d{}",
+                        better_auth::SchemaValue::<String>::from_field(value.clone())
+                            .display_string()?
+                    ),
+                )
             }));
         if !matches!(profile, "username-order-default" | "username-writes") {
             let order = if profile == "username-order-post" {

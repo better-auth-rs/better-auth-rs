@@ -55,9 +55,15 @@ pub(crate) async fn request(
         .filter_map(|value| value.split(';').next())
         .collect::<Vec<_>>()
         .join("; ");
-    (
-        response.status,
-        serde_json::from_slice(&response.body.bytes().unwrap()).unwrap(),
-        cookie,
-    )
+    let bytes = response.body.bytes().unwrap();
+    let body = if bytes.is_empty() {
+        assert_eq!(
+            response.status, 500,
+            "Native HTTP errors have an empty body"
+        );
+        Value::String(String::new())
+    } else {
+        serde_json::from_slice(&bytes).unwrap()
+    };
+    (response.status, body, cookie)
 }

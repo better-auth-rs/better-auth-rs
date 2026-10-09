@@ -45,7 +45,7 @@ fn hidden_native_user_function_rejects_public_clone_before_filtering() -> AuthRe
 }
 
 #[tokio::test]
-async fn session_public_clone_failure_keeps_raw_request_snapshot_and_stored_session()
+async fn session_public_clone_failure_precedes_request_snapshot_and_keeps_stored_session()
 -> AuthResult<()> {
     for user_field in [false, true] {
         let calls = Arc::new(AtomicUsize::new(0));
@@ -107,15 +107,7 @@ async fn session_public_clone_failure_keeps_raw_request_snapshot_and_stored_sess
                 .await,
             Err(AuthError::DataClone)
         ));
-        let snapshot = request.session_snapshot()?.ok_or_else(|| {
-            AuthError::internal("Expected raw Session snapshot before public clone")
-        })?;
-        let fields = if user_field {
-            FieldMap::from(snapshot.user)
-        } else {
-            FieldMap::from(snapshot.session)
-        };
-        assert!(fields["hiddenFunction"].strict_equals(&function));
+        assert!(request.session_snapshot()?.is_none());
         assert_eq!(calls.load(Ordering::SeqCst), 0);
         assert_eq!(
             request

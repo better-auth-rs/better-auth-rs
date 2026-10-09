@@ -68,15 +68,20 @@ mod user {
         pub image: Option<String>,
         pub username: Option<String>,
         pub display_username: Option<String>,
+        #[sea_orm(default_value = false)]
         pub two_factor_enabled: bool,
         pub role: Option<String>,
+        #[sea_orm(default_value = false)]
         pub banned: bool,
         pub ban_reason: Option<String>,
         pub ban_expires: Option<DateTimeUtc>,
+        #[sea_orm(default_expr = "Expr::cust(\"('{}')\")")]
         pub metadata: Json,
         pub created_at: DateTimeUtc,
         pub updated_at: DateTimeUtc,
+        #[sea_orm(default_value = 1)]
         pub tenant_id: i64,
+        #[sea_orm(default_value = "en")]
         pub locale: String,
     }
 
@@ -1030,6 +1035,9 @@ async fn legacy_numeric_schema_signup_flow_uses_numeric_ids_and_defaults() {
     assert!(stored_user.id > 0);
     assert_eq!(stored_user.tenant_id, 1);
     assert_eq!(stored_user.locale, "en");
+    assert!(!stored_user.two_factor_enabled);
+    assert!(!stored_user.banned);
+    assert_eq!(stored_user.metadata, json!({}));
     assert_eq!(body["user"]["id"], stored_user.id.to_string());
 
     let session_response = auth

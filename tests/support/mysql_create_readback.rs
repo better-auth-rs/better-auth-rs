@@ -334,7 +334,10 @@ pub(super) async fn stored(
                     "INT" => json!(row.try_get::<i32, _>(name)?),
                     "BIGINT" => json!(row.try_get::<i64, _>(name)?),
                     "BOOLEAN" | "TINYINT" => json!(row.try_get::<i8, _>(name)?),
-                    "TIMESTAMP" | "DATETIME" => values::observe(&FieldValue::from(
+                    "TIMESTAMP" => values::observe(&FieldValue::from(
+                        row.try_get::<chrono::DateTime<chrono::Utc>, _>(name)?,
+                    ))?,
+                    "DATETIME" => values::observe(&FieldValue::from(
                         row.try_get::<chrono::NaiveDateTime, _>(name)?.and_utc(),
                     ))?,
                     kind => {

@@ -398,7 +398,7 @@ async fn contract<S: AuthSchema>(raw: Arc<dyn AuthStore<S>>, run: Run) -> TestRe
         } else if run.case == Case::GeneratorFailure {
             AuthError::bad_request("session generator failure")
         } else {
-            AuthError::forbidden("session creation cancelled by database hook")
+            AuthError::forbidden("session creation returned no record")
         };
         assert_eq!(error.to_string(), expected_error.to_string());
     } else if run.case == Case::Cancel {

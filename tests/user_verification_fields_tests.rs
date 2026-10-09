@@ -300,11 +300,11 @@ async fn verification_uses_mapped_fields_and_transforms_serial_references_once()
     assert_eq!(verified.email_verified, true);
     assert_eq!(
         verified.name.json().unwrap(),
-        Some(json!({"stored":"Final"}))
+        Some(json!(r#"{"stored":"Final"}"#))
     );
     assert_eq!(
         verified.image.json().unwrap(),
-        Some(json!({"source":"hook"}))
+        Some(json!(r#"{"source":"hook"}"#))
     );
     assert_eq!(
         verified.additional_fields.get("sponsor"),

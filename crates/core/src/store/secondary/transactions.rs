@@ -306,9 +306,7 @@ impl<S: AuthSchema> AuthTransaction<S> for Transaction<S> {
     async fn create_session(&self, input: CreateSession) -> AuthResult<crate::wire::SessionView> {
         self.create_session_with_storage(input, false)
             .await?
-            .ok_or_else(|| {
-                crate::AuthError::forbidden("session creation cancelled by database hook")
-            })
+            .ok_or_else(|| crate::AuthError::forbidden("session creation returned no record"))
     }
     async fn create_session_with_deferred_secondary(
         &self,
@@ -316,9 +314,7 @@ impl<S: AuthSchema> AuthTransaction<S> for Transaction<S> {
     ) -> AuthResult<crate::wire::SessionView> {
         self.create_session_with_storage(input, true)
             .await?
-            .ok_or_else(|| {
-                crate::AuthError::forbidden("session creation cancelled by database hook")
-            })
+            .ok_or_else(|| crate::AuthError::forbidden("session creation returned no record"))
     }
     async fn create_session_with_deferred_secondary_optional(
         &self,

@@ -98,7 +98,7 @@ async fn raw_username_projection_resolves_empty_aliases_and_preserves_serialized
                         )
                     };
                     assert_eq!(
-                        projected.additional_fields.get(name).cloned(),
+                        FieldMap::from(projected.clone()).get(name).cloned(),
                         expected_field,
                         "stored projection: {name}, alias={alias:?}, public={public}, returned={returned}",
                     );

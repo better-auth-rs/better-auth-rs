@@ -30,6 +30,9 @@ async fn output_case(
     let mut config = contract::config()?;
     let (raw, seeded) = contract::seed(&config).await?;
     let before = FieldMap::from(seeded);
+    // Creation stores JSON text. Output callbacks run before the adapter decodes that text.
+    let mut callback_inputs = before.clone();
+    let _ = callback_inputs.insert("metadata".into(), r#"{"seed":true}"#.into());
     let trace = contract::replace(&mut config, name, replacement.clone(), fail);
     let store = raw.with_runtime(Arc::new(config), Vec::new(), Default::default())?;
     let result = store.get_user_by_id(contract::OWNER).await;
@@ -38,7 +41,7 @@ async fn output_case(
     if calls == 1 {
         assert_eq!(
             contract::observe(&events[0])?,
-            contract::observe(before.get(name).unwrap())?,
+            contract::observe(callback_inputs.get(name).unwrap())?,
             "{name}"
         );
     }
@@ -239,6 +242,9 @@ async fn admin_role_consumer_uses_truthy_fallback_and_requires_the_string_split_
             "{}: {body}",
             case["name"]
         );
+        if status == 500 {
+            assert_eq!(body, serde_json::Value::String(String::new()));
+        }
         assert!(cookies.is_empty());
         assert_eq!(raw.get_user_sessions(contract::OWNER).await?.len(), 1);
         assert_eq!(
@@ -299,6 +305,9 @@ async fn selected_email_must_support_lowercase_before_any_verification_delivery(
             "{}: {body}",
             case["name"]
         );
+        if status == 500 {
+            assert_eq!(body, serde_json::Value::String(String::new()));
+        }
         assert_eq!(
             delivered.lock().unwrap().len() as u64,
             case["sent"].as_u64().unwrap()

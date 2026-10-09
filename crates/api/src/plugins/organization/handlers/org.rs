@@ -814,10 +814,10 @@ mod tests {
     use better_auth_core::types::{CreateOrganization, CreateUser, HttpMethod};
     use chrono::Duration;
 
-    use crate::plugins::organization::OrganizationConfig;
+    use crate::plugins::organization::{OrganizationConfig, OrganizationPlugin};
     use crate::plugins::test_helpers::{
-        create_auth_json_request_no_query, create_test_context, create_user,
-        create_user_and_session,
+        create_auth_json_request_no_query, create_test_config, create_test_context_with_plugins,
+        create_user, create_user_and_session,
     };
 
     use super::{get_full_organization_core, handle_create_organization};
@@ -848,8 +848,12 @@ mod tests {
 
     #[tokio::test]
     async fn create_organization_keeps_current_active_organization_when_requested() {
-        let ctx = create_test_context().await;
         let config = test_config();
+        let ctx = create_test_context_with_plugins(
+            create_test_config(),
+            &[&OrganizationPlugin::with_config(config.clone())],
+        )
+        .await;
         let (user, session) = create_user_and_session(
             &ctx,
             test_user("owner@example.com", "Owner"),
@@ -910,8 +914,12 @@ mod tests {
 
     #[tokio::test]
     async fn create_organization_updates_active_organization_by_default() {
-        let ctx = create_test_context().await;
         let config = test_config();
+        let ctx = create_test_context_with_plugins(
+            create_test_config(),
+            &[&OrganizationPlugin::with_config(config.clone())],
+        )
+        .await;
         let (_, session) = create_user_and_session(
             &ctx,
             test_user("owner2@example.com", "Owner"),
@@ -956,8 +964,12 @@ mod tests {
 
     #[tokio::test]
     async fn get_full_organization_respects_members_limit() {
-        let ctx = create_test_context().await;
         let config = test_config();
+        let ctx = create_test_context_with_plugins(
+            create_test_config(),
+            &[&OrganizationPlugin::with_config(config.clone())],
+        )
+        .await;
         let (user, session) = create_user_and_session(
             &ctx,
             test_user("owner3@example.com", "Owner"),

@@ -145,6 +145,67 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn hidden_native_session_fields_control_expiry_and_revocation() -> AuthResult<()> {
+        for hidden in ["expiresAt", "token"] {
+            let mut config = AuthConfig::new("hidden-session-field-secret-at-least-32-characters");
+            let _ = config.session.fields_mut().insert(
+                hidden.into(),
+                UserFieldConfig {
+                    returned: Some(false),
+                    ..Default::default()
+                },
+            );
+            let config = Arc::new(config);
+            let manager = SessionManager::<StatelessSchema>::new(
+                config.clone(),
+                Arc::new(EphemeralStore::new(config.clone())),
+            );
+            let user = manager
+                .database
+                .create_user(CreateUser::new().with_email("hidden-session@example.test"))
+                .await?;
+            let session = manager
+                .database
+                .create_session(CreateSession {
+                    inherited_fields: Default::default(),
+                    user_id: user.id.clone(),
+                    expires_at: (chrono::Utc::now() - chrono::Duration::hours(1)).into(),
+                    additional_fields: Default::default(),
+                    ip_address: None,
+                    user_agent: None,
+                    impersonated_by: None,
+                    active_organization_id: None,
+                })
+                .await?;
+            let token = session.token.typed()?.clone();
+            let mut request = AuthRequest::new(HttpMethod::Get, "/get-session");
+            request.query = Some(serde_json::json!({"disableRefresh": true}));
+            let _ = request.headers.insert(
+                "cookie".into(),
+                format!(
+                    "{}={}",
+                    config.auth_cookie("session_token", Default::default()).name,
+                    crate::utils::cookie_utils::sign_cookie_value(&token, config.signing_secret()),
+                ),
+            );
+            let resolved = manager
+                .resolve_native(&request, SessionRead::Authoritative)
+                .await?;
+            assert_eq!(resolved.data.is_some(), hidden == "expiresAt");
+            let snapshot = request.session_snapshot()?.ok_or_else(|| {
+                AuthError::internal("Expected public Session snapshot before expiry handling")
+            })?;
+            assert!(!FieldMap::from(snapshot.session).contains_key(hidden));
+            assert!(request.new_session()?.is_none());
+            let stored = manager.database.get_session(&token).await?.ok_or_else(|| {
+                AuthError::internal("Hidden expiry or token must preserve the stored Session")
+            })?;
+            assert_eq!(stored.expires_at, session.expires_at);
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn typed_relationship_array_rejection_precedes_refresh_and_cookie_callbacks()
     -> AuthResult<()> {
         let calls = Arc::new(AtomicUsize::new(0));

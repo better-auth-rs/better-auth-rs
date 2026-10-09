@@ -108,6 +108,7 @@ async fn owner_operations<S: AuthSchema>(ctx: AuthContext<S>, sqlite: bool) -> T
         ),
     )
     .await?;
+    let started = chrono::Utc::now().timestamp_millis() as f64;
     let updated = response(
         &projected,
         &request(
@@ -119,16 +120,23 @@ async fn owner_operations<S: AuthSchema>(ctx: AuthContext<S>, sqlite: bool) -> T
     )
     .await;
     assert_eq!(updated.status, 200);
+    let stored = ctx
+        .database
+        .get_passkey_by_id(original.id.typed()?)
+        .await?
+        .ok_or_else(|| AuthError::internal("Expected updated passkey"))?;
+    assert!(
+        (started..=chrono::Utc::now().timestamp_millis() as f64)
+            .contains(&stored.updated_at.date_milliseconds()?)
+    );
     let mut expected = original.clone();
     expected.name = Some("Renamed".to_owned()).into();
+    expected.updated_at = stored.updated_at.clone();
     assert_eq!(
         serde_json::from_slice::<Value>(&updated.body.bytes()?)?,
         json!({"passkey": PasskeyView::from(&expected)})
     );
-    assert_eq!(
-        ctx.database.get_passkey_by_id(original.id.typed()?).await?,
-        Some(expected)
-    );
+    assert_eq!(stored, expected);
     let deleted = response(
         &projected,
         &request(

@@ -12,13 +12,11 @@ pub(super) async fn create_test_context_with_credential_user(
     email: &str,
     two_factor_enabled: bool,
 ) -> (AuthContext<TestSchema>, UserView, SessionView) {
-    let mut ctx = test_helpers::create_test_context().await;
-    let mut init = better_auth_core::AuthInitContext::new(ctx.config.clone(), ctx.database.clone());
-    init.extensions = ctx.extensions.clone();
-    init.metadata = ctx.metadata.clone();
-    TwoFactorPlugin::new().on_init(&mut init).await.unwrap();
-    ctx.extensions = init.extensions;
-    ctx.metadata = init.metadata;
+    let ctx = test_helpers::create_test_context_with_plugins(
+        test_helpers::create_test_config(),
+        &[&TwoFactorPlugin::new()],
+    )
+    .await;
     let user = test_helpers::create_user(
         &ctx,
         CreateUser::new()

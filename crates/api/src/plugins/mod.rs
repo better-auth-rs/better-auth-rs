@@ -48,7 +48,12 @@ pub(crate) mod test_helpers {
 
     use better_auth_core::config::AuthConfig;
     use better_auth_core::wire::{SessionView, UserView};
-    use better_auth_core::{AuthContext, AuthRequest, CreateSession, CreateUser, HttpMethod};
+    use better_auth_core::{
+        AuthContext, AuthInitContext, AuthPlugin, AuthRequest, AuthResult, AuthSchema,
+        CreateSession, CreateUser, HttpMethod,
+        plugin_runtime::{AdapterUserFields, ApplicationUserFields},
+        store::{AuthStore, schema::SchemaConfiguration},
+    };
     use better_auth_seaorm::store::__private_test_support::bundled_schema::BundledSchema;
     use better_auth_seaorm::{Database, SeaOrmStore};
     use chrono::{Duration, Utc};
@@ -75,16 +80,17 @@ pub(crate) mod test_helpers {
     }
 
     pub async fn create_test_database() -> Arc<TestDatabase> {
+        create_test_database_with_config(Arc::new(create_test_config())).await
+    }
+
+    async fn create_test_database_with_config(config: Arc<AuthConfig>) -> Arc<TestDatabase> {
         let database = Database::connect("sqlite::memory:")
             .await
             .expect("sqlite test database should connect");
         better_auth_seaorm::store::__private_test_support::migrator::run_migrations(&database)
             .await
             .expect("sqlite test migrations should run");
-        Arc::new(SeaOrmStore::<BundledSchema>::new(
-            Arc::new(create_test_config()),
-            database,
-        ))
+        Arc::new(SeaOrmStore::<BundledSchema>::new(config, database))
     }
 
     pub async fn create_test_context() -> AuthContext<BundledSchema> {
@@ -100,14 +106,56 @@ pub(crate) mod test_helpers {
     }
 
     pub async fn create_test_context_with_config(config: AuthConfig) -> AuthContext<BundledSchema> {
+        create_test_context_with_plugins(config, &[]).await
+    }
+
+    pub async fn create_test_context_with_plugins(
+        config: AuthConfig,
+        plugins: &[&dyn AuthPlugin<BundledSchema>],
+    ) -> AuthContext<BundledSchema> {
         let config = Arc::new(config);
-        let database = create_test_database().await;
-        AuthContext::new(config, database)
-            .initialize_request_context()
+        let database = create_test_database_with_config(config.clone()).await;
+        initialize_test_context(config, database, plugins)
             .await
-            .expect("test request context should initialize")
-            .as_ref()
-            .clone()
+            .expect("test plugin context should initialize")
+    }
+
+    pub async fn initialize_test_context<S: AuthSchema>(
+        config: Arc<AuthConfig>,
+        database: Arc<dyn AuthStore<S>>,
+        plugins: &[&dyn AuthPlugin<S>],
+    ) -> AuthResult<AuthContext<S>> {
+        let mut init = AuthInitContext::new(config, database.clone());
+        init.initialize_request_context().await?;
+        for plugin in plugins {
+            plugin.on_init(&mut init).await?;
+        }
+        let config = init.config.clone();
+        let mut parts = init.into_parts();
+        let (adapter, endpoint, mut fields) = parts.plugin_fields.clone().resolve(&config);
+        let adapter_fields = adapter.user.clone();
+        let adapter = Arc::new(adapter);
+        fields.set_schema_configuration(&SchemaConfiguration {
+            config: adapter.clone(),
+            plugins: plugins.iter().map(|plugin| plugin.name()).collect(),
+            metadata: parts.metadata.clone(),
+            secondary_storage: parts.secondary_storage.is_some(),
+            database_rate_limit: false,
+        });
+        let database = database.with_runtime(adapter, parts.database_hooks.clone(), fields)?;
+        parts
+            .extensions
+            .insert(ApplicationUserFields(config.user.clone()));
+        parts.extensions.insert(AdapterUserFields(adapter_fields));
+        let mut context = AuthContext::new(Arc::new(endpoint), database);
+        parts.apply_request_runtime(&mut context);
+        context.extensions = parts.extensions;
+        context.email_verification_policy = parts.email_verification_policy;
+        context.email_provider = parts.email_provider;
+        context.secondary_storage = parts.secondary_storage;
+        context.password_policy = parts.password_policy;
+        context.metadata = parts.metadata;
+        Ok(context)
     }
 
     pub async fn create_user(

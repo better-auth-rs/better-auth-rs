@@ -348,8 +348,7 @@ async fn run(base: &str, input: Value) -> AuthResult<Value> {
         .first()
         .map(|session| {
             Ok::<_, AuthError>(
-                session.expires_at.field_value().date_milliseconds()?
-                    - session.created_at.field_value().date_milliseconds()?,
+                session.expires_at.date_milliseconds()? - session.created_at.date_milliseconds()?,
             )
         })
         .transpose()?

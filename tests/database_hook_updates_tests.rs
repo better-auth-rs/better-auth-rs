@@ -88,14 +88,14 @@ impl SeaOrmHooks<BundledSchema> for PatchHook {
         update: &SessionUpdate,
         _: &SeaOrmHookContext<'_, BundledSchema>,
     ) -> AuthResult<DatabaseHookUpdate<SessionUpdate>> {
+        let fields = update.clone().into_public_fields()?;
         assert_eq!(
-            update
-                .active_organization_id
-                .as_ref()
-                .and_then(Option::as_deref),
+            fields
+                .get("activeOrganizationId")
+                .and_then(better_auth_core::FieldValue::as_str),
             Some("requested")
         );
-        assert!(update.token.is_none());
+        assert!(!fields.contains_key("token"));
         Ok(DatabaseHookUpdate::Patch(if self.first {
             SessionUpdate {
                 token: Some("rotated-by-hook".into()),

@@ -318,7 +318,7 @@ async fn mapped_json_columns_preserve_raw_values_and_apply_each_storage_transfor
         .await?;
     assert_eq!(
         created.name.json()?,
-        Some(json!({"shown":{"stored":"Initial"}}))
+        Some(json!({"shown":r#"{"stored":"Initial"}"#}))
     );
     assert_eq!(inputs.load(Ordering::SeqCst), 1);
     assert_eq!(outputs.load(Ordering::SeqCst), 1);
@@ -330,9 +330,9 @@ async fn mapped_json_columns_preserve_raw_values_and_apply_each_storage_transfor
         .await?;
     assert_eq!(
         updated.name.json()?,
-        Some(json!({"shown":{"stored":[1,false]}}))
+        Some(json!({"shown":r#"{"stored":[1,false]}"#}))
     );
-    assert_eq!(updated.image.json()?, Some(json!({"raw":null})));
+    assert_eq!(updated.image.json()?, Some(json!(r#"{"raw":null}"#)));
     assert_eq!(inputs.load(Ordering::SeqCst), 2);
     assert_eq!(outputs.load(Ordering::SeqCst), 2);
     let physical = required(
@@ -362,7 +362,7 @@ async fn mapped_json_columns_preserve_raw_values_and_apply_each_storage_transfor
                     serde_json::from_value(json!({"name":{"rolled":"back"},"image":[1,2]}))?,
                 )
                 .await?;
-            assert_eq!(updated.image.json()?, Some(json!([1, 2])));
+            assert_eq!(updated.image.json()?, Some(json!("[1,2]")));
             Err(better_auth_core::AuthError::internal("rollback raw fields"))
         })
     })

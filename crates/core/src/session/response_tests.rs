@@ -17,7 +17,11 @@ async fn refreshed_request() -> (SessionManager<BundledSchema>, AuthRequest, Ses
     let manager = SessionManager::new(Arc::new(config), test_database().await);
     let user = manager
         .database
-        .create_user(CreateUser::new().with_email("rotation@example.com"))
+        .create_user(
+            CreateUser::new()
+                .with_email("rotation@example.com")
+                .with_name("Rotation owner"),
+        )
         .await
         .unwrap();
     let session = manager.create_session(&user, None, None).await.unwrap();

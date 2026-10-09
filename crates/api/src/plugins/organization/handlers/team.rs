@@ -538,9 +538,10 @@ pub(crate) async fn handle_team_request(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::plugins::organization::OrganizationTeamsConfig;
+    use crate::plugins::organization::{OrganizationPlugin, OrganizationTeamsConfig};
     use crate::plugins::test_helpers::{
-        create_auth_json_request_no_query, create_test_context, create_user_and_session,
+        create_auth_json_request_no_query, create_test_config, create_test_context_with_plugins,
+        create_user_and_session,
     };
     use better_auth_core::CreateTeam;
     use better_auth_core::{CreateMember, CreateOrganization, CreateUser};
@@ -548,7 +549,19 @@ mod tests {
 
     #[tokio::test]
     async fn team_membership_is_idempotent_and_team_scope_is_enforced() {
-        let ctx = create_test_context().await;
+        let config = OrganizationConfig {
+            teams: OrganizationTeamsConfig {
+                enabled: true,
+                maximum_members_per_team: Some(1),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let ctx = create_test_context_with_plugins(
+            create_test_config(),
+            &[&OrganizationPlugin::with_config(config.clone())],
+        )
+        .await;
         let (user, session) = create_user_and_session(
             &ctx,
             CreateUser {
@@ -587,14 +600,6 @@ mod tests {
             )
             .await
             .unwrap();
-        let config = OrganizationConfig {
-            teams: OrganizationTeamsConfig {
-                enabled: true,
-                maximum_members_per_team: Some(1),
-                ..Default::default()
-            },
-            ..Default::default()
-        };
         let team = ctx
             .database
             .create_team(CreateTeam {

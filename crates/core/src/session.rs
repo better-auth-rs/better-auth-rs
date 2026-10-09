@@ -549,7 +549,7 @@ impl<S: AuthSchema> SessionManager<S> {
             self.clear_cookies(req)?;
             return Ok(none());
         };
-        let mut data = if let Some(mut data) = cached_data {
+        let data = if let Some(mut data) = cached_data {
             match &mut data.user {
                 JoinValue::One(Some(user)) => *user = self.internal_user_view(user).await?,
                 JoinValue::One(None) => {
@@ -575,11 +575,14 @@ impl<S: AuthSchema> SessionManager<S> {
                 user: JoinValue::One(Some(self.internal_user_view(&user).await?)),
             }
         };
+        let mut data = self.public_data(data)?;
         req.set_session_snapshot(Some(data.clone()))?;
-        if session.expires_at().is_before(Utc::now())? || !session.active() {
+        if data.session.expires_at().is_before(Utc::now())? || !data.session.active() {
             self.clear_cookies(req)?;
             if !self.config.session.defer_session_refresh || is_post {
-                self.database.delete_session(&token).await?;
+                self.database
+                    .delete_session_by_token_value(&data.session.token.field_value())
+                    .await?;
             }
             return Ok(none());
         }
@@ -590,7 +593,7 @@ impl<S: AuthSchema> SessionManager<S> {
                 needs_refresh: None,
             });
         }
-        let needs_refresh = self.needs_refresh(&session)?;
+        let needs_refresh = self.needs_refresh(&data.session)?;
         if self.config.session.defer_session_refresh && !is_post {
             self.write_cache_with_response(req, &data.clone().into(), false, None, None)
                 .await?;
@@ -602,14 +605,28 @@ impl<S: AuthSchema> SessionManager<S> {
         if needs_refresh {
             let updated = match self
                 .database
-                .update_session_expiry(&token, Utc::now() + self.config.session.expires_in())
+                .update_session_fields_by_token_value(
+                    &data.session.token.field_value(),
+                    crate::FieldMap::from([
+                        (
+                            "expiresAt".into(),
+                            crate::FieldDate::from(Utc::now() + self.config.session.expires_in())
+                                .into(),
+                        ),
+                        (
+                            "updatedAt".into(),
+                            crate::FieldDate::from(Utc::now()).into(),
+                        ),
+                    ]),
+                )
                 .await
             {
-                Err(AuthError::SessionNotFound) => {
+                Ok(None) | Err(AuthError::SessionNotFound) => {
                     self.clear_cookies(req)?;
                     return Err(failed_session_update());
                 }
-                result => result?,
+                Ok(Some(updated)) => updated,
+                Err(error) => return Err(error),
             };
             data.session = self.internal_session_view(&updated).await?;
             self.set_native_session_cookie(req, data.clone().into(), Some(false))

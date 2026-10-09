@@ -1,5 +1,8 @@
 use super::{SessionIssueError, issue_selected_user_session_optional, issue_user_session};
-use crate::plugins::test_helpers::create_test_config;
+use crate::plugins::{
+    admin::AdminPlugin,
+    test_helpers::{create_test_config, initialize_test_context},
+};
 use better_auth_core::{
     AuthContext, AuthError, AuthResult, CreateUser, FieldMap, FieldValue, RequestMeta,
     store::{
@@ -27,18 +30,16 @@ impl DatabaseHooks<StatelessSchema> for SessionOwners {
     }
 }
 
-fn context(owners: &Arc<SessionOwners>) -> AuthContext<StatelessSchema> {
+async fn context(owners: &Arc<SessionOwners>) -> AuthResult<AuthContext<StatelessSchema>> {
     let config = Arc::new(create_test_config());
     let store = EphemeralStore::new(config.clone()).with_hooks(vec![owners.clone()]);
-    let mut ctx = AuthContext::new(config, Arc::new(store));
-    ctx.set_metadata("admin.enabled", serde_json::Value::Bool(true));
-    ctx
+    initialize_test_context(config, Arc::new(store), &[&AdminPlugin::new()]).await
 }
 
 #[tokio::test]
 async fn selected_users_without_an_admin_identity_reach_session_storage() -> AuthResult<()> {
     let owners = Arc::new(SessionOwners::default());
-    let ctx = context(&owners);
+    let ctx = context(&owners).await?;
     let ids = [
         FieldValue::Undefined,
         FieldValue::Null,
@@ -83,7 +84,7 @@ async fn selected_users_without_an_admin_identity_reach_session_storage() -> Aut
 #[tokio::test]
 async fn selected_banned_user_is_rejected_before_session_hooks() -> AuthResult<()> {
     let owners = Arc::new(SessionOwners::default());
-    let ctx = context(&owners);
+    let ctx = context(&owners).await?;
     let user = ctx
         .database
         .create_user(CreateUser {

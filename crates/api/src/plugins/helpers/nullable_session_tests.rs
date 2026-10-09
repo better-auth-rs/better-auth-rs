@@ -52,10 +52,10 @@ impl DatabaseHooks<StatelessSchema> for SessionHooks {
     }
 }
 
-fn context(hooks: &Arc<SessionHooks>) -> AuthContext<StatelessSchema> {
+async fn context(hooks: &Arc<SessionHooks>) -> AuthResult<AuthContext<StatelessSchema>> {
     let config = Arc::new(test_helpers::create_test_config());
     let store = EphemeralStore::new(config.clone()).with_hooks(vec![hooks.clone()]);
-    AuthContext::new(config, Arc::new(store))
+    test_helpers::initialize_test_context(config, Arc::new(store), &[]).await
 }
 
 async fn user(ctx: &AuthContext<StatelessSchema>) -> AuthResult<UserView> {
@@ -103,7 +103,7 @@ fn assert_cancelled(hooks: &SessionHooks, existing: usize) {
 async fn email_signin_null_session_keeps_credentials_and_returns_unauthorized() -> AuthResult<()> {
     let hooks = Arc::new(SessionHooks::default());
     hooks.cancel.store(true, Ordering::SeqCst);
-    let ctx = context(&hooks);
+    let ctx = context(&hooks).await?;
     let owner = user(&ctx).await?;
     credential(&ctx, &owner).await?;
     let req = test_helpers::create_auth_request_no_query(
@@ -146,7 +146,7 @@ async fn email_signin_null_session_keeps_credentials_and_returns_unauthorized() 
 async fn password_replacement_null_session_keeps_password_change_and_revocation() -> AuthResult<()>
 {
     let hooks = Arc::new(SessionHooks::default());
-    let ctx = context(&hooks);
+    let ctx = context(&hooks).await?;
     let owner = user(&ctx).await?;
     credential(&ctx, &owner).await?;
     let session = ctx
@@ -195,7 +195,7 @@ async fn password_replacement_null_session_keeps_password_change_and_revocation(
 async fn email_otp_null_session_consumes_proof_and_keeps_created_user() -> AuthResult<()> {
     let hooks = Arc::new(SessionHooks::default());
     hooks.cancel.store(true, Ordering::SeqCst);
-    let ctx = context(&hooks);
+    let ctx = context(&hooks).await?;
     let identifier = "sign-in-otp-nullable@session.test";
     let _ = ctx
         .database
@@ -239,7 +239,7 @@ async fn email_otp_null_session_consumes_proof_and_keeps_created_user() -> AuthR
 async fn magic_link_null_session_redirects_after_consuming_proof() -> AuthResult<()> {
     let hooks = Arc::new(SessionHooks::default());
     hooks.cancel.store(true, Ordering::SeqCst);
-    let ctx = context(&hooks);
+    let ctx = context(&hooks).await?;
     let owner = user(&ctx).await?;
     let _ = ctx
         .database
