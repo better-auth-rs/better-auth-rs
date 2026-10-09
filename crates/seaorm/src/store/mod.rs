@@ -53,7 +53,8 @@ mod updates;
 mod user_column_defaults;
 mod user_delete;
 mod user_output;
-mod user_verification;
+#[cfg(test)]
+mod user_verification_tests;
 mod users;
 mod value_filter;
 mod verifications;

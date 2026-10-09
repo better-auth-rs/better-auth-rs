@@ -517,11 +517,12 @@ where
                 )
             })
             .await?;
-        let mut active = super::record_write::RecordWrite::from_active(
-            S::Verification::new_active(id.clone(), &input)?,
-        );
-        active.not_set(S::Verification::id_column());
-        active.apply_fields(input, S::Verification::field_column)?;
+        let mut active = super::record_write::RecordWrite::from_initialized_fields(
+            input,
+            S::Verification::field_column,
+            S::Verification::extra_insert_columns(),
+            |input| S::Verification::new_active(id.clone(), input),
+        )?;
         if let Some(id) = id {
             active.set(S::Verification::id_column(), id.into());
         } else {
@@ -632,12 +633,14 @@ where
         let snapshot: AuthResult<Option<VerificationView>> = async {
             match database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(
                 self.config(),
-                "findOne",
+                "findMany",
                 async {
                     <S::Verification as SeaOrmVerificationModel>::Entity::find()
                         .filter(condition.clone())
-                        .one(db)
+                        .limit(1)
+                        .all(db)
                         .await
+                        .map(|rows| rows.into_iter().next())
                         .map_err(map_db_err)
                 },
             )

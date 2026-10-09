@@ -1,4 +1,4 @@
-use super::{AuthError, AuthResult, AuthSchema, FieldValue, SecondaryStore};
+use super::{AuthError, AuthResult, AuthSchema, FieldValue, SecondaryStore, active_sessions_key};
 use crate::utils::json::safe_parse_field;
 
 fn property<'a>(value: &'a FieldValue, name: &str) -> AuthResult<&'a FieldValue> {
@@ -34,10 +34,7 @@ impl<S: AuthSchema> SecondaryStore<S> {
                     .error("Session not found in secondary storage", &[]);
                 return Ok(());
             }
-            let user_id = property(session, "userId")?.display_utf16()?;
-            let mut units: Vec<_> = "active-sessions-".encode_utf16().collect();
-            units.extend_from_slice(user_id.as_utf16());
-            let key = FieldValue::from(crate::Utf16String::from_units(units));
+            let key = active_sessions_key(property(session, "userId")?)?;
             if let Some(current) = storage
                 .get_native(&key)
                 .await?

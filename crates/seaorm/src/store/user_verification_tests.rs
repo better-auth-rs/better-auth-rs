@@ -1,8 +1,8 @@
 use super::*;
 use crate::store::{bundled_schema::BundledSchema, migrator::run_migrations};
 use better_auth_core::{
-    AuthConfig, CreateAccount, CreateSession, CreateUser,
-    store::{AccountStore, SessionStore, UserStore},
+    AuthConfig, AuthUser, CreateAccount, CreateSession, CreateUser, UpdateUser,
+    store::{AccountStore, SessionStore, UserStore, VerificationStore},
 };
 use chrono::Utc;
 use std::sync::Arc;
@@ -37,7 +37,7 @@ fn session(user_id: &str) -> CreateSession {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn concurrent_email_proofs_preserve_new_owner_sessions_and_commit_cleanup_before_hooks()
+async fn database_cleanup_reservations_preserve_new_owner_sessions_after_committed_hook_errors()
 -> Result<(), Box<dyn std::error::Error>> {
     let directory =
         std::env::temp_dir().join(format!("better-auth-email-proof-{}", uuid::Uuid::new_v4()));
@@ -71,6 +71,7 @@ scope: Default::default(),
             assert!(store.get_user_by_id(user_id.typed().unwrap()).await?.unwrap().email_verified().typed().copied().unwrap());
             assert!(store.get_user_accounts(user_id.typed().unwrap()).await?.is_empty());
             assert!(store.get_user_sessions(user_id.typed().unwrap()).await?.is_empty());
+            assert!(store.get_verification_by_identifier(&format!("revoke-unproven-account-access:{}", user_id.typed().unwrap())).await?.is_none());
             let _ = store.update_user(user_id.typed().unwrap(), UpdateUser { email_verified: Some(false), ..Default::default() }).await?;
             let barrier = Arc::new(Barrier::new(8));
             let mut tasks = JoinSet::new();
@@ -85,6 +86,7 @@ scope: Default::default(),
             }
             while let Some(result) = tasks.join_next().await { let _ = result??; }
             assert_eq!(store.get_user_sessions(user_id.typed().unwrap()).await?.len(), 8);
+            assert!(store.get_verification_by_identifier(&format!("revoke-unproven-account-access:{}", user_id.typed().unwrap())).await?.is_none());
             Ok::<_, Box<dyn std::error::Error>>(())
         }.await;
         database.close().await?;

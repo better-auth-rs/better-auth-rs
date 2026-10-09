@@ -38,7 +38,7 @@ struct MemoryFixture {
 }
 
 impl MemoryFixture {
-    async fn new(user: CreateUser) -> TestResult<Self> {
+    async fn new(user: CreateUser, admin_fields: bool) -> TestResult<Self> {
         let mut config = test_helpers::create_test_config().base_url(ORIGIN);
         config.telemetry.enabled = false;
         let config = Arc::new(config);
@@ -46,7 +46,12 @@ impl MemoryFixture {
             Arc::new(EphemeralStore::new(config.clone()));
         let mut init = AuthInitContext::new(config.clone(), raw.clone());
         AuthPlugin::on_init(&PasskeyPlugin::new(), &mut init).await?;
-        let raw = raw.with_runtime(config.clone(), Vec::new(), init.into_parts().plugin_fields)?;
+        if admin_fields {
+            init.register_native_user_fields("admin.enabled");
+        }
+        let (config, _, fields) = init.into_parts().plugin_fields.resolve(&config);
+        let config = Arc::new(config);
+        let raw = raw.with_runtime(config.clone(), Vec::new(), fields)?;
         let ctx = AuthContext::new(config, raw.clone());
         let owner = raw.create_user(user).await?;
         let session = ctx
@@ -147,12 +152,11 @@ impl MemoryFixture {
         }
         init.register_model_fields(EntityRole::Passkey, fields)?;
         let parts = init.into_parts();
-        let database = self.raw.with_runtime(
-            config.clone(),
-            vec![self.trace.clone()],
-            parts.plugin_fields,
-        )?;
-        self.ctx = AuthContext::new(config, database);
+        let (adapter, endpoint, fields) = parts.plugin_fields.resolve(&config);
+        let database =
+            self.raw
+                .with_runtime(Arc::new(adapter), vec![self.trace.clone()], fields)?;
+        self.ctx = AuthContext::new(Arc::new(endpoint), database);
         self.ctx.metadata = parts.metadata;
         self.ctx.extensions = parts.extensions;
         Ok(())
@@ -276,7 +280,7 @@ async fn signed_authentication_creates_orphan_session_before_missing_owner_error
             "".into(),
             "missing-user".into(),
         ] {
-            let mut fixture = MemoryFixture::new(user()).await?;
+            let mut fixture = MemoryFixture::new(user(), false).await?;
             fixture
                 .configure(
                     fixture.ctx.config.as_ref().clone(),
@@ -378,12 +382,15 @@ async fn signed_authentication_consumes_projected_admin_bans_after_counter_write
             false,
         ),
     ] {
-        let mut fixture = MemoryFixture::new(CreateUser {
-            banned: Some(banned),
-            ban_reason: Some("Stored reason".into()),
-            ban_expires: expiry.map(Into::into),
-            ..user()
-        })
+        let mut fixture = MemoryFixture::new(
+            CreateUser {
+                banned: Some(banned),
+                ban_reason: Some("Stored reason".into()),
+                ban_expires: expiry.map(Into::into),
+                ..user()
+            },
+            true,
+        )
         .await?;
         let mut config = fixture.ctx.config.as_ref().clone();
         for (field, value) in [

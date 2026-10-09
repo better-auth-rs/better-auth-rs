@@ -51,9 +51,36 @@ where
         .await
     }
 
-    pub(super) async fn user_account_records(&self, user_id: &str) -> AuthResult<Vec<SqlRow>> {
-        self.model_fields.canonicalize_id(EntityRole::Account)?;
-        let user_id = self.parse_id(user_id, <S::Account as SeaOrmAccountModel>::parse_user_id)?;
+    fn account_selector(
+        &self,
+        name: &str,
+        original: &FieldValue,
+    ) -> AuthResult<sea_orm::sea_query::SimpleExpr> {
+        let fields = self.config().account.field_schema();
+        let field = if name == "id" {
+            Default::default()
+        } else {
+            fields.fields().get(name).cloned().unwrap_or_default()
+        };
+        let backend = self.connection().get_database_backend();
+        let value = if name == "id" || field.references_id() {
+            self.config()
+                .advanced
+                .database
+                .generate_id()
+                .adapter_id_query(original.clone())?
+        } else {
+            original.clone()
+        };
+        let value = better_auth_core::user_query::bind_filter(&field, &value)?;
+        let value = super::value_filter::adapter_query_value(value, original, &field, backend)?;
+        let name =
+            better_auth_core::store::schema::resolve_field_name(field.field_name.as_deref(), name);
+        super::value_filter::equals(S::Account::field_column(name)?, &value, backend)
+    }
+
+    async fn user_account_records(&self, user_id: &FieldValue) -> AuthResult<Vec<SqlRow>> {
+        self.model_fields.begin_id_query(EntityRole::Account)?;
         database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(
             self.config(),
             "findMany",
@@ -61,7 +88,7 @@ where
                 super::plugin_rows::all(
                     self.connection(),
                     <S::Account as SeaOrmAccountModel>::Entity::find()
-                        .filter(<S::Account as SeaOrmAccountModel>::user_id_column().eq(user_id))
+                        .filter(self.account_selector("userId", user_id)?)
                         .limit(super::pagination::default_limit(
                             self.config(),
                             self.connection().get_database_backend(),
@@ -305,7 +332,12 @@ where
         let id = id.as_deref().map(S::Account::parse_id).transpose()?;
         let mut active = super::record_write::RecordWrite::<
             <S::Account as SeaOrmAccountModel>::Entity,
-        >::from_fields(input, S::Account::field_column)?;
+        >::from_initialized_fields(
+            input,
+            S::Account::field_column,
+            S::Account::extra_insert_columns(),
+            |input| S::Account::new_active(id.clone(), input),
+        )?;
         if let Some(id) = id {
             active.set(S::Account::id_column(), id.into());
         } else {
@@ -544,6 +576,10 @@ where
     }
 
     async fn get_user_accounts(&self, user_id: &str) -> AuthResult<Vec<AccountView>> {
+        self.get_user_accounts_value(&user_id.into()).await
+    }
+
+    async fn get_user_accounts_value(&self, user_id: &FieldValue) -> AuthResult<Vec<AccountView>> {
         let rows = self.user_account_records(user_id).await?;
         self.output_accounts(&rows, self.connection()).await
     }
@@ -639,24 +675,28 @@ where
     }
 
     async fn delete_account(&self, id: &str) -> AuthResult<()> {
-        self.model_fields.canonicalize_id(EntityRole::Account)?;
-        let account_id = self.parse_id(id, <S::Account as SeaOrmAccountModel>::parse_id)?;
+        self.delete_account_value(&id.into()).await
+    }
+
+    async fn delete_account_value(&self, id: &FieldValue) -> AuthResult<()> {
         // The upstream single-delete snapshot catch also covers adapter output failures.
         let snapshot: AuthResult<Option<AccountView>> = async {
+            self.model_fields.begin_id_query(EntityRole::Account)?;
             match database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(
                 self.config(),
-                "findOne",
+                "findMany",
                 async {
-                    super::plugin_rows::one(
+                    super::plugin_rows::all(
                         self.connection(),
                         <S::Account as SeaOrmAccountModel>::Entity::find()
-                            .filter(S::Account::id_column().eq(account_id.clone())),
+                            .filter(self.account_selector("id", id)?)
+                            .limit(1),
                     )
                     .await
                 },
             )
             .await?
-            .as_ref()
+            .first()
             {
                 Some(record) => self
                     .output_account(record, self.connection())
@@ -683,12 +723,13 @@ where
                 return Ok(());
             }
         }
+        self.model_fields.begin_id_query(EntityRole::Account)?;
         let _ = database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(
             self.config(),
             "delete",
             async {
                 <S::Account as SeaOrmAccountModel>::Entity::delete_many()
-                    .filter(<S::Account as SeaOrmAccountModel>::id_column().eq(account_id))
+                    .filter(self.account_selector("id", id)?)
                     .exec(self.connection())
                     .await
                     .map_err(map_db_err)

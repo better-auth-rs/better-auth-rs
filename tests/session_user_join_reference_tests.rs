@@ -5,9 +5,9 @@
 )]
 
 use better_auth_core::{
-    AuthConfig, AuthError, AuthResult, AuthSchema, AuthStore, CreateSession, CreateUser, FieldDate,
-    FieldMap, FieldValue, ListUsersParams, UserView,
-    session::{NativeSessionData, SessionData},
+    AuthConfig, AuthError, AuthRequest, AuthResult, AuthSchema, AuthStore, CreateSession,
+    CreateUser, FieldDate, FieldMap, FieldValue, HttpMethod, ListUsersParams, UserView,
+    session::{NativeSessionData, SessionData, SessionManager, SessionRead},
     store::{EphemeralStore, JoinValue},
     user_fields::{FieldTransforms, UserFieldConfig, UserFieldReference, UserFieldTransform},
     wire::SessionView,
@@ -157,7 +157,6 @@ fn snapshot_fields(
     (session, joined): (SessionView, Option<SessionData<JoinValue<UserView>>>),
     config: &AuthConfig,
     internal: bool,
-    batch: bool,
 ) -> AuthResult<FieldValue> {
     let mut data = NativeSessionData::from(
         joined
@@ -168,9 +167,6 @@ fn snapshot_fields(
             return Ok(FieldValue::Null);
         }
         data.session.filter_returned_fields(&config.session)?;
-        if !batch {
-            data.user = data.public_user(&config.user)?;
-        }
         return Ok(FieldMap::from(data).into());
     }
     let mut fields = FieldMap::from(session);
@@ -218,7 +214,7 @@ async fn operation<S: AuthSchema>(
             .get_session_snapshots(&tokens, false)
             .await?
             .into_iter()
-            .map(|snapshot| snapshot_fields(snapshot, &config, internal, true))
+            .map(|snapshot| snapshot_fields(snapshot, &config, internal))
             .collect::<AuthResult<Vec<_>>>()?;
         return Ok(if internal && values.iter().any(FieldValue::is_null) {
             Vec::<FieldValue>::new().into()
@@ -247,10 +243,56 @@ async fn operation<S: AuthSchema>(
             .await?
             .map_or(FieldValue::Null, |session| FieldMap::from(session).into()));
     }
+    if internal {
+        let mut request = AuthRequest::new(HttpMethod::Get, "/get-session");
+        request.query = Some(json!({"disableRefresh": true}));
+        let _ = request.headers.insert(
+            "cookie".into(),
+            format!(
+                "{}={}",
+                config.auth_cookie("session_token", Default::default()).name,
+                better_auth_core::utils::cookie_utils::sign_cookie_value(
+                    token,
+                    config.signing_secret()
+                ),
+            ),
+        );
+        let resolved = SessionManager::new(config, store)
+            .resolve_native(&request, SessionRead::Authoritative)
+            .await?;
+        return Ok(resolved
+            .data
+            .map_or(FieldValue::Null, |data| FieldMap::from(data).into()));
+    }
     let Some(snapshot) = store.get_session_snapshot(token).await? else {
         return Ok(FieldValue::Null);
     };
-    snapshot_fields(snapshot, &config, internal, false)
+    snapshot_fields(snapshot, &config, false)
+}
+
+fn key_order(value: &FieldValue, path: &[String]) -> Vec<Value> {
+    let entries: Vec<_> = match value {
+        FieldValue::Object(fields) => fields
+            .iter()
+            .map(|(name, value)| (name.clone(), value))
+            .collect(),
+        FieldValue::Array(values) => values
+            .iter()
+            .enumerate()
+            .map(|(index, value)| (index.to_string(), value))
+            .collect(),
+        _ => return Vec::new(),
+    };
+    let mut result = vec![json!({
+        "path": path,
+        "keys": entries.iter().map(|(name, _)| name).collect::<Vec<_>>(),
+    })];
+    for (name, value) in entries {
+        let mut child = path.to_vec();
+        child.push(name);
+        result.extend(key_order(value, &child));
+    }
+    result
 }
 
 fn assert_outcome(result: AuthResult<FieldValue>, expected: &Value) -> TestResult {
@@ -259,14 +301,11 @@ fn assert_outcome(result: AuthResult<FieldValue>, expected: &Value) -> TestResul
             assert_eq!(expected["returned"], true, "{expected}");
             assert_eq!(value, values::revive(&expected["result"])?, "{expected}");
             assert_eq!(value.json()?, Some(expected["json"].clone()), "{expected}");
-            if value.is_null() {
-                assert_eq!(expected["keyOrder"], json!([]));
-            } else {
-                println!(
-                    "Unpaired observation boundary: {} object keyOrder {:?}; Rust typed Session/User views retain their wire order.",
-                    expected["name"], expected["keyOrder"]
-                );
-            }
+            assert_eq!(
+                Value::Array(key_order(&value, &[])),
+                expected["keyOrder"],
+                "{expected}"
+            );
         }
         Err(error) => {
             assert_eq!(expected["returned"], false, "{expected}: {error:?}");

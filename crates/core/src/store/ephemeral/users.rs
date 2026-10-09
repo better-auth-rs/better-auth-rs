@@ -258,28 +258,19 @@ impl EphemeralStore {
 
 #[async_trait]
 impl UserStore<StatelessSchema> for EphemeralStore {
-    async fn verify_user_with_cleanup(
-        &self,
-        user_id: &str,
-        cleanup: crate::store::VerificationCleanup,
-        sessions: Option<&dyn crate::store::VerificationSessionCleanup>,
-    ) -> AuthResult<Option<UserView>> {
-        self.verify_unproven_user(
-            user_id,
-            matches!(
-                cleanup,
-                crate::store::VerificationCleanup::AccountsAndSessions
-            ),
-            sessions,
-        )
-        .await
-    }
-
     async fn verify_user_and_revoke_unproven_access(
         &self,
         user_id: &str,
     ) -> AuthResult<Option<UserView>> {
-        self.verify_unproven_user(user_id, true, None).await
+        self.verify_user_and_revoke_unproven_access_value(&user_id.into())
+            .await
+    }
+
+    async fn verify_user_and_revoke_unproven_access_value(
+        &self,
+        user_id: &FieldValue,
+    ) -> AuthResult<Option<UserView>> {
+        crate::store::revoke_unproven_account_access(self, user_id).await
     }
     async fn create_user(&self, input: CreateUser) -> AuthResult<UserView> {
         self.create_user_optional(input)

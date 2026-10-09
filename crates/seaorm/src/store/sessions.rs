@@ -300,14 +300,21 @@ where
         &self,
         user_id: &str,
     ) -> AuthResult<Vec<better_auth_core::wire::SessionView>> {
+        self.get_user_sessions_value(&user_id.into()).await
+    }
+
+    async fn get_user_sessions_value(
+        &self,
+        user_id: &better_auth_core::FieldValue,
+    ) -> AuthResult<Vec<better_auth_core::wire::SessionView>> {
         self.model_fields.begin_id_query(EntityRole::Session)?;
-        let user_id = self.parse_id(user_id, <S::Session as SeaOrmSessionModel>::parse_user_id)?;
+        let condition = self.session_user_filter(user_id)?;
         match database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
             self.config(),
             "findMany",
             async {
                 <S::Session as SeaOrmSessionModel>::Entity::find()
-                    .filter(<S::Session as SeaOrmSessionModel>::user_id_column().eq(user_id))
+                    .filter(condition)
                     .filter(
                         Condition::all()
                             .add_option(S::Session::active_column().map(|column| column.eq(true))),
@@ -457,7 +464,15 @@ where
     }
 
     async fn delete_user_sessions(&self, user_id: &str) -> AuthResult<()> {
-        self.delete_user_sessions_optional(user_id, false)
+        self.delete_user_sessions_by_user_value(&user_id.into())
+            .await
+    }
+
+    async fn delete_user_sessions_by_user_value(
+        &self,
+        user_id: &better_auth_core::FieldValue,
+    ) -> AuthResult<()> {
+        self.delete_user_sessions_optional_value(user_id, false)
             .await
             .map(|_| ())
     }
@@ -467,8 +482,16 @@ where
         user_id: &str,
         preserve: bool,
     ) -> AuthResult<Option<usize>> {
-        let user_id = self.parse_id(user_id, S::Session::parse_user_id)?;
-        let condition = Condition::all().add(S::Session::user_id_column().eq(user_id));
+        self.delete_user_sessions_optional_value(&user_id.into(), preserve)
+            .await
+    }
+
+    async fn delete_user_sessions_optional_value(
+        &self,
+        user_id: &better_auth_core::FieldValue,
+        preserve: bool,
+    ) -> AuthResult<Option<usize>> {
+        let condition = Condition::all().add(self.session_user_filter(user_id)?);
         self.delete_sessions_with_connection(self.connection(), None, condition, preserve)
             .await
     }
@@ -591,5 +614,39 @@ where
         )
         .await?
         .ok_or(AuthError::SessionNotFound)
+    }
+}
+
+impl<S, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> SeaOrmStore<S, O, P>
+where
+    S: AuthSchema,
+    S::Session: SeaOrmSessionModel,
+{
+    fn session_user_filter(
+        &self,
+        user_id: &better_auth_core::FieldValue,
+    ) -> AuthResult<sea_orm::sea_query::SimpleExpr> {
+        let schema = better_auth_core::store::session_create_schema(
+            &self.config().session,
+            &Default::default(),
+        );
+        let field = &schema.fields()["userId"];
+        let backend = self.connection().get_database_backend();
+        let value = if field.references_id() {
+            self.config()
+                .advanced
+                .database
+                .generate_id()
+                .adapter_id_query(user_id.clone())?
+        } else {
+            user_id.clone()
+        };
+        let value = better_auth_core::user_query::bind_filter(field, &value)?;
+        let value = super::value_filter::adapter_query_value(value, user_id, field, backend)?;
+        let name = better_auth_core::store::schema::resolve_field_name(
+            field.field_name.as_deref(),
+            "userId",
+        );
+        super::value_filter::equals(S::Session::field_column(name)?, &value, backend)
     }
 }

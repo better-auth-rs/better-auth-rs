@@ -106,6 +106,7 @@ better_auth_core::impl_auth_plugin! {
             S::User::require_plugin_fields("admin", &["role", "banned", "ban_reason", "ban_expires"])?;
             S::Session::require_plugin_fields("admin", &["impersonated_by"])?;
             ctx.register_native_user_fields("admin.enabled");
+            ctx.register_native_session_fields("admin.enabled")?;
             ctx.set_metadata("admin.enabled", serde_json::Value::Bool(true));
             ctx.set_metadata(
                 "admin.default_role",

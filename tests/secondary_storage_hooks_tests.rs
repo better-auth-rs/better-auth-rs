@@ -529,9 +529,12 @@ async fn pure_secondary_email_verification_does_not_require_a_session_table() {
 struct ControlledSecondaryStorage {
     cache: MemoryCacheAdapter,
     pause_next: AtomicBool,
+    pause_lock_next: AtomicBool,
     fail_delete_next: AtomicBool,
     entered: tokio::sync::Notify,
     release: tokio::sync::Notify,
+    lock_entered: tokio::sync::Notify,
+    release_lock: tokio::sync::Notify,
 }
 
 #[async_trait]
@@ -540,6 +543,12 @@ impl SecondaryStorage for ControlledSecondaryStorage {
         if key.starts_with("active-sessions-") && self.pause_next.swap(false, Ordering::SeqCst) {
             self.entered.notify_one();
             self.release.notified().await;
+        }
+        if key.starts_with("verification:revoke-unproven-account-access:")
+            && self.pause_lock_next.swap(false, Ordering::SeqCst)
+        {
+            self.lock_entered.notify_one();
+            self.release_lock.notified().await;
         }
         SecondaryStorage::get(&self.cache, key).await
     }
@@ -563,7 +572,7 @@ impl SecondaryStorage for ControlledSecondaryStorage {
 }
 
 #[tokio::test]
-async fn late_email_proof_does_not_revoke_the_verified_owners_new_cached_session() {
+async fn database_cleanup_lock_preserves_the_verified_owners_new_cached_session() {
     let database = Database::connect("sqlite::memory:").await.unwrap();
     migrator::run_migrations(&database).await.unwrap();
     let _ = database
@@ -571,10 +580,12 @@ async fn late_email_proof_does_not_revoke_the_verified_owners_new_cached_session
         .await
         .unwrap();
     let cache = Arc::new(ControlledSecondaryStorage::default());
-    let config = AuthConfig::new("secondary-verification-race-test-secret-at-least-32-characters");
+    let mut config =
+        AuthConfig::new("secondary-verification-race-test-secret-at-least-32-characters");
+    config.verification.store_in_database = true;
     let auth = Arc::new(
         AuthBuilder::<BundledSchema>::new(config.clone())
-            .store(SeaOrmStore::<BundledSchema>::new(config, database))
+            .store(SeaOrmStore::<BundledSchema>::new(config, database.clone()))
             .secondary_storage(cache.clone())
             .build()
             .await
@@ -596,7 +607,7 @@ async fn late_email_proof_does_not_revoke_the_verified_owners_new_cached_session
         .unwrap();
 
     cache.pause_next.store(true, Ordering::SeqCst);
-    let late = {
+    let winner = {
         let auth = auth.clone();
         let id = user.id.clone();
         tokio::spawn(async move {
@@ -608,12 +619,28 @@ async fn late_email_proof_does_not_revoke_the_verified_owners_new_cached_session
     tokio::time::timeout(std::time::Duration::from_secs(5), cache.entered.notified())
         .await
         .unwrap();
-    let winner = auth
-        .store()
-        .verify_user_and_revoke_unproven_access(user.id.typed().unwrap())
-        .await
-        .unwrap()
-        .unwrap();
+    assert_eq!(
+        VerificationEntity::find().count(&database).await.unwrap(),
+        1
+    );
+    cache.pause_lock_next.store(true, Ordering::SeqCst);
+    let late = {
+        let auth = auth.clone();
+        let id = user.id.clone();
+        tokio::spawn(async move {
+            auth.store()
+                .verify_user_and_revoke_unproven_access(id.typed().unwrap())
+                .await
+        })
+    };
+    tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        cache.lock_entered.notified(),
+    )
+    .await
+    .unwrap();
+    cache.release.notify_one();
+    let winner = winner.await.unwrap().unwrap().unwrap();
     assert!(winner.email_verified().typed().copied().unwrap());
     assert!(
         auth.store()
@@ -627,7 +654,7 @@ async fn late_email_proof_does_not_revoke_the_verified_owners_new_cached_session
         .create_session(input(user.id.typed().unwrap().clone()))
         .await
         .unwrap();
-    cache.release.notify_one();
+    cache.release_lock.notify_one();
     assert!(
         late.await
             .unwrap()
@@ -655,6 +682,20 @@ async fn late_email_proof_does_not_revoke_the_verified_owners_new_cached_session
     assert_eq!(
         active.first().unwrap().token().typed().unwrap(),
         proven.token().typed().unwrap()
+    );
+    assert_eq!(
+        VerificationEntity::find().count(&database).await.unwrap(),
+        0
+    );
+    assert!(
+        cache
+            .get(&format!(
+                "verification:revoke-unproven-account-access:{}",
+                user.id.typed().unwrap()
+            ))
+            .await
+            .unwrap()
+            .is_none()
     );
 }
 
@@ -770,7 +811,7 @@ async fn committed_verification_revokes_cache_when_after_hook_fails() {
 }
 
 #[tokio::test]
-async fn cache_revocation_failure_rolls_back_verification_and_next_proof_finishes_cleanup() {
+async fn cache_revocation_failure_keeps_verification_and_does_not_retry_on_later_proofs() {
     let database = Database::connect("sqlite::memory:").await.unwrap();
     migrator::run_migrations(&database).await.unwrap();
     let _ = database
@@ -818,18 +859,23 @@ async fn cache_revocation_failure_rolls_back_verification_and_next_proof_finishe
         .await
         .unwrap();
 
+    let active_key = format!("active-sessions-{}", user.id.typed().unwrap());
+    let active_before = cache.get(&active_key).await.unwrap().unwrap();
     cache.fail_delete_next.store(true, Ordering::SeqCst);
-    let error = auth
+    let verified = auth
         .store()
         .verify_user_and_revoke_unproven_access(user.id.typed().unwrap())
         .await
-        .unwrap_err();
-    assert!(
-        matches!(error, AuthError::Internal(message) if message == "secondary deletion failed")
+        .unwrap()
+        .unwrap();
+    assert!(verified.email_verified().typed().copied().unwrap());
+    assert!(!cache.fail_delete_next.load(Ordering::SeqCst));
+    assert_eq!(
+        cache.get(&active_key).await.unwrap(),
+        Some(active_before.clone())
     );
     assert!(
-        !auth
-            .store()
+        auth.store()
             .get_user_by_id(user.id.typed().unwrap())
             .await
             .unwrap()
@@ -845,7 +891,7 @@ async fn cache_revocation_failure_rolls_back_verification_and_next_proof_finishe
             .await
             .unwrap()
             .len(),
-        1
+        0
     );
     assert!(
         auth.store()
@@ -853,6 +899,16 @@ async fn cache_revocation_failure_rolls_back_verification_and_next_proof_finishe
             .await
             .unwrap()
             .is_some()
+    );
+    let encoded = cache
+        .get(old.token().typed().unwrap())
+        .await
+        .unwrap()
+        .unwrap();
+    let cached: serde_json::Value = serde_json::from_str(encoded.as_str().unwrap()).unwrap();
+    assert_eq!(
+        cached.pointer("/user/emailVerified"),
+        Some(&serde_json::json!(true))
     );
 
     assert!(
@@ -878,14 +934,15 @@ async fn cache_revocation_failure_rolls_back_verification_and_next_proof_finishe
             .get(old.token().typed().unwrap())
             .await
             .unwrap()
-            .is_none()
+            .is_some()
     );
+    assert_eq!(cache.get(&active_key).await.unwrap(), Some(active_before));
     assert!(
         auth.store()
             .get_session(old.token().typed().unwrap())
             .await
             .unwrap()
-            .is_none()
+            .is_some()
     );
     let owner = auth
         .store()
@@ -908,11 +965,18 @@ async fn cache_revocation_failure_rolls_back_verification_and_next_proof_finishe
         .get_user_sessions(user.id.typed().unwrap())
         .await
         .unwrap();
-    assert_eq!(sessions.len(), 1);
-    assert_eq!(
-        sessions.first().unwrap().token().typed().unwrap(),
-        owner.token().typed().unwrap()
-    );
+    assert_eq!(sessions.len(), 2);
+    let mut tokens = sessions
+        .iter()
+        .map(|session| session.token().typed().unwrap().clone())
+        .collect::<Vec<_>>();
+    tokens.sort();
+    let mut expected = vec![
+        old.token().typed().unwrap().clone(),
+        owner.token().typed().unwrap().clone(),
+    ];
+    expected.sort();
+    assert_eq!(tokens, expected);
 }
 
 #[tokio::test]

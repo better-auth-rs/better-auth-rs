@@ -797,13 +797,24 @@ pub async fn handle_cancel_invitation(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::plugins::test_helpers::{create_test_context, create_user_and_session};
+    use crate::plugins::organization::OrganizationPlugin;
+    use crate::plugins::test_helpers::{
+        create_test_config, create_test_context_with_plugins, create_user_and_session,
+    };
     use better_auth_core::{CreateMember, CreateOrganization, CreateUser};
     use chrono::Duration;
 
     #[tokio::test]
     async fn resend_renews_existing_invitation_when_pending_limit_is_reached() {
-        let ctx = create_test_context().await;
+        let config = OrganizationConfig {
+            invitation_limit: Some(1),
+            ..Default::default()
+        };
+        let ctx = create_test_context_with_plugins(
+            create_test_config(),
+            &[&OrganizationPlugin::with_config(config.clone())],
+        )
+        .await;
         let (user, session) = create_user_and_session(
             &ctx,
             CreateUser {
@@ -835,10 +846,6 @@ mod tests {
             })
             .await
             .unwrap();
-        let config = OrganizationConfig {
-            invitation_limit: Some(1),
-            ..Default::default()
-        };
         let mut body: InviteMemberRequest = serde_json::from_value(serde_json::json!({
             "organizationId": organization.id, "email": "invitee@example.com", "role": "member",
         }))

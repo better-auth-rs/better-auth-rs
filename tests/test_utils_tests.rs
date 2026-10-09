@@ -470,7 +470,7 @@ async fn raw_organization_cleanup_retains_earlier_deletes_when_parent_delete_fai
         login.session.active_team_id.typed().unwrap().as_deref(),
         Some("seed-team")
     );
-    assert!(login.session.impersonated_by.typed().unwrap().is_none());
+    assert!(login.session.impersonated_by.is_undefined());
     let persisted = auth
         .store()
         .get_session(login.token.typed().unwrap())

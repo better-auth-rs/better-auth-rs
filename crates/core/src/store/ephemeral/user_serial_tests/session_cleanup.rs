@@ -170,6 +170,7 @@ async fn serial_unproven_user_verification_cleans_access_once_through_aliases() 
     let verified = required(store.verify_user_and_revoke_unproven_access("0x1").await?)?;
     assert_eq!(verified.id, "1");
     assert!(*verified.email_verified.typed()?);
+    assert!(store.lock()?.verifications.snapshot()?.is_empty());
     assert!(
         !*required(store.get_user_by_id("2").await?)?
             .email_verified
@@ -199,6 +200,7 @@ async fn serial_unproven_user_verification_cleans_access_once_through_aliases() 
         required(store.get_session(proven.token.typed().unwrap()).await?)?.user_id,
         "1"
     );
+    assert!(store.lock()?.verifications.snapshot()?.is_empty());
     assert_eq!(
         raw_owners(&store)?,
         (

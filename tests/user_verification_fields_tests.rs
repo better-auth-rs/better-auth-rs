@@ -130,7 +130,7 @@ async fn verification_hooks_use_memory_and_sqlite_record_binding() {
 }
 
 #[tokio::test]
-async fn failed_verification_field_conversion_rolls_back_cleanup() {
+async fn failed_verification_field_conversion_preserves_committed_cleanup() {
     let config = Arc::new(AuthConfig::default());
     let database = Database::connect("sqlite::memory:").await.unwrap();
     migrator::run_migrations(&database).await.unwrap();
@@ -154,8 +154,8 @@ async fn failed_verification_field_conversion_rolls_back_cleanup() {
     let user = store.get_user_by_id(&id).await.unwrap().unwrap();
     assert_eq!(user.email_verified, false);
     assert_eq!(user.name.json().unwrap(), Some(json!("Initial")));
-    assert_eq!(store.get_user_accounts(&id).await.unwrap().len(), 1);
-    assert_eq!(store.get_user_sessions(&id).await.unwrap().len(), 1);
+    assert!(store.get_user_accounts(&id).await.unwrap().is_empty());
+    assert!(store.get_user_sessions(&id).await.unwrap().is_empty());
     assert_eq!(after.load(Ordering::SeqCst), 0);
 }
 
@@ -203,7 +203,7 @@ async fn verification_uses_mapped_fields_and_transforms_serial_references_once()
         id::IdGeneration,
         user_fields::{UserFieldConfig, UserFieldReference},
     };
-    use better_auth_seaorm::{SeaOrmAccountModel, SeaOrmSessionModel};
+    use better_auth_seaorm::{SeaOrmAccountModel, SeaOrmSessionModel, SeaOrmVerificationModel};
     let inputs = Arc::new(AtomicUsize::new(0));
     let observed = inputs.clone();
     let mut config = AuthConfig::default();
@@ -259,6 +259,9 @@ async fn verification_uses_mapped_fields_and_transforms_serial_references_once()
         ),
         schema.create_table_from_entity(
             <<MappedSchema as AuthSchema>::Session as SeaOrmSessionModel>::Entity::default(),
+        ),
+        schema.create_table_from_entity(
+            <<MappedSchema as AuthSchema>::Verification as SeaOrmVerificationModel>::Entity::default(),
         ),
     ] {
         let _ = database.execute(&statement).await.unwrap();

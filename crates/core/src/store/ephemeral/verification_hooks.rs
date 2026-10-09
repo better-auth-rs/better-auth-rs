@@ -71,27 +71,23 @@ impl EphemeralStore {
         many: bool,
     ) -> AuthResult<usize> {
         let rows: Vec<_> = self
-            .raw(
-                "verification",
-                if many { "findMany" } else { "findOne" },
-                |state| {
-                    let mut matched = Vec::new();
-                    for row in state.verifications.snapshot()? {
-                        if predicate(&row)? {
-                            matched.push(row);
-                        }
+            .raw("verification", "findMany", |state| {
+                let mut matched = Vec::new();
+                for row in state.verifications.snapshot()? {
+                    if predicate(&row)? {
+                        matched.push(row);
                     }
-                    Ok(crate::query::paginate_memory(
-                        matched,
-                        Some(if many {
-                            self.config.advanced.database.find_many_limit()
-                        } else {
-                            1.0
-                        }),
-                        None,
-                    ))
-                },
-            )
+                }
+                Ok(crate::query::paginate_memory(
+                    matched,
+                    Some(if many {
+                        self.config.advanced.database.find_many_limit()
+                    } else {
+                        1.0
+                    }),
+                    None,
+                ))
+            })
             .await?;
         self.finish_verification_delete(rows, predicate, many).await
     }

@@ -53,6 +53,8 @@ mod passkeys;
 #[cfg(test)]
 mod plugin_display_json_tests;
 mod plugin_records;
+#[cfg(test)]
+mod protected_function_tests;
 mod rate_limits;
 mod rows;
 mod runtime;
@@ -69,7 +71,6 @@ mod two_factor;
 mod user_runtime_input_tests;
 #[cfg(test)]
 mod user_serial_tests;
-mod user_verification;
 mod users;
 mod verification_hooks;
 mod verifications;

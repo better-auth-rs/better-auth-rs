@@ -197,7 +197,7 @@ impl SessionManagementPlugin {
     ) -> AuthResult<AuthResponse> {
         let resolved = ctx
             .session_manager()
-            .resolve(req, better_auth_core::session::SessionRead::Cached)
+            .resolve_native(req, better_auth_core::session::SessionRead::Cached)
             .await;
         let resolved = match resolved {
             Ok(value) => value,
@@ -433,6 +433,97 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn get_session_preserves_numeric_key_user_relationships() -> AuthResult<()> {
+        use better_auth_core::{
+            store::{EphemeralStore, StatelessSchema},
+            user_fields::{UserFieldConfig, UserFieldReference},
+        };
+        use std::sync::Arc;
+
+        for count in [0, 1, 2] {
+            let mut config = test_helpers::create_test_config();
+            let _ = config.user.fields_mut().insert(
+                "image".into(),
+                UserFieldConfig {
+                    references: Some(UserFieldReference {
+                        model: "session".into(),
+                        field: "id".into(),
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                },
+            );
+            let _ = config.user.fields_mut().insert(
+                "name".into(),
+                UserFieldConfig {
+                    returned: Some(false),
+                    ..Default::default()
+                },
+            );
+            let config = Arc::new(config);
+            let database = Arc::new(EphemeralStore::new(config.clone()));
+            let ctx = AuthContext::<StatelessSchema>::new(config, database);
+            let session = ctx
+                .database
+                .create_session(CreateSession {
+                    inherited_fields: Default::default(),
+                    additional_fields: Default::default(),
+                    user_id: "canonical-owner".into(),
+                    expires_at: (Utc::now() + Duration::hours(24)).into(),
+                    ip_address: None,
+                    user_agent: None,
+                    impersonated_by: None,
+                    active_organization_id: None,
+                })
+                .await?;
+            let mut expected_users = FieldMap::new();
+            for index in 0..count {
+                let mut input = CreateUser::new()
+                    .with_email(format!("selected-{index}@session.example.test"))
+                    .with_name(format!("Selected {index}"));
+                input.image = Some(session.id.typed()?.clone()).into();
+                let user = ctx.database.create_user(input).await?;
+                let _ = expected_users.insert(index.to_string(), FieldMap::from(user).into());
+            }
+            let mut request = test_helpers::create_auth_request_no_query(
+                HttpMethod::Get,
+                "/get-session",
+                Some(session.token.typed()?),
+                None,
+            );
+            request.query = Some(serde_json::json!({"disableRefresh": true}));
+            let response = SessionManagementPlugin::new()
+                .handle_get_session(&request, &ctx)
+                .await?;
+            assert_eq!(response.status, 200);
+            let body: serde_json::Value = serde_json::from_slice(response.body.bytes()?.as_ref())?;
+            let snapshot = request
+                .native_session_snapshot()?
+                .ok_or_else(|| AuthError::internal("Expected native Session snapshot"))?;
+            assert_eq!(snapshot.user, FieldValue::from(expected_users));
+            assert_eq!(
+                response.body.field_value()?,
+                FieldValue::from(FieldMap::from(snapshot.clone()))
+            );
+            assert_eq!(body, serde_json::to_value(&snapshot)?);
+            assert!(snapshot.user_field("id").is_undefined());
+            assert!(matches!(
+                request.session_snapshot(),
+                Err(AuthError::Internal(message)) if message == "A User relationship array cannot authenticate a typed User"
+            ));
+            assert!(request.new_session()?.is_none());
+            assert_eq!(
+                ctx.database
+                    .get_session(session.token.typed()?)
+                    .await?
+                    .map(|stored| stored.expires_at),
+                Some(session.expires_at),
+            );
+        }
+        Ok(())
+    }
+
     // Upstream reference: packages/better-auth/src/api/routes/session-api.test.ts :: describe("session") and packages/better-auth/src/api/routes/sign-out.test.ts :: describe("sign-out"); adapted to the Rust session-management plugin.
     #[tokio::test]
     async fn test_get_session_unauthorized() {
@@ -592,14 +683,19 @@ mod tests {
     #[tokio::test]
     async fn test_list_sessions_filters_impersonated_sessions_when_admin_plugin_is_enabled() {
         let plugin = SessionManagementPlugin::new();
-        let (mut ctx, user, session) = test_helpers::create_test_context_with_user(
+        let ctx = test_helpers::create_test_context_with_plugins(
+            test_helpers::create_test_config(),
+            &[&crate::plugins::admin::AdminPlugin::new()],
+        )
+        .await;
+        let (user, session) = test_helpers::create_user_and_session(
+            &ctx,
             CreateUser::new()
                 .with_email("test@example.com")
                 .with_name("Test User"),
             Duration::hours(24),
         )
         .await;
-        ctx.set_metadata("admin.enabled", serde_json::Value::Bool(true));
 
         let direct_session = CreateSession {
             inherited_fields: Default::default(),

@@ -49,6 +49,12 @@ impl<S: AuthSchema> AccountStore<S> for SecondaryStore<S> {
     async fn get_user_accounts(&self, user_id: &str) -> AuthResult<Vec<crate::wire::AccountView>> {
         self.inner.get_user_accounts(user_id).await
     }
+    async fn get_user_accounts_value(
+        &self,
+        user_id: &crate::FieldValue,
+    ) -> AuthResult<Vec<crate::wire::AccountView>> {
+        self.inner.get_user_accounts_value(user_id).await
+    }
     async fn get_credential_account(
         &self,
         user_id: &str,
@@ -71,6 +77,9 @@ impl<S: AuthSchema> AccountStore<S> for SecondaryStore<S> {
     }
     async fn delete_account(&self, id: &str) -> AuthResult<()> {
         self.inner.delete_account(id).await
+    }
+    async fn delete_account_value(&self, id: &crate::FieldValue) -> AuthResult<()> {
+        self.inner.delete_account_value(id).await
     }
 }
 

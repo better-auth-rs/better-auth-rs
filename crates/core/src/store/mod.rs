@@ -10,10 +10,13 @@ pub mod cache;
 mod capabilities;
 mod runtime;
 mod session_create;
+mod user_verification;
 pub use session_create::{
     PreparedSessionCreate, SessionCreateWriter, session_create_native_fields,
     session_create_schema, session_field_schema, session_from_create_fields,
 };
+#[doc(hidden)]
+pub use user_verification::revoke_unproven_account_access;
 pub mod schema;
 pub use runtime::RuntimeStore;
 pub mod database_hooks;
@@ -403,47 +406,28 @@ pub trait AuthTransaction<S: AuthSchema>:
     }
 }
 
-/// Persistent records invalidated when an unverified user proves email ownership.
-#[derive(Debug, Clone, Copy)]
-pub enum VerificationCleanup {
-    /// Remove accounts; the runtime owns session revocation.
-    Accounts,
-    /// Remove accounts and database sessions.
-    AccountsAndSessions,
-}
-
-/// Revoke external sessions while the user verification transaction remains uncommitted.
-#[async_trait]
-pub trait VerificationSessionCleanup: Send + Sync {
-    /// Revoke the captured sessions. An error must abort the verification transaction.
-    async fn revoke(&self) -> AuthResult<()>;
-}
-
 #[async_trait]
 pub trait UserStore<S: AuthSchema>: Send + Sync {
     /// Return whether the database adapter preserves native JSON at field-policy boundaries.
     fn supports_native_json(&self) -> bool {
         true
     }
-    /// Verify ownership after revoking accounts and the selected session storage.
-    /// Run external cleanup only for the unverified user while holding the verification lock.
-    /// Complete cleanup before commit; roll back database changes if cleanup fails.
-    async fn verify_user_with_cleanup(
-        &self,
-        _user_id: &str,
-        _cleanup: VerificationCleanup,
-        _sessions: Option<&dyn VerificationSessionCleanup>,
-    ) -> AuthResult<Option<crate::wire::UserView>> {
-        Err(AuthError::config(
-            "The store must support pre-commit session cleanup during user verification",
-        ))
-    }
-    /// Atomically verify an unverified user after deleting every existing account and session.
+    /// Verify an unverified user after deleting existing accounts and sessions in upstream order.
     /// Already verified users retain their accounts and sessions.
     async fn verify_user_and_revoke_unproven_access(
         &self,
         user_id: &str,
     ) -> AuthResult<Option<crate::wire::UserView>>;
+    /// Preserve the native selector through cleanup, including falsy User lookup semantics.
+    async fn verify_user_and_revoke_unproven_access_value(
+        &self,
+        user_id: &crate::FieldValue,
+    ) -> AuthResult<Option<crate::wire::UserView>> {
+        let user_id = user_id.as_str().ok_or_else(|| {
+            AuthError::config("The store must support native user verification selectors")
+        })?;
+        self.verify_user_and_revoke_unproven_access(user_id).await
+    }
     async fn create_user(&self, create_user: CreateUser) -> AuthResult<crate::wire::UserView>;
     /// Return None when a before-create hook cancels the write.
     async fn create_user_optional(
@@ -730,6 +714,18 @@ pub trait SessionStore<S: AuthSchema>: Send + Sync {
         ))
     }
 
+    /// Preserve the native User selector and batch cancellation before adapter query conversion.
+    async fn delete_user_sessions_optional_value(
+        &self,
+        user_id: &crate::FieldValue,
+        preserve: bool,
+    ) -> AuthResult<Option<usize>> {
+        let user_id = user_id.as_str().ok_or_else(|| {
+            AuthError::config("The store must support native User selectors for Session cleanup")
+        })?;
+        self.delete_user_sessions_optional(user_id, preserve).await
+    }
+
     /// Run session creation hooks when secondary storage owns the session.
     async fn before_create_runtime_session(
         &self,
@@ -816,6 +812,16 @@ pub trait SessionStore<S: AuthSchema>: Send + Sync {
         fields: crate::FieldMap,
     ) -> AuthResult<Option<crate::wire::SessionView>>;
     async fn get_user_sessions(&self, user_id: &str) -> AuthResult<Vec<crate::wire::SessionView>>;
+    /// List Sessions without narrowing the projected User ID before adapter query conversion.
+    async fn get_user_sessions_value(
+        &self,
+        user_id: &crate::FieldValue,
+    ) -> AuthResult<Vec<crate::wire::SessionView>> {
+        let user_id = user_id.as_str().ok_or_else(|| {
+            AuthError::config("The store must support native User selectors for Session queries")
+        })?;
+        self.get_user_sessions(user_id).await
+    }
     /// List stored sessions with optional secondary projections that preserve absent fields.
     async fn get_user_session_snapshots(
         &self,
@@ -856,6 +862,16 @@ pub trait SessionStore<S: AuthSchema>: Send + Sync {
         ))
     }
     async fn delete_user_sessions(&self, user_id: &str) -> AuthResult<()>;
+    /// Revoke Sessions without narrowing the projected User ID before adapter query conversion.
+    async fn delete_user_sessions_by_user_value(
+        &self,
+        user_id: &crate::FieldValue,
+    ) -> AuthResult<()> {
+        let user_id = user_id.as_str().ok_or_else(|| {
+            AuthError::config("The store must support native User selectors for Session deletion")
+        })?;
+        self.delete_user_sessions(user_id).await
+    }
     async fn delete_expired_sessions(&self) -> AuthResult<usize>;
     async fn update_session_active_team(
         &self,
@@ -905,6 +921,16 @@ pub trait AccountStore<S: AuthSchema>: Send + Sync {
         ))
     }
     async fn get_user_accounts(&self, user_id: &str) -> AuthResult<Vec<crate::wire::AccountView>>;
+    /// List Accounts with the native User selector before adapter query conversion.
+    async fn get_user_accounts_value(
+        &self,
+        user_id: &crate::FieldValue,
+    ) -> AuthResult<Vec<crate::wire::AccountView>> {
+        let user_id = user_id.as_str().ok_or_else(|| {
+            AuthError::config("The store must support native User selectors for Account queries")
+        })?;
+        self.get_user_accounts(user_id).await
+    }
     /// Read the current user's credential account independently of list pagination.
     /// Match the stored user ID, credential provider, and account ID before output projection.
     async fn get_credential_account(
@@ -926,6 +952,13 @@ pub trait AccountStore<S: AuthSchema>: Send + Sync {
         self.update_account(id, update).await.map(Some)
     }
     async fn delete_account(&self, id: &str) -> AuthResult<()>;
+    /// Delete one Account with its native selector and per-record hook lifecycle.
+    async fn delete_account_value(&self, id: &crate::FieldValue) -> AuthResult<()> {
+        let id = id.as_str().ok_or_else(|| {
+            AuthError::config("The store must support native Account selectors for deletion")
+        })?;
+        self.delete_account(id).await
+    }
 }
 
 #[async_trait]

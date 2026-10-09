@@ -451,28 +451,19 @@ where
         self.connection().get_database_backend() == sea_orm::DbBackend::Postgres
     }
 
-    async fn verify_user_with_cleanup(
-        &self,
-        user_id: &str,
-        cleanup: better_auth_core::store::VerificationCleanup,
-        sessions: Option<&dyn better_auth_core::store::VerificationSessionCleanup>,
-    ) -> AuthResult<Option<better_auth_core::wire::UserView>> {
-        self.verify_unproven_user(
-            user_id,
-            matches!(
-                cleanup,
-                better_auth_core::store::VerificationCleanup::AccountsAndSessions
-            ),
-            sessions,
-        )
-        .await
-    }
-
     async fn verify_user_and_revoke_unproven_access(
         &self,
         user_id: &str,
     ) -> AuthResult<Option<better_auth_core::wire::UserView>> {
-        self.verify_unproven_user(user_id, true, None).await
+        self.verify_user_and_revoke_unproven_access_value(&user_id.into())
+            .await
+    }
+
+    async fn verify_user_and_revoke_unproven_access_value(
+        &self,
+        user_id: &better_auth_core::FieldValue,
+    ) -> AuthResult<Option<better_auth_core::wire::UserView>> {
+        better_auth_core::store::revoke_unproven_account_access(self, user_id).await
     }
     async fn create_user(
         &self,

@@ -69,7 +69,7 @@ fn cases() -> Vec<Case> {
             fails: false,
         },
         Case {
-            name: "atomic-verification-retains-adapter-history",
+            name: "verification-cleanup-retains-adapter-history",
             probe: Probe::Verify,
             warmed: true,
             fails: false,
@@ -153,7 +153,12 @@ async fn check<S: AuthSchema>(
             );
             assert_eq!(
                 events.take(),
-                [json!(["query", "findOne", "user"])],
+                [
+                    json!(["query", "create", "verification"]),
+                    json!(["query", "findOne", "user"]),
+                    json!(["query", "findMany", "verification"]),
+                    json!(["query", "delete", "verification"]),
+                ],
                 "{} verification events",
                 case.name
             );
@@ -200,7 +205,7 @@ async fn contract() -> AuthResult<()> {
 }
 
 #[tokio::test]
-async fn query_failures_and_atomic_verification_preserve_adapter_schema_history() -> AuthResult<()>
+async fn query_failures_and_verification_cleanup_preserve_adapter_schema_history() -> AuthResult<()>
 {
     contract().await
 }

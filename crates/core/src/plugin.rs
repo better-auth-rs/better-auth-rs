@@ -471,6 +471,29 @@ impl<S: AuthSchema> AuthInitContext<S> {
         self.register_user_fields(fields);
     }
 
+    /// Register one plugin's native Session declarations at its initialization position.
+    #[doc(hidden)]
+    pub fn register_native_session_fields(&mut self, enabled_metadata: &str) -> AuthResult<()> {
+        let metadata = [(enabled_metadata.to_owned(), serde_json::Value::Bool(true))].into();
+        let fields = crate::user_fields::UserConfig {
+            additional_fields: Some(
+                crate::wire::SessionView::active_plugin_fields(&metadata)
+                    .map(|name| {
+                        (
+                            name.to_owned(),
+                            crate::user_fields::UserFieldConfig {
+                                required: Some(false),
+                                input: Some(false),
+                                ..Default::default()
+                            },
+                        )
+                    })
+                    .collect(),
+            ),
+        };
+        self.register_model_fields(crate::store::schema::EntityRole::Session, fields)
+    }
+
     /// Merge complete adapter field declarations for a supported model in registration order.
     /// Model-specific restrictions apply until the model uses the shared native field policies.
     pub fn register_model_fields(

@@ -11,6 +11,86 @@ use std::sync::{Arc, Mutex};
 
 type Events = Arc<Mutex<Vec<(&'static str, FieldValue)>>>;
 
+#[tokio::test]
+async fn native_user_cleanup_converts_only_the_secondary_index_key() -> AuthResult<()> {
+    let events = Events::default();
+    let mut config = AuthConfig::default();
+    config.session.store_session_in_database = Some(true);
+    let config = Arc::new(config);
+    let inner = Arc::new(
+        EphemeralStore::new(config.clone()).with_hooks(vec![Arc::new(Hooks(events.clone()))]),
+    );
+    let cache = Arc::new(Storage {
+        values: MemoryCacheAdapter::new(),
+        events: events.clone(),
+    });
+    let expires_at = 4_102_444_800_000_f64;
+    for (token, owner) in [
+        ("numeric-owner", FieldValue::from(7)),
+        ("text-owner", "7".into()),
+    ] {
+        let session = inner
+            .create_session(crate::CreateSession {
+                inherited_fields: Default::default(),
+                user_id: crate::SchemaValue::from_field(owner),
+                expires_at: crate::FieldDate::from_milliseconds(expires_at),
+                ip_address: None,
+                user_agent: None,
+                impersonated_by: None,
+                active_organization_id: None,
+                additional_fields: [("token".into(), token.into())].into(),
+            })
+            .await?;
+        cache
+            .values
+            .set(
+                token,
+                &json!({"session": session, "user": {}}).to_string(),
+                None,
+            )
+            .await?;
+    }
+    cache
+        .values
+        .set(
+            "active-sessions-7",
+            &json!([
+                {"token":"numeric-owner", "expiresAt":expires_at},
+                {"token":"text-owner", "expiresAt":expires_at},
+            ])
+            .to_string(),
+            None,
+        )
+        .await?;
+    let store = SecondaryStore::new(inner.clone(), cache.clone(), config, Default::default())?;
+    assert_eq!(store.get_user_sessions_value(&7.into()).await?.len(), 2);
+    events
+        .lock()
+        .map_err(|_| AuthError::internal("Trace lock poisoned"))?
+        .clear();
+    store.delete_user_sessions_by_user_value(&7.into()).await?;
+    assert_eq!(
+        *events
+            .lock()
+            .map_err(|_| AuthError::internal("Trace lock poisoned"))?,
+        [
+            ("get", "active-sessions-7".into()),
+            ("before-delete", "numeric-owner".into()),
+            ("after-delete", "numeric-owner".into()),
+            ("delete", "numeric-owner".into()),
+            ("delete", "text-owner".into()),
+            ("get", "active-sessions-7".into()),
+            ("delete", "active-sessions-7".into()),
+        ]
+    );
+    assert!(inner.get_user_sessions_value(&7.into()).await?.is_empty());
+    assert_eq!(inner.get_user_sessions("7").await?.len(), 1);
+    for key in ["numeric-owner", "text-owner", "active-sessions-7"] {
+        assert!(cache.values.get(key).await?.is_none());
+    }
+    Ok(())
+}
+
 fn record(events: &Events, name: &'static str, key: &FieldValue) -> AuthResult<()> {
     events
         .lock()

@@ -466,15 +466,22 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
     }
 
     async fn get_user_sessions(&self, user_id: &str) -> AuthResult<Vec<SessionView>> {
+        self.get_user_sessions_value(&user_id.into()).await
+    }
+
+    async fn get_user_sessions_value(&self, user_id: &Value) -> AuthResult<Vec<SessionView>> {
         self.model_fields.begin_id_query(EntityRole::Session)?;
-        let user_id = self.memory_session_user_id_query(Value::from(user_id))?;
+        let user_id = self.memory_session_user_id_query(user_id.clone())?;
         let sessions: Vec<_> = self
             .raw("session", "findMany", |state| {
                 Ok(crate::query::paginate_memory(
                     state
                         .sessions
                         .select_refs(|session| {
-                            session.user_id.field_value().strict_equals(&user_id)
+                            crate::query::field_matches_equality(
+                                &session.user_id.field_value(),
+                                &user_id,
+                            )
                         })?
                         .into_iter()
                         .map(SessionSource::Live)
@@ -578,7 +585,12 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
     }
 
     async fn delete_user_sessions(&self, user_id: &str) -> AuthResult<()> {
-        self.delete_user_sessions_optional(user_id, false)
+        self.delete_user_sessions_by_user_value(&user_id.into())
+            .await
+    }
+
+    async fn delete_user_sessions_by_user_value(&self, user_id: &Value) -> AuthResult<()> {
+        self.delete_user_sessions_optional_value(user_id, false)
             .await
             .map(|_| ())
     }
@@ -588,9 +600,23 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
         user_id: &str,
         preserve: bool,
     ) -> AuthResult<Option<usize>> {
-        let user_id = self.memory_session_user_id_query(Value::from(user_id))?;
+        self.delete_user_sessions_optional_value(&user_id.into(), preserve)
+            .await
+    }
+
+    async fn delete_user_sessions_optional_value(
+        &self,
+        user_id: &Value,
+        preserve: bool,
+    ) -> AuthResult<Option<usize>> {
+        let user_id = self.memory_session_user_id_query(user_id.clone())?;
         self.delete_sessions_with_hooks(
-            |row| Ok(row.user_id.field_value().strict_equals(&user_id)),
+            |row| {
+                Ok(crate::query::field_matches_equality(
+                    &row.user_id.field_value(),
+                    &user_id,
+                ))
+            },
             preserve,
         )
         .await
@@ -640,6 +666,8 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
 
 #[cfg(test)]
 mod live_output_tests;
+#[cfg(test)]
+mod native_owner_tests;
 
 #[tokio::test]
 async fn invitation_fields_update_atomically_with_team_membership() {

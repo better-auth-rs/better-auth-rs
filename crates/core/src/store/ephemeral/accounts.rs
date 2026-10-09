@@ -37,11 +37,14 @@ impl EphemeralStore {
         .await
     }
 
-    pub(super) async fn user_account_records(&self, user_id: &str) -> AuthResult<Vec<FieldMap>> {
-        self.model_fields.canonicalize_id(EntityRole::Account)?;
+    async fn user_account_records(&self, user_id: &Value) -> AuthResult<Vec<FieldMap>> {
+        self.model_fields.begin_id_query(EntityRole::Account)?;
         let fields = self.config.account.field_schema();
-        let user_id =
-            self.memory_field_query(&fields, "userId", Value::String(user_id.to_owned()))?;
+        let user_id = self.memory_field_query(&fields, "userId", user_id.clone())?;
+        let user_id = match fields.fields().get("userId") {
+            Some(field) => crate::user_query::bind_filter(field, &user_id)?,
+            None => user_id,
+        };
         let records: Vec<_> = self
             .raw("account", "findMany", |state| {
                 Ok(crate::query::paginate_memory(
@@ -224,6 +227,10 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
     }
 
     async fn get_user_accounts(&self, user_id: &str) -> AuthResult<Vec<AccountView>> {
+        self.get_user_accounts_value(&user_id.into()).await
+    }
+
+    async fn get_user_accounts_value(&self, user_id: &Value) -> AuthResult<Vec<AccountView>> {
         self.output_accounts(&self.user_account_records(user_id).await?)
             .await
     }
@@ -295,27 +302,30 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
     }
 
     async fn delete_account(&self, id: &str) -> AuthResult<()> {
-        self.model_fields.canonicalize_id(EntityRole::Account)?;
-        let id = self.memory_primary_id_query(&Value::from(id))?;
-        let record = self
-            .raw("account", "findOne", |state| {
-                Ok(state
-                    .accounts
-                    .snapshot()?
-                    .iter()
-                    .find(|row| {
+        self.delete_account_value(&id.into()).await
+    }
+
+    async fn delete_account_value(&self, id: &Value) -> AuthResult<()> {
+        // Upstream single-delete catches the read and output projection before hooks and writes.
+        let snapshot: AuthResult<Option<AccountView>> = async {
+            self.model_fields.begin_id_query(EntityRole::Account)?;
+            let id = self.memory_primary_id_query(id)?;
+            let record = self
+                .raw("account", "findMany", |state| {
+                    Ok(state.accounts.snapshot()?.into_iter().find(|row| {
                         row.get("id")
                             .unwrap_or(&Value::Undefined)
                             .strict_equals(&id)
-                    })
-                    .cloned())
-            })
-            .await?;
-        // Upstream single-delete catches the read and output projection before hooks and writes.
-        let Some(account) = (match record {
-            Some(record) => self.output_account(&record).await.ok(),
-            None => None,
-        }) else {
+                    }))
+                })
+                .await?;
+            match record {
+                Some(record) => self.output_account(&record).await.map(Some),
+                None => Ok(None),
+            }
+        }
+        .await;
+        let Ok(Some(account)) = snapshot else {
             return Ok(());
         };
         let transaction = EphemeralTransaction {
@@ -335,6 +345,8 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
                 return Ok(());
             }
         }
+        self.model_fields.begin_id_query(EntityRole::Account)?;
+        let id = self.memory_primary_id_query(id)?;
         self.raw("account", "delete", |state| {
             let _ = state.accounts.remove_first(|row| {
                 row.get("id")

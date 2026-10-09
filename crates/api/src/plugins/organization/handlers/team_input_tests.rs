@@ -1,7 +1,8 @@
 use super::*;
-use crate::plugins::organization::OrganizationTeamsConfig;
+use crate::plugins::organization::{OrganizationPlugin, OrganizationTeamsConfig};
 use crate::plugins::test_helpers::{
-    create_auth_json_request_no_query, create_test_context, create_user_and_session,
+    create_auth_json_request_no_query, create_test_config, create_test_context_with_plugins,
+    create_user_and_session,
 };
 use better_auth_core::{
     CreateMember, CreateOrganization, CreateUser, user_fields::UserFieldConfig,
@@ -44,7 +45,21 @@ impl OrganizationHooks for Callbacks {
 
 #[tokio::test]
 async fn invalid_team_input_precedes_policies_and_preserves_null_errors() {
-    let ctx = create_test_context().await;
+    let callbacks = Arc::new(Callbacks::default());
+    let mut config = OrganizationConfig {
+        teams: OrganizationTeamsConfig {
+            enabled: true,
+            ..Default::default()
+        },
+        policy: Some(callbacks.clone()),
+        hooks: Some(callbacks.clone()),
+        ..Default::default()
+    };
+    let ctx = create_test_context_with_plugins(
+        create_test_config(),
+        &[&OrganizationPlugin::with_config(config.clone())],
+    )
+    .await;
     let (user, session) = create_user_and_session(
         &ctx,
         CreateUser::new()
@@ -74,16 +89,6 @@ async fn invalid_team_input_precedes_policies_and_preserves_null_errors() {
         )
         .await
         .unwrap();
-    let callbacks = Arc::new(Callbacks::default());
-    let mut config = OrganizationConfig {
-        teams: OrganizationTeamsConfig {
-            enabled: true,
-            ..Default::default()
-        },
-        policy: Some(callbacks.clone()),
-        hooks: Some(callbacks.clone()),
-        ..Default::default()
-    };
     config.schema.team.fields_mut().insert(
         "label".into(),
         UserFieldConfig {

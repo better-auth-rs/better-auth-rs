@@ -1,12 +1,17 @@
+#![expect(
+    clippy::unwrap_used,
+    clippy::indexing_slicing,
+    reason = "Pinned fixture keys and setup must fail immediately when the protected function contract changes"
+)]
+
 // Compare complete User rows and callback counts.
 // Admission, JavaScript this/arguments, and reflection remain outside this contract.
-use super::support::{fixture, observe, operation, user};
-use better_auth_core::{
+use crate::{
     AuthConfig, AuthError, AuthResult, AuthStore, FieldFunction, FieldMap, FieldValue, UpdateUser,
     UserView,
     id::{IdGeneration, IdGenerator},
     store::{
-        EphemeralStore, RuntimeStore, StatelessSchema, UserStore,
+        EphemeralStore, RuntimeStore, StatelessSchema,
         database_hooks::{DatabaseHookContext, DatabaseHookUpdate, DatabaseHooks},
         transaction,
     },
@@ -20,6 +25,15 @@ use std::sync::{
     Arc, Mutex,
     atomic::{AtomicUsize, Ordering},
 };
+use support::{fixture, observe, operation, user};
+
+mod support {
+    use crate as better_auth_core;
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/protected_function_tests/support.rs"
+    ));
+}
 
 const CALLBACKS: [&str; 8] = [
     "factory",
@@ -214,15 +228,8 @@ impl Harness {
             .user
             .fields_mut()
             .insert("protectedValue".into(), field);
-        let mut raw_config = config.clone();
-        raw_config
-            .user
-            .fields_mut()
-            .get_mut("protectedValue")
-            .unwrap()
-            .transform = None;
-        let raw = EphemeralStore::new(Arc::new(raw_config));
         let config = Arc::new(config);
+        let raw = EphemeralStore::new(config.clone());
         let hooks: Vec<Arc<dyn DatabaseHooks<StatelessSchema>>> = if with_hooks {
             vec![Arc::new(Hooks(counts.clone()))]
         } else {
@@ -275,13 +282,12 @@ impl Harness {
         Ok(())
     }
 
-    async fn storage(&self, expected: &Value) -> AuthResult<()> {
-        let (rows, total) = self.raw.list_users(Default::default()).await?;
+    fn storage(&self, expected: &Value) -> AuthResult<()> {
+        let rows = self.raw.lock()?.users.snapshot()?;
         let rows = rows
             .iter()
             .map(|row| self.row(row))
             .collect::<AuthResult<Vec<_>>>()?;
-        assert_eq!(total, rows.len());
         assert_eq!(
             Value::Array(rows),
             expected["storage"]["user"],
@@ -330,7 +336,7 @@ impl Harness {
             .map(Some);
             self.outcome(&result, expected, &expected["result"]["user"])?;
             self.counts.check(before, expected);
-            self.storage(expected).await?;
+            self.storage(expected)?;
         }
         Ok(())
     }
@@ -397,7 +403,7 @@ async fn memory_callable_writes_and_public_output_match_complete_pinned_rows() -
                 let expected = operation(case, "update:seed");
                 harness.outcome(&seeded, expected, &expected["result"])?;
                 harness.counts.check(before, expected);
-                harness.storage(expected).await?;
+                harness.storage(expected)?;
             }
             let before = harness.counts.snapshot();
             let written = if update {
@@ -423,13 +429,13 @@ async fn memory_callable_writes_and_public_output_match_complete_pinned_rows() -
             let expected = operation(case, write);
             harness.outcome(&written, expected, &expected["result"])?;
             harness.counts.check(before, expected);
-            harness.storage(expected).await?;
+            harness.storage(expected)?;
             let before = harness.counts.snapshot();
             let read = harness.store.get_user_by_id(id).await;
             let expected = operation(case, if update { "update:read" } else { "direct:read" });
             harness.outcome(&read, expected, &expected["result"])?;
             harness.counts.check(before, expected);
-            harness.storage(expected).await?;
+            harness.storage(expected)?;
             if let Ok(Some(row)) = read {
                 let public = if update {
                     "update:public-output"
@@ -464,7 +470,7 @@ async fn committed_callable_blocks_the_next_snapshot_before_transaction_work() -
         let expected = operation(case, "transaction:create-and-commit");
         harness.outcome(&created, expected, &expected["result"])?;
         harness.counts.check(before, expected);
-        harness.storage(expected).await?;
+        harness.storage(expected)?;
         let entered = Arc::new(AtomicUsize::new(0));
         let called = entered.clone();
         let before = harness.counts.snapshot();
@@ -499,7 +505,7 @@ async fn committed_callable_blocks_the_next_snapshot_before_transaction_work() -
             .count();
         assert_eq!(entered.load(Ordering::SeqCst), entries);
         harness.counts.check(before, expected);
-        harness.storage(expected).await?;
+        harness.storage(expected)?;
     }
     Ok(())
 }
@@ -553,7 +559,7 @@ async fn transaction_public_clone_failure_discards_callable_rows_and_after_hooks
             harness.outcome(&result, expected, row)?;
             harness.counts.check(before, expected);
             harness.hooks(expected)?;
-            harness.storage(expected).await?;
+            harness.storage(expected)?;
         }
     }
     Ok(())

@@ -43,6 +43,34 @@ impl<E: EntityTrait> RecordWrite<E> {
         Ok(write)
     }
 
+    pub(super) fn from_initialized_fields<M: ActiveModelTrait<Entity = E>>(
+        fields: better_auth_core::FieldMap,
+        column: impl Fn(&str) -> AuthResult<E::Column>,
+        extra_columns: Vec<E::Column>,
+        initialize: impl FnOnce(&better_auth_core::FieldMap) -> AuthResult<M>,
+    ) -> AuthResult<Self> {
+        let initial = if extra_columns.is_empty() {
+            None
+        } else {
+            Some(initialize(&fields)?)
+        };
+        let mut write = Self::from_fields(fields, column)?;
+        if let Some(initial) = initial {
+            for column in extra_columns {
+                // Prepared fields retain their value and position when an initializer also sets the column.
+                if !write
+                    .fields
+                    .iter()
+                    .any(|(stored, _)| stored.to_string() == column.to_string())
+                    && let sea_orm::ActiveValue::Set(value) = initial.get(column)
+                {
+                    write.set(column, value);
+                }
+            }
+        }
+        Ok(write)
+    }
+
     pub(super) fn apply_fields(
         &mut self,
         fields: better_auth_core::FieldMap,

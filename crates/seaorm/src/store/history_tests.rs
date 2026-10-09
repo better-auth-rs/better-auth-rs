@@ -1,5 +1,5 @@
 use super::*;
-use better_auth_core::store::{AccountOwner, RuntimeStore, UserStore};
+use better_auth_core::store::{AccountOwner, RuntimeStore, UserStore, VerificationStore};
 use better_auth_core::user_fields::{
     FieldTransforms, UserFieldConfig, UserFieldReference, UserFieldTransform,
 };
@@ -212,7 +212,7 @@ async fn schema_history_sqlite_generator_failure_keeps_the_input_mutation() {
 }
 
 #[tokio::test]
-async fn schema_history_sqlite_atomic_verification_keeps_the_adapter_runtime() {
+async fn schema_history_sqlite_verification_cleanup_keeps_the_adapter_runtime() {
     let store = store(config()).await;
     assert!(owner_schema(&store).get("error").is_some());
     assert!(
@@ -223,4 +223,11 @@ async fn schema_history_sqlite_atomic_verification_keeps_the_adapter_runtime() {
             .is_none()
     );
     assert_eq!(owner_schema(&store), Value::Null);
+    assert!(
+        store
+            .get_verification_by_identifier("revoke-unproven-account-access:missing")
+            .await
+            .unwrap()
+            .is_none()
+    );
 }

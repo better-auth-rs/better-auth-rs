@@ -57,11 +57,7 @@ pub struct AuthRequest {
     server_context: std::sync::Arc<std::sync::Mutex<crate::FieldMap>>,
     headers_present: bool,
     new_session: std::sync::Arc<std::sync::Mutex<Option<crate::session::NativeSessionData>>>,
-    session_snapshot: std::sync::Arc<
-        std::sync::Mutex<
-            Option<crate::session::SessionData<crate::store::JoinValue<crate::wire::UserView>>>,
-        >,
-    >,
+    session_snapshot: std::sync::Arc<std::sync::Mutex<Option<crate::session::SessionSnapshot>>>,
 }
 
 /// Metadata extracted from an incoming request for session creation.
@@ -513,14 +509,27 @@ impl AuthRequest {
             .lock()
             .map_err(|_| crate::AuthError::internal("Session snapshot lock poisoned"))?
             .clone()
-            .map(crate::session::SessionData::into_typed)
+            .map(crate::session::SessionSnapshot::into_typed)
             .transpose()
             .map(Option::flatten)
     }
 
+    /// Read the endpoint snapshot without requiring the selected relationship to be one User.
+    /// Preserve the public User shape, including numeric-key objects from relationship arrays.
+    pub fn native_session_snapshot(
+        &self,
+    ) -> crate::AuthResult<Option<crate::session::NativeSessionData>> {
+        Ok(self
+            .session_snapshot
+            .lock()
+            .map_err(|_| crate::AuthError::internal("Session snapshot lock poisoned"))?
+            .clone()
+            .map(|snapshot| snapshot.data))
+    }
+
     pub(crate) fn set_session_snapshot(
         &self,
-        data: Option<crate::session::SessionData<crate::store::JoinValue<crate::wire::UserView>>>,
+        data: Option<crate::session::SessionSnapshot>,
     ) -> crate::AuthResult<()> {
         *self
             .session_snapshot

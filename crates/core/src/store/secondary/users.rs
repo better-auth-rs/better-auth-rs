@@ -1,6 +1,5 @@
-use super::{SecondaryStore, cache};
-use crate::entity::AuthUser;
-use crate::store::{AuthTransaction, UserStore, VerificationCleanup, VerificationSessionCleanup};
+use super::{SecondaryStore, cache, sessions::active_sessions_key};
+use crate::store::{AuthTransaction, UserStore};
 use crate::types::{CreateUser, ListUsersParams, UpdateUser};
 use crate::wire::UserView;
 use crate::{AuthError, AuthResult, AuthSchema, FieldDate, FieldMap, FieldValue, SchemaValue};
@@ -8,12 +7,6 @@ use async_trait::async_trait;
 
 #[cfg(test)]
 mod tests;
-
-struct CachedVerificationSessions<'a, S: AuthSchema> {
-    store: &'a SecondaryStore<S>,
-    user_id: &'a str,
-    references: &'a [super::sessions::SessionReference],
-}
 
 fn cached_expiration(value: FieldValue) -> SchemaValue<FieldDate> {
     SchemaValue::from_field(match value {
@@ -23,15 +16,6 @@ fn cached_expiration(value: FieldValue) -> SchemaValue<FieldDate> {
         },
         value => value,
     })
-}
-
-#[async_trait]
-impl<S: AuthSchema> VerificationSessionCleanup for CachedVerificationSessions<'_, S> {
-    async fn revoke(&self) -> AuthResult<()> {
-        self.store
-            .delete_cached_sessions(self.user_id, self.references)
-            .await
-    }
 }
 
 impl<S: AuthSchema> SecondaryStore<S> {
@@ -72,7 +56,7 @@ impl<S: AuthSchema> SecondaryStore<S> {
         .await?;
         let references = cache::decode(
             self.secondary()?
-                .get_native(&format!("active-sessions-{}", user.id.display_string()?).into())
+                .get_native(&active_sessions_key(&user.id.field_value())?)
                 .await?,
         )
         .unwrap_or_default();
@@ -200,53 +184,19 @@ impl<S: AuthSchema> UserStore<S> for SecondaryStore<S> {
         self.inner.get_user_by_id_value(id).await
     }
 
-    async fn verify_user_with_cleanup(
-        &self,
-        user_id: &str,
-        cleanup: VerificationCleanup,
-        sessions: Option<&dyn VerificationSessionCleanup>,
-    ) -> AuthResult<Option<crate::wire::UserView>> {
-        self.inner
-            .verify_user_with_cleanup(user_id, cleanup, sessions)
-            .await
-    }
-
     async fn verify_user_and_revoke_unproven_access(
         &self,
         user_id: &str,
     ) -> AuthResult<Option<crate::wire::UserView>> {
-        if self.storage.is_none() {
-            return self
-                .inner
-                .verify_user_and_revoke_unproven_access(user_id)
-                .await;
-        }
-        let unverified = self
-            .inner
-            .get_user_by_id(user_id)
-            .await?
-            .is_some_and(|user| !user.email_verified().field_value().is_truthy());
-        let references = if unverified {
-            self.references(user_id).await?
-        } else {
-            Vec::new()
-        };
-        let cleanup = if self.database_sessions() {
-            VerificationCleanup::AccountsAndSessions
-        } else {
-            VerificationCleanup::Accounts
-        };
-        let sessions = CachedVerificationSessions {
-            store: self,
-            user_id,
-            references: &references,
-        };
-        let user = self
-            .inner
-            .verify_user_with_cleanup(user_id, cleanup, Some(&sessions))
-            .await?;
-        self.queue_user_session_refresh(user.clone(), None).await?;
-        Ok(user)
+        self.verify_user_and_revoke_unproven_access_value(&user_id.into())
+            .await
+    }
+
+    async fn verify_user_and_revoke_unproven_access_value(
+        &self,
+        user_id: &FieldValue,
+    ) -> AuthResult<Option<crate::wire::UserView>> {
+        crate::store::revoke_unproven_account_access(self, user_id).await
     }
     async fn create_user_fields_optional(
         &self,

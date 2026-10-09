@@ -29,7 +29,19 @@ fn expected_session(
             .all(|byte| byte.is_ascii_alphanumeric())
     );
     Ok(SessionView {
-        field_order: Default::default(),
+        field_order: [
+            "expiresAt",
+            "token",
+            "createdAt",
+            "updatedAt",
+            "ipAddress",
+            "userAgent",
+            "userId",
+            "label",
+            "id",
+        ]
+        .map(str::to_owned)
+        .into(),
         visible_fields: Some(Default::default()),
         id: id
             .map(str::to_owned)
@@ -42,9 +54,9 @@ fn expected_session(
         ip_address: Some("198.51.100.4".into()).into(),
         user_agent: Some("id-slot-test".into()).into(),
         user_id: "ordinary-owner".into(),
-        impersonated_by: None.into(),
-        active_organization_id: None.into(),
-        active_team_id: None.into(),
+        impersonated_by: crate::SchemaValue::Undefined,
+        active_organization_id: crate::SchemaValue::Undefined,
+        active_team_id: crate::SchemaValue::Undefined,
         active: true,
         additional_fields: [("label".into(), label.into())].into(),
     })

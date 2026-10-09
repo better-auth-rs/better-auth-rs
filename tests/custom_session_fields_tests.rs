@@ -253,11 +253,9 @@ async fn check_native_fields(path: &str) {
         fields.get("nativeDate"),
         Some(FieldValue::Date(_))
     ));
-    assert!(
-        fields
-            .get("nativeDate")
-            .is_some_and(|value| value.strict_equals(&fixture.date))
-    );
+    let date = fields.get("nativeDate").unwrap();
+    assert_eq!(date, &fixture.date);
+    assert_eq!(date.strict_equals(&fixture.date), path == LIST_PATH);
     assert!(fields.contains_key("ownUndefined"));
     assert!(matches!(
         fields.get("ownUndefined"),
@@ -266,14 +264,12 @@ async fn check_native_fields(path: &str) {
     assert!(
         matches!(fields.get("loneSurrogate"), Some(FieldValue::Utf16String(value)) if value.as_utf16() == [0xd800])
     );
-    for name in ["left", "right"] {
-        assert!(
-            fields
-                .get(name)
-                .is_some_and(|value| value.strict_equals(&fixture.shared)),
-            "{name} must retain the output callback's object identity"
-        );
-    }
+    let left = fields.get("left").unwrap();
+    let right = fields.get("right").unwrap();
+    assert_eq!(left, &fixture.shared);
+    assert_eq!(right, &fixture.shared);
+    assert!(left.strict_equals(right));
+    assert_eq!(left.strict_equals(&fixture.shared), path == LIST_PATH);
 
     let body: Value = serde_json::from_slice(response.body.bytes().unwrap().as_ref()).unwrap();
     let data = if path == LIST_PATH {

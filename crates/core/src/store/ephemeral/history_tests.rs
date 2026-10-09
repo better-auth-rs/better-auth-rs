@@ -184,7 +184,7 @@ async fn schema_history_memory_input_failure_preserves_callback_and_mutation() {
 }
 
 #[tokio::test]
-async fn schema_history_memory_atomic_verification_keeps_the_adapter_runtime() {
+async fn schema_history_memory_verification_cleanup_keeps_the_adapter_runtime() {
     let store = EphemeralStore::new(Arc::new(config()));
     assert!(owner_schema(&store).get("error").is_some());
     assert!(
@@ -195,4 +195,13 @@ async fn schema_history_memory_atomic_verification_keeps_the_adapter_runtime() {
             .is_none()
     );
     assert_eq!(owner_schema(&store), JsonValue::Null);
+    assert!(
+        store
+            .lock()
+            .unwrap()
+            .verifications
+            .snapshot()
+            .unwrap()
+            .is_empty()
+    );
 }

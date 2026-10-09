@@ -287,8 +287,10 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for OrganizationPlugin {
         ctx.extensions.insert(self.clone());
 
         S::Session::require_plugin_fields("organization", &["active_organization_id"])?;
+        ctx.register_native_session_fields(METADATA_ENABLED)?;
         if self.config.teams.enabled {
             S::Session::require_plugin_fields("organization", &["active_team_id"])?;
+            ctx.register_native_session_fields("organization.teams_enabled")?;
         }
         ctx.set_metadata(
             METADATA_DYNAMIC_ACCESS_CONTROL,

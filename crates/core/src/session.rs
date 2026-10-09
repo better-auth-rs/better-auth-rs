@@ -21,6 +21,7 @@ mod native;
 mod response;
 mod signer;
 pub use native::NativeSessionData;
+pub(crate) use native::SessionSnapshot;
 pub use signer::{SessionCookieContext, SessionCookieSigner};
 #[cfg(test)]
 mod response_tests;
@@ -228,15 +229,13 @@ impl<S: AuthSchema> SessionManager<S> {
         req.set_new_session(data)
     }
 
-    fn public_data(
-        &self,
-        mut data: SessionData<JoinValue<UserView>>,
-    ) -> AuthResult<SessionData<JoinValue<UserView>>> {
-        data.session.filter_returned_fields(&self.config.session)?;
-        if let JoinValue::One(Some(user)) = &mut data.user {
-            user.filter_cached_fields(&self.config.user)?;
-        }
-        Ok(data)
+    fn public_data(&self, mut snapshot: SessionSnapshot) -> AuthResult<SessionSnapshot> {
+        snapshot
+            .data
+            .session
+            .filter_returned_fields(&self.config.session)?;
+        snapshot.data.user = snapshot.data.public_user(&self.config.user)?;
+        Ok(snapshot)
     }
 
     /// Install a plugin-provided signer without coupling core to the plugin implementation.
@@ -364,17 +363,17 @@ impl<S: AuthSchema> SessionManager<S> {
             <= Utc::now().timestamp_millis() as f64)
     }
 
-    /// Resolve an HTTP session and queue any cookie updates on the request.
+    /// Resolve a session for a caller that requires one User and queue its cookie updates.
     pub async fn resolve(
         &self,
         req: &AuthRequest,
         read: SessionRead,
     ) -> AuthResult<SessionResolution> {
-        let resolved = self.resolve_relations(req, read, true).await?;
+        let resolved = self.resolve_relations(req, read).await?;
         Ok(SessionResolution {
             data: resolved
                 .data
-                .map(SessionData::into_typed)
+                .map(SessionSnapshot::into_typed)
                 .transpose()?
                 .flatten(),
             needs_refresh: resolved.needs_refresh,
@@ -387,9 +386,9 @@ impl<S: AuthSchema> SessionManager<S> {
         req: &AuthRequest,
         read: SessionRead,
     ) -> AuthResult<SessionResolution<NativeSessionData>> {
-        let resolved = self.resolve_relations(req, read, false).await?;
+        let resolved = self.resolve_relations(req, read).await?;
         Ok(SessionResolution {
-            data: resolved.data.map(Into::into),
+            data: resolved.data.map(|snapshot| snapshot.data),
             needs_refresh: resolved.needs_refresh,
         })
     }
@@ -402,10 +401,8 @@ impl<S: AuthSchema> SessionManager<S> {
         &self,
         req: &AuthRequest,
         read: SessionRead,
-        typed_user: bool,
-    ) -> impl std::future::Future<
-        Output = AuthResult<SessionResolution<SessionData<JoinValue<UserView>>>>,
-    > + Send {
+    ) -> impl std::future::Future<Output = AuthResult<SessionResolution<SessionSnapshot>>> + Send
+    {
         async move {
             let raw = if req.path() == "/get-session" {
                 req.query.clone()
@@ -419,8 +416,7 @@ impl<S: AuthSchema> SessionManager<S> {
                 )
             };
             let query = crate::query::session_query(raw)?;
-            crate::query::with_validated_query(query, self.resolve_inner(req, read, typed_user))
-                .await
+            crate::query::with_validated_query(query, self.resolve_inner(req, read)).await
         }
     }
 
@@ -428,8 +424,7 @@ impl<S: AuthSchema> SessionManager<S> {
         &self,
         req: &AuthRequest,
         read: SessionRead,
-        typed_user: bool,
-    ) -> AuthResult<SessionResolution<SessionData<JoinValue<UserView>>>> {
+    ) -> AuthResult<SessionResolution<SessionSnapshot>> {
         let none = || SessionResolution {
             data: None,
             needs_refresh: None,
@@ -557,10 +552,9 @@ impl<S: AuthSchema> SessionManager<S> {
                     self.clear_cookies(req)?;
                     return Ok(none());
                 }
-                JoinValue::Many(_) if typed_user => return Err(relationship_array_error()),
                 JoinValue::Many(_) => {}
             }
-            data
+            SessionSnapshot::from(data)
         } else {
             let Some(user_id) = session.user_id.as_str() else {
                 return Ok(none());
@@ -570,18 +564,20 @@ impl<S: AuthSchema> SessionManager<S> {
                 self.clear_cookies(req)?;
                 return Ok(none());
             };
-            SessionData {
+            SessionSnapshot::from(SessionData {
                 session: self.internal_session_view(&session).await?,
-                user: JoinValue::One(Some(self.internal_user_view(&user).await?)),
-            }
+                user: self.internal_user_view(&user).await?,
+            })
         };
-        let mut data = self.public_data(data)?;
-        req.set_session_snapshot(Some(data.clone()))?;
-        if data.session.expires_at().is_before(Utc::now())? || !data.session.active() {
+        let mut snapshot = self.public_data(data)?;
+        req.set_session_snapshot(Some(snapshot.clone()))?;
+        if snapshot.data.session.expires_at().is_before(Utc::now())?
+            || !snapshot.data.session.active()
+        {
             self.clear_cookies(req)?;
             if !self.config.session.defer_session_refresh || is_post {
                 self.database
-                    .delete_session_by_token_value(&data.session.token.field_value())
+                    .delete_session_by_token_value(&snapshot.data.session.token.field_value())
                     .await?;
             }
             return Ok(none());
@@ -589,16 +585,16 @@ impl<S: AuthSchema> SessionManager<S> {
         let dont_remember = self.dont_remember(req);
         if dont_remember || query_flag(req, "disableRefresh")? {
             return Ok(SessionResolution {
-                data: Some(self.public_data(data)?),
+                data: Some(self.public_data(snapshot)?),
                 needs_refresh: None,
             });
         }
-        let needs_refresh = self.needs_refresh(&data.session)?;
+        let needs_refresh = self.needs_refresh(&snapshot.data.session)?;
         if self.config.session.defer_session_refresh && !is_post {
-            self.write_cache_with_response(req, &data.clone().into(), false, None, None)
+            self.write_cache_with_response(req, &snapshot.data, false, None, None)
                 .await?;
             return Ok(SessionResolution {
-                data: Some(self.public_data(data)?),
+                data: Some(self.public_data(snapshot)?),
                 needs_refresh: Some(needs_refresh),
             });
         }
@@ -606,7 +602,7 @@ impl<S: AuthSchema> SessionManager<S> {
             let updated = match self
                 .database
                 .update_session_fields_by_token_value(
-                    &data.session.token.field_value(),
+                    &snapshot.data.session.token.field_value(),
                     crate::FieldMap::from([
                         (
                             "expiresAt".into(),
@@ -628,15 +624,15 @@ impl<S: AuthSchema> SessionManager<S> {
                 Ok(Some(updated)) => updated,
                 Err(error) => return Err(error),
             };
-            data.session = self.internal_session_view(&updated).await?;
-            self.set_native_session_cookie(req, data.clone().into(), Some(false))
+            snapshot.data.session = self.internal_session_view(&updated).await?;
+            self.set_native_session_cookie(req, snapshot.data.clone(), Some(false))
                 .await?;
         } else {
-            self.write_cache_with_response(req, &data.clone().into(), false, None, None)
+            self.write_cache_with_response(req, &snapshot.data, false, None, None)
                 .await?;
         }
         Ok(SessionResolution {
-            data: Some(self.public_data(data)?),
+            data: Some(self.public_data(snapshot)?),
             needs_refresh: None,
         })
     }

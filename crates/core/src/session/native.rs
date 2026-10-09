@@ -15,6 +15,48 @@ pub struct NativeSessionData {
     pub user: FieldValue,
 }
 
+/// Retain relationship cardinality after public projection changes an array into an object.
+#[derive(Debug, Clone)]
+pub(crate) struct SessionSnapshot {
+    pub(crate) data: NativeSessionData,
+    relationship_array: bool,
+}
+
+impl SessionSnapshot {
+    pub(crate) fn into_typed(self) -> AuthResult<Option<SessionData>> {
+        if self.relationship_array {
+            return Err(super::relationship_array_error());
+        }
+        match self.data.user {
+            FieldValue::Null => Ok(None),
+            FieldValue::Object(fields) => Ok(Some(SessionData {
+                session: self.data.session,
+                user: UserView::try_from((*fields).clone())?,
+            })),
+            _ => Err(AuthError::internal("Session User must be an object")),
+        }
+    }
+}
+
+impl From<SessionData> for SessionSnapshot {
+    fn from(data: SessionData) -> Self {
+        Self {
+            data: data.into(),
+            relationship_array: false,
+        }
+    }
+}
+
+impl From<SessionData<JoinValue<UserView>>> for SessionSnapshot {
+    fn from(data: SessionData<JoinValue<UserView>>) -> Self {
+        let relationship_array = matches!(&data.user, JoinValue::Many(_));
+        Self {
+            data: data.into(),
+            relationship_array,
+        }
+    }
+}
+
 impl NativeSessionData {
     /// Read a User model field. Relationship arrays have no User model fields.
     pub fn user_field(&self, name: &str) -> &FieldValue {
@@ -206,7 +248,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn typed_relationship_array_rejection_precedes_refresh_and_cookie_callbacks()
+    async fn typed_relationship_consumption_follows_native_refresh_and_cookie_callbacks()
     -> AuthResult<()> {
         let calls = Arc::new(AtomicUsize::new(0));
         let recorded = calls.clone();
@@ -274,21 +316,33 @@ mod tests {
             manager.resolve(&request, SessionRead::Authoritative).await,
             Err(AuthError::Internal(message)) if message == "A User relationship array cannot authenticate a typed User"
         ));
-        assert_eq!(calls.load(Ordering::SeqCst), 0);
-        assert_eq!(
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        assert!(
             request
                 .take_response_headers()?
                 .get_all("set-cookie")
-                .count(),
-            0
+                .count()
+                >= 2
         );
         let stored = manager
             .database
             .get_session(session.token.typed().unwrap())
             .await?
             .ok_or_else(|| AuthError::internal("Selected Session must remain stored"))?;
-        assert_eq!(stored.expires_at, session.expires_at);
-        assert!(request.new_session()?.is_none());
+        assert!(stored.expires_at.date_milliseconds()? > session.expires_at.date_milliseconds()?);
+        let issued = request
+            .new_session()?
+            .ok_or_else(|| AuthError::internal("Native refresh must publish the issued Session"))?;
+        assert!(issued.user.is_object());
+        assert!(issued.user_field("id").is_undefined());
+        assert!(matches!(
+            request.session_snapshot(),
+            Err(AuthError::Internal(message)) if message == "A User relationship array cannot authenticate a typed User"
+        ));
+        let snapshot = request.native_session_snapshot()?.ok_or_else(|| {
+            AuthError::internal("Native Session snapshot must preserve the selected relationship")
+        })?;
+        assert_eq!(snapshot.user, issued.user);
 
         let mut native_request = AuthRequest::new(HttpMethod::Get, "/get-session");
         native_request.headers = request.headers.clone();
@@ -300,19 +354,18 @@ mod tests {
             .ok_or_else(|| {
                 AuthError::internal("Native resolution must preserve the selected relationship")
             })?;
-        let selected = native
-            .user
-            .as_array()
-            .ok_or_else(|| AuthError::internal("Native User relationship must remain an array"))?;
+        let selected = native.user.as_object().ok_or_else(|| {
+            AuthError::internal("Native User relationship must become a numeric-key object")
+        })?;
         assert_eq!(selected.len(), 1);
         assert_eq!(
             selected
-                .first()
+                .get("0")
                 .and_then(FieldValue::as_object)
                 .and_then(|fields| fields.get("id")),
             Some(&user.id.field_value())
         );
-        assert_eq!(calls.load(Ordering::SeqCst), 0);
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
         Ok(())
     }
 

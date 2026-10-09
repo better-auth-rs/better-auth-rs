@@ -151,7 +151,7 @@ impl EmailOtpPlugin {
         let user = match ctx.database.get_user_by_email(&email).await? {
             Some(user) if !user.email_verified().is_truthy()? => ctx
                 .database
-                .verify_user_and_revoke_unproven_access(user.id().typed()?)
+                .verify_user_and_revoke_unproven_access_value(&user.id().field_value())
                 .await?
                 .ok_or_else(invalid_otp)?,
             Some(user) => user,

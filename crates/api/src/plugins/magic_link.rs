@@ -301,7 +301,7 @@ impl MagicLinkPlugin {
         } else {
             let Some(user) = ctx
                 .database
-                .verify_user_and_revoke_unproven_access(user.id().typed()?)
+                .verify_user_and_revoke_unproven_access_value(&user.id().field_value())
                 .await?
             else {
                 return Ok(error_redirect(error_callback, "user_not_found"));

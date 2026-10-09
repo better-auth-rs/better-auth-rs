@@ -163,6 +163,7 @@ impl<S: Subscriber> Layer<S> for Events {
         let model = match (self.1, table) {
             (false, "users") => "user",
             (false, "accounts") => "account",
+            (false, "verifications") => "verification",
             (_, name) => name,
         };
         self.push(json!(["query", operation, model]));
