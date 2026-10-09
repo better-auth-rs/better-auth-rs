@@ -101,17 +101,19 @@ fn role_names(
     Ok(role.split(',').map(str::to_owned).collect())
 }
 
-pub(super) fn is_admin_user_id(user_id: Option<&str>, config: &AdminConfig) -> bool {
-    user_id.is_some_and(|user_id| {
-        config
-            .admin_user_ids
-            .as_ref()
-            .is_some_and(|ids| ids.iter().any(|id| id == user_id))
-    })
+pub(super) fn is_admin_user_id(
+    user_id: &better_auth_core::FieldValue,
+    config: &AdminConfig,
+) -> bool {
+    user_id.is_truthy()
+        && config.admin_user_ids.as_ref().is_some_and(|ids| {
+            ids.iter()
+                .any(|id| user_id.strict_equals(&id.clone().into()))
+        })
 }
 
 pub(super) fn has_permission(
-    user_id: Option<&str>,
+    user_id: &better_auth_core::FieldValue,
     role: &better_auth_core::FieldValue,
     config: &AdminConfig,
     requested: &HashMap<String, Vec<String>>,

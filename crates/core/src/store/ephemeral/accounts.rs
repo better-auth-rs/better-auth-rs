@@ -361,9 +361,12 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
 }
 
 impl EphemeralStore {
-    pub(super) async fn delete_user_accounts_with_hooks(&self, user_id: &str) -> AuthResult<()> {
+    pub(super) async fn delete_user_accounts_with_hooks(&self, user_id: &Value) -> AuthResult<()> {
         // Upstream catches only the batch snapshot; the matching database deletion still runs.
-        let accounts = self.get_user_accounts(user_id).await.unwrap_or_default();
+        let accounts = self
+            .get_user_accounts_value(user_id)
+            .await
+            .unwrap_or_default();
         let transaction = EphemeralTransaction {
             store: self.clone(),
         };
@@ -384,8 +387,7 @@ impl EphemeralStore {
             }
         }
         let schema = self.config.account.field_schema();
-        let user_id =
-            self.memory_field_query(&schema, "userId", Value::String(user_id.to_owned()))?;
+        let user_id = self.memory_field_query(&schema, "userId", user_id.clone())?;
         self.raw("account", "deleteMany", |state| {
             state.accounts.retain(|record| {
                 !record

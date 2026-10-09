@@ -390,9 +390,7 @@ async fn sign_in_with_id_token_core(
         req.input_field_value()?,
         ctx,
     );
-    endpoint.session = req
-        .session_snapshot()?
-        .map(|data| (data.user, data.session));
+    endpoint.session = req.native_session_snapshot()?;
     let claims =
         super::id_token::verify_in_endpoint(&body.provider, provider, id_token, &endpoint).await?;
 
@@ -473,9 +471,7 @@ async fn link_with_id_token_core(
         req.input_field_value()?,
         ctx,
     );
-    endpoint.session = req
-        .session_snapshot()?
-        .map(|data| (data.user, data.session));
+    endpoint.session = req.native_session_snapshot()?;
     let claims =
         super::id_token::verify_in_endpoint(&body.provider, provider, id_token, &endpoint).await?;
 

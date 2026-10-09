@@ -419,13 +419,25 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
             Option<crate::session::SessionData<crate::store::JoinValue<UserView>>>,
         )>,
     > {
+        self.get_session_snapshot_value(&token.into()).await
+    }
+
+    async fn get_session_snapshot_value(
+        &self,
+        token: &crate::FieldValue,
+    ) -> AuthResult<
+        Option<(
+            SessionView,
+            Option<crate::session::SessionData<crate::store::JoinValue<UserView>>>,
+        )>,
+    > {
         let relation = crate::session::SessionData::resolve_schema(
             &self.config,
             &self.model_fields,
             |_, _| false,
         )?;
         Ok(self
-            .session_user_relations(&[token.to_owned()], false, true, &relation)
+            .session_user_relations(std::slice::from_ref(token), false, true, &relation)
             .await?
             .into_iter()
             .next())
@@ -446,7 +458,11 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
             &self.model_fields,
             |_, _| false,
         )?;
-        self.session_user_relations(tokens, only_active, false, &relation)
+        let tokens = tokens
+            .iter()
+            .map(|token| token.as_str().into())
+            .collect::<Vec<_>>();
+        self.session_user_relations(&tokens, only_active, false, &relation)
             .await
     }
 

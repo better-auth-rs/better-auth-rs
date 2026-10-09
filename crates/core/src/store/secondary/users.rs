@@ -275,16 +275,19 @@ impl<S: AuthSchema> UserStore<S> for SecondaryStore<S> {
         Ok(user)
     }
     async fn delete_user(&self, id: &str) -> AuthResult<()> {
+        self.delete_user_value(&id.into()).await
+    }
+    async fn delete_user_value(&self, id: &FieldValue) -> AuthResult<()> {
         if self.storage.is_none() {
-            return self.inner.delete_user(id).await;
+            return self.inner.delete_user_value(id).await;
         }
-        let references = self.references(id).await?;
+        let references = self.references_value(id).await?;
         let removed = self
             .inner
-            .delete_user_optional(id, self.database_sessions())
+            .delete_user_optional_value(id, self.database_sessions())
             .await?;
         if removed.is_some() {
-            self.queue_cached_user_session_deletion(id.to_owned(), references, None)
+            self.queue_cached_user_session_deletion_value(id.clone(), references, None)
                 .await?;
         }
         Ok(())
@@ -294,8 +297,16 @@ impl<S: AuthSchema> UserStore<S> for SecondaryStore<S> {
         id: &str,
         delete_database_sessions: bool,
     ) -> AuthResult<Option<crate::wire::UserView>> {
+        self.delete_user_optional_value(&id.into(), delete_database_sessions)
+            .await
+    }
+    async fn delete_user_optional_value(
+        &self,
+        id: &FieldValue,
+        delete_database_sessions: bool,
+    ) -> AuthResult<Option<crate::wire::UserView>> {
         self.inner
-            .delete_user_optional(id, delete_database_sessions)
+            .delete_user_optional_value(id, delete_database_sessions)
             .await
     }
 

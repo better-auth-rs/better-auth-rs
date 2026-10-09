@@ -157,7 +157,17 @@ async fn callbacks_receive_the_complete_session_and_custom_signing_options() {
                 Ok(serde_json::to_string(&payload)?)
             })
         }));
-    let claims: Value = serde_json::from_str(&plugin.sign_session(json!({"user": {"id": "owner"}, "session": {"id": "sid", "userId": "owner", "token": "session-token"}}), &EndpointContext::native(None, None, better_auth_core::FieldValue::Null, &ctx)).await.unwrap()).unwrap();
+    let session = serde_json::from_value(json!({"user": {"id": "owner"}, "session": {"id": "sid", "userId": "owner", "token": "session-token"}})).unwrap();
+    let claims: Value = serde_json::from_str(
+        &plugin
+            .sign_session(
+                Some(session),
+                &EndpointContext::native(None, None, better_auth_core::FieldValue::Null, &ctx),
+            )
+            .await
+            .unwrap(),
+    )
+    .unwrap();
     assert_eq!(claims["sub"], "owner");
     assert_eq!(claims["sessionId"], "sid");
     assert_eq!(claims["iat"], 123);

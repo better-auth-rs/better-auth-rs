@@ -26,10 +26,8 @@ pub struct EndpointContext<'a, S: AuthSchema> {
     /// Active transaction. Use this store for database work inside transactional callbacks.
     pub transaction: Option<&'a dyn better_auth_core::store::AuthTransaction<S>>,
     /// Session already resolved by this endpoint before the callback.
-    pub session: Option<(
-        better_auth_core::wire::UserView,
-        better_auth_core::wire::SessionView,
-    )>,
+    /// Preserve native User values; `user_view` provides object slots without discarding numeric keys.
+    pub session: Option<better_auth_core::session::NativeSessionData>,
     /// Completed response when the callback runs from an after hook.
     pub response: Option<&'a AuthResponse>,
 }

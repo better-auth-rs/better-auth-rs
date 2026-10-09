@@ -186,6 +186,7 @@ run_stage() {
           user_column_defaults user_runtime_input_tests protected_function_tests field_value:: record_bindings::function_tests types_plugin::device::tests \
           user_view_preserves_adapter_order_through_cache_and_visibility \
           plugins::jwt:: plugins::api_key:: plugins::passkey:: plugins::organization:: plugins::test_utils:: \
+          plugins::custom_session:: plugins::one_time_token:: plugins::multi_session:: plugins::anonymous:: \
           plugins::user_admission:: \
           plugins::admin:: plugins::email_verification:: plugins::email_password:: plugins::phone_number:: \
           plugins::two_factor:: plugins::user_management:: plugins::oauth:: || create_status=1
@@ -206,7 +207,7 @@ run_stage() {
           --test memory_user_live_reads_tests --test api_key_number_name_tests \
           --test plugin_display_json_tests --test plugin_model_fields_tests \
           --test nullable_user_update_tests --test sql_user_string_output_tests --test sql_user_extra_output_tests \
-          --test username_runtime_tests --test email_normalization_tests || create_status=1
+          --test username_runtime_tests --test email_normalization_tests --test user_native_delete_tests || create_status=1
         cargo test --locked --features axum,seaorm2,redis-cache --test mysql_create_readback_tests -- --ignored || create_status=1
         cargo test --locked --features axum,seaorm2,redis-cache --test user_account_raw_column_tests -- --ignored || create_status=1
         cargo test --locked -p better-auth-cli --test generate || create_status=1

@@ -139,7 +139,7 @@ pub(crate) async fn change_email_core<S: better_auth_core::AuthSchema>(
         better_auth_core::FieldValue::from_json(serde_json::to_value(body)?)?,
         ctx,
     );
-    endpoint.session = Some((user.clone(), session.clone()));
+    endpoint.session = Some((user.clone(), session.clone()).into());
     let task = if confirmation {
         let message = super::ChangeEmailConfirmation {
             user: user.clone(),
@@ -259,7 +259,7 @@ pub(crate) async fn delete_user_core<S: better_auth_core::AuthSchema>(
             better_auth_core::FieldValue::from_json(serde_json::to_value(body)?)?,
             ctx,
         );
-        endpoint.session = Some((user.clone(), session.clone()));
+        endpoint.session = Some((user.clone(), session.clone()).into());
         let message = crate::plugins::email_verification::VerificationEmail {
             user: user.clone(),
             url,

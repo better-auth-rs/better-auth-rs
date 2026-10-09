@@ -20,9 +20,9 @@ use tracing::{
 use super::revoke_unproven_account_access;
 use crate::{
     AuthConfig, AuthError, AuthResult, CreateAccount, CreateSession, CreateUser, FieldMap,
-    FieldValue, StatelessSchema, UpdateUser,
+    FieldValue, UpdateUser,
     store::{
-        AccountStore, EphemeralStore, SessionStore, UserStore, VerificationStore,
+        AccountStore, EphemeralStore, SessionStore, StatelessSchema, UserStore, VerificationStore,
         database_hooks::{
             DatabaseHookContext, DatabaseHookControl, DatabaseHookUpdate, DatabaseHooks,
         },

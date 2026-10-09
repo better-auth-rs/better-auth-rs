@@ -24,10 +24,7 @@ impl<S: AuthSchema> SessionCookieSigner<S> for CookieSigner<S> {
             &runtime,
         );
         endpoint.transaction = context.transaction;
-        endpoint.session = context
-            .request
-            .session_snapshot()?
-            .map(|data| (data.user, data.session));
+        endpoint.session = context.request.native_session_snapshot()?;
         let options = JwtSigningOptions {
             header: serde_json::from_value(json!({"typ": TYPE}))?,
             ..Default::default()
@@ -55,7 +52,7 @@ impl<S: AuthSchema> SessionCookieSigner<S> for CookieSigner<S> {
             ("iss".into(), issuer(&runtime).into()),
         ]);
         let _ = payload.remove("sub");
-        claims::prepare_local_claims(&mut payload)?;
+        claims::prepare_local_claims(&mut payload, &FieldValue::Undefined)?;
         let subject = payload
             .get("user")
             .and_then(|user| user.get("id"))
@@ -84,10 +81,7 @@ impl<S: AuthSchema> SessionCookieSigner<S> for CookieSigner<S> {
             &runtime,
         );
         endpoint.transaction = context.transaction;
-        endpoint.session = context
-            .request
-            .session_snapshot()?
-            .map(|data| (data.user, data.session));
+        endpoint.session = context.request.native_session_snapshot()?;
         let keys = match self.plugin.read_keys(&endpoint).await {
             Ok(Some(keys)) => keys,
             Ok(None) => return Ok(None),

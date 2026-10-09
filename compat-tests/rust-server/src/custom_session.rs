@@ -104,15 +104,16 @@ impl CustomSessionCallback<TestSchema> for CustomSessionFixture {
         context: &AuthContext<TestSchema>,
     ) -> AuthResult<Value> {
         let mode = request.headers.get("x-custom-mode").map(String::as_str);
+        let user = input.data.user_view()?;
         let exists = context
             .database
-            .get_user_by_id(input.data.user.id.typed().unwrap())
+            .get_user_by_id(user.id.typed().unwrap())
             .await?
             .is_some();
         request.append_response_header("x-customized", "true".into())?;
-        self.state.lock().unwrap().events.push(json!({ "path": request.path(), "name": input.data.user.name, "exists": exists, "tag": request.headers.get("x-app-tag"), "needsRefresh": input.needs_refresh }));
+        self.state.lock().unwrap().events.push(json!({ "path": request.path(), "name": user.name, "exists": exists, "tag": request.headers.get("x-app-tag"), "needsRefresh": input.needs_refresh }));
         if mode == Some("partial-reject") {
-            if input.data.user.name.typed()?.as_deref() == Some("First") {
+            if user.name.typed()?.as_deref() == Some("First") {
                 return Err(AuthError::Upstream {
                     status: 403,
                     code: "CUSTOM_SESSION_REJECTED",
@@ -124,7 +125,7 @@ impl CustomSessionCallback<TestSchema> for CustomSessionFixture {
                 .lock()
                 .unwrap()
                 .events
-                .push(json!({ "completed": input.data.user.name }));
+                .push(json!({ "completed": user.name }));
         }
         if mode == Some("reject") {
             return Err(AuthError::Upstream {

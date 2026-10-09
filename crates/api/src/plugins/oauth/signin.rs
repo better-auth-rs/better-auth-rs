@@ -234,14 +234,13 @@ pub(super) async fn process_oauth_sign_in(
     {
         endpoint.session = ctx
             .session_manager()
-            .resolve(
+            .resolve_native(
                 options.request,
                 better_auth_core::session::SessionRead::Cached,
             )
             .await
             .map_err(|error| error.to_string())?
-            .data
-            .map(|data| (data.user, data.session));
+            .data;
     }
     let (account_owner, existing_user) = match account_owner {
         Some(owner) => (Some(owner), None),

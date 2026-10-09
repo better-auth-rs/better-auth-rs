@@ -462,7 +462,7 @@ impl PhoneNumberPlugin {
         } else {
             return Err(error(500, "FAILED_TO_UPDATE_USER", "Failed to update user"));
         };
-        endpoint.session = existing_session.clone();
+        endpoint.session = existing_session.clone().map(Into::into);
         self.notify_verified(
             PhoneVerification {
                 phone_number: phone.to_owned(),

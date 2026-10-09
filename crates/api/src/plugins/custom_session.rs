@@ -5,17 +5,19 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use better_auth_core::{
     AuthContext, AuthInitContext, AuthPlugin, AuthRequest, AuthResponse, AuthResult, AuthRoute,
-    AuthSchema, FieldValue, FromFieldMap, HttpMethod, ResponseBody, session::SessionData,
+    AuthSchema, FieldValue, FromFieldMap, HttpMethod, ResponseBody, session::NativeSessionData,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 /// The public session and the optional deferred-refresh signal.
+/// Read individual User values with `data.user_field`, or use `data.user_view` for object slots.
+/// Native callbacks retain absent values, null, relationship pages, and object identity.
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CustomSessionInput {
     #[serde(flatten)]
-    pub data: SessionData,
+    pub data: NativeSessionData,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub needs_refresh: Option<bool>,
 }
@@ -26,7 +28,7 @@ impl CustomSessionInput {
             better_auth_core::AuthError::internal("Custom session input must be an object")
         })?;
         Ok(Self {
-            data: SessionData::from_field_values(fields.clone())?,
+            data: NativeSessionData::from_field_values(fields.clone())?,
             needs_refresh: fields
                 .get("needsRefresh")
                 .cloned()
@@ -231,5 +233,62 @@ impl<S: AuthSchema> AuthPlugin<S> for CustomSessionPlugin<S> {
             },
         )
         .await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use better_auth_core::{FieldDate, FieldMap};
+
+    #[test]
+    fn custom_session_input_keeps_native_user_values_and_aliases() -> AuthResult<()> {
+        let shared: FieldValue = FieldMap::from([
+            ("ownUndefined".into(), FieldValue::Undefined),
+            ("date".into(), FieldDate::from_milliseconds(123.0).into()),
+        ])
+        .into();
+        for user in [
+            FieldValue::Undefined,
+            FieldValue::Null,
+            7.0.into(),
+            vec![shared.clone(), shared.clone()].into(),
+            FieldMap::from([("0".into(), shared.clone()), ("1".into(), shared.clone())]).into(),
+        ] {
+            let body = ResponseBody::Native(
+                FieldMap::from([
+                    ("session".into(), FieldMap::new().into()),
+                    ("user".into(), user.clone()),
+                    ("needsRefresh".into(), true.into()),
+                ])
+                .into(),
+            );
+            let input = CustomSessionInput::from_response(&body)?.ok_or_else(|| {
+                better_auth_core::AuthError::internal("Expected native custom session input")
+            })?;
+            assert!(input.data.user.strict_equals(&user));
+            assert_eq!(input.needs_refresh, Some(true));
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn custom_session_bytes_preserve_absent_and_non_object_user_values() -> AuthResult<()> {
+        for source in [
+            serde_json::json!({"session": {}, "needsRefresh": false}),
+            serde_json::json!({"session": {}, "user": null}),
+            serde_json::json!({"session": {}, "user": 7}),
+            serde_json::json!({"session": {}, "user": [{"id": null}]}),
+        ] {
+            let input = CustomSessionInput::from_response(&ResponseBody::Bytes(
+                serde_json::to_vec(&source)?,
+            ))?
+            .ok_or_else(|| {
+                better_auth_core::AuthError::internal("Expected JSON custom session input")
+            })?;
+            assert_eq!(input.data.user.is_undefined(), source.get("user").is_none());
+            assert_eq!(serde_json::to_value(input)?, source);
+        }
+        Ok(())
     }
 }

@@ -1,5 +1,5 @@
 use super::instrumentation::database_operation;
-use sea_orm::{ColumnTrait, Condition, ConnectionTrait, EntityTrait, QueryFilter, QuerySelect};
+use sea_orm::{Condition, ConnectionTrait, EntityTrait, QueryFilter, QuerySelect};
 
 use super::transaction_hooks::after_write;
 use super::{HookTransaction, map_db_err};
@@ -18,12 +18,10 @@ where
         &self,
         db: &impl ConnectionTrait,
         tx: Option<HookTransaction<'_, S>>,
-        user_id: &str,
+        user_id: &better_auth_core::FieldValue,
     ) -> AuthResult<Option<usize>> {
         self.model_fields
             .canonicalize_id(better_auth_core::store::schema::EntityRole::Account)?;
-        let user_id = self.parse_id(user_id, S::Account::parse_user_id)?;
-        let condition = S::Account::user_id_column().eq(user_id);
         let snapshot: AuthResult<Vec<better_auth_core::wire::AccountView>> = async {
             match database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(
                 self.config(),
@@ -32,7 +30,7 @@ where
                     super::plugin_rows::all(
                         db,
                         <S::Account as SeaOrmAccountModel>::Entity::find()
-                            .filter(condition.clone())
+                            .filter(self.account_selector("userId", user_id)?)
                             .limit(super::pagination::default_limit(
                                 self.config(),
                                 db.get_database_backend(),
@@ -71,7 +69,7 @@ where
             "deleteMany",
             async {
                 <S::Account as SeaOrmAccountModel>::Entity::delete_many()
-                    .filter(condition)
+                    .filter(self.account_selector("userId", user_id)?)
                     .exec(db)
                     .await
                     .map_err(map_db_err)
@@ -101,12 +99,11 @@ where
         &self,
         db: &impl ConnectionTrait,
         tx: Option<HookTransaction<'_, S>>,
-        id: &str,
+        id: &better_auth_core::FieldValue,
         delete_database_sessions: bool,
     ) -> AuthResult<Option<better_auth_core::wire::UserView>> {
         if delete_database_sessions {
-            let owner = self.parse_id(id, S::Session::parse_user_id)?;
-            let condition = Condition::all().add(S::Session::user_id_column().eq(owner));
+            let condition = Condition::all().add(self.session_user_filter(id)?);
             // A child batch cancellation does not cancel the later user deletion.
             let _ = self
                 .delete_sessions_with_connection(db, tx, condition, false)
@@ -115,27 +112,34 @@ where
         let _ = self
             .delete_user_accounts_with_connection(db, tx, id)
             .await?;
-        self.model_fields
-            .begin_id_query(better_auth_core::store::schema::EntityRole::User)?;
-        let user_id = self.parse_id(id, S::User::parse_id)?;
-        let snapshot = database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
-            self.config(),
-            "findOne",
-            async {
+        let snapshot: AuthResult<Option<better_auth_core::wire::UserView>> = async {
+            self.model_fields
+                .begin_id_query(better_auth_core::store::schema::EntityRole::User)?;
+            let policy = self.config().advanced.database.generate_id();
+            let user_id = policy.adapter_id_query(id.clone())?;
+            let filter = super::value_filter::equals_id(
+                S::User::id_column(),
+                &user_id,
+                policy,
+                db.get_database_backend(),
+            )?;
+            let row = database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
+                self.config(),
+                "findMany",
                 super::plugin_rows::one(
                     db,
                     <S::User as SeaOrmUserModel>::Entity::find()
-                        .filter(S::User::id_column().eq(user_id.clone())),
-                )
-                .await
-            },
-        )
+                        .filter(filter)
+                        .limit(1),
+                ),
+            )
+            .await?;
+            match row {
+                Some(row) => self.output_user(&row, db).await.map(Some),
+                None => Ok(None),
+            }
+        }
         .await;
-        let snapshot = match snapshot {
-            Ok(Some(row)) => self.output_user(&row, db).await.map(Some),
-            Ok(None) => Ok(None),
-            Err(error) => Err(error),
-        };
         // deleteWithHooks returns null after a missing or unreadable snapshot.
         let user = match snapshot {
             Ok(Some(user)) => user,
@@ -161,7 +165,11 @@ where
             "deleteMany",
             async {
                 <P::ApiKey as crate::SeaOrmPluginModel>::Entity::delete_many()
-                    .filter(<P::ApiKey as crate::SeaOrmPluginModel>::column("reference_id")?.eq(id))
+                    .filter(super::value_filter::equals(
+                        <P::ApiKey as crate::SeaOrmPluginModel>::column("reference_id")?,
+                        id,
+                        db.get_database_backend(),
+                    )?)
                     .exec(db)
                     .await
                     .map_err(map_db_err)
@@ -170,12 +178,20 @@ where
         .await?;
         self.model_fields
             .begin_id_query(better_auth_core::store::schema::EntityRole::User)?;
+        let policy = self.config().advanced.database.generate_id();
+        let user_id = policy.adapter_id_query(id.clone())?;
+        let filter = super::value_filter::equals_id(
+            S::User::id_column(),
+            &user_id,
+            policy,
+            db.get_database_backend(),
+        )?;
         let _ = database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
             self.config(),
             "delete",
             async {
                 <S::User as SeaOrmUserModel>::Entity::delete_many()
-                    .filter(S::User::id_column().eq(user_id))
+                    .filter(filter)
                     .exec(db)
                     .await
                     .map_err(map_db_err)

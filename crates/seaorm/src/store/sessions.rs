@@ -152,6 +152,13 @@ where
     }
 
     async fn get_session_snapshot(&self, token: &str) -> AuthResult<Option<SessionSnapshot>> {
+        self.get_session_snapshot_value(&token.into()).await
+    }
+
+    async fn get_session_snapshot_value(
+        &self,
+        token: &better_auth_core::FieldValue,
+    ) -> AuthResult<Option<SessionSnapshot>> {
         let relation = SessionData::resolve_schema(
             self.config(),
             &self.model_fields,
@@ -159,7 +166,7 @@ where
         )?;
         self.model_fields.begin_id_query(EntityRole::Session)?;
         let parent = <S::Session as SeaOrmSessionModel>::Entity::find()
-            .filter(S::Session::token_column().eq(token))
+            .filter(self.session_token_filter(token)?)
             .filter(
                 Condition::all()
                     .add_option(S::Session::active_column().map(|column| column.eq(true))),
@@ -622,7 +629,7 @@ where
     S: AuthSchema,
     S::Session: SeaOrmSessionModel,
 {
-    fn session_user_filter(
+    pub(super) fn session_user_filter(
         &self,
         user_id: &better_auth_core::FieldValue,
     ) -> AuthResult<sea_orm::sea_query::SimpleExpr> {

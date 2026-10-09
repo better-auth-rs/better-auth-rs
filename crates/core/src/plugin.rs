@@ -747,6 +747,39 @@ impl<S: AuthSchema> AuthContext<S> {
             .await
     }
 
+    /// Require a session while preserving the public User object selected by the adapter.
+    pub async fn require_native_session(
+        &self,
+        req: &AuthRequest,
+    ) -> AuthResult<crate::session::NativeSessionData> {
+        self.require_native_session_with_read(req, crate::session::SessionRead::Cached)
+            .await
+    }
+
+    /// Read the server store without requiring the selected relationship to contain one User.
+    pub async fn require_authoritative_native_session(
+        &self,
+        req: &AuthRequest,
+    ) -> AuthResult<crate::session::NativeSessionData> {
+        self.require_native_session_with_read(req, crate::session::SessionRead::Authoritative)
+            .await
+    }
+
+    async fn require_native_session_with_read(
+        &self,
+        req: &AuthRequest,
+        read: crate::session::SessionRead,
+    ) -> AuthResult<crate::session::NativeSessionData> {
+        let resolved = self.session_manager().resolve_native(req, read).await?;
+        req.replace_native_session_snapshot(resolved.data.clone())?;
+        let data = resolved.data.ok_or(AuthError::Unauthenticated)?;
+        let id = data.user_field("id");
+        if !id.is_undefined() {
+            req.set_server_context("auth.current-user-id", id.clone())?;
+        }
+        Ok(data)
+    }
+
     async fn require_session_with_read(
         &self,
         req: &AuthRequest,

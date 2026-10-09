@@ -538,6 +538,27 @@ impl AuthRequest {
         Ok(())
     }
 
+    /// Replace resolved data without changing its selected relationship cardinality.
+    pub(crate) fn replace_native_session_snapshot(
+        &self,
+        data: Option<crate::session::NativeSessionData>,
+    ) -> crate::AuthResult<()> {
+        let mut snapshot = self
+            .session_snapshot
+            .lock()
+            .map_err(|_| crate::AuthError::internal("Session snapshot lock poisoned"))?;
+        match (snapshot.as_mut(), data) {
+            (Some(snapshot), Some(data)) => snapshot.data = data,
+            (_, None) => *snapshot = None,
+            (None, Some(_)) => {
+                return Err(crate::AuthError::internal(
+                    "Session resolution did not publish a snapshot",
+                ));
+            }
+        }
+        Ok(())
+    }
+
     /// The exact identity last passed to the session-cookie writer during this endpoint call.
     pub fn new_session(&self) -> crate::AuthResult<Option<crate::session::NativeSessionData>> {
         Ok(self

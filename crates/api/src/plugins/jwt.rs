@@ -227,8 +227,8 @@ impl<S: AuthSchema> AuthPlugin<S> for JwtPlugin {
             return self.jwks(&endpoint).await.map(Some);
         }
         if req.path() == "/token" {
-            let (user, session) = ctx
-                .require_session(req)
+            let session = ctx
+                .require_native_session(req)
                 .await
                 .map_err(|error| match error {
                     AuthError::Unauthenticated => AuthError::Upstream {
@@ -238,10 +238,8 @@ impl<S: AuthSchema> AuthPlugin<S> for JwtPlugin {
                     },
                     error => error,
                 })?;
-            endpoint.session = Some((user.clone(), session.clone()));
-            let token = self
-                .sign_session(json!({"user": user, "session": session}), &endpoint)
-                .await?;
+            endpoint.session = Some(session.clone());
+            let token = self.sign_session(Some(session), &endpoint).await?;
             return Ok(Some(AuthResponse::json(200, &json!({"token": token}))?));
         }
         Ok(None)
@@ -264,19 +262,14 @@ impl<S: AuthSchema> AuthPlugin<S> for JwtPlugin {
                 if self.config.disable_setting_jwt_header || req.path() != "/get-session" {
                     return Ok(());
                 }
-                let snapshot = req.session_snapshot()?;
-                let Some(data) = snapshot
-                    .clone()
-                    .map(better_auth_core::session::NativeSessionData::from)
-                    .or(req.new_session()?)
-                else {
+                let snapshot = req.native_session_snapshot()?;
+                if snapshot.is_none() && req.new_session()?.is_none() {
                     return Ok(());
-                };
-                let payload = serde_json::to_value(&data)?;
+                }
                 let mut endpoint = EndpointContext::new(Some(req), request_body(req)?, ctx);
-                endpoint.session = snapshot.map(|data| (data.user, data.session));
+                endpoint.session = snapshot.clone();
                 endpoint.response = Some(response);
-                let token = self.sign_session(payload, &endpoint).await?;
+                let token = self.sign_session(snapshot, &endpoint).await?;
                 let _ = response.headers.insert("set-auth-jwt", token);
                 let mut exposed: Vec<_> = response
                     .headers

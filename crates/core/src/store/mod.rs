@@ -520,6 +520,13 @@ pub trait UserStore<S: AuthSchema>: Send + Sync {
         self.update_user_optional(id, update).await
     }
     async fn delete_user(&self, id: &str) -> AuthResult<()>;
+    /// Delete owned records and the User with the original native selector.
+    async fn delete_user_value(&self, id: &crate::FieldValue) -> AuthResult<()> {
+        let id = id.as_str().ok_or_else(|| {
+            AuthError::config("The store must support native user deletion selectors")
+        })?;
+        self.delete_user(id).await
+    }
     /// Delete children and the user, preserving cancellation for secondary cleanup.
     async fn delete_user_optional(
         &self,
@@ -529,6 +536,19 @@ pub trait UserStore<S: AuthSchema>: Send + Sync {
         Err(AuthError::config(
             "The store must preserve user deletion cancellation",
         ))
+    }
+
+    /// Preserve a native deletion selector and cancellation before secondary cleanup.
+    async fn delete_user_optional_value(
+        &self,
+        id: &crate::FieldValue,
+        delete_database_sessions: bool,
+    ) -> AuthResult<Option<crate::wire::UserView>> {
+        let id = id.as_str().ok_or_else(|| {
+            AuthError::config("The store must support native user deletion selectors")
+        })?;
+        self.delete_user_optional(id, delete_database_sessions)
+            .await
     }
 
     async fn list_users(
@@ -772,6 +792,25 @@ pub trait SessionStore<S: AuthSchema>: Send + Sync {
     > {
         Ok(self
             .get_session(token)
+            .await?
+            .map(|session| (session, None)))
+    }
+
+    /// Read a native Session token without discarding a loaded User relationship.
+    async fn get_session_snapshot_value(
+        &self,
+        token: &crate::FieldValue,
+    ) -> AuthResult<
+        Option<(
+            crate::wire::SessionView,
+            Option<crate::session::SessionData<JoinValue<crate::wire::UserView>>>,
+        )>,
+    > {
+        if let Some(token) = token.as_str() {
+            return self.get_session_snapshot(token).await;
+        }
+        Ok(self
+            .get_session_by_token_value(token)
             .await?
             .map(|session| (session, None)))
     }

@@ -1,7 +1,7 @@
 use super::*;
 use crate::store::database_hooks::{DatabaseHookContext, DatabaseHookControl, DatabaseHooks};
 use crate::store::{
-    EphemeralStore, MemoryCacheAdapter, SecondaryStorage, SessionStore, StatelessSchema,
+    EphemeralStore, MemoryCacheAdapter, SecondaryStorage, SessionStore, StatelessSchema, UserStore,
 };
 use crate::{AuthConfig, FieldMap};
 use async_trait::async_trait;
@@ -10,6 +10,109 @@ use serde_json::{Value, json};
 use std::sync::{Arc, Mutex};
 
 type Events = Arc<Mutex<Vec<(&'static str, FieldValue)>>>;
+
+#[tokio::test]
+async fn native_snapshot_keeps_secondary_key_identity_and_database_relationships() -> AuthResult<()>
+{
+    use crate::session::NativeSessionData;
+    use crate::user_fields::{UserFieldConfig, UserFieldReference};
+
+    let events = Events::default();
+    let mut config = AuthConfig::default();
+    config.session.store_session_in_database = Some(true);
+    let _ = config.user.fields_mut().insert(
+        "image".into(),
+        UserFieldConfig {
+            references: Some(UserFieldReference {
+                model: "session".into(),
+                field: "id".into(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+    );
+    let config = Arc::new(config);
+    let inner = Arc::new(EphemeralStore::new(config.clone()));
+    let session = inner
+        .create_session(crate::CreateSession {
+            inherited_fields: Default::default(),
+            user_id: "canonical-owner".into(),
+            expires_at: crate::FieldDate::from_milliseconds(4_102_444_800_000.0),
+            ip_address: None,
+            user_agent: None,
+            impersonated_by: None,
+            active_organization_id: None,
+            additional_fields: [("token".into(), 7.into())].into(),
+        })
+        .await?;
+    let mut user = crate::CreateUser::new().with_email("selected-owner@example.test");
+    user.image = Some(session.id.typed()?.clone()).into();
+    let user = inner.create_user(user).await?;
+    let cache = Arc::new(Storage {
+        values: MemoryCacheAdapter::new(),
+        events: events.clone(),
+    });
+    let token: FieldValue = FieldMap::from([("token".into(), 7.into())]).into();
+    let other_token: FieldValue = FieldMap::from([("token".into(), 7.into())]).into();
+    let cached = json!({
+        "session": {
+            "token": "cached-token",
+            "expiresAt": "2100-01-01T00:00:00.000Z",
+            "createdAt": "2030-01-01T00:00:00.000Z",
+            "updatedAt": "2030-01-01T00:00:00.000Z",
+        },
+        "user": {
+            "id": "cached-user",
+            "createdAt": "2030-01-01T00:00:00.000Z",
+            "updatedAt": "2030-01-01T00:00:00.000Z",
+        },
+    });
+    cache
+        .values
+        .set_native(&token, &cached.to_string(), None)
+        .await?;
+    let store = SecondaryStore::new(inner.clone(), cache, config.clone(), Default::default())?;
+    let (cached_session, cached_relation) = store
+        .get_session_snapshot_value(&token)
+        .await?
+        .ok_or_else(|| AuthError::internal("Native cache key must select the cached Session"))?;
+    assert_eq!(cached_session.token, "cached-token");
+    let cached_relation = NativeSessionData::from(
+        cached_relation
+            .ok_or_else(|| AuthError::internal("Cached snapshot must retain the cached User"))?,
+    );
+    assert_eq!(cached_relation.user.json()?, Some(cached["user"].clone()));
+    assert!(
+        store
+            .get_session_snapshot_value(&other_token)
+            .await?
+            .is_none()
+    );
+    let no_cache = SecondaryStore::without_secondary(inner, config, Default::default());
+    for store in [&store, &no_cache] {
+        let (selected, relation) = store
+            .get_session_snapshot_value(&7.into())
+            .await?
+            .ok_or_else(|| AuthError::internal("Native token must reach the database"))?;
+        assert_eq!(FieldMap::from(selected), FieldMap::from(session.clone()));
+        let relation = NativeSessionData::from(relation.ok_or_else(|| {
+            AuthError::internal("Database fallback must preserve the Many relationship")
+        })?);
+        assert_eq!(
+            relation.user,
+            FieldValue::from(vec![FieldValue::from(FieldMap::from(user.clone()))])
+        );
+    }
+    let events = events
+        .lock()
+        .map_err(|_| AuthError::internal("Trace lock poisoned"))?;
+    assert_eq!(events.len(), 3);
+    for ((name, actual), expected) in events.iter().zip([token, other_token, 7.into()]) {
+        assert_eq!(*name, "get");
+        assert!(actual.strict_equals(&expected));
+    }
+    Ok(())
+}
 
 #[tokio::test]
 async fn native_user_cleanup_converts_only_the_secondary_index_key() -> AuthResult<()> {

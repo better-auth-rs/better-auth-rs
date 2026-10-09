@@ -117,15 +117,23 @@ impl EmailOtpPlugin {
             return self.session_response(req, ctx, &user, true).await;
         }
         let manager = ctx.session_manager();
-        if let Some(mut current) = manager
-            .resolve(req, better_auth_core::session::SessionRead::Cached)
+        if let Some(current) = manager
+            .resolve_native(req, better_auth_core::session::SessionRead::Cached)
             .await?
             .data
-            && current.user.id() == user.id()
+            && user.email_verified.is_truthy()?
+            && current
+                .user_field("id")
+                .strict_equals(&user.id.field_value())
         {
-            current.user.set_field("emailVerified", true.into());
+            let (mut user, session) = current.into_views()?;
+            user.set_field("emailVerified", true.into());
             manager
-                .write_cache(req, &current, manager.dont_remember(req))
+                .write_cache(
+                    req,
+                    &better_auth_core::session::SessionData { session, user },
+                    manager.dont_remember(req),
+                )
                 .await?;
         }
         Ok(AuthResponse::json(
@@ -321,12 +329,13 @@ impl EmailOtpPlugin {
             better_auth_core::FieldValue::from_json(body.value())?,
             ctx,
         );
-        let (user, session) = ctx
-            .require_authoritative_session(req)
+        let session = ctx
+            .require_authoritative_native_session(req)
             .await
             .map_err(session_error)?;
+        let user = session.user_view()?;
         let (email, new_email) = self.change_addresses(&user, &body)?;
-        endpoint.session = Some((user.clone(), session));
+        endpoint.session = Some(session);
         if self.config.verify_current_email {
             let otp = body
                 .optional("otp")
@@ -362,9 +371,10 @@ impl EmailOtpPlugin {
     ) -> AuthResult<AuthResponse> {
         let body = body!(req);
         let (user, session) = ctx
-            .require_authoritative_session(req)
+            .require_authoritative_native_session(req)
             .await
-            .map_err(session_error)?;
+            .map_err(session_error)?
+            .into_views()?;
         let (email, new_email) = self.change_addresses(&user, &body)?;
         let authenticated_user = user.clone();
         self.verify_otp(

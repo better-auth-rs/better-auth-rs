@@ -13,10 +13,7 @@ pub struct OwnedEndpointContext<S: AuthSchema> {
     body: better_auth_core::FieldValue,
     auth: AuthContext<S>,
     transaction: Option<Arc<dyn better_auth_core::store::AuthTransaction<S>>>,
-    session: Option<(
-        better_auth_core::wire::UserView,
-        better_auth_core::wire::SessionView,
-    )>,
+    session: Option<better_auth_core::session::NativeSessionData>,
     response: Option<AuthResponse>,
 }
 impl<S: AuthSchema> OwnedEndpointContext<S> {

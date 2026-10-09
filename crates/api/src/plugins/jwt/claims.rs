@@ -32,7 +32,10 @@ pub(super) fn default_expiration(
     }
 }
 
-pub(super) fn prepare_local_claims(payload: &mut Map<String, Value>) -> AuthResult<()> {
+pub(super) fn prepare_local_claims(
+    payload: &mut Map<String, Value>,
+    subject: &FieldValue,
+) -> AuthResult<()> {
     let expiry = numeric_date(&payload["exp"])?;
     let _ = payload.insert("exp".into(), expiry);
     require_string("iss", &payload["iss"])?;
@@ -47,6 +50,14 @@ pub(super) fn prepare_local_claims(payload: &mut Map<String, Value>) -> AuthResu
         ));
     }
     for name in ["iat", "sub", "nbf", "jti"] {
+        if name == "sub" {
+            if subject.is_truthy()
+                && !matches!(subject, FieldValue::String(_) | FieldValue::Utf16String(_))
+            {
+                return Err(AuthError::internal("\"sub\" claim must be a string"));
+            }
+            continue;
+        }
         if let Some(value) = payload.get(name).filter(|value| is_truthy(value)) {
             if matches!(name, "iat" | "nbf") {
                 let date = numeric_date(value)?;

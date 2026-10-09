@@ -5,10 +5,12 @@ description: Transfer an existing authenticated session with a single-use token.
 
 Register `OneTimeTokenPlugin::new()`. An authenticated `GET /one-time-token/generate` returns `{ "token": "..." }`. `POST /one-time-token/verify` accepts that token, consumes it atomically, and returns the original session and user. The recipient receives a signed session cookie.
 
-Tokens expire after three minutes. `.expires_in(chrono::Duration::minutes(1))` changes the lifetime; the Rust API uses a duration, while Better Auth's numeric option uses minutes. `.store_token(TokenStorage::Hashed)` stores a SHA-256 digest. `TokenStorage::Custom` supports an application hasher. `.generate_token(generator)` receives the session and user for custom token generation.
+Tokens expire after three minutes. `.expires_in(chrono::Duration::minutes(1))` changes the lifetime; the Rust API uses a duration, while Better Auth's numeric option uses minutes. `.store_token(TokenStorage::Hashed)` stores a SHA-256 digest. `TokenStorage::Custom` supports an application hasher. `.generate_token(generator)` receives `NativeSessionData` for custom token generation. Read `data.session` and `data.user`, or use `data.user_view()` when the User is an object.
 
 The lifetime starts after token generation and before the storage hasher runs. A slow asynchronous hasher does not extend the deadline. A token that expires during hashing cannot transfer the session.
 
-`.disable_client_request(true)` disables HTTP generation. Trusted server code may call `generate` with a session and user. `.disable_set_session_cookie(true)` returns the verified session without setting its cookie. `.set_ott_header_on_new_session(true)` generates a `set-ott` response header when a response sets a session, and adds that header to `Access-Control-Expose-Headers`.
+`.disable_client_request(true)` disables HTTP generation. Trusted server code may call `generate` with a session and user, or `generate_native` with retained native data. `.disable_set_session_cookie(true)` returns the verified session without setting its cookie. `.set_ott_header_on_new_session(true)` generates a `set-ott` response header from the endpoint's retained `newSession`, and adds that header to `Access-Control-Expose-Headers`. The hook does not reread the session from storage.
 
 Verification does not create a new session. Revoking the original session invalidates its outstanding exchange tokens. Failed verification also consumes the token, so retrying the same token cannot authenticate.
+
+After a valid proof selects a session, verification writes the session cookie before checking the selected session's expiration. An expired session returns an error after that cookie write. An expired proof fails before session lookup and writes no cookie.

@@ -11,6 +11,8 @@ use validator::ValidateEmail;
 use crate::plugins::helpers::{SessionIssueError, issue_selected_user_session_optional};
 
 mod callbacks;
+#[cfg(test)]
+mod native_session_tests;
 pub use callbacks::{AnonymousCallbackFuture, AnonymousCallbacks};
 
 type FutureResult<T> = Pin<Box<dyn Future<Output = AuthResult<T>> + Send>>;
@@ -100,7 +102,7 @@ impl AnonymousPlugin {
         session_request.query = Some(query.into());
         let previous = ctx
             .session_manager()
-            .resolve(
+            .resolve_native(
                 &session_request,
                 better_auth_core::session::SessionRead::Cached,
             )
@@ -108,7 +110,7 @@ impl AnonymousPlugin {
             .data;
         if previous
             .as_ref()
-            .is_some_and(|data| data.user.is_anonymous.field_value().is_truthy())
+            .is_some_and(|data| data.user_field("isAnonymous").is_truthy())
         {
             return Err(error(
                 400,
@@ -149,7 +151,7 @@ impl AnonymousPlugin {
             better_auth_core::FieldValue::from_json(body)?,
             ctx,
         );
-        endpoint.session = previous.map(|data| (data.user, data.session));
+        endpoint.session = previous;
         let name = if let Some(generate) = ctx
             .extensions
             .get::<Arc<AnonymousCallbacks<S>>>()
@@ -214,7 +216,7 @@ impl AnonymousPlugin {
         ctx: &AuthContext<impl AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let (user, _) = ctx
-            .require_authoritative_session(req)
+            .require_authoritative_native_session(req)
             .await
             .map_err(|cause| {
                 if matches!(cause, AuthError::Unauthenticated) {
@@ -222,7 +224,8 @@ impl AnonymousPlugin {
                 } else {
                     cause
                 }
-            })?;
+            })?
+            .into_views()?;
         if self.disable_delete_anonymous_user {
             return Err(error(
                 400,
@@ -234,7 +237,7 @@ impl AnonymousPlugin {
             return Err(error(403, "USER_IS_NOT_ANONYMOUS", "User is not anonymous"));
         }
         ctx.database
-            .delete_user_sessions(user.id.typed()?)
+            .delete_user_sessions_by_user_value(&user.id.field_value())
             .await
             .map_err(|cause| {
                 better_auth_core::observability::logger::current().error(
@@ -248,7 +251,7 @@ impl AnonymousPlugin {
                 )
             })?;
         ctx.database
-            .delete_user(user.id.typed()?)
+            .delete_user_value(&user.id.field_value())
             .await
             .map_err(|cause| {
                 better_auth_core::observability::logger::current().error(
@@ -317,63 +320,62 @@ impl AnonymousPlugin {
         session_request.query = Some(query.into());
         let previous = ctx
             .session_manager()
-            .resolve(
+            .resolve_native(
                 &session_request,
                 better_auth_core::session::SessionRead::Cached,
             )
             .await?
             .data;
-        let previous = match previous
-            .filter(|session| session.user.is_anonymous.field_value().is_truthy())
-        {
-            Some(previous) => Some(previous),
-            None => {
-                if let Some(user_id) = req
-                    .server_context("anonymousUserId")?
-                    .and_then(|value| value.as_str().map(str::to_owned))
-                {
-                    if let Some(user) = ctx
-                        .database
-                        .get_user_by_id(&user_id)
-                        .await?
-                        .filter(|user| user.is_anonymous().field_value().is_truthy())
+        let previous =
+            match previous.filter(|session| session.user_field("isAnonymous").is_truthy()) {
+                Some(previous) => Some(previous),
+                None => {
+                    if let Some(user_id) = req
+                        .server_context("anonymousUserId")?
+                        .and_then(|value| value.as_str().map(str::to_owned))
                     {
-                        let mut session = None;
-                        for candidate in ctx.database.get_user_session_snapshots(&user_id).await? {
-                            if candidate.0.expires_at().is_after(chrono::Utc::now())? {
-                                session = Some(candidate);
-                                break;
+                        if let Some(user) = ctx
+                            .database
+                            .get_user_by_id(&user_id)
+                            .await?
+                            .filter(|user| user.is_anonymous().field_value().is_truthy())
+                        {
+                            let mut session = None;
+                            for candidate in ctx
+                                .database
+                                .get_user_sessions_value(&user.id.field_value())
+                                .await?
+                            {
+                                if candidate.expires_at().is_after(chrono::Utc::now())? {
+                                    session = Some(candidate);
+                                    break;
+                                }
                             }
-                        }
-                        if let Some((session, snapshot)) = session {
-                            Some(better_auth_core::session::SessionData {
-                                user: ctx.internal_user_view(&user).await?,
-                                session: match snapshot {
-                                    Some(session) => session,
-                                    None => {
-                                        ctx.session_manager()
-                                            .internal_session_view(&session)
-                                            .await?
-                                    }
-                                },
-                            })
+                            if let Some(session) = session {
+                                Some(better_auth_core::session::NativeSessionData {
+                                    user: better_auth_core::FieldMap::from(
+                                        ctx.internal_user_view(&user).await?,
+                                    )
+                                    .into(),
+                                    session,
+                                })
+                            } else {
+                                None
+                            }
                         } else {
                             None
                         }
                     } else {
                         None
                     }
-                } else {
-                    None
                 }
-            }
-        };
-        let Some(previous) = previous else {
+            };
+        let Some(mut previous) = previous else {
             return Ok(());
         };
-        if !previous.user.is_anonymous.is_truthy()? {
-            return Ok(());
-        }
+        let mut anonymous_user = previous.user_view()?;
+        anonymous_user.set_field("isAnonymous", true.into());
+        previous.user = better_auth_core::FieldMap::from(anonymous_user.clone()).into();
         let Some(new_session) = req.new_session()? else {
             if req.path() == "/sign-in/anonymous" {
                 return Err(error(
@@ -385,7 +387,7 @@ impl AnonymousPlugin {
             return Ok(());
         };
         let link = AnonymousLink {
-            anonymous_user: previous.user.clone(),
+            anonymous_user,
             anonymous_session: previous.session.clone(),
             new_user: new_session.user.clone(),
             new_session: new_session.session.clone(),
@@ -409,7 +411,7 @@ impl AnonymousPlugin {
                 better_auth_core::FieldValue::from_json(body)?,
                 ctx,
             );
-            endpoint.session = Some((previous.user.clone(), previous.session));
+            endpoint.session = Some(previous.clone());
             endpoint.response = Some(response);
             callback(&link, &endpoint).await?;
         } else if let Some(callback) = &self.on_link_account {
@@ -417,14 +419,16 @@ impl AnonymousPlugin {
         }
         if !self.disable_delete_anonymous_user
             && !previous
-                .user
-                .id
-                .field_value()
+                .user_field("id")
                 .strict_equals(new_session.user_field("id"))
-            && new_session.user_field("isAnonymous").as_bool() != Some(true)
+            && !new_session.user_field("isAnonymous").is_truthy()
         {
             // Upstream keeps a successful sign-in when post-link cleanup fails.
-            if let Err(cause) = ctx.database.delete_user(previous.user.id.typed()?).await {
+            if let Err(cause) = ctx
+                .database
+                .delete_user_value(previous.user_field("id"))
+                .await
+            {
                 better_auth_core::observability::logger::current().error(
                     "Failed to clean up anonymous user during post-link cleanup",
                     &[better_auth_core::observability::LogArgument::Error(&cause)],
@@ -466,12 +470,16 @@ better_auth_core::impl_auth_plugin!(AnonymousPlugin, "anonymous";
             if req.path() != "/sign-in/social" { return Ok(None); }
             better_auth_core::observability::instrumentation::with_endpoint_hook(
                 &ctx.config, req, "before", "plugin:anonymous", async {
+                    let mut session_request = req.clone();
+                    let mut query = session_request.query.take()
+                        .and_then(|query| query.as_object().cloned()).unwrap_or_default();
+                    let _ = query.insert("disableRefresh".into(), true.into());
+                    session_request.query = Some(query.into());
                     let session = ctx.session_manager()
-                        .resolve(req, better_auth_core::session::SessionRead::Authoritative)
+                        .resolve_native(&session_request, better_auth_core::session::SessionRead::Cached)
                         .await?.data;
-                    if let Some(session) = session.filter(|session| session.user.is_anonymous.field_value().is_truthy())
-                        && !session.user.id.is_undefined() {
-                        req.set_server_context("anonymousUserId", session.user.id.field_value())?;
+                    if let Some(session) = session.filter(|session| session.user_field("isAnonymous").is_truthy()) {
+                        req.set_server_context("anonymousUserId", session.user_field("id").clone())?;
                     }
                     Ok(None)
                 },

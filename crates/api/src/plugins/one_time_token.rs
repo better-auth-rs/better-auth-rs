@@ -5,8 +5,8 @@ use std::{future::Future, pin::Pin, sync::Arc};
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use better_auth_core::{
     AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, AuthSchema, AuthSession,
-    CreateVerification,
-    utils::cookie_utils::verify_cookie_value,
+    CreateVerification, FieldMap, FieldValue,
+    session::NativeSessionData,
     wire::{SessionView, UserView},
 };
 use chrono::{Duration, Utc};
@@ -41,7 +41,7 @@ impl TokenStorage {
 
 /// Custom generation receives the authenticated session and user.
 pub type OneTimeTokenGenerator = Arc<
-    dyn Fn(SessionView, UserView) -> Pin<Box<dyn Future<Output = AuthResult<String>> + Send>>
+    dyn Fn(NativeSessionData) -> Pin<Box<dyn Future<Output = AuthResult<String>> + Send>>
         + Send
         + Sync,
 >;
@@ -93,13 +93,10 @@ better_auth_core::observability::instrumentation::with_endpoint_hook(
             if !self.config.set_ott_header_on_new_session {
                 return Ok(());
             }
-            let Some(token) = response_session_token(response, &ctx.config) else {
+            let Some(data) = _req.new_session()? else {
                 return Ok(());
             };
-            let Some((session, user)) = find_session(ctx, &token).await? else {
-                return Ok(());
-            };
-            let token = self.generate(ctx, session, user).await?;
+            let token = self.generate_native(ctx, data).await?;
             let _ = response.headers.insert("set-ott", token);
             let mut exposed: Vec<_> = response.headers.get("access-control-expose-headers")
                 .map(|value| value.split(',').map(str::trim).filter(|value| !value.is_empty()).map(str::to_owned).collect())
@@ -123,9 +120,18 @@ impl OneTimeTokenPlugin {
         session: SessionView,
         user: UserView,
     ) -> AuthResult<String> {
-        let session_token = session.token.clone();
+        self.generate_native(ctx, (user, session).into()).await
+    }
+
+    /// Generate a token without narrowing the selected User relationship or callback values.
+    pub async fn generate_native<S: AuthSchema>(
+        &self,
+        ctx: &AuthContext<S>,
+        data: NativeSessionData,
+    ) -> AuthResult<String> {
+        let session_token = data.session.token.clone();
         let token = match &self.config.generate_token {
-            Some(generate) => generate(session, user).await?,
+            Some(generate) => generate(data).await?,
             None => {
                 let mut bytes = [0_u8; 24];
                 rand::thread_rng().fill_bytes(&mut bytes);
@@ -151,11 +157,18 @@ impl OneTimeTokenPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<S>,
     ) -> AuthResult<AuthResponse> {
-        let (user, session) = ctx.require_session(req).await.map_err(session_required)?;
-        if self.config.disable_client_request {
+        let data = ctx
+            .require_native_session(req)
+            .await
+            .map_err(session_required)?;
+        if self.config.disable_client_request
+            && super::endpoint_context::EndpointContext::new(Some(req), FieldValue::Undefined, ctx)
+                .request
+                .is_some()
+        {
             return message_error("Client requests are disabled");
         }
-        let token = self.generate(ctx, session, user).await?;
+        let token = self.generate_native(ctx, data).await?;
         Ok(AuthResponse::json(
             200,
             &serde_json::json!({ "token": token }),
@@ -179,27 +192,18 @@ impl OneTimeTokenPlugin {
         else {
             return message_error("Invalid token");
         };
-        let Some((session, user)) = find_session(ctx, verification.value.typed()?).await? else {
+        let Some(data) = find_session(ctx, &verification.value.field_value()).await? else {
             return message_error("Session not found");
-        };
-        let response = if session.expires_at.is_before(Utc::now())? {
-            message_error("Session expired")?
-        } else {
-            AuthResponse::json(
-                200,
-                &serde_json::json!({ "session": session, "user": user }),
-            )?
         };
         if !self.config.disable_set_session_cookie {
             ctx.session_manager()
-                .set_session_cookie(
-                    req,
-                    better_auth_core::session::SessionData { session, user },
-                    None,
-                )
+                .set_native_session_cookie(req, data.clone(), None)
                 .await?;
         }
-        Ok(response)
+        if data.session.expires_at.is_before(Utc::now())? {
+            return message_error("Session expired");
+        }
+        Ok(AuthResponse::native(200, FieldMap::from(data).into()))
     }
 }
 
@@ -257,48 +261,31 @@ pub(crate) fn token_body(req: &AuthRequest, field: &str) -> Result<String, AuthR
 
 pub(crate) async fn find_session<S: AuthSchema>(
     ctx: &AuthContext<S>,
-    token: &str,
-) -> AuthResult<Option<(SessionView, UserView)>> {
-    let Some((session, snapshot)) = ctx.database.get_session_snapshot(token).await? else {
+    token: &FieldValue,
+) -> AuthResult<Option<NativeSessionData>> {
+    let Some((session, snapshot)) = ctx.database.get_session_snapshot_value(token).await? else {
         return Ok(None);
     };
     if let Some(data) = snapshot {
-        let Some(mut data) = data.into_typed()? else {
+        let mut data = NativeSessionData::from(data);
+        if !data.user.is_truthy() {
             return Ok(None);
-        };
+        }
         data.session.filter_returned_fields(&ctx.config.session)?;
-        return Ok(Some((data.session, ctx.user_view(&data.user).await?)));
+        data.user = data.public_user(&ctx.config.user)?;
+        return Ok(Some(data));
     }
     let Some(user) = ctx
         .database
-        .get_user_by_id(session.user_id().typed()?)
+        .get_user_by_id_value(&session.user_id().field_value())
         .await?
     else {
         return Ok(None);
     };
-    Ok(Some((
-        ctx.session_view(&session).await?,
-        ctx.user_view(&user).await?,
-    )))
-}
-
-pub(crate) fn response_session_token(
-    response: &AuthResponse,
-    config: &better_auth_core::AuthConfig,
-) -> Option<String> {
-    response
-        .headers
-        .get_all("set-cookie")
-        .filter_map(|value| cookie::Cookie::parse(value.as_str()).ok())
-        .filter(|cookie| {
-            cookie.name() == config.auth_cookie("session_token", Default::default()).name
-        })
-        .last()
-        .filter(|cookie| {
-            !cookie.value().is_empty()
-                && cookie.max_age().is_none_or(|age| age.whole_seconds() != 0)
-        })
-        .and_then(|cookie| verify_cookie_value(cookie.value(), config.signing_secret()))
+    Ok(Some(NativeSessionData {
+        session: ctx.session_view(&session).await?,
+        user: FieldMap::from(ctx.user_view(&user).await?).into(),
+    }))
 }
 
 #[cfg(test)]

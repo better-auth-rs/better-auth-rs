@@ -1,10 +1,8 @@
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use better_auth_core::{
     AuthContext, AuthError, AuthRecordFields, AuthRequest, AuthResult, AuthSchema, CreatePasskey,
-    CreateSession, FieldMap, FieldValue,
-    entity::AuthUser,
-    store::AuthTransaction,
-    wire::{PasskeyView, UserView},
+    CreateSession, FieldMap, FieldValue, session::NativeSessionData, store::AuthTransaction,
+    wire::PasskeyView,
 };
 use chrono::Utc;
 use serde_json::{Map, Value};
@@ -23,32 +21,31 @@ use super::{
 pub(super) async fn optional_session<S: AuthSchema>(
     ctx: &AuthContext<S>,
     req: &AuthRequest,
-) -> AuthResult<Option<UserView>> {
+) -> AuthResult<Option<NativeSessionData>> {
     Ok(ctx
         .session_manager()
-        .resolve(req, better_auth_core::session::SessionRead::Cached)
+        .resolve_native(req, better_auth_core::session::SessionRead::Cached)
         .await?
-        .data
-        .map(|data| data.user))
+        .data)
 }
 
 pub(super) async fn registration_session<S: AuthSchema>(
     ctx: &AuthContext<S>,
     req: &AuthRequest,
     config: &PasskeyConfig,
-) -> AuthResult<Option<UserView>> {
+) -> AuthResult<Option<NativeSessionData>> {
     if !config.registration.require_session {
         return optional_session(ctx, req).await;
     }
-    let (user, session) = ctx.require_session(req).await?;
-    if !crate::plugins::helpers::session_is_fresh(&session, &ctx.config)? {
+    let data = ctx.require_native_session(req).await?;
+    if !crate::plugins::helpers::session_is_fresh(&data.session, &ctx.config)? {
         return Err(AuthError::Upstream {
             status: 403,
             code: "SESSION_NOT_FRESH",
             message: "Session is not fresh",
         });
     }
-    Ok(Some(user))
+    Ok(Some(data))
 }
 
 pub(super) async fn resolve_user<S: AuthSchema>(
@@ -56,17 +53,17 @@ pub(super) async fn resolve_user<S: AuthSchema>(
     req: &AuthRequest,
     config: &PasskeyConfig,
 ) -> AuthResult<PasskeyRegistrationUser> {
-    if let Some(user) = registration_session(ctx, req, config).await?
-        && user.id.is_truthy()?
+    if let Some(data) = registration_session(ctx, req, config).await?
+        && data.user_field("id").is_truthy()
     {
-        let name = user.email().field_value();
+        let name = data.user_field("email").clone();
         let name = if name.is_truthy() {
             name
         } else {
-            user.id.field_value()
+            data.user_field("id").clone()
         };
         return Ok(PasskeyRegistrationUser {
-            id: user.id.clone(),
+            id: better_auth_core::SchemaValue::from_field(data.user_field("id").clone()),
             display_name: better_auth_core::SchemaValue::from_field(name.clone()),
             name: better_auth_core::SchemaValue::from_field(name),
         });
@@ -166,7 +163,7 @@ pub(super) fn verification_error(error: AuthError, registration: bool) -> AuthEr
 pub(super) async fn verify_registration_core<S: AuthSchema>(
     body: VerifyRegistrationRequest,
     req: &AuthRequest,
-    session_user: Option<UserView>,
+    session_user: Option<NativeSessionData>,
     config: &PasskeyConfig,
     ctx: &AuthContext<S>,
 ) -> PasskeyHandlerResult<FieldValue> {
@@ -196,7 +193,7 @@ pub(super) async fn verify_registration_core<S: AuthSchema>(
         optional_session(ctx, req).await?
     };
     if session_user.as_ref().is_some_and(|user| {
-        let id = user.id.field_value();
+        let id = user.user_field("id");
         id.is_truthy() && !id.strict_equals(&state.user.id.field_value())
     }) {
         return Err(forbidden_user());
@@ -315,7 +312,7 @@ struct Registration<S: AuthSchema> {
     state: StoredRegistrationState,
     verification: PasskeyRegistrationVerification,
     input: CreatePasskey,
-    session_user: Option<UserView>,
+    session_user: Option<NativeSessionData>,
     body: VerifyRegistrationRequest,
 }
 impl<S: AuthSchema> Registration<S> {
@@ -349,7 +346,7 @@ impl<S: AuthSchema> Registration<S> {
                 .await?;
             if let Some(user_id) = result.user_id.filter(|id| !id.is_empty()) {
                 if self.session_user.as_ref().is_some_and(|user| {
-                    let id = user.id.field_value();
+                    let id = user.user_field("id");
                     id.is_truthy() && !id.strict_equals(&FieldValue::from(user_id.as_str()))
                 }) {
                     return Err(forbidden_user());

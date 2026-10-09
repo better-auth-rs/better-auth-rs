@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
@@ -16,6 +17,85 @@ fn passkey_plugin() -> PasskeyPlugin {
         .rp_id("localhost")
         .rp_name("Better Auth Test")
         .origin("http://localhost:3000")
+}
+
+#[tokio::test]
+async fn native_session_relationship_uses_missing_id_semantics_at_each_passkey_boundary() {
+    use better_auth_core::{
+        CreateSession,
+        store::{EphemeralStore, StatelessSchema},
+        user_fields::{UserFieldConfig, UserFieldReference},
+    };
+    let plugin = passkey_plugin();
+    let mut config = test_helpers::create_test_config();
+    let _ = config.user.fields_mut().insert(
+        "image".into(),
+        UserFieldConfig {
+            references: Some(UserFieldReference {
+                model: "session".into(),
+                field: "id".into(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+    );
+    let config = Arc::new(config);
+    let ctx: AuthContext<StatelessSchema> = test_helpers::initialize_test_context(
+        config.clone(),
+        Arc::new(EphemeralStore::new(config)),
+        &[&plugin],
+    )
+    .await
+    .unwrap();
+    let session = ctx
+        .database
+        .create_session(CreateSession {
+            inherited_fields: Default::default(),
+            additional_fields: Default::default(),
+            user_id: "canonical-owner".into(),
+            expires_at: (chrono::Utc::now() + Duration::hours(1)).into(),
+            ip_address: None,
+            user_agent: None,
+            impersonated_by: None,
+            active_organization_id: None,
+        })
+        .await
+        .unwrap();
+    let mut user = CreateUser::new()
+        .with_email("many-passkey@example.test")
+        .with_name("Selected");
+    user.image = Some(session.id.typed().unwrap().clone()).into();
+    ctx.database.create_user(user).await.unwrap();
+    let request = test_helpers::create_auth_request_no_query(
+        HttpMethod::Get,
+        "/passkey/generate-register-options",
+        Some(session.token.typed().unwrap()),
+        None,
+    );
+    let error = plugin
+        .handle_generate_register_options(&request, &ctx)
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        error,
+        AuthError::Upstream {
+            code: "SESSION_REQUIRED",
+            ..
+        }
+    ));
+    let response = plugin
+        .handle_list_user_passkeys(&request, &ctx)
+        .await
+        .unwrap();
+    assert_eq!(response.status, 200);
+    assert_eq!(response.body.bytes().unwrap().as_ref(), b"[]");
+    let response = plugin
+        .handle_generate_authenticate_options(&request, &ctx)
+        .await
+        .unwrap();
+    assert_eq!(response.status, 200);
+    let body: serde_json::Value = serde_json::from_slice(&response.body.bytes().unwrap()).unwrap();
+    assert!(body.get("allowCredentials").is_none());
 }
 
 fn cookie_header(response: &better_auth_core::AuthResponse) -> &str {

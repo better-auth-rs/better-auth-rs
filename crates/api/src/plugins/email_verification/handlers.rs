@@ -34,7 +34,7 @@ pub(super) async fn send_verification_email_core(
         better_auth_core::FieldValue::from_json(endpoint_body.into())?,
         ctx,
     );
-    endpoint.session = current_session.cloned();
+    endpoint.session = current_session.cloned().map(Into::into);
     if !super::delivery::available(Some(config), ctx) {
         return Err(AuthError::bad_request("Verification email isn't enabled"));
     }

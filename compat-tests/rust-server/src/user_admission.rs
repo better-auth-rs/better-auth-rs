@@ -63,7 +63,7 @@ impl ValidateUserInfo<TestSchema> for UserAdmissionFixture {
             "emailVerified":user.get("emailVerified"),"hasId":data.user.contains_key("id"),"hasCreatedAt":data.user.contains_key("createdAt"),
             "hasUpdatedAt":data.user.contains_key("updatedAt"),"role":user.get("role"),
             "existing":exists,"path":endpoint.path,"tag":endpoint.request.and_then(|request|request.headers.get("x-admission-tag")),
-            "customBody":body.get("customBody"),"sessionEmail":endpoint.session.as_ref().map(|(user,_)|&user.email),
+            "customBody":body.get("customBody"),"sessionEmail":endpoint.session.as_ref().map(|data|data.user_field("email").json()).transpose()?.flatten(),
             "username":user.get("username"),"bodyUsername":body.get("username"),"bodyDisplayUsername":body.get("displayUsername"),
         }));
             state.mode.clone()

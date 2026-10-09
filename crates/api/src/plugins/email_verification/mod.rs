@@ -195,7 +195,7 @@ impl EmailVerificationPlugin {
             better_auth_core::FieldValue::Null,
             ctx,
         );
-        endpoint.session = current_session.clone();
+        endpoint.session = current_session.clone().map(Into::into);
 
         match verify_email_core(
             &query,

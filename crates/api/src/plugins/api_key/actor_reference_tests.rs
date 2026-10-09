@@ -478,3 +478,86 @@ async fn secondary_null_and_missing_references_retain_distinct_strict_owners() {
 mod create_gate;
 #[path = "actor_reference_tests/organization.rs"]
 mod organization;
+
+#[tokio::test]
+async fn deleting_api_keys_only_rejects_a_strict_boolean_ban() {
+    let mut config = crate::plugins::test_helpers::create_test_config();
+    let _ = config.user.fields_mut().insert(
+        "banned".into(),
+        better_auth_core::user_fields::UserFieldConfig {
+            field_type: better_auth_core::user_fields::UserFieldType::Boolean,
+            ..Default::default()
+        },
+    );
+    let config = Arc::new(config);
+    let (ctx, plugin, sessions, keys, _) = harness(
+        AuthContext::new(config.clone(), Arc::new(EphemeralStore::new(config))),
+        true,
+    )
+    .await;
+    for banned in [
+        json!(true),
+        json!(false),
+        json!("true"),
+        json!(1),
+        json!([]),
+        Value::Null,
+    ] {
+        actor(&sessions, Some(&json!("owner"))).await;
+        let cached = sessions.get("actor-token").await.unwrap().unwrap();
+        let mut cached: Value = serde_json::from_str(cached.as_str().unwrap()).unwrap();
+        cached["user"]["banned"] = banned.clone();
+        sessions
+            .set("actor-token", &cached.to_string(), None)
+            .await
+            .unwrap();
+        let key = json!({
+            "id":"strict-ban-key", "configId":"default", "referenceId":"owner",
+            "key":"strict-ban-hash", "createdAt":"2026-01-01T00:00:00.000Z",
+            "updatedAt":"2026-01-01T00:00:00.000Z"
+        });
+        keys.set("api-key:by-id:strict-ban-key", &key.to_string(), None)
+            .await
+            .unwrap();
+        keys.set("api-key:by-ref:owner", "[\"strict-ban-key\"]", None)
+            .await
+            .unwrap();
+        let response = plugin
+            .handle_delete(
+                &request(
+                    HttpMethod::Post,
+                    "/api-key/delete",
+                    Some(json!({"keyId":"strict-ban-key"})),
+                    None,
+                ),
+                &ctx,
+            )
+            .await;
+        if banned == json!(true) {
+            let error = response.unwrap_err();
+            assert_eq!(error.status_code(), 401);
+            assert_eq!(
+                json_body(&error.to_auth_response()),
+                json!({"code":"USER_BANNED", "message":"User is banned"})
+            );
+            assert!(
+                keys.get("api-key:by-id:strict-ban-key")
+                    .await
+                    .unwrap()
+                    .is_some()
+            );
+        } else {
+            assert_eq!(
+                json_body(&response.unwrap()),
+                json!({"success":true}),
+                "{banned}"
+            );
+            assert!(
+                keys.get("api-key:by-id:strict-ban-key")
+                    .await
+                    .unwrap()
+                    .is_none()
+            );
+        }
+    }
+}

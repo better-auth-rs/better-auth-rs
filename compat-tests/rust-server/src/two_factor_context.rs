@@ -39,7 +39,7 @@ impl TwoFactorContextFixture {
                         "requestPath": endpoint.request.map(|request| request.path()),
                         "body": endpoint.body.json()?,
                         "header": endpoint.request.and_then(|request| request.header("x-callback-tag")),
-                        "sessionEmail": endpoint.session.as_ref().map(|(user, _)| &user.email),
+                        "sessionEmail": endpoint.session.as_ref().map(|data| data.user_field("email").json()).transpose()?.flatten(),
                         "hasResponse": endpoint.response.is_some(),
                         "otpLength": otp.len(),
                     }));

@@ -691,12 +691,25 @@ where
             .flatten())
     }
     async fn delete_user(&self, id: &str) -> AuthResult<()> {
-        self.delete_user_optional(id, true).await.map(|_| ())
+        self.delete_user_value(&id.into()).await
+    }
+
+    async fn delete_user_value(&self, id: &FieldValue) -> AuthResult<()> {
+        self.delete_user_optional_value(id, true).await.map(|_| ())
     }
 
     async fn delete_user_optional(
         &self,
         id: &str,
+        delete_database_sessions: bool,
+    ) -> AuthResult<Option<better_auth_core::wire::UserView>> {
+        self.delete_user_optional_value(&id.into(), delete_database_sessions)
+            .await
+    }
+
+    async fn delete_user_optional_value(
+        &self,
+        id: &FieldValue,
         delete_database_sessions: bool,
     ) -> AuthResult<Option<better_auth_core::wire::UserView>> {
         self.delete_user_with_connection(self.connection(), None, id, delete_database_sessions)

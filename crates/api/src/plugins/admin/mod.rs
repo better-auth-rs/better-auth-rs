@@ -131,12 +131,13 @@ impl AdminPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<(UserView, SessionView)> {
-        ctx.require_authoritative_session(req)
+        ctx.require_authoritative_native_session(req)
             .await
             .map_err(|error| match error {
                 AuthError::Unauthenticated => AuthResponse::new(401).into(),
                 error => error,
-            })
+            })?
+            .into_views()
     }
 
     async fn optional_session(
@@ -146,14 +147,14 @@ impl AdminPlugin {
     ) -> AuthResult<Option<(UserView, SessionView)>> {
         let data = ctx
             .session_manager()
-            .resolve(req, better_auth_core::session::SessionRead::Authoritative)
+            .resolve_native(req, better_auth_core::session::SessionRead::Authoritative)
             .await?
             .data;
         if data.is_none() && (req.endpoint_headers().is_some() || req.original_request().is_some())
         {
             return Err(AuthResponse::new(401).into());
         }
-        Ok(data.map(|data| (data.user, data.session)))
+        data.map(|data| data.into_views()).transpose()
     }
 
     fn authorize(
@@ -165,7 +166,7 @@ impl AdminPlugin {
     ) -> AuthResult<()> {
         let permissions = HashMap::from([(resource.to_string(), vec![action.to_string()])]);
         if has_permission(
-            user.id.as_str(),
+            &user.id.field_value(),
             &user.role.field_value(),
             &self.config,
             &permissions,
@@ -271,7 +272,7 @@ impl AdminPlugin {
         let (user, _session) = self.require_session(req, ctx).await?;
         self.authorize(&user, "user", "ban", MESSAGE_BAN_USERS)?;
         let body: BanUserRequest = request::read(req)?;
-        let response = ban_user_core(&body, user.id.typed()?.as_str(), &self.config, ctx).await?;
+        let response = ban_user_core(&body, &user.id.field_value(), &self.config, ctx).await?;
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }
 
@@ -339,7 +340,7 @@ impl AdminPlugin {
     ) -> AuthResult<AuthResponse> {
         let session_manager = ctx.session_manager();
         let session = session_manager
-            .resolve(req, better_auth_core::session::SessionRead::Authoritative)
+            .resolve_native(req, better_auth_core::session::SessionRead::Cached)
             .await?
             .data
             .ok_or_else(|| AuthError::from(AuthResponse::new(401)))?
@@ -358,7 +359,7 @@ impl AdminPlugin {
         let (response, data) = stop_impersonating_core(&session, &admin_cookie, ctx).await?;
 
         ctx.session_manager()
-            .set_session_cookie(req, data, Some(admin_cookie.dont_remember))
+            .set_native_session_cookie(req, data, Some(admin_cookie.dont_remember))
             .await?;
         let mut auth_response = AuthResponse::json(200, &response)?;
         better_auth_core::utils::cookie_utils::remove_set_cookie_entries(
@@ -405,7 +406,7 @@ impl AdminPlugin {
         let (user, _session) = self.require_session(req, ctx).await?;
         self.authorize(&user, "user", "delete", MESSAGE_DELETE_USERS)?;
         let body: UserIdRequest = request::read(req)?;
-        let response = remove_user_core(&body, user.id.typed()?.as_str(), ctx).await?;
+        let response = remove_user_core(&body, &user.id.field_value(), ctx).await?;
         AuthResponse::json(200, &response).map_err(AuthError::from)
     }
 
@@ -453,7 +454,7 @@ impl AdminPlugin {
             None => PermissionResponse {
                 error: None,
                 success: has_permission(
-                    user_id,
+                    &user_id.map_or(better_auth_core::FieldValue::Undefined, Into::into),
                     &role.map_or(better_auth_core::FieldValue::Undefined, Into::into),
                     &self.config,
                     requested,
@@ -465,7 +466,7 @@ impl AdminPlugin {
 }
 
 pub(super) fn target_is_admin(
-    user_id: Option<&str>,
+    user_id: &better_auth_core::FieldValue,
     role: &better_auth_core::FieldValue,
     config: &AdminConfig,
 ) -> AuthResult<bool> {

@@ -3,19 +3,16 @@
 use better_auth_core::{
     AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, AuthSchema, FieldMap,
     FieldValue,
-    session::SessionData,
+    session::NativeSessionData,
     utils::cookie_utils::{
         create_clear_cookie, create_cookie, get_cookie, sign_cookie_value, verify_cookie_value,
     },
-    wire::{SessionView, UserView},
 };
 use chrono::Utc;
 
 use super::{
     helpers::delete_session_cookies,
-    one_time_token::{
-        find_session, response_session_token, session_required, session_token_body, token_body,
-    },
+    one_time_token::{find_session, session_required, session_token_body, token_body},
 };
 
 /// Device session configuration.
@@ -67,13 +64,19 @@ impl MultiSessionPlugin {
         ctx: &AuthContext<S>,
     ) -> AuthResult<AuthResponse> {
         let sessions = list_sessions(req, ctx, true).await?;
-        let mut users = std::collections::HashSet::new();
-        let sessions: Vec<_> = sessions
-            .into_iter()
-            .filter(|(_, user)| users.insert(user.id.as_str().map(str::to_owned)))
-            .map(|(session, user)| FieldValue::from(FieldMap::from(SessionData { session, user })))
-            .collect();
-        Ok(AuthResponse::native(200, sessions.into()))
+        let mut users: Vec<FieldValue> = Vec::new();
+        let mut output = Vec::new();
+        for mut data in sessions {
+            let id = data.user_field("id");
+            if users.iter().any(|seen| seen.strict_equals(id)) {
+                continue;
+            }
+            users.push(id.clone());
+            data.session.filter_returned_fields(&ctx.config.session)?;
+            data.user = data.public_user(&ctx.config.user)?;
+            output.push(FieldValue::from(FieldMap::from(data)));
+        }
+        Ok(AuthResponse::native(200, output.into()))
     }
 
     async fn handle_set_active<S: AuthSchema>(
@@ -87,29 +90,21 @@ impl MultiSessionPlugin {
         };
         let name = cookie_name(&token, &ctx.config);
         let token = signed_device_token(req, &name, &ctx.config).ok_or_else(invalid_session)?;
-        let session = match find_session(ctx, &token).await? {
-            Some((session, user)) if !session.expires_at.is_before(Utc::now())? => {
-                Some((session, user))
-            }
+        let session = match find_session(ctx, &token.into()).await? {
+            Some(data) if !data.session.expires_at.is_before(Utc::now())? => Some(data),
             _ => None,
         };
-        let Some((session, user)) = session else {
+        let Some(mut data) = session else {
             better_auth_core::utils::cookie_utils::remove_set_cookie_entries(req, None, &name)?;
             req.append_response_header("Set-Cookie", create_clear_cookie(&name, &ctx.config)?)?;
             return Err(invalid_session());
         };
-        let response = AuthResponse::json(
-            200,
-            &serde_json::json!({ "session": session, "user": user }),
-        )?;
         ctx.session_manager()
-            .set_session_cookie(
-                req,
-                better_auth_core::session::SessionData { session, user },
-                None,
-            )
+            .set_native_session_cookie(req, data.clone(), None)
             .await?;
-        Ok(response)
+        data.session.filter_returned_fields(&ctx.config.session)?;
+        data.user = data.public_user(&ctx.config.user)?;
+        Ok(AuthResponse::native(200, FieldMap::from(data).into()))
     }
 
     async fn handle_revoke<S: AuthSchema>(
@@ -121,23 +116,27 @@ impl MultiSessionPlugin {
             Ok(token) => token,
             Err(response) => return Ok(response),
         };
-        let (_, current) = ctx.require_session(req).await.map_err(session_required)?;
+        let current = ctx
+            .require_native_session(req)
+            .await
+            .map_err(session_required)?;
         let name = cookie_name(&token, &ctx.config);
         let token = signed_device_token(req, &name, &ctx.config).ok_or_else(invalid_session)?;
         ctx.database.delete_session(&token).await?;
         better_auth_core::utils::cookie_utils::remove_set_cookie_entries(req, None, &name)?;
         req.append_response_header("Set-Cookie", create_clear_cookie(&name, &ctx.config)?)?;
         let response = AuthResponse::json(200, &serde_json::json!({ "status": true }))?;
-        if !current.token.field_value().strict_equals(&token.into()) {
+        if !current
+            .session
+            .token
+            .field_value()
+            .strict_equals(&token.into())
+        {
             return Ok(response);
         }
-        if let Some((session, user)) = list_sessions(req, ctx, false).await?.into_iter().next() {
+        if let Some(data) = list_sessions(req, ctx, false).await?.into_iter().next() {
             ctx.session_manager()
-                .set_session_cookie(
-                    req,
-                    better_auth_core::session::SessionData { session, user },
-                    None,
-                )
+                .set_native_session_cookie(req, data, None)
                 .await?;
         } else {
             delete_session_cookies(req, &ctx.config, false, None)?;
@@ -151,14 +150,20 @@ impl MultiSessionPlugin {
         response: &mut AuthResponse,
         ctx: &AuthContext<S>,
     ) -> AuthResult<()> {
-        let Some(token) = response_session_token(response, &ctx.config) else {
+        if !response.headers.contains_key("set-cookie") {
+            return Ok(());
+        }
+        let cookie = ctx.config.auth_cookie("session_token", Default::default());
+        let adds_session = response
+            .headers
+            .get_all("set-cookie")
+            .any(|value| value.contains(&cookie.name));
+        let Some(data) = req.new_session()? else {
             return Ok(());
         };
-        let Some((_, user)) = find_session(ctx, &token).await? else {
-            return Ok(());
-        };
-        let name = cookie_name(&token, &ctx.config);
-        if get_cookie(req, &name).is_some()
+        let token = data.session.token.typed()?;
+        let name = cookie_name(token, &ctx.config);
+        if get_cookie(req, &name).is_some_and(|value| !value.is_empty())
             || response
                 .headers
                 .get_all("set-cookie")
@@ -180,10 +185,14 @@ impl MultiSessionPlugin {
             .unwrap_or_default();
         let mut tokens_to_delete = Vec::new();
         for (name, previous_token) in device_cookies(req, &ctx.config) {
-            if find_session(ctx, &previous_token)
+            if previous_token.is_empty() {
+                continue;
+            }
+            let previous_id = find_session(ctx, &previous_token.as_str().into())
                 .await?
-                .is_some_and(|(_, previous)| previous.id == user.id)
-            {
+                .map(|previous| previous.user_field("id").clone())
+                .unwrap_or_default();
+            if previous_id.strict_equals(data.user_field("id")) {
                 response
                     .headers
                     .append("Set-Cookie", create_clear_cookie(&name, &ctx.config)?);
@@ -193,14 +202,16 @@ impl MultiSessionPlugin {
         if !tokens_to_delete.is_empty() {
             ctx.database.delete_sessions(&tokens_to_delete).await?;
         }
-        if multi_count - tokens_to_delete.len() + 1 > self.config.maximum_sessions {
+        if multi_count - tokens_to_delete.len() + usize::from(adds_session)
+            > self.config.maximum_sessions
+        {
             return Ok(());
         }
         response.headers.append(
             "Set-Cookie",
             create_cookie(
                 &name,
-                &sign_cookie_value(&token, ctx.config.signing_secret()),
+                &sign_cookie_value(token, ctx.config.signing_secret()),
                 ctx.config.session.expires_in().as_seconds_f64(),
                 &ctx.config,
             )?,
@@ -230,7 +241,9 @@ fn signed_device_token(
     name: &str,
     config: &better_auth_core::AuthConfig,
 ) -> Option<String> {
-    get_cookie(req, name).and_then(|value| verify_cookie_value(&value, config.signing_secret()))
+    get_cookie(req, name)
+        .and_then(|value| verify_cookie_value(&value, config.signing_secret()))
+        .filter(|token| !token.is_empty())
 }
 
 fn device_cookies(
@@ -258,11 +271,14 @@ async fn list_sessions<S: AuthSchema>(
     req: &AuthRequest,
     ctx: &AuthContext<S>,
     only_active: bool,
-) -> AuthResult<Vec<(SessionView, UserView)>> {
+) -> AuthResult<Vec<NativeSessionData>> {
     let tokens = device_cookies(req, &ctx.config)
         .into_iter()
         .map(|(_, token)| token)
         .collect::<Vec<_>>();
+    if tokens.is_empty() {
+        return Ok(Vec::new());
+    }
     let mut sessions = Vec::new();
     let mut missing_user = false;
     for (session, snapshot) in ctx
@@ -270,14 +286,21 @@ async fn list_sessions<S: AuthSchema>(
         .get_session_snapshots(&tokens, only_active)
         .await?
     {
-        let user = if let Some(data) = snapshot {
-            data.into_typed()?.map(|data| data.user)
+        let data = if let Some(data) = snapshot {
+            NativeSessionData::from(data)
         } else {
-            ctx.database.get_user_by_id_field(&session.user_id).await?
+            let user = ctx.database.get_user_by_id_field(&session.user_id).await?;
+            NativeSessionData {
+                session,
+                user: user
+                    .map(FieldMap::from)
+                    .map(FieldValue::from)
+                    .unwrap_or(FieldValue::Null),
+            }
         };
-        if let Some(user) = user {
-            if session.expires_at.is_after(Utc::now())? {
-                sessions.push((session, user));
+        if data.user.is_truthy() {
+            if data.session.expires_at.is_after(Utc::now())? {
+                sessions.push(data);
             }
         } else {
             missing_user = true;
@@ -288,3 +311,6 @@ async fn list_sessions<S: AuthSchema>(
     }
     Ok(sessions)
 }
+
+#[cfg(test)]
+mod tests;

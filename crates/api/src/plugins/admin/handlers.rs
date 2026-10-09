@@ -99,7 +99,7 @@ fn require_user_permission(
 ) -> AuthResult<()> {
     let permission = std::collections::HashMap::from([("user".into(), vec![action.into()])]);
     if has_permission(
-        Some(user.id.typed()?),
+        &user.id.field_value(),
         &user.role.field_value(),
         config,
         &permission,
@@ -314,7 +314,7 @@ pub(crate) async fn update_user_core(
         let permissions =
             std::collections::HashMap::from([("user".to_string(), vec!["set-role".to_string()])]);
         if !has_permission(
-            acting_user.id.as_str(),
+            &acting_user.id.field_value(),
             &acting_user.role.field_value(),
             config,
             &permissions,
@@ -484,7 +484,7 @@ pub(crate) async fn list_user_sessions_core(
 
 pub(crate) async fn ban_user_core(
     body: &BanUserRequest,
-    admin_user_id: impl AsRef<str>,
+    admin_user_id: &better_auth_core::FieldValue,
     config: &AdminConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<UserResponse<AdminUserView>> {
@@ -494,7 +494,7 @@ pub(crate) async fn ban_user_core(
         .await?
         .ok_or_else(|| AuthError::not_found(MESSAGE_USER_NOT_FOUND))?;
 
-    if body.user_id == admin_user_id.as_ref() {
+    if admin_user_id.strict_equals(&body.user_id.clone().into()) {
         return Err(AuthError::bad_request("You cannot ban yourself"));
     }
 
@@ -589,7 +589,11 @@ pub(crate) async fn impersonate_user_core(
         .ok_or_else(|| AuthError::not_found(MESSAGE_USER_NOT_FOUND))?;
 
     if !config.allow_impersonating_admins
-        && target_is_admin(Some(&body.user_id), &target.role().field_value(), config)?
+        && target_is_admin(
+            &target.id().field_value(),
+            &target.role().field_value(),
+            config,
+        )?
     {
         require_user_permission(
             acting_user,
@@ -637,12 +641,12 @@ pub(crate) async fn impersonate_user_core(
     .ok_or_else(|| AuthError::internal("Invalid impersonation expiration date"))?;
     let create_session = CreateSession {
         inherited_fields: Default::default(),
-        additional_fields: Default::default(),
+        additional_fields: [("impersonatedBy".into(), acting_user.id.field_value())].into(),
         user_id: target.id().into_owned(),
         expires_at: expires_at.into(),
         ip_address: ip_address.map(|value| value.to_string()),
         user_agent: user_agent.map(|value| value.to_string()),
-        impersonated_by: acting_user.id.as_str().map(str::to_owned),
+        impersonated_by: None,
         active_organization_id: None,
     };
 
@@ -672,8 +676,8 @@ pub(crate) async fn stop_impersonating_core(
     admin_cookie: &AdminSessionCookiePayload,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<(
-    SessionUserResponse<SessionView, UserView>,
-    better_auth_core::session::SessionData,
+    SessionUserResponse<SessionView, better_auth_core::FieldValue>,
+    better_auth_core::session::NativeSessionData,
 )> {
     let admin_id = session.impersonated_by().field_value();
     if !admin_id.is_truthy() {
@@ -692,31 +696,31 @@ pub(crate) async fn stop_impersonating_core(
         .await?
         .ok_or_else(|| AuthError::internal(MESSAGE_FAILED_TO_FIND_ADMIN_SESSION))?;
 
-    if admin_session.user_id() != admin_user.id() {
+    if !admin_session
+        .user_id()
+        .field_value()
+        .strict_equals(&admin_user.id.field_value())
+    {
         return Err(AuthError::internal(MESSAGE_FAILED_TO_FIND_ADMIN_SESSION));
     }
 
-    let snapshot = match snapshot {
-        Some(data) => Some(
-            data.into_typed()?
-                .ok_or_else(|| AuthError::internal(MESSAGE_FAILED_TO_FIND_ADMIN_SESSION))?,
-        ),
-        None => None,
-    };
-    ctx.database
-        .delete_session_by_token_value(&session.token().field_value())
-        .await?;
-
     let data = if let Some(data) = snapshot {
-        data
+        better_auth_core::session::NativeSessionData::from(data)
     } else {
         ctx.session_manager()
             .internal_data(&admin_user, &admin_session)
             .await?
+            .into()
     };
+    if !data.user.is_truthy() {
+        return Err(AuthError::internal(MESSAGE_FAILED_TO_FIND_ADMIN_SESSION));
+    }
+    ctx.database
+        .delete_session_by_token_value(&session.token().field_value())
+        .await?;
     let response = SessionUserResponse {
         session: ctx.session_view(&data.session).await?,
-        user: ctx.user_view(&data.user).await?,
+        user: data.public_user(&ctx.config.user)?,
     };
 
     Ok((response, data))
@@ -746,10 +750,10 @@ pub(crate) async fn revoke_user_sessions_core(
 
 pub(crate) async fn remove_user_core(
     body: &UserIdRequest,
-    admin_user_id: impl AsRef<str>,
+    admin_user_id: &better_auth_core::FieldValue,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<SuccessResponse> {
-    if body.user_id == admin_user_id.as_ref() {
+    if admin_user_id.strict_equals(&body.user_id.clone().into()) {
         return Err(AuthError::bad_request("You cannot remove yourself"));
     }
 
@@ -763,7 +767,9 @@ pub(crate) async fn remove_user_core(
 
     let accounts = ctx.database.get_user_accounts(&body.user_id).await?;
     for account in &accounts {
-        ctx.database.delete_account(account.id.typed()?).await?;
+        ctx.database
+            .delete_account_value(&account.id.field_value())
+            .await?;
     }
 
     ctx.database.delete_user(&body.user_id).await?;
@@ -834,7 +840,7 @@ pub(crate) fn has_permission_core(
     Ok(PermissionResponse {
         error: None,
         success: has_permission(
-            user.id.as_str(),
+            &user.id.field_value(),
             &user.role.field_value(),
             config,
             requested,

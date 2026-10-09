@@ -204,7 +204,10 @@ impl<S: AuthSchema> SecondaryStore<S> {
         self.references_value(&user_id.into()).await
     }
 
-    async fn references_value(&self, user_id: &FieldValue) -> AuthResult<Vec<SessionReference>> {
+    pub(super) async fn references_value(
+        &self,
+        user_id: &FieldValue,
+    ) -> AuthResult<Vec<SessionReference>> {
         Ok(cache::decode(
             self.secondary()?
                 .get_native(&active_sessions_key(user_id)?)
@@ -416,7 +419,7 @@ impl<S: AuthSchema> SecondaryStore<S> {
             .await
     }
 
-    async fn queue_cached_user_session_deletion_value(
+    pub(super) async fn queue_cached_user_session_deletion_value(
         &self,
         user_id: FieldValue,
         references: Vec<SessionReference>,
@@ -633,10 +636,22 @@ impl<S: AuthSchema> SessionStore<S> for SecondaryStore<S> {
             Option<crate::session::SessionData<crate::store::JoinValue<UserView>>>,
         )>,
     > {
+        self.get_session_snapshot_value(&token.into()).await
+    }
+
+    async fn get_session_snapshot_value(
+        &self,
+        token: &FieldValue,
+    ) -> AuthResult<
+        Option<(
+            crate::wire::SessionView,
+            Option<crate::session::SessionData<crate::store::JoinValue<UserView>>>,
+        )>,
+    > {
         if self.storage.is_none() {
-            return self.inner.get_session_snapshot(token).await;
+            return self.inner.get_session_snapshot_value(token).await;
         }
-        let raw = self.secondary()?.get_native(&token.into()).await?;
+        let raw = self.secondary()?.get_native(token).await?;
         if raw.is_some() {
             let Some(mut cached) = cache::decode(raw).and_then(|value| value.as_object().cloned())
             else {
@@ -658,7 +673,7 @@ impl<S: AuthSchema> SessionStore<S> for SecondaryStore<S> {
         if !self.database_sessions() || self.config.session.preserve_session_in_database() {
             return Ok(None);
         }
-        self.inner.get_session_snapshot(token).await
+        self.inner.get_session_snapshot_value(token).await
     }
 
     async fn get_session_snapshots(

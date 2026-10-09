@@ -630,7 +630,7 @@ where
             .delete_user_with_connection(
                 &self.tx,
                 Some((&self.tx, self)),
-                id,
+                &id.into(),
                 delete_database_sessions,
             )
             .await?;

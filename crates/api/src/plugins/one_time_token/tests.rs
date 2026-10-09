@@ -1,6 +1,6 @@
 use super::*;
 use crate::plugins::test_helpers::{create_test_context_with_user, finalize_response};
-use better_auth_core::{CreateUser, HttpMethod};
+use better_auth_core::{AuthPlugin, CreateUser, HttpMethod};
 
 fn verify_request(token: &str) -> AuthRequest {
     let mut req = AuthRequest::new(HttpMethod::Post, "/one-time-token/verify");
@@ -9,6 +9,84 @@ fn verify_request(token: &str) -> AuthRequest {
         .insert("content-type".into(), "application/json".into());
     req.body = Some(serde_json::to_vec(&serde_json::json!({ "token": token })).unwrap());
     req
+}
+
+#[tokio::test]
+async fn expired_session_writes_cookie_and_new_session_before_rejecting_transfer() {
+    let (ctx, user, session) = create_test_context_with_user(
+        CreateUser::new()
+            .with_email("expired-session@example.test")
+            .with_name("Expired"),
+        Duration::seconds(-60),
+    )
+    .await;
+    let plugin = OneTimeTokenPlugin::new();
+    let token = plugin.generate(&ctx, session.clone(), user).await.unwrap();
+    let request = verify_request(&token);
+    let response = plugin.handle_verify(&request, &ctx).await.unwrap();
+    let response = finalize_response(&ctx, &request, response);
+    assert_eq!(response.status, 400);
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&response.body.bytes().unwrap()).unwrap(),
+        serde_json::json!({"message": "Session expired"}),
+    );
+    assert!(response.headers.contains_key("set-cookie"));
+    assert_eq!(
+        request.new_session().unwrap().unwrap().session.token,
+        session.token
+    );
+}
+
+#[tokio::test]
+async fn after_hook_generates_from_native_new_session_without_rereading_storage() {
+    let (ctx, _, session) = create_test_context_with_user(
+        CreateUser::new()
+            .with_email("native-transfer@example.test")
+            .with_name("Native"),
+        Duration::hours(1),
+    )
+    .await;
+    let user = FieldValue::from(vec![FieldValue::from(FieldMap::from([
+        ("id".into(), 7.into()),
+        ("hidden".into(), "retained".into()),
+    ]))]);
+    let expected = user.clone();
+    let plugin = OneTimeTokenPlugin::new()
+        .set_ott_header_on_new_session(true)
+        .generate_token(Arc::new(move |data| {
+            assert!(data.user.strict_equals(&expected));
+            Box::pin(async { Ok("native-transfer".to_owned()) })
+        }));
+    let request = AuthRequest::new(HttpMethod::Post, "/native-session");
+    ctx.session_manager()
+        .publish_session(
+            &request,
+            NativeSessionData {
+                session: session.clone(),
+                user,
+            },
+        )
+        .unwrap();
+    ctx.database
+        .delete_session(session.token.typed().unwrap())
+        .await
+        .unwrap();
+    let mut response = AuthResponse::new(200);
+    plugin
+        .after_request(&request, &mut response, &ctx)
+        .await
+        .unwrap();
+    assert_eq!(
+        response.headers.get("set-ott").map(String::as_str),
+        Some("native-transfer")
+    );
+    let stored = ctx
+        .database
+        .get_verification_by_identifier("one-time-token:native-transfer")
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(stored.value, session.token);
 }
 
 #[tokio::test]

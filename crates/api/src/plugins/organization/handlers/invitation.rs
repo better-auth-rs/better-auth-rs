@@ -313,7 +313,7 @@ pub(crate) async fn invite_member_core(
         better_auth_core::FieldValue::from_json(serde_json::to_value(body)?)?,
         ctx,
     );
-    endpoint.session = Some((user_view.clone(), session_view));
+    endpoint.session = Some((user_view.clone(), session_view).into());
     let task = crate::plugins::organization::callbacks::delivery(
         config,
         InvitationEmail {

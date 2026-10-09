@@ -22,30 +22,45 @@ impl ResolvedSigningKey {
 impl JwtPlugin {
     pub(super) async fn sign_session<S: AuthSchema>(
         &self,
-        session: Value,
+        session: Option<better_auth_core::session::NativeSessionData>,
         endpoint: &EndpointContext<'_, S>,
     ) -> AuthResult<String> {
-        let user = session
-            .get("user")
-            .and_then(Value::as_object)
-            .ok_or_else(|| AuthError::internal("JWT user must be an object"))?;
-        let default_subject = user
-            .get("id")
-            .cloned()
-            .ok_or_else(|| AuthError::internal("JWT user must have an ID"))?;
-        let mut payload = match &self.config.define_payload {
-            Some(callback) => callback(session.clone()).await?,
-            None => user.clone(),
+        let user = || {
+            session.as_ref().map(|data| &data.user).ok_or_else(|| {
+                AuthError::internal("Cannot read properties of null (reading 'user')")
+            })
         };
+        let mut payload = FieldMap::from([("iat".into(), (Utc::now().timestamp() as f64).into())]);
+        match &self.config.define_payload {
+            Some(callback) => {
+                payload.extend(FieldMap::from_json(
+                    callback(serde_json::to_value(&session)?).await?,
+                )?);
+            }
+            None => keys::spread(&mut payload, user()?.clone()),
+        }
         let subject = match &self.config.get_subject {
-            Some(callback) => callback(session).await?.into(),
-            None => default_subject,
+            Some(callback) => callback(serde_json::to_value(&session)?).await?.into(),
+            None => match user()? {
+                FieldValue::Null => {
+                    return Err(AuthError::internal(
+                        "Cannot read properties of null (reading 'id')",
+                    ));
+                }
+                FieldValue::Undefined => {
+                    return Err(AuthError::internal(
+                        "Cannot read properties of undefined (reading 'id')",
+                    ));
+                }
+                value => value
+                    .as_object()
+                    .and_then(|fields| fields.get("id"))
+                    .cloned()
+                    .unwrap_or_default(),
+            },
         };
-        let _ = payload
-            .entry("iat")
-            .or_insert_with(|| Utc::now().timestamp().into());
         let _ = payload.insert("sub".into(), subject);
-        self.sign_in_endpoint(payload, &JwtSigningOptions::default(), endpoint)
+        self.sign_fields_in_endpoint(payload, &JwtSigningOptions::default(), endpoint)
             .await
     }
 
@@ -82,17 +97,29 @@ impl JwtPlugin {
     /// Sign with the supplied endpoint context, including its active transaction.
     pub async fn sign_in_endpoint<S: AuthSchema>(
         &self,
-        mut payload: Map<String, Value>,
+        payload: Map<String, Value>,
         options: &JwtSigningOptions,
         endpoint: &EndpointContext<'_, S>,
     ) -> AuthResult<String> {
+        self.sign_fields_in_endpoint(FieldMap::from_json(payload)?, options, endpoint)
+            .await
+    }
+
+    async fn sign_fields_in_endpoint<S: AuthSchema>(
+        &self,
+        fields: FieldMap,
+        options: &JwtSigningOptions,
+        endpoint: &EndpointContext<'_, S>,
+    ) -> AuthResult<String> {
+        let subject = fields.get("sub").cloned().unwrap_or_default();
+        let mut payload = fields.json()?;
         let config = &endpoint.auth.config;
         self.default_claims(&mut payload, config)?;
         if let Some(callback) = &self.config.custom_sign {
             return callback(payload, options.clone()).await;
         }
         let key = self.resolve_local_signing_key(options, endpoint).await?;
-        claims::prepare_local_claims(&mut payload)?;
+        claims::prepare_local_claims(&mut payload, &subject)?;
         key.sign(payload, options)
     }
 

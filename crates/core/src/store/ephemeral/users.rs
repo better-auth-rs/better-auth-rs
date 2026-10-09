@@ -268,7 +268,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
 
     async fn verify_user_and_revoke_unproven_access_value(
         &self,
-        user_id: &FieldValue,
+        user_id: &crate::FieldValue,
     ) -> AuthResult<Option<UserView>> {
         crate::store::revoke_unproven_account_access(self, user_id).await
     }
@@ -444,7 +444,11 @@ impl UserStore<StatelessSchema> for EphemeralStore {
     }
 
     async fn delete_user(&self, id: &str) -> AuthResult<()> {
-        self.delete_user_optional(id, true).await.map(|_| ())
+        self.delete_user_value(&id.into()).await
+    }
+
+    async fn delete_user_value(&self, id: &Value) -> AuthResult<()> {
+        self.delete_user_optional_value(id, true).await.map(|_| ())
     }
 
     async fn delete_user_optional(
@@ -452,22 +456,34 @@ impl UserStore<StatelessSchema> for EphemeralStore {
         id: &str,
         delete_database_sessions: bool,
     ) -> AuthResult<Option<UserView>> {
+        self.delete_user_optional_value(&id.into(), delete_database_sessions)
+            .await
+    }
+
+    async fn delete_user_optional_value(
+        &self,
+        id: &Value,
+        delete_database_sessions: bool,
+    ) -> AuthResult<Option<UserView>> {
         if delete_database_sessions {
-            self.delete_user_sessions(id).await?;
+            self.delete_user_sessions_by_user_value(id).await?;
         }
         self.delete_user_accounts_with_hooks(id).await?;
-        self.model_fields.begin_id_query(EntityRole::User)?;
-        let stored_id = crate::SchemaValue::<String>::from_field(
-            self.memory_primary_id_query(&Value::from(id))?,
-        );
-        let user = self
-            .raw("user", "findOne", |state| state.users.get(&stored_id))
-            .await?;
-        // Upstream deleteWithHooks treats snapshot projection failures as a missing row.
-        let Some(user) = (match user {
-            Some(user) => self.output_user(user).await.ok(),
-            None => None,
-        }) else {
+        let snapshot: AuthResult<Option<UserView>> = async {
+            self.model_fields.begin_id_query(EntityRole::User)?;
+            let stored_id =
+                crate::SchemaValue::<String>::from_field(self.memory_primary_id_query(id)?);
+            let user = self
+                .raw("user", "findMany", |state| state.users.get(&stored_id))
+                .await?;
+            match user {
+                Some(user) => self.output_user(user).await.map(Some),
+                None => Ok(None),
+            }
+        }
+        .await;
+        // Upstream single-delete catches snapshot lookup and projection errors.
+        let Ok(Some(user)) = snapshot else {
             return Ok(None);
         };
         let transaction = EphemeralTransaction {
@@ -488,6 +504,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             }
         }
         self.model_fields.begin_id_query(EntityRole::User)?;
+        let stored_id = crate::SchemaValue::<String>::from_field(self.memory_primary_id_query(id)?);
         self.raw("user", "delete", |state| {
             let _ = state.users.remove(&stored_id)?;
             Ok(())

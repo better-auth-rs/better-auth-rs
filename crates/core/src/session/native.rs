@@ -7,11 +7,15 @@ use crate::{
 };
 
 /// Session data before the selected User value crosses a typed authentication boundary.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Deserialize)]
 pub struct NativeSessionData {
     /// Session passed to the credential writer.
     pub session: SessionView,
     /// Preserve the selected User object or relationship array for trusted callbacks.
+    #[serde(
+        default,
+        deserialize_with = "crate::field_value::serde::value::deserialize"
+    )]
     pub user: FieldValue,
 }
 
@@ -66,9 +70,29 @@ impl NativeSessionData {
             .unwrap_or(&FieldValue::Undefined)
     }
 
+    /// Read an object through native User slots without requiring a typed User identity.
+    /// Preserve numeric keys, absent fields, explicit null, and callback replacement values.
+    pub fn user_view(&self) -> AuthResult<UserView> {
+        let fields = self
+            .user
+            .as_object()
+            .ok_or_else(|| AuthError::internal("Session User must be an object"))?;
+        UserView::try_from(fields.clone())
+    }
+
+    /// Consume public object fields without rejecting the selected relationship cardinality.
+    /// Use the session manager's typed resolution when the caller requires one User.
+    pub fn into_views(self) -> AuthResult<(UserView, SessionView)> {
+        let user = self.user_view()?;
+        Ok((user, self.session))
+    }
+
     /// Clone enumerable User fields and remove fields with `returned: false`.
     /// Arrays become numeric-key objects only at this output boundary.
     pub fn public_user(&self, config: &UserConfig) -> AuthResult<FieldValue> {
+        if !self.user.is_truthy() {
+            return Ok(self.user.clone());
+        }
         let value = StructuredCloneContext::new().clone_value(&self.user)?;
         let mut fields = match value {
             FieldValue::Object(fields) => (*fields).clone(),
@@ -77,11 +101,9 @@ impl NativeSessionData {
                 .enumerate()
                 .map(|(index, value)| (index.to_string(), value.clone()))
                 .collect(),
-            _ => {
-                return Err(AuthError::internal(
-                    "Session User must be an object or an array",
-                ));
-            }
+            FieldValue::String(value) => string_fields(value.encode_utf16()),
+            FieldValue::Utf16String(value) => string_fields(value.as_utf16().iter().copied()),
+            _ => FieldMap::new(),
         };
         fields.retain(|name, _| {
             config
@@ -90,6 +112,37 @@ impl NativeSessionData {
                 .is_none_or(|field| field.returned())
         });
         Ok(fields.into())
+    }
+}
+
+fn string_fields(units: impl Iterator<Item = u16>) -> FieldMap {
+    units
+        .enumerate()
+        .map(|(index, unit)| {
+            (
+                index.to_string(),
+                crate::Utf16String::from_units(vec![unit]).into(),
+            )
+        })
+        .collect()
+}
+
+impl crate::FromFieldMap for NativeSessionData {
+    fn from_field_values(mut fields: FieldMap) -> AuthResult<Self> {
+        let session = fields.shift_remove("session").unwrap_or_default();
+        let session = session.as_object().ok_or_else(|| {
+            AuthError::internal("Session response must contain a `session` object")
+        })?;
+        Ok(Self {
+            session: <SessionView as crate::FromFieldMap>::from_field_values(session.clone())?,
+            user: fields.shift_remove("user").unwrap_or_default(),
+        })
+    }
+}
+
+impl From<(UserView, SessionView)> for NativeSessionData {
+    fn from((user, session): (UserView, SessionView)) -> Self {
+        SessionData { session, user }.into()
     }
 }
 
@@ -158,6 +211,8 @@ impl serde::Serialize for NativeSessionData {
 
 #[cfg(test)]
 mod function_tests;
+#[cfg(test)]
+mod value_tests;
 
 #[cfg(test)]
 mod tests {
@@ -366,6 +421,34 @@ mod tests {
             Some(&user.id.field_value())
         );
         assert_eq!(calls.load(Ordering::SeqCst), 1);
+        let context = crate::AuthContext::new(config, manager.database.clone());
+        for authoritative in [false, true] {
+            let mut request = AuthRequest::new(HttpMethod::Get, "/native-business-consumer");
+            request.headers = native_request.headers.clone();
+            request.query = Some(serde_json::json!({"disableRefresh": true}));
+            let resolved = if authoritative {
+                context
+                    .require_authoritative_native_session(&request)
+                    .await?
+            } else {
+                context.require_native_session(&request).await?
+            };
+            let view = resolved.user_view()?;
+            assert!(view.id.is_undefined());
+            assert_eq!(FieldValue::from(FieldMap::from(view)), resolved.user);
+            assert!(request.server_context("auth.current-user-id")?.is_none());
+            assert!(
+                request
+                    .native_session_snapshot()?
+                    .unwrap()
+                    .user
+                    .strict_equals(&resolved.user)
+            );
+            assert!(matches!(
+                request.session_snapshot(),
+                Err(AuthError::Internal(message)) if message == "A User relationship array cannot authenticate a typed User"
+            ));
+        }
         Ok(())
     }
 

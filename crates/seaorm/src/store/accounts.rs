@@ -51,7 +51,7 @@ where
         .await
     }
 
-    fn account_selector(
+    pub(super) fn account_selector(
         &self,
         name: &str,
         original: &FieldValue,

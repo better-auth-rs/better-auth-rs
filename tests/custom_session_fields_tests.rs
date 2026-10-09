@@ -18,8 +18,7 @@ use better_auth_core::store::{EphemeralStore, StatelessSchema};
 use better_auth_core::user_fields::{FieldTransforms, UserFieldConfig, UserFieldTransform};
 use better_auth_core::utils::cookie_utils::sign_cookie_value;
 use better_auth_core::{
-    AuthContext, AuthRequest, AuthResponse, CreateUser, FieldDate, FieldMap, FieldValue,
-    HttpMethod, UserView,
+    AuthContext, AuthRequest, AuthResponse, CreateUser, FieldDate, FieldMap, FieldValue, HttpMethod,
 };
 use serde_json::{Value, json};
 use std::sync::{Arc, Mutex};
@@ -29,7 +28,7 @@ const LIST_PATH: &str = "/multi-session/list-device-sessions";
 
 enum Event {
     After,
-    Customize { path: String, user: Box<UserView> },
+    Customize { path: String, user: FieldValue },
 }
 
 type Trace = Arc<Mutex<Vec<Event>>>;
@@ -50,11 +49,16 @@ impl CustomSessionCallback<StatelessSchema> for Capture {
             .map_err(|_| AuthError::internal("Custom session trace lock poisoned"))?
             .push(Event::Customize {
                 path: request.path().into(),
-                user: Box::new(input.data.user.clone()),
+                user: input.data.user.clone(),
             });
         request.set_response_header("x-custom-session", "observed")?;
         // This callback selects JSON output, whose Rust value cannot represent a lone surrogate.
-        let _ = input.data.user.additional_fields.remove("loneSurrogate");
+        let FieldValue::Object(user) = &mut input.data.user else {
+            return Err(AuthError::internal(
+                "Expected public User object in this fixture",
+            ));
+        };
+        let _ = Arc::make_mut(user).remove("loneSurrogate");
         Ok(serde_json::to_value(input)?)
     }
 }
@@ -248,7 +252,7 @@ async fn check_native_fields(path: &str) {
         })
         .unwrap();
     assert_eq!(callback_path, path);
-    let fields = &user.additional_fields;
+    let fields = user.as_object().unwrap();
     assert!(matches!(
         fields.get("nativeDate"),
         Some(FieldValue::Date(_))
@@ -327,11 +331,12 @@ async fn list_custom_callback_observes_global_after_hook_replacement() {
         })
         .unwrap();
     assert_eq!(path, LIST_PATH);
-    assert_eq!(user.name.typed().unwrap().as_deref(), Some("After hook"));
+    let fields = user.as_object().unwrap();
     assert_eq!(
-        user.additional_fields.get("replacement"),
-        Some(&FieldValue::Bool(true))
+        fields.get("name").and_then(FieldValue::as_str),
+        Some("After hook")
     );
+    assert_eq!(fields.get("replacement"), Some(&FieldValue::Bool(true)));
     let body: Value = serde_json::from_slice(response.body.bytes().unwrap().as_ref()).unwrap();
     let user = body
         .as_array()

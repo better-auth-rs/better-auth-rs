@@ -1,4 +1,4 @@
-use better_auth_core::entity::{AuthPasskey, AuthUser};
+use better_auth_core::entity::AuthPasskey;
 use better_auth_core::wire::PasskeyView;
 use better_auth_core::{
     AuthContext, AuthError, AuthResult, CreateVerification, FieldMap, FieldValue, RequestMeta,
@@ -168,8 +168,8 @@ pub(super) async fn generate_register_options_core(
     Ok((response.into(), cookie))
 }
 
-pub(super) async fn generate_authenticate_options_core<U: AuthUser>(
-    maybe_user: Option<&U>,
+pub(super) async fn generate_authenticate_options_core(
+    user_id: Option<&FieldValue>,
     req: &better_auth_core::AuthRequest,
     config: &PasskeyConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
@@ -180,10 +180,8 @@ pub(super) async fn generate_authenticate_options_core<U: AuthUser>(
         &[ctx.config.base_url.as_static().unwrap_or("").to_owned()],
     )?;
 
-    let stored_passkeys = if let Some(user) = maybe_user {
-        ctx.database
-            .list_passkeys_by_user_value(&user.id().field_value())
-            .await?
+    let stored_passkeys = if let Some(user_id) = user_id {
+        ctx.database.list_passkeys_by_user_value(user_id).await?
     } else {
         Vec::new()
     };
@@ -421,22 +419,19 @@ pub(super) async fn verify_authentication_core(
 }
 
 pub(super) async fn list_user_passkeys_core(
-    user: &impl AuthUser,
+    user_id: &FieldValue,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<Vec<PasskeyView>> {
-    let passkeys = ctx
-        .database
-        .list_passkeys_by_user_value(&user.id().field_value())
-        .await?;
+    let passkeys = ctx.database.list_passkeys_by_user_value(user_id).await?;
     Ok(passkeys.iter().map(PasskeyView::from).collect())
 }
 
 pub(super) async fn delete_passkey_core(
     body: &DeletePasskeyRequest,
-    user: &impl AuthUser,
+    user_id: &FieldValue,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<StatusResponse> {
-    require_passkey_owner(&body.id, user, ctx, empty_unauthorized()).await?;
+    require_passkey_owner(&body.id, user_id, ctx, empty_unauthorized()).await?;
 
     ctx.database.delete_passkey(&body.id).await?;
     Ok(StatusResponse { status: true })
@@ -444,12 +439,12 @@ pub(super) async fn delete_passkey_core(
 
 pub(super) async fn update_passkey_core(
     body: &UpdatePasskeyRequest,
-    user: &impl AuthUser,
+    user_id: &FieldValue,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<PasskeyResponse> {
     require_passkey_owner(
         &body.id,
-        user,
+        user_id,
         ctx,
         AuthError::Upstream {
             status: 401,
@@ -477,11 +472,10 @@ fn empty_unauthorized() -> AuthError {
 
 async fn require_passkey_owner(
     id: &str,
-    user: &impl AuthUser,
+    owner: &FieldValue,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     forbidden: AuthError,
 ) -> AuthResult<()> {
-    let owner = user.id().field_value();
     if !owner.is_truthy() {
         return Err(empty_unauthorized());
     }
@@ -497,7 +491,7 @@ async fn require_passkey_owner(
         .get_passkey_by_id(id)
         .await?
         .ok_or_else(|| AuthError::not_found("Passkey not found"))?;
-    if !passkey.user_id().field_value().strict_equals(&owner) {
+    if !passkey.user_id().field_value().strict_equals(owner) {
         return Err(forbidden);
     }
     Ok(())

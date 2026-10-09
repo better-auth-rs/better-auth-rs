@@ -14,8 +14,12 @@ export async function expectStandaloneCapture(
   const directory = mkdtempSync(join(tmpdir(), `better-auth-${basename(script, ".mjs")}-`));
   const output = join(directory, "capture.json");
   // Bun's test runner exposes different Error properties from standalone captures.
+  const env = { ...process.env };
+  // The standalone capture has no test-mode IP fallback.
+  delete env.NODE_ENV;
+  delete env.TEST;
   const child = Bun.spawn([process.execPath, "--no-install", script, ...args, output], {
-    stdout: "pipe", stderr: "pipe",
+    stdout: "pipe", stderr: "pipe", env,
   });
   const [stdout, stderr, status] = await Promise.all([
     new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited,

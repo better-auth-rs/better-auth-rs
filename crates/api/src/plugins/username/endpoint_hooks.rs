@@ -68,19 +68,15 @@ impl UsernamePlugin {
                     } else {
                         context
                             .session_manager()
-                            .resolve(request, SessionRead::Cached)
+                            .resolve_native(request, SessionRead::Cached)
                             .await?
                             .data
                     };
                     if !signup
                         && self.config.immutable_username
                         && let Some(session) = &session
-                        && session.user.username.field_value().is_truthy()
-                        && !session
-                            .user
-                            .username
-                            .field_value()
-                            .strict_equals(&normalized)
+                        && session.user_field("username").is_truthy()
+                        && !session.user_field("username").strict_equals(&normalized)
                     {
                         return Err(error(
                             400,
@@ -97,7 +93,7 @@ impl UsernamePlugin {
                                 !existing
                                     .id
                                     .field_value()
-                                    .strict_equals(&session.user.id.field_value())
+                                    .strict_equals(session.user_field("id"))
                             }))
                     {
                         return Err(error(

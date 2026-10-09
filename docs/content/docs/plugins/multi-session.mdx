@@ -11,6 +11,8 @@ Register `MultiSessionPlugin::new()`. Session responses add a signed cookie for 
 
 Database-backed lists use one token-list query with `advanced.database.default_find_many_limit` and the database query order. The list endpoint filters expired sessions before applying the limit. Revoking the active session applies the limit before rejecting expired replacement sessions. If a selected database session has no user, the whole candidate list is empty.
 
+User IDs use upstream strict equality during deduplication, before public field filtering. Selected relationship arrays retain their native shape until public output converts them into numeric-key objects. Switching and revocation preserve the selected data through the cookie writer. New-session hooks use the retained endpoint value without rereading its database row.
+
 With secondary storage, candidate sessions follow the device-cookie order. The database limit does not apply. Missing or malformed cache records are skipped without reading the database.
 
 The storage schema does not change. The plugin uses existing session persistence and the configured session cookie attributes.

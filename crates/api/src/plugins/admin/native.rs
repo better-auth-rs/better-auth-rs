@@ -45,14 +45,15 @@ impl<'a, S: AuthSchema> AdminApi<'a, S> {
                     better_auth_core::with_request_hook_context_value(hook_context, async {
                         let session = if headers.is_some() {
                             let session = context
-                                .require_authoritative_session(&request)
+                                .require_authoritative_native_session(&request)
                                 .await
                                 .map_err(|error| match error {
                                     AuthError::Unauthenticated => {
                                         AuthError::from(AuthResponse::new(401))
                                     }
                                     error => error,
-                                })?;
+                                })?
+                                .into_views()?;
                             self.plugin.authorize(
                                 &session.0,
                                 "user",

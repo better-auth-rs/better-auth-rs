@@ -349,7 +349,7 @@ pub(super) async fn send_otp_core<S: better_auth_core::AuthSchema>(
         ctx,
     );
     if let ResolvedTwoFactorState::Session { user, session, .. } = &state {
-        endpoint.session = Some((user.clone(), *session.clone()));
+        endpoint.session = Some((user.clone(), *session.clone()).into());
     }
 
     let otp: String = (0..config.otp_digits)

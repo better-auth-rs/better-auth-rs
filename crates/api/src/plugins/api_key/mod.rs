@@ -4,7 +4,6 @@ use rand::seq::SliceRandom;
 use sha2::{Digest, Sha256};
 use std::sync::{Arc, Mutex};
 
-use better_auth_core::entity::AuthUser;
 use better_auth_core::{AuthContext, AuthError, AuthResult, BeforeRequestAction};
 use better_auth_core::{AuthRequest, AuthResponse, FieldValue};
 
@@ -55,6 +54,7 @@ pub enum ApiKeyErrorCode {
     KeyNotFound,
     RateLimited,
     UnauthorizedSession,
+    UserBanned,
     InvalidPrefixLength,
     InvalidNameLength,
     MetadataDisabled,
@@ -88,6 +88,7 @@ impl ApiKeyErrorCode {
             Self::KeyNotFound => "KEY_NOT_FOUND",
             Self::RateLimited => "RATE_LIMITED",
             Self::UnauthorizedSession => "UNAUTHORIZED_SESSION",
+            Self::UserBanned => "USER_BANNED",
             Self::InvalidPrefixLength => "INVALID_PREFIX_LENGTH",
             Self::InvalidNameLength => "INVALID_NAME_LENGTH",
             Self::MetadataDisabled => "METADATA_DISABLED",
@@ -121,6 +122,7 @@ impl ApiKeyErrorCode {
             Self::KeyNotFound => "API Key not found",
             Self::RateLimited => "Rate limit exceeded.",
             Self::UnauthorizedSession => "Unauthorized or invalid session",
+            Self::UserBanned => "User is banned",
             Self::InvalidPrefixLength => "The prefix length is either too large or too small.",
             Self::InvalidNameLength => "The name length is either too large or too small.",
             Self::MetadataDisabled => "Metadata is disabled.",
@@ -170,7 +172,7 @@ impl serde::Serialize for ApiKeyErrorCode {
 
 pub(super) fn api_key_error(code: ApiKeyErrorCode) -> AuthError {
     let status = match code {
-        ApiKeyErrorCode::UnauthorizedSession => 401,
+        ApiKeyErrorCode::UnauthorizedSession | ApiKeyErrorCode::UserBanned => 401,
         ApiKeyErrorCode::OrganizationPluginRequired => 500,
         ApiKeyErrorCode::UserNotMemberOfOrganization
         | ApiKeyErrorCode::InsufficientApiKeyPermissions => 403,
@@ -719,7 +721,7 @@ impl ApiKeyPlugin {
         let config = self.resolve_configuration(body.config_id.as_deref())?;
         let session = ctx
             .session_manager()
-            .resolve(req, better_auth_core::session::SessionRead::Authoritative)
+            .resolve_native(req, better_auth_core::session::SessionRead::Authoritative)
             .await?
             .data;
         let original = req.original_request().or_else(|| {
@@ -737,7 +739,7 @@ impl ApiKeyPlugin {
         let actor = create_key_actor(
             &body,
             config.references,
-            session.as_ref().map(|data| data.user.id.field_value()),
+            session.as_ref().map(|data| data.user_field("id").clone()),
             client,
         )?;
         let response = create_key_for_user(&body, &actor, self, ctx, original).await?;
@@ -749,12 +751,13 @@ impl ApiKeyPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let (user, _session) = ctx.require_session(req).await?;
+        let session = ctx.require_native_session(req).await?;
         let id = req
             .query_string("id")?
             .ok_or_else(|| AuthError::bad_request("Query parameter 'id' is required"))?;
         let config_id = req.query_string("configId")?;
-        let response = get_key_core(id, config_id, user.id().field_value(), self, ctx).await?;
+        let response =
+            get_key_core(id, config_id, session.user_field("id").clone(), self, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
 
@@ -763,9 +766,9 @@ impl ApiKeyPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let (user, _session) = ctx.require_session(req).await?;
+        let session = ctx.require_native_session(req).await?;
         let query = ListKeysQuery::from_request(req)?;
-        let response = list_keys_core(user.id().field_value(), &query, self, ctx).await?;
+        let response = list_keys_core(session.user_field("id").clone(), &query, self, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
 
@@ -777,7 +780,7 @@ impl ApiKeyPlugin {
         let body: UpdateKeyRequest = request::read(req)?;
         let session = ctx
             .session_manager()
-            .resolve(req, better_auth_core::session::SessionRead::Authoritative)
+            .resolve_native(req, better_auth_core::session::SessionRead::Authoritative)
             .await?
             .data;
         let client = req.endpoint_headers().is_some()
@@ -786,7 +789,7 @@ impl ApiKeyPlugin {
                 .is_some_and(|context| context.is_http);
         let actor = session
             .as_ref()
-            .map(|data| data.user.id.field_value())
+            .map(|data| data.user_field("id").clone())
             .or_else(|| {
                 (!client)
                     .then_some(body.user_id.as_deref())
@@ -818,11 +821,11 @@ impl ApiKeyPlugin {
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let body: DeleteKeyRequest = request::read(req)?;
-        let (user, _session) = ctx.require_session(req).await?;
-        if user.banned().is_truthy()? {
-            return Err(AuthError::authentication_failed("User is banned"));
+        let session = ctx.require_native_session(req).await?;
+        if session.user_field("banned").as_bool() == Some(true) {
+            return Err(api_key_error(ApiKeyErrorCode::UserBanned));
         }
-        let response = delete_key_core(&body, user.id().field_value(), self, ctx).await?;
+        let response = delete_key_core(&body, session.user_field("id").clone(), self, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
 }
