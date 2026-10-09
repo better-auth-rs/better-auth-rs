@@ -52,15 +52,14 @@ async function postgres(tableNames, configuration, observeRows) {
   const { Pool } = await import("pg");
   const connectionString = process.env.BETTER_AUTH_TEST_POSTGRES_URL;
   assert.ok(connectionString, "CI must supply BETTER_AUTH_TEST_POSTGRES_URL");
-  const pool = new Pool({ connectionString, max: 1 });
   const schema = `ba_catalog_${randomUUID().replaceAll("-", "")}`;
+  // Pool.query discards a connection after a rejected query, so every replacement needs the same schema.
+  const pool = new Pool({ connectionString, max: 1, options: `-c search_path=${schema}` });
   try {
     await pool.query(`CREATE SCHEMA "${schema}"`);
     try {
-      await pool.query(`SET search_path TO "${schema}"`);
       return await observe(pool, async (sql, values) => (await pool.query(sql, values)).rows, "postgres", tableNames, configuration, observeRows);
     } finally {
-      await pool.query("RESET search_path");
       await pool.query(`DROP SCHEMA "${schema}" CASCADE`);
     }
   } finally {

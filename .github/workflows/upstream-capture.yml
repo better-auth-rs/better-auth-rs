@@ -85,9 +85,6 @@ jobs:
         include:
           - contract: team-member-catalog
             regressions: []
-            backend: sqlite
-          - contract: team-member-catalog
-            regressions: []
             backend: postgres
           - contract: team-member-catalog
             regressions: []

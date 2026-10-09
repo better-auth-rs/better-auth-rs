@@ -58,12 +58,23 @@ async function observeMemberships({ query, backend }, configuration) {
   }
 
   const rejected = [];
+  const accepted = [];
   for (const [name, kind, row] of [
     ["duplicateKey", "unique", { id: "member-key-duplicate", teamId: "team-b", userId: "user-b", membershipKey: "key-a" }],
     ["duplicateId", "unique", { id: "member-a", teamId: "team-b", userId: "user-b", membershipKey: "key-c" }],
     ["missingTeam", "foreign-key", { id: "member-invalid-team", teamId: "missing", userId: "user-b", membershipKey: "key-c" }],
-    ["missingUser", "foreign-key", { id: "member-invalid-user", teamId: "team-b", userId: "missing", membershipKey: "key-c" }],
+    ["missingUser", "foreign-key", { id: "member-invalid-user", teamId: "team-b", userId: "missing", membershipKey: "key-d" }],
   ]) {
+    // MySQL ignores the inline REFERENCES clauses emitted by the upstream migration.
+    if (backend === "mysql" && kind === "foreign-key") {
+      await insert("teamMember", row);
+      expected.push({ ...row, createdAt: null });
+      expected.sort((left, right) => left.id.localeCompare(right.id));
+      const rows = await snapshot();
+      assert.deepEqual(rows, expected);
+      accepted.push({ name, kind, rows });
+      continue;
+    }
     await assert.rejects(() => insert("teamMember", row), error => {
       if (backend === "postgres") {
         assert.equal(error.code, kind === "unique" ? "23505" : "23503");
@@ -84,15 +95,16 @@ async function observeMemberships({ query, backend }, configuration) {
     await insert("teamMember", row);
     expected.push(row);
   }
+  expected.sort((left, right) => left.id.localeCompare(right.id));
   const afterNullKeys = await snapshot();
   assert.deepEqual(afterNullKeys, expected);
   await query(`DELETE FROM ${table("team")} WHERE ${column("team", "id")} = ${parameter(0)}`, ["team-a"]);
   const afterTeamDelete = await snapshot();
-  assert.deepEqual(afterTeamDelete, expected.slice(2));
+  assert.deepEqual(afterTeamDelete, backend === "mysql" ? expected : expected.slice(2));
   await query(`DELETE FROM ${table("user")} WHERE ${column("user", "id")} = ${parameter(0)}`, ["user-b"]);
   const afterUserDelete = await snapshot();
-  assert.deepEqual(afterUserDelete, []);
-  return { inserted, rejected, afterNullKeys, afterTeamDelete, afterUserDelete };
+  assert.deepEqual(afterUserDelete, backend === "mysql" ? expected : []);
+  return { inserted, rejected, ...(backend === "mysql" ? { accepted } : {}), afterNullKeys, afterTeamDelete, afterUserDelete };
 }
 
 async function captureSqlite(tableName, configuration, observeRows) {
