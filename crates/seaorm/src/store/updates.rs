@@ -4,12 +4,12 @@ use sea_orm::{
     sea_query::{BinOper, ExprTrait, Query, SimpleExpr},
 };
 
-use super::map_db_err;
+use super::{map_db_err, record_write::RecordUpdate};
 use crate::error::{AuthError, AuthResult};
 
 pub(super) async fn execute_update_returning_raw<E, C>(
     db: &C,
-    query: sea_orm::UpdateMany<E>,
+    query: RecordUpdate<E>,
     reselect: SimpleExpr,
 ) -> AuthResult<Option<QueryResult>>
 where
@@ -17,30 +17,31 @@ where
     C: ConnectionTrait,
 {
     let reselect = updated_reselect_filter(&query, reselect);
-    execute_returning_raw(db, query, reselect).await
+    execute_returning_raw(db, query.query, reselect).await
 }
 
 fn updated_reselect_filter<E: EntityTrait>(
-    query: &sea_orm::UpdateMany<E>,
+    query: &RecordUpdate<E>,
     fallback: SimpleExpr,
 ) -> SimpleExpr {
     for primary in E::PrimaryKey::iter() {
         let column = primary.into_column();
         if let Some((_, value)) = query
+            .query
             .as_query()
             .get_values()
             .iter()
             .rev()
             .find(|(stored, _)| stored.to_string() == column.to_string())
         {
-            if is_null(value) {
+            if query.source_is_null(column) {
                 continue;
             }
             return column.into_expr().eq(value.as_ref().clone());
         }
     }
     // Callers select an original ID equality when available, otherwise the first where field.
-    let SimpleExpr::Binary(column, BinOper::Equal | BinOper::Is, previous) = &fallback else {
+    let SimpleExpr::Binary(column, operator @ (BinOper::Equal | BinOper::Is), _) = &fallback else {
         return fallback;
     };
     let Some(selected) = E::Column::iter().find(|candidate| candidate.into_expr() == **column)
@@ -49,11 +50,12 @@ fn updated_reselect_filter<E: EntityTrait>(
     };
     if E::PrimaryKey::iter()
         .any(|primary| primary.into_column().to_string() == selected.to_string())
-        && !is_null(previous)
+        && *operator == BinOper::Equal
     {
         return fallback;
     }
     let Some((_, value)) = query
+        .query
         .as_query()
         .get_values()
         .iter()
@@ -62,15 +64,11 @@ fn updated_reselect_filter<E: EntityTrait>(
     else {
         return fallback;
     };
-    if is_null(value) {
+    if query.source_is_null(selected) {
         selected.is_null()
     } else {
         selected.into_expr().eq(value.as_ref().clone())
     }
-}
-
-fn is_null(value: &SimpleExpr) -> bool {
-    matches!(value, SimpleExpr::Value(value) | SimpleExpr::Constant(value) if *value == value.as_null())
 }
 
 pub(super) async fn execute_returning_raw<E, C>(
@@ -196,7 +194,9 @@ mod tests {
                 fields.field(api_key::Column::Id, value);
             }
             let filter = api_key::Column::Id.eq("before");
-            let query = fields.update(DbBackend::MySql)?.filter(filter.clone());
+            let query = fields
+                .update_returning(DbBackend::MySql)?
+                .filter(filter.clone());
             let statement = Query::select()
                 .column(api_key::Column::Id)
                 .from(api_key::Entity)
@@ -252,7 +252,9 @@ mod tests {
             } else {
                 api_key::Column::Name.eq("before")
             };
-            let query = fields.update(DbBackend::MySql)?.filter(filter.clone());
+            let query = fields
+                .update_returning(DbBackend::MySql)?
+                .filter(filter.clone());
             let statement = Query::select()
                 .column(api_key::Column::Id)
                 .from(api_key::Entity)
@@ -262,6 +264,42 @@ mod tests {
                 statement,
                 format!("SELECT `id` FROM `api_keys` WHERE {expected}")
             );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn mysql_reselect_distinguishes_source_null_from_invalid_date_after_binding() -> AuthResult<()>
+    {
+        for native_date in [false, true] {
+            for (value, predicate) in [
+                (FieldValue::Null, "IS NULL"),
+                (
+                    FieldValue::Date(better_auth_core::FieldDate::invalid()),
+                    "= NULL",
+                ),
+            ] {
+                let mut fields = RecordWrite::<api_key::Entity>::default();
+                fields.field(api_key::Column::Name, FieldValue::Null);
+                if native_date {
+                    fields.native_field(api_key::Column::Name, value);
+                } else {
+                    fields.field(api_key::Column::Name, value);
+                }
+                let filter = api_key::Column::Name.eq("before");
+                let query = fields
+                    .update_returning(DbBackend::MySql)?
+                    .filter(filter.clone());
+                let statement = Query::select()
+                    .column(api_key::Column::Id)
+                    .from(api_key::Entity)
+                    .and_where(updated_reselect_filter(&query, filter))
+                    .to_string(MysqlQueryBuilder);
+                assert_eq!(
+                    statement,
+                    format!("SELECT `id` FROM `api_keys` WHERE `api_keys`.`name` {predicate}")
+                );
+            }
         }
         Ok(())
     }

@@ -3,7 +3,7 @@
 use better_auth_core::{AuthResult, FieldValue};
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, FromQueryResult, Iden, Iterable,
-    QueryResult,
+    QueryFilter, QueryResult,
     sea_query::{Query, Value},
 };
 
@@ -11,6 +11,24 @@ use super::{create_readback::CreateReadback, map_db_err, record_bindings::Bindin
 
 pub(super) struct RecordWrite<E: EntityTrait> {
     fields: Vec<(E::Column, Binding)>,
+}
+
+pub(super) struct RecordUpdate<E: EntityTrait> {
+    pub(super) query: sea_orm::UpdateMany<E>,
+    null_columns: Vec<E::Column>,
+}
+
+impl<E: EntityTrait> RecordUpdate<E> {
+    pub(super) fn filter(mut self, filter: sea_orm::sea_query::SimpleExpr) -> Self {
+        self.query = self.query.filter(filter);
+        self
+    }
+
+    pub(super) fn source_is_null(&self, column: E::Column) -> bool {
+        self.null_columns
+            .iter()
+            .any(|stored| stored.to_string() == column.to_string())
+    }
 }
 
 impl<E: EntityTrait> Default for RecordWrite<E> {
@@ -139,6 +157,21 @@ impl<E: EntityTrait> RecordWrite<E> {
 
     pub(super) fn update(self, backend: sea_orm::DbBackend) -> AuthResult<sea_orm::UpdateMany<E>> {
         self.apply_to(E::update_many(), backend)
+    }
+
+    pub(super) fn update_returning(
+        self,
+        backend: sea_orm::DbBackend,
+    ) -> AuthResult<RecordUpdate<E>> {
+        let null_columns = self
+            .fields
+            .iter()
+            .filter_map(|(column, value)| value.is_null().then_some(*column))
+            .collect();
+        Ok(RecordUpdate {
+            query: self.update(backend)?,
+            null_columns,
+        })
     }
 
     pub(super) async fn insert(

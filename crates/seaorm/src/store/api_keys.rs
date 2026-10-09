@@ -269,16 +269,16 @@ where
             // Kysely evaluates set policies, then replaces colliding assignments with increments.
             fields.not_set(*column);
         }
-        let mut query = fields.update(backend)?;
+        let mut query = fields.update_returning(backend)?;
         if let Some((column, expression)) = increment {
-            query = query.col_expr(column, expression);
+            query.query = query.query.col_expr(column, expression);
         }
         let query = query.filter(guard.clone());
         let model = database_operation::<Entity<P::ApiKey>, _>(self.config(), operation, async {
             if operation == "incrementOne" {
                 super::updates::increment_returning_raw::<Entity<P::ApiKey>>(
                     self.connection(),
-                    query,
+                    query.query,
                     guard,
                     reselect,
                 )

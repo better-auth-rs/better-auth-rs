@@ -198,7 +198,7 @@ where
             super::updates::execute_update_returning_raw(
                 self.connection(),
                 patch
-                    .update(self.connection().get_database_backend())?
+                    .update_returning(self.connection().get_database_backend())?
                     .filter(filter.clone()),
                 filter,
             )
@@ -284,7 +284,7 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
             super::updates::execute_update_returning_raw(
                 self.connection(),
                 patch
-                    .update(self.connection().get_database_backend())?
+                    .update_returning(self.connection().get_database_backend())?
                     .filter(filter.clone()),
                 filter,
             )

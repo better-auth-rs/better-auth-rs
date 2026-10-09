@@ -642,7 +642,7 @@ where
                     _,
                 >(
                     self.connection(),
-                    active.update(backend)?.filter(account_id.clone()),
+                    active.update_returning(backend)?.filter(account_id.clone()),
                     account_id,
                 )
                 .await

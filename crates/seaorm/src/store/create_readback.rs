@@ -117,7 +117,7 @@ impl<E: EntityTrait> CreateReadback<'_, E> {
                         Err(error) => return Some(Err(error)),
                     };
                 field_value(fields, column)
-                    .filter(|value| !is_null(value) && !is_undefined(value))
+                    .filter(|value| !value.is_null() && !is_undefined(value))
                     .map(|value| Ok((column, value)))
             })
     }
@@ -158,7 +158,7 @@ fn full_match<E: EntityTrait>(
         if is_undefined(value) {
             continue;
         }
-        let filter = if is_null(value) {
+        let filter = if value.is_null() {
             column.is_null()
         } else {
             column
@@ -176,15 +176,6 @@ fn is_undefined(value: &Binding) -> bool {
         value,
         Binding::Raw(FieldValue::Undefined) | Binding::Json(FieldValue::Undefined)
     )
-}
-
-fn is_null(value: &Binding) -> bool {
-    match value {
-        Binding::Native(value) => *value == value.as_null(),
-        Binding::Raw(value) | Binding::Json(value) => value.is_null(),
-        // An invalid Date encodes as SQL NULL but still uses an equality predicate.
-        Binding::Date(_) => false,
-    }
 }
 
 fn is_truthy(value: &Binding) -> bool {
@@ -357,7 +348,7 @@ mod tests {
             Binding::Raw(FieldValue::Date(FieldDate::invalid())),
         ] {
             assert!(is_truthy(&value));
-            assert!(!is_null(&value));
+            assert!(!value.is_null());
             assert_eq!(
                 value.bind(DbBackend::MySql)?,
                 sea_orm::sea_query::SimpleExpr::Value(Value::String(None))
@@ -370,7 +361,7 @@ mod tests {
             Binding::Native(Value::String(Some(String::new()))),
         ] {
             assert!(!is_truthy(&value));
-            assert!(!is_null(&value));
+            assert!(!value.is_null());
         }
         assert!(is_truthy(&Binding::Raw("0".into())));
         Ok(())

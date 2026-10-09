@@ -169,7 +169,7 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
             super::updates::execute_update_returning_raw::<Entity<P::TwoFactor>, _>(
                 self.connection(),
                 active
-                    .update(self.connection().get_database_backend())?
+                    .update_returning(self.connection().get_database_backend())?
                     .filter(filter.clone()),
                 filter,
             )
@@ -453,12 +453,12 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
             if guarded { "incrementOne" } else { "update" },
             async {
                 let query = active
-                    .update(self.connection().get_database_backend())?
+                    .update_returning(self.connection().get_database_backend())?
                     .filter(guard.clone());
                 if guarded {
                     super::updates::increment_returning_raw::<Entity<P::TwoFactor>>(
                         self.connection(),
-                        query,
+                        query.query,
                         guard,
                         by_id,
                     )

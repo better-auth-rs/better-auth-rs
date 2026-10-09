@@ -180,6 +180,7 @@ pub(super) async fn verify_email_core(
     let verified = user.email_verified.field_value().is_truthy();
     let user = FieldValue::from(FieldMap::from(user));
     let email = FieldValue::from(claims.email.clone());
+    let email_selector = FieldValue::from(claims.email.to_lowercase());
     let mut endpoint = EndpointContext::new(Some(req), FieldValue::Null, ctx);
     if let Some(update_to) = claims
         .update_to
@@ -228,7 +229,7 @@ pub(super) async fn verify_email_core(
             .database
             .update_user_by_field_value(
                 "email",
-                &email,
+                &email_selector,
                 UpdateUser {
                     email: Some(update_to.into()),
                     email_verified: Some(verified),
@@ -302,7 +303,7 @@ pub(super) async fn verify_email_core(
         .database
         .update_user_by_field_value(
             "email",
-            &email,
+            &email_selector,
             UpdateUser {
                 email_verified: Some(true),
                 ..Default::default()

@@ -309,7 +309,7 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
             super::updates::execute_update_returning_raw(
                 connection,
                 active
-                    .update(connection.get_database_backend())?
+                    .update_returning(connection.get_database_backend())?
                     .filter(filter.clone()),
                 filter,
             )
@@ -328,7 +328,7 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         let active = self.prepare_device_code_update(update).await?;
         let reselect = self.plugin_id_filter::<P::DeviceCode>(EntityRole::DeviceCode, id)?;
         let query = active
-            .update(connection.get_database_backend())?
+            .update_returning(connection.get_database_backend())?
             .filter(reselect.clone())
             .filter(self.plugin_equals::<P::DeviceCode>(
                 EntityRole::DeviceCode,

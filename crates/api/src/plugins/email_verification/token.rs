@@ -56,7 +56,7 @@ fn create_email_verification_token_at(
 ) -> AuthResult<String> {
     let claims = EmailVerificationClaims {
         email: email.to_lowercase(),
-        update_to: update_to.map(str::to_string),
+        update_to: update_to.map(str::to_lowercase),
         request_type: request_type.map(str::to_string),
         iat: now.timestamp(),
         exp: now.timestamp() as f64 + expires_in.as_seconds_f64(),

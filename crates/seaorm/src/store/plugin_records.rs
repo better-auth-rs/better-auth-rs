@@ -79,7 +79,7 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPluginSchema> SeaOrmSt
             super::updates::execute_update_returning_raw::<Entity<M>, _>(
                 connection,
                 active
-                    .update(connection.get_database_backend())?
+                    .update_returning(connection.get_database_backend())?
                     .filter(filter.clone()),
                 filter,
             )

@@ -580,7 +580,7 @@ where
                 async {
                     super::updates::execute_update_returning_raw(
                         db,
-                        active.update(backend)?.filter(filter.clone()),
+                        active.update_returning(backend)?.filter(filter.clone()),
                         filter,
                     )
                     .await

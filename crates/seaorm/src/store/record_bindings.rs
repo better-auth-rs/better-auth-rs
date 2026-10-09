@@ -16,6 +16,15 @@ pub(super) enum Binding {
 }
 
 impl Binding {
+    pub(super) fn is_null(&self) -> bool {
+        match self {
+            Self::Native(value) => *value == value.as_null(),
+            Self::Raw(value) | Self::Json(value) => value.is_null(),
+            // An invalid Date encodes as SQL NULL but remains a non-null source value.
+            Self::Date(_) => false,
+        }
+    }
+
     pub(super) fn for_column(column: impl ColumnTrait, value: FieldValue) -> Self {
         if matches!(
             column.def().get_column_type(),

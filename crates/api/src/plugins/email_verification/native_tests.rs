@@ -72,6 +72,29 @@ fn verify_request(
     Ok(req)
 }
 
+fn raw_email_request(
+    ctx: &AuthContext<StatelessSchema>,
+    email: &str,
+    update: Option<(&str, &str)>,
+) -> AuthResult<AuthRequest> {
+    let now = Utc::now().timestamp();
+    let claims = token::EmailVerificationClaims {
+        email: email.into(),
+        update_to: update.map(|(email, _)| email.into()),
+        request_type: update.map(|(_, request)| request.into()),
+        iat: now,
+        exp: (now + 3600) as f64,
+    };
+    let token = jsonwebtoken::encode(
+        &jsonwebtoken::Header::new(jsonwebtoken::Algorithm::HS256),
+        &claims,
+        &jsonwebtoken::EncodingKey::from_secret(ctx.config.signing_secret().as_bytes()),
+    )?;
+    let mut req = AuthRequest::new(HttpMethod::Get, "/verify-email");
+    req.query = Some(serde_json::json!({"token":token}));
+    Ok(req)
+}
+
 #[tokio::test]
 async fn verification_uses_email_selector_and_preserves_raw_nullable_hooks() -> AuthResult<()> {
     for cancel in [false, true] {
@@ -122,7 +145,7 @@ async fn verification_uses_email_selector_and_preserves_raw_nullable_hooks() -> 
             .await?;
         assert_eq!(user.id.field_value(), FieldValue::from(17.0));
         assert!(!FieldMap::from(ctx.user_view(&user).await?).contains_key("name"));
-        let request = verify_request(&ctx, None)?;
+        let request = raw_email_request(&ctx, "OWNER@NATIVE-EMAIL.TEST", None)?;
         let response = plugin.handle_verify_email(&request, &ctx).await?;
         assert_eq!(
             response.body.json()?,
@@ -152,6 +175,155 @@ async fn verification_uses_email_selector_and_preserves_raw_nullable_hooks() -> 
             let fields = calls[1].1.as_object().unwrap();
             assert_eq!(fields.get("name"), Some(&"Hidden callback field".into()));
             assert_eq!(fields.get("emailVerified"), Some(&true.into()));
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn change_email_normalizes_storage_and_tokens_but_preserves_session_ownership()
+-> AuthResult<()> {
+    for request_type in [
+        "change-email-confirmation",
+        "change-email-verification",
+        "legacy",
+    ] {
+        for has_session in [false, true] {
+            let delivered = Arc::new(Mutex::new(Vec::new()));
+            let deliveries = delivered.clone();
+            let verified = Arc::new(Mutex::new(Vec::new()));
+            let verifications = verified.clone();
+            let plugin = EmailVerificationPlugin::new()
+                .after_email_verification(Arc::new(move |user| {
+                    verifications.lock().unwrap().push(user.clone());
+                    Box::pin(async { Ok(()) })
+                }))
+                .callbacks(EmailVerificationCallbacks::<StatelessSchema>::send(
+                    move |message, _| {
+                        deliveries.lock().unwrap().push(message.clone());
+                        Ok(None)
+                    },
+                ));
+            let config = Arc::new(crate::plugins::test_helpers::create_test_config());
+            let ctx = crate::plugins::test_helpers::initialize_test_context(
+                config.clone(),
+                Arc::new(EphemeralStore::new(config)),
+                &[&plugin],
+            )
+            .await?;
+            let user = ctx
+                .database
+                .create_user(CreateUser::new().with_email("owner@native-email.test"))
+                .await?;
+            let original = FieldValue::from(FieldMap::from(user.clone()));
+            let mut req = raw_email_request(
+                &ctx,
+                "OWNER@NATIVE-EMAIL.TEST",
+                Some(("NEW@NATIVE-EMAIL.TEST", request_type)),
+            )?;
+            if has_session {
+                let session = ctx
+                    .database
+                    .create_session(CreateSession {
+                        user_id: user.id.clone(),
+                        expires_at: (Utc::now() + Duration::hours(1)).into(),
+                        inherited_fields: Default::default(),
+                        additional_fields: Default::default(),
+                        ip_address: None,
+                        user_agent: None,
+                        impersonated_by: None,
+                        active_organization_id: None,
+                    })
+                    .await?;
+                let cookie = format!(
+                    "{}={}",
+                    ctx.config
+                        .auth_cookie("session_token", Default::default())
+                        .name,
+                    better_auth_core::utils::cookie_utils::sign_cookie_value(
+                        session.token.typed()?,
+                        ctx.config.signing_secret(),
+                    ),
+                );
+                let _ = req.headers.insert("cookie".into(), cookie);
+            }
+            let response = plugin.on_request(&req, &ctx).await;
+            let stored = ctx
+                .database
+                .get_user_by_id_value(&user.id.field_value())
+                .await?
+                .unwrap();
+            let original_email_present = ctx
+                .database
+                .get_user_by_email("owner@native-email.test")
+                .await?
+                .is_some();
+            let stored = FieldValue::from(FieldMap::from(stored));
+            if has_session {
+                assert!(matches!(
+                    response,
+                    Err(AuthError::Upstream {
+                        code: "INVALID_USER",
+                        ..
+                    })
+                ));
+                assert_eq!(stored, original);
+                assert!(req.new_session()?.is_none());
+                assert!(verified.lock().unwrap().is_empty());
+                assert!(delivered.lock().unwrap().is_empty());
+                continue;
+            }
+            let response = response?.unwrap();
+            assert_eq!(response.status, 200);
+            let delivered = delivered.lock().unwrap();
+            let verified = verified.lock().unwrap();
+            if request_type == "change-email-confirmation" {
+                assert_eq!(
+                    response.body.json()?,
+                    Some(serde_json::json!({"status":true}))
+                );
+                assert_eq!(stored, original);
+                assert!(req.new_session()?.is_none());
+                assert!(verified.is_empty());
+                assert_eq!(delivered.len(), 1);
+                let mut expected = original.enumerable_fields();
+                let _ = expected.insert("email".into(), "NEW@NATIVE-EMAIL.TEST".into());
+                assert_eq!(delivered[0].user, FieldValue::from(expected));
+                let claims = token::decode_email_verification_token(
+                    ctx.config.signing_secret(),
+                    &delivered[0].token,
+                )?;
+                assert_eq!(claims.email, "owner@native-email.test");
+                assert_eq!(claims.update_to.as_deref(), Some("new@native-email.test"));
+                assert_eq!(
+                    claims.request_type.as_deref(),
+                    Some("change-email-verification")
+                );
+                continue;
+            }
+            let is_verified = request_type == "change-email-verification";
+            let fields = stored.as_object().unwrap();
+            assert_eq!(fields.get("email"), Some(&"new@native-email.test".into()));
+            assert_eq!(fields.get("emailVerified"), Some(&is_verified.into()));
+            assert!(!original_email_present);
+            let mut expected = original.enumerable_fields();
+            let _ = expected.insert("email".into(), "NEW@NATIVE-EMAIL.TEST".into());
+            let _ = expected.insert("emailVerified".into(), is_verified.into());
+            assert_eq!(req.new_session()?.unwrap().user, FieldValue::from(expected));
+            if is_verified {
+                assert_eq!(*verified, [stored]);
+                assert!(delivered.is_empty());
+            } else {
+                assert!(verified.is_empty());
+                assert_eq!(delivered.len(), 1);
+                assert_eq!(delivered[0].user, stored);
+                let claims = token::decode_email_verification_token(
+                    ctx.config.signing_secret(),
+                    &delivered[0].token,
+                )?;
+                assert_eq!(claims.email, "new@native-email.test");
+                assert!(claims.update_to.is_none());
+            }
         }
     }
     Ok(())
