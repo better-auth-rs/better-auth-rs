@@ -112,7 +112,8 @@ impl<S: AuthSchema> SeaOrmHooks<S> for PluginHook<S> {
 
     async fn before_update_user(
         &self,
-        _id: &better_auth_core::FieldValue,
+        _field: &str,
+        _value: &better_auth_core::FieldValue,
         _data: &mut better_auth_core::FieldMap,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<DatabaseHookUpdate<better_auth_core::FieldMap>> {
@@ -197,7 +198,7 @@ impl<S: AuthSchema> SeaOrmHooks<S> for PluginHook<S> {
 
     async fn before_update_account(
         &self,
-        _id: &str,
+        _id: &better_auth_core::FieldValue,
         _data: &UpdateAccount,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<DatabaseHookUpdate<UpdateAccount>> {

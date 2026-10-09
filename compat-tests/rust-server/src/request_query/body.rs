@@ -233,12 +233,15 @@ impl better_auth::plugins::SendResetPassword for BodyTrace {
 impl better_auth_core::email::SendVerificationEmail for BodyTrace {
     async fn send(
         &self,
-        user: &better_auth_core::wire::UserView,
+        user: &better_auth_core::FieldValue,
         url: &str,
         token: &str,
     ) -> AuthResult<()> {
         self.current("email.sender", None);
-        self.email("verification", user, None, url, token)
+        let user = better_auth_core::wire::UserView::try_from(
+            user.as_object().expect("Verification User").clone(),
+        )?;
+        self.email("verification", &user, None, url, token)
     }
 }
 
@@ -282,13 +285,22 @@ impl BodyTrace {
 impl better_auth::plugins::SendChangeEmailConfirmation for BodyTrace {
     async fn send(
         &self,
-        user: &better_auth_core::wire::UserView,
+        user: &better_auth_core::FieldValue,
         new_email: &str,
         url: &str,
         token: &str,
     ) -> AuthResult<()> {
         self.current("email.confirmation", None);
-        self.email("confirmation", user, Some(new_email), url, token)
+        let fields = user.as_object().ok_or_else(|| {
+            better_auth_core::AuthError::type_error("Confirmation User must be an object")
+        })?;
+        self.email(
+            "confirmation",
+            &better_auth_core::wire::UserView::try_from(fields.clone())?,
+            Some(new_email),
+            url,
+            token,
+        )
     }
 }
 
@@ -368,7 +380,7 @@ impl better_auth::plugins::api_key::ApiKeyDefaultPermissions for BodyTrace {
 
 #[async_trait::async_trait]
 impl better_auth::plugins::two_factor::SendTwoFactorOtp for BodyTrace {
-    async fn send(&self, _: &better_auth_core::wire::UserView, otp: &str) -> AuthResult<()> {
+    async fn send(&self, _: &better_auth_core::FieldValue, otp: &str) -> AuthResult<()> {
         self.current("otp.sender", None);
         self.1.lock().unwrap().push(json!({"kind":"otp","otp":otp}));
         Ok(())

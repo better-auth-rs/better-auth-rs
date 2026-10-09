@@ -293,6 +293,22 @@ impl FieldValue {
         }
     }
 
+    /// Copy own enumerable properties while retaining native child identities.
+    /// String keys enumerate UTF-16 units, as in object spread and `Object.entries`.
+    pub fn enumerable_fields(&self) -> FieldMap {
+        match self {
+            Self::Object(fields) => (**fields).clone(),
+            Self::Array(values) => values
+                .iter()
+                .enumerate()
+                .map(|(index, value)| (index.to_string(), value.clone()))
+                .collect(),
+            Self::String(value) => string_fields(value.encode_utf16()),
+            Self::Utf16String(value) => string_fields(value.as_utf16().iter().copied()),
+            _ => FieldMap::new(),
+        }
+    }
+
     /// Evaluate JavaScript truthiness without serializing numbers or objects.
     pub fn is_truthy(&self) -> bool {
         match self {
@@ -386,6 +402,18 @@ impl FieldValue {
                 .map_err(Into::into)
         }
     }
+}
+
+fn string_fields(units: impl Iterator<Item = u16>) -> FieldMap {
+    units
+        .enumerate()
+        .map(|(index, unit)| {
+            (
+                index.to_string(),
+                crate::Utf16String::from_units(vec![unit]).into(),
+            )
+        })
+        .collect()
 }
 
 impl From<bool> for FieldValue {

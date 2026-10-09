@@ -42,9 +42,17 @@ struct Mailbox {
 
 #[async_trait]
 impl SendVerificationEmail for Mailbox {
-    async fn send(&self, user: &UserView, url: &str, _: &str) -> AuthResult<()> {
+    async fn send(
+        &self,
+        user: &better_auth_core::FieldValue,
+        url: &str,
+        _: &str,
+    ) -> AuthResult<()> {
         assert_eq!(
-            user.email().typed().unwrap().as_deref(),
+            user.as_object()
+                .unwrap()
+                .get("email")
+                .and_then(better_auth_core::FieldValue::as_str),
             Some("unverified@example.com")
         );
         self.urls.lock().unwrap().push(url.to_owned());
@@ -426,10 +434,10 @@ async fn sign_in_preserves_scopes_and_account_cookie_while_explicit_link_merges_
                 additional_fields: Default::default(),
             },
             &incoming,
-            &super::state::OAuthStateLink {
-                user_id: stored.user_id.typed().unwrap().clone(),
-                email: "owner@example.test".into(),
-            },
+            &super::state::OAuthStateLink::new(
+                stored.user_id.field_value(),
+                "owner@example.test".into(),
+            ),
             None,
             &endpoint,
         )

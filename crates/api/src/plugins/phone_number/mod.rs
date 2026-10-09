@@ -386,7 +386,7 @@ impl PhoneNumberPlugin {
         .await?;
         let update_phone = body.get("updatePhoneNumber") == Some(&Value::Bool(true));
         let existing_session = if update_phone {
-            Some(ctx.require_session(req).await.map_err(|error| {
+            Some(ctx.require_native_session(req).await.map_err(|error| {
                 if matches!(error, AuthError::Unauthenticated) {
                     self::error(401, "USER_NOT_FOUND", "User not found")
                 } else {
@@ -397,7 +397,7 @@ impl PhoneNumberPlugin {
             None
         };
         let found = ctx.database.get_user_by_phone_number(phone).await?;
-        let user = if let Some((user, _)) = &existing_session {
+        let user = if let Some(session) = &existing_session {
             if found.is_some() {
                 return Err(error(
                     400,
@@ -406,8 +406,8 @@ impl PhoneNumberPlugin {
                 ));
             }
             ctx.database
-                .update_user_optional(
-                    user.id.typed()?,
+                .update_user_by_id_value(
+                    session.user_property("id")?,
                     UpdateUser {
                         phone_number: Some(Some(phone.to_owned())),
                         phone_number_verified: Some(true),
@@ -418,8 +418,8 @@ impl PhoneNumberPlugin {
                 .ok_or_else(|| error(500, "FAILED_TO_UPDATE_USER", "Failed to update user"))?
         } else if let Some(user) = found {
             ctx.database
-                .update_user_optional(
-                    user.id().typed()?,
+                .update_user_by_id_value(
+                    &user.id().field_value(),
                     UpdateUser {
                         phone_number_verified: Some(true),
                         ..Default::default()
@@ -462,7 +462,7 @@ impl PhoneNumberPlugin {
         } else {
             return Err(error(500, "FAILED_TO_UPDATE_USER", "Failed to update user"));
         };
-        endpoint.session = existing_session.clone().map(Into::into);
+        endpoint.session = existing_session.clone();
         self.notify_verified(
             PhoneVerification {
                 phone_number: phone.to_owned(),
@@ -471,12 +471,12 @@ impl PhoneNumberPlugin {
             &endpoint,
         )
         .await?;
-        if let Some((_, session)) = existing_session {
+        if let Some(session) = existing_session {
             return Ok(AuthResponse::native(
                 200,
                 better_auth_core::FieldMap::from([
                     ("status".into(), true.into()),
-                    ("token".into(), session.token.field_value()),
+                    ("token".into(), session.session.token.field_value()),
                     (
                         "user".into(),
                         better_auth_core::FieldMap::from(ctx.user_view(&user).await?).into(),

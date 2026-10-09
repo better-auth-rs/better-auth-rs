@@ -3,14 +3,13 @@ use super::*;
 pub(super) async fn enable_core<S: better_auth_core::AuthSchema>(
     req: &AuthRequest,
     body: &EnableRequest,
-    user: &impl AuthUser,
-    current_session: &impl AuthSession,
+    data: &NativeSessionData,
     config: &TwoFactorConfig,
     ctx: &AuthContext<S>,
 ) -> AuthResult<(EnableResponse, Vec<String>)> {
     verify_user_password(
         ctx,
-        user,
+        data.user_property("id")?,
         body.password.as_deref(),
         config.allow_passwordless,
         false,
@@ -29,18 +28,18 @@ pub(super) async fn enable_core<S: better_auth_core::AuthSchema>(
                 message: "OTP is not available",
             });
         }
-        let updated = update_two_factor_user(user, true, ctx)
+        let updated = update_two_factor_user(data.user_property("id")?, true, ctx)
             .await?
             .ok_or_else(|| AuthError::internal("Cannot read properties of null (reading 'id')"))?;
         let _ = issue_factor_session(
             req,
             updated.id().into_owned(),
             FieldMap::from(updated).into(),
-            current_session.field_values()?,
+            data.session.field_values()?,
             ctx,
         )
         .await?;
-        delete_factor_session(current_session, ctx).await?;
+        delete_factor_session(&data.session, ctx).await?;
         return Ok((
             EnableResponse {
                 method: "otp",
@@ -59,7 +58,9 @@ pub(super) async fn enable_core<S: better_auth_core::AuthSchema>(
     }
     let existing = ctx
         .database
-        .get_two_factor_by_user_id_value(&user.id().into_owned())
+        .get_two_factor_by_user_id_value(&SchemaValue::from_field(
+            data.user_property("id")?.clone(),
+        ))
         .await?;
     if existing
         .as_ref()
@@ -91,18 +92,18 @@ pub(super) async fn enable_core<S: better_auth_core::AuthSchema>(
 
     let set_cookie_headers = Vec::new();
     if config.skip_verification_on_enable {
-        let updated_user = update_two_factor_user(user, true, ctx)
+        let updated_user = update_two_factor_user(data.user_property("id")?, true, ctx)
             .await?
             .ok_or_else(|| AuthError::internal("Cannot read properties of null (reading 'id')"))?;
         let _ = issue_factor_session(
             req,
             updated_user.id().into_owned(),
             FieldMap::from(updated_user).into(),
-            current_session.field_values()?,
+            data.session.field_values()?,
             ctx,
         )
         .await?;
-        delete_factor_session(current_session, ctx).await?;
+        delete_factor_session(&data.session, ctx).await?;
     }
 
     let mut fields = FieldMap::from([
@@ -116,7 +117,7 @@ pub(super) async fn enable_core<S: better_auth_core::AuthSchema>(
             .update_two_factor_record(&existing.id, fields)
             .await?;
     } else {
-        let _ = fields.insert("userId".into(), user.id().field_value());
+        let _ = fields.insert("userId".into(), data.user_property("id")?.clone());
         let _ = ctx.database.create_two_factor_record(fields).await?;
     }
 
@@ -127,7 +128,7 @@ pub(super) async fn enable_core<S: better_auth_core::AuthSchema>(
             .as_deref()
             .filter(|issuer| !issuer.is_empty())
             .or(config.issuer.as_deref().filter(|issuer| !issuer.is_empty())),
-        user,
+        data.user_property("email")?,
         ctx,
     )?
     .get_url()?;
@@ -143,22 +144,21 @@ pub(super) async fn enable_core<S: better_auth_core::AuthSchema>(
 
 pub(super) async fn disable_core(
     body: &DisableRequest,
-    user: &impl AuthUser,
-    current_session: &impl AuthSession,
+    data: &NativeSessionData,
     req: &AuthRequest,
     config: &TwoFactorConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<(StatusResponse, Vec<String>)> {
     verify_user_password(
         ctx,
-        user,
+        data.user_property("id")?,
         body.password.as_deref(),
         config.allow_passwordless,
         false,
     )
     .await?;
 
-    let updated_user = update_two_factor_user(user, false, ctx)
+    let updated_user = update_two_factor_user(data.user_property("id")?, false, ctx)
         .await?
         .ok_or_else(|| AuthError::internal("Cannot read properties of null (reading 'id')"))?;
     ctx.database
@@ -168,11 +168,11 @@ pub(super) async fn disable_core(
         req,
         updated_user.id().into_owned(),
         FieldMap::from(updated_user).into(),
-        current_session.field_values()?,
+        data.session.field_values()?,
         ctx,
     )
     .await?;
-    delete_factor_session(current_session, ctx).await?;
+    delete_factor_session(&data.session, ctx).await?;
 
     let mut set_cookie_headers = Vec::new();
 
@@ -198,19 +198,19 @@ pub(super) async fn disable_core(
 
 pub(super) async fn get_totp_uri_core(
     body: &GetTotpUriRequest,
-    user: &impl AuthUser,
+    data: &NativeSessionData,
     config: &TwoFactorConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<TotpUriResponse> {
     require_totp(config)?;
-    let two_factor = load_two_factor_record(user, ctx).await?;
+    let two_factor = load_two_factor_record(data.user_property("id")?, ctx).await?;
     let secret = crate::plugins::symmetric::decrypt_field(
         ctx.config.encryption_secret(),
         &two_factor.secret.field_value(),
     )?;
     verify_user_password(
         ctx,
-        user,
+        data.user_property("id")?,
         body.password.as_deref(),
         config
             .totp_allow_passwordless
@@ -219,7 +219,7 @@ pub(super) async fn get_totp_uri_core(
     )
     .await?;
     Ok(TotpUriResponse {
-        totp_uri: build_totp(config, &secret, None, user, ctx)?
+        totp_uri: build_totp(config, &secret, None, data.user_property("email")?, ctx)?
             .with_default_period()
             .get_url()?,
     })
@@ -233,7 +233,7 @@ pub(super) async fn verify_totp_core(
 ) -> AuthResult<(SessionTokenResponse, Vec<String>)> {
     require_totp(config)?;
     let state = resolve_two_factor_state(req, ctx).await?;
-    let two_factor = load_two_factor_record(state.user(), ctx).await?;
+    let two_factor = load_two_factor_record(&state.user_id()?, ctx).await?;
     if state.is_sign_in()
         && two_factor
             .verified
@@ -284,11 +284,10 @@ pub(super) async fn verify_totp_core(
     };
 
     match state {
-        ResolvedTwoFactorState::Session { user, session, .. } => {
+        ResolvedTwoFactorState::Session { data, .. } => {
             verify_existing_session_factor(
                 req,
-                user,
-                *session,
+                *data,
                 needs_enrollment.then_some(EnrollmentMethod::Totp),
                 ctx,
                 update_enrollment,
@@ -303,7 +302,8 @@ pub(super) async fn verify_totp_core(
                     .get("twoFactorEnabled")
                     .is_some_and(FieldValue::is_truthy)
             {
-                let updated = update_two_factor_user(&pending.user, true, ctx).await?;
+                let updated =
+                    update_two_factor_user(&pending.user.id.field_value(), true, ctx).await?;
                 let _ = issue_factor_session(
                     req,
                     pending.user.id.clone(),
@@ -348,8 +348,8 @@ pub(super) async fn send_otp_core<S: better_auth_core::AuthSchema>(
         better_auth_core::FieldValue::from_json(body)?,
         ctx,
     );
-    if let ResolvedTwoFactorState::Session { user, session, .. } = &state {
-        endpoint.session = Some((user.clone(), *session.clone()).into());
+    if let ResolvedTwoFactorState::Session { data, .. } = &state {
+        endpoint.session = Some(*data.clone());
     }
 
     let otp: String = (0..config.otp_digits)
@@ -381,10 +381,10 @@ pub(super) async fn send_otp_core<S: better_auth_core::AuthSchema>(
         .await?;
 
     let task: Option<better_auth_core::background::BackgroundFuture> = match sender {
-        Sender::Callback(callback) => callback(state.user(), &otp, &endpoint)?,
+        Sender::Callback(callback) => callback(&state.user(), &otp, &endpoint)?,
         Sender::Legacy(sender) => {
             let sender = sender.clone();
-            let user = state.user().clone();
+            let user = state.user();
             Some(Box::pin(async move { sender.send(&user, &otp).await }))
         }
     };
@@ -408,7 +408,7 @@ pub(super) async fn verify_otp_core(
     let state = resolve_two_factor_state(req, ctx).await?;
     let factor = if state.is_sign_in() {
         ctx.database
-            .get_two_factor_by_user_id_value(&state.user().id().into_owned())
+            .get_two_factor_by_user_id_value(&SchemaValue::from_field(state.user_id()?))
             .await?
     } else {
         None
@@ -471,11 +471,10 @@ pub(super) async fn verify_otp_core(
     }
 
     match state {
-        ResolvedTwoFactorState::Session { user, session, .. } => {
+        ResolvedTwoFactorState::Session { data, .. } => {
             verify_existing_session_factor(
                 req,
-                user,
-                *session,
+                *data,
                 Some(EnrollmentMethod::Otp),
                 ctx,
                 std::future::ready(Ok(())),
@@ -502,21 +501,17 @@ pub(super) async fn verify_otp_core(
 
 pub(super) async fn generate_backup_codes_core(
     body: &GenerateBackupCodesRequest,
-    user: &impl AuthUser,
+    data: &NativeSessionData,
     config: &TwoFactorConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<BackupCodesResponse> {
-    if !user
-        .field_values()?
-        .get("twoFactorEnabled")
-        .is_some_and(FieldValue::is_truthy)
-    {
+    if !data.user_property("twoFactorEnabled")?.is_truthy() {
         return Err(AuthError::bad_request("Two factor isn't enabled"));
     }
 
     verify_user_password(
         ctx,
-        user,
+        data.user_property("id")?,
         body.password.as_deref(),
         config
             .backup_code_options
@@ -525,7 +520,7 @@ pub(super) async fn generate_backup_codes_core(
         true,
     )
     .await?;
-    let two_factor = load_two_factor_record(user, ctx).await?;
+    let two_factor = load_two_factor_record(data.user_property("id")?, ctx).await?;
 
     let backup_codes = config.backup_code_options.generate();
     let encrypted = config
@@ -564,7 +559,7 @@ pub(super) async fn verify_backup_code_core(
     let state = resolve_two_factor_state(req, ctx).await?;
     let two_factor = ctx
         .database
-        .get_two_factor_by_user_id_value(&state.user().id().into_owned())
+        .get_two_factor_by_user_id_value(&SchemaValue::from_field(state.user_id()?))
         .await?
         .ok_or_else(|| AuthError::bad_request("Backup codes aren't enabled"))?;
     assert_not_locked(&state, &two_factor, &config.account_lockout, ctx).await?;
@@ -618,29 +613,23 @@ pub(super) async fn verify_backup_code_core(
     reset_failures(&state, &two_factor, &config.account_lockout, ctx).await?;
 
     match state {
-        ResolvedTwoFactorState::Session { user, session, .. } => {
+        ResolvedTwoFactorState::Session { data, .. } => {
             if body.disable_session.unwrap_or(false) {
                 Ok((
                     SessionTokenResponse {
-                        token: session
+                        token: data
+                            .session
                             .field_values()?
                             .get("token")
                             .cloned()
                             .unwrap_or_default(),
-                        user: ctx.user_view(&user).await?,
+                        user: data.public_user(&ctx.config.user)?,
                     },
                     Vec::new(),
                 ))
             } else {
-                verify_existing_session_factor(
-                    req,
-                    user,
-                    *session,
-                    None,
-                    ctx,
-                    std::future::ready(Ok(())),
-                )
-                .await
+                verify_existing_session_factor(req, *data, None, ctx, std::future::ready(Ok(())))
+                    .await
             }
         }
         ResolvedTwoFactorState::Pending(pending) => {
@@ -648,7 +637,7 @@ pub(super) async fn verify_backup_code_core(
                 return Ok((
                     SessionTokenResponse {
                         token: FieldValue::Undefined,
-                        user: ctx.user_view(&pending.user).await?,
+                        user: FieldMap::from(ctx.user_view(&pending.user).await?).into(),
                     },
                     Vec::new(),
                 ));

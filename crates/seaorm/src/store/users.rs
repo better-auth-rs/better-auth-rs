@@ -142,6 +142,22 @@ where
         name: &str,
         value: &FieldValue,
     ) -> AuthResult<sea_orm::Select<<S::User as SeaOrmUserModel>::Entity>> {
+        let (physical, bound) = self.user_field_selector(db, name, value)?;
+        Ok(
+            <S::User as SeaOrmUserModel>::Entity::find().filter(super::value_filter::equals(
+                S::User::field_column(&physical)?,
+                &bound,
+                db.get_database_backend(),
+            )?),
+        )
+    }
+
+    fn user_field_selector(
+        &self,
+        db: &impl ConnectionTrait,
+        name: &str,
+        value: &FieldValue,
+    ) -> AuthResult<(String, FieldValue)> {
         let schema = self.user_field_schema().adapter_fields(&[]);
         let (logical, field) = schema
             .fields()
@@ -166,13 +182,7 @@ where
         };
         let bound = better_auth_core::user_query::bind_filter(field, &bound)?;
         let bound = super::value_filter::adapter_query_value(bound, value, field, backend)?;
-        Ok(
-            <S::User as SeaOrmUserModel>::Entity::find().filter(super::value_filter::equals(
-                S::User::field_column(physical)?,
-                &bound,
-                backend,
-            )?),
-        )
+        Ok((physical.to_owned(), bound))
     }
 
     pub(super) async fn find_user_by_field_value(
@@ -295,7 +305,7 @@ where
         update: UpdateUser,
     ) -> AuthResult<better_auth_core::UserView> {
         match self
-            .update_user_outcome_with_connection(db, tx, &FieldValue::from(id), update)
+            .update_user_outcome_with_connection(db, tx, "id", &FieldValue::from(id), update)
             .await?
         {
             std::ops::ControlFlow::Break(()) => Err(cancelled_by_hook("user update")),
@@ -307,7 +317,8 @@ where
         &self,
         db: &impl ConnectionTrait,
         tx: Option<super::HookTransaction<'_, S>>,
-        id: &FieldValue,
+        field: &str,
+        value: &FieldValue,
         update: UpdateUser,
     ) -> AuthResult<std::ops::ControlFlow<(), Option<better_auth_core::UserView>>> {
         let mut prepared = better_auth_core::store::database_hooks::PreparedRecordWrite::new(
@@ -319,7 +330,12 @@ where
                 hook_context.config,
                 hook.hook_metadata(),
                 better_auth_core::observability::database::DatabaseHook::BeforeUpdateUser,
-                hook.before_update_user(id, prepared.original_fields_mut(), &hook_context),
+                hook.before_update_user(
+                    field,
+                    value,
+                    prepared.original_fields_mut(),
+                    &hook_context,
+                ),
             )
             .await?;
             if !prepared.apply(outcome) {
@@ -327,7 +343,7 @@ where
             }
         }
         let user = self
-            .update_user_record(db, id, prepared.into_fields())
+            .update_user_record(db, field, value, prepared.into_fields())
             .await?;
         let Some(user) = user else {
             let store = self.clone();
@@ -365,13 +381,18 @@ where
     pub(super) async fn update_user_record(
         &self,
         db: &impl ConnectionTrait,
-        user_id: &FieldValue,
+        field: &str,
+        value: &FieldValue,
         input: FieldMap,
     ) -> AuthResult<Option<SqlRow>> {
         self.model_fields.canonicalize_id(EntityRole::User)?;
         let policy = self.config().advanced.database.generate_id();
-        let user_id = policy.adapter_id_query(user_id.clone())?;
         let backend = db.get_database_backend();
+        let (physical, value) = if field == "id" {
+            ("id".to_owned(), policy.adapter_id_query(value.clone())?)
+        } else {
+            self.user_field_selector(db, field, value)?
+        };
         self.model_fields.begin_id_input(
             EntityRole::User,
             AdapterIdInput {
@@ -411,8 +432,11 @@ where
                 fields,
                 S::User::field_column,
             )?;
-        let filter =
-            super::value_filter::equals_id(S::User::id_column(), &user_id, policy, backend)?;
+        let filter = if field == "id" {
+            super::value_filter::equals_id(S::User::id_column(), &value, policy, backend)?
+        } else {
+            super::value_filter::equals(S::User::field_column(&physical)?, &value, backend)?
+        };
         database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
             self.config(),
             "update",
@@ -679,13 +703,14 @@ where
         self.update_user_by_id_value(&FieldValue::from(id), update)
             .await
     }
-    async fn update_user_by_id_value(
+    async fn update_user_by_field_value(
         &self,
-        id: &FieldValue,
+        field: &str,
+        value: &FieldValue,
         update: UpdateUser,
     ) -> AuthResult<Option<better_auth_core::UserView>> {
         Ok(self
-            .update_user_outcome_with_connection(self.connection(), None, id, update)
+            .update_user_outcome_with_connection(self.connection(), None, field, value, update)
             .await?
             .continue_value()
             .flatten())

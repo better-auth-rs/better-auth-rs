@@ -720,10 +720,8 @@ impl ApiKeyPlugin {
         let body: CreateKeyRequest = request::read(req)?;
         let config = self.resolve_configuration(body.config_id.as_deref())?;
         let session = ctx
-            .session_manager()
-            .resolve_native(req, better_auth_core::session::SessionRead::Authoritative)
-            .await?
-            .data;
+            .native_session(req, better_auth_core::session::SessionRead::CookieBypass)
+            .await?;
         let original = req.original_request().or_else(|| {
             better_auth_core::hooks::current_request_hook_context()
                 .is_some_and(|context| context.is_http)
@@ -779,10 +777,8 @@ impl ApiKeyPlugin {
     ) -> AuthResult<AuthResponse> {
         let body: UpdateKeyRequest = request::read(req)?;
         let session = ctx
-            .session_manager()
-            .resolve_native(req, better_auth_core::session::SessionRead::Authoritative)
-            .await?
-            .data;
+            .native_session(req, better_auth_core::session::SessionRead::CookieBypass)
+            .await?;
         let client = req.endpoint_headers().is_some()
             || req.original_request().is_some()
             || better_auth_core::hooks::current_request_hook_context()

@@ -10,13 +10,22 @@ use std::sync::Arc;
 #[derive(Clone)]
 pub struct ChangeEmailConfirmation {
     /// Current session user, before the email change.
-    pub user: better_auth_core::wire::UserView,
+    pub user: better_auth_core::FieldValue,
     /// Requested new address.
     pub new_email: String,
     /// Confirmation URL.
     pub url: String,
     /// Signed confirmation token.
     pub token: String,
+}
+impl ChangeEmailConfirmation {
+    /// Read native object fields through the typed User accessors.
+    pub fn user_view(&self) -> AuthResult<better_auth_core::wire::UserView> {
+        let fields = self.user.as_object().ok_or_else(|| {
+            better_auth_core::AuthError::internal("Confirmation User must be an object")
+        })?;
+        better_auth_core::wire::UserView::try_from(fields.clone())
+    }
 }
 type Sender<S, M> =
     dyn Fn(&M, &EndpointContext<'_, S>) -> AuthResult<Option<BackgroundFuture>> + Send + Sync;

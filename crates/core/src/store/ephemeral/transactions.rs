@@ -203,12 +203,15 @@ impl AuthTransaction<StatelessSchema> for EphemeralTransaction {
     ) -> AuthResult<Option<UserView>> {
         self.store.update_user_optional(id, update).await
     }
-    async fn update_user_by_id_value(
+    async fn update_user_by_field_value(
         &self,
-        id: &crate::FieldValue,
+        field: &str,
+        value: &crate::FieldValue,
         update: UpdateUser,
     ) -> AuthResult<Option<UserView>> {
-        self.store.update_user_by_id_value(id, update).await
+        self.store
+            .update_user_by_field_value(field, value, update)
+            .await
     }
     async fn delete_user(&self, id: &str) -> AuthResult<()> {
         self.store.delete_user(id).await

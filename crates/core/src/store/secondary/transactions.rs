@@ -236,12 +236,16 @@ impl<S: AuthSchema> AuthTransaction<S> for Transaction<S> {
         self.update_user_by_id_value(&crate::FieldValue::from(id), update)
             .await
     }
-    async fn update_user_by_id_value(
+    async fn update_user_by_field_value(
         &self,
-        id: &crate::FieldValue,
+        field: &str,
+        value: &crate::FieldValue,
         update: crate::UpdateUser,
     ) -> AuthResult<Option<crate::UserView>> {
-        let user = self.inner.update_user_by_id_value(id, update).await?;
+        let user = self
+            .inner
+            .update_user_by_field_value(field, value, update)
+            .await?;
         self.runtime
             .queue_user_session_refresh(user.clone(), Some(self.inner.as_ref()))
             .await?;

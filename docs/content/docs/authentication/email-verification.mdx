@@ -14,14 +14,15 @@ use std::sync::Arc;
 use better_auth::{AuthError, AuthResult, BetterAuth};
 use better_auth::email::{ConsoleEmailProvider, EmailProvider};
 use better_auth::plugins::{EmailVerificationPlugin, SendVerificationEmail};
-use better_auth::prelude::UserView;
+use better_auth::FieldValue;
 
 struct VerificationEmail;
 
 #[async_trait::async_trait]
 impl SendVerificationEmail for VerificationEmail {
-    async fn send(&self, user: &UserView, url: &str, _token: &str) -> AuthResult<()> {
-        let email = user.email.as_deref().ok_or_else(|| AuthError::bad_request("Email is required"))?;
+    async fn send(&self, user: &FieldValue, url: &str, _token: &str) -> AuthResult<()> {
+        let email = user.as_object().and_then(|fields| fields.get("email")).and_then(FieldValue::as_str)
+            .ok_or_else(|| AuthError::bad_request("Email is required"))?;
         ConsoleEmailProvider
             .send(email, "Verify your email", "", url)
             .await
@@ -90,12 +91,7 @@ GET /verify-email?token=<verification_token>
 
 ```json
 {
-  "user": {
-    "id": "uuid",
-    "email": "alice@example.com",
-    "emailVerified": true,
-    ...
-  },
+  "user": null,
   "status": true
 }
 ```
@@ -106,6 +102,12 @@ GET /verify-email?token=<verification_token>
 | 401 | Token expired or invalid, user missing, or change-email user mismatch |
 
 Verification failures use `TOKEN_EXPIRED`, `INVALID_TOKEN`, `USER_NOT_FOUND`, or `INVALID_USER`. A nonempty trusted `callbackURL` receives a redirect with the same uppercase code in its `error` parameter; the existing query and fragment are preserved.
+
+Verification hooks and `SendVerificationEmail::send` receive `&FieldValue`. `VerificationEmail.user` also retains the complete native value. Use `VerificationEmail::user_view()` when an application requires an object with ordinary Rust field access. Before hooks receive the selected internal User, including hidden fields. After hooks receive the updated internal User or `FieldValue::Null` when the update is cancelled or no row matches. Public output applies visibility only at the response boundary.
+
+Verification updates select by the token email through `update_user_by_field_value`. An output-transformed User ID does not change that selector. Ordinary verification resolves the current Session only when automatic sign-in is enabled, after the update and hooks. Email-change branches resolve the Session after token validation and User lookup. As in upstream `getSessionFromCtx`, Session endpoint failures produce an absent Session. The direct `/get-session` endpoint keeps its original error response.
+
+Anonymous send requests retain the upstream 500 ms timing floor, including sender failures. Email-change confirmation returns only `status`; email-change completion also returns the projected updated User, which can be null. The legacy email-change continuation issues a new token with the default one-hour lifetime.
 
 ## Sending After Sign-Up
 

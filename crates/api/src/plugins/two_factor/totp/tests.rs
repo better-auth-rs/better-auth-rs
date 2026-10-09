@@ -136,8 +136,7 @@ async fn nan_period_enrollment_uri_encodes_the_persisted_secret() -> AuthResult<
                 issuer: Some(fixture["issuer"].as_str().expect("issuer").to_owned()),
                 method: EnrollmentMethod::Totp,
             },
-            &user,
-            &session,
+            &(user.clone(), session.clone()).into(),
             &config,
             &ctx,
         )

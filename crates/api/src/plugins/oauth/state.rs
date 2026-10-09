@@ -1,18 +1,58 @@
 use chrono::{Duration, Utc};
-use serde::{Deserialize, Serialize, Serializer, de::DeserializeOwned};
+use serde::{Serialize, Serializer, de::DeserializeOwned};
 use serde_json::{Map, Value};
 
 use super::state_json::StateExtras;
 
 use better_auth_core::{
-    AuthConfig, AuthError, AuthRequest, AuthResult, OAuthStateStrategy, SecretKey,
+    AuthConfig, AuthError, AuthRequest, AuthResult, FieldMap, FieldValue, OAuthStateStrategy,
+    SecretKey,
 };
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub(crate) struct OAuthStateLink {
-    pub email: String,
-    #[serde(rename = "userId")]
-    pub user_id: String,
+#[derive(Debug, Clone, Serialize, Default)]
+#[serde(transparent)]
+pub(crate) struct OAuthStateLink(
+    #[serde(with = "better_auth_core::field_value::serde::map")] FieldMap,
+);
+
+impl OAuthStateLink {
+    pub(crate) fn new(user_id: FieldValue, email: FieldValue) -> Self {
+        Self(FieldMap::from([
+            ("userId".into(), user_id),
+            ("email".into(), email),
+        ]))
+    }
+
+    pub(crate) fn user_id(&self) -> &FieldValue {
+        self.0.get("userId").unwrap_or(&FieldValue::Undefined)
+    }
+
+    pub(crate) fn email(&self) -> &FieldValue {
+        self.0.get("email").unwrap_or(&FieldValue::Undefined)
+    }
+
+    pub(super) fn native_value(&self) -> FieldValue {
+        self.0.clone().into()
+    }
+
+    fn parse(raw: &str) -> AuthResult<Self> {
+        let value = FieldValue::parse_json(raw)?;
+        let fields = value
+            .as_object()
+            .ok_or_else(|| AuthError::bad_request("Invalid OAuth state link"))?;
+        let email = fields
+            .get("email")
+            .filter(|value| matches!(value, FieldValue::String(_) | FieldValue::Utf16String(_)))
+            .ok_or_else(|| AuthError::bad_request("Invalid OAuth state link email"))?;
+        let user_id = fields
+            .get("userId")
+            .unwrap_or(&FieldValue::Undefined)
+            .display_utf16()?;
+        Ok(Self(FieldMap::from([
+            ("email".into(), email.clone()),
+            ("userId".into(), user_id.into()),
+        ])))
+    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -25,6 +65,7 @@ pub(crate) struct OAuthStatePayload {
     pub expires_at: f64,
     pub request_sign_up: Option<bool>,
     pub server_context: Map<String, Value>,
+    pub server_context_present: bool,
     pub id_token_nonce: Option<String>,
     pub oauth_state: Option<String>,
     pub additional_data: StateExtras,
@@ -41,20 +82,12 @@ impl OAuthStatePayload {
         let oauth_state = optional(&mut fields, "oauthState")?;
         let link = match fields.remove("link") {
             None => None,
-            Some(raw) => {
-                let mut value: Value = serde_json::from_str(raw.get())?;
-                if let Some(link) = value.as_object_mut() {
-                    let user_id =
-                        better_auth_core::SchemaValue::<String>::from_json(link.remove("userId"))?
-                            .display_string()?;
-                    let _ = link.insert("userId".into(), user_id.into());
-                }
-                Some(serde_json::from_value(value)?)
-            }
+            Some(raw) => Some(OAuthStateLink::parse(raw.get())?),
         };
         let request_sign_up = optional(&mut fields, "requestSignUp")?;
         let id_token_nonce = optional(&mut fields, "idTokenNonce")?;
-        let server_context = optional(&mut fields, "serverContext")?.unwrap_or_default();
+        let server_context: Option<Map<String, Value>> = optional(&mut fields, "serverContext")?;
+        let server_context_present = server_context.is_some();
         // Zod's loose object drops this top-level key; nested extras remain raw.
         fields.retain(|key| key != "__proto__");
         Ok(Self {
@@ -65,7 +98,8 @@ impl OAuthStatePayload {
             link,
             expires_at,
             request_sign_up,
-            server_context,
+            server_context: server_context.unwrap_or_default(),
+            server_context_present,
             id_token_nonce,
             oauth_state,
             additional_data: fields,
@@ -90,6 +124,7 @@ impl OAuthStatePayload {
             expires_at: (Utc::now() + Duration::minutes(10)).timestamp_millis() as f64,
             request_sign_up,
             server_context: Map::new(),
+            server_context_present: false,
             id_token_nonce: None,
             oauth_state: None,
             additional_data,
@@ -104,7 +139,6 @@ impl OAuthStatePayload {
         let mut fields = self.additional_data.clone();
         fields.insert("callbackURL", &self.callback_url)?;
         fields.insert("codeVerifier", &self.code_verifier)?;
-        fields.insert("expiresAt", &self.expires_at)?;
         if let Some(value) = &self.error_url {
             fields.insert("errorURL", value)?;
         }
@@ -114,6 +148,10 @@ impl OAuthStatePayload {
         if let Some(value) = &self.link {
             fields.insert("link", value)?;
         }
+        if self.server_context_present || !self.server_context.is_empty() {
+            fields.insert("serverContext", &self.server_context)?;
+        }
+        fields.insert("expiresAt", &self.expires_at)?;
         if let Some(value) = &self.request_sign_up {
             fields.insert("requestSignUp", value)?;
         }
@@ -122,9 +160,6 @@ impl OAuthStatePayload {
         }
         if let Some(value) = &self.oauth_state {
             fields.insert("oauthState", value)?;
-        }
-        if !self.server_context.is_empty() {
-            fields.insert("serverContext", &self.server_context)?;
         }
         Ok(fields)
     }

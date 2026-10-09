@@ -1,78 +1,85 @@
 use jsonwebtoken::errors::ErrorKind;
 
+use crate::plugins::endpoint_context::EndpointContext;
 use crate::plugins::helpers::{SessionIssueError, issue_selected_user_session_optional};
-use better_auth_core::wire::{SessionView, UserView};
-use better_auth_core::{AuthContext, AuthError, AuthResult, UpdateUser};
-use better_auth_core::{AuthSession, AuthUser};
+use better_auth_core::session::{NativeSessionData, SessionRead};
+use better_auth_core::{
+    AuthContext, AuthError, AuthRequest, AuthResult, FieldMap, FieldValue, UpdateUser,
+};
 
 use super::token::{create_email_verification_token, decode_email_verification_token};
 use super::types::*;
-use super::{EmailVerificationConfig, StatusResponse};
+use super::{EmailVerificationConfig, StatusResponse, VerificationEmail};
 
 fn verification_url(base_url: &str, token: &str, callback_url: Option<&str>) -> String {
-    let callback_url = callback_url.unwrap_or("/");
+    let callback_url = callback_url.filter(|url| !url.is_empty()).unwrap_or("/");
     format!(
         "{base_url}/verify-email?token={token}&callbackURL={}",
         urlencoding::encode(callback_url),
     )
 }
 
+async fn send_for_user<S: better_auth_core::AuthSchema>(
+    user: FieldValue,
+    email: &FieldValue,
+    body: &SendVerificationEmailRequest,
+    config: &EmailVerificationConfig,
+    endpoint: &EndpointContext<'_, S>,
+) -> AuthResult<()> {
+    let ctx = endpoint.auth;
+    let token = create_email_verification_token(
+        ctx.config.signing_secret(),
+        &crate::plugins::helpers::user_email_field(email)?,
+        None,
+        config.verification_token_expiry(),
+        None,
+    )?;
+    let url = verification_url(ctx.base_url(), &token, body.callback_url.as_deref());
+    if let Some(task) = super::delivery::delivery(
+        Some(config),
+        VerificationEmail { user, url, token },
+        endpoint,
+    )? {
+        task.await?;
+    }
+    Ok(())
+}
+
 pub(super) async fn send_verification_email_core(
     body: &SendVerificationEmailRequest,
-    current_session: Option<&(UserView, SessionView)>,
-    request: Option<&better_auth_core::AuthRequest>,
+    req: &AuthRequest,
     config: &EmailVerificationConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<StatusResponse> {
-    let mut endpoint_body =
-        serde_json::Map::from_iter([("email".into(), serde_json::json!(body.email))]);
-    if let Some(callback_url) = &body.callback_url {
-        let _ = endpoint_body.insert("callbackURL".into(), serde_json::json!(callback_url));
-    }
-    let mut endpoint = crate::plugins::endpoint_context::EndpointContext::new(
-        request,
-        better_auth_core::FieldValue::from_json(endpoint_body.into())?,
-        ctx,
-    );
-    endpoint.session = current_session.cloned().map(Into::into);
     if !super::delivery::available(Some(config), ctx) {
         return Err(AuthError::bad_request("Verification email isn't enabled"));
     }
-
-    match current_session.map(|(user, _)| user) {
-        Some(user) => {
-            let session_email = crate::plugins::helpers::user_email(user)?;
-            if session_email.to_lowercase() != body.email.to_lowercase() {
-                return Err(AuthError::bad_request("Email mismatch"));
-            }
-            if user.email_verified().is_truthy()? {
-                return Err(AuthError::bad_request("Email is already verified"));
-            }
-
-            let token = create_email_verification_token(
-                ctx.config.signing_secret(),
-                &body.email,
-                None,
-                config.verification_token_expiry(),
-                None,
-            )?;
-            let url = verification_url(ctx.base_url(), &token, body.callback_url.as_deref());
-            let user = ctx.user_view(user).await?;
-            if let Some(task) = super::delivery::delivery(
-                Some(config),
-                super::VerificationEmail { user, url, token },
-                &endpoint,
-            )? {
-                task.await?;
-            }
+    let mut endpoint_body = FieldMap::from([("email".into(), body.email.clone().into())]);
+    if let Some(callback_url) = &body.callback_url {
+        let _ = endpoint_body.insert("callbackURL".into(), callback_url.clone().into());
+    }
+    let mut endpoint = EndpointContext::new(Some(req), endpoint_body.into(), ctx);
+    endpoint.session = ctx.native_session(req, SessionRead::Cached).await?;
+    if let Some(data) = &endpoint.session {
+        let email = data.user_property("email")?;
+        if crate::plugins::helpers::user_email_field(email)?.to_lowercase()
+            != body.email.to_lowercase()
+        {
+            return Err(AuthError::bad_request("Email mismatch"));
         }
-        None => {
-            let user = match ctx.database.get_user_by_email(&body.email).await? {
-                Some(user) => user,
-                None => return Ok(StatusResponse { status: true }),
-            };
-
-            if user.email_verified().is_truthy()? {
+        if data.user_property("emailVerified")?.is_truthy() {
+            return Err(AuthError::bad_request("Email is already verified"));
+        }
+        send_for_user(data.user.clone(), email, body, config, &endpoint).await?;
+    } else {
+        let start = std::time::Instant::now();
+        let user = ctx.database.get_user_by_email(&body.email).await?;
+        let result = match user.filter(|user| !user.email_verified.field_value().is_truthy()) {
+            Some(user) => {
+                let email = user.email.field_value();
+                send_for_user(FieldMap::from(user).into(), &email, body, config, &endpoint).await
+            }
+            None => {
                 let _ = create_email_verification_token(
                     ctx.config.signing_secret(),
                     &body.email,
@@ -80,28 +87,16 @@ pub(super) async fn send_verification_email_core(
                     config.verification_token_expiry(),
                     None,
                 )?;
-                return Ok(StatusResponse { status: true });
+                Ok(())
             }
-
-            let token = create_email_verification_token(
-                ctx.config.signing_secret(),
-                &body.email,
-                None,
-                config.verification_token_expiry(),
-                None,
-            )?;
-            let url = verification_url(ctx.base_url(), &token, body.callback_url.as_deref());
-            let user = ctx.user_view(&user).await?;
-            if let Some(task) = super::delivery::delivery(
-                Some(config),
-                super::VerificationEmail { user, url, token },
-                &endpoint,
-            )? {
-                task.await?;
-            }
+        };
+        // Preserve the upstream timing floor even when delivery fails.
+        if let Some(remaining) = std::time::Duration::from_millis(500).checked_sub(start.elapsed())
+        {
+            tokio::time::sleep(remaining).await;
         }
+        result?;
     }
-
     Ok(StatusResponse { status: true })
 }
 
@@ -125,32 +120,50 @@ fn verification_error(
     })
 }
 
-pub(super) async fn verify_email_core<U, S>(
-    query: &VerifyEmailQuery,
-    current_session: Option<(U, S)>,
-    config: &EmailVerificationConfig,
-    req: &better_auth_core::AuthRequest,
-    ip_address: Option<String>,
-    user_agent: Option<String>,
-    endpoint: &crate::plugins::endpoint_context::EndpointContext<
-        '_,
-        impl better_auth_core::AuthSchema,
-    >,
-) -> AuthResult<VerifyEmailResult>
-where
-    U: AuthUser,
-    S: AuthSession,
-{
-    let ctx = endpoint.auth;
-    let current_session = if let Some((user, session)) = current_session {
-        Some((
-            ctx.user_view(&user).await?,
-            ctx.session_view(&session).await?,
-        ))
-    } else {
-        None
-    };
+fn success(query: &VerifyEmailQuery, user: Option<FieldValue>) -> VerifyEmailResult {
+    if let Some(url) = query.callback_url.as_ref().filter(|url| !url.is_empty()) {
+        return VerifyEmailResult::Redirect { url: url.clone() };
+    }
+    let mut body = FieldMap::from([("status".into(), true.into())]);
+    if let Some(user) = user {
+        let _ = body.insert("user".into(), user);
+    }
+    VerifyEmailResult::Json { body: body.into() }
+}
 
+async fn active_session(
+    current: Option<NativeSessionData>,
+    user: &FieldValue,
+    req: &AuthRequest,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+) -> AuthResult<NativeSessionData> {
+    if let Some(current) = current {
+        return Ok(current);
+    }
+    issue_selected_user_session_optional(
+        ctx,
+        user.clone(),
+        &better_auth_core::RequestMeta {
+            ip_address: ctx.config.advanced.ip_address.resolve(req),
+            user_agent: req.headers.get("user-agent").cloned(),
+        },
+        ctx.config.session.expires_in(),
+    )
+    .await
+    .map_err(SessionIssueError::into_auth_error)?
+    .ok_or(AuthError::Upstream {
+        status: 500,
+        code: "FAILED_TO_CREATE_SESSION",
+        message: "Failed to create session",
+    })
+}
+
+pub(super) async fn verify_email_core(
+    query: &VerifyEmailQuery,
+    config: &EmailVerificationConfig,
+    req: &AuthRequest,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+) -> AuthResult<VerifyEmailResult> {
     let claims = match decode_email_verification_token(ctx.config.signing_secret(), &query.token) {
         Ok(claims) => claims,
         Err(AuthError::Jwt(error)) => {
@@ -161,306 +174,160 @@ where
         }
         Err(error) => return Err(error),
     };
-
     let Some(user) = ctx.database.get_user_by_email(&claims.email).await? else {
         return verification_error(query, "USER_NOT_FOUND", "User not found");
     };
-
-    if let Some(update_to) = claims.update_to.as_deref() {
-        if let Some((ref session_user, _)) = current_session
-            && !session_user
-                .email()
-                .field_value()
-                .strict_equals(&claims.email.clone().into())
+    let verified = user.email_verified.field_value().is_truthy();
+    let user = FieldValue::from(FieldMap::from(user));
+    let email = FieldValue::from(claims.email.clone());
+    let mut endpoint = EndpointContext::new(Some(req), FieldValue::Null, ctx);
+    if let Some(update_to) = claims
+        .update_to
+        .as_deref()
+        .filter(|email| !email.is_empty())
+    {
+        endpoint.session = ctx.native_session(req, SessionRead::Cached).await?;
+        if let Some(data) = &endpoint.session
+            && !data.user_property("email")?.strict_equals(&email)
         {
             return verification_error(query, "INVALID_USER", "Invalid user");
         }
-
-        match claims.request_type.as_deref() {
-            Some("change-email-confirmation") => {
-                let new_token = create_email_verification_token(
-                    ctx.config.signing_secret(),
-                    &claims.email,
-                    Some(update_to),
-                    config.verification_token_expiry(),
-                    Some("change-email-verification"),
+        if claims.request_type.as_deref() == Some("change-email-confirmation") {
+            let token = create_email_verification_token(
+                ctx.config.signing_secret(),
+                &claims.email,
+                Some(update_to),
+                config.verification_token_expiry(),
+                Some("change-email-verification"),
+            )?;
+            let url = verification_url(ctx.base_url(), &token, query.callback_url.as_deref());
+            if super::delivery::available(Some(config), ctx) {
+                let mut fields = user.enumerable_fields();
+                let _ = fields.insert("email".into(), update_to.into());
+                let task = super::delivery::delivery(
+                    Some(config),
+                    VerificationEmail {
+                        user: fields.into(),
+                        url,
+                        token,
+                    },
+                    &endpoint,
                 )?;
-                let url =
-                    verification_url(ctx.base_url(), &new_token, query.callback_url.as_deref());
-                if super::delivery::available(Some(config), ctx) {
-                    let mut updated_user = ctx.user_view(&user).await?;
-                    updated_user.set_field("email", update_to.into());
-                    let task = super::delivery::delivery(
-                        Some(config),
-                        super::VerificationEmail {
-                            user: updated_user,
-                            url,
-                            token: new_token,
-                        },
-                        endpoint,
-                    )?;
-                    better_auth_core::background::run_or_await(
-                        task,
-                        ctx.config.advanced.background_tasks.as_ref(),
-                        &ctx.config.logger,
-                    )
-                    .await;
-                }
-
-                if let Some(callback_url) = query.callback_url.as_deref() {
-                    return Ok(VerifyEmailResult::Redirect {
-                        url: callback_url.to_owned(),
-                    });
-                }
-
-                return Ok(VerifyEmailResult::Json {
-                    body: serde_json::json!({ "status": true }),
-                });
+                better_auth_core::background::run_or_await(
+                    task,
+                    ctx.config.advanced.background_tasks.as_ref(),
+                    &ctx.config.logger,
+                )
+                .await;
             }
-            Some("change-email-verification") => {
-                let (mut session_user, session): (UserView, SessionView) = match current_session {
-                    Some((user, session)) => (user, session),
-                    None => {
-                        let session = issue_selected_user_session_optional(
-                            ctx,
-                            better_auth_core::FieldMap::from(ctx.internal_user_view(&user).await?)
-                                .into(),
-                            &better_auth_core::RequestMeta {
-                                ip_address,
-                                user_agent,
-                            },
-                            ctx.config.session.expires_in(),
-                        )
-                        .await
-                        .map_err(SessionIssueError::into_auth_error)?
-                        .ok_or(AuthError::Upstream {
-                            status: 500,
-                            code: "FAILED_TO_CREATE_SESSION",
-                            message: "Failed to create session",
-                        })?
-                        .session;
-                        (
-                            ctx.internal_user_view(&user).await?,
-                            ctx.session_manager()
-                                .internal_session_view(&session)
-                                .await?,
-                        )
-                    }
-                };
-
-                let updated_user = ctx
-                    .database
-                    .update_user(
-                        user.id().typed()?,
-                        UpdateUser {
-                            email: Some(update_to.to_string()),
-                            email_verified: Some(true),
-                            ..Default::default()
-                        },
-                    )
-                    .await?;
-
-                if let Some(ref hook) = config.after_email_verification {
-                    let hook_user = ctx.user_view(&updated_user).await?;
-                    hook(&hook_user).await?;
-                }
-                session_user.set_field("email", update_to.into());
-                session_user.set_field("emailVerified", true.into());
-                let data = better_auth_core::session::SessionData {
-                    user: session_user,
-                    session,
-                };
-                ctx.session_manager()
-                    .set_session_cookie(req, data, None)
-                    .await?;
-
-                if let Some(callback_url) = query.callback_url.as_deref() {
-                    return Ok(VerifyEmailResult::Redirect {
-                        url: callback_url.to_owned(),
-                    });
-                }
-
-                return Ok(VerifyEmailResult::Json {
-                    body: serde_json::json!({
-                        "status": true,
-                        "user": ctx.user_view(&updated_user).await?,
-                    }),
-                });
+            return Ok(success(query, None));
+        }
+        let mut active = active_session(endpoint.session.clone(), &user, req, ctx).await?;
+        let verified = claims.request_type.as_deref() == Some("change-email-verification");
+        let updated = ctx
+            .database
+            .update_user_by_field_value(
+                "email",
+                &email,
+                UpdateUser {
+                    email: Some(update_to.into()),
+                    email_verified: Some(verified),
+                    ..Default::default()
+                },
+            )
+            .await?;
+        let updated_value = updated
+            .clone()
+            .map(|user| FieldMap::from(user).into())
+            .unwrap_or(FieldValue::Null);
+        if verified {
+            if let Some(hook) = &config.after_email_verification {
+                hook(&updated_value).await?;
             }
-            _ => {
-                let (mut session_user, session) = match current_session {
-                    Some(pair) => pair,
-                    None => {
-                        let issued = issue_selected_user_session_optional(
-                            ctx,
-                            better_auth_core::FieldMap::from(ctx.internal_user_view(&user).await?)
-                                .into(),
-                            &better_auth_core::RequestMeta {
-                                ip_address,
-                                user_agent,
-                            },
-                            ctx.config.session.expires_in(),
-                        )
-                        .await
-                        .map_err(SessionIssueError::into_auth_error)?
-                        .ok_or(AuthError::Upstream {
-                            status: 500,
-                            code: "FAILED_TO_CREATE_SESSION",
-                            message: "Failed to create session",
-                        })?;
-                        (
-                            ctx.internal_user_view(&user).await?,
-                            ctx.session_manager()
-                                .internal_session_view(&issued.session)
-                                .await?,
-                        )
-                    }
-                };
-                let updated_user = ctx
-                    .database
-                    .update_user(
-                        user.id().typed()?,
-                        UpdateUser {
-                            email: Some(update_to.to_string()),
-                            email_verified: Some(false),
-                            ..Default::default()
-                        },
-                    )
-                    .await?;
-                let new_token = create_email_verification_token(
-                    ctx.config.signing_secret(),
-                    update_to,
-                    None,
-                    config.verification_token_expiry(),
-                    None,
+        } else {
+            let token = create_email_verification_token(
+                ctx.config.signing_secret(),
+                update_to,
+                None,
+                chrono::Duration::hours(1),
+                None,
+            )?;
+            let url = verification_url(ctx.base_url(), &token, query.callback_url.as_deref());
+            if super::delivery::available(Some(config), ctx) {
+                let task = super::delivery::delivery(
+                    Some(config),
+                    VerificationEmail {
+                        user: updated_value,
+                        url,
+                        token,
+                    },
+                    &endpoint,
                 )?;
-                let url =
-                    verification_url(ctx.base_url(), &new_token, query.callback_url.as_deref());
-                if super::delivery::available(Some(config), ctx) {
-                    let task = super::delivery::delivery(
-                        Some(config),
-                        super::VerificationEmail {
-                            user: ctx.user_view(&updated_user).await?,
-                            url,
-                            token: new_token,
-                        },
-                        endpoint,
-                    )?;
-                    better_auth_core::background::run_or_await(
-                        task,
-                        ctx.config.advanced.background_tasks.as_ref(),
-                        &ctx.config.logger,
-                    )
-                    .await;
-                }
-                session_user.set_field("email", update_to.into());
-                session_user.set_field("emailVerified", false.into());
-                let data = better_auth_core::session::SessionData {
-                    user: session_user,
-                    session,
-                };
-                ctx.session_manager()
-                    .set_session_cookie(req, data, None)
-                    .await?;
-
-                if let Some(callback_url) = query.callback_url.as_deref() {
-                    return Ok(VerifyEmailResult::Redirect {
-                        url: callback_url.to_owned(),
-                    });
-                }
-
-                return Ok(VerifyEmailResult::Json {
-                    body: serde_json::json!({
-                        "status": true,
-                        "user": updated_user,
-                    }),
-                });
+                better_auth_core::background::run_or_await(
+                    task,
+                    ctx.config.advanced.background_tasks.as_ref(),
+                    &ctx.config.logger,
+                )
+                .await;
             }
         }
-    }
-
-    if user.email_verified().is_truthy()? {
-        if let Some(callback_url) = query.callback_url.as_deref() {
-            return Ok(VerifyEmailResult::Redirect {
-                url: callback_url.to_owned(),
-            });
+        let mut fields = active.user.enumerable_fields();
+        let _ = fields.insert("email".into(), update_to.into());
+        let _ = fields.insert("emailVerified".into(), verified.into());
+        active.user = fields.into();
+        ctx.session_manager()
+            .set_native_session_cookie(req, active, None)
+            .await?;
+        // Redirects precede public projection, so projection errors cannot replace the redirect.
+        if query
+            .callback_url
+            .as_ref()
+            .is_some_and(|url| !url.is_empty())
+        {
+            return Ok(success(query, None));
         }
-
-        return Ok(VerifyEmailResult::Json {
-            body: serde_json::json!({ "status": true, "user": serde_json::Value::Null }),
-        });
+        let output = match updated {
+            Some(user) => FieldMap::from(ctx.user_view(&user).await?).into(),
+            None => FieldValue::Null,
+        };
+        return Ok(success(query, Some(output)));
     }
-
-    if let Some(ref hook) = config.before_email_verification {
-        let hook_user = ctx.user_view(&user).await?;
-        hook(&hook_user).await?;
+    if verified {
+        return Ok(success(query, Some(FieldValue::Null)));
     }
-
-    let updated_user = ctx
+    if let Some(hook) = &config.before_email_verification {
+        hook(&user).await?;
+    }
+    let updated = ctx
         .database
-        .update_user(
-            user.id().typed()?,
+        .update_user_by_field_value(
+            "email",
+            &email,
             UpdateUser {
                 email_verified: Some(true),
                 ..Default::default()
             },
         )
         .await?;
-
-    if let Some(ref hook) = config.after_email_verification {
-        let hook_user = ctx.user_view(&updated_user).await?;
-        hook(&hook_user).await?;
+    if let Some(hook) = &config.after_email_verification {
+        let updated = updated
+            .map(|user| FieldMap::from(user).into())
+            .unwrap_or(FieldValue::Null);
+        hook(&updated).await?;
     }
-
-    let session_data = if config.auto_sign_in_after_verification {
-        let mut data = if let Some((session_user, session)) = current_session.filter(|(user, _)| {
-            user.email()
-                .field_value()
-                .strict_equals(&claims.email.clone().into())
-        }) {
-            better_auth_core::session::SessionData {
-                user: session_user,
-                session,
-            }
-        } else {
-            let issued = issue_selected_user_session_optional(
-                ctx,
-                better_auth_core::FieldMap::from(ctx.internal_user_view(&user).await?).into(),
-                &better_auth_core::RequestMeta {
-                    ip_address,
-                    user_agent,
-                },
-                ctx.config.session.expires_in(),
-            )
-            .await
-            .map_err(SessionIssueError::into_auth_error)?
-            .ok_or(AuthError::Upstream {
-                status: 500,
-                code: "FAILED_TO_CREATE_SESSION",
-                message: "Failed to create session",
-            })?;
-            ctx.session_manager()
-                .internal_data(&user, &issued.session)
-                .await?
+    if config.auto_sign_in_after_verification {
+        let current = ctx.native_session(req, SessionRead::Cached).await?;
+        let current = match current {
+            Some(data) if data.user_property("email")?.strict_equals(&email) => Some(data),
+            _ => None,
         };
-        data.user.set_field("emailVerified", true.into());
-        Some(data)
-    } else {
-        None
-    };
-    if let Some(data) = session_data {
+        let mut data = active_session(current, &user, req, ctx).await?;
+        let mut fields = data.user.enumerable_fields();
+        let _ = fields.insert("emailVerified".into(), true.into());
+        data.user = fields.into();
         ctx.session_manager()
-            .set_session_cookie(req, data, None)
+            .set_native_session_cookie(req, data, None)
             .await?;
     }
-
-    if let Some(callback_url) = query.callback_url.as_deref() {
-        return Ok(VerifyEmailResult::Redirect {
-            url: callback_url.to_owned(),
-        });
-    }
-
-    Ok(VerifyEmailResult::Json {
-        body: serde_json::json!({ "status": true, "user": serde_json::Value::Null }),
-    })
+    Ok(success(query, Some(FieldValue::Null)))
 }

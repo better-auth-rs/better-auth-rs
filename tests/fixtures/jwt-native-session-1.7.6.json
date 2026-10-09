@@ -1,0 +1,918 @@
+{
+  "version": "1.7.6",
+  "cases": [
+    {
+      "name": "string",
+      "result": {
+        "claims": {
+          "iat": "now",
+          "id": "owner",
+          "marker": "kept",
+          "sub": "owner",
+          "exp": "now+900",
+          "iss": "http://jwt-native-session.test",
+          "aud": "http://jwt-native-session.test"
+        }
+      },
+      "events": [
+        [
+          "keys",
+          {
+            "session": {
+              "id": "sid",
+              "token": "session-token",
+              "userId": "owner"
+            },
+            "user": {
+              "id": "owner",
+              "marker": "kept"
+            }
+          }
+        ]
+      ]
+    },
+    {
+      "name": "missing",
+      "result": {
+        "claims": {
+          "iat": "now",
+          "marker": "kept",
+          "exp": "now+900",
+          "iss": "http://jwt-native-session.test",
+          "aud": "http://jwt-native-session.test"
+        }
+      },
+      "events": [
+        [
+          "keys",
+          {
+            "session": {
+              "id": "sid",
+              "token": "session-token",
+              "userId": "owner"
+            },
+            "user": {
+              "marker": "kept"
+            }
+          }
+        ]
+      ]
+    },
+    {
+      "name": "undefined",
+      "result": {
+        "claims": {
+          "iat": "now",
+          "marker": "kept",
+          "exp": "now+900",
+          "iss": "http://jwt-native-session.test",
+          "aud": "http://jwt-native-session.test"
+        }
+      },
+      "events": [
+        [
+          "keys",
+          {
+            "session": {
+              "id": "sid",
+              "token": "session-token",
+              "userId": "owner"
+            },
+            "user": {
+              "id": {
+                "undefined": true
+              },
+              "marker": "kept"
+            }
+          }
+        ]
+      ]
+    },
+    {
+      "name": "null",
+      "result": {
+        "claims": {
+          "iat": "now",
+          "id": null,
+          "marker": "kept",
+          "sub": null,
+          "exp": "now+900",
+          "iss": "http://jwt-native-session.test",
+          "aud": "http://jwt-native-session.test"
+        }
+      },
+      "events": [
+        [
+          "keys",
+          {
+            "session": {
+              "id": "sid",
+              "token": "session-token",
+              "userId": "owner"
+            },
+            "user": {
+              "id": null,
+              "marker": "kept"
+            }
+          }
+        ]
+      ]
+    },
+    {
+      "name": "false",
+      "result": {
+        "claims": {
+          "iat": "now",
+          "id": false,
+          "marker": "kept",
+          "sub": false,
+          "exp": "now+900",
+          "iss": "http://jwt-native-session.test",
+          "aud": "http://jwt-native-session.test"
+        }
+      },
+      "events": [
+        [
+          "keys",
+          {
+            "session": {
+              "id": "sid",
+              "token": "session-token",
+              "userId": "owner"
+            },
+            "user": {
+              "id": false,
+              "marker": "kept"
+            }
+          }
+        ]
+      ]
+    },
+    {
+      "name": "zero",
+      "result": {
+        "claims": {
+          "iat": "now",
+          "id": 0,
+          "marker": "kept",
+          "sub": 0,
+          "exp": "now+900",
+          "iss": "http://jwt-native-session.test",
+          "aud": "http://jwt-native-session.test"
+        }
+      },
+      "events": [
+        [
+          "keys",
+          {
+            "session": {
+              "id": "sid",
+              "token": "session-token",
+              "userId": "owner"
+            },
+            "user": {
+              "id": 0,
+              "marker": "kept"
+            }
+          }
+        ]
+      ]
+    },
+    {
+      "name": "empty",
+      "result": {
+        "claims": {
+          "iat": "now",
+          "id": "",
+          "marker": "kept",
+          "sub": "",
+          "exp": "now+900",
+          "iss": "http://jwt-native-session.test",
+          "aud": "http://jwt-native-session.test"
+        }
+      },
+      "events": [
+        [
+          "keys",
+          {
+            "session": {
+              "id": "sid",
+              "token": "session-token",
+              "userId": "owner"
+            },
+            "user": {
+              "id": "",
+              "marker": "kept"
+            }
+          }
+        ]
+      ]
+    },
+    {
+      "name": "number",
+      "result": {
+        "error": "\"sub\" claim must be a string"
+      },
+      "events": [
+        [
+          "keys",
+          {
+            "session": {
+              "id": "sid",
+              "token": "session-token",
+              "userId": "owner"
+            },
+            "user": {
+              "id": 7,
+              "marker": "kept"
+            }
+          }
+        ]
+      ]
+    },
+    {
+      "name": "nan",
+      "result": {
+        "claims": {
+          "iat": "now",
+          "id": null,
+          "marker": "kept",
+          "sub": null,
+          "exp": "now+900",
+          "iss": "http://jwt-native-session.test",
+          "aud": "http://jwt-native-session.test"
+        }
+      },
+      "events": [
+        [
+          "keys",
+          {
+            "session": {
+              "id": "sid",
+              "token": "session-token",
+              "userId": "owner"
+            },
+            "user": {
+              "id": {
+                "number": "NaN"
+              },
+              "marker": "kept"
+            }
+          }
+        ]
+      ]
+    },
+    {
+      "name": "infinity",
+      "result": {
+        "error": "\"sub\" claim must be a string"
+      },
+      "events": [
+        [
+          "keys",
+          {
+            "session": {
+              "id": "sid",
+              "token": "session-token",
+              "userId": "owner"
+            },
+            "user": {
+              "id": {
+                "number": "Infinity"
+              },
+              "marker": "kept"
+            }
+          }
+        ]
+      ]
+    },
+    {
+      "name": "many-array",
+      "result": {
+        "claims": {
+          "0": {
+            "id": "child",
+            "marker": "kept"
+          },
+          "iat": "now",
+          "exp": "now+900",
+          "iss": "http://jwt-native-session.test",
+          "aud": "http://jwt-native-session.test"
+        }
+      },
+      "events": [
+        [
+          "keys",
+          {
+            "session": {
+              "id": "sid",
+              "token": "session-token",
+              "userId": "owner"
+            },
+            "user": [
+              {
+                "id": "child",
+                "marker": "kept"
+              }
+            ]
+          }
+        ]
+      ]
+    },
+    {
+      "name": "many-public",
+      "result": {
+        "claims": {
+          "0": {
+            "id": "child",
+            "marker": "kept"
+          },
+          "iat": "now",
+          "exp": "now+900",
+          "iss": "http://jwt-native-session.test",
+          "aud": "http://jwt-native-session.test"
+        }
+      },
+      "events": [
+        [
+          "keys",
+          {
+            "session": {
+              "id": "sid",
+              "token": "session-token",
+              "userId": "owner"
+            },
+            "user": {
+              "0": {
+                "id": "child",
+                "marker": "kept"
+              }
+            }
+          }
+        ]
+      ]
+    },
+    {
+      "name": "null-user",
+      "result": {
+        "error": "null is not an object (evaluating 'ctx.context.session.user.id')"
+      },
+      "events": []
+    },
+    {
+      "name": "false-user",
+      "result": {
+        "claims": {
+          "iat": "now",
+          "exp": "now+900",
+          "iss": "http://jwt-native-session.test",
+          "aud": "http://jwt-native-session.test"
+        }
+      },
+      "events": [
+        [
+          "keys",
+          {
+            "session": {
+              "id": "sid",
+              "token": "session-token",
+              "userId": "owner"
+            },
+            "user": false
+          }
+        ]
+      ]
+    },
+    {
+      "name": "zero-user",
+      "result": {
+        "claims": {
+          "iat": "now",
+          "exp": "now+900",
+          "iss": "http://jwt-native-session.test",
+          "aud": "http://jwt-native-session.test"
+        }
+      },
+      "events": [
+        [
+          "keys",
+          {
+            "session": {
+              "id": "sid",
+              "token": "session-token",
+              "userId": "owner"
+            },
+            "user": 0
+          }
+        ]
+      ]
+    },
+    {
+      "name": "missing-callbacks",
+      "result": {
+        "claims": {
+          "iat": "now",
+          "callback": true,
+          "sub": "callback-subject",
+          "exp": "now+900",
+          "iss": "http://jwt-native-session.test",
+          "aud": "http://jwt-native-session.test"
+        }
+      },
+      "events": [
+        [
+          "payload",
+          {
+            "native": {
+              "session": {
+                "id": "sid",
+                "token": "session-token",
+                "userId": "owner"
+              },
+              "user": {
+                "marker": "kept"
+              }
+            },
+            "json": {
+              "session": {
+                "id": "sid",
+                "token": "session-token",
+                "userId": "owner"
+              },
+              "user": {
+                "marker": "kept"
+              }
+            }
+          }
+        ],
+        [
+          "subject",
+          {
+            "native": {
+              "session": {
+                "id": "sid",
+                "token": "session-token",
+                "userId": "owner"
+              },
+              "user": {
+                "marker": "kept"
+              }
+            },
+            "json": {
+              "session": {
+                "id": "sid",
+                "token": "session-token",
+                "userId": "owner"
+              },
+              "user": {
+                "marker": "kept"
+              }
+            }
+          }
+        ],
+        [
+          "keys",
+          {
+            "session": {
+              "id": "sid",
+              "token": "session-token",
+              "userId": "owner"
+            },
+            "user": {
+              "marker": "kept"
+            }
+          }
+        ]
+      ]
+    },
+    {
+      "name": "many-callbacks",
+      "result": {
+        "claims": {
+          "iat": "now",
+          "callback": true,
+          "sub": "callback-subject",
+          "exp": "now+900",
+          "iss": "http://jwt-native-session.test",
+          "aud": "http://jwt-native-session.test"
+        }
+      },
+      "events": [
+        [
+          "payload",
+          {
+            "native": {
+              "session": {
+                "id": "sid",
+                "token": "session-token",
+                "userId": "owner"
+              },
+              "user": [
+                {
+                  "id": "child"
+                }
+              ]
+            },
+            "json": {
+              "session": {
+                "id": "sid",
+                "token": "session-token",
+                "userId": "owner"
+              },
+              "user": [
+                {
+                  "id": "child"
+                }
+              ]
+            }
+          }
+        ],
+        [
+          "subject",
+          {
+            "native": {
+              "session": {
+                "id": "sid",
+                "token": "session-token",
+                "userId": "owner"
+              },
+              "user": [
+                {
+                  "id": "child"
+                }
+              ]
+            },
+            "json": {
+              "session": {
+                "id": "sid",
+                "token": "session-token",
+                "userId": "owner"
+              },
+              "user": [
+                {
+                  "id": "child"
+                }
+              ]
+            }
+          }
+        ],
+        [
+          "keys",
+          {
+            "session": {
+              "id": "sid",
+              "token": "session-token",
+              "userId": "owner"
+            },
+            "user": [
+              {
+                "id": "child"
+              }
+            ]
+          }
+        ]
+      ]
+    },
+    {
+      "name": "null-user-subject",
+      "result": {
+        "claims": {
+          "iat": "now",
+          "sub": "callback-subject",
+          "exp": "now+900",
+          "iss": "http://jwt-native-session.test",
+          "aud": "http://jwt-native-session.test"
+        }
+      },
+      "events": [
+        [
+          "subject",
+          {
+            "native": {
+              "session": {
+                "id": "sid",
+                "token": "session-token",
+                "userId": "owner"
+              },
+              "user": null
+            },
+            "json": {
+              "session": {
+                "id": "sid",
+                "token": "session-token",
+                "userId": "owner"
+              },
+              "user": null
+            }
+          }
+        ],
+        [
+          "keys",
+          {
+            "session": {
+              "id": "sid",
+              "token": "session-token",
+              "userId": "owner"
+            },
+            "user": null
+          }
+        ]
+      ]
+    },
+    {
+      "name": "absent-session",
+      "result": {
+        "error": "null is not an object (evaluating 'ctx.context.session.user')"
+      },
+      "events": []
+    },
+    {
+      "name": "absent-session-callbacks",
+      "result": {
+        "claims": {
+          "iat": "now",
+          "callback": true,
+          "sub": "callback-subject",
+          "exp": "now+900",
+          "iss": "http://jwt-native-session.test",
+          "aud": "http://jwt-native-session.test"
+        }
+      },
+      "events": [
+        [
+          "payload",
+          {
+            "native": null,
+            "json": null
+          }
+        ],
+        [
+          "subject",
+          {
+            "native": null,
+            "json": null
+          }
+        ],
+        [
+          "keys",
+          null
+        ]
+      ]
+    },
+    {
+      "name": "payload-failure",
+      "result": {
+        "error": "payload failure"
+      },
+      "events": [
+        [
+          "payload",
+          {
+            "native": {
+              "session": {
+                "id": "sid",
+                "token": "session-token",
+                "userId": "owner"
+              },
+              "user": {}
+            },
+            "json": {
+              "session": {
+                "id": "sid",
+                "token": "session-token",
+                "userId": "owner"
+              },
+              "user": {}
+            }
+          }
+        ]
+      ]
+    },
+    {
+      "name": "subject-failure",
+      "result": {
+        "error": "subject failure"
+      },
+      "events": [
+        [
+          "payload",
+          {
+            "native": {
+              "session": {
+                "id": "sid",
+                "token": "session-token",
+                "userId": "owner"
+              },
+              "user": {}
+            },
+            "json": {
+              "session": {
+                "id": "sid",
+                "token": "session-token",
+                "userId": "owner"
+              },
+              "user": {}
+            }
+          }
+        ],
+        [
+          "subject",
+          {
+            "native": {
+              "session": {
+                "id": "sid",
+                "token": "session-token",
+                "userId": "owner"
+              },
+              "user": {}
+            },
+            "json": {
+              "session": {
+                "id": "sid",
+                "token": "session-token",
+                "userId": "owner"
+              },
+              "user": {}
+            }
+          }
+        ]
+      ]
+    },
+    {
+      "name": "cache-string",
+      "result": {
+        "claims": {
+          "session": {
+            "id": "sid",
+            "token": "session-token",
+            "userId": "owner"
+          },
+          "user": {
+            "id": "owner",
+            "marker": "kept"
+          },
+          "sid": "session-token",
+          "iat": "now",
+          "exp": "now+60",
+          "iss": "http://jwt-native-session.test",
+          "aud": "better-auth:session-cache",
+          "sub": "owner"
+        }
+      },
+      "events": [
+        [
+          "keys",
+          null
+        ]
+      ]
+    },
+    {
+      "name": "cache-missing",
+      "result": {
+        "error": "\"sub\" claim must be a string"
+      },
+      "events": [
+        [
+          "keys",
+          null
+        ]
+      ]
+    },
+    {
+      "name": "cache-undefined",
+      "result": {
+        "error": "\"sub\" claim must be a string"
+      },
+      "events": [
+        [
+          "keys",
+          null
+        ]
+      ]
+    },
+    {
+      "name": "cache-null",
+      "result": {
+        "error": "\"sub\" claim must be a string"
+      },
+      "events": [
+        [
+          "keys",
+          null
+        ]
+      ]
+    },
+    {
+      "name": "cache-false",
+      "result": {
+        "error": "\"sub\" claim must be a string"
+      },
+      "events": [
+        [
+          "keys",
+          null
+        ]
+      ]
+    },
+    {
+      "name": "cache-zero",
+      "result": {
+        "error": "\"sub\" claim must be a string"
+      },
+      "events": [
+        [
+          "keys",
+          null
+        ]
+      ]
+    },
+    {
+      "name": "cache-empty",
+      "result": {
+        "claims": {
+          "session": {
+            "id": "sid",
+            "token": "session-token",
+            "userId": "owner"
+          },
+          "user": {
+            "id": "",
+            "marker": "kept"
+          },
+          "sid": "session-token",
+          "iat": "now",
+          "exp": "now+60",
+          "iss": "http://jwt-native-session.test",
+          "aud": "better-auth:session-cache",
+          "sub": ""
+        }
+      },
+      "events": [
+        [
+          "keys",
+          null
+        ]
+      ]
+    },
+    {
+      "name": "cache-number",
+      "result": {
+        "error": "\"sub\" claim must be a string"
+      },
+      "events": [
+        [
+          "keys",
+          null
+        ]
+      ]
+    },
+    {
+      "name": "cache-nan",
+      "result": {
+        "error": "\"sub\" claim must be a string"
+      },
+      "events": [
+        [
+          "keys",
+          null
+        ]
+      ]
+    },
+    {
+      "name": "cache-infinity",
+      "result": {
+        "error": "\"sub\" claim must be a string"
+      },
+      "events": [
+        [
+          "keys",
+          null
+        ]
+      ]
+    },
+    {
+      "name": "cache-many-array",
+      "result": {
+        "error": "\"sub\" claim must be a string"
+      },
+      "events": [
+        [
+          "keys",
+          null
+        ]
+      ]
+    },
+    {
+      "name": "cache-many-public",
+      "result": {
+        "error": "\"sub\" claim must be a string"
+      },
+      "events": [
+        [
+          "keys",
+          null
+        ]
+      ]
+    }
+  ]
+}

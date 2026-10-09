@@ -18,7 +18,7 @@ pub(crate) struct VerifyEmailQuery {
 /// Result of the verify-email core function.
 pub(crate) enum VerifyEmailResult {
     Redirect { url: String },
-    Json { body: serde_json::Value },
+    Json { body: better_auth_core::FieldValue },
 }
 
 pub(super) fn body(

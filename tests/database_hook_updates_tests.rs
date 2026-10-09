@@ -42,6 +42,7 @@ struct PatchHook {
 impl SeaOrmHooks<BundledSchema> for PatchHook {
     async fn before_update_user(
         &self,
+        _: &str,
         _: &better_auth_core::FieldValue,
         update: &mut better_auth_core::FieldMap,
         _: &SeaOrmHookContext<'_, BundledSchema>,
@@ -61,7 +62,7 @@ impl SeaOrmHooks<BundledSchema> for PatchHook {
     }
     async fn before_update_account(
         &self,
-        _: &str,
+        _: &better_auth_core::FieldValue,
         update: &UpdateAccount,
         _: &SeaOrmHookContext<'_, BundledSchema>,
     ) -> AuthResult<DatabaseHookUpdate<UpdateAccount>> {

@@ -2,8 +2,7 @@ use async_trait::async_trait;
 use chrono::Duration;
 use std::sync::Arc;
 
-use better_auth_core::wire::UserView;
-use better_auth_core::{AuthContext, AuthPlugin, AuthRoute};
+use better_auth_core::{AuthContext, AuthPlugin, AuthRoute, FieldValue};
 use better_auth_core::{AuthError, AuthResult};
 use better_auth_core::{AuthRequest, AuthResponse, HttpMethod};
 
@@ -14,6 +13,8 @@ mod request;
 pub(super) mod types;
 
 #[cfg(test)]
+mod native_tests;
+#[cfg(test)]
 mod tests;
 
 use handlers::*;
@@ -23,8 +24,8 @@ use types::*;
 // User info snapshot (dyn-compatible alternative to &dyn AuthUser)
 // ---------------------------------------------------------------------------
 
-/// Public user snapshot passed to change-email callbacks, including additional fields.
-pub type UserInfo = UserView;
+/// Native user payload passed to change-email callbacks, including replacement values.
+pub type UserInfo = FieldValue;
 
 // ---------------------------------------------------------------------------
 // Callback traits
@@ -51,14 +52,21 @@ pub trait SendChangeEmailConfirmation: Send + Sync {
 /// abort the deletion.
 #[async_trait]
 pub trait BeforeDeleteUser: Send + Sync {
-    async fn before_delete(&self, user: &UserView, request: Option<&AuthRequest>)
-    -> AuthResult<()>;
+    async fn before_delete(
+        &self,
+        user: &FieldValue,
+        request: Option<&AuthRequest>,
+    ) -> AuthResult<()>;
 }
 
 /// Hook invoked **after** a user has been deleted.
 #[async_trait]
 pub trait AfterDeleteUser: Send + Sync {
-    async fn after_delete(&self, user: &UserView, request: Option<&AuthRequest>) -> AuthResult<()>;
+    async fn after_delete(
+        &self,
+        user: &FieldValue,
+        request: Option<&AuthRequest>,
+    ) -> AuthResult<()>;
 }
 
 /// Configuring this sender requires email confirmation before account deletion.
@@ -66,7 +74,7 @@ pub trait AfterDeleteUser: Send + Sync {
 pub trait SendDeleteAccountVerification: Send + Sync {
     async fn send(
         &self,
-        user: &UserView,
+        user: &FieldValue,
         url: &str,
         token: &str,
         request: Option<&AuthRequest>,
@@ -243,8 +251,8 @@ impl UserManagementPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let (user, session) = ctx
-            .require_authoritative_session(req)
+        let data = ctx
+            .require_authoritative_native_session(req)
             .await
             .map_err(|error| match error {
                 AuthError::Unauthenticated => AuthError::Upstream {
@@ -255,7 +263,7 @@ impl UserManagementPlugin {
                 error => error,
             })?;
         let body = request::change_email(req)?;
-        let response = change_email_core(&body, &user, &session, req, &self.config, ctx).await?;
+        let response = change_email_core(&body, &data, req, &self.config, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
 
@@ -265,10 +273,9 @@ impl UserManagementPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let (user, session) = ctx.require_session(req).await?;
-        let user = ctx.user_view(&user).await?;
+        let data = ctx.require_native_session(req).await?;
         let body = request::delete_user(req)?;
-        let response = delete_user_core(&body, &user, &session, req, &self.config, ctx).await?;
+        let response = delete_user_core(&body, &data, req, &self.config, ctx).await?;
         let mut response = AuthResponse::json(200, &response)?;
         for (name, value) in req.take_response_headers()? {
             response.headers.append(name, value);
@@ -282,8 +289,8 @@ impl UserManagementPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let (user, _) = ctx
-            .require_authoritative_session(req)
+        let data = ctx
+            .require_authoritative_native_session(req)
             .await
             .map_err(|error| {
                 if error.status_code() == 401 {
@@ -292,15 +299,14 @@ impl UserManagementPlugin {
                     error
                 }
             })?;
-        let user = ctx.user_view(&user).await?;
         let query: TokenQuery = serde_json::from_value(serde_json::json!({
             "token": req.query_string("token")?.map(str::to_owned),
             "callbackURL": req.query_string("callbackURL")?.map(str::to_owned),
         }))
         .map_err(|_| AuthError::bad_request("Verification token is required"))?;
         let response =
-            delete_user_callback_core(&query.token, &user, req, &self.config, ctx).await?;
-        if let Some(callback_url) = query.callback_url {
+            delete_user_callback_core(&query.token, &data, req, &self.config, ctx).await?;
+        if let Some(callback_url) = query.callback_url.filter(|url| !url.is_empty()) {
             let mut headers = better_auth_core::Headers::new();
             _ = headers.insert("Location".to_string(), callback_url);
             let mut response = AuthResponse::new(302);

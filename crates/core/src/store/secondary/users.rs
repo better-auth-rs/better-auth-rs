@@ -265,12 +265,16 @@ impl<S: AuthSchema> UserStore<S> for SecondaryStore<S> {
         self.update_user_by_id_value(&crate::FieldValue::from(id), update)
             .await
     }
-    async fn update_user_by_id_value(
+    async fn update_user_by_field_value(
         &self,
-        id: &crate::FieldValue,
+        field: &str,
+        value: &crate::FieldValue,
         update: UpdateUser,
     ) -> AuthResult<Option<crate::UserView>> {
-        let user = self.inner.update_user_by_id_value(id, update).await?;
+        let user = self
+            .inner
+            .update_user_by_field_value(field, value, update)
+            .await?;
         self.queue_user_session_refresh(user.clone(), None).await?;
         Ok(user)
     }

@@ -20,6 +20,8 @@ mod lifecycle_hooks;
 mod lifecycle_models;
 #[path = "support/mysql_readback_trace.rs"]
 mod trace;
+#[path = "support/mysql_update_readback.rs"]
+mod update_readback;
 #[path = "support/device_where_values.rs"]
 mod values;
 
@@ -128,3 +130,9 @@ lifecycle_case!(
     live_mysql_lifecycle_verification_writer_after_error,
     "verification-secondary-after-error"
 );
+
+#[tokio::test]
+#[ignore = "Requires BETTER_AUTH_TEST_MYSQL_URL and permission to create isolated test databases"]
+async fn live_mysql_update_readback_tracks_email_and_mapped_selectors() -> contract::TestResult {
+    contract::in_mysql_catalog(update_readback::check).await
+}

@@ -26,6 +26,17 @@ pub(super) struct AuthLifecycleFixture {
     state: Arc<Mutex<State>>,
 }
 impl AuthLifecycleFixture {
+    fn record_native(
+        &self,
+        name: &str,
+        user: &FieldValue,
+        request: Option<&AuthRequest>,
+    ) -> AuthResult<()> {
+        let fields = user
+            .as_object()
+            .ok_or_else(|| AuthError::type_error("Lifecycle User must be an object"))?;
+        self.record(name, &UserView::try_from(fields.clone())?, request)
+    }
     fn record(&self, name: &str, user: &UserView, request: Option<&AuthRequest>) -> AuthResult<()> {
         self.state.lock().unwrap().events.push(json!({"name":name,"email":user.email,"userName":user.name,"image":user.image,
             "department":user.additional_fields.get("department").map(FieldValue::json).transpose()?.flatten(),"hasHidden":user.additional_fields.contains_key("secretNote"),
@@ -185,29 +196,33 @@ impl SendResetPassword for AuthLifecycleFixture {
 impl SendDeleteAccountVerification for AuthLifecycleFixture {
     async fn send(
         &self,
-        user: &UserView,
+        user: &FieldValue,
         _url: &str,
         token: &str,
         request: Option<&AuthRequest>,
     ) -> AuthResult<()> {
         self.state.lock().unwrap().delete_token = Some(token.into());
-        self.record("delete-send", user, request)
+        self.record_native("delete-send", user, request)
     }
 }
 #[async_trait]
 impl BeforeDeleteUser for AuthLifecycleFixture {
     async fn before_delete(
         &self,
-        user: &UserView,
+        user: &FieldValue,
         request: Option<&AuthRequest>,
     ) -> AuthResult<()> {
-        self.record("before-delete", user, request)
+        self.record_native("before-delete", user, request)
     }
 }
 #[async_trait]
 impl AfterDeleteUser for AuthLifecycleFixture {
-    async fn after_delete(&self, user: &UserView, request: Option<&AuthRequest>) -> AuthResult<()> {
-        self.record("after-delete", user, request)
+    async fn after_delete(
+        &self,
+        user: &FieldValue,
+        request: Option<&AuthRequest>,
+    ) -> AuthResult<()> {
+        self.record_native("after-delete", user, request)
     }
 }
 

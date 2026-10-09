@@ -21,6 +21,12 @@ impl EphemeralStore {
         value: &Value,
     ) -> AuthResult<Option<RowRef<UserView>>> {
         self.model_fields.begin_id_query(EntityRole::User)?;
+        let (physical, value) = self.user_field_selector(name, value)?;
+        self.user_ref(|user| Self::user_matches_selector(user, &physical, &value))
+            .await
+    }
+
+    fn user_field_selector(&self, name: &str, value: &Value) -> AuthResult<(String, Value)> {
         let schema = self.user_schema();
         let (logical, field) = schema
             .fields()
@@ -41,14 +47,15 @@ impl EphemeralStore {
             )?
         };
         let physical = resolve_field_name(field.field_name.as_deref(), logical);
-        self.user_ref(|user| {
-            let stored = FieldMap::from(user.clone())
-                .get(physical)
-                .cloned()
-                .unwrap_or_default();
-            stored.strict_equals(&value) || (value.is_null() && stored.is_undefined())
-        })
-        .await
+        Ok((physical.to_owned(), value))
+    }
+
+    fn user_matches_selector(user: &UserView, field: &str, value: &Value) -> bool {
+        let stored = FieldMap::from(user.clone())
+            .get(field)
+            .cloned()
+            .unwrap_or_default();
+        crate::query::field_matches_equality(&stored, value)
     }
 
     pub(super) async fn user_ref(
@@ -84,10 +91,13 @@ impl EphemeralStore {
 
     async fn finish_user_update(
         &self,
-        id: &Value,
+        field: &str,
+        value: &Value,
         update: FieldMap,
     ) -> AuthResult<Option<UserView>> {
-        let user = self.update_user_record_optional(id, update).await?;
+        let user = self
+            .update_user_record_optional(field, value, update)
+            .await?;
         self.after(CommittedWrite::UserUpdated(user.clone()))
             .await?;
         Ok(user)
@@ -148,14 +158,6 @@ impl EphemeralStore {
         }
     }
 
-    pub(super) async fn prepare_user_update(&self, update: UpdateUser) -> AuthResult<FieldMap> {
-        let update = self
-            .prepare_user_update_optional(update)
-            .await?
-            .ok_or_else(|| AuthError::forbidden("user update cancelled by database hook"))?;
-        self.prepare_user_update_fields(update).await
-    }
-
     async fn prepare_user_update_optional(
         &self,
         update: UpdateUser,
@@ -206,43 +208,32 @@ impl EphemeralStore {
 
     async fn update_user_outcome(
         &self,
-        id: &Value,
+        field: &str,
+        value: &Value,
         update: UpdateUser,
     ) -> AuthResult<std::ops::ControlFlow<(), Option<UserView>>> {
         let Some(update) = self.prepare_user_update_optional(update).await? else {
             return Ok(std::ops::ControlFlow::Break(()));
         };
         self.model_fields.canonicalize_id(EntityRole::User)?;
-        let id = self.memory_primary_id_query(id)?;
+        let (physical, value) = self.user_field_selector(field, value)?;
         let update = self.prepare_user_update_fields(update).await?;
-        self.finish_user_update(&id, update)
+        self.finish_user_update(&physical, &value, update)
             .await
             .map(std::ops::ControlFlow::Continue)
     }
 
-    pub(super) async fn update_user_record(
-        &self,
-        id: &str,
-        update: FieldMap,
-    ) -> AuthResult<UserView> {
-        self.model_fields.canonicalize_id(EntityRole::User)?;
-        let id = self.memory_primary_id_query(&Value::from(id))?;
-        self.update_user_record_optional(&id, update)
-            .await?
-            .ok_or(AuthError::UserNotFound)
-    }
-
     async fn update_user_record_optional(
         &self,
-        id: &Value,
+        field: &str,
+        value: &Value,
         update: FieldMap,
     ) -> AuthResult<Option<UserView>> {
         let user = self
             .raw("user", "update", |state| {
-                let selected = state.users.select_refs(|user| {
-                    let value = user.id.field_value();
-                    value.strict_equals(id) || (id.is_null() && value.is_undefined())
-                })?;
+                let selected = state
+                    .users
+                    .select_refs(|user| Self::user_matches_selector(user, field, value))?;
                 for row in &selected {
                     row.write(|user| {
                         self.assign_user_storage_fields(user, &update);
@@ -417,7 +408,10 @@ impl UserStore<StatelessSchema> for EphemeralStore {
     }
 
     async fn update_user(&self, id: &str, update: UpdateUser) -> AuthResult<UserView> {
-        match self.update_user_outcome(&Value::from(id), update).await? {
+        match self
+            .update_user_outcome("id", &Value::from(id), update)
+            .await?
+        {
             std::ops::ControlFlow::Break(()) => Err(AuthError::forbidden(
                 "user update cancelled by database hook",
             )),
@@ -431,13 +425,14 @@ impl UserStore<StatelessSchema> for EphemeralStore {
     ) -> AuthResult<Option<UserView>> {
         self.update_user_by_id_value(&Value::from(id), update).await
     }
-    async fn update_user_by_id_value(
+    async fn update_user_by_field_value(
         &self,
-        id: &Value,
+        field: &str,
+        value: &Value,
         update: UpdateUser,
     ) -> AuthResult<Option<UserView>> {
         Ok(self
-            .update_user_outcome(id, update)
+            .update_user_outcome(field, value, update)
             .await?
             .continue_value()
             .flatten())

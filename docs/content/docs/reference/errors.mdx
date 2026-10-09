@@ -40,9 +40,12 @@ For 5xx errors, the actual error details are hidden and a generic message is ret
 | `Serialization` | 500 | JSON serialization error |
 | `Plugin` | 500 | Plugin-specific error |
 | `Internal` | 500 | Unexpected internal error |
+| `TypeError` | 500 | A native value rejected a property or method operation |
 | `PasswordHash` | 500 | Password hashing failure |
 | `Jwt` | 500 | JWT encoding/decoding error |
 | `Redis` | 500 | Redis operation failed; available with `redis-cache` |
+
+`AuthError::TypeError(message)` preserves the runtime error category and message for native endpoint calls and HTTP error callbacks. Use `AuthError::type_error(message)` for an operation that corresponds to an upstream JavaScript `TypeError`. The HTTP dispatcher treats this variant as an ordinary runtime failure and returns an empty 500 response. Application failures created with `AuthError::internal` remain distinct.
 
 ## DatabaseError Variants
 

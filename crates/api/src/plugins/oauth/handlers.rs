@@ -4,10 +4,11 @@ use indexmap::IndexMap;
 use rand::RngCore;
 use sha2::{Digest, Sha256};
 
-use better_auth_core::entity::{AuthSession, AuthUser};
+use better_auth_core::entity::AuthSession;
+use better_auth_core::session::NativeSessionData;
 use better_auth_core::{
     AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, CreateAccount,
-    CreateVerification, UpdateAccount, UpdateUser,
+    CreateVerification, FieldValue, UpdateAccount, UpdateUser, Utf16String,
 };
 
 use super::authorization::{AuthorizationRequest, build_authorization_url};
@@ -227,7 +228,7 @@ pub(super) async fn complete_link_social(
     let ctx = endpoint.auth;
     super::signin::validate_provider_user(
         user_info,
-        link.user_id.clone().into(),
+        link.user_id().clone(),
         provider_name,
         profile,
         crate::plugins::user_admission::UserValidationAction::LinkAccount,
@@ -244,10 +245,11 @@ pub(super) async fn complete_link_social(
         return Err("unable_to_link_account".to_string().into());
     }
 
-    if !linking.allow_different_emails
-        && !user_info
-            .email()?
-            .is_some_and(|email| email.eq_ignore_ascii_case(&link.email))
+    let provider_email = user_info
+        .email()?
+        .map(|email| Utf16String::from(email).to_lowercase());
+    if provider_email.as_ref() != Some(&lowercase_link_email(link.email())?)
+        && !linking.allow_different_emails
     {
         return Err("email_doesn't_match".to_string().into());
     }
@@ -258,7 +260,19 @@ pub(super) async fn complete_link_social(
         .await
         .map_err(|error| error.to_string())?
     {
-        if existing_account.user_id != link.user_id {
+        let account_owner = existing_account.user_id.field_value();
+        if matches!(account_owner, FieldValue::Null | FieldValue::Undefined) {
+            let kind = if account_owner.is_null() {
+                "null"
+            } else {
+                "undefined"
+            };
+            return Err(AuthError::type_error(format!(
+                "{kind} is not an object (evaluating 'existingAccount.userId.toString')"
+            ))
+            .into());
+        }
+        if account_owner.display_utf16()? != link.user_id().display_utf16()? {
             return Err("account_already_linked_to_different_user"
                 .to_string()
                 .into());
@@ -292,11 +306,8 @@ pub(super) async fn complete_link_social(
 
         let _ = ctx
             .database
-            .update_account(
-                existing_account
-                    .id
-                    .typed()
-                    .map_err(|error| error.to_string())?,
+            .update_account_by_id_value(
+                &existing_account.id.field_value(),
                 UpdateAccount {
                     provider_id: provider_name.to_owned().into(),
                     access_token: (token_bundle.access_token)
@@ -327,7 +338,7 @@ pub(super) async fn complete_link_social(
             .await
             .map_err(|error| error.to_string())?;
 
-        apply_link_user_info(&link.user_id, user_info, ctx).await;
+        apply_link_user_info(link.user_id(), user_info, ctx).await;
         return Ok(());
     }
 
@@ -342,7 +353,7 @@ pub(super) async fn complete_link_social(
     let _ = ctx
         .database
         .create_account_optional(CreateAccount {
-            user_id: (link.user_id.clone()).into(),
+            user_id: better_auth_core::SchemaValue::from_field(link.user_id().clone()),
             account_id: (user_info.id.clone()).into(),
             provider_id: (provider_name.to_string()).into(),
             access_token: (token_bundle.access_token)
@@ -372,7 +383,7 @@ pub(super) async fn complete_link_social(
         .map_err(|_| "unable_to_link_account".to_string())?
         .ok_or_else(|| "unable_to_link_account".to_string())?;
 
-    apply_link_user_info(&link.user_id, user_info, ctx).await;
+    apply_link_user_info(link.user_id(), user_info, ctx).await;
     Ok(())
 }
 
@@ -463,7 +474,7 @@ async fn link_with_id_token_core(
     body: &LinkSocialRequest,
     id_token: &OAuthIdTokenRequest,
     provider: &ResolvedProvider,
-    current_user: &impl AuthUser,
+    current_session: &NativeSessionData,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<SocialSignInResponse> {
     let mut endpoint = crate::plugins::endpoint_context::EndpointContext::new(
@@ -497,29 +508,31 @@ async fn link_with_id_token_core(
         });
     };
 
-    if let Some(account) = ctx
+    let account = ctx
         .database
         .get_account(&body.provider, &response.user.id)
-        .await?
-    {
-        if account.user_id != current_user.id().into_owned() {
-            return Err(AuthError::Upstream {
-                status: 409,
-                code: "SOCIAL_ACCOUNT_ALREADY_LINKED",
-                message: "Social account already linked",
-            });
-        }
+        .await?;
+    let current_user_id = current_session.user_property("id")?;
+    let account_user_id = account
+        .as_ref()
+        .map(|account| account.user_id.field_value())
+        .unwrap_or(FieldValue::Undefined);
+    if account_user_id.strict_equals(current_user_id) {
         let tokens = encrypt_token_set(
             ctx,
             id_token.access_token.clone(),
             id_token.refresh_token.clone(),
             Some(id_token.token.clone()),
         )?;
+        let account = account.as_ref().ok_or_else(|| {
+            AuthError::type_error("null is not an object (evaluating 'linkedAccount.id')")
+        })?;
         let _ = ctx
             .database
-            .update_account_optional(
-                account.id.typed()?,
+            .update_account_by_id_value(
+                &account.id.field_value(),
                 UpdateAccount {
+                    provider_id: body.provider.clone().into(),
                     access_token: (tokens.access_token)
                         .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
                         .unwrap_or_default(),
@@ -533,13 +546,20 @@ async fn link_with_id_token_core(
                 },
             )
             .await?;
-        apply_link_user_info(current_user.id().typed()?, &response.user, ctx).await;
+        apply_link_user_info(current_user_id, &response.user, ctx).await;
         return Ok(SocialSignInResponse {
             url: Some(String::new()),
             redirect: false,
             status: Some(true),
             token: better_auth_core::FieldValue::Undefined,
             user: None,
+        });
+    }
+    if account.is_some() {
+        return Err(AuthError::Upstream {
+            status: 409,
+            code: "SOCIAL_ACCOUNT_ALREADY_LINKED",
+            message: "Social account already linked",
         });
     }
 
@@ -556,9 +576,9 @@ async fn link_with_id_token_core(
             message: "Account not linked - linking not allowed",
         });
     }
-    if !linking.allow_different_emails
-        && provider_email.to_lowercase()
-            != crate::plugins::helpers::user_email(current_user)?.to_lowercase()
+    if Utf16String::from(provider_email).to_lowercase()
+        != lowercase_link_email(current_session.user_property("email")?)?
+        && !linking.allow_different_emails
     {
         return Err(AuthError::Upstream {
             status: 401,
@@ -577,7 +597,7 @@ async fn link_with_id_token_core(
         let _ = ctx
             .database
             .create_account_optional(CreateAccount {
-                user_id: current_user.id().into_owned(),
+                user_id: better_auth_core::SchemaValue::from_field(current_user_id.clone()),
                 provider_id: (body.provider.clone()).into(),
                 account_id: (response.user.id.clone()).into(),
                 access_token: (token_bundle.access_token)
@@ -604,7 +624,7 @@ async fn link_with_id_token_core(
         code: "LINKING_FAILED",
         message: "Account not linked - unable to create account",
     })?;
-    apply_link_user_info(current_user.id().typed()?, &response.user, ctx).await;
+    apply_link_user_info(current_user_id, &response.user, ctx).await;
 
     Ok(SocialSignInResponse {
         url: Some(String::new()),
@@ -616,7 +636,7 @@ async fn link_with_id_token_core(
 }
 
 async fn apply_link_user_info(
-    user_id: &str,
+    user_id: &FieldValue,
     user_info: &OAuthUserInfo,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) {
@@ -630,7 +650,7 @@ async fn apply_link_user_info(
     }
     let result = async {
         ctx.database
-            .update_user(
+            .update_user_by_id_value(
                 user_id,
                 UpdateUser {
                     additional_fields: ctx
@@ -654,6 +674,22 @@ async fn apply_link_user_info(
             "Could not update user info on account link",
             &[better_auth_core::observability::LogArgument::Error(&error)],
         );
+    }
+}
+
+fn lowercase_link_email(email: &FieldValue) -> AuthResult<Utf16String> {
+    match email {
+        FieldValue::String(value) => Ok(Utf16String::from(value.as_str()).to_lowercase()),
+        FieldValue::Utf16String(value) => Ok(value.to_lowercase()),
+        FieldValue::Null => Err(AuthError::type_error(
+            "null is not an object (evaluating 'session.user.email.toLowerCase')",
+        )),
+        FieldValue::Undefined => Err(AuthError::type_error(
+            "undefined is not an object (evaluating 'session.user.email.toLowerCase')",
+        )),
+        _ => Err(AuthError::type_error(
+            "session.user.email.toLowerCase is not a function. (In 'session.user.email.toLowerCase()', 'session.user.email.toLowerCase' is undefined)",
+        )),
     }
 }
 
@@ -689,6 +725,7 @@ async fn social_sign_in_core(
         .server_context("anonymousUserId")?
         .and_then(|value| value.as_str().map(str::to_owned));
     initiate_oauth_flow_core(
+        req,
         ctx,
         FlowStartRequest {
             redirect_base: req
@@ -715,7 +752,7 @@ async fn social_sign_in_core(
 async fn link_social_core(
     req: &AuthRequest,
     body: &LinkSocialRequest,
-    session: &impl AuthSession,
+    session: &NativeSessionData,
     config: &OAuthConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<InitiatedOAuthFlow> {
@@ -734,14 +771,8 @@ async fn link_social_core(
         validate_redirect_target(error_callback_url, ctx, "Invalid errorCallbackURL")?;
     }
 
-    let user = ctx
-        .database
-        .get_user_by_id(session.user_id().typed()?)
-        .await?
-        .ok_or(AuthError::UserNotFound)?;
-    let email = crate::plugins::helpers::user_email(&user)?;
-
     initiate_oauth_flow_core(
+        req,
         ctx,
         FlowStartRequest {
             redirect_base: req
@@ -758,10 +789,10 @@ async fn link_social_core(
             login_hint: body.login_hint.as_deref(),
             request_sign_up: body.request_sign_up,
             additional_data: filter_additional_state_data(body.additional_data.clone())?,
-            link: Some(OAuthStateLink {
-                email: email.to_lowercase(),
-                user_id: session.user_id().typed()?.to_string(),
-            }),
+            link: Some(OAuthStateLink::new(
+                session.user_property("id")?.clone(),
+                session.user_property("email")?.clone(),
+            )),
             disable_redirect: body.disable_redirect.unwrap_or(false),
         },
     )
@@ -852,10 +883,12 @@ pub(super) fn oauth_authorization_url(
 
 /// Prepare, persist, and authorize a social sign-in or account-link flow.
 pub(super) async fn initiate_oauth_flow_core(
+    req: &AuthRequest,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     request: FlowStartRequest<'_>,
 ) -> AuthResult<InitiatedOAuthFlow> {
     let flow = prepare_oauth_flow(&request);
+    super::state_context::publish_generated(req, &flow.payload)?;
     store_oauth_flow(ctx, &flow).await?;
     let url = oauth_authorization_url(ctx, &request, &flow)?;
     Ok(InitiatedOAuthFlow {
@@ -924,7 +957,7 @@ pub(crate) async fn handle_link_social(
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<AuthResponse> {
     let body: LinkSocialRequest = super::request::read(req)?;
-    let (user, session) = ctx.require_session(req).await?;
+    let session = ctx.require_native_session(req).await?;
     if let Some(id_token) = &body.id_token {
         let provider = config
             .providers
@@ -934,7 +967,8 @@ pub(crate) async fn handle_link_social(
                 code: "PROVIDER_NOT_FOUND",
                 message: "Provider not found",
             })?;
-        let response = link_with_id_token_core(req, &body, id_token, provider, &user, ctx).await?;
+        let response =
+            link_with_id_token_core(req, &body, id_token, provider, &session, ctx).await?;
         return AuthResponse::json(200, &response).map_err(AuthError::from);
     }
 

@@ -1,0 +1,449 @@
+#![expect(
+    clippy::unwrap_used,
+    clippy::panic_in_result_fn,
+    reason = "The native verification regressions assert complete callback, storage, and read-order results"
+)]
+
+use super::*;
+use better_auth_core::{
+    AuthInitContext, AuthPlugin, AuthRoute, AuthSchema, CreateSession, CreateUser, FieldMap,
+    FieldValue, HttpMethod,
+    config::{FieldTransforms, UserFieldConfig, UserFieldTransform},
+    store::{
+        EphemeralStore, StatelessSchema,
+        database_hooks::{DatabaseHookContext, DatabaseHookUpdate, DatabaseHooks},
+    },
+};
+use chrono::Utc;
+use std::sync::{
+    Mutex,
+    atomic::{AtomicBool, AtomicUsize, Ordering},
+};
+
+struct CancelUpdate(bool);
+#[better_auth_core::database_hooks]
+impl<S: AuthSchema> DatabaseHooks<S> for CancelUpdate {
+    async fn before_update_user(
+        &self,
+        _: &mut FieldMap,
+        _: &DatabaseHookContext<'_, S>,
+    ) -> AuthResult<DatabaseHookUpdate<FieldMap>> {
+        Ok(if self.0 {
+            DatabaseHookUpdate::Cancel
+        } else {
+            DatabaseHookUpdate::Continue
+        })
+    }
+}
+#[async_trait::async_trait]
+impl<S: AuthSchema> AuthPlugin<S> for CancelUpdate {
+    fn name(&self) -> &'static str {
+        "email-native-update"
+    }
+    fn routes(&self) -> Vec<AuthRoute> {
+        vec![]
+    }
+    async fn on_init(&self, ctx: &mut AuthInitContext<S>) -> AuthResult<()> {
+        ctx.register_database_hook(Arc::new(Self(self.0)));
+        Ok(())
+    }
+    async fn on_request(
+        &self,
+        _: &AuthRequest,
+        _: &AuthContext<S>,
+    ) -> AuthResult<Option<AuthResponse>> {
+        Ok(None)
+    }
+}
+
+fn verify_request(
+    ctx: &AuthContext<StatelessSchema>,
+    update: Option<(&str, &str)>,
+) -> AuthResult<AuthRequest> {
+    let token = token::create_email_verification_token(
+        ctx.config.signing_secret(),
+        "owner@native-email.test",
+        update.map(|(email, _)| email),
+        Duration::hours(1),
+        update.map(|(_, request)| request),
+    )?;
+    let mut req = AuthRequest::new(HttpMethod::Get, "/verify-email");
+    req.query = Some(serde_json::json!({"token":token}));
+    Ok(req)
+}
+
+#[tokio::test]
+async fn verification_uses_email_selector_and_preserves_raw_nullable_hooks() -> AuthResult<()> {
+    for cancel in [false, true] {
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let before = calls.clone();
+        let after = calls.clone();
+        let plugin = EmailVerificationPlugin::new()
+            .before_email_verification(Arc::new(move |user| {
+                before.lock().unwrap().push(("before", user.clone()));
+                Box::pin(async { Ok(()) })
+            }))
+            .after_email_verification(Arc::new(move |user| {
+                after.lock().unwrap().push(("after", user.clone()));
+                Box::pin(async { Ok(()) })
+            }));
+        let mut config = crate::plugins::test_helpers::create_test_config();
+        let _ = config.user.fields_mut().insert(
+            "id".into(),
+            UserFieldConfig {
+                transform: Some(FieldTransforms {
+                    input: None,
+                    output: Some(UserFieldTransform::new(|_| Ok(17.0.into()))),
+                }),
+                ..Default::default()
+            },
+        );
+        let _ = config.user.fields_mut().insert(
+            "name".into(),
+            UserFieldConfig {
+                returned: Some(false),
+                ..Default::default()
+            },
+        );
+        let config = Arc::new(config);
+        let ctx = crate::plugins::test_helpers::initialize_test_context(
+            config.clone(),
+            Arc::new(EphemeralStore::new(config)),
+            &[&plugin, &CancelUpdate(cancel)],
+        )
+        .await?;
+        let user = ctx
+            .database
+            .create_user(
+                CreateUser::new()
+                    .with_email("owner@native-email.test")
+                    .with_name("Hidden callback field"),
+            )
+            .await?;
+        assert_eq!(user.id.field_value(), FieldValue::from(17.0));
+        assert!(!FieldMap::from(ctx.user_view(&user).await?).contains_key("name"));
+        let request = verify_request(&ctx, None)?;
+        let response = plugin.handle_verify_email(&request, &ctx).await?;
+        assert_eq!(
+            response.body.json()?,
+            Some(serde_json::json!({"status":true,"user":null}))
+        );
+        assert!(request.new_session()?.is_none());
+        let stored = ctx
+            .database
+            .get_user_by_email("owner@native-email.test")
+            .await?
+            .unwrap();
+        assert_eq!(
+            stored.email_verified.field_value(),
+            FieldValue::Bool(!cancel)
+        );
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 2);
+        assert_eq!(calls[0].0, "before");
+        assert_eq!(
+            calls[0].1.as_object().unwrap().get("name"),
+            Some(&"Hidden callback field".into())
+        );
+        assert_eq!(calls[1].0, "after");
+        if cancel {
+            assert!(calls[1].1.is_null());
+        } else {
+            let fields = calls[1].1.as_object().unwrap();
+            assert_eq!(fields.get("name"), Some(&"Hidden callback field".into()));
+            assert_eq!(fields.get("emailVerified"), Some(&true.into()));
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn session_reads_follow_token_branches_and_caught_failures_use_anonymous_flow()
+-> AuthResult<()> {
+    let rejecting = Arc::new(AtomicBool::new(false));
+    let reads = Arc::new(AtomicUsize::new(0));
+    let api_error = Arc::new(AtomicBool::new(false));
+    let api_failure = api_error.clone();
+    let reject = rejecting.clone();
+    let count = reads.clone();
+    let mut config = crate::plugins::test_helpers::create_test_config();
+    let _ = config.session.fields_mut().insert(
+        "userId".into(),
+        UserFieldConfig {
+            transform: Some(FieldTransforms {
+                input: None,
+                output: Some(UserFieldTransform::new(move |value| {
+                    if reject.load(Ordering::SeqCst) {
+                        let _ = count.fetch_add(1, Ordering::SeqCst);
+                        if api_failure.load(Ordering::SeqCst) {
+                            Err(AuthError::Upstream {
+                                status: 500,
+                                code: "SESSION_POLICY_REJECTED",
+                                message: "Session policy rejected",
+                            })
+                        } else {
+                            Err(AuthError::internal("native session read rejected"))
+                        }
+                    } else {
+                        Ok(value)
+                    }
+                })),
+            }),
+            ..Default::default()
+        },
+    );
+    let config = Arc::new(config);
+    let plugin = EmailVerificationPlugin::new().callbacks(EmailVerificationCallbacks::<
+        StatelessSchema,
+    >::send(|_, _| Ok(None)));
+    let ctx = crate::plugins::test_helpers::initialize_test_context(
+        config.clone(),
+        Arc::new(EphemeralStore::new(config)),
+        &[&plugin],
+    )
+    .await?;
+    let user = ctx
+        .database
+        .create_user(CreateUser::new().with_email("owner@native-email.test"))
+        .await?;
+    let session = ctx
+        .database
+        .create_session(CreateSession {
+            user_id: user.id,
+            expires_at: (Utc::now() + Duration::hours(1)).into(),
+            inherited_fields: Default::default(),
+            additional_fields: Default::default(),
+            ip_address: None,
+            user_agent: None,
+            impersonated_by: None,
+            active_organization_id: None,
+        })
+        .await?;
+    let cookie = format!(
+        "{}={}",
+        ctx.config
+            .auth_cookie("session_token", Default::default())
+            .name,
+        better_auth_core::utils::cookie_utils::sign_cookie_value(
+            session.token.typed()?,
+            ctx.config.signing_secret()
+        )
+    );
+    rejecting.store(true, Ordering::SeqCst);
+    let mut req = verify_request(&ctx, None)?;
+    let _ = req.headers.insert("cookie".into(), cookie.clone());
+    let response = plugin.on_request(&req, &ctx).await?.unwrap();
+    assert_eq!(response.status, 200);
+    assert_eq!(reads.load(Ordering::SeqCst), 0);
+    let mut req = verify_request(&ctx, None)?;
+    req.query = Some(serde_json::json!({"token":"invalid"}));
+    let _ = req.headers.insert("cookie".into(), cookie.clone());
+    let result = handlers::verify_email_core(
+        &types::VerifyEmailQuery {
+            token: "invalid".into(),
+            callback_url: None,
+        },
+        &EmailVerificationConfig::default(),
+        &req,
+        &ctx,
+    )
+    .await;
+    assert!(matches!(
+        result,
+        Err(AuthError::Upstream {
+            code: "INVALID_TOKEN",
+            ..
+        })
+    ));
+    assert_eq!(reads.load(Ordering::SeqCst), 0);
+    let mut req = AuthRequest::new(HttpMethod::Post, "/send-verification-email");
+    let _ = req.headers.insert("cookie".into(), cookie);
+    let result = handlers::send_verification_email_core(
+        &types::SendVerificationEmailRequest {
+            email: "owner@native-email.test".into(),
+            callback_url: None,
+        },
+        &req,
+        &EmailVerificationConfig::default(),
+        &ctx,
+    )
+    .await;
+    assert!(result?.status);
+    assert!(req.native_session_snapshot()?.is_none());
+    assert_eq!(reads.load(Ordering::SeqCst), 1);
+    api_error.store(true, Ordering::SeqCst);
+    let direct = ctx
+        .session_manager()
+        .resolve_native_for_endpoint(&req, better_auth_core::session::SessionRead::Cached)
+        .await;
+    assert!(matches!(
+        direct,
+        Err(AuthError::Upstream {
+            status: 500,
+            code: "SESSION_POLICY_REJECTED",
+            ..
+        })
+    ));
+    assert_eq!(reads.load(Ordering::SeqCst), 2);
+    assert!(
+        ctx.native_session(&req, better_auth_core::session::SessionRead::Cached)
+            .await?
+            .is_none()
+    );
+    assert_eq!(reads.load(Ordering::SeqCst), 3);
+    Ok(())
+}
+
+#[tokio::test]
+async fn caught_session_failure_discards_nested_cookie_headers_but_keeps_outer_headers()
+-> AuthResult<()> {
+    use better_auth_core::{
+        config::{CookieCacheConfig, CookieCacheStrategy},
+        session::{NativeSessionData, SessionRead},
+    };
+
+    let rejecting = Arc::new(AtomicBool::new(false));
+    let reads = Arc::new(AtomicUsize::new(0));
+    let reject = rejecting.clone();
+    let count = reads.clone();
+    let mut config = crate::plugins::test_helpers::create_test_config();
+    config.session.cookie_cache = Some(CookieCacheConfig {
+        enabled: Some(true),
+        strategy: Some(CookieCacheStrategy::Compact),
+        ..Default::default()
+    });
+    let _ = config.session.fields_mut().insert(
+        "userId".into(),
+        UserFieldConfig {
+            transform: Some(FieldTransforms {
+                input: None,
+                output: Some(UserFieldTransform::new(move |value| {
+                    if reject.load(Ordering::SeqCst) {
+                        let _ = count.fetch_add(1, Ordering::SeqCst);
+                        Err(AuthError::internal(
+                            "Session output failed after cache expiry",
+                        ))
+                    } else {
+                        Ok(value)
+                    }
+                })),
+            }),
+            ..Default::default()
+        },
+    );
+    let config = Arc::new(config);
+    let ctx = crate::plugins::test_helpers::initialize_test_context(
+        config.clone(),
+        Arc::new(EphemeralStore::new(config)),
+        &[],
+    )
+    .await?;
+    let user = ctx
+        .database
+        .create_user(CreateUser::new().with_email("expired-cache@native-email.test"))
+        .await?;
+    let session = ctx
+        .database
+        .create_session(CreateSession {
+            user_id: user.id.clone(),
+            expires_at: (Utc::now() + Duration::hours(1)).into(),
+            inherited_fields: Default::default(),
+            additional_fields: Default::default(),
+            ip_address: None,
+            user_agent: None,
+            impersonated_by: None,
+            active_organization_id: None,
+        })
+        .await?;
+    let mut expired_cache = session.clone();
+    expired_cache.expires_at = (Utc::now() - Duration::minutes(1)).into();
+    let issuance = AuthRequest::new(HttpMethod::Post, "/sign-in/email");
+    ctx.session_manager()
+        .set_native_session_cookie(
+            &issuance,
+            NativeSessionData {
+                user: FieldMap::from(user).into(),
+                session: expired_cache,
+            },
+            None,
+        )
+        .await?;
+    let cookie = issuance
+        .take_response_headers()?
+        .get_all("set-cookie")
+        .map(|header| header.split(';').next().unwrap().to_owned())
+        .collect::<Vec<_>>()
+        .join("; ");
+    let cache_name = format!(
+        "{}=",
+        ctx.config
+            .auth_cookie("session_data", Default::default())
+            .name
+    );
+    assert!(cookie.contains(&cache_name));
+    rejecting.store(true, Ordering::SeqCst);
+
+    for nested in [true, false] {
+        let mut req = AuthRequest::new(
+            HttpMethod::Get,
+            if nested {
+                "/send-verification-email"
+            } else {
+                "/get-session"
+            },
+        );
+        let _ = req.headers.insert("cookie".into(), cookie.clone());
+        req.set_response_header("x-outer", "kept")?;
+        req.set_response_header("cache-control", "private")?;
+        req.append_response_header("set-cookie", "outer-marker=1; Path=/".into())?;
+        if nested {
+            assert!(
+                ctx.native_session(&req, SessionRead::Cached)
+                    .await?
+                    .is_none()
+            );
+            assert!(req.native_session_snapshot()?.is_none());
+        } else {
+            let result = ctx
+                .session_manager()
+                .resolve_native_for_endpoint(&req, SessionRead::Cached)
+                .await;
+            assert!(matches!(
+                result,
+                Err(AuthError::Upstream {
+                    status: 500,
+                    code: "FAILED_TO_GET_SESSION",
+                    ..
+                })
+            ));
+        }
+        let headers = req.take_response_headers()?;
+        assert_eq!(headers.get("x-outer").map(String::as_str), Some("kept"));
+        assert_eq!(
+            headers.get("cache-control").map(String::as_str),
+            Some("private")
+        );
+        let cookies = headers
+            .get_all("set-cookie")
+            .map(String::as_str)
+            .collect::<Vec<_>>();
+        assert!(cookies.contains(&"outer-marker=1; Path=/"));
+        if nested {
+            assert_eq!(cookies, ["outer-marker=1; Path=/"]);
+        } else {
+            assert!(
+                cookies
+                    .iter()
+                    .any(|cookie| cookie.starts_with(&cache_name) && cookie.contains("Max-Age=0"))
+            );
+        }
+        assert!(req.new_session()?.is_none());
+    }
+    assert_eq!(reads.load(Ordering::SeqCst), 2);
+    rejecting.store(false, Ordering::SeqCst);
+    assert_eq!(
+        ctx.database.get_session(session.token.typed()?).await?,
+        Some(session)
+    );
+    Ok(())
+}

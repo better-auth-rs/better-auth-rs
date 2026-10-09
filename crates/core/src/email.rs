@@ -5,7 +5,7 @@ use std::{future::Future, pin::Pin, sync::Arc};
 
 /// Application callback invoked around a successful email verification.
 pub type EmailVerificationHook = Arc<
-    dyn Fn(&crate::wire::UserView) -> Pin<Box<dyn Future<Output = AuthResult<()>> + Send>>
+    dyn Fn(&crate::FieldValue) -> Pin<Box<dyn Future<Output = AuthResult<()>> + Send>>
         + Send
         + Sync,
 >;
@@ -14,7 +14,7 @@ pub type EmailVerificationHook = Arc<
 #[async_trait]
 pub trait SendVerificationEmail: Send + Sync {
     /// Deliver a verification message for the supplied user.
-    async fn send(&self, user: &crate::wire::UserView, url: &str, token: &str) -> AuthResult<()>;
+    async fn send(&self, user: &crate::FieldValue, url: &str, token: &str) -> AuthResult<()>;
 }
 
 /// Shared email-verification behavior used by proof-based authentication plugins.

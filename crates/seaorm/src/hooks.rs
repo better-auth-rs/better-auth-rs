@@ -61,11 +61,12 @@ pub trait SeaOrmHooks<S: AuthSchema>: Send + Sync {
 
     async fn before_update_user(
         &self,
-        id: &better_auth_core::FieldValue,
+        field: &str,
+        value: &better_auth_core::FieldValue,
         update: &mut better_auth_core::FieldMap,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<DatabaseHookUpdate<better_auth_core::FieldMap>> {
-        let _ = (id, update, ctx);
+        let _ = (field, value, update, ctx);
         Ok(DatabaseHookUpdate::Continue)
     }
 
@@ -173,7 +174,7 @@ pub trait SeaOrmHooks<S: AuthSchema>: Send + Sync {
 
     async fn before_update_account(
         &self,
-        id: &str,
+        id: &better_auth_core::FieldValue,
         update: &UpdateAccount,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<DatabaseHookUpdate<UpdateAccount>> {

@@ -17,6 +17,8 @@ pub(crate) mod delivery;
 pub use callbacks::{EmailVerificationCallbacks, VerificationEmail};
 
 #[cfg(test)]
+mod native_tests;
+#[cfg(test)]
 mod tests;
 
 use handlers::*;
@@ -149,14 +151,11 @@ impl EmailVerificationPlugin {
             Some(body) => body.clone(),
             None => super::json_body::email_input(req, "email", "callbackURL")?.0,
         };
-        let current_session = ctx.require_session(req).await.ok();
         let mut config = self.config.clone();
         if config.send_verification_email.is_none() {
             config.send_verification_email = ctx.email_verification_policy.override_sender.clone();
         }
-        let response =
-            send_verification_email_core(&body, current_session.as_ref(), Some(req), &config, ctx)
-                .await?;
+        let response = send_verification_email_core(&body, req, &config, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
 
@@ -187,27 +186,7 @@ impl EmailVerificationPlugin {
             callback_url,
         };
 
-        let ip_address = ctx.config.advanced.ip_address.resolve(req);
-        let user_agent = req.headers.get("user-agent").cloned();
-        let current_session = ctx.require_session(req).await.ok();
-        let mut endpoint = crate::plugins::endpoint_context::EndpointContext::new(
-            Some(req),
-            better_auth_core::FieldValue::Null,
-            ctx,
-        );
-        endpoint.session = current_session.clone().map(Into::into);
-
-        match verify_email_core(
-            &query,
-            current_session,
-            &self.config,
-            req,
-            ip_address,
-            user_agent,
-            &endpoint,
-        )
-        .await?
-        {
+        match verify_email_core(&query, &self.config, req, ctx).await? {
             VerifyEmailResult::Redirect { url } => {
                 let mut headers = better_auth_core::Headers::new();
                 _ = headers.insert("Location".to_string(), url);
@@ -216,7 +195,7 @@ impl EmailVerificationPlugin {
                 response.headers = headers;
                 Ok(response)
             }
-            VerifyEmailResult::Json { body } => Ok(AuthResponse::json(200, &body)?),
+            VerifyEmailResult::Json { body } => Ok(AuthResponse::native(200, body)),
         }
     }
 
@@ -293,7 +272,7 @@ impl EmailVerificationPlugin {
             return Ok(());
         }
         let message = VerificationEmail {
-            user: ctx.internal_user_view(user).await?,
+            user: better_auth_core::FieldMap::from(ctx.internal_user_view(user).await?).into(),
             url: verification_url,
             token: verification_token,
         };

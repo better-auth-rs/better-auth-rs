@@ -66,11 +66,7 @@ impl UsernamePlugin {
                     let session = if signup {
                         None
                     } else {
-                        context
-                            .session_manager()
-                            .resolve_native(request, SessionRead::Cached)
-                            .await?
-                            .data
+                        context.native_session(request, SessionRead::Cached).await?
                     };
                     if !signup
                         && self.config.immutable_username

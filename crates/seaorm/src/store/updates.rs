@@ -1,7 +1,7 @@
 use sea_orm::{
     ColumnTrait, ConnectionTrait, EntityTrait, Iden, IdenStatic, Iterable, PrimaryKeyToColumn,
     QueryFilter, QueryResult, QuerySelect, QueryTrait,
-    sea_query::{ExprTrait, Query, SimpleExpr},
+    sea_query::{BinOper, ExprTrait, Query, SimpleExpr},
 };
 
 use super::map_db_err;
@@ -16,11 +16,11 @@ where
     E: EntityTrait,
     C: ConnectionTrait,
 {
-    let reselect = updated_primary_filter(&query, reselect);
+    let reselect = updated_reselect_filter(&query, reselect);
     execute_returning_raw(db, query, reselect).await
 }
 
-fn updated_primary_filter<E: EntityTrait>(
+fn updated_reselect_filter<E: EntityTrait>(
     query: &sea_orm::UpdateMany<E>,
     fallback: SimpleExpr,
 ) -> SimpleExpr {
@@ -33,14 +33,44 @@ fn updated_primary_filter<E: EntityTrait>(
             .rev()
             .find(|(stored, _)| stored.to_string() == column.to_string())
         {
-            if matches!(value.as_ref(), SimpleExpr::Value(value) | SimpleExpr::Constant(value) if *value == value.as_null())
-            {
-                return fallback;
+            if is_null(value) {
+                continue;
             }
             return column.into_expr().eq(value.as_ref().clone());
         }
     }
-    fallback
+    // Callers select an original ID equality when available, otherwise the first where field.
+    let SimpleExpr::Binary(column, BinOper::Equal | BinOper::Is, previous) = &fallback else {
+        return fallback;
+    };
+    let Some(selected) = E::Column::iter().find(|candidate| candidate.into_expr() == **column)
+    else {
+        return fallback;
+    };
+    if E::PrimaryKey::iter()
+        .any(|primary| primary.into_column().to_string() == selected.to_string())
+        && !is_null(previous)
+    {
+        return fallback;
+    }
+    let Some((_, value)) = query
+        .as_query()
+        .get_values()
+        .iter()
+        .rev()
+        .find(|(stored, _)| stored.to_string() == selected.to_string())
+    else {
+        return fallback;
+    };
+    if is_null(value) {
+        selected.is_null()
+    } else {
+        selected.into_expr().eq(value.as_ref().clone())
+    }
+}
+
+fn is_null(value: &SimpleExpr) -> bool {
+    matches!(value, SimpleExpr::Value(value) | SimpleExpr::Constant(value) if *value == value.as_null())
 }
 
 pub(super) async fn execute_returning_raw<E, C>(
@@ -66,7 +96,7 @@ where
     if query.exec(db).await.map_err(map_db_err)?.rows_affected == 0 {
         return Ok(None);
     }
-    // Ordinary updates use the assigned ID; guarded increments retain the locked ID.
+    // Ordinary updates use the updated selector; guarded increments retain the locked ID.
     db.query_one_raw(E::find().filter(reselect).build(db.get_database_backend()))
         .await
         .map_err(map_db_err)
@@ -170,11 +200,67 @@ mod tests {
             let statement = Query::select()
                 .column(api_key::Column::Id)
                 .from(api_key::Entity)
-                .and_where(updated_primary_filter(&query, filter))
+                .and_where(updated_reselect_filter(&query, filter))
                 .to_string(MysqlQueryBuilder);
             assert_eq!(
                 statement,
                 format!("SELECT `id` FROM `api_keys` WHERE `api_keys`.`id` = '{expected}'")
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn mysql_reselect_tracks_selected_field_assignments_and_keeps_id_precedence() -> AuthResult<()>
+    {
+        for (by_id, name, id, expected) in [
+            (
+                false,
+                FieldValue::Undefined,
+                None,
+                "`api_keys`.`name` = 'before'",
+            ),
+            (false, "after".into(), None, "`api_keys`.`name` = 'after'"),
+            (false, FieldValue::Null, None, "`api_keys`.`name` IS NULL"),
+            (
+                false,
+                "after".into(),
+                Some(FieldValue::Null),
+                "`api_keys`.`name` = 'after'",
+            ),
+            (
+                false,
+                "after".into(),
+                Some("moved".into()),
+                "`api_keys`.`id` = 'moved'",
+            ),
+            (true, "after".into(), None, "`api_keys`.`id` = 'before'"),
+            (
+                true,
+                "after".into(),
+                Some(FieldValue::Null),
+                "`api_keys`.`id` = 'before'",
+            ),
+        ] {
+            let mut fields = RecordWrite::<api_key::Entity>::default();
+            fields.field(api_key::Column::Name, name);
+            if let Some(id) = id {
+                fields.field(api_key::Column::Id, id);
+            }
+            let filter = if by_id {
+                api_key::Column::Id.eq("before")
+            } else {
+                api_key::Column::Name.eq("before")
+            };
+            let query = fields.update(DbBackend::MySql)?.filter(filter.clone());
+            let statement = Query::select()
+                .column(api_key::Column::Id)
+                .from(api_key::Entity)
+                .and_where(updated_reselect_filter(&query, filter))
+                .to_string(MysqlQueryBuilder);
+            assert_eq!(
+                statement,
+                format!("SELECT `id` FROM `api_keys` WHERE {expected}")
             );
         }
         Ok(())

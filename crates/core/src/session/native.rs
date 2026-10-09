@@ -70,6 +70,22 @@ impl NativeSessionData {
             .unwrap_or(&FieldValue::Undefined)
     }
 
+    /// Read a User property at a required property-access boundary.
+    /// Non-null primitives have no User fields; null and undefined reject property access.
+    pub fn user_property(&self, name: &str) -> AuthResult<&FieldValue> {
+        let nullish = match &self.user {
+            FieldValue::Null => Some("null"),
+            FieldValue::Undefined => Some("undefined"),
+            _ => None,
+        };
+        if let Some(nullish) = nullish {
+            return Err(AuthError::type_error(format!(
+                "Cannot read properties of {nullish} (reading '{name}')"
+            )));
+        }
+        Ok(self.user_field(name))
+    }
+
     /// Read an object through native User slots without requiring a typed User identity.
     /// Preserve numeric keys, absent fields, explicit null, and callback replacement values.
     pub fn user_view(&self) -> AuthResult<UserView> {
@@ -94,17 +110,7 @@ impl NativeSessionData {
             return Ok(self.user.clone());
         }
         let value = StructuredCloneContext::new().clone_value(&self.user)?;
-        let mut fields = match value {
-            FieldValue::Object(fields) => (*fields).clone(),
-            FieldValue::Array(values) => values
-                .iter()
-                .enumerate()
-                .map(|(index, value)| (index.to_string(), value.clone()))
-                .collect(),
-            FieldValue::String(value) => string_fields(value.encode_utf16()),
-            FieldValue::Utf16String(value) => string_fields(value.as_utf16().iter().copied()),
-            _ => FieldMap::new(),
-        };
+        let mut fields = value.enumerable_fields();
         fields.retain(|name, _| {
             config
                 .fields()
@@ -113,18 +119,6 @@ impl NativeSessionData {
         });
         Ok(fields.into())
     }
-}
-
-fn string_fields(units: impl Iterator<Item = u16>) -> FieldMap {
-    units
-        .enumerate()
-        .map(|(index, unit)| {
-            (
-                index.to_string(),
-                crate::Utf16String::from_units(vec![unit]).into(),
-            )
-        })
-        .collect()
 }
 
 impl crate::FromFieldMap for NativeSessionData {

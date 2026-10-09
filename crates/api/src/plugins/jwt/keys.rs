@@ -84,29 +84,7 @@ pub(super) fn date_millis(value: &FieldValue, expression: &str) -> AuthResult<f6
 }
 
 pub(super) fn spread(fields: &mut FieldMap, value: FieldValue) {
-    match value {
-        FieldValue::Object(values) => fields.extend(
-            values
-                .iter()
-                .map(|(key, value)| (key.clone(), value.clone())),
-        ),
-        FieldValue::Array(values) => fields.extend(
-            values
-                .iter()
-                .enumerate()
-                .map(|(index, value)| (index.to_string(), value.clone())),
-        ),
-        value => {
-            if let Some(units) = better_auth_core::query::field_string_units(&value) {
-                fields.extend(units.iter().enumerate().map(|(index, unit)| {
-                    (
-                        index.to_string(),
-                        better_auth_core::Utf16String::from_units(vec![*unit]).into(),
-                    )
-                }));
-            }
-        }
-    }
+    fields.extend(value.enumerable_fields());
 }
 
 pub(super) fn import(value: FieldValue, alg: &FieldValue) -> AuthResult<(String, Jwk)> {

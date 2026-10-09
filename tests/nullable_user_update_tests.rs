@@ -218,19 +218,18 @@ async fn native_missing_user<S: AuthSchema>(
     Ok(())
 }
 async fn exercise<S: AuthSchema>(
-    auth: BetterAuth<S>,
-    observer: Observer,
-    cache: Arc<Cache>,
+    auth: &BetterAuth<S>,
+    observer: &Observer,
+    cache: &Arc<Cache>,
+    field: &'static str,
 ) -> TestResult {
+    let email = format!("optional-{field}@example.test");
     let user = auth
         .store()
-        .create_user(
-            CreateUser::new()
-                .with_email("optional@example.test")
-                .with_name("Original"),
-        )
+        .create_user(CreateUser::new().with_email(&email).with_name("Original"))
         .await?;
     let id = user.id().typed()?.to_string();
+    let selector = FieldValue::from(if field == "id" { id.clone() } else { email });
     let session = auth
         .store()
         .create_session(CreateSession {
@@ -246,11 +245,15 @@ async fn exercise<S: AuthSchema>(
         .await?;
     let token = session.token().typed()?.to_string();
     *lock(&cache.watched)? = token.clone();
-    native_missing_user(&auth, &observer, &cache, &token).await?;
+    native_missing_user(auth, observer, cache, &token).await?;
     lock(&observer.events)?.clear();
     assert!(
         auth.store()
-            .update_user_optional(&uuid::Uuid::new_v4().to_string(), update("Missing"))
+            .update_user_by_field_value(
+                field,
+                &uuid::Uuid::new_v4().to_string().into(),
+                update("Missing"),
+            )
             .await?
             .is_none()
     );
@@ -259,7 +262,7 @@ async fn exercise<S: AuthSchema>(
     observer.mode.store(1, Ordering::SeqCst);
     assert!(
         auth.store()
-            .update_user_optional(&id, update("Cancelled"))
+            .update_user_by_field_value(field, &selector, update("Cancelled"))
             .await?
             .is_none()
     );
@@ -274,7 +277,7 @@ async fn exercise<S: AuthSchema>(
             .as_deref(),
         Some("Original")
     );
-    assert_eq!(cached_name(&cache, &token).await?, "Original");
+    assert_eq!(cached_name(cache, &token).await?, "Original");
     assert!(matches!(
         auth.store().update_user(&id, update("Strict cancelled")).await,
         Err(AuthError::Forbidden(message)) if message == "user update cancelled by database hook"
@@ -283,7 +286,7 @@ async fn exercise<S: AuthSchema>(
     observer.mode.store(2, Ordering::SeqCst);
     assert!(matches!(
         auth.store()
-            .update_user_optional(&id, update("Before error"))
+            .update_user_by_field_value(field, &selector, update("Before error"))
             .await,
         Err(AuthError::UserNotFound)
     ));
@@ -292,7 +295,7 @@ async fn exercise<S: AuthSchema>(
     observer.mode.store(3, Ordering::SeqCst);
     assert!(matches!(
         auth.store()
-            .update_user_optional(&id, update("After error"))
+            .update_user_by_field_value(field, &selector, update("After error"))
             .await,
         Err(AuthError::UserNotFound)
     ));
@@ -307,17 +310,19 @@ async fn exercise<S: AuthSchema>(
             .as_deref(),
         Some("After error")
     );
-    assert_eq!(cached_name(&cache, &token).await?, "Original");
+    assert_eq!(cached_name(cache, &token).await?, "Original");
     observer.mode.store(0, Ordering::SeqCst);
     for commit in [false, true] {
         lock(&observer.events)?.clear();
-        let tx_id = id.clone();
+        let tx_selector = selector.clone();
         let observed = observer.events.clone();
         let cache_inner = cache.clone();
         let token_inner = token.clone();
         let result: AuthResult<()> = transaction(auth.store().as_ref(), move |tx| {
             Box::pin(async move {
-                let user = tx.update_user_optional(&tx_id, update("Committed")).await?;
+                let user = tx
+                    .update_user_by_field_value(field, &tx_selector, update("Committed"))
+                    .await?;
                 assert!(user.is_some());
                 assert_eq!(*lock(&observed)?, ["before"]);
                 assert_eq!(cached_name(&cache_inner, &token_inner).await?, "Original");
@@ -341,7 +346,7 @@ async fn exercise<S: AuthSchema>(
             Some(if commit { "Committed" } else { "After error" })
         );
         assert_eq!(
-            cached_name(&cache, &token).await?,
+            cached_name(cache, &token).await?,
             if commit { "Committed" } else { "Original" }
         );
         assert_eq!(
@@ -372,7 +377,10 @@ async fn sqlite_nullable_updates_preserve_hooks_transactions_and_cache_order() -
         .plugin(observer.clone())
         .build()
         .await?;
-    exercise(auth, observer, cache).await
+    for field in ["id", "email"] {
+        exercise(&auth, &observer, &cache, field).await?;
+    }
+    Ok(())
 }
 #[tokio::test]
 async fn ephemeral_nullable_updates_preserve_hooks_transactions_and_cache_order() -> TestResult {
@@ -384,7 +392,10 @@ async fn ephemeral_nullable_updates_preserve_hooks_transactions_and_cache_order(
     .plugin(observer.clone())
     .build()
     .await?;
-    exercise(auth, observer, cache).await
+    for field in ["id", "email"] {
+        exercise(&auth, &observer, &cache, field).await?;
+    }
+    Ok(())
 }
 #[tokio::test]
 async fn ephemeral_nullable_update_propagates_input_and_output_transform_user_not_found()
@@ -443,6 +454,68 @@ async fn ephemeral_nullable_update_propagates_input_and_output_transform_user_no
                 .typed()?
                 .as_deref(),
             Some(if phase == 1 { "Original" } else { "Written" })
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn native_user_field_update_reuses_mapping_and_binds_before_projection() -> TestResult {
+    let events = Events::default();
+    let input_events = events.clone();
+    let output_events = events.clone();
+    let mut config = AuthConfig::default();
+    let _ = config.user.fields_mut().insert(
+        "email".into(),
+        better_auth_core::config::UserFieldConfig {
+            field_name: Some("storedEmail".into()),
+            transform: Some(FieldTransforms {
+                input: Some(UserFieldTransform::new(move |value| {
+                    lock(&input_events)?.push("input");
+                    let value = better_auth_core::SchemaValue::<String>::from_field(value)
+                        .display_string()?;
+                    Ok(format!("stored:{value}").into())
+                })),
+                output: Some(UserFieldTransform::new(move |_| {
+                    lock(&output_events)?.push("output");
+                    Ok("projected@example.test".into())
+                })),
+            }),
+            ..Default::default()
+        },
+    );
+    let store = EphemeralStore::new(Arc::new(config));
+    let target = store
+        .create_user(
+            CreateUser::new()
+                .with_email("target@example.test")
+                .with_name("Target"),
+        )
+        .await?;
+    let other = store
+        .create_user(
+            CreateUser::new()
+                .with_email("other@example.test")
+                .with_name("Other"),
+        )
+        .await?;
+    for field in ["email", "storedEmail"] {
+        lock(&events)?.clear();
+        let result = store
+            .update_user_by_field_value(field, &"stored:target@example.test".into(), update(field))
+            .await?
+            .ok_or("Expected selected User")?;
+        assert_eq!(*lock(&events)?, ["output"]);
+        assert_eq!(result.id, target.id);
+        assert_eq!(result.email, "projected@example.test");
+        assert_eq!(result.name.typed()?.as_deref(), Some(field));
+        assert_eq!(
+            store.get_user_by_id(target.id.typed()?).await?,
+            Some(result)
+        );
+        assert_eq!(
+            store.get_user_by_id(other.id.typed()?).await?,
+            Some(other.clone())
         );
     }
     Ok(())

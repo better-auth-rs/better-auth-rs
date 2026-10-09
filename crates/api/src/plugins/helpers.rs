@@ -7,15 +7,24 @@ use better_auth_core::{AuthContext, AuthError, AuthRequest, AuthResult, FieldMap
 use chrono::Utc;
 
 pub(crate) fn user_email(user: &impl AuthUser) -> AuthResult<String> {
-    let email = user.email().field_value();
+    user_email_field(&user.email().field_value())
+}
+
+pub(crate) fn user_email_field(email: &better_auth_core::FieldValue) -> AuthResult<String> {
     match email {
-        better_auth_core::FieldValue::String(email) => Ok(email),
+        better_auth_core::FieldValue::String(email) => Ok(email.clone()),
         better_auth_core::FieldValue::Utf16String(email) => email.to_utf8().map_err(|error| {
             AuthError::internal(format!(
                 "Cannot represent user email as a Rust string: {error}"
             ))
         }),
-        _ => Err(AuthError::internal(
+        better_auth_core::FieldValue::Null => Err(AuthError::type_error(
+            "Cannot read properties of null (reading 'toLowerCase')",
+        )),
+        better_auth_core::FieldValue::Undefined => Err(AuthError::type_error(
+            "Cannot read properties of undefined (reading 'toLowerCase')",
+        )),
+        _ => Err(AuthError::type_error(
             "user.email.toLowerCase is not a function",
         )),
     }
@@ -188,10 +197,9 @@ pub async fn get_credential_account<S: better_auth_core::AuthSchema>(
     user_id: impl Into<better_auth_core::SchemaValue<String>>,
 ) -> AuthResult<Option<better_auth_core::wire::AccountView>> {
     let user_id = user_id.into();
-    let Some(user_id) = user_id.as_str() else {
-        return Ok(None);
-    };
-    ctx.database.get_credential_account(user_id).await
+    ctx.database
+        .get_credential_account_value(&user_id.field_value())
+        .await
 }
 
 /// Resolve the user's stored password hash from the credential account.

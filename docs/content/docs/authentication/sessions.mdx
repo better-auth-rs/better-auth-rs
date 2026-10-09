@@ -5,6 +5,8 @@ description: Session lifecycle, transport, refresh behavior, and session-managem
 
 The `SessionManagementPlugin` provides endpoints for querying, listing, and revoking sessions. Sessions are created automatically during sign-up, sign-in, passkey authentication, and successful 2FA completion.
 
+`AuthContext::native_session` follows upstream endpoint Session reads: it reuses the current request snapshot and treats Session endpoint failures as no Session. `SessionRead::CookieBypass` skips the cookie cache only when a read is required. `SessionRead::Authoritative` also clears the request snapshot for deployments with a server Session store. Direct `SessionManager::resolve_native` keeps resolution errors available to application callers.
+
 ## Setup
 
 These examples assume you've already defined `AppAuthSchema`. If you want a complete setup from entity definitions through Axum mounting, start with the [Axum integration guide](/docs/integrations/axum).

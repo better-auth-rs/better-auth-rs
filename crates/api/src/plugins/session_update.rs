@@ -1,15 +1,20 @@
 use super::json_body::is_truthy;
-use better_auth_core::session::SessionData;
-use better_auth_core::{AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, AuthSchema};
+use better_auth_core::{
+    AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, AuthSchema, FieldMap,
+    FromFieldMap,
+};
 use serde_json::Value;
+
+#[cfg(test)]
+mod native_session_tests;
 
 pub(super) async fn handle(
     req: &AuthRequest,
     ctx: &AuthContext<impl AuthSchema>,
 ) -> AuthResult<AuthResponse> {
     let body = better_auth_core::endpoint_input::record_input(req)?;
-    let (user, session) = ctx
-        .require_session(req)
+    let mut data = ctx
+        .require_native_session(req)
         .await
         .map_err(|error| match error {
             AuthError::Unauthenticated => AuthError::Upstream {
@@ -46,24 +51,34 @@ pub(super) async fn handle(
             &serde_json::json!({ "message": "No fields to update" }),
         )?);
     }
-    let Some(updated) = ctx
+    let updated = ctx
         .database
-        .update_session_fields_by_token_value(&session.token.field_value(), fields)
-        .await?
-    else {
+        .update_session_fields_by_token_value(&data.session.token.field_value(), fields.clone())
+        .await?;
+    if updated.is_none() && ctx.store_capabilities().server_sessions() {
         ctx.session_manager().clear_cookies(req)?;
         return Err(AuthError::Upstream {
             status: 401,
             code: "FAILED_TO_GET_SESSION",
             message: "Failed to get session",
         });
-    };
+    }
     let manager = ctx.session_manager();
-    let mut data = SessionData {
-        session: manager.internal_session_view(&updated).await?,
-        user,
+    data.session = match updated {
+        Some(updated) => manager.internal_session_view(&updated).await?,
+        None => {
+            let mut merged = FieldMap::from(data.session.clone());
+            merged.extend(fields);
+            let _ = merged.insert(
+                "updatedAt".into(),
+                better_auth_core::FieldDate::from(chrono::Utc::now()).into(),
+            );
+            better_auth_core::wire::SessionView::from_field_values(merged)?
+        }
     };
-    manager.set_session_cookie(req, data.clone(), None).await?;
+    manager
+        .set_native_session_cookie(req, data.clone(), None)
+        .await?;
     data.session.filter_returned_fields(&ctx.config.session)?;
     Ok(AuthResponse::json(
         200,

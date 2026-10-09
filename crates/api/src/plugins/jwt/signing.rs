@@ -27,7 +27,9 @@ impl JwtPlugin {
     ) -> AuthResult<String> {
         let user = || {
             session.as_ref().map(|data| &data.user).ok_or_else(|| {
-                AuthError::internal("Cannot read properties of null (reading 'user')")
+                AuthError::type_error(
+                    "null is not an object (evaluating 'ctx.context.session.user')",
+                )
             })
         };
         let mut payload = FieldMap::from([("iat".into(), (Utc::now().timestamp() as f64).into())]);
@@ -43,12 +45,12 @@ impl JwtPlugin {
             Some(callback) => callback(serde_json::to_value(&session)?).await?.into(),
             None => match user()? {
                 FieldValue::Null => {
-                    return Err(AuthError::internal(
-                        "Cannot read properties of null (reading 'id')",
+                    return Err(AuthError::type_error(
+                        "null is not an object (evaluating 'ctx.context.session.user.id')",
                     ));
                 }
                 FieldValue::Undefined => {
-                    return Err(AuthError::internal(
+                    return Err(AuthError::type_error(
                         "Cannot read properties of undefined (reading 'id')",
                     ));
                 }

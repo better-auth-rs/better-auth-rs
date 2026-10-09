@@ -354,7 +354,21 @@ pub trait AuthTransaction<S: AuthSchema>:
         id: &crate::FieldValue,
         update: UpdateUser,
     ) -> AuthResult<Option<crate::UserView>> {
-        let id = id
+        self.update_user_by_field_value("id", id, update).await
+    }
+    /// Update the original native field selector without projecting a User ID first.
+    async fn update_user_by_field_value(
+        &self,
+        field: &str,
+        value: &crate::FieldValue,
+        update: UpdateUser,
+    ) -> AuthResult<Option<crate::UserView>> {
+        if field != "id" {
+            return Err(AuthError::config(
+                "The store must support native transactional user field updates",
+            ));
+        }
+        let id = value
             .as_str()
             .ok_or_else(|| AuthError::config("The store must support native user ID updates"))?;
         self.update_user_optional(id, update).await
@@ -514,7 +528,21 @@ pub trait UserStore<S: AuthSchema>: Send + Sync {
         id: &crate::FieldValue,
         update: UpdateUser,
     ) -> AuthResult<Option<crate::UserView>> {
-        let id = id
+        self.update_user_by_field_value("id", id, update).await
+    }
+    /// Update the original native field selector without projecting a User ID first.
+    async fn update_user_by_field_value(
+        &self,
+        field: &str,
+        value: &crate::FieldValue,
+        update: UpdateUser,
+    ) -> AuthResult<Option<crate::UserView>> {
+        if field != "id" {
+            return Err(AuthError::config(
+                "The store must support native user field updates",
+            ));
+        }
+        let id = value
             .as_str()
             .ok_or_else(|| AuthError::config("The store must support native user ID updates"))?;
         self.update_user_optional(id, update).await
@@ -976,6 +1004,16 @@ pub trait AccountStore<S: AuthSchema>: Send + Sync {
         &self,
         user_id: &str,
     ) -> AuthResult<Option<crate::wire::AccountView>>;
+    /// Match the credential owner and provider with the original native User selector.
+    async fn get_credential_account_value(
+        &self,
+        user_id: &crate::FieldValue,
+    ) -> AuthResult<Option<crate::wire::AccountView>> {
+        let user_id = user_id.as_str().ok_or_else(|| {
+            AuthError::config("The store must support native credential Account selectors")
+        })?;
+        self.get_credential_account(user_id).await
+    }
     async fn update_account(
         &self,
         id: &str,
@@ -990,7 +1028,24 @@ pub trait AccountStore<S: AuthSchema>: Send + Sync {
     ) -> AuthResult<Option<crate::wire::AccountView>> {
         self.update_account(id, update).await.map(Some)
     }
+    /// Preserve the native Account ID through cancellation, conversion, and persistence.
+    async fn update_account_by_id_value(
+        &self,
+        id: &crate::FieldValue,
+        update: UpdateAccount,
+    ) -> AuthResult<Option<crate::wire::AccountView>> {
+        let id = id
+            .as_str()
+            .ok_or_else(|| AuthError::config("The store must support native Account ID updates"))?;
+        self.update_account_optional(id, update).await
+    }
     async fn delete_account(&self, id: &str) -> AuthResult<()>;
+    /// Delete the Account batch selected by its native owner through one hook lifecycle.
+    async fn delete_user_accounts_value(&self, _user_id: &crate::FieldValue) -> AuthResult<()> {
+        Err(AuthError::config(
+            "The store must support native Account batch deletion",
+        ))
+    }
     /// Delete one Account with its native selector and per-record hook lifecycle.
     async fn delete_account_value(&self, id: &crate::FieldValue) -> AuthResult<()> {
         let id = id.as_str().ok_or_else(|| {

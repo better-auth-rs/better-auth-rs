@@ -12,7 +12,7 @@ struct NoopDeleteSender;
 impl SendDeleteAccountVerification for NoopDeleteSender {
     async fn send(
         &self,
-        _user: &UserView,
+        _user: &FieldValue,
         _url: &str,
         _token: &str,
         _request: Option<&AuthRequest>,
@@ -23,7 +23,7 @@ impl SendDeleteAccountVerification for NoopDeleteSender {
 
 #[async_trait]
 impl better_auth_core::email::SendVerificationEmail for NoopDeleteSender {
-    async fn send(&self, _: &UserView, _: &str, _: &str) -> AuthResult<()> {
+    async fn send(&self, _: &better_auth_core::FieldValue, _: &str, _: &str) -> AuthResult<()> {
         Ok(())
     }
 }
@@ -440,7 +440,7 @@ async fn test_delete_user_before_hook_abort() {
     impl BeforeDeleteUser for AbortHook {
         async fn before_delete(
             &self,
-            _user: &UserView,
+            _user: &FieldValue,
             _request: Option<&AuthRequest>,
         ) -> AuthResult<()> {
             Err(AuthError::forbidden("Deletion blocked by policy"))
@@ -455,7 +455,7 @@ async fn test_delete_user_before_hook_abort() {
     impl AfterDeleteUser for AfterHook {
         async fn after_delete(
             &self,
-            _user: &UserView,
+            _user: &FieldValue,
             _request: Option<&AuthRequest>,
         ) -> AuthResult<()> {
             self.0.store(true, Ordering::SeqCst);

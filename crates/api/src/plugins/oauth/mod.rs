@@ -73,6 +73,8 @@ mod social_profile;
 #[cfg(all(test, feature = "axum"))]
 mod social_token_wire_tests;
 mod state;
+mod state_context;
+pub use state_context::get_oauth_state;
 mod state_json;
 #[cfg(all(test, feature = "axum"))]
 mod tiktok_tests;
@@ -89,6 +91,8 @@ mod wechat_tests;
 mod google_test_support;
 #[cfg(test)]
 mod google_tests;
+#[cfg(test)]
+mod native_session_contract_tests;
 #[cfg(test)]
 mod verifier_context_tests;
 

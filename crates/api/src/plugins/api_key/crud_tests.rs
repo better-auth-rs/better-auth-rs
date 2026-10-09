@@ -1,4 +1,5 @@
 use super::*;
+use better_auth_core::AuthUser;
 use better_auth_core::{AuthConfig, CreateSession, CreateUser, HttpMethod};
 use chrono::{Duration, Utc};
 use serde_json::json;

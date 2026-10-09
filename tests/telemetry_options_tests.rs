@@ -350,7 +350,7 @@ async fn plugin_scalars_preserve_omitted_and_explicit_options() -> AuthResult<()
 
 #[async_trait]
 impl core::email::SendVerificationEmail for Callbacks {
-    async fn send(&self, _: &core::wire::UserView, _: &str, _: &str) -> AuthResult<()> {
+    async fn send(&self, _: &better_auth_core::FieldValue, _: &str, _: &str) -> AuthResult<()> {
         Err(AuthError::internal(
             "telemetry must not invoke verification delivery",
         ))
@@ -366,7 +366,7 @@ impl better_auth::plugins::password_management::SendResetPassword for Callbacks 
 }
 #[async_trait]
 impl better_auth::plugins::user_management::SendChangeEmailConfirmation for Callbacks {
-    async fn send(&self, _: &core::wire::UserView, _: &str, _: &str, _: &str) -> AuthResult<()> {
+    async fn send(&self, _: &core::FieldValue, _: &str, _: &str, _: &str) -> AuthResult<()> {
         Err(AuthError::internal(
             "telemetry must not invoke confirmation delivery",
         ))

@@ -483,12 +483,15 @@ impl DeviceAuthorizationPlugin {
             return device_error_response(400, "expired_token", EXPIRED_USER_CODE);
         }
 
-        let user_id = match ctx.require_session(req).await {
-            Ok((user, _)) => Some(user.id().into_owned()),
+        let session = match ctx.require_native_session(req).await {
+            Ok(session) => Some(session),
             Err(AuthError::Unauthenticated) => None,
             Err(error) => return Err(error),
         };
-        if let Some(user_id) = user_id.as_ref().filter(|id| id.field_value().is_truthy())
+        if let Some(user_id) = session
+            .as_ref()
+            .map(|data| data.user_field("id"))
+            .filter(|id| id.is_truthy())
             && !device_code.user_id.field_value().is_truthy()
             && device_code
                 .status
@@ -496,16 +499,17 @@ impl DeviceAuthorizationPlugin {
                 .strict_equals(&DEVICE_STATUS_PENDING.into())
             && ctx
                 .database
-                .claim_device_code(&device_code.id, user_id)
+                .claim_device_code(&device_code.id, &SchemaValue::from_field(user_id.clone()))
                 .await?
         {
-            device_code.user_id = SchemaValue::from_field(user_id.field_value());
+            device_code.user_id = SchemaValue::from_field(user_id.clone());
         }
+        let user_id = session
+            .as_ref()
+            .map(|data| data.user_property("id"))
+            .transpose()?;
         let can_review = user_id.as_ref().is_some_and(|id| {
-            !id.is_undefined()
-                && id
-                    .field_value()
-                    .strict_equals(&device_code.user_id.field_value())
+            !id.is_undefined() && id.strict_equals(&device_code.user_id.field_value())
         });
         let additional_fields = if can_review {
             match self.configured_grant(ctx)? {
@@ -554,15 +558,14 @@ impl DeviceAuthorizationPlugin {
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
         decision: DeviceDecision,
     ) -> AuthResult<AuthResponse> {
-        let user = match ctx.require_session(req).await {
-            Ok((user, _session)) => user,
+        let session = match ctx.require_native_session(req).await {
+            Ok(session) => session,
             Err(AuthError::Unauthenticated) | Err(AuthError::SessionNotFound) => {
                 return device_error_response(401, "unauthorized", AUTHENTICATION_REQUIRED);
             }
             Err(error) => return Err(error),
         };
 
-        let current_user_id = user.id().into_owned();
         let body: DeviceActionRequest = request::read(req, request::action)?;
 
         let Some(device_code) = find_device_code_by_user_code(ctx, &body.user_code).await? else {
@@ -586,10 +589,7 @@ impl DeviceAuthorizationPlugin {
             return device_error_response(400, "invalid_request", DEVICE_CODE_NOT_CLAIMED);
         }
 
-        if !current_user_id
-            .field_value()
-            .strict_equals(&claimed_user_id)
-        {
+        if !session.user_property("id")?.strict_equals(&claimed_user_id) {
             return device_error_response(403, "access_denied", decision.forbidden_message());
         }
 

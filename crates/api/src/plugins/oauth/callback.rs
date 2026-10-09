@@ -78,6 +78,7 @@ pub(super) async fn handle_callback(
                         .is_some_and(|generic| generic.config.allow_idp_initiated)
                 {
                     let flow = initiate_oauth_flow_core(
+                        req,
                         ctx,
                         FlowStartRequest {
                             redirect_base: None,
@@ -153,7 +154,11 @@ pub(super) async fn handle_callback(
                     .is_some_and(|value| value == state_param);
             if !bound_state_matches || !cookie_matches {
                 return Ok(redirect_response(&append_query_params(
-                    payload.error_url.as_deref().unwrap_or(&default_error_url),
+                    payload
+                        .error_url
+                        .as_deref()
+                        .filter(|value| !value.is_empty())
+                        .unwrap_or(&default_error_url),
                     "error=state_mismatch",
                 )?));
             }
@@ -173,7 +178,11 @@ pub(super) async fn handle_callback(
                 Ok(payload) => {
                     if payload.oauth_state.as_deref() != Some(state_param.as_str()) {
                         return Ok(redirect_response(&append_query_params(
-                            payload.error_url.as_deref().unwrap_or(&default_error_url),
+                            payload
+                                .error_url
+                                .as_deref()
+                                .filter(|value| !value.is_empty())
+                                .unwrap_or(&default_error_url),
                             "error=state_mismatch",
                         )?));
                     }
@@ -196,6 +205,7 @@ pub(super) async fn handle_callback(
     let error_url = payload
         .error_url
         .clone()
+        .filter(|value| !value.is_empty())
         .unwrap_or_else(|| default_error_url.clone());
 
     let redirect_on_error =
@@ -214,6 +224,8 @@ pub(super) async fn handle_callback(
     if payload.is_expired() {
         return redirect_on_error("state_mismatch", None);
     }
+
+    super::state_context::publish_parsed(req, &payload, Some(&default_error_url))?;
 
     if let Some(error) = error.as_deref().filter(|error| !error.is_empty()) {
         return redirect_on_error(

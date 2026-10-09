@@ -248,7 +248,7 @@ pub(crate) async fn create_user_core(
         ctx,
     );
     endpoint.path = Some("/admin/create-user");
-    endpoint.session = session;
+    endpoint.session = session.map(Into::into);
     let user =
         crate::plugins::user_admission::create_user_optional(create_user, "admin", &endpoint)
             .await?
@@ -676,7 +676,7 @@ pub(crate) async fn stop_impersonating_core(
     admin_cookie: &AdminSessionCookiePayload,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<(
-    SessionUserResponse<SessionView, better_auth_core::FieldValue>,
+    better_auth_core::FieldValue,
     better_auth_core::session::NativeSessionData,
 )> {
     let admin_id = session.impersonated_by().field_value();
@@ -718,10 +718,14 @@ pub(crate) async fn stop_impersonating_core(
     ctx.database
         .delete_session_by_token_value(&session.token().field_value())
         .await?;
-    let response = SessionUserResponse {
-        session: ctx.session_view(&data.session).await?,
-        user: data.public_user(&ctx.config.user)?,
-    };
+    let response = better_auth_core::FieldMap::from([
+        (
+            "session".into(),
+            better_auth_core::FieldMap::from(ctx.session_view(&data.session).await?).into(),
+        ),
+        ("user".into(), data.public_user(&ctx.config.user)?),
+    ])
+    .into();
 
     Ok((response, data))
 }

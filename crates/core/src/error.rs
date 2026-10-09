@@ -124,6 +124,10 @@ pub enum AuthError {
     #[error("The object can not be cloned.")]
     DataClone,
 
+    /// A native value rejected a JavaScript property or method operation.
+    #[error("{0}")]
+    TypeError(String),
+
     #[error("Internal server error: {0}")]
     Internal(String),
 
@@ -150,9 +154,10 @@ impl AuthError {
                         .map(str::to_owned)
                 })
                 .unwrap_or_else(|| self.to_string()),
-            Self::Internal(message) | Self::Config(message) | Self::PasswordHash(message) => {
-                message.clone()
-            }
+            Self::Internal(message)
+            | Self::TypeError(message)
+            | Self::Config(message)
+            | Self::PasswordHash(message) => message.clone(),
             _ => self.to_string(),
         }
     }
@@ -220,6 +225,7 @@ impl AuthError {
             | Self::Serialization(_)
             | Self::Plugin { .. }
             | Self::Internal(_)
+            | Self::TypeError(_)
             | Self::DataClone
             | Self::PasswordHash(_)
             | Self::Jwt(_) => false,
@@ -279,6 +285,7 @@ impl AuthError {
             | Self::Serialization(_)
             | Self::Plugin { .. }
             | Self::Internal(_)
+            | Self::TypeError(_)
             | Self::DataClone
             | Self::PasswordHash(_)
             | Self::Jwt(_) => 500,
@@ -409,6 +416,11 @@ impl AuthError {
 
     pub fn internal(message: impl Into<String>) -> Self {
         Self::Internal(message.into())
+    }
+
+    /// Preserve a native TypeError for server callers and error callbacks.
+    pub fn type_error(message: impl Into<String>) -> Self {
+        Self::TypeError(message.into())
     }
 
     pub fn validation(message: impl Into<String>) -> Self {

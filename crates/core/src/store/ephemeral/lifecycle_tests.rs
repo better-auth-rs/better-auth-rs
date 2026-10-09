@@ -146,6 +146,138 @@ async fn account_update_hooks_receive_original_input_and_merge_independent_patch
     );
 }
 
+#[tokio::test]
+async fn native_credential_selectors_bind_all_fields_before_account_projection() -> AuthResult<()> {
+    use crate::user_fields::{FieldTransforms, UserFieldConfig, UserFieldTransform};
+
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let mut config = AuthConfig::default();
+    for (name, physical) in [
+        ("userId", "storedOwner"),
+        ("providerId", "storedProvider"),
+        ("accountId", "storedAccount"),
+    ] {
+        let events = events.clone();
+        let _ = config.account.additional_fields.insert(
+            name.into(),
+            UserFieldConfig {
+                field_name: Some(physical.into()),
+                transform: Some(FieldTransforms {
+                    input: Some(UserFieldTransform::new(move |value| {
+                        events.lock().unwrap().push((name, value.clone()));
+                        Ok(value)
+                    })),
+                    output: (name == "userId").then(|| UserFieldTransform::new(|_| Ok(99.into()))),
+                }),
+                ..Default::default()
+            },
+        );
+    }
+    let store = EphemeralStore::new(Arc::new(config));
+    let mut created = Vec::new();
+    for (owner, account_id, provider) in [
+        (Value::from(7), Value::from(7), "social"),
+        (Value::from(7), Value::from("7"), "credential"),
+        (Value::from("7"), Value::from("7"), "credential"),
+        (Value::from(7), Value::from(7), "credential"),
+    ] {
+        created.push(
+            store
+                .create_account(CreateAccount {
+                    user_id: crate::SchemaValue::from_field(owner),
+                    account_id: crate::SchemaValue::from_field(account_id),
+                    provider_id: provider.into(),
+                    ..Default::default()
+                })
+                .await?,
+        );
+    }
+    events.lock().unwrap().clear();
+    let selected = store.get_credential_account_value(&7.into()).await?;
+    assert_eq!(selected, created.get(3).cloned());
+    assert!(
+        events.lock().unwrap().is_empty(),
+        "where binding must not call field input transforms"
+    );
+    assert_eq!(
+        store.get_credential_account("7").await?,
+        created.get(2).cloned()
+    );
+    store.delete_user_accounts_value(&7.into()).await?;
+    let remaining = store.lock()?.accounts.snapshot()?;
+    assert_eq!(remaining.len(), 1);
+    assert_eq!(remaining[0].get("id"), Some(&created[2].id.field_value()));
+    assert_eq!(remaining[0].get("storedOwner"), Some(&"7".into()));
+    Ok(())
+}
+
+#[tokio::test]
+async fn native_account_update_keeps_numeric_ids_and_original_hook_lifecycle() -> AuthResult<()> {
+    let observed = Arc::new(Mutex::new(Vec::new()));
+    let store = EphemeralStore::default().with_hooks(vec![Arc::new(UpdateHooks {
+        first: true,
+        observed: observed.clone(),
+    })]);
+    let created = store
+        .create_account(CreateAccount {
+            user_id: "owner".into(),
+            account_id: "owner".into(),
+            provider_id: "credential".into(),
+            ..Default::default()
+        })
+        .await?;
+    let _ = store
+        .update_account_optional(
+            created.id.typed()?,
+            UpdateAccount {
+                id: crate::SchemaValue::from_field(7.into()),
+                ..Default::default()
+            },
+        )
+        .await?;
+    observed.lock().unwrap().clear();
+    assert!(
+        store
+            .update_account_by_id_value(&"7".into(), UpdateAccount::default())
+            .await?
+            .is_none()
+    );
+    assert_eq!(*observed.lock().unwrap(), ["", "after-null"]);
+    observed.lock().unwrap().clear();
+    assert!(
+        store
+            .update_account_by_id_value(
+                &7.into(),
+                UpdateAccount {
+                    scope: Some("cancel".into()).into(),
+                    ..Default::default()
+                }
+            )
+            .await?
+            .is_none()
+    );
+    assert_eq!(*observed.lock().unwrap(), [""]);
+    observed.lock().unwrap().clear();
+    let updated = store
+        .update_account_by_id_value(
+            &7.into(),
+            UpdateAccount {
+                password: Some("original".into()).into(),
+                ..Default::default()
+            },
+        )
+        .await?
+        .ok_or_else(|| AuthError::internal("Expected updated native Account"))?;
+    assert_eq!(updated.password.typed()?.as_deref(), Some("first-patch"));
+    assert_eq!(*observed.lock().unwrap(), ["original", "after-row"]);
+    assert_eq!(store.get_credential_account("owner").await?, Some(updated));
+    assert_eq!(
+        store.lock()?.accounts.snapshot()?[0].get("id"),
+        Some(&7.into())
+    );
+    Ok(())
+}
+
 struct ConsumeHooks {
     before: Arc<AtomicUsize>,
     after: Arc<AtomicUsize>,

@@ -1,4 +1,5 @@
 use super::*;
+use better_auth_core::AuthUser;
 use better_auth_core::wire::{SessionView, UserView};
 use better_auth_core::{
     AuthContext, AuthPlugin, CreateSession, CreateUser, HttpMethod, UpdateApiKey,

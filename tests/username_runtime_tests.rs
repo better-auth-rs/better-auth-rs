@@ -22,7 +22,7 @@ struct RejectedDelivery(AtomicUsize);
 impl better_auth_core::email::SendVerificationEmail for RejectedDelivery {
     async fn send(
         &self,
-        _: &better_auth_core::wire::UserView,
+        _: &better_auth_core::FieldValue,
         _: &str,
         _: &str,
     ) -> better_auth::AuthResult<()> {

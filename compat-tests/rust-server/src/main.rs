@@ -321,8 +321,17 @@ struct CompatVerificationSender {
 
 #[async_trait::async_trait]
 impl SendVerificationEmail for CompatVerificationSender {
-    async fn send(&self, user: &UserView, url: &str, token: &str) -> better_auth::AuthResult<()> {
-        if let Some(email) = user.email().typed()?.clone() {
+    async fn send(
+        &self,
+        user: &better_auth_core::FieldValue,
+        url: &str,
+        token: &str,
+    ) -> better_auth::AuthResult<()> {
+        if let Some(email) = user
+            .as_object()
+            .and_then(|fields| fields.get("email"))
+            .and_then(better_auth_core::FieldValue::as_str)
+        {
             self.outbox.lock().await.insert(
                 email.to_string(),
                 EmailOutboxRecord {
@@ -343,8 +352,16 @@ struct CompatTwoFactorOtpSender {
 
 #[async_trait::async_trait]
 impl SendTwoFactorOtp for CompatTwoFactorOtpSender {
-    async fn send(&self, user: &UserView, otp: &str) -> better_auth::AuthResult<()> {
-        if let Some(email) = user.email().typed()?.clone() {
+    async fn send(
+        &self,
+        user: &better_auth_core::FieldValue,
+        otp: &str,
+    ) -> better_auth::AuthResult<()> {
+        if let Some(email) = user
+            .as_object()
+            .and_then(|fields| fields.get("email"))
+            .and_then(better_auth_core::FieldValue::as_str)
+        {
             self.outbox
                 .lock()
                 .await
@@ -369,10 +386,19 @@ impl SendChangeEmailConfirmation for CompatChangeEmailSender {
         url: &str,
         token: &str,
     ) -> better_auth::AuthResult<()> {
-        if user.email_verified.is_truthy()? {
-            if let Some(email) = user.email.typed()? {
+        let fields = user.as_object().ok_or_else(|| {
+            better_auth::AuthError::type_error("Confirmation User must be an object")
+        })?;
+        if fields
+            .get("emailVerified")
+            .is_some_and(better_auth_core::FieldValue::is_truthy)
+        {
+            if let Some(email) = fields
+                .get("email")
+                .and_then(better_auth_core::FieldValue::as_str)
+            {
                 self.outbox.lock().await.insert(
-                    email.clone(),
+                    email.to_owned(),
                     ChangeEmailOutboxRecord {
                         new_email: new_email.to_string(),
                         url: url.to_string(),

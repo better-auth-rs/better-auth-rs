@@ -8,7 +8,7 @@ struct VerificationSender(Arc<AtomicUsize>);
 
 #[async_trait]
 impl core::email::SendVerificationEmail for VerificationSender {
-    async fn send(&self, _: &core::wire::UserView, _: &str, _: &str) -> AuthResult<()> {
+    async fn send(&self, _: &better_auth_core::FieldValue, _: &str, _: &str) -> AuthResult<()> {
         let _ = self.0.fetch_add(1, Ordering::SeqCst);
         Ok(())
     }

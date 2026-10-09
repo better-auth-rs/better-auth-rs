@@ -690,6 +690,7 @@ impl OAuthProxyPlugin {
         {
             return redirect_error(error_url, "state_mismatch", None);
         }
+        super::state_context::publish_parsed(req, &state, None)?;
         if let Some(anonymous_user) = state.server_context.get("anonymousUserId") {
             req.set_server_context(
                 "anonymousUserId",

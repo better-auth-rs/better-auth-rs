@@ -260,6 +260,7 @@ async fn start(req: &AuthRequest, ctx: &AuthContext<impl AuthSchema>) -> AuthRes
         disable_redirect: false,
     };
     let flow = handlers::prepare_oauth_flow(&request);
+    super::state_context::publish_generated(req, &flow.payload)?;
     let state_response = match ctx.config.account.store_state_strategy() {
         OAuthStateStrategy::Database => {
             handlers::attach_state_cookie(response, &ctx.config, &flow.state)

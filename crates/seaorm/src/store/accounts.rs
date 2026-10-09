@@ -1,9 +1,7 @@
 use super::instrumentation::database_operation;
 use async_trait::async_trait;
 use chrono::Utc;
-use sea_orm::{
-    ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QuerySelect, sea_query::ExprTrait,
-};
+use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QuerySelect};
 
 use better_auth_core::store::schema::EntityRole;
 use better_auth_core::store::{AccountOwner, AccountStore, ResolvedJoin};
@@ -28,7 +26,9 @@ where
         provider: &str,
         provider_account_id: &str,
     ) -> AuthResult<Vec<SqlRow>> {
-        self.model_fields.canonicalize_id(EntityRole::Account)?;
+        self.model_fields.begin_id_query(EntityRole::Account)?;
+        let provider = self.account_selector("providerId", &provider.into())?;
+        let account_id = self.account_selector("accountId", &provider_account_id.into())?;
         database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(
             self.config(),
             "findMany",
@@ -36,13 +36,8 @@ where
                 super::plugin_rows::all(
                     self.connection(),
                     <S::Account as SeaOrmAccountModel>::Entity::find()
-                        .filter(
-                            <S::Account as SeaOrmAccountModel>::provider_id_column().eq(provider),
-                        )
-                        .filter(
-                            <S::Account as SeaOrmAccountModel>::account_id_column()
-                                .eq(provider_account_id),
-                        )
+                        .filter(provider)
+                        .filter(account_id)
                         .limit(2),
                 )
                 .await
@@ -541,9 +536,17 @@ where
     }
 
     async fn get_credential_account(&self, user_id: &str) -> AuthResult<Option<AccountView>> {
-        self.model_fields.canonicalize_id(EntityRole::Account)?;
-        let stored_user_id =
-            self.parse_id(user_id, <S::Account as SeaOrmAccountModel>::parse_user_id)?;
+        self.get_credential_account_value(&user_id.into()).await
+    }
+
+    async fn get_credential_account_value(
+        &self,
+        user_id: &FieldValue,
+    ) -> AuthResult<Option<AccountView>> {
+        self.model_fields.begin_id_query(EntityRole::Account)?;
+        let owner = self.account_selector("userId", user_id)?;
+        let provider = self.account_selector("providerId", &"credential".into())?;
+        let account_id = self.account_selector("accountId", user_id)?;
         let account = database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(
             self.config(),
             "findOne",
@@ -551,16 +554,9 @@ where
                 super::plugin_rows::one(
                     self.connection(),
                     <S::Account as SeaOrmAccountModel>::Entity::find()
-                        .filter(
-                            <S::Account as SeaOrmAccountModel>::user_id_column().eq(stored_user_id),
-                        )
-                        .filter(
-                            <S::Account as SeaOrmAccountModel>::provider_id_column()
-                                .eq("credential"),
-                        )
-                        .filter(
-                            <S::Account as SeaOrmAccountModel>::account_id_column().eq(user_id),
-                        ),
+                        .filter(owner)
+                        .filter(provider)
+                        .filter(account_id),
                 )
                 .await
             },
@@ -593,9 +589,16 @@ where
     async fn update_account_optional(
         &self,
         id: &str,
+        update: UpdateAccount,
+    ) -> AuthResult<Option<AccountView>> {
+        self.update_account_by_id_value(&id.into(), update).await
+    }
+
+    async fn update_account_by_id_value(
+        &self,
+        id: &FieldValue,
         mut update: UpdateAccount,
     ) -> AuthResult<Option<AccountView>> {
-        let account_id = self.parse_id(id, <S::Account as SeaOrmAccountModel>::parse_id)?;
         let hook_context = self.hook_context(None);
         let original = update.clone();
         for hook in self.hooks() {
@@ -615,6 +618,7 @@ where
         let fields = self.config().account.field_schema();
         let backend = self.connection().get_database_backend();
         self.model_fields.canonicalize_id(EntityRole::Account)?;
+        let account_id = self.account_selector("id", id)?;
         let input = fields
             .record_storage_fields_with_binding(update.fields()?, false, |name, field, value| {
                 crate::reference_id::input_binding(
@@ -629,12 +633,6 @@ where
             })
             .await?;
         let active = super::record_write::RecordWrite::<<S::Account as SeaOrmAccountModel>::Entity>::from_fields(input, S::Account::field_column)?;
-        let reselect = match active.expression(S::Account::id_column(), backend)? {
-            Some(value) => S::Account::id_column()
-                .into_expr()
-                .eq(S::Account::id_column().save_as(value)),
-            None => S::Account::id_column().eq(account_id.clone()),
-        };
         let account = match database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(
             self.config(),
             "update",
@@ -644,10 +642,8 @@ where
                     _,
                 >(
                     self.connection(),
-                    active
-                        .update(backend)?
-                        .filter(S::Account::id_column().eq(account_id)),
-                    reselect,
+                    active.update(backend)?.filter(account_id.clone()),
+                    account_id,
                 )
                 .await
                 .map(|row| row.map(SqlRow::from))
@@ -676,6 +672,12 @@ where
 
     async fn delete_account(&self, id: &str) -> AuthResult<()> {
         self.delete_account_value(&id.into()).await
+    }
+
+    async fn delete_user_accounts_value(&self, user_id: &FieldValue) -> AuthResult<()> {
+        self.delete_user_accounts_with_connection(self.connection(), None, user_id)
+            .await
+            .map(|_| ())
     }
 
     async fn delete_account_value(&self, id: &FieldValue) -> AuthResult<()> {

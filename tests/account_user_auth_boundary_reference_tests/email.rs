@@ -2,7 +2,6 @@ use super::*;
 use better_auth_core::{
     email::SendVerificationEmail,
     observability::{LogArgument, LogLevel, LogSink},
-    wire::UserView,
 };
 
 const DIAGNOSTIC: &str = "Cannot create an OAuth verification token without a user email";
@@ -11,10 +10,15 @@ pub(super) struct Sender(pub(super) Events);
 
 #[async_trait::async_trait]
 impl SendVerificationEmail for Sender {
-    async fn send(&self, user: &UserView, url: &str, token: &str) -> AuthResult<()> {
+    async fn send(
+        &self,
+        user: &better_auth_core::FieldValue,
+        url: &str,
+        token: &str,
+    ) -> AuthResult<()> {
         self.0.push(json!({
             "kind": "email.sender",
-            "data": {"user": values::observe(&FieldMap::from(user.clone()).into())?, "url": url, "token": token},
+            "data": {"user": values::observe(user)?, "url": url, "token": token},
         }))
     }
 }

@@ -1,7 +1,6 @@
 use serde::Deserialize;
 
-use better_auth_core::entity::AuthUser;
-use better_auth_core::{AuthContext, AuthError, AuthResult};
+use better_auth_core::{AuthContext, AuthError, AuthResult, FieldValue};
 use better_auth_core::{AuthRequest, AuthResponse};
 
 use super::StatusResponse;
@@ -55,10 +54,10 @@ better_auth_core::impl_auth_plugin! {
 // ---------------------------------------------------------------------------
 
 pub(crate) async fn list_accounts_core(
-    user: &impl AuthUser,
+    user_id: &FieldValue,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<Vec<AccountResponse>> {
-    let accounts = ctx.database.get_user_accounts(user.id().typed()?).await?;
+    let accounts = ctx.database.get_user_accounts_value(user_id).await?;
 
     accounts
         .into_iter()
@@ -104,19 +103,21 @@ pub(crate) async fn list_accounts_core(
 }
 
 pub(crate) async fn unlink_account_core(
-    user: &impl AuthUser,
+    user_id: &FieldValue,
     account_id: &str,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<StatusResponse> {
-    let accounts = ctx.database.get_user_accounts(user.id().typed()?).await?;
+    let accounts = ctx.database.get_user_accounts_value(user_id).await?;
     if accounts.len() == 1 && !ctx.config.account.account_linking.allow_unlinking_all() {
         return Err(AuthError::bad_request("You can't unlink your last account"));
     }
     let account = accounts
         .iter()
-        .find(|account| account.id == account_id)
+        .find(|account| account.id.field_value().strict_equals(&account_id.into()))
         .ok_or_else(|| AuthError::bad_request("Account not found"))?;
-    ctx.database.delete_account(account.id.typed()?).await?;
+    ctx.database
+        .delete_account_value(&account.id.field_value())
+        .await?;
     Ok(StatusResponse { status: true })
 }
 
@@ -130,13 +131,16 @@ impl AccountManagementPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let (user, _session) = ctx.require_session(req).await?;
-        let filtered = list_accounts_core(&user, ctx).await?;
-        let response = filtered
-            .iter()
-            .map(better_auth_core::FieldMap::json)
-            .collect::<AuthResult<Vec<_>>>()?;
-        Ok(AuthResponse::json(200, &response)?)
+        let data = ctx.require_native_session(req).await?;
+        let filtered = list_accounts_core(data.user_field("id"), ctx).await?;
+        Ok(AuthResponse::native(
+            200,
+            filtered
+                .into_iter()
+                .map(FieldValue::from)
+                .collect::<Vec<_>>()
+                .into(),
+        ))
     }
 
     async fn handle_unlink_account(
@@ -144,8 +148,8 @@ impl AccountManagementPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let (user, session) = ctx.require_session(req).await?;
-        if !crate::plugins::helpers::session_is_fresh(&session, &ctx.config)? {
+        let data = ctx.require_native_session(req).await?;
+        if !crate::plugins::helpers::session_is_fresh(&data.session, &ctx.config)? {
             return Err(AuthError::Upstream {
                 status: 403,
                 code: "SESSION_NOT_FRESH",
@@ -158,7 +162,8 @@ impl AccountManagementPlugin {
             None => super::json_body::string_input(req, &[("accountId", true)])?.0,
         };
 
-        let response = unlink_account_core(&user, &unlink_req.account_id, ctx).await?;
+        let response =
+            unlink_account_core(data.user_field("id"), &unlink_req.account_id, ctx).await?;
         Ok(AuthResponse::json(200, &response)?)
     }
 }

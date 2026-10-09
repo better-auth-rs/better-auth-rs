@@ -39,13 +39,13 @@ pub(super) async fn issue_factor_session(
 }
 
 pub(super) async fn update_two_factor_user(
-    user: &impl AuthUser,
+    user_id: &FieldValue,
     enabled: bool,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<Option<UserView>> {
     ctx.database
         .update_user_by_id_value(
-            &user.id().field_value(),
+            user_id,
             UpdateUser {
                 two_factor_enabled: Some(enabled),
                 ..Default::default()
@@ -73,17 +73,13 @@ pub(super) fn build_totp(
     config: &TwoFactorConfig,
     secret: &str,
     request_issuer: Option<&str>,
-    user: &impl AuthUser,
+    email: &FieldValue,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<totp::Totp> {
     let issuer = request_issuer
         .map(str::to_owned)
         .unwrap_or_else(|| ctx.config.app_name.clone());
-    let account_name = user
-        .field_values()?
-        .get("email")
-        .cloned()
-        .unwrap_or_default()
+    let account_name = email
         .display_utf16()?
         .to_utf8()
         .map_err(|_| AuthError::internal("URI malformed"))?;
@@ -124,12 +120,16 @@ pub(super) fn totp_verifier(config: &TwoFactorConfig, secret: &str) -> totp::Tot
 
 pub(super) async fn verify_user_password(
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-    user: &impl AuthUser,
+    user_id: &FieldValue,
     password: Option<&str>,
     allow_passwordless: bool,
     hash_missing_password: bool,
 ) -> AuthResult<()> {
-    let stored_hash = get_credential_password_hash(ctx, user).await?;
+    let account = get_credential_account(ctx, SchemaValue::from_field(user_id.clone())).await?;
+    let stored_hash = match account.filter(|account| account.password.field_value().is_truthy()) {
+        Some(account) => account.password.typed()?.clone(),
+        None => None,
+    };
     if allow_passwordless && stored_hash.as_deref().is_none_or(str::is_empty) {
         return Ok(());
     }

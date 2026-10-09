@@ -1,7 +1,7 @@
 use super::EmailVerificationPlugin;
 use crate::plugins::endpoint_context::{EndpointContext, WithCallbacks};
 use better_auth_core::{
-    AuthPlugin, AuthResult, AuthSchema, background::BackgroundFuture, wire::UserView,
+    AuthPlugin, AuthResult, AuthSchema, FieldValue, background::BackgroundFuture, wire::UserView,
 };
 use std::sync::Arc;
 
@@ -9,11 +9,20 @@ use std::sync::Arc;
 #[derive(Clone)]
 pub struct VerificationEmail {
     /// User snapshot supplied by the verification lifecycle.
-    pub user: UserView,
+    pub user: FieldValue,
     /// Complete verification link, including the token.
     pub url: String,
     /// Verification token for application-specific delivery.
     pub token: String,
+}
+impl VerificationEmail {
+    /// Read object fields through native Rust slots at an application boundary.
+    pub fn user_view(&self) -> AuthResult<UserView> {
+        let fields = self.user.as_object().ok_or_else(|| {
+            better_auth_core::AuthError::internal("Verification User must be an object")
+        })?;
+        UserView::try_from(fields.clone())
+    }
 }
 type Sender<S> = dyn Fn(&VerificationEmail, &EndpointContext<'_, S>) -> AuthResult<Option<BackgroundFuture>>
     + Send

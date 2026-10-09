@@ -747,6 +747,46 @@ impl<S: AuthSchema> AuthContext<S> {
             .await
     }
 
+    /// Resolve an endpoint Session with upstream getSessionFromCtx reuse and failure semantics.
+    pub async fn native_session(
+        &self,
+        req: &AuthRequest,
+        read: crate::session::SessionRead,
+    ) -> AuthResult<Option<crate::session::NativeSessionData>> {
+        let authoritative = matches!(read, crate::session::SessionRead::Authoritative)
+            && self.store_capabilities().server_sessions();
+        if authoritative {
+            req.replace_native_session_snapshot(None)?;
+        } else if let Some(data) = req.native_session_snapshot()? {
+            return Ok(Some(data));
+        }
+        let mut nested = req.with_separate_response_headers();
+        nested.method = crate::HttpMethod::Get;
+        // Failed nested endpoints do not publish their queued headers to the outer response.
+        let data = match self
+            .session_manager()
+            .resolve_native_for_endpoint(&nested, read)
+            .await
+        {
+            Ok(resolved) => {
+                for (name, value) in nested.take_response_headers()? {
+                    if name.eq_ignore_ascii_case("set-cookie") {
+                        req.append_response_header(&name, value)?;
+                    } else if !name.eq_ignore_ascii_case("cache-control")
+                        && !name.eq_ignore_ascii_case("pragma")
+                    {
+                        req.set_response_header(&name, value)?;
+                    }
+                }
+                resolved.data
+            }
+            // getSessionFromCtx treats endpoint failures as an absent Session.
+            Err(_) => None,
+        };
+        req.replace_native_session_snapshot(data.clone())?;
+        Ok(data)
+    }
+
     /// Require a session while preserving the public User object selected by the adapter.
     pub async fn require_native_session(
         &self,
@@ -770,9 +810,10 @@ impl<S: AuthSchema> AuthContext<S> {
         req: &AuthRequest,
         read: crate::session::SessionRead,
     ) -> AuthResult<crate::session::NativeSessionData> {
-        let resolved = self.session_manager().resolve_native(req, read).await?;
-        req.replace_native_session_snapshot(resolved.data.clone())?;
-        let data = resolved.data.ok_or(AuthError::Unauthenticated)?;
+        let data = self
+            .native_session(req, read)
+            .await?
+            .ok_or(AuthError::Unauthenticated)?;
         let id = data.user_field("id");
         if !id.is_undefined() {
             req.set_server_context("auth.current-user-id", id.clone())?;

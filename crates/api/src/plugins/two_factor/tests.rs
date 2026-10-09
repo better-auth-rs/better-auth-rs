@@ -246,8 +246,7 @@ async fn test_verify_existing_session_factor_enables_two_factor_and_reissues_ses
     );
     let (response, _) = verify_existing_session_factor(
         &request,
-        user.clone(),
-        session.clone(),
+        (user.clone(), session.clone()).into(),
         Some(EnrollmentMethod::Totp),
         &ctx,
         std::future::ready(Ok(())),
@@ -257,7 +256,10 @@ async fn test_verify_existing_session_factor_enables_two_factor_and_reissues_ses
 
     let queued = request.take_response_headers().unwrap();
     let set_cookie_headers: Vec<_> = queued.get_all("set-cookie").collect();
-    assert_eq!(response.user.two_factor_enabled, Some(false));
+    assert_eq!(
+        response.user.as_object().unwrap()["twoFactorEnabled"],
+        FieldValue::Bool(false)
+    );
     assert_eq!(
         response.token.as_str(),
         Some(session.token.typed().unwrap().as_str())

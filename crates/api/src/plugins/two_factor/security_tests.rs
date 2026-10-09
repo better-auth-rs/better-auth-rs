@@ -93,7 +93,7 @@ struct OtpOutbox(Mutex<Vec<String>>);
 
 #[async_trait]
 impl SendTwoFactorOtp for OtpOutbox {
-    async fn send(&self, _: &UserView, otp: &str) -> AuthResult<()> {
+    async fn send(&self, _: &FieldValue, otp: &str) -> AuthResult<()> {
         self.0.lock().unwrap().push(otp.to_owned());
         Ok(())
     }
@@ -140,8 +140,7 @@ async fn otp_enrollment_rotates_session_and_does_not_enroll_an_authenticator() {
     let missing_sender = enable_core(
         &AuthRequest::new(better_auth_core::HttpMethod::Post, "/two-factor/enable"),
         &body,
-        &user,
-        &session,
+        &(user.clone(), session.clone()).into(),
         &TwoFactorConfig::default(),
         &ctx,
     )
@@ -156,9 +155,15 @@ async fn otp_enrollment_rotates_session_and_does_not_enroll_an_authenticator() {
         ..Default::default()
     };
     let request = AuthRequest::new(better_auth_core::HttpMethod::Post, "/two-factor/enable");
-    let (response, _) = enable_core(&request, &body, &user, &session, &config, &ctx)
-        .await
-        .unwrap();
+    let (response, _) = enable_core(
+        &request,
+        &body,
+        &(user.clone(), session.clone()).into(),
+        &config,
+        &ctx,
+    )
+    .await
+    .unwrap();
     let queued = request.take_response_headers().unwrap();
     let cookies: Vec<_> = queued.get_all("set-cookie").collect();
     assert_eq!(
@@ -203,8 +208,7 @@ async fn authenticator_enrollment_can_restart_only_until_verified() {
     let (first, _) = enable_core(
         &AuthRequest::new(better_auth_core::HttpMethod::Post, "/two-factor/enable"),
         &body,
-        &user,
-        &session,
+        &(user.clone(), session.clone()).into(),
         &config,
         &ctx,
     )
@@ -220,8 +224,7 @@ async fn authenticator_enrollment_can_restart_only_until_verified() {
     let (second, _) = enable_core(
         &AuthRequest::new(better_auth_core::HttpMethod::Post, "/two-factor/enable"),
         &body,
-        &user,
-        &session,
+        &(user.clone(), session.clone()).into(),
         &config,
         &ctx,
     )
@@ -253,7 +256,7 @@ async fn authenticator_enrollment_can_restart_only_until_verified() {
     .unwrap_err();
     assert_eq!(unverified.to_string(), "TOTP not enabled");
     let secret = decrypt_value(&ctx.config.secret, &second_record.secret).unwrap();
-    let code = build_totp(&config, &secret, None, &user, &ctx)
+    let code = build_totp(&config, &secret, None, &user.email.field_value(), &ctx)
         .unwrap()
         .generate_current()
         .unwrap();
@@ -277,8 +280,7 @@ async fn authenticator_enrollment_can_restart_only_until_verified() {
     let rejected = enable_core(
         &AuthRequest::new(better_auth_core::HttpMethod::Post, "/two-factor/enable"),
         &body,
-        &user,
-        &session,
+        &(user.clone(), session.clone()).into(),
         &config,
         &ctx,
     )
@@ -314,8 +316,7 @@ async fn failed_challenge_budget_and_account_lock_survive_new_challenges() {
             issuer: None,
             method: EnrollmentMethod::Totp,
         },
-        &user,
-        &session,
+        &(user.clone(), session.clone()).into(),
         &config,
         &ctx,
     )

@@ -161,11 +161,15 @@ async fn pairing<S: AuthSchema>(
         .plugin(
             EmailVerificationPlugin::new()
                 .before_email_verification(Arc::new(move |user| {
-                    let result = before.push(json!({"kind": "verification.before", "user": user}));
+                    let result = user.json().and_then(|user| {
+                        before.push(json!({"kind": "verification.before", "user": user}))
+                    });
                     Box::pin(async move { result })
                 }))
                 .after_email_verification(Arc::new(move |user| {
-                    let result = after.push(json!({"kind": "verification.after", "user": user}));
+                    let result = user.json().and_then(|user| {
+                        after.push(json!({"kind": "verification.after", "user": user}))
+                    });
                     Box::pin(async move { result })
                 })),
         )

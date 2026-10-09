@@ -65,7 +65,8 @@ pub trait SeaOrmHooks<S: AuthSchema>: Send + Sync {
 
     async fn before_update_user(
         &self,
-        id: &better_auth::FieldValue,
+        field: &str,
+        value: &better_auth::FieldValue,
         update: &mut FieldMap,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<DatabaseHookUpdate<FieldMap>>;
@@ -103,6 +104,10 @@ pub trait SeaOrmHooks<S: AuthSchema>: Send + Sync {
 ```
 
 Creation-after hooks receive `Option<&View>` for User, Account, Session, and Verification. A successful database insert can return `None` when MySQL cannot identify the inserted row. The after hooks still run. A before hook that cancels creation does not insert a row or run the writer or after hooks. An output-transform error also skips after hooks; a direct insert remains committed, while an enclosing transaction retains its rollback boundary.
+
+`SeaOrmHooks::before_update_user` receives the declared selector field and its native value. ID and email updates use the same write policies, transaction, after-hook queue, and cache refresh. Use the supplied field to interpret the value; an email selector is not a User ID.
+
+`SeaOrmHooks::before_update_account` receives the native Account ID as `&FieldValue`. Credential lookup, Account update, and owner-batch deletion use the same declared field-query policies as other native selectors.
 
 `SeaOrmHooks::before_update_session` receives the native token as `&FieldValue`. Runtime database hooks continue to receive the update object. Use the native token without a string conversion when the Session schema replaces its type.
 

@@ -1,7 +1,7 @@
 //! Apply complete Session field policies while retaining lifecycle and transaction boundaries.
 
 use super::instrumentation::database_operation;
-use sea_orm::{ActiveModelTrait, ColumnTrait, ConnectionTrait, QueryFilter, sea_query::ExprTrait};
+use sea_orm::{ActiveModelTrait, ConnectionTrait, QueryFilter};
 
 use super::{SeaOrmStore, cancelled_by_hook};
 use crate::error::{AuthError, AuthResult};
@@ -377,25 +377,13 @@ where
         let backend = db.get_database_backend();
         let (active, schema) = self.prepare_session_update(db, update).await?;
         let filter = self.session_token_filter(token)?;
-        let reselect = match (
-            active.expression(S::Session::id_column(), backend)?,
-            active.expression(S::Session::token_column(), backend)?,
-        ) {
-            (Some(value), _) => S::Session::id_column()
-                .into_expr()
-                .eq(S::Session::id_column().save_as(value)),
-            (_, Some(value)) => S::Session::token_column()
-                .into_expr()
-                .eq(S::Session::token_column().save_as(value)),
-            _ => filter.clone(),
-        };
         let session = database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
             self.config(),
             "update",
             super::updates::execute_update_returning_raw(
                 db,
-                active.update(backend)?.filter(filter),
-                reselect,
+                active.update(backend)?.filter(filter.clone()),
+                filter,
             ),
         )
         .await?;

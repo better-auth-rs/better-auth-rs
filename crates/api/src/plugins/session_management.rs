@@ -197,23 +197,8 @@ impl SessionManagementPlugin {
     ) -> AuthResult<AuthResponse> {
         let resolved = ctx
             .session_manager()
-            .resolve_native(req, better_auth_core::session::SessionRead::Cached)
-            .await;
-        let resolved = match resolved {
-            Ok(value) => value,
-            Err(error) if error.status_code() < 500 => return Err(error),
-            Err(error) => {
-                better_auth_core::observability::logger::current().error(
-                    "Failed to read session",
-                    &[better_auth_core::observability::LogArgument::Error(&error)],
-                );
-                return Err(AuthError::Upstream {
-                    status: 500,
-                    code: "FAILED_TO_GET_SESSION",
-                    message: "Failed to get session",
-                });
-            }
-        };
+            .resolve_native_for_endpoint(req, better_auth_core::session::SessionRead::Cached)
+            .await?;
         let mut response = match resolved.data {
             Some(data) => {
                 let mut fields = FieldMap::from(data);

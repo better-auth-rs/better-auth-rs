@@ -285,7 +285,7 @@ async fn selected_email_must_support_lowercase_before_any_verification_delivery(
                         observed
                             .lock()
                             .unwrap()
-                            .push(message.user.email.field_value());
+                            .push(message.user_view()?.email.field_value());
                         Ok(None)
                     },
                 )),

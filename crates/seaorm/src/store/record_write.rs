@@ -87,18 +87,6 @@ impl<E: EntityTrait> RecordWrite<E> {
             .retain(|(stored, _)| stored.to_string() != column.to_string());
     }
 
-    pub(super) fn expression(
-        &self,
-        column: E::Column,
-        backend: sea_orm::DbBackend,
-    ) -> AuthResult<Option<sea_orm::sea_query::SimpleExpr>> {
-        self.fields
-            .iter()
-            .find(|(stored, _)| stored.to_string() == column.to_string())
-            .map(|(_, value)| value.clone().bind(backend))
-            .transpose()
-    }
-
     fn assign(&mut self, column: E::Column, value: Binding) {
         if let Some((_, stored)) = self
             .fields

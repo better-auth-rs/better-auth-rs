@@ -47,6 +47,8 @@ pub struct SessionResolution<T = SessionData> {
 /// Select whether an authentication check may use a cookie cache.
 #[derive(Clone, Copy)]
 pub enum SessionRead {
+    /// Skip the cookie cache when no request snapshot is available.
+    CookieBypass,
     /// Allow a valid signed cookie cache.
     Cached,
     /// Read the session from the server store, for sensitive operations.
@@ -393,6 +395,29 @@ impl<S: AuthSchema> SessionManager<S> {
         })
     }
 
+    /// Apply get-session endpoint logging and error mapping after raw resolution.
+    pub async fn resolve_native_for_endpoint(
+        &self,
+        req: &AuthRequest,
+        read: SessionRead,
+    ) -> AuthResult<SessionResolution<NativeSessionData>> {
+        match self.resolve_native(req, read).await {
+            Ok(resolved) => Ok(resolved),
+            Err(error) if error.is_api_error() => Err(error),
+            Err(error) => {
+                crate::observability::logger::current().error(
+                    "INTERNAL_SERVER_ERROR",
+                    &[crate::observability::LogArgument::Error(&error)],
+                );
+                Err(AuthError::Upstream {
+                    status: 500,
+                    code: "FAILED_TO_GET_SESSION",
+                    message: "Failed to get session",
+                })
+            }
+        }
+    }
+
     #[expect(
         clippy::manual_async_fn,
         reason = "The explicit Send return bound prevents generated consumers from expanding nested projection futures"
@@ -466,8 +491,8 @@ impl<S: AuthSchema> SessionManager<S> {
         let Some(token) = token else {
             return Ok(none());
         };
-        let disable_cache = (matches!(read, SessionRead::Authoritative)
-            && self.capabilities.server_sessions())
+        let disable_cache = matches!(read, SessionRead::CookieBypass)
+            || (matches!(read, SessionRead::Authoritative) && self.capabilities.server_sessions())
             || query_flag(req, "disableCookieCache")?;
         if !disable_cache && let (Some(cache), Some(value)) = (cache, cache_value.as_deref()) {
             let decoded = if let Some(signer) = &self.signer {

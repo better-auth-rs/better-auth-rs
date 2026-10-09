@@ -1,13 +1,13 @@
 use std::sync::Arc;
 
 use better_auth_core::{
-    AuthPlugin, AuthResult, AuthSchema, background::BackgroundFuture, wire::UserView,
+    AuthPlugin, AuthResult, AuthSchema, FieldValue, background::BackgroundFuture,
 };
 
 use super::TwoFactorPlugin;
 use crate::plugins::endpoint_context::{EndpointContext, WithCallbacks};
 
-type Sender<S> = dyn Fn(&UserView, &str, &EndpointContext<'_, S>) -> AuthResult<Option<BackgroundFuture>>
+type Sender<S> = dyn Fn(&FieldValue, &str, &EndpointContext<'_, S>) -> AuthResult<Option<BackgroundFuture>>
     + Send
     + Sync;
 
@@ -27,7 +27,7 @@ impl<S: AuthSchema> TwoFactorCallbacks<S> {
     /// Retain the endpoint with `to_owned` when delivery needs its active runtime.
     pub fn send<F>(mut self, callback: F) -> Self
     where
-        F: Fn(&UserView, &str, &EndpointContext<'_, S>) -> AuthResult<Option<BackgroundFuture>>
+        F: Fn(&FieldValue, &str, &EndpointContext<'_, S>) -> AuthResult<Option<BackgroundFuture>>
             + Send
             + Sync
             + 'static,

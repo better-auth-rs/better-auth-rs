@@ -117,10 +117,9 @@ impl EmailOtpPlugin {
             return self.session_response(req, ctx, &user, true).await;
         }
         let manager = ctx.session_manager();
-        if let Some(current) = manager
-            .resolve_native(req, better_auth_core::session::SessionRead::Cached)
+        if let Some(current) = ctx
+            .native_session(req, better_auth_core::session::SessionRead::Cached)
             .await?
-            .data
             && user.email_verified.is_truthy()?
             && current
                 .user_field("id")
@@ -426,7 +425,7 @@ impl EmailOtpPlugin {
         email: String,
     ) -> AuthResult<better_auth_core::wire::UserView> {
         if let Some(hook) = &ctx.email_verification_policy.before_email_verification {
-            hook(&ctx.user_view(user).await?).await?;
+            hook(&better_auth_core::FieldMap::from(user.clone()).into()).await?;
         }
         let user = ctx
             .database
@@ -440,7 +439,7 @@ impl EmailOtpPlugin {
             )
             .await?;
         if let Some(hook) = &ctx.email_verification_policy.after_email_verification {
-            hook(&ctx.user_view(&user).await?).await?;
+            hook(&better_auth_core::FieldMap::from(user.clone()).into()).await?;
         }
         Ok(user)
     }

@@ -32,7 +32,7 @@ pub(crate) fn delivery<S: AuthSchema>(
         && crate::plugins::email_otp::callbacks::overrides_verification(ctx)
     {
         let retained = endpoint.to_owned();
-        let email = crate::plugins::helpers::user_email(&message.user)?;
+        let email = crate::plugins::helpers::user_email(&message.user_view()?)?;
         return Ok(Some(Box::pin(async move {
             crate::plugins::email_otp::callbacks::send_verification_override(
                 &email,
@@ -65,7 +65,7 @@ pub(crate) fn delivery<S: AuthSchema>(
                 let text = format!("Verify your email address: {}", message.url);
                 provider
                     .send(
-                        &crate::plugins::helpers::user_email(&message.user)?,
+                        &crate::plugins::helpers::user_email(&message.user_view()?)?,
                         "Verify your email address",
                         &html,
                         &text,

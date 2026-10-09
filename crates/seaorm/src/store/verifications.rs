@@ -572,18 +572,7 @@ where
         let active = super::record_write::RecordWrite::<
             <S::Verification as SeaOrmVerificationModel>::Entity,
         >::from_fields(input, S::Verification::field_column)?;
-        let reselect = match (
-            active.expression(S::Verification::id_column(), backend)?,
-            active.expression(S::Verification::identifier_column(), backend)?,
-        ) {
-            (Some(value), _) => S::Verification::id_column()
-                .into_expr()
-                .eq(S::Verification::id_column().save_as(value)),
-            (_, Some(value)) => S::Verification::identifier_column()
-                .into_expr()
-                .eq(S::Verification::identifier_column().save_as(value)),
-            _ => S::Verification::identifier_column().eq(identifier),
-        };
+        let filter = S::Verification::identifier_column().eq(identifier);
         let row =
             match database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(
                 self.config(),
@@ -591,10 +580,8 @@ where
                 async {
                     super::updates::execute_update_returning_raw(
                         db,
-                        active
-                            .update(backend)?
-                            .filter(S::Verification::identifier_column().eq(identifier)),
-                        reselect,
+                        active.update(backend)?.filter(filter.clone()),
+                        filter,
                     )
                     .await
                 },

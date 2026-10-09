@@ -600,14 +600,21 @@ where
         self.update_user_by_id_value(&better_auth_core::FieldValue::from(id), update)
             .await
     }
-    async fn update_user_by_id_value(
+    async fn update_user_by_field_value(
         &self,
-        id: &better_auth_core::FieldValue,
+        field: &str,
+        value: &better_auth_core::FieldValue,
         update: better_auth_core::UpdateUser,
     ) -> AuthResult<Option<better_auth_core::UserView>> {
         let record = self
             .store
-            .update_user_outcome_with_connection(&self.tx, Some((&self.tx, self)), id, update)
+            .update_user_outcome_with_connection(
+                &self.tx,
+                Some((&self.tx, self)),
+                field,
+                value,
+                update,
+            )
             .await?
             .continue_value()
             .flatten();

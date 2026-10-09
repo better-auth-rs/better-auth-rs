@@ -61,6 +61,12 @@ impl<S: AuthSchema> AccountStore<S> for SecondaryStore<S> {
     ) -> AuthResult<Option<crate::wire::AccountView>> {
         self.inner.get_credential_account(user_id).await
     }
+    async fn get_credential_account_value(
+        &self,
+        user_id: &crate::FieldValue,
+    ) -> AuthResult<Option<crate::wire::AccountView>> {
+        self.inner.get_credential_account_value(user_id).await
+    }
     async fn update_account(
         &self,
         id: &str,
@@ -75,8 +81,18 @@ impl<S: AuthSchema> AccountStore<S> for SecondaryStore<S> {
     ) -> AuthResult<Option<crate::wire::AccountView>> {
         self.inner.update_account_optional(id, update).await
     }
+    async fn update_account_by_id_value(
+        &self,
+        id: &crate::FieldValue,
+        update: UpdateAccount,
+    ) -> AuthResult<Option<crate::wire::AccountView>> {
+        self.inner.update_account_by_id_value(id, update).await
+    }
     async fn delete_account(&self, id: &str) -> AuthResult<()> {
         self.inner.delete_account(id).await
+    }
+    async fn delete_user_accounts_value(&self, user_id: &crate::FieldValue) -> AuthResult<()> {
+        self.inner.delete_user_accounts_value(user_id).await
     }
     async fn delete_account_value(&self, id: &crate::FieldValue) -> AuthResult<()> {
         self.inner.delete_account_value(id).await

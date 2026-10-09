@@ -686,6 +686,14 @@ impl AuthRequest {
             .cloned())
     }
 
+    /// Retain shared endpoint context while isolating a nested endpoint's response headers.
+    pub(crate) fn with_separate_response_headers(&self) -> Self {
+        Self {
+            response_headers: Default::default(),
+            ..self.clone()
+        }
+    }
+
     /// Queue a response header from request-scoped authentication middleware.
     pub fn set_response_header(
         &self,

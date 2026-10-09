@@ -23,10 +23,8 @@ pub(super) async fn optional_session<S: AuthSchema>(
     req: &AuthRequest,
 ) -> AuthResult<Option<NativeSessionData>> {
     Ok(ctx
-        .session_manager()
-        .resolve_native(req, better_auth_core::session::SessionRead::Cached)
-        .await?
-        .data)
+        .native_session(req, better_auth_core::session::SessionRead::Cached)
+        .await?)
 }
 
 pub(super) async fn registration_session<S: AuthSchema>(

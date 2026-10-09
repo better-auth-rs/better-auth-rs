@@ -146,10 +146,8 @@ impl AdminPlugin {
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<Option<(UserView, SessionView)>> {
         let data = ctx
-            .session_manager()
-            .resolve_native(req, better_auth_core::session::SessionRead::Authoritative)
-            .await?
-            .data;
+            .native_session(req, better_auth_core::session::SessionRead::Authoritative)
+            .await?;
         if data.is_none() && (req.endpoint_headers().is_some() || req.original_request().is_some())
         {
             return Err(AuthResponse::new(401).into());
@@ -338,11 +336,9 @@ impl AdminPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
-        let session_manager = ctx.session_manager();
-        let session = session_manager
-            .resolve_native(req, better_auth_core::session::SessionRead::Cached)
+        let session = ctx
+            .native_session(req, better_auth_core::session::SessionRead::Cached)
             .await?
-            .data
             .ok_or_else(|| AuthError::from(AuthResponse::new(401)))?
             .session;
         if !session.impersonated_by.field_value().is_truthy() {
@@ -361,7 +357,7 @@ impl AdminPlugin {
         ctx.session_manager()
             .set_native_session_cookie(req, data, Some(admin_cookie.dont_remember))
             .await?;
-        let mut auth_response = AuthResponse::json(200, &response)?;
+        let mut auth_response = AuthResponse::native(200, response);
         better_auth_core::utils::cookie_utils::remove_set_cookie_entries(
             req,
             Some(&mut auth_response.headers),

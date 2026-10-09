@@ -9,7 +9,7 @@ use async_trait::async_trait;
 use better_auth::{AuthConfig, BetterAuth, plugins::EmailVerificationPlugin};
 use better_auth_core::{
     AuthRequest, AuthResult, AuthSchema, AuthStore, CreateUser, HttpMethod,
-    email::SendVerificationEmail, store::EphemeralStore, wire::UserView,
+    email::SendVerificationEmail, store::EphemeralStore,
 };
 use better_auth_seaorm::{
     Database, SeaOrmStore,
@@ -31,7 +31,7 @@ struct Sender(Mutex<Vec<String>>);
 
 #[async_trait]
 impl SendVerificationEmail for Sender {
-    async fn send(&self, _: &UserView, _: &str, token: &str) -> AuthResult<()> {
+    async fn send(&self, _: &better_auth_core::FieldValue, _: &str, token: &str) -> AuthResult<()> {
         self.0
             .lock()
             .expect("Delivered email tokens")

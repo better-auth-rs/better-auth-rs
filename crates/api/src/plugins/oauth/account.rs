@@ -1,6 +1,6 @@
 use better_auth_core::SchemaValue;
 use better_auth_core::{
-    AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, UpdateAccount,
+    AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, FieldValue, UpdateAccount,
 };
 use chrono::Utc;
 
@@ -18,9 +18,15 @@ use super::types::{
 };
 
 #[derive(Clone)]
-enum AccountSelection {
+enum AccountSource {
     Id(String),
     Cookie,
+}
+
+#[derive(Clone)]
+struct AccountSelection {
+    source: AccountSource,
+    user_id: Option<String>,
 }
 
 pub(super) fn account_body(
@@ -75,8 +81,8 @@ impl AccountSelection {
             .and_then(serde_json::Value::as_bool)
             == Some(true);
         let (selection, field) = match (account_id, use_cookie) {
-            (Some(id), false) => (Self::Id(id.to_owned()), "accountId"),
-            (None, true) => (Self::Cookie, "useAccountCookie"),
+            (Some(id), false) => (AccountSource::Id(id.to_owned()), "accountId"),
+            (None, true) => (AccountSource::Cookie, "useAccountCookie"),
             _ => return Err("Invalid input".into()),
         };
         let unknown: Vec<_> = object
@@ -92,29 +98,90 @@ impl AccountSelection {
                 .join(", ");
             return Err(format!("Unrecognized key{suffix}: {names}"));
         }
-        Ok(selection)
+        Ok(Self {
+            source: selection,
+            user_id: object
+                .get("userId")
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_owned),
+        })
+    }
+
+    async fn resolve_user_id(
+        &self,
+        req: &AuthRequest,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+    ) -> AuthResult<FieldValue> {
+        let read = if ctx.store_capabilities().server_sessions() {
+            better_auth_core::session::SessionRead::CookieBypass
+        } else {
+            better_auth_core::session::SessionRead::Cached
+        };
+        let session = ctx.native_session(req, read).await?;
+        let endpoint = crate::plugins::endpoint_context::EndpointContext::new(
+            Some(req),
+            FieldValue::Undefined,
+            ctx,
+        );
+        if session.is_none() && (endpoint.request.is_some() || endpoint.headers().is_some()) {
+            return Err(AuthError::Unauthenticated);
+        }
+        session
+            .as_ref()
+            .map(|data| data.user_field("id").clone())
+            .filter(FieldValue::is_truthy)
+            .or_else(|| {
+                self.user_id
+                    .as_deref()
+                    .map(FieldValue::from)
+                    .filter(FieldValue::is_truthy)
+            })
+            .ok_or(AuthError::Upstream {
+                status: 400,
+                code: "USER_ID_OR_SESSION_REQUIRED",
+                message: "Either userId or session is required",
+            })
+    }
+
+    fn matches(
+        &self,
+        account: &AccountCookiePayload,
+        user_id: &FieldValue,
+        ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+    ) -> bool {
+        (!ctx.store_capabilities().database || account.user_id.field_value().strict_equals(user_id))
+            && match &self.source {
+                AccountSource::Id(id) => {
+                    account.id.field_value().strict_equals(&id.as_str().into())
+                }
+                AccountSource::Cookie => true,
+            }
     }
 
     async fn resolve(
         &self,
         req: &AuthRequest,
-        user_id: &str,
+        user_id: &FieldValue,
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AccountCookiePayload> {
-        let account = match self {
-            Self::Id(account_id) => ctx
+        let account = match &self.source {
+            AccountSource::Id(account_id) => ctx
                 .database
-                .get_user_accounts(user_id)
+                .get_user_accounts_value(user_id)
                 .await?
                 .iter()
-                .find(|account| account.id == account_id.as_str())
-                .cloned(),
-            Self::Cookie if ctx.config.account.store_account_cookie() => {
-                decode_account_cookie(req, &ctx.config)?.filter(|account| {
-                    !ctx.store_capabilities().database || account.user_id == user_id
+                .find(|account| {
+                    account
+                        .id
+                        .field_value()
+                        .strict_equals(&account_id.as_str().into())
                 })
+                .cloned(),
+            AccountSource::Cookie if ctx.config.account.store_account_cookie() => {
+                decode_account_cookie(req, &ctx.config)?
+                    .filter(|account| self.matches(account, user_id, ctx))
             }
-            Self::Cookie => None,
+            AccountSource::Cookie => None,
         };
         account.ok_or_else(|| AuthError::bad_request("Account not found"))
     }
@@ -262,7 +329,7 @@ async fn persist_tokens(
     }
     let updated = if account.id.is_truthy()? {
         ctx.database
-            .update_account_optional(account.id.typed()?, update.clone())
+            .update_account_by_id_value(&account.id.field_value(), update.clone())
             .await?
     } else {
         None
@@ -282,10 +349,15 @@ async fn persist_tokens(
 
 async fn valid_access_token(
     account: &AccountCookiePayload,
+    selection: &AccountSelection,
+    user_id: &FieldValue,
     config: &OAuthConfig,
     req: &AuthRequest,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<(AccessTokenResponse, Vec<String>)> {
+    if !selection.matches(account, user_id, ctx) {
+        return Err(AuthError::bad_request("Account not found"));
+    }
     let provider = provider_for(config, account)?;
     async {
         let expired = account.access_token_expires_at.is_truthy()?
@@ -383,11 +455,10 @@ pub(super) async fn handle_get_access_token(
         Ok(selection) => selection,
         Err(message) => return invalid_selection("body", message),
     };
-    let (_, session) = ctx.require_authoritative_session(req).await?;
-    let account = selection
-        .resolve(req, session.user_id.typed()?, ctx)
-        .await?;
-    let (response, cookies) = valid_access_token(&account, config, req, ctx).await?;
+    let user_id = selection.resolve_user_id(req, ctx).await?;
+    let account = selection.resolve(req, &user_id, ctx).await?;
+    let (response, cookies) =
+        valid_access_token(&account, &selection, &user_id, config, req, ctx).await?;
     token_response(&response, cookies)
 }
 
@@ -400,10 +471,8 @@ pub(super) async fn handle_refresh_token(
         Ok(selection) => selection,
         Err(message) => return invalid_selection("body", message),
     };
-    let (_, session) = ctx.require_authoritative_session(req).await?;
-    let account = selection
-        .resolve(req, session.user_id.typed()?, ctx)
-        .await?;
+    let user_id = selection.resolve_user_id(req, ctx).await?;
+    let account = selection.resolve(req, &user_id, ctx).await?;
     let provider = provider_for(config, &account)?;
     if !provider.config.supports_refresh() {
         return Err(AuthResponse::json(
@@ -452,7 +521,7 @@ pub(super) async fn handle_refresh_token(
             provider_id: account.provider_id.clone(),
             account_id: account.id.clone(),
         };
-        let cookies = if matches!(selection, AccountSelection::Cookie)
+        let cookies = if matches!(selection.source, AccountSource::Cookie)
             && ctx.config.account.store_account_cookie()
         {
             create_account_cookie_headers(req, &ctx.config, &updated)?
@@ -474,10 +543,8 @@ pub(super) async fn handle_account_info(
         Ok(selection) => selection,
         Err(message) => return invalid_selection("query", message),
     };
-    let (_, session) = ctx.require_authoritative_session(req).await?;
-    let account = selection
-        .resolve(req, session.user_id.typed()?, ctx)
-        .await?;
+    let user_id = selection.resolve_user_id(req, ctx).await?;
+    let account = selection.resolve(req, &user_id, ctx).await?;
     let provider = config
         .providers
         .iter()
@@ -488,7 +555,8 @@ pub(super) async fn handle_account_info(
             code: "PROVIDER_NOT_CONFIGURED",
             message: "Account is not associated with a configured social provider.",
         })?;
-    let (tokens, cookies) = valid_access_token(&account, config, req, ctx).await?;
+    let (tokens, cookies) =
+        valid_access_token(&account, &selection, &user_id, config, req, ctx).await?;
     if !tokens.access_token.is_truthy()? {
         return Err(AuthError::bad_request("Access token not found"));
     }

@@ -1,7 +1,6 @@
 use std::collections::HashSet;
 
-use better_auth_core::entity::AuthSession;
-use better_auth_core::{AuthContext, AuthRequest, AuthResponse, AuthResult};
+use better_auth_core::{AuthContext, AuthRequest, AuthResponse, AuthResult, FieldValue};
 use url::Url;
 
 use crate::plugins::json_body::{self, SignOutBody};
@@ -20,9 +19,9 @@ pub(crate) async fn handle_sign_out(
     let Some(config) = ctx.extensions.get::<std::sync::Arc<OAuthConfig>>() else {
         return crate::plugins::session_management::handle_sign_out(req, ctx).await;
     };
-    let user_id = if let Some(token) = ctx.session_manager().extract_session_token(req) {
-        match ctx.database.get_session(&token).await {
-            Ok(session) => session.map(|session| session.user_id().into_owned()),
+    let current_session = if let Some(token) = ctx.session_manager().extract_session_token(req) {
+        match crate::plugins::one_time_token::find_session(ctx, &token.into()).await {
+            Ok(session) => session,
             Err(error) => {
                 better_auth_core::observability::logger::current().error(
                     "Failed to read session from database",
@@ -36,12 +35,13 @@ pub(crate) async fn handle_sign_out(
     };
 
     let mut response = crate::plugins::session_management::handle_sign_out(req, ctx).await?;
-    let Some(user_id) = user_id else {
+    let Some(current_session) = current_session else {
         return Ok(response);
     };
     // Upstream completes local logout even if provider logout cannot be prepared.
-    let mut accounts = match ctx.database.get_user_accounts(user_id.typed()?).await {
-        Ok(accounts) => accounts,
+    let url = match provider_logout_url(current_session.user_field("id"), &body, &config, ctx).await
+    {
+        Ok(url) => url,
         Err(error) => {
             better_auth_core::observability::logger::current().error(
                 "Failed to create provider logout URL",
@@ -50,6 +50,28 @@ pub(crate) async fn handle_sign_out(
             return Ok(response);
         }
     };
+    if let Some(url) = url {
+        let redirect = !body.disable_redirect.unwrap_or(false);
+        if redirect {
+            _ = response.headers.insert("Location", url.as_str());
+        }
+        response.body =
+            better_auth_core::ResponseBody::Bytes(serde_json::to_vec(&serde_json::json!({
+                "success": true,
+                "url": url.as_str(),
+                "redirect": redirect,
+            }))?);
+    }
+    Ok(response)
+}
+
+async fn provider_logout_url(
+    user_id: &FieldValue,
+    body: &SignOutBody,
+    config: &OAuthConfig,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+) -> AuthResult<Option<Url>> {
+    let mut accounts = ctx.database.get_user_accounts_value(user_id).await?;
     accounts.retain(|account| {
         config.providers.iter().any(|(name, provider)| {
             account.provider_id == name.as_str() && provider.config.end_session_endpoint.is_some()
@@ -76,8 +98,7 @@ pub(crate) async fn handle_sign_out(
         }
     });
     if let Some(error) = date_error {
-        tracing::error!(%error, "Failed to create provider logout URL");
-        return Ok(response);
+        return Err(error);
     }
     let mut seen = HashSet::new();
     for account in accounts {
@@ -94,32 +115,31 @@ pub(crate) async fn handle_sign_out(
         if provider.config.end_session_endpoint.is_none() {
             continue;
         }
-        let id_token = if account.id_token.is_truthy()? {
-            Some(account.id_token.display_string()?)
-        } else {
-            None
-        };
-        let Some(url) = end_session_url(
-            &provider.config,
-            id_token.as_deref(),
-            &body,
-            &super::handlers::auth_base_url(ctx),
-        ) else {
-            continue;
-        };
-        let redirect = !body.disable_redirect.unwrap_or(false);
-        if redirect {
-            _ = response.headers.insert("Location", url.as_str());
+        let url = (|| -> AuthResult<Option<Url>> {
+            let id_token = if account.id_token.is_truthy()? {
+                Some(account.id_token.display_string()?)
+            } else {
+                None
+            };
+            Ok(end_session_url(
+                &provider.config,
+                id_token.as_deref(),
+                body,
+                &super::handlers::auth_base_url(ctx),
+            ))
+        })();
+        match url {
+            Ok(Some(url)) => return Ok(Some(url)),
+            Ok(None) => {}
+            Err(error) => {
+                better_auth_core::observability::logger::current().error(
+                    &format!("Failed to create logout URL for provider \"{provider_id}\""),
+                    &[better_auth_core::observability::LogArgument::Error(&error)],
+                );
+            }
         }
-        response.body =
-            better_auth_core::ResponseBody::Bytes(serde_json::to_vec(&serde_json::json!({
-                "success": true,
-                "url": url.as_str(),
-                "redirect": redirect,
-            }))?);
-        break;
     }
-    Ok(response)
+    Ok(None)
 }
 
 fn end_session_url(
