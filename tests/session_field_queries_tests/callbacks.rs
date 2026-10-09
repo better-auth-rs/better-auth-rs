@@ -19,10 +19,10 @@ fn reentrant_config<S: AuthSchema>(
             let events = events.clone();
             async move {
                 if enabled.load(Ordering::SeqCst) {
-                    events.push(json!({"kind":"input","value":value}))?;
+                    events.push(json!({"kind":"input","value":value.json()?}))?;
                     let store = target.get().and_then(Weak::upgrade).ok_or_else(|| AuthError::internal("Session callback store is unavailable"))?;
                     let found = required(store.get_session("7").await?)?;
-                    events.push(json!({"kind":"read","session":FieldMap::from(found)}))?;
+                    events.push(json!({"kind":"read","session":FieldMap::from(found).json()?}))?;
                     if fail_query {
                         let result = store.get_session_by_token_value(&bad_token()).await;
                         assert!(matches!(result, Err(AuthError::TypeError(message)) if message == "No default value"));
@@ -93,7 +93,7 @@ async fn reentrant<S: AuthSchema>(
     assert_eq!(FieldMap::from(result), expected);
     let mut expected_events = vec![
         json!({"kind":"input","value":"outer"}),
-        json!({"kind":"read","session":before}),
+        json!({"kind":"read","session":before.json()?}),
     ];
     if fail_query {
         expected_events
@@ -164,8 +164,9 @@ impl<S: AuthSchema> DatabaseHooks<S> for DeleteHooks {
         session: &SessionView,
         _: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<DatabaseHookControl> {
-        self.events
-            .push(json!({"kind":"before-delete","session":FieldMap::from(session.clone())}))?;
+        self.events.push(
+            json!({"kind":"before-delete","session":FieldMap::from(session.clone()).json()?}),
+        )?;
         Ok(if self.mode == DeleteMode::Cancel {
             DatabaseHookControl::Cancel
         } else {
@@ -179,7 +180,7 @@ impl<S: AuthSchema> DatabaseHooks<S> for DeleteHooks {
         _: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
         self.events
-            .push(json!({"kind":"after-delete","session":FieldMap::from(session.clone())}))
+            .push(json!({"kind":"after-delete","session":FieldMap::from(session.clone()).json()?}))
     }
 }
 
@@ -194,7 +195,7 @@ fn delete_config(events: &Events, enabled: &Arc<AtomicBool>, mode: DeleteMode) -
                 input: None,
                 output: Some(UserFieldTransform::new(move |value| {
                     if enabled.load(Ordering::SeqCst) {
-                        events.push(json!({"kind":"output","value":value}))?;
+                        events.push(json!({"kind":"output","value":value.json()?}))?;
                         if mode == DeleteMode::OutputFailure {
                             return Err(AuthError::internal("session-output-rejected"));
                         }
@@ -237,11 +238,11 @@ async fn deletion<S: AuthSchema>(
         json!({"kind":"output","value":"seed-ip"}),
     ];
     if mode != DeleteMode::OutputFailure {
-        expected.push(json!({"kind":"before-delete","session":candidate}));
+        expected.push(json!({"kind":"before-delete","session":candidate.json()?}));
     }
     if mode == DeleteMode::Normal {
         expected.push(json!({"kind":"query","operation":"delete","model":model}));
-        expected.push(json!({"kind":"after-delete","session":candidate}));
+        expected.push(json!({"kind":"after-delete","session":candidate.json()?}));
     }
     assert_eq!(events.take()?, expected);
     let candidate_rows = fixture

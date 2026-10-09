@@ -8,7 +8,7 @@ use better_auth_core::{AuthError, AuthResult, Invitation, Member, store::schema:
 use better_auth_core::{FieldValue, SchemaField};
 use chrono::Utc;
 use sea_orm::{
-    ColumnTrait, EntityTrait, FromQueryResult, PaginatorTrait, QueryFilter, TransactionTrait,
+    EntityTrait, FromQueryResult, PaginatorTrait, QueryFilter, TransactionTrait,
     sea_query::{Expr, ExprTrait},
 };
 

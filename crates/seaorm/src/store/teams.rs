@@ -11,8 +11,7 @@ use better_auth_core::{
 use better_auth_core::{FieldValue, SchemaField};
 use chrono::Utc;
 use sea_orm::{
-    ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QuerySelect, TransactionTrait,
-    sea_query::Expr,
+    EntityTrait, PaginatorTrait, QueryFilter, QuerySelect, TransactionTrait, sea_query::Expr,
 };
 
 #[async_trait]
@@ -140,28 +139,10 @@ impl<
             .await
             .map_err(map_db_err)?;
         let config = self.organization_fields()?.invitation;
-        let pending = Entity::<O::Invitation>::find()
-            .filter(self.organization_fields_equal::<O::Invitation>(
-                EntityRole::Invitation,
-                [
-                    ("organizationId", &team.organization_id.field_value()),
-                    ("status", &"pending".into()),
-                ],
-            )?)
-            .all(&tx)
-            .await
-            .map_err(map_db_err)?;
-        // Upstream projects every pending row before filtering expiration or updating team IDs.
-        let pending = models::project::<O::Invitation>(
-            pending,
-            &config,
-            self.connection().get_database_backend(),
-        )
-        .await?;
+        let pending = self
+            .pending_invitation_rows(&tx, &team.organization_id.field_value(), None)
+            .await?;
         for row in pending {
-            if row.expires_at.typed()?.milliseconds() <= Utc::now().timestamp_millis() as f64 {
-                continue;
-            }
             if let Some(ids) = row.team_id.typed()? {
                 let retained: Vec<_> = ids
                     .split(',')

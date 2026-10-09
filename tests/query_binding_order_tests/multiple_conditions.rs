@@ -246,7 +246,7 @@ async fn wallet_mixed_aliases_resolve_twice_without_converting_operands_twice() 
             AuthError::internal("Mixed aliases must select the original string address")
         })?;
     assert_eq!(
-        returned.field_values()?.json()?,
+        serde_json::Value::Object(returned.field_values()?.json()?),
         json!({
             "id": "mixed", "userId": "owner", "address": 1, "chainId": "true",
             "isPrimary": false, "createdAt": "2030-01-01T00:00:00.000Z",
@@ -313,7 +313,7 @@ async fn organization_role_names_convert_as_one_array_and_keep_the_organization_
         .await?;
     let returned = returned
         .iter()
-        .map(|row| row.field_values()?.json())
+        .map(|row| row.field_values()?.json().map(serde_json::Value::Object))
         .collect::<AuthResult<Vec<_>>>()?;
     assert_eq!(
         returned,

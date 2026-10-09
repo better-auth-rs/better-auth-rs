@@ -11,7 +11,6 @@ use crate::store::schema::resolve_field_name;
 use crate::user_fields::{project_adapter_value, project_source_fields_batches_then};
 
 type UserRef = RowRef<UserView>;
-type AccountRef = RowRef<FieldMap>;
 type SessionSnapshot = (SessionView, Option<SessionData<JoinValue<UserView>>>);
 
 impl EphemeralStore {
@@ -68,32 +67,6 @@ impl EphemeralStore {
             complete,
         )
         .await
-    }
-
-    pub(super) async fn output_account_ref(&self, source: &AccountRef) -> AuthResult<AccountView> {
-        self.model_fields
-            .canonicalize_id(crate::store::schema::EntityRole::Account)?;
-        let schema = self.config.account.field_schema();
-        let mut fields = FieldMap::new();
-        for (name, field) in schema.fields() {
-            if name == "id" {
-                continue;
-            }
-            let value = source.read(|row| Ok(row.get(schema.record_storage_key(name)).cloned()))?;
-            let value = project_adapter_value(
-                value.unwrap_or_default(),
-                field,
-                field.references_id(),
-                true,
-            )
-            .await?;
-            let _ = fields.insert(name.clone(), value);
-        }
-        if let Some(id) = source.read(|row| Ok(row.get("id").cloned()))? {
-            let id = Self::project_id(&crate::SchemaValue::from_field(id))?;
-            let _ = fields.insert("id".into(), id.into_field_value());
-        }
-        Ok(AccountView::from_adapter_fields(fields))
     }
 
     pub(super) async fn session_user_relations(

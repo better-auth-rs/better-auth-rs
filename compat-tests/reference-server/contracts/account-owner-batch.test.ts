@@ -112,3 +112,41 @@ for (const backend of ["memory", "sqlite"] as const) {
     }
   }
 }
+
+test("Memory Account owner number selectors match ordinary reads with native joins", async () => {
+  const date = new Date("2030-01-01T00:00:00.000Z");
+  const user = {
+    id: "selector-owner", name: "Selector owner", email: "selector-owner@example.test",
+    emailVerified: true, image: null, createdAt: date, updatedAt: date,
+  };
+  const account = {
+    id: "numeric-provider", accountId: "shared-subject", providerId: 1, userId: user.id,
+    accessToken: null, refreshToken: null, idToken: null, accessTokenExpiresAt: null,
+    refreshTokenExpiresAt: null, scope: null, password: null, createdAt: date, updatedAt: date,
+  };
+  const data = {
+    user: [user], session: [], verification: [],
+    account: [account, { ...account, id: "string-decoy", providerId: "01" }],
+  };
+  const before = structuredClone(data);
+  for (const joins of [false, true]) {
+    const events: unknown[] = [];
+    const context = await betterAuth({
+      database: memoryAdapter(data),
+      baseURL: "http://account-owner-selector.test",
+      secret: "ordinary-account-selector-secret-32-characters",
+      logger: { disabled: true },
+      advanced: { database: { joins } },
+      account: { additionalFields: { providerId: {
+        type: "number", transform: { input(value) { events.push(["provider-input", value]); return value; } },
+      } } },
+    }).$context;
+    const selector = { providerId: "01", accountId: "shared-subject" };
+    expect(await context.internalAdapter.findAccountByKey(selector)).toStrictEqual(account);
+    expect(await context.internalAdapter.findAccountOwnerByKey(selector)).toStrictEqual({
+      kind: "owned", user, account,
+    });
+    expect(events).toStrictEqual([]);
+    expect(data).toStrictEqual(before);
+  }
+});

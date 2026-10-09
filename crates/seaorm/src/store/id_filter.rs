@@ -45,22 +45,6 @@ pub(super) trait IdColumn: ColumnTrait {
             .into_expr()
             .eq(self.save_as(self.id_parameter(id.as_ref(), policy, backend)?)))
     }
-
-    fn is_in_ids(
-        &self,
-        ids: impl IntoIterator<Item = impl AsRef<str>>,
-        policy: &IdGeneration,
-        backend: DbBackend,
-    ) -> AuthResult<SimpleExpr> {
-        let values = ids
-            .into_iter()
-            .map(|id| {
-                self.id_parameter(id.as_ref(), policy, backend)
-                    .map(|value| self.save_as(value))
-            })
-            .collect::<AuthResult<Vec<_>>>()?;
-        Ok(self.into_expr().is_in(values))
-    }
 }
 
 impl<C: ColumnTrait> IdColumn for C {}
@@ -116,9 +100,11 @@ mod tests {
                 for column in [member::Column::Id, member::Column::UserId] {
                     for predicate in [
                         column.eq_id(input, &IdGeneration::Random, DbBackend::Sqlite)?,
-                        column.is_in_ids(
-                            ["missing", input],
-                            &IdGeneration::Random,
+                        value_filter::is_in(
+                            column,
+                            &better_auth_core::FieldValue::Array(
+                                ["missing".into(), input.into()].into(),
+                            ),
                             DbBackend::Sqlite,
                         )?,
                         value_filter::equals_id(

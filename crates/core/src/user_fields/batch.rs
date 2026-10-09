@@ -10,37 +10,6 @@ use std::future::Future;
 
 type ReadyRow<'a, T> = (usize, &'a mut T, usize);
 
-/// Read ready asynchronous callback inputs before polling those callbacks.
-pub(crate) async fn project_source_fields_then<T: Send, V: Send, R: Send>(
-    rows: &mut [T],
-    fields: &IndexMap<String, UserFieldConfig>,
-    read: impl Fn(&mut T, &str, &UserFieldConfig) -> AuthResult<V> + Sync,
-    apply: impl for<'a> Fn(&'a mut T, &'a str, &'a UserFieldConfig, V) -> BoxFuture<'a, AuthResult<()>>
-    + Sync,
-    complete: impl Fn(usize, &mut T) -> AuthResult<R> + Sync,
-) -> AuthResult<Vec<R>> {
-    if !fields.values().any(is_async) {
-        return project_fields_then(
-            rows,
-            fields,
-            |row, name, field| match read(row, name, field) {
-                Ok(value) => apply(row, name, field, value),
-                Err(error) => Box::pin(std::future::ready(Err(error))),
-            },
-            |index, row| std::future::ready(complete(index, row)),
-        )
-        .await;
-    }
-    let pending = source_projection_results(rows, fields, &read, &apply, &complete);
-    futures_util::pin_mut!(pending);
-    let mut first_error = None;
-    let mut completed = Vec::new();
-    while let Some(result) = pending.next().await {
-        collect_result(result, &mut first_error, &mut completed);
-    }
-    finish_projection(first_error, completed)
-}
-
 fn source_projection_results<'a, T: Send, V: Send + 'a, R: Send + 'a>(
     rows: &'a mut [T],
     fields: &'a IndexMap<String, UserFieldConfig>,

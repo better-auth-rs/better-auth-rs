@@ -101,6 +101,11 @@ async fn check(database: DatabaseConnection) -> TestResult {
                 assert!(near.starts_with(')'), "{message}");
             }
         }
+        _ => {
+            return Err(
+                AuthError::internal(format!("Unsupported test backend: {backend:?}")).into(),
+            );
+        }
     }
     assert_eq!(take_trace(&trace)?, Vec::<&str>::new());
     assert_eq!(

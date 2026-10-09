@@ -70,32 +70,11 @@ impl InvitationStore for EphemeralStore {
         org: &Value,
         email: &str,
     ) -> AuthResult<Option<Invitation>> {
-        let email = self.organization_query(EntityRole::Invitation, "email", Value::from(email))?;
-        let org = self.organization_query(EntityRole::Invitation, "organizationId", org.clone())?;
-        let schema = self.field_config(EntityRole::Invitation)?;
-        let rows = self.lock()?.invitations.snapshot()?;
-        for row in rows {
-            let invitation: Invitation = super::super::organization_rows::view(&row, &schema)?;
-            if !invitation
-                .organization_id
-                .field_value()
-                .strict_equals(&org.field_value())
-                || !invitation.is_pending()
-            {
-                continue;
-            }
-            if match (invitation.email.as_str(), email.as_str()) {
-                (Some(actual), Some(expected)) => actual.eq_ignore_ascii_case(expected),
-                _ => invitation
-                    .email
-                    .field_value()
-                    .strict_equals(&email.field_value()),
-            } && !invitation.is_expired()?
-            {
-                return self.output_invitation(row).await.map(Some);
-            }
-        }
-        Ok(None)
+        Ok(self
+            .pending_invitation_rows(org, Some(email))
+            .await?
+            .into_iter()
+            .next())
     }
     async fn update_invitation_status(
         &self,
@@ -196,24 +175,7 @@ impl InvitationStore for EphemeralStore {
             .await
     }
     async fn count_pending_organization_invitations_value(&self, org: &Value) -> AuthResult<i64> {
-        let org = self.organization_query(EntityRole::Invitation, "organizationId", org.clone())?;
-        let schema = self.field_config(EntityRole::Invitation)?;
-        self.lock()?
-            .invitations
-            .snapshot()?
-            .iter()
-            .try_fold(0, |count, row| {
-                let invitation: Invitation = super::super::organization_rows::view(row, &schema)?;
-                Ok(count
-                    + i64::from(
-                        invitation
-                            .organization_id
-                            .field_value()
-                            .strict_equals(&org.field_value())
-                            && invitation.is_pending()
-                            && !invitation.is_expired()?,
-                    ))
-            })
+        Ok(self.pending_invitation_rows(org, None).await?.len() as i64)
     }
     async fn list_user_invitations(
         &self,
@@ -282,5 +244,80 @@ impl InvitationStore for EphemeralStore {
             },
         )
         .await
+    }
+}
+
+impl EphemeralStore {
+    pub(in crate::store::ephemeral) fn pending_invitation_selectors(
+        &self,
+        organization_id: &Value,
+        email: Option<&str>,
+    ) -> AuthResult<Vec<(String, Value)>> {
+        let mut selectors = Vec::new();
+        if let Some(email) = email {
+            selectors.push(("email", Value::from(email.to_lowercase())));
+        }
+        selectors.extend([
+            ("organizationId", organization_id.clone()),
+            ("status", "pending".into()),
+        ]);
+        let schema = self.field_config(EntityRole::Invitation)?;
+        selectors
+            .into_iter()
+            .map(|(name, value)| {
+                let value = self
+                    .organization_query(EntityRole::Invitation, name, value)?
+                    .field_value();
+                Ok((schema.record_storage_key(name).to_owned(), value))
+            })
+            .collect()
+    }
+
+    pub(in crate::store::ephemeral) fn matches_pending_invitation(
+        row: &FieldMap,
+        selectors: &[(String, Value)],
+    ) -> bool {
+        selectors.iter().all(|(name, value)| {
+            crate::query::field_matches_equality(row.get(name).unwrap_or(&Value::Undefined), value)
+        })
+    }
+
+    async fn pending_invitation_rows(
+        &self,
+        organization_id: &Value,
+        email: Option<&str>,
+    ) -> AuthResult<Vec<Invitation>> {
+        let selectors = self.pending_invitation_selectors(organization_id, email)?;
+        let rows = self
+            .lock()?
+            .invitations
+            .select_refs(|row| Self::matches_pending_invitation(row, &selectors))?;
+        self.project_pending_invitation_rows(rows).await
+    }
+
+    pub(in crate::store::ephemeral) async fn project_pending_invitation_rows(
+        &self,
+        rows: Vec<super::super::rows::RowRef<FieldMap>>,
+    ) -> AuthResult<Vec<Invitation>> {
+        let rows = crate::query::paginate_memory(
+            rows,
+            Some(self.config.advanced.database.find_many_limit()),
+            None,
+        );
+        let rows = self
+            .output_record_refs::<Invitation>(EntityRole::Invitation, rows)
+            .await?;
+        rows.into_iter()
+            .try_fold(Vec::new(), |mut live, invitation| {
+                if invitation
+                    .expires_at
+                    .clone()
+                    .converted_date()?
+                    .is_after(Utc::now())?
+                {
+                    live.push(invitation);
+                }
+                Ok(live)
+            })
     }
 }

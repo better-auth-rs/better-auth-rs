@@ -1,4 +1,4 @@
-use super::rows::RowRef;
+use super::rows::{RecordSource, RowRef};
 use super::*;
 use crate::store::schema::EntityRole;
 use crate::store::{AccountOwner, JoinValue, ResolvedJoin, UserAccounts};
@@ -122,13 +122,13 @@ impl EphemeralStore {
         };
         let accounts = match accounts {
             JoinValue::One(account) => JoinValue::One(match account {
-                Some(account) => Some(self.output_account_ref(&account).await?),
+                Some(account) => Some(self.output_account(RecordSource::Live(account)).await?),
                 None => None,
             }),
             JoinValue::Many(accounts) => {
                 let mut projected = Vec::with_capacity(accounts.len());
                 for account in accounts {
-                    projected.push(self.output_account_ref(&account).await?);
+                    projected.push(self.output_account(RecordSource::Live(account)).await?);
                 }
                 JoinValue::Many(projected)
             }
@@ -189,22 +189,17 @@ impl EphemeralStore {
         let fields = self.config.account.field_schema();
         let native = self.config.advanced.database.joins == Some(true);
         let (records, users) = if native {
-            let provider = self.memory_field_query(&fields, "providerId", Value::from(provider))?;
-            let account_id =
-                self.memory_field_query(&fields, "accountId", Value::from(account_id))?;
+            let selectors = self.account_identity_selectors(provider, account_id)?;
             let rows = self
                 .raw("account", "findMany", |state| {
                     let mut selected = Vec::new();
                     let mut parent_ids = Vec::new();
-                    for account in state.accounts.snapshot()?.into_iter().filter(|row| {
-                        row.get(fields.record_storage_key("providerId"))
-                            .unwrap_or(&Value::Undefined)
-                            .strict_equals(&provider)
-                            && row
-                                .get(fields.record_storage_key("accountId"))
-                                .unwrap_or(&Value::Undefined)
-                                .strict_equals(&account_id)
-                    }) {
+                    for account in state
+                        .accounts
+                        .snapshot()?
+                        .into_iter()
+                        .filter(|row| Self::account_matches_selectors(row, &selectors))
+                    {
                         let id = account.get("id").cloned().unwrap_or_default();
                         if parent_ids
                             .iter()
@@ -223,7 +218,7 @@ impl EphemeralStore {
                             self.config.advanced.database.find_many_limit(),
                             |user| user.id.field_value(),
                         )?;
-                        selected.push((account, users));
+                        selected.push((RecordSource::Snapshot(Box::new(account)), users));
                         if selected.len() == 2 {
                             break;
                         }
@@ -236,8 +231,8 @@ impl EphemeralStore {
         } else {
             (self.account_records(provider, account_id).await?, None)
         };
-        let owners = fields
-            .project_memory_records_batches_then(&records, |ready| {
+        let owners = self
+            .project_record_sources_batches_then(EntityRole::Account, &fields, records, |ready| {
                 let users = &users;
                 let fields = &fields;
                 async move {

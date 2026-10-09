@@ -32,7 +32,9 @@ fn raw_date_config(joins: bool, events: &Events) -> AuthConfig {
                     input: None,
                     output: Some(UserFieldTransform::new(move |value| {
                         assert_eq!(value, FieldValue::from("expiry-is-not-a-date"));
-                        events.push(json!({"kind":"output","field":"expiresAt","value":value}))?;
+                        events.push(
+                            json!({"kind":"output","field":"expiresAt","value":value.json()?}),
+                        )?;
                         Ok(date(100).into())
                     })),
                 }),
@@ -55,7 +57,7 @@ impl<S: AuthSchema> better_auth_core::store::database_hooks::DatabaseHooks<S> fo
         let fields = FieldMap::from(session.clone());
         assert_eq!(fields, raw_date_fields());
         self.0
-            .push(json!({"kind":"before-delete","session":fields}))?;
+            .push(json!({"kind":"before-delete","session":fields.json()?}))?;
         Ok(better_auth_core::store::database_hooks::DatabaseHookControl::Continue)
     }
 
@@ -66,7 +68,8 @@ impl<S: AuthSchema> better_auth_core::store::database_hooks::DatabaseHooks<S> fo
     ) -> AuthResult<()> {
         let fields = FieldMap::from(session.clone());
         assert_eq!(fields, raw_date_fields());
-        self.0.push(json!({"kind":"after-delete","session":fields}))
+        self.0
+            .push(json!({"kind":"after-delete","session":fields.json()?}))
     }
 }
 
@@ -160,8 +163,8 @@ async fn raw_date_contract<S: AuthSchema>(fixture: Fixture<S>, events: &Events) 
         serde_json::to_value(events.take()?)?,
         json!([
             {"kind":"output","field":"expiresAt","value":"expiry-is-not-a-date"},
-            {"kind":"before-delete","session":expected},
-            {"kind":"after-delete","session":expected},
+            {"kind":"before-delete","session":expected.json()?},
+            {"kind":"after-delete","session":expected.json()?},
         ])
     );
     assert!(fixture.store.get_session("raw-token").await?.is_none());

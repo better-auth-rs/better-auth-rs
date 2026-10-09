@@ -64,10 +64,14 @@ where
 
     fn session_from_output(
         &self,
-        row: &SqlRow,
+        rows: &[SqlRow],
+        index: usize,
         schema: &UserConfig,
         output: FieldMap,
     ) -> AuthResult<SessionView> {
+        let row = rows
+            .get(index)
+            .ok_or_else(|| AuthError::internal("Session projection lost its source row"))?;
         let mut output = super::plugin_rows::ordered_output(schema, output);
         let order = output.keys().cloned().collect();
         // The enumerable active field is independent of the model's private liveness state.
@@ -99,7 +103,7 @@ where
                 backend == DbBackend::Postgres,
                 backend != DbBackend::Sqlite,
                 |index, output| {
-                    std::future::ready(self.session_from_output(&rows[index], schema, output))
+                    std::future::ready(self.session_from_output(rows, index, schema, output))
                 },
             )
             .await
@@ -156,7 +160,7 @@ where
                         let ready = ready
                             .into_iter()
                             .map(|(index, output)| {
-                                self.session_from_output(&rows[index], schema, output)
+                                self.session_from_output(rows, index, schema, output)
                                     .map(|session| (index, session))
                             })
                             .collect::<AuthResult<Vec<_>>>()?;
@@ -219,7 +223,7 @@ where
                             &self.model_fields,
                         )?;
                         let value = output.get(&source).cloned().unwrap_or_default();
-                        let session = self.session_from_output(&rows[index], schema, output)?;
+                        let session = self.session_from_output(rows, index, schema, output)?;
                         let users = self
                             .selected_join_users(
                                 relation,

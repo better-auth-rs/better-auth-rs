@@ -208,7 +208,7 @@ async fn mapped_lifecycle<S: AuthSchema>(
             expected
         );
     }
-    transaction(store.as_ref(), |tx| {
+    transaction(store.as_ref(), move |tx| {
         Box::pin(async move {
             tx.delete_verification_by_identifier(updated_identifier)
                 .await

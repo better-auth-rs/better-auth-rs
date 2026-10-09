@@ -90,6 +90,6 @@ async fn memory_serial_uses_current_length_and_retains_duplicate_ids() {
     assert_eq!(rows[2].account_id, "fourth");
     store.delete_account("3").await.unwrap();
     let rows = store.get_user_accounts("1").await.unwrap();
-    assert_eq!(rows.len(), 2);
-    assert_eq!(rows[1].account_id, "fourth");
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].account_id, "first");
 }

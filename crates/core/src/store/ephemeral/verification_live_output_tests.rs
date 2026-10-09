@@ -201,7 +201,15 @@ async fn verification_output_reads_live_fields_after_awaited_writer_updates() ->
                 expected("subject", "after", 1)
             );
             assert_eq!(
-                serde_json::to_value(writer.lock()?.verifications.snapshot()?)?,
+                serde_json::to_value(
+                    writer
+                        .lock()?
+                        .verifications
+                        .snapshot()?
+                        .iter()
+                        .map(FieldMap::json)
+                        .collect::<AuthResult<Vec<_>>>()?
+                )?,
                 json!([expected("subject", "after", 1)])
             );
         }
@@ -248,7 +256,15 @@ async fn verification_consumed_output_retains_the_detached_record_when_its_id_is
         expected("replacement", "other", 0)
     );
     assert_eq!(
-        serde_json::to_value(writer.lock()?.verifications.snapshot()?)?,
+        serde_json::to_value(
+            writer
+                .lock()?
+                .verifications
+                .snapshot()?
+                .iter()
+                .map(FieldMap::json)
+                .collect::<AuthResult<Vec<_>>>()?
+        )?,
         json!([expected("replacement", "other", 0)])
     );
     Ok(())

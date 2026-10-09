@@ -9,7 +9,8 @@ use better_auth::plugins::organization::{OrganizationConfig, OrganizationPlugin}
 use better_auth::server_api::EndpointInput;
 use better_auth::{AuthConfig, AuthError, AuthResult, AuthSchema, BetterAuth};
 use better_auth_core::store::{
-    EphemeralStore, MemberStore, MemoryCacheAdapter, OrganizationStore, secondary::SecondaryStore,
+    EphemeralStore, InvitationStore, MemberStore, MemoryCacheAdapter, OrganizationStore,
+    secondary::SecondaryStore,
 };
 use better_auth_core::{
     AuthStore, AuthUser, CreateMember, CreateOrganization, CreateSession, CreateUser, FieldValue,
@@ -342,6 +343,319 @@ async fn memory_organization_owners_compare_object_identity_in_both_join_modes()
                     .await?
                     .is_empty()
             );
+        }
+    }
+    Ok(())
+}
+
+async fn check_pending_invitation_output<S: AuthSchema>(
+    inner: Arc<dyn AuthStore<S>>,
+    config: AuthConfig,
+    secondary: bool,
+) -> AuthResult<()> {
+    use better_auth_core::user_fields::UserFieldType;
+    use better_auth_core::{CreateInvitation, FieldDate, FieldMap, InvitationStatus, SchemaValue};
+
+    let past = 946_684_800_000.0;
+    let future = 4_102_444_800_000.0;
+    let later = future + 86_400_000.0;
+    let _ = inner
+        .create_user(CreateUser {
+            id: Some("inviter".into()),
+            email: Some("inviter@pending.test".into()),
+            name: Some("Inviter".into()).into(),
+            ..Default::default()
+        })
+        .await?;
+    for id in ["organization", "outside"] {
+        let _ = inner
+            .create_organization(CreateOrganization {
+                id: Some(id.into()),
+                ..CreateOrganization::new(id, id)
+            })
+            .await?;
+    }
+    let mut stored = Vec::new();
+    for (id, organization, email, expiry, status) in [
+        (
+            "first",
+            "organization",
+            "recipient@pending.test",
+            past,
+            InvitationStatus::Pending,
+        ),
+        (
+            "second",
+            "organization",
+            "recipient@pending.test",
+            future,
+            InvitationStatus::Pending,
+        ),
+        (
+            "third",
+            "organization",
+            "other@pending.test",
+            later,
+            InvitationStatus::Pending,
+        ),
+        (
+            "canceled",
+            "organization",
+            "recipient@pending.test",
+            later,
+            InvitationStatus::Canceled,
+        ),
+        (
+            "outside",
+            "outside",
+            "UPPER@pending.test",
+            later,
+            InvitationStatus::Pending,
+        ),
+    ] {
+        let mut input = CreateInvitation::new(
+            organization,
+            email,
+            "member",
+            "inviter",
+            FieldDate::from_milliseconds(expiry),
+        );
+        input.id = Some(id.into());
+        input.created_at = Some(FieldDate::from_milliseconds(past));
+        input.status = Some(status);
+        stored.push(inner.create_invitation(input).await?);
+    }
+    let store: Arc<dyn AuthStore<S>> = if secondary {
+        Arc::new(SecondaryStore::new(
+            inner.clone(),
+            Arc::new(MemoryCacheAdapter::new()),
+            Arc::new(config.clone()),
+            Default::default(),
+        )?)
+    } else {
+        inner.clone()
+    };
+    let limit = config.advanced.database.default_find_many_limit;
+    let events = Events::default();
+    for (label, replacement, active, failure) in [
+        (
+            "date",
+            FieldValue::Date(FieldDate::from_milliseconds(later)),
+            true,
+            false,
+        ),
+        (
+            "text",
+            FieldValue::from("2100-01-02T00:00:00.000Z"),
+            true,
+            false,
+        ),
+        ("number", FieldValue::Number(later), true, false),
+        ("null", FieldValue::Null, false, false),
+        ("undefined", FieldValue::Undefined, false, false),
+        ("invalid", FieldValue::from("invalid-expiry"), false, false),
+        (
+            "invalid-date",
+            FieldValue::Date(FieldDate::invalid()),
+            false,
+            false,
+        ),
+        (
+            "object",
+            FieldValue::from(FieldMap::from([("toString".into(), FieldValue::Null)])),
+            false,
+            true,
+        ),
+    ] {
+        let seen = events.clone();
+        let output = replacement.clone();
+        let mut fields = OrganizationFields::default();
+        let _ = fields.invitation.fields_mut().insert(
+            "expiresAt".into(),
+            UserFieldConfig {
+                field_type: UserFieldType::Date,
+                transform: Some(FieldTransforms {
+                    output: Some(UserFieldTransform::new(move |value| {
+                        let milliseconds =
+                            better_auth_core::query::field_date(&value)?.milliseconds();
+                        let name = if milliseconds == past {
+                            "first"
+                        } else if milliseconds == future {
+                            "second"
+                        } else {
+                            "third"
+                        };
+                        seen.lock()
+                            .map_err(|error| AuthError::internal(error.to_string()))?
+                            .push(name.into());
+                        Ok(if milliseconds == past {
+                            output.clone()
+                        } else if milliseconds == future {
+                            "invalid-expiry".into()
+                        } else {
+                            value
+                        })
+                    })),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+        );
+        let _ = fields.invitation.fields_mut().insert(
+            "status".into(),
+            UserFieldConfig {
+                transform: Some(FieldTransforms {
+                    output: Some(UserFieldTransform::new(|_| Ok("canceled".into()))),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+        );
+        inner.configure_organization_fields(fields)?;
+        let result = store
+            .get_pending_invitation("organization", "RECIPIENT@pending.test")
+            .await;
+        let expected_events = if limit == Some(0.0) {
+            vec![]
+        } else if limit == Some(1.0) {
+            vec!["first"]
+        } else {
+            vec!["first", "second"]
+        };
+        assert_eq!(
+            take(&events)?,
+            expected_events,
+            "{label}: getter output page"
+        );
+        if failure && limit != Some(0.0) {
+            assert!(
+                matches!(result.expect_err("Date conversion must reject the object"), AuthError::TypeError(message) if message == "No default value")
+            );
+        } else if active && limit != Some(0.0) {
+            let mut expected = stored[0].clone();
+            expected.expires_at = SchemaValue::from_field(replacement);
+            expected.status = InvitationStatus::Canceled.into();
+            assert_eq!(
+                result?,
+                Some(expected),
+                "{label}: complete projected invitation"
+            );
+        } else {
+            assert_eq!(
+                result?, None,
+                "{label}: invalid or expired values must not remain pending"
+            );
+        }
+        let result = store
+            .count_pending_organization_invitations("organization")
+            .await;
+        let expected_events = if limit == Some(0.0) {
+            vec![]
+        } else if limit == Some(1.0) {
+            vec!["first"]
+        } else {
+            vec!["first", "second", "third"]
+        };
+        assert_eq!(
+            take(&events)?,
+            expected_events,
+            "{label}: quota output page"
+        );
+        if failure && limit != Some(0.0) {
+            assert!(
+                matches!(result.expect_err("Quota Date conversion must reject the object"), AuthError::TypeError(message) if message == "No default value")
+            );
+        } else {
+            let count = if limit == Some(0.0) {
+                0
+            } else {
+                i64::from(active) + i64::from(limit != Some(1.0))
+            };
+            assert_eq!(
+                result?, count,
+                "{label}: quota uses projected expiration after the default page"
+            );
+        }
+        assert_eq!(
+            store
+                .get_pending_invitation("outside", "UPPER@pending.test")
+                .await?,
+            None
+        );
+        assert!(take(&events)?.is_empty());
+    }
+    let mut fields = OrganizationFields::default();
+    let _ = fields.invitation.fields_mut().insert(
+        "expiresAt".into(),
+        UserFieldConfig {
+            field_type: UserFieldType::Date,
+            transform: Some(FieldTransforms {
+                output: Some(UserFieldTransform::new(move |value| {
+                    if better_auth_core::query::field_date(&value)?.milliseconds() == future {
+                        Err(AuthError::bad_request("later-invitation-output-failed"))
+                    } else {
+                        Ok(FieldValue::Date(FieldDate::from_milliseconds(later)))
+                    }
+                })),
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+    );
+    inner.configure_organization_fields(fields)?;
+    for result in [
+        store
+            .get_pending_invitation("organization", "recipient@pending.test")
+            .await
+            .map(|_| ()),
+        store
+            .count_pending_organization_invitations("organization")
+            .await
+            .map(|_| ()),
+    ] {
+        if limit.is_none() {
+            assert!(
+                matches!(result.expect_err("A later output failure must precede selecting the first invitation"), AuthError::BadRequest(message) if message == "later-invitation-output-failed")
+            );
+        } else {
+            result?;
+        }
+    }
+    inner.configure_organization_fields(OrganizationFields::default())?;
+    for expected in stored {
+        assert_eq!(
+            inner.get_invitation_by_id(expected.id.typed()?).await?,
+            Some(expected)
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn pending_invitations_project_the_complete_page_before_expiry_and_quota() -> AuthResult<()> {
+    for secondary in [false, true] {
+        for limit in [None, Some(0.0), Some(1.0)] {
+            let mut config =
+                AuthConfig::new("pending-invitation-query-secret-at-least-32-characters");
+            config.advanced.database.default_find_many_limit = limit;
+            check_pending_invitation_output(
+                Arc::new(EphemeralStore::new(Arc::new(config.clone()))),
+                config.clone(),
+                secondary,
+            )
+            .await?;
+            let database = Database::connect("sqlite::memory:")
+                .await
+                .map_err(|error| AuthError::internal(error.to_string()))?;
+            migrator::run_migrations(&database)
+                .await
+                .map_err(|error| AuthError::internal(error.to_string()))?;
+            check_pending_invitation_output(
+                Arc::new(SeaOrmStore::<BundledSchema>::new(config.clone(), database)),
+                config,
+                secondary,
+            )
+            .await?;
         }
     }
     Ok(())

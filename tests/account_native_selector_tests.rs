@@ -308,3 +308,124 @@ async fn native_user_batches_keep_adapter_matching_limits_and_output_failures() 
     }
     Ok(())
 }
+
+#[tokio::test]
+async fn account_owner_number_selectors_match_ordinary_reads_with_native_joins() -> AuthResult<()> {
+    let store: Arc<dyn AuthStore<better_auth_core::store::StatelessSchema>> =
+        Arc::new(EphemeralStore::default());
+    let date = better_auth_core::FieldDate::from_milliseconds(1_893_456_000_000.0);
+    let _ = store
+        .create_user(CreateUser {
+            id: Some("selector-owner".into()),
+            name: Some("Selector owner".into()).into(),
+            email: Some("selector-owner@example.test".into()),
+            email_verified: Some(true),
+            image: None::<String>.into(),
+            created_at: Some(date.clone()),
+            updated_at: Some(date.clone()),
+            ..Default::default()
+        })
+        .await?;
+    for (id, provider) in [
+        ("numeric-provider", FieldValue::from(1)),
+        ("string-decoy", FieldValue::from("01")),
+    ] {
+        let _ = store
+            .create_account(CreateAccount {
+                id: id.into(),
+                account_id: "shared-subject".into(),
+                provider_id: better_auth_core::SchemaValue::from_field(provider),
+                user_id: "selector-owner".into(),
+                access_token: None::<String>.into(),
+                refresh_token: None::<String>.into(),
+                id_token: None::<String>.into(),
+                access_token_expires_at: None::<better_auth_core::FieldDate>.into(),
+                refresh_token_expires_at: None::<better_auth_core::FieldDate>.into(),
+                scope: None::<String>.into(),
+                password: None::<String>.into(),
+                created_at: date.clone().into(),
+                updated_at: date.clone().into(),
+                ..Default::default()
+            })
+            .await?;
+    }
+    let before = store
+        .get_user_accounts("selector-owner")
+        .await?
+        .iter()
+        .map(AccountView::internal_fields)
+        .collect::<AuthResult<Vec<_>>>()?;
+    let before_user = store.get_user_by_id("selector-owner").await?;
+    assert_eq!(before.len(), 2);
+    let expected_account = serde_json::json!({
+        "id": "numeric-provider", "accountId": "shared-subject", "providerId": 1,
+        "userId": "selector-owner", "accessToken": null, "refreshToken": null,
+        "idToken": null, "accessTokenExpiresAt": null, "refreshTokenExpiresAt": null,
+        "scope": null, "password": null,
+        "createdAt": "2030-01-01T00:00:00.000Z", "updatedAt": "2030-01-01T00:00:00.000Z",
+    });
+    for joins in [false, true] {
+        let events = Events::default();
+        let input_events = events.clone();
+        let mut config = AuthConfig::default();
+        config.advanced.database.joins = Some(joins);
+        let _ = config.account.additional_fields.insert(
+            "providerId".into(),
+            UserFieldConfig {
+                field_type: UserFieldType::Number,
+                transform: Some(FieldTransforms {
+                    input: Some(UserFieldTransform::new(move |value| {
+                        input_events.lock().unwrap().push("provider-input".into());
+                        Ok(value)
+                    })),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+        );
+        let reader = store.with_runtime(Arc::new(config), vec![], Default::default())?;
+        let account = reader
+            .get_account("01", "shared-subject")
+            .await?
+            .ok_or_else(|| {
+                AuthError::internal("Number selector must match the numeric provider")
+            })?;
+        let owner = reader
+            .get_account_owner("01", "shared-subject")
+            .await?
+            .ok_or_else(|| AuthError::internal("Number selector must retain its account owner"))?;
+        let better_auth_core::store::JoinValue::One(Some(user)) = owner.user else {
+            return Err(AuthError::internal("Number selector must join one owner"));
+        };
+        assert_eq!(
+            serde_json::Value::Object(account.internal_fields()?.json()?),
+            expected_account
+        );
+        assert_eq!(
+            serde_json::json!({
+                "kind": "owned", "account": owner.account.internal_fields()?.json()?, "user": user,
+            }),
+            serde_json::json!({
+                "kind": "owned", "account": expected_account,
+                "user": {
+                    "id": "selector-owner", "name": "Selector owner",
+                    "email": "selector-owner@example.test", "emailVerified": true, "image": null,
+                    "createdAt": "2030-01-01T00:00:00.000Z", "updatedAt": "2030-01-01T00:00:00.000Z",
+                },
+            }),
+            "joins={joins}"
+        );
+        assert!(events.lock().unwrap().is_empty());
+        assert_eq!(
+            store
+                .get_user_accounts("selector-owner")
+                .await?
+                .iter()
+                .map(AccountView::internal_fields)
+                .collect::<AuthResult<Vec<_>>>()?,
+            before
+        );
+        assert_eq!(store.get_user_by_id("selector-owner").await?, before_user);
+    }
+    Ok(())
+}
