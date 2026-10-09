@@ -381,7 +381,8 @@ pub struct ListMembersResponse {
 
 #[derive(Debug, Serialize)]
 pub struct GetActiveMemberRoleResponse {
-    pub role: String,
+    #[serde(skip_serializing_if = "SchemaValue::is_json_omitted")]
+    pub role: SchemaValue<String>,
 }
 
 #[derive(Debug, Serialize)]

@@ -24,6 +24,7 @@ mod overrides;
 mod signing;
 mod verification;
 pub use callbacks::{JwtAdapterFuture, JwtCallbacks};
+pub(crate) use jose::verify_hs256_raw;
 pub use native::JwtApi;
 pub use options::*;
 pub use overrides::{JwtCallOverrides, JwtKeyOptions, JwtTokenOptions};

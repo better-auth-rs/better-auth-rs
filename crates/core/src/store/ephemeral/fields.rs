@@ -240,34 +240,7 @@ impl EphemeralStore {
         &self,
         role: EntityRole,
     ) -> AuthResult<crate::user_fields::UserConfig> {
-        let fields = self.organization_fields()?;
-        let mut fields = match role {
-            EntityRole::Organization => fields.organization,
-            EntityRole::Member => fields.member,
-            EntityRole::Invitation => fields.invitation,
-            EntityRole::Team => fields.team,
-            EntityRole::OrganizationRole => fields.organization_role,
-            _ => return Err(AuthError::config("Expected an organization entity role")),
-        };
-        let entity = better_auth_schema_registry::plugin_schemas()
-            .iter()
-            .flat_map(|plugin| plugin.extra_entities)
-            .find(|entity| entity.role == Some(role))
-            .ok_or_else(|| AuthError::config("Missing organization schema"))?;
-        for (name, model) in better_auth_schema_registry::entity_foreign_keys(entity.table_name) {
-            let _ = fields
-                .fields_mut()
-                .entry(public_name(name))
-                .or_insert_with(|| crate::user_fields::UserFieldConfig {
-                    references: Some(crate::user_fields::UserFieldReference {
-                        model: (*model).into(),
-                        field: "id".into(),
-                        ..Default::default()
-                    }),
-                    ..Default::default()
-                });
-        }
-        Ok(fields)
+        self.organization_fields()?.schema_for(role)
     }
 
     fn bind_record_id(&self, fields: &mut FieldMap) -> AuthResult<()> {

@@ -291,11 +291,17 @@ impl OrganizationStore for EphemeralStore {
         Ok(())
     }
     async fn list_user_organizations(&self, user_id: &str) -> AuthResult<Vec<Organization>> {
+        self.list_user_organizations_value(&user_id.into()).await
+    }
+
+    async fn list_user_organizations_value(
+        &self,
+        user_id: &Value,
+    ) -> AuthResult<Vec<Organization>> {
         if self.config.advanced.database.joins == Some(true) {
             return self.joined_user_organizations(user_id).await;
         }
-        let user_id =
-            self.organization_query(EntityRole::Member, "userId", Value::from(user_id))?;
+        let user_id = self.organization_query(EntityRole::Member, "userId", user_id.clone())?;
         let selected = {
             let state = self.lock()?;
             state.members.select_refs(|row| {

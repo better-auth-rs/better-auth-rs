@@ -1,6 +1,6 @@
 use super::{
-    optional_session, request_only_session, request_present, require_session,
-    resolve_organization_id,
+    optional_session, request_only_session, request_present, require_native_session,
+    require_session, resolve_organization_id,
 };
 use crate::plugins::organization::rbac::check_permission;
 use crate::plugins::organization::types::{
@@ -14,6 +14,7 @@ use crate::plugins::organization::{OrganizationConfig, hooks::*};
 use better_auth_core::entity::{AuthMember, AuthOrganization, AuthSession, AuthUser};
 use better_auth_core::error::{AuthError, AuthResult};
 use better_auth_core::plugin::AuthContext;
+use better_auth_core::session::NativeSessionData;
 use better_auth_core::types::{AuthRequest, AuthResponse, CreateOrganization, UpdateOrganization};
 use better_auth_core::wire::InvitationView;
 
@@ -374,12 +375,12 @@ pub(crate) async fn delete_organization_core(
 }
 
 pub(crate) async fn list_organizations_core(
-    user: &impl AuthUser,
+    session: &NativeSessionData,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<Vec<OrganizationResponse>> {
     let organizations = ctx
         .database
-        .list_user_organizations(user.id().typed()?)
+        .list_user_organizations_value(session.user_property("id")?)
         .await?;
     Ok(organizations
         .iter()
@@ -389,14 +390,13 @@ pub(crate) async fn list_organizations_core(
 
 pub(crate) async fn get_full_organization_core(
     query: &GetFullOrganizationQuery,
-    user: &impl AuthUser,
-    session: &impl AuthSession,
+    session: &NativeSessionData,
     config: &OrganizationConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<Option<FullOrganizationResponse<OrganizationResponse, InvitationView>>> {
     use better_auth_core::store::{OrganizationDetailsQuery, OrganizationKey};
 
-    let active_id = session.active_organization_id().field_value();
+    let active_id = session.session.active_organization_id.field_value();
     let selector = if let Some(slug) = query
         .organization_slug
         .as_deref()
@@ -428,13 +428,16 @@ pub(crate) async fn get_full_organization_core(
     let organization = details.organization;
     if ctx
         .database
-        .get_member_value(&organization.id.field_value(), &user.id().field_value())
+        .get_member_value(&organization.id.field_value(), session.user_property("id")?)
         .await?
         .is_none()
     {
         let _ = ctx
             .database
-            .update_session_active_organization_by_token_value(&session.token().field_value(), None)
+            .update_session_active_organization_by_token_value(
+                &session.session.token.field_value(),
+                None,
+            )
             .await?;
         return Err(AuthError::forbidden(
             "User is not a member of the organization",
@@ -714,8 +717,8 @@ pub async fn handle_list_organizations(
     req: &AuthRequest,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<AuthResponse> {
-    let (user, _session) = require_session(req, ctx).await?;
-    let organizations = list_organizations_core(&user, ctx).await?;
+    let session = require_native_session(req, ctx).await?;
+    let organizations = list_organizations_core(&session, ctx).await?;
     Ok(AuthResponse::json(200, &organizations)?)
 }
 
@@ -724,7 +727,7 @@ pub async fn handle_get_organization(
     req: &AuthRequest,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<AuthResponse> {
-    let (user, session) = require_session(req, ctx).await?;
+    let session = require_native_session(req, ctx).await?;
     let nonempty = |key: &str| {
         req.query_string(key)
             .map(|value| value.filter(|value| !value.is_empty()))
@@ -734,7 +737,7 @@ pub async fn handle_get_organization(
     } else {
         let id = nonempty("organizationId")?
             .map(better_auth_core::FieldValue::from)
-            .unwrap_or_else(|| session.active_organization_id().field_value());
+            .unwrap_or_else(|| session.session.active_organization_id.field_value());
         if !id.is_truthy() {
             return Ok(AuthResponse::json(200, &serde_json::Value::Null)?);
         }
@@ -744,13 +747,19 @@ pub async fn handle_get_organization(
 
     if ctx
         .database
-        .get_member_value(&organization.id().field_value(), &user.id().field_value())
+        .get_member_value(
+            &organization.id().field_value(),
+            session.user_property("id")?,
+        )
         .await?
         .is_none()
     {
         _ = ctx
             .database
-            .update_session_active_organization_by_token_value(&session.token().field_value(), None)
+            .update_session_active_organization_by_token_value(
+                &session.session.token.field_value(),
+                None,
+            )
             .await?;
         return Err(AuthError::forbidden(
             "User is not a member of the organization",
@@ -768,9 +777,9 @@ pub async fn handle_get_full_organization(
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
-    let (user, session) = require_session(req, ctx).await?;
+    let session = require_native_session(req, ctx).await?;
     let query = crate::plugins::query_input::parse::<GetFullOrganizationQuery>(&req.query)?;
-    let response = get_full_organization_core(&query, &user, &session, config, ctx).await?;
+    let response = get_full_organization_core(&query, &session, config, ctx).await?;
     Ok(AuthResponse::json(200, &response)?)
 }
 
@@ -1015,8 +1024,7 @@ mod tests {
                 organization_slug: None,
                 members_limit: Some(1.0),
             },
-            &user,
-            &session,
+            &(user, session).into(),
             &config,
             &ctx,
         )

@@ -190,7 +190,13 @@ pub(super) fn verify_local(
         _ => return None,
     };
     let protected = jose::header(token)?;
-    let payload = jose::verify(token, &protected, verifier.as_ref())?;
+    let payload = jose::verify(
+        token,
+        &protected,
+        verifier.algorithm().name(),
+        |input, signature| verifier.verify(input, signature).is_ok(),
+    )
+    .ok()?;
     let claims: Map<String, Value> = serde_json::from_slice(&payload).ok()?;
     if issuer.is_some_and(|issuer| claims.get("iss").and_then(Value::as_str) != Some(issuer)) {
         return None;

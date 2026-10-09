@@ -106,10 +106,25 @@ impl From<String> for Utf16String {
 
 impl Serialize for Utf16String {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let mut json = String::from("\"");
-        for unit in &self.0 {
-            json.push_str(&format!("\\u{unit:04x}"));
+        fn append_segment(json: &mut String, segment: &str) -> serde_json::Result<()> {
+            let escaped = serde_json::to_string(segment)?;
+            json.push_str(&escaped[1..escaped.len() - 1]);
+            Ok(())
         }
+
+        let mut json = String::from("\"");
+        let mut segment = String::new();
+        for scalar in char::decode_utf16(self.0.iter().copied()) {
+            match scalar {
+                Ok(scalar) => segment.push(scalar),
+                Err(error) => {
+                    append_segment(&mut json, &segment).map_err(serde::ser::Error::custom)?;
+                    segment.clear();
+                    json.push_str(&format!("\\u{:04x}", error.unpaired_surrogate()));
+                }
+            }
+        }
+        append_segment(&mut json, &segment).map_err(serde::ser::Error::custom)?;
         json.push('"');
         serde_json::value::RawValue::from_string(json)
             .map_err(serde::ser::Error::custom)?
@@ -143,6 +158,72 @@ impl<'de> Deserialize<'de> for Utf16String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn json_bytes_escape_only_controls_and_unpaired_surrogates() {
+        for (value, expected) in [
+            (Utf16String::default(), r#""""#),
+            (Utf16String::from_units(vec![0xd83d, 0xde00]), r#""😀""#),
+            (
+                Utf16String::from("ASCII / é 中 😀 🧑‍💻"),
+                r#""ASCII / é 中 😀 🧑‍💻""#,
+            ),
+            (
+                Utf16String::from("\u{2028}\u{2029}\u{007f}"),
+                "\"\u{2028}\u{2029}\u{007f}\"",
+            ),
+            (
+                Utf16String::from("\0\u{0001}\u{0008}\t\n\u{000b}\u{000c}\r\u{001f}\"\\/"),
+                r#""\u0000\u0001\b\t\n\u000b\f\r\u001f\"\\/""#,
+            ),
+            (
+                Utf16String::from_units(vec![
+                    0xd800, 65, 0xd83d, 0xde00, 0xdc00, 34, 92, 10, 0xdfff,
+                ]),
+                r#""\ud800A😀\udc00\"\\\n\udfff""#,
+            ),
+            (
+                Utf16String::from_units(vec![0xdbff, 0xdbff, 0xdfff, 0xdc00]),
+                "\"\\udbff\u{10ffff}\\udc00\"",
+            ),
+        ] {
+            assert_eq!(serde_json::to_vec(&value).unwrap(), expected.as_bytes());
+            assert_eq!(
+                serde_json::from_str::<Utf16String>(expected).unwrap(),
+                value
+            );
+            let field = crate::FieldValue::Utf16String(value);
+            assert_eq!(field.stringify().unwrap().as_deref(), Some(expected));
+        }
+    }
+
+    #[test]
+    fn native_claims_keep_the_same_json_bytes_for_utf8_and_utf16_strings() {
+        let make_claims = |email, update_to| {
+            crate::FieldValue::from(crate::FieldMap::from([
+                ("email".into(), email),
+                ("updateTo".into(), update_to),
+            ]))
+        };
+        let expected = "{\"email\":\"😀user@example.test\",\"updateTo\":\"中\\ud800@next.test\"}";
+        let mut update_to = "中".encode_utf16().collect::<Vec<_>>();
+        update_to.push(0xd800);
+        update_to.extend("@next.test".encode_utf16());
+        let update_to = crate::FieldValue::Utf16String(Utf16String::from_units(update_to));
+        for email in [
+            crate::FieldValue::String("😀user@example.test".into()),
+            crate::FieldValue::Utf16String("😀user@example.test".into()),
+        ] {
+            assert_eq!(
+                make_claims(email, update_to.clone())
+                    .stringify()
+                    .unwrap()
+                    .unwrap()
+                    .as_bytes(),
+                expected.as_bytes()
+            );
+        }
+    }
 
     #[test]
     fn substring_retains_surrogates_through_json_and_wtf8() {

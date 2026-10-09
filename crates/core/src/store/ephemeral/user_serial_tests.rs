@@ -389,3 +389,77 @@ async fn native_user_update_preserves_undefined_null_and_string_selectors() -> A
     }
     Ok(())
 }
+
+#[tokio::test]
+async fn serial_user_batches_convert_the_whole_array_once() -> AuthResult<()> {
+    let store = serial_store(false);
+    for name in ["zero", "one", "nan"] {
+        let _ = store.create_user(user(name)).await?;
+    }
+    store.lock()?.users.update_each(|user| {
+        user.id =
+            crate::SchemaValue::from_field(Value::Number(match user.name.typed()?.as_deref() {
+                Some("zero") => 0.0,
+                Some("one") => 1.0,
+                _ => f64::NAN,
+            }));
+        Ok(())
+    })?;
+    for (ids, expected) in [
+        (
+            vec![Value::from("01"), true.into(), vec![1.into()].into()],
+            "one",
+        ),
+        (
+            vec![Value::Null, false.into(), Vec::<Value>::new().into()],
+            "zero",
+        ),
+        (
+            vec![Value::Undefined, vec![1.into(), 2.into()].into()],
+            "nan",
+        ),
+    ] {
+        let rows = store.list_users_by_id_values(&ids, 10.0).await?;
+        assert_eq!(rows.len(), 1);
+        assert_eq!(
+            required(rows.first())?.name.typed()?.as_deref(),
+            Some(expected)
+        );
+    }
+    let rows = store
+        .list_users_by_id_values(&[vec![1.into()].into()], 1.0)
+        .await?;
+    assert_eq!(rows.len(), 1);
+    assert_eq!(required(rows.first())?.id, "1");
+    assert!(store.list_users_by_id_values(&[], 10.0).await?.is_empty());
+    Ok(())
+}
+
+#[tokio::test]
+async fn native_user_batches_distinguish_stored_primitive_ids() -> AuthResult<()> {
+    let store = EphemeralStore::default();
+    let cases = [
+        ("number", Value::Number(1.0)),
+        ("boolean", Value::Bool(true)),
+        ("null", Value::Null),
+        ("undefined", Value::Undefined),
+        ("string", Value::from("1")),
+    ];
+    for (name, _) in &cases {
+        let _ = store.create_user(user(name)).await?;
+    }
+    store.lock()?.users.update_each(|user| {
+        let name = user.name.typed()?.as_deref();
+        let (_, id) = required(cases.iter().find(|(candidate, _)| Some(*candidate) == name))?;
+        user.id = crate::SchemaValue::from_field(id.clone());
+        Ok(())
+    })?;
+    for (name, id) in cases {
+        let rows = store
+            .list_users_by_id_values(&[id.clone(), id], 10.0)
+            .await?;
+        assert_eq!(rows.len(), 1);
+        assert_eq!(required(rows.first())?.name.typed()?.as_deref(), Some(name));
+    }
+    Ok(())
+}

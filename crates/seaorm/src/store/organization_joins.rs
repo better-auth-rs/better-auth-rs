@@ -309,15 +309,16 @@ where
 impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPluginSchema> SeaOrmStore<S, O, P> {
     pub(super) async fn joined_user_organizations(
         &self,
-        user_id: &str,
+        user_id: &better_auth_core::FieldValue,
     ) -> AuthResult<Vec<better_auth_core::Organization>> {
         let fields = self.organization_fields()?;
         let backend = self.connection().get_database_backend();
         let parent = Entity::<O::Member>::find()
-            .filter(
-                O::Member::column("user_id")?
-                    .eq_id(user_id, self.config().advanced.database.generate_id())?,
-            )
+            .filter(self.organization_field_equals::<O::Member>(
+                better_auth_schema_registry::EntityRole::Member,
+                "userId",
+                user_id,
+            )?)
             .limit(super::pagination::default_limit(
                 self.config(),
                 self.connection().get_database_backend(),

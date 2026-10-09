@@ -1,32 +1,51 @@
 use chrono::{DateTime, Duration, Utc};
-use jsonwebtoken::{
-    Algorithm, DecodingKey, EncodingKey, Header, Validation, decode, encode, errors::ErrorKind,
-};
-use serde::{Deserialize, Serialize};
+use jsonwebtoken::{EncodingKey, Header, encode, errors::ErrorKind};
+use serde::{Deserialize, Serialize, de::Error as _};
 
-use better_auth_core::AuthResult;
+use better_auth_core::{AuthResult, FieldMap, FieldValue, Utf16String};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 pub(crate) struct EmailVerificationClaims {
     pub(crate) email: String,
-    #[serde(rename = "updateTo", skip_serializing_if = "Option::is_none")]
-    pub(crate) update_to: Option<String>,
-    #[serde(rename = "requestType", skip_serializing_if = "Option::is_none")]
-    pub(crate) request_type: Option<String>,
-    pub(crate) iat: i64,
-    #[serde(serialize_with = "numeric_date")]
-    pub(crate) exp: f64,
+    #[serde(
+        rename = "updateTo",
+        serialize_with = "better_auth_core::field_value::serde::optional_value::serialize",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub(crate) update_to: Option<FieldValue>,
+    #[serde(
+        rename = "requestType",
+        serialize_with = "better_auth_core::field_value::serde::optional_value::serialize",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub(crate) request_type: Option<FieldValue>,
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "better_auth_core::wire::serialize_optional_number"
+    )]
+    pub(crate) iat: Option<f64>,
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "better_auth_core::wire::serialize_optional_number"
+    )]
+    pub(crate) exp: Option<f64>,
 }
 
+#[serde_with::serde_as]
 #[derive(Deserialize)]
-struct VerificationTokenDates {
-    #[serde(rename = "iat")]
-    _issued_at: i64,
-    exp: f64,
-}
+#[serde(transparent)]
+struct VerificationPayload(
+    #[serde_as(as = "std::collections::HashMap<serde_with::Bytes, _>")]
+    std::collections::HashMap<Vec<u8>, Box<serde_json::value::RawValue>>,
+);
 
-fn numeric_date<S: serde::Serializer>(value: &f64, serializer: S) -> Result<S::Ok, S::Error> {
-    better_auth_core::wire::serialize_optional_number(&Some(*value), serializer)
+impl VerificationPayload {
+    fn field(&self, name: &str) -> AuthResult<Option<FieldValue>> {
+        self.0
+            .get(name.as_bytes())
+            .map(|value| FieldValue::parse_json(value.get()))
+            .transpose()
+    }
 }
 
 pub(crate) fn create_email_verification_token(
@@ -54,20 +73,63 @@ fn create_email_verification_token_at(
     request_type: Option<&str>,
     now: DateTime<Utc>,
 ) -> AuthResult<String> {
-    let claims = EmailVerificationClaims {
-        email: email.to_lowercase(),
-        update_to: update_to.map(str::to_lowercase),
-        request_type: request_type.map(str::to_string),
-        iat: now.timestamp(),
-        exp: now.timestamp() as f64 + expires_in.as_seconds_f64(),
-    };
+    create_native_token_at(
+        secret,
+        &email.into(),
+        update_to.map(Utf16String::from).as_ref(),
+        expires_in,
+        request_type,
+        now,
+    )
+}
 
+pub(super) fn create_native_email_verification_token(
+    secret: &str,
+    email: &Utf16String,
+    update_to: Option<&Utf16String>,
+    expires_in: Duration,
+    request_type: Option<&str>,
+) -> AuthResult<String> {
+    create_native_token_at(
+        secret,
+        email,
+        update_to,
+        expires_in,
+        request_type,
+        Utc::now(),
+    )
+}
+
+fn create_native_token_at(
+    secret: &str,
+    email: &Utf16String,
+    update_to: Option<&Utf16String>,
+    expires_in: Duration,
+    request_type: Option<&str>,
+    now: DateTime<Utc>,
+) -> AuthResult<String> {
+    #[derive(Serialize)]
+    #[serde(transparent)]
+    struct Claims(#[serde(with = "better_auth_core::field_value::serde::map")] FieldMap);
+
+    let mut claims = FieldMap::from([("email".into(), email.to_lowercase().into())]);
+    if let Some(update_to) = update_to {
+        let _ = claims.insert("updateTo".into(), update_to.to_lowercase().into());
+    }
+    if let Some(request_type) = request_type {
+        let _ = claims.insert("requestType".into(), request_type.into());
+    }
+    let _ = claims.insert("iat".into(), (now.timestamp() as f64).into());
+    let _ = claims.insert(
+        "exp".into(),
+        (now.timestamp() as f64 + expires_in.as_seconds_f64()).into(),
+    );
     Ok(encode(
         &Header {
             typ: None,
             ..Default::default()
         },
-        &claims,
+        &Claims(claims),
         &EncodingKey::from_secret(secret.as_bytes()),
     )?)
 }
@@ -84,24 +146,68 @@ fn decode_email_verification_token_at(
     token: &str,
     now: DateTime<Utc>,
 ) -> AuthResult<EmailVerificationClaims> {
-    let mut validation = Validation::new(Algorithm::HS256);
-    // The typed dates require exp. Validate its fractional value without the library's rounding or clock tolerance.
-    validation.required_spec_claims.clear();
-    validation.validate_exp = false;
-
-    let payload = decode::<serde_json::Value>(
-        token,
-        &DecodingKey::from_secret(secret.as_bytes()),
-        &validation,
-    )?
-    .claims;
-    let dates: VerificationTokenDates =
-        serde_json::from_value(payload.clone()).map_err(jsonwebtoken::errors::Error::from)?;
-    if dates.exp <= now.timestamp() as f64 {
+    let bytes = crate::plugins::jwt::verify_hs256_raw(token, secret)?;
+    let text = std::str::from_utf8(&bytes)
+        .map_err(|_| jsonwebtoken::errors::Error::from(ErrorKind::InvalidToken))?;
+    let fields: VerificationPayload =
+        serde_json::from_str(text.strip_prefix('\u{feff}').unwrap_or(text))
+            .map_err(jsonwebtoken::errors::Error::from)?;
+    // jose accepts optional fractional dates and checks nbf before exp without clock tolerance.
+    let iat = numeric_date_claim(&fields, "iat")?;
+    if numeric_date_claim(&fields, "nbf")?.is_some_and(|value| value > now.timestamp() as f64) {
+        return Err(jsonwebtoken::errors::Error::from(ErrorKind::ImmatureSignature).into());
+    }
+    let exp = numeric_date_claim(&fields, "exp")?;
+    if exp.is_some_and(|value| value <= now.timestamp() as f64) {
         return Err(jsonwebtoken::errors::Error::from(ErrorKind::ExpiredSignature).into());
     }
     // Upstream parses email fields after JWT verification; business payload errors remain server errors.
-    Ok(serde_json::from_value(payload)?)
+    let email = fields.field("email")?;
+    let email = email
+        .as_ref()
+        .and_then(FieldValue::as_str)
+        .ok_or_else(|| serde_json::Error::custom("Expected an email string"))?;
+    if !crate::plugins::json_body::valid_email(email)? {
+        return Err(serde_json::Error::custom("Invalid email address").into());
+    }
+    Ok(EmailVerificationClaims {
+        email: email.into(),
+        update_to: optional_string_claim(&fields, "updateTo")?,
+        request_type: optional_string_claim(&fields, "requestType")?,
+        iat,
+        exp,
+    })
+}
+
+fn numeric_date_claim(
+    fields: &VerificationPayload,
+    name: &str,
+) -> Result<Option<f64>, jsonwebtoken::errors::Error> {
+    fields
+        .field(name)
+        .map_err(|_| jsonwebtoken::errors::Error::from(ErrorKind::InvalidClaimFormat(name.into())))?
+        .map(|value| {
+            value.as_f64().ok_or_else(|| {
+                jsonwebtoken::errors::Error::from(ErrorKind::InvalidClaimFormat(name.into()))
+            })
+        })
+        .transpose()
+}
+
+fn optional_string_claim(
+    fields: &VerificationPayload,
+    name: &str,
+) -> AuthResult<Option<FieldValue>> {
+    fields
+        .field(name)?
+        .map(|value| {
+            if value.is_string() {
+                Ok(value)
+            } else {
+                Err(serde_json::Error::custom(format!("Expected a string for {name}")).into())
+            }
+        })
+        .transpose()
 }
 
 #[cfg(test)]

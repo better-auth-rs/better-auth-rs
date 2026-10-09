@@ -535,11 +535,39 @@ where
         ids: &[String],
         limit: f64,
     ) -> AuthResult<Vec<better_auth_core::wire::UserView>> {
-        self.model_fields.begin_id_query(EntityRole::User)?;
-        let user_ids = ids
+        let ids = ids
             .iter()
-            .map(|id| self.parse_id(id, S::User::parse_id))
+            .cloned()
+            .map(FieldValue::from)
+            .collect::<Vec<_>>();
+        self.list_users_by_id_values(&ids, limit).await
+    }
+
+    async fn list_users_by_id_values(
+        &self,
+        ids: &[FieldValue],
+        limit: f64,
+    ) -> AuthResult<Vec<better_auth_core::wire::UserView>> {
+        use sea_orm::sea_query::{BinOper, ExprTrait, SimpleExpr};
+
+        let backend = self.connection().get_database_backend();
+        let (physical, bound) =
+            self.user_field_selector(self.connection(), "id", &ids.to_vec().into())?;
+        let column = S::User::field_column(&physical)?;
+        let values = bound
+            .as_array()
+            .unwrap_or_else(|| std::slice::from_ref(&bound));
+        let values = values
+            .iter()
+            .map(|value| {
+                super::record_bindings::parameter(value.clone(), backend)
+                    .map(|value| column.save_as(value))
+            })
             .collect::<AuthResult<Vec<_>>>()?;
+        // Preserve each backend's empty-set syntax and driver result.
+        let filter = column
+            .into_expr()
+            .binary(BinOper::Custom("IN"), SimpleExpr::Tuple(values));
 
         match database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
             self.config(),
@@ -548,7 +576,7 @@ where
                 super::plugin_rows::all(
                     self.connection(),
                     <S::User as SeaOrmUserModel>::Entity::find()
-                        .filter(<S::User as SeaOrmUserModel>::id_column().is_in(user_ids))
+                        .filter(filter)
                         .limit(
                             super::pagination::sql_pagination(
                                 self.connection().get_database_backend(),

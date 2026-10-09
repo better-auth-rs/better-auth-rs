@@ -206,7 +206,7 @@ async fn run<S: AuthSchema>(
     let verification=EmailVerificationPlugin::new().send_on_sign_up(true).callbacks(
         EmailVerificationCallbacks::<S>::send(move |mail, endpoint| {
             callback_state.event("sender:called");
-            let state=callback_state.clone();let endpoint=endpoint.to_owned();let user_id=mail.user.id.typed()?.clone();
+            let state=callback_state.clone();let endpoint=endpoint.to_owned();let user_id=mail.user.as_object().unwrap().get("id").unwrap().as_str().unwrap().to_owned();
             Ok(Some(Box::pin(async move {
                 state.event("sender:start");
                 for phase in ["start","released"] {

@@ -84,6 +84,48 @@ pub struct OrganizationFields {
 }
 
 impl OrganizationFields {
+    /// Resolve declared fields and native references without replacing explicit declarations.
+    #[doc(hidden)]
+    pub fn schema_for(
+        &self,
+        role: better_auth_schema_registry::EntityRole,
+    ) -> crate::AuthResult<UserConfig> {
+        use better_auth_schema_registry::EntityRole;
+        let mut fields = match role {
+            EntityRole::Organization => self.organization.clone(),
+            EntityRole::Member => self.member.clone(),
+            EntityRole::Invitation => self.invitation.clone(),
+            EntityRole::Team => self.team.clone(),
+            EntityRole::OrganizationRole => self.organization_role.clone(),
+            _ => {
+                return Err(crate::AuthError::config(
+                    "Expected an organization entity role",
+                ));
+            }
+        };
+        let entity = better_auth_schema_registry::plugin_schemas()
+            .iter()
+            .flat_map(|plugin| plugin.extra_entities)
+            .find(|entity| entity.role == Some(role))
+            .ok_or_else(|| crate::AuthError::config("Missing organization schema"))?;
+        for (name, model) in better_auth_schema_registry::entity_foreign_keys(entity.table_name) {
+            let _ = fields
+                .fields_mut()
+                .entry(better_auth_schema_registry::canonical_field_name(
+                    role, name,
+                ))
+                .or_insert_with(|| crate::user_fields::UserFieldConfig {
+                    references: Some(crate::user_fields::UserFieldReference {
+                        model: (*model).into(),
+                        field: "id".into(),
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                });
+        }
+        Ok(fields)
+    }
+
     /// Resolve raw declarations in native schema order and apply dynamic-role storage requirements.
     pub fn into_storage(self) -> Self {
         let mut fields = crate::plugin_runtime::ModelFields::default();

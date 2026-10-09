@@ -271,10 +271,9 @@ impl EphemeralStore {
 
     pub(super) async fn joined_user_organizations(
         &self,
-        user_id: &str,
+        user_id: &Value,
     ) -> AuthResult<Vec<Organization>> {
-        let user_id =
-            self.organization_query(EntityRole::Member, "userId", Value::from(user_id))?;
+        let user_id = self.organization_query(EntityRole::Member, "userId", user_id.clone())?;
         let (members, organizations) = {
             let state = self.lock()?;
             let rows = crate::query::paginate_memory(
@@ -282,7 +281,11 @@ impl EphemeralStore {
                     .members
                     .snapshot()?
                     .into_iter()
-                    .filter(|row| row.user_id == user_id)
+                    .filter(|row| {
+                        row.user_id
+                            .field_value()
+                            .strict_equals(&user_id.field_value())
+                    })
                     .collect(),
                 Some(self.config.advanced.database.find_many_limit()),
                 None,

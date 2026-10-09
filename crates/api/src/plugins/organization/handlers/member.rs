@@ -1,11 +1,11 @@
 use better_auth_core::entity::{AuthMember, AuthOrganization, AuthSession, AuthUser};
 use better_auth_core::error::{AuthError, AuthResult};
 use better_auth_core::plugin::AuthContext;
+use better_auth_core::session::NativeSessionData;
 use better_auth_core::store::ListOrganizationMembersParams;
 use better_auth_core::types::{AuthRequest, AuthResponse};
-use std::collections::HashMap;
 
-use super::{require_session, resolve_organization_id};
+use super::{require_native_session, require_session, resolve_organization_id};
 use crate::plugins::organization::rbac::check_permission;
 use crate::plugins::organization::types::{
     BasicMemberResponse, GetActiveMemberRoleQuery, GetActiveMemberRoleResponse, ListMembersQuery,
@@ -28,18 +28,17 @@ fn has_role(member: &impl AuthMember, role: &str) -> AuthResult<bool> {
 // ---------------------------------------------------------------------------
 
 pub(crate) async fn get_active_member_core(
-    user: &impl AuthUser,
-    session: &impl AuthSession,
+    session: &NativeSessionData,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<MemberResponse> {
-    let org_id = session.active_organization_id().field_value();
+    let org_id = session.session.active_organization_id.field_value();
     if !org_id.is_truthy() {
         return Err(AuthError::bad_request("No active organization"));
     }
 
     let joined = ctx
         .database
-        .get_member_with_user_value(&org_id, &user.id().field_value())
+        .get_member_with_user_value(&org_id, session.user_property("id")?)
         .await?
         .ok_or_else(|| AuthError::bad_request("Member not found"))?;
 
@@ -52,11 +51,14 @@ pub(crate) async fn get_active_member_core(
 pub(crate) async fn list_members_core(
     query: &ListMembersQuery,
     config: &OrganizationConfig,
-    user: &impl AuthUser,
-    session: &impl AuthSession,
+    session: &NativeSessionData,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<ListMembersResponse> {
-    let org_id = if let Some(slug) = query.organization_slug.as_deref() {
+    let org_id = if let Some(slug) = query
+        .organization_slug
+        .as_deref()
+        .filter(|slug| !slug.is_empty())
+    {
         let organization = ctx
             .database
             .get_organization_by_slug(slug)
@@ -64,12 +66,21 @@ pub(crate) async fn list_members_core(
             .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
         organization.id().field_value()
     } else {
-        resolve_organization_id(query.organization_id.as_deref(), None, session, ctx).await?
+        resolve_organization_id(
+            query.organization_id.as_deref(),
+            None,
+            &session.session,
+            ctx,
+        )
+        .await?
     };
+    if !org_id.is_truthy() {
+        return Err(AuthError::bad_request("No active organization"));
+    }
 
     let _ = ctx
         .database
-        .get_member_with_user_value(&org_id, &user.id().field_value())
+        .get_member_with_user_value(&org_id, session.user_property("id")?)
         .await?
         .ok_or_else(|| AuthError::forbidden("You are not a member of this organization"))?;
 
@@ -96,19 +107,21 @@ pub(crate) async fn list_members_core(
         .await?;
     let user_ids = members_raw
         .iter()
-        .map(|member| member.user_id.typed().cloned())
-        .collect::<AuthResult<Vec<_>>>()?;
-    let users_by_id = ctx
+        .map(|member| member.user_id.field_value())
+        .collect::<Vec<_>>();
+    let users = ctx
         .database
-        .list_users_by_ids(&user_ids, members_raw.len() as f64)
-        .await?
-        .into_iter()
-        .map(|user| (user.id.as_str().map(str::to_owned), user))
-        .collect::<HashMap<_, _>>();
+        .list_users_by_id_values(&user_ids, members_raw.len() as f64)
+        .await?;
     let mut members = Vec::with_capacity(members_raw.len());
     for member in &members_raw {
-        let user_info = users_by_id
-            .get(&member.user_id.as_str().map(str::to_owned))
+        let user_info = users
+            .iter()
+            .find(|user| {
+                user.id
+                    .field_value()
+                    .strict_equals(&member.user_id.field_value())
+            })
             .ok_or_else(|| AuthError::internal("Unexpected error: User not found for member"))?;
         members.push(MemberResponse::from_member_and_user(
             member,
@@ -121,11 +134,14 @@ pub(crate) async fn list_members_core(
 
 pub(crate) async fn get_active_member_role_core(
     query: &GetActiveMemberRoleQuery,
-    user: &impl AuthUser,
-    session: &impl AuthSession,
+    session: &NativeSessionData,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<GetActiveMemberRoleResponse> {
-    let org_id = if let Some(slug) = query.organization_slug.as_deref() {
+    let org_id = if let Some(slug) = query
+        .organization_slug
+        .as_deref()
+        .filter(|slug| !slug.is_empty())
+    {
         let organization = ctx
             .database
             .get_organization_by_slug(slug)
@@ -133,17 +149,26 @@ pub(crate) async fn get_active_member_role_core(
             .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
         organization.id().field_value()
     } else {
-        resolve_organization_id(query.organization_id.as_deref(), None, session, ctx).await?
+        resolve_organization_id(
+            query.organization_id.as_deref(),
+            None,
+            &session.session,
+            ctx,
+        )
+        .await?
     };
+    if !org_id.is_truthy() {
+        return Err(AuthError::bad_request("No active organization"));
+    }
 
     let requester_member = ctx
         .database
-        .get_member_with_user_value(&org_id, &user.id().field_value())
+        .get_member_with_user_value(&org_id, session.user_property("id")?)
         .await?
         .map(|joined| joined.member)
         .ok_or_else(|| AuthError::forbidden("You are not a member of this organization"))?;
 
-    if let Some(user_id) = query.user_id.as_deref() {
+    if let Some(user_id) = query.user_id.as_deref().filter(|id| !id.is_empty()) {
         let target_member = ctx
             .database
             .get_member_with_user_value(&org_id, &user_id.into())
@@ -151,12 +176,12 @@ pub(crate) async fn get_active_member_role_core(
             .map(|joined| joined.member)
             .ok_or_else(|| AuthError::forbidden("You are not a member of this organization"))?;
         return Ok(GetActiveMemberRoleResponse {
-            role: target_member.role().typed()?.to_string(),
+            role: target_member.role,
         });
     }
 
     Ok(GetActiveMemberRoleResponse {
-        role: requester_member.role().typed()?.to_string(),
+        role: requester_member.role,
     })
 }
 
@@ -472,8 +497,8 @@ pub async fn handle_get_active_member(
     req: &AuthRequest,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<AuthResponse> {
-    let (user, session) = require_session(req, ctx).await?;
-    let response = get_active_member_core(&user, &session, ctx).await?;
+    let session = require_native_session(req, ctx).await?;
+    let response = get_active_member_core(&session, ctx).await?;
     Ok(AuthResponse::json(200, &response)?)
 }
 
@@ -483,9 +508,9 @@ pub async fn handle_list_members(
     config: &OrganizationConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<AuthResponse> {
-    let (user, session) = require_session(req, ctx).await?;
+    let session = require_native_session(req, ctx).await?;
     let query = crate::plugins::query_input::parse::<ListMembersQuery>(&req.query)?;
-    let response = list_members_core(&query, config, &user, &session, ctx).await?;
+    let response = list_members_core(&query, config, &session, ctx).await?;
     Ok(AuthResponse::json(200, &response)?)
 }
 
@@ -494,9 +519,9 @@ pub async fn handle_get_active_member_role(
     req: &AuthRequest,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<AuthResponse> {
-    let (user, session) = require_session(req, ctx).await?;
+    let session = require_native_session(req, ctx).await?;
     let query = crate::plugins::query_input::parse::<GetActiveMemberRoleQuery>(&req.query)?;
-    let response = get_active_member_role_core(&query, &user, &session, ctx).await?;
+    let response = get_active_member_role_core(&query, &session, ctx).await?;
     Ok(AuthResponse::json(200, &response)?)
 }
 

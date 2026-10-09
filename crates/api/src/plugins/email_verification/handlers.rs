@@ -7,7 +7,10 @@ use better_auth_core::{
     AuthContext, AuthError, AuthRequest, AuthResult, FieldMap, FieldValue, UpdateUser,
 };
 
-use super::token::{create_email_verification_token, decode_email_verification_token};
+use super::token::{
+    create_email_verification_token, create_native_email_verification_token,
+    decode_email_verification_token,
+};
 use super::types::*;
 use super::{EmailVerificationConfig, StatusResponse, VerificationEmail};
 
@@ -182,29 +185,26 @@ pub(super) async fn verify_email_core(
     let email = FieldValue::from(claims.email.clone());
     let email_selector = FieldValue::from(claims.email.to_lowercase());
     let mut endpoint = EndpointContext::new(Some(req), FieldValue::Null, ctx);
-    if let Some(update_to) = claims
-        .update_to
-        .as_deref()
-        .filter(|email| !email.is_empty())
-    {
+    if let Some(update_to) = claims.update_to.as_ref().filter(|email| email.is_truthy()) {
         endpoint.session = ctx.native_session(req, SessionRead::Cached).await?;
         if let Some(data) = &endpoint.session
             && !data.user_property("email")?.strict_equals(&email)
         {
             return verification_error(query, "INVALID_USER", "Invalid user");
         }
-        if claims.request_type.as_deref() == Some("change-email-confirmation") {
-            let token = create_email_verification_token(
+        let request_type = claims.request_type.as_ref().and_then(FieldValue::as_str);
+        if request_type == Some("change-email-confirmation") {
+            let token = create_native_email_verification_token(
                 ctx.config.signing_secret(),
-                &claims.email,
-                Some(update_to),
+                &claims.email.as_str().into(),
+                Some(&update_to.display_utf16()?),
                 config.verification_token_expiry(),
                 Some("change-email-verification"),
             )?;
             let url = verification_url(ctx.base_url(), &token, query.callback_url.as_deref());
             if super::delivery::available(Some(config), ctx) {
                 let mut fields = user.enumerable_fields();
-                let _ = fields.insert("email".into(), update_to.into());
+                let _ = fields.insert("email".into(), update_to.clone());
                 let task = super::delivery::delivery(
                     Some(config),
                     VerificationEmail {
@@ -224,15 +224,17 @@ pub(super) async fn verify_email_core(
             return Ok(success(query, None));
         }
         let mut active = active_session(endpoint.session.clone(), &user, req, ctx).await?;
-        let verified = claims.request_type.as_deref() == Some("change-email-verification");
+        let verified = request_type == Some("change-email-verification");
         let updated = ctx
             .database
             .update_user_by_field_value(
                 "email",
                 &email_selector,
                 UpdateUser {
-                    email: Some(update_to.into()),
-                    email_verified: Some(verified),
+                    additional_fields: FieldMap::from([
+                        ("email".into(), update_to.clone()),
+                        ("emailVerified".into(), verified.into()),
+                    ]),
                     ..Default::default()
                 },
             )
@@ -246,9 +248,9 @@ pub(super) async fn verify_email_core(
                 hook(&updated_value).await?;
             }
         } else {
-            let token = create_email_verification_token(
+            let token = create_native_email_verification_token(
                 ctx.config.signing_secret(),
-                update_to,
+                &update_to.display_utf16()?,
                 None,
                 chrono::Duration::hours(1),
                 None,
@@ -273,7 +275,7 @@ pub(super) async fn verify_email_core(
             }
         }
         let mut fields = active.user.enumerable_fields();
-        let _ = fields.insert("email".into(), update_to.into());
+        let _ = fields.insert("email".into(), update_to.clone());
         let _ = fields.insert("emailVerified".into(), verified.into());
         active.user = fields.into();
         ctx.session_manager()

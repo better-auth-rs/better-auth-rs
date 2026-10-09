@@ -16,7 +16,7 @@ use better_auth_core::{
         database_hooks::{DatabaseHookContext, DatabaseHookControl, DatabaseHooks},
         secondary::SecondaryStore,
     },
-    user_fields::{UserFieldConfig, UserFieldType},
+    user_fields::{FieldTransforms, UserFieldConfig, UserFieldTransform, UserFieldType},
     wire::AccountView,
 };
 use better_auth_seaorm::{
@@ -183,5 +183,124 @@ async fn serial_account_selectors_convert_native_values_before_matching() -> Aut
     assert_eq!(store.get_user_accounts_value(&true.into()).await?.len(), 1);
     store.delete_account_value(&true.into()).await?;
     assert!(store.get_user_accounts_value(&1.into()).await?.is_empty());
+    Ok(())
+}
+
+async fn check_user_batches<S: AuthSchema>(
+    inner: Arc<dyn AuthStore<S>>,
+    mut config: AuthConfig,
+    secondary: bool,
+    sqlite: bool,
+) -> AuthResult<()> {
+    for (id, name) in [("0", "zero"), ("1", "one"), ("2", "failed")] {
+        let _ = inner
+            .create_user(CreateUser {
+                id: Some(id.into()),
+                name: Some(name.into()).into(),
+                email: Some(format!("{name}@native-batch.test")),
+                ..Default::default()
+            })
+            .await?;
+    }
+    let events = Events::default();
+    let observed = events.clone();
+    let _ = config.user.fields_mut().insert(
+        "name".into(),
+        UserFieldConfig {
+            transform: Some(FieldTransforms {
+                output: Some(UserFieldTransform::new(move |value| {
+                    let name = value.as_str().unwrap();
+                    observed.lock().unwrap().push(name.to_owned());
+                    if name == "failed" {
+                        return Err(AuthError::internal("batch output failed"));
+                    }
+                    Ok(format!("projected:{name}").into())
+                })),
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+    );
+    let config = Arc::new(config);
+    let inner = inner.with_runtime(config.clone(), vec![], Default::default())?;
+    let store: Arc<dyn AuthStore<S>> = if secondary {
+        Arc::new(SecondaryStore::new(
+            inner,
+            Arc::new(MemoryCacheAdapter::new()),
+            config,
+            Default::default(),
+        )?)
+    } else {
+        inner
+    };
+    let take = || std::mem::take(&mut *events.lock().unwrap());
+    let rows = store
+        .list_users_by_id_values(&["1".into(), "0".into(), "1".into()], 10.0)
+        .await?;
+    let mut ids = rows
+        .iter()
+        .map(|row| row.id.typed().cloned())
+        .collect::<AuthResult<Vec<_>>>()?;
+    ids.sort();
+    assert_eq!(ids, ["0", "1"]);
+    let mut projected = take();
+    projected.sort();
+    assert_eq!(projected, ["one", "zero"]);
+
+    let rows = store
+        .list_users_by_id_values(&["1".into(), "0".into()], 1.0)
+        .await?;
+    assert_eq!(rows.len(), 1);
+    let projected = take();
+    assert_eq!(projected.len(), 1);
+    assert_eq!(
+        rows.first().unwrap().name.typed()?.as_deref(),
+        Some(format!("projected:{}", projected.first().unwrap()).as_str())
+    );
+    for id in [1.into(), true.into(), 0.into(), false.into()] {
+        let rows = store.list_users_by_id_values(&[id], 10.0).await?;
+        assert_eq!(rows.len(), usize::from(sqlite));
+        assert_eq!(take().len(), usize::from(sqlite));
+    }
+    for ids in [vec![], vec![FieldValue::Null, FieldValue::Undefined]] {
+        assert!(store.list_users_by_id_values(&ids, 10.0).await?.is_empty());
+        assert!(take().is_empty());
+    }
+    assert!(
+        store
+            .list_users_by_id_values(&["2".into()], 0.0)
+            .await?
+            .is_empty()
+    );
+    assert!(take().is_empty());
+    assert!(matches!(
+        store.list_users_by_id_values(&["2".into()], 1.0).await,
+        Err(AuthError::Internal(message)) if message == "batch output failed"
+    ));
+    assert_eq!(take(), ["failed"]);
+    Ok(())
+}
+
+#[tokio::test]
+async fn native_user_batches_keep_adapter_matching_limits_and_output_failures() -> AuthResult<()> {
+    for secondary in [false, true] {
+        let config = AuthConfig::default();
+        check_user_batches(
+            Arc::new(EphemeralStore::new(Arc::new(config.clone()))),
+            config.clone(),
+            secondary,
+            false,
+        )
+        .await?;
+        let database = Database::connect("sqlite::memory:").await.unwrap();
+        migrator::run_migrations(&database).await.unwrap();
+        check_user_batches(
+            Arc::new(SeaOrmStore::<BundledSchema>::new(config.clone(), database)),
+            config,
+            secondary,
+            true,
+        )
+        .await?;
+    }
     Ok(())
 }

@@ -638,8 +638,7 @@ mod tests {
                 organization_id: Some(org.id.typed().unwrap().clone()),
                 ..Default::default()
             },
-            &user,
-            &session,
+            &(user.clone(), session.clone()).into(),
             &config,
             &ctx,
         )

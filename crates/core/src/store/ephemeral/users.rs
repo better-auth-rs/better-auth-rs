@@ -351,11 +351,20 @@ impl UserStore<StatelessSchema> for EphemeralStore {
     }
 
     async fn list_users_by_ids(&self, ids: &[String], limit: f64) -> AuthResult<Vec<UserView>> {
+        let ids = ids.iter().cloned().map(Value::from).collect::<Vec<_>>();
+        self.list_users_by_id_values(&ids, limit).await
+    }
+
+    async fn list_users_by_id_values(
+        &self,
+        ids: &[Value],
+        limit: f64,
+    ) -> AuthResult<Vec<UserView>> {
         self.model_fields.begin_id_query(EntityRole::User)?;
-        let ids = ids
-            .iter()
-            .map(|id| self.memory_primary_id_query(&Value::from(id.clone())))
-            .collect::<AuthResult<Vec<_>>>()?;
+        let bound = self.memory_primary_id_query(&ids.to_vec().into())?;
+        let ids = bound
+            .as_array()
+            .ok_or_else(|| AuthError::internal("Native ID batch query lost its array shape"))?;
         let users: Vec<_> = self
             .raw("user", "findMany", |state| {
                 Ok(crate::query::paginate_memory(

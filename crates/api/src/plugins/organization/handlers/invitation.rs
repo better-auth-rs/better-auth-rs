@@ -3,10 +3,11 @@ use better_auth_core::entity::{
 };
 use better_auth_core::error::{AuthError, AuthResult};
 use better_auth_core::plugin::AuthContext;
+use better_auth_core::session::NativeSessionData;
 use better_auth_core::types::{AuthRequest, AuthResponse, InvitationStatus};
 use better_auth_core::wire::InvitationView;
 
-use super::{require_session, resolve_organization_id};
+use super::{require_native_session, require_session, resolve_organization_id};
 use crate::plugins::organization::rbac::check_permission;
 use crate::plugins::organization::types::{
     AcceptInvitationRequest, AcceptInvitationResponse, BasicMemberResponse,
@@ -345,7 +346,7 @@ pub(crate) async fn invite_member_core(
 
 pub(crate) async fn get_invitation_core(
     query: &GetInvitationQuery,
-    user: &impl AuthUser,
+    session: &NativeSessionData,
     config: &OrganizationConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<Option<GetInvitationResponse<InvitationView>>> {
@@ -361,12 +362,17 @@ pub(crate) async fn get_invitation_core(
     }
 
     let recipient = invitation.email().typed()?;
-    if recipient.to_lowercase() != crate::plugins::helpers::user_email(user)?.to_lowercase() {
+    if recipient.to_lowercase()
+        != crate::plugins::helpers::user_email_field(session.user_property("email")?)?
+            .to_lowercase()
+    {
         return Err(AuthError::forbidden(
             "You are not the recipient of the invitation",
         ));
     }
-    if config.require_email_verification_on_invitation && !user.email_verified().is_truthy()? {
+    if config.require_email_verification_on_invitation
+        && !session.user_property("emailVerified")?.is_truthy()
+    {
         return Err(AuthError::forbidden(
             "Email verification required to view or list invitations for the session email",
         ));
@@ -374,15 +380,15 @@ pub(crate) async fn get_invitation_core(
 
     let organization = ctx
         .database
-        .get_organization_by_id(invitation.organization_id.typed()?)
+        .get_organization_by_id_value(&invitation.organization_id.field_value())
         .await?
         .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
 
     let inviter = ctx
         .database
-        .get_member_with_user(
-            invitation.organization_id().typed()?.as_str(),
-            invitation.inviter_id().typed()?.as_str(),
+        .get_member_with_user_value(
+            &invitation.organization_id.field_value(),
+            &invitation.inviter_id.field_value(),
         )
         .await?
         .ok_or_else(|| {
@@ -400,16 +406,20 @@ pub(crate) async fn get_invitation_core(
 
 pub(crate) async fn list_invitations_core(
     query: &ListInvitationsQuery,
-    user: &impl AuthUser,
-    session: &impl AuthSession,
+    session: &NativeSessionData,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<Vec<InvitationView>> {
-    let org_id =
-        resolve_organization_id(query.organization_id.as_deref(), None, session, ctx).await?;
+    let org_id = resolve_organization_id(
+        query.organization_id.as_deref(),
+        None,
+        &session.session,
+        ctx,
+    )
+    .await?;
 
     let _ = ctx
         .database
-        .get_member_with_user_value(&org_id, &user.id().field_value())
+        .get_member_with_user_value(&org_id, session.user_property("id")?)
         .await?
         .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;
 
@@ -421,18 +431,33 @@ pub(crate) async fn list_invitations_core(
 }
 
 pub(crate) async fn list_user_invitations_core(
-    user: &impl AuthUser,
+    session: Option<&NativeSessionData>,
+    email: Option<&str>,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<Vec<UserInvitationResponse<InvitationView>>> {
-    // Upstream refuses to list invitations for a session whose email is not
-    // verified, so an unverified address cannot enumerate what it was invited to.
-    if !user.email_verified().is_truthy()? {
+    if let Some(session) = session
+        && !session.user_property("emailVerified")?.is_truthy()
+    {
         return Err(AuthError::forbidden(
             "Email verification required to view or list invitations for the session email",
         ));
     }
-
-    let user_email = crate::plugins::helpers::user_email(user)?;
+    let email = match session
+        .map(|session| session.user_property("email"))
+        .transpose()?
+        .filter(|email| email.is_truthy())
+    {
+        Some(email) => email.clone(),
+        None => email
+            .map(better_auth_core::FieldValue::from)
+            .unwrap_or_default(),
+    };
+    if !email.is_truthy() {
+        return Err(AuthError::bad_request(
+            "Missing session headers, or email query parameter.",
+        ));
+    }
+    let user_email = crate::plugins::helpers::user_email_field(&email)?;
 
     let all_invitations = ctx.database.list_user_invitations(&user_email).await?;
     let pending = all_invitations
@@ -710,15 +735,15 @@ pub async fn handle_get_invitation(
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
-    let (user, _) = ctx
-        .require_session(req)
+    let session = ctx
+        .require_native_session(req)
         .await
         .map_err(|error| match error {
             AuthError::Unauthenticated => AuthError::authentication_failed("Not authenticated"),
             error => error,
         })?;
     let query = crate::plugins::query_input::parse::<GetInvitationQuery>(&req.query)?;
-    match get_invitation_core(&query, &user, config, ctx).await? {
+    match get_invitation_core(&query, &session, config, ctx).await? {
         Some(response) => Ok(AuthResponse::json(200, &response)?),
         None => Ok(AuthResponse::json(
             400,
@@ -731,9 +756,9 @@ pub async fn handle_list_invitations(
     req: &AuthRequest,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<AuthResponse> {
-    let (user, session) = require_session(req, ctx).await?;
+    let session = require_native_session(req, ctx).await?;
     let query = crate::plugins::query_input::parse::<ListInvitationsQuery>(&req.query)?;
-    let invitations = list_invitations_core(&query, &user, &session, ctx).await?;
+    let invitations = list_invitations_core(&query, &session, ctx).await?;
     Ok(AuthResponse::json(200, &invitations)?)
 }
 
@@ -741,8 +766,21 @@ pub async fn handle_list_user_invitations(
     req: &AuthRequest,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<AuthResponse> {
-    let (user, _session) = require_session(req, ctx).await?;
-    let invitations = list_user_invitations_core(&user, ctx).await?;
+    let session = ctx
+        .native_session(req, better_auth_core::session::SessionRead::Cached)
+        .await?;
+    let email = req.query_string("email")?;
+    let endpoint = crate::plugins::endpoint_context::EndpointContext::new(
+        Some(req),
+        better_auth_core::FieldValue::Null,
+        ctx,
+    );
+    if endpoint.request.is_some() && email.is_some_and(|email| !email.is_empty()) {
+        return Err(AuthError::bad_request(
+            "User email cannot be passed for client side API calls.",
+        ));
+    }
+    let invitations = list_user_invitations_core(session.as_ref(), email, ctx).await?;
     Ok(AuthResponse::json(200, &invitations)?)
 }
 

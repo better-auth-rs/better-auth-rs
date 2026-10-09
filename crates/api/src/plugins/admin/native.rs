@@ -52,10 +52,9 @@ impl<'a, S: AuthSchema> AdminApi<'a, S> {
                                         AuthError::from(AuthResponse::new(401))
                                     }
                                     error => error,
-                                })?
-                                .into_views()?;
+                                })?;
                             self.plugin.authorize(
-                                &session.0,
+                                &session,
                                 "user",
                                 "create",
                                 MESSAGE_CREATE_USERS,

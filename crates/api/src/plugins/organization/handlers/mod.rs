@@ -8,9 +8,10 @@ pub use invitation::*;
 pub use member::*;
 pub use org::*;
 
-use better_auth_core::entity::{AuthMember, AuthSession, AuthUser};
+use better_auth_core::entity::{AuthMember, AuthSession};
 use better_auth_core::error::{AuthError, AuthResult};
 use better_auth_core::plugin::AuthContext;
+use better_auth_core::session::NativeSessionData;
 use better_auth_core::types::{AuthRequest, AuthResponse};
 
 use super::OrganizationConfig;
@@ -33,6 +34,22 @@ pub(crate) async fn require_session<S: better_auth_core::AuthSchema>(
         },
         error => error,
     })
+}
+
+pub(crate) async fn require_native_session<S: better_auth_core::AuthSchema>(
+    req: &AuthRequest,
+    ctx: &AuthContext<S>,
+) -> AuthResult<NativeSessionData> {
+    ctx.require_native_session(req)
+        .await
+        .map_err(|error| match error {
+            AuthError::Unauthenticated => AuthError::Upstream {
+                status: 401,
+                code: "UNAUTHORIZED",
+                message: "Unauthorized",
+            },
+            error => error,
+        })
 }
 
 async fn optional_session<S: better_auth_core::AuthSchema>(
@@ -112,17 +129,17 @@ pub(crate) async fn resolve_organization_id(
 
 pub(crate) async fn has_permission_core(
     body: &HasPermissionRequest,
-    user: &impl AuthUser,
-    session: &impl AuthSession,
+    session: &NativeSessionData,
     config: &OrganizationConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<HasPermissionResponse> {
     let org_id =
-        resolve_organization_id(body.organization_id.as_deref(), None, session, ctx).await?;
+        resolve_organization_id(body.organization_id.as_deref(), None, &session.session, ctx)
+            .await?;
 
     let member = ctx
         .database
-        .get_member_with_user_value(&org_id, &user.id().field_value())
+        .get_member_with_user_value(&org_id, session.user_property("id")?)
         .await?
         .map(|joined| joined.member)
         .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;
@@ -152,8 +169,11 @@ pub async fn handle_has_permission(
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
-    let (user, session) = require_session(req, ctx).await?;
+    let session = require_native_session(req, ctx).await?;
     let body: HasPermissionRequest = super::request::read(req, &config.schema)?;
-    let response = has_permission_core(&body, &user, &session, config, ctx).await?;
+    let response = has_permission_core(&body, &session, config, ctx).await?;
     Ok(AuthResponse::json(200, &response)?)
 }
+
+#[cfg(test)]
+mod native_tests;

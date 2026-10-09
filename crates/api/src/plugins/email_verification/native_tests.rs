@@ -75,15 +75,15 @@ fn verify_request(
 fn raw_email_request(
     ctx: &AuthContext<StatelessSchema>,
     email: &str,
-    update: Option<(&str, &str)>,
+    update: Option<(&FieldValue, &FieldValue)>,
 ) -> AuthResult<AuthRequest> {
     let now = Utc::now().timestamp();
     let claims = token::EmailVerificationClaims {
         email: email.into(),
-        update_to: update.map(|(email, _)| email.into()),
-        request_type: update.map(|(_, request)| request.into()),
-        iat: now,
-        exp: (now + 3600) as f64,
+        update_to: update.map(|(email, _)| email.clone()),
+        request_type: update.map(|(_, request)| request.clone()),
+        iat: Some(now as f64),
+        exp: Some((now + 3600) as f64),
     };
     let token = jsonwebtoken::encode(
         &jsonwebtoken::Header::new(jsonwebtoken::Algorithm::HS256),
@@ -219,7 +219,7 @@ async fn change_email_normalizes_storage_and_tokens_but_preserves_session_owners
             let mut req = raw_email_request(
                 &ctx,
                 "OWNER@NATIVE-EMAIL.TEST",
-                Some(("NEW@NATIVE-EMAIL.TEST", request_type)),
+                Some((&"NEW@NATIVE-EMAIL.TEST".into(), &request_type.into())),
             )?;
             if has_session {
                 let session = ctx
@@ -294,10 +294,10 @@ async fn change_email_normalizes_storage_and_tokens_but_preserves_session_owners
                     &delivered[0].token,
                 )?;
                 assert_eq!(claims.email, "owner@native-email.test");
-                assert_eq!(claims.update_to.as_deref(), Some("new@native-email.test"));
+                assert_eq!(claims.update_to, Some("new@native-email.test".into()));
                 assert_eq!(
-                    claims.request_type.as_deref(),
-                    Some("change-email-verification")
+                    claims.request_type,
+                    Some("change-email-verification".into())
                 );
                 continue;
             }
@@ -323,6 +323,109 @@ async fn change_email_normalizes_storage_and_tokens_but_preserves_session_owners
                 )?;
                 assert_eq!(claims.email, "new@native-email.test");
                 assert!(claims.update_to.is_none());
+            }
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn native_change_email_strings_survive_storage_delivery_and_follow_up_tokens()
+-> AuthResult<()> {
+    let update_to = FieldValue::parse_json(r#""NEW\ud800@EXAMPLE.TEST""#)?;
+    let lowercase = FieldValue::parse_json(r#""new\ud800@example.test""#)?;
+    for request_type in [
+        FieldValue::from("change-email-confirmation"),
+        FieldValue::from("change-email-verification"),
+        FieldValue::parse_json(r#""legacy\udc00""#)?,
+    ] {
+        let messages = Arc::new(Mutex::new(Vec::new()));
+        let delivered = messages.clone();
+        let plugin =
+            EmailVerificationPlugin::new().callbacks(
+                EmailVerificationCallbacks::<StatelessSchema>::send(move |message, _| {
+                    delivered.lock().unwrap().push(message.clone());
+                    Ok(None)
+                }),
+            );
+        let config = Arc::new(crate::plugins::test_helpers::create_test_config());
+        let ctx = crate::plugins::test_helpers::initialize_test_context(
+            config.clone(),
+            Arc::new(EphemeralStore::new(config)),
+            &[&plugin],
+        )
+        .await?;
+        let user = ctx
+            .database
+            .create_user(CreateUser::new().with_email("owner@native-email.test"))
+            .await?;
+        let req = raw_email_request(
+            &ctx,
+            "owner@native-email.test",
+            Some((&update_to, &request_type)),
+        )?;
+        assert_eq!(plugin.on_request(&req, &ctx).await?.unwrap().status, 200);
+        let stored = ctx
+            .database
+            .get_user_by_id_value(&user.id.field_value())
+            .await?
+            .unwrap();
+        let messages = messages.lock().unwrap();
+        if request_type.as_str() == Some("change-email-confirmation") {
+            assert_eq!(
+                stored.email.field_value(),
+                FieldValue::from("owner@native-email.test")
+            );
+            assert!(req.new_session()?.is_none());
+            assert_eq!(messages.len(), 1);
+            assert_eq!(
+                messages[0].user.as_object().unwrap().get("email"),
+                Some(&update_to)
+            );
+            let claims = token::decode_email_verification_token(
+                ctx.config.signing_secret(),
+                &messages[0].token,
+            )?;
+            assert_eq!(claims.email, "owner@native-email.test");
+            assert_eq!(claims.update_to, Some(lowercase.clone()));
+            assert_eq!(
+                claims.request_type,
+                Some("change-email-verification".into())
+            );
+        } else {
+            let verified = request_type.as_str() == Some("change-email-verification");
+            assert_eq!(stored.email.field_value(), lowercase);
+            assert_eq!(
+                stored.email_verified.field_value(),
+                FieldValue::Bool(verified)
+            );
+            let session = req.new_session()?.unwrap();
+            assert_eq!(session.user_property("email")?, &update_to);
+            assert_eq!(
+                session.user_property("emailVerified")?,
+                &FieldValue::Bool(verified)
+            );
+            if verified {
+                assert!(messages.is_empty());
+            } else {
+                assert_eq!(messages.len(), 1);
+                assert_eq!(
+                    messages[0].user.as_object().unwrap().get("email"),
+                    Some(&lowercase)
+                );
+                let bytes = crate::plugins::jwt::verify_hs256_raw(
+                    &messages[0].token,
+                    ctx.config.signing_secret(),
+                )?;
+                let payload = FieldValue::parse_json(std::str::from_utf8(&bytes).unwrap())?;
+                assert_eq!(payload.as_object().unwrap().get("email"), Some(&lowercase));
+                assert!(matches!(
+                    token::decode_email_verification_token(
+                        ctx.config.signing_secret(),
+                        &messages[0].token
+                    ),
+                    Err(AuthError::Serialization(_))
+                ));
             }
         }
     }

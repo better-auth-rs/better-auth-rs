@@ -138,7 +138,9 @@ async function captureCase(backend, scenario, callbackURL, recorder, diagnostics
   } finally { recorder.events = null; recorder.context = null; sqlite?.close(); }
 }
 
-export async function captureEmailVerificationPayload({ diagnostics = [] } = {}) {
+export { native as observePayloadValue, sign as signVerificationPayload };
+
+export async function withPayloadRecorder(operation, { diagnostics = [] } = {}) {
   const recorder = { events: null, context: null };
   const originalConsoleError = console.error;
   let warmup = false;
@@ -163,13 +165,19 @@ export async function captureEmailVerificationPayload({ diagnostics = [] } = {})
       if (!warmup) await new Promise(resolve => setTimeout(resolve, 10));
     }
     assert.equal(warmup, true, "The query recorder must be active before sampling");
+    return await operation(recorder);
+  } finally { console.error = originalConsoleError; trace.disable(); }
+}
+
+export async function captureEmailVerificationPayload({ diagnostics = [] } = {}) {
+  return withPayloadRecorder(async recorder => {
     const cases = [];
     for (const backend of ["memory", "sqlite"]) for (const scenario of scenarios) for (const callbackURL of [null, callback]) {
       cases.push(await captureCase(backend, scenario, callbackURL, recorder, diagnostics));
     }
     assert.equal(cases.length, 20);
     return { version, scenarios, cases };
-  } finally { console.error = originalConsoleError; trace.disable(); }
+  }, { diagnostics });
 }
 
 if (import.meta.main) {

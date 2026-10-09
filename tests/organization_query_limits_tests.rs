@@ -1,13 +1,22 @@
 #![cfg(feature = "seaorm2")]
 
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
 use better_auth::plugins::organization::{OrganizationConfig, OrganizationPlugin};
 use better_auth::server_api::EndpointInput;
 use better_auth::{AuthConfig, AuthError, AuthResult, AuthSchema, BetterAuth};
-use better_auth_core::store::EphemeralStore;
+use better_auth_core::store::{
+    EphemeralStore, MemberStore, MemoryCacheAdapter, OrganizationStore, secondary::SecondaryStore,
+};
 use better_auth_core::{
-    AuthUser, CreateMember, CreateOrganization, CreateSession, CreateUser, HttpMethod,
+    AuthStore, AuthUser, CreateMember, CreateOrganization, CreateSession, CreateUser, FieldValue,
+    HttpMethod, Utf16String,
+    id::IdGeneration,
+    organization_fields::OrganizationFields,
+    user_fields::{FieldTransforms, UserFieldConfig, UserFieldTransform},
 };
 use better_auth_seaorm::store::__private_test_support::{bundled_schema::BundledSchema, migrator};
 use better_auth_seaorm::{SeaOrmStore, sea_orm::Database};
@@ -158,6 +167,180 @@ async fn organization_user_pages_and_missing_users_match_upstream() -> AuthResul
                     .await?;
                 check(auth, membership_limit, database_limit).await?;
             }
+        }
+    }
+    Ok(())
+}
+
+type Events = Arc<Mutex<Vec<String>>>;
+
+fn take(events: &Events) -> AuthResult<Vec<String>> {
+    Ok(std::mem::take(
+        &mut *events
+            .lock()
+            .map_err(|error| AuthError::internal(error.to_string()))?,
+    ))
+}
+
+fn output_field(events: &Events, kind: &'static str) -> UserFieldConfig {
+    let events = events.clone();
+    UserFieldConfig {
+        transform: Some(FieldTransforms {
+            output: Some(UserFieldTransform::new(move |value| {
+                events
+                    .lock()
+                    .map_err(|error| AuthError::internal(error.to_string()))?
+                    .push(format!("{kind}:{}", value.as_str().unwrap_or("undefined")));
+                Ok(value)
+            })),
+            ..Default::default()
+        }),
+        ..Default::default()
+    }
+}
+
+async fn check_native_organization_lists<S: AuthSchema>(
+    inner: Arc<dyn AuthStore<S>>,
+    config: AuthConfig,
+    sqlite: bool,
+    serial: bool,
+    secondary: bool,
+) -> AuthResult<()> {
+    for id in ["0", "1"] {
+        let _ = inner
+            .create_user(CreateUser {
+                id: Some(id.into()),
+                email: Some(format!("{id}@native-organization.test")),
+                ..Default::default()
+            })
+            .await?;
+    }
+    for name in ["first", "second"] {
+        let organization = inner
+            .create_organization(CreateOrganization::new(name, name))
+            .await?;
+        for id in ["0", "1"] {
+            let _ = inner
+                .create_member(CreateMember::new(organization.id.typed()?, id, "owner"))
+                .await?;
+        }
+    }
+    let events = Events::default();
+    let mut fields = OrganizationFields::default();
+    let _ = fields
+        .member
+        .fields_mut()
+        .insert("role".into(), output_field(&events, "member"));
+    let _ = fields
+        .organization
+        .fields_mut()
+        .insert("name".into(), output_field(&events, "organization"));
+    inner.configure_organization_fields(fields)?;
+    let config = Arc::new(config);
+    let inner = inner.with_runtime(config.clone(), vec![], Default::default())?;
+    let store: Arc<dyn AuthStore<S>> = if secondary {
+        Arc::new(SecondaryStore::new(
+            inner,
+            Arc::new(MemoryCacheAdapter::new()),
+            config,
+            Default::default(),
+        )?)
+    } else {
+        inner
+    };
+    for (selector, matches) in [
+        (FieldValue::from("1"), true),
+        (
+            FieldValue::Utf16String(Utf16String::from_units(vec![49])),
+            true,
+        ),
+        (FieldValue::Number(1.0), sqlite || serial),
+        (FieldValue::Bool(true), sqlite || serial),
+        (FieldValue::Bool(false), sqlite || serial),
+        (FieldValue::Null, serial),
+        (FieldValue::Undefined, false),
+    ] {
+        let rows = store.list_user_organizations_value(&selector).await?;
+        assert_eq!(rows.len(), usize::from(matches), "selector: {selector:?}");
+        let observed = take(&events)?;
+        if let Some(row) = rows.first() {
+            assert_eq!(
+                observed,
+                [
+                    "member:owner".to_owned(),
+                    format!("organization:{}", row.name.typed()?)
+                ]
+            );
+        } else {
+            assert!(observed.is_empty());
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn native_organization_owners_keep_join_limits_and_output_order() -> AuthResult<()> {
+    for secondary in [false, true] {
+        for joins in [false, true] {
+            for serial in [false, true] {
+                let mut config = AuthConfig::default();
+                config.advanced.database.default_find_many_limit = Some(1.0);
+                config.advanced.database.joins = Some(joins);
+                if serial {
+                    config.advanced.database.generate_id = Some(IdGeneration::Serial);
+                }
+                check_native_organization_lists(
+                    Arc::new(EphemeralStore::new(Arc::new(config.clone()))),
+                    config.clone(),
+                    false,
+                    serial,
+                    secondary,
+                )
+                .await?;
+                let database = Database::connect("sqlite::memory:")
+                    .await
+                    .map_err(|error| AuthError::internal(error.to_string()))?;
+                migrator::run_migrations(&database)
+                    .await
+                    .map_err(|error| AuthError::internal(error.to_string()))?;
+                check_native_organization_lists(
+                    Arc::new(SeaOrmStore::<BundledSchema>::new(
+                        AuthConfig::default(),
+                        database,
+                    )),
+                    config,
+                    true,
+                    serial,
+                    secondary,
+                )
+                .await?;
+            }
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn memory_organization_owners_compare_object_identity_in_both_join_modes() -> AuthResult<()> {
+    for joins in [false, true] {
+        for shape in [json!({"owner":1}), json!([1])] {
+            let mut config = AuthConfig::default();
+            config.advanced.database.joins = Some(joins);
+            let store = EphemeralStore::new(Arc::new(config));
+            let organization = store
+                .create_organization(CreateOrganization::new("Native", "native"))
+                .await?;
+            let owner = FieldValue::from_json(shape.clone())?;
+            let mut member = CreateMember::new(organization.id.typed()?, "placeholder", "owner");
+            member.user_id = better_auth_core::SchemaValue::from_field(owner.clone());
+            let _ = store.create_member(member).await?;
+            assert_eq!(store.list_user_organizations_value(&owner).await?.len(), 1);
+            assert!(
+                store
+                    .list_user_organizations_value(&FieldValue::from_json(shape)?)
+                    .await?
+                    .is_empty()
+            );
         }
     }
     Ok(())

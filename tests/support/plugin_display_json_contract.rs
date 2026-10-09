@@ -26,7 +26,6 @@ pub(crate) use observation::{api_key_value, passkey_value};
 pub(crate) use policies::config;
 
 mod values {
-    use better_auth::__private_core as better_auth_core;
     use better_auth::seaorm::__private_chrono as chrono;
     include!("device_where_values.rs");
 }

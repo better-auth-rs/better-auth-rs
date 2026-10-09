@@ -342,15 +342,23 @@ where
     }
 
     async fn list_user_organizations(&self, user_id: &str) -> AuthResult<Vec<Organization>> {
+        self.list_user_organizations_value(&user_id.into()).await
+    }
+
+    async fn list_user_organizations_value(
+        &self,
+        user_id: &better_auth_core::FieldValue,
+    ) -> AuthResult<Vec<Organization>> {
         if self.config().advanced.database.joins == Some(true) {
             return self.joined_user_organizations(user_id).await;
         }
         let config = self.organization_fields()?;
         let rows = Entity::<O::Member>::find()
-            .filter(
-                O::Member::column("user_id")?
-                    .eq_id(user_id, self.config().advanced.database.generate_id())?,
-            )
+            .filter(self.organization_field_equals::<O::Member>(
+                better_auth_schema_registry::EntityRole::Member,
+                "userId",
+                user_id,
+            )?)
             .limit(super::pagination::default_limit(
                 self.config(),
                 self.connection().get_database_backend(),

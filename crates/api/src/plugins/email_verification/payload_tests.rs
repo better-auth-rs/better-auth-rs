@@ -29,12 +29,140 @@ fn signed(payload: &str, secret: &str) -> String {
     )
 }
 
-fn malformed_payloads() -> [Value; 3] {
-    [
+fn malformed_payloads() -> Vec<Value> {
+    vec![
         json!({"iat": 1_700_000_000, "exp": 4_102_444_800_u64}),
         json!({"email": 7, "iat": 1_700_000_000, "exp": 4_102_444_800_u64}),
         json!({"email": "owner@verify-payload.test", "updateTo": 7, "iat": 1_700_000_000, "exp": 4_102_444_800_u64}),
+        json!({"email": "not-an-email", "iat": 1_700_000_000, "exp": 4_102_444_800_u64}),
+        json!({"email": "owner@verify-payload.test", "updateTo": null, "iat": 1_700_000_000, "exp": 4_102_444_800_u64}),
+        json!({"email": "owner@verify-payload.test", "requestType": null, "iat": 1_700_000_000, "exp": 4_102_444_800_u64}),
+        json!({"email": "owner@verify-payload.test", "requestType": false, "iat": 1_700_000_000, "exp": 4_102_444_800_u64}),
     ]
+}
+
+#[test]
+fn optional_dates_use_jose_types_order_and_fractional_boundaries() -> AuthResult<()> {
+    let now =
+        DateTime::from_timestamp(2_000_000_000, 900_000_000).expect("Fixture clock fits Chrono");
+    for extra in [
+        json!({}),
+        json!({"iat": -0.5}),
+        json!({"iat": 4_102_444_800.5}),
+        json!({"nbf": 2_000_000_000.0}),
+        json!({"nbf": -0.5, "exp": 2_000_000_000.25}),
+        json!({"aud": "unrestricted", "iss": false, "sub": [7]}),
+    ] {
+        let mut payload = json!({"email":"owner@verify-payload.test"});
+        payload
+            .as_object_mut()
+            .expect("Fixture object")
+            .extend(extra.as_object().expect("Fixture extra fields").clone());
+        let token = signed(&serde_json::to_string(&payload)?, SECRET);
+        let claims = decode_email_verification_token_at(SECRET, &token, now)?;
+        assert_eq!(claims.email, "owner@verify-payload.test");
+        assert_eq!(claims.iat, payload.get("iat").and_then(Value::as_f64));
+        assert_eq!(claims.exp, payload.get("exp").and_then(Value::as_f64));
+    }
+    for field in ["iat", "nbf", "exp"] {
+        for invalid in [
+            Value::Null,
+            json!("2000000000"),
+            json!(true),
+            json!([]),
+            json!({}),
+        ] {
+            let mut payload = json!({"email":"owner@verify-payload.test"});
+            let _ = payload
+                .as_object_mut()
+                .expect("Fixture object")
+                .insert(field.into(), invalid);
+            let token = signed(&serde_json::to_string(&payload)?, SECRET);
+            assert!(matches!(
+                decode_email_verification_token_at(SECRET, &token, now),
+                Err(AuthError::Jwt(error)) if error.kind() == &ErrorKind::InvalidClaimFormat(field.into())
+            ));
+        }
+    }
+    for (payload, expected) in [
+        (
+            json!({"email":"invalid", "iat":null, "exp":0}),
+            ErrorKind::InvalidClaimFormat("iat".into()),
+        ),
+        (
+            json!({"email":"invalid", "nbf":2_000_000_000.25, "exp":0}),
+            ErrorKind::ImmatureSignature,
+        ),
+        (
+            json!({"email":"invalid", "nbf":null, "exp":0}),
+            ErrorKind::InvalidClaimFormat("nbf".into()),
+        ),
+        (
+            json!({"email":"invalid", "exp":2_000_000_000.0, "updateTo":null}),
+            ErrorKind::ExpiredSignature,
+        ),
+    ] {
+        let token = signed(&serde_json::to_string(&payload)?, SECRET);
+        assert!(matches!(
+            decode_email_verification_token_at(SECRET, &token, now),
+            Err(AuthError::Jwt(error)) if error.kind() == &expected
+        ));
+    }
+    Ok(())
+}
+
+#[test]
+fn native_payload_preserves_duplicate_claims_overflow_and_utf16_values() -> AuthResult<()> {
+    let now = DateTime::from_timestamp(2_000_000_000, 0).expect("Fixture clock fits Chrono");
+    let token = signed(
+        r#"{"email":"invalid","email":"owner@verify-payload.test","iat":null,"iat":1e400,"nbf":1e400,"nbf":-1e400,"exp":0,"exp":1e400,"aud":"ignored","aud":null,"iss":false,"sub":[],"\ud800":"ignored","extra":{"\ud800":1e400},"updateTo":"NEW\ud800@EXAMPLE.TEST","requestType":"\udc00"}"#,
+        SECRET,
+    );
+    let claims = decode_email_verification_token_at(SECRET, &token, now)?;
+    assert_eq!(claims.email, "owner@verify-payload.test");
+    assert_eq!(claims.iat, Some(f64::INFINITY));
+    assert_eq!(claims.exp, Some(f64::INFINITY));
+    assert_eq!(
+        claims.update_to,
+        Some(better_auth_core::FieldValue::parse_json(
+            r#""NEW\ud800@EXAMPLE.TEST""#
+        )?)
+    );
+    assert_eq!(
+        claims.request_type,
+        Some(better_auth_core::FieldValue::parse_json(r#""\udc00""#)?)
+    );
+    for (payload, expired) in [
+        (
+            r#"{"email":"owner@verify-payload.test","exp":1e400,"exp":-1e400}"#,
+            true,
+        ),
+        (
+            r#"{"email":"owner@verify-payload.test","nbf":-1e400,"nbf":1e400,"exp":-1e400}"#,
+            false,
+        ),
+    ] {
+        let token = signed(payload, SECRET);
+        let expected = if expired {
+            ErrorKind::ExpiredSignature
+        } else {
+            ErrorKind::ImmatureSignature
+        };
+        assert!(matches!(
+            decode_email_verification_token_at(SECRET, &token, now),
+            Err(AuthError::Jwt(error)) if error.kind() == &expected
+        ));
+    }
+    for payload in [
+        r#"{"email":"\ud800"}"#,
+        r#"{"email":"owner@verify-payload.test","updateTo":{"\ud800":0}}"#,
+    ] {
+        assert!(matches!(
+            decode_email_verification_token_at(SECRET, &signed(payload, SECRET), now),
+            Err(AuthError::Serialization(_))
+        ));
+    }
+    Ok(())
 }
 
 #[test]

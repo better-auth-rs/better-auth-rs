@@ -9,6 +9,37 @@ use sea_orm::{
 
 pub(super) type Entity<M> = <M as SeaOrmOrganizationModel>::Entity;
 
+impl<S: crate::schema::AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema>
+    super::SeaOrmStore<S, O, P>
+{
+    pub(super) fn organization_field_equals<M: SeaOrmOrganizationModel>(
+        &self,
+        role: better_auth_schema_registry::EntityRole,
+        name: &str,
+        value: &FieldValue,
+    ) -> AuthResult<sea_orm::sea_query::SimpleExpr> {
+        self.model_fields.begin_id_query(role)?;
+        let fields = self.organization_fields()?.schema_for(role)?;
+        let field = fields.fields().get(name).ok_or_else(|| {
+            AuthError::config(format!("Unknown organization field {role:?}.{name}"))
+        })?;
+        let column = M::column(resolve_field_name(field.field_name.as_deref(), name))?;
+        let bound = if name == "id" || field.references_id() {
+            self.config()
+                .advanced
+                .database
+                .generate_id()
+                .adapter_id_query(value.clone())?
+        } else {
+            value.clone()
+        };
+        let bound = better_auth_core::user_query::bind_filter(field, &bound)?;
+        let backend = self.connection().get_database_backend();
+        let bound = super::value_filter::adapter_query_value(bound, value, field, backend)?;
+        super::value_filter::equals(column, &bound, backend)
+    }
+}
+
 pub(crate) fn record_fields<M: SeaOrmOrganizationModel>(
     model: &M,
     fields: &UserConfig,

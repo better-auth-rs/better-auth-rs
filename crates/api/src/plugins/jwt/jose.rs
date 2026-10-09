@@ -5,7 +5,9 @@ use base64::{
         DecodePaddingMode, GeneralPurpose, GeneralPurposeConfig, general_purpose::URL_SAFE_NO_PAD,
     },
 };
-use josekit::jws::JwsVerifier;
+use hmac::{Hmac, Mac};
+use jsonwebtoken::errors::{Error as JwtError, ErrorKind};
+use sha2::Sha256;
 
 pub(super) fn sign(
     payload: &Map<String, Value>,
@@ -38,21 +40,38 @@ pub(super) fn header(token: &str) -> Option<verification::Header> {
 pub(super) fn verify(
     token: &str,
     header: &verification::Header,
-    verifier: &dyn JwsVerifier,
-) -> Option<Vec<u8>> {
-    validate_header(header, false).ok()?;
-    if header.field("alg").ok()?.as_str() != Some(verifier.algorithm().name()) {
-        return None;
+    algorithm: &str,
+    verify_signature: impl FnOnce(&[u8], &[u8]) -> bool,
+) -> AuthResult<Vec<u8>> {
+    validate_header(header, false).map_err(|_| JwtError::from(ErrorKind::InvalidToken))?;
+    if header.field("alg")?.as_str() != Some(algorithm) {
+        return Err(JwtError::from(ErrorKind::InvalidAlgorithm).into());
     }
-    let (input, signature) = token.rsplit_once('.')?;
-    let (_, payload) = input.split_once('.')?;
+    let (input, signature) = token
+        .rsplit_once('.')
+        .ok_or_else(|| JwtError::from(ErrorKind::InvalidToken))?;
+    let (_, payload) = input
+        .split_once('.')
+        .ok_or_else(|| JwtError::from(ErrorKind::InvalidToken))?;
     if !input.is_ascii() {
-        return None;
+        return Err(JwtError::from(ErrorKind::InvalidToken).into());
     }
-    verifier
-        .verify(input.as_bytes(), &decode(signature)?)
-        .ok()?;
-    decode(payload)
+    let signature = decode(signature).ok_or_else(|| JwtError::from(ErrorKind::InvalidToken))?;
+    if !verify_signature(input.as_bytes(), &signature) {
+        return Err(JwtError::from(ErrorKind::InvalidSignature).into());
+    }
+    decode(payload).ok_or_else(|| JwtError::from(ErrorKind::InvalidToken).into())
+}
+
+/// Verify HS256 integrity and JOSE headers without parsing or validating payload claims.
+pub(crate) fn verify_hs256_raw(token: &str, secret: &str) -> AuthResult<Vec<u8>> {
+    let protected = header(token).ok_or_else(|| JwtError::from(ErrorKind::InvalidToken))?;
+    let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes())
+        .map_err(|_| JwtError::from(ErrorKind::InvalidKeyFormat))?;
+    verify(token, &protected, "HS256", |input, signature| {
+        mac.update(input);
+        mac.verify_slice(signature).is_ok()
+    })
 }
 
 fn decode(value: &str) -> Option<Vec<u8>> {
@@ -117,4 +136,60 @@ fn validate_header(header: &verification::Header, signing: bool) -> AuthResult<(
         ));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn signed(header: &str, payload: &[u8], secret: &str) -> AuthResult<String> {
+        let input = format!(
+            "{}.{}",
+            URL_SAFE_NO_PAD.encode(header),
+            URL_SAFE_NO_PAD.encode(payload)
+        );
+        let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes())
+            .map_err(|_| JwtError::from(ErrorKind::InvalidKeyFormat))?;
+        mac.update(input.as_bytes());
+        Ok(format!(
+            "{input}.{}",
+            URL_SAFE_NO_PAD.encode(mac.finalize().into_bytes())
+        ))
+    }
+
+    #[test]
+    fn hs256_raw_preserves_payload_and_verification_error_classes() -> AuthResult<()> {
+        let secret = "short";
+        let payload = br#"{"exp":0,"exp":1e400,"ignored":"\ud800"}"#;
+        let token = signed(r#"{"alg":"HS256","ignored":"\ud800"}"#, payload, secret)?;
+        assert_eq!(verify_hs256_raw(&token, secret)?.as_slice(), payload);
+        assert!(matches!(
+            verify_hs256_raw(&token, "wrong"),
+            Err(AuthError::Jwt(error)) if error.kind() == &ErrorKind::InvalidSignature
+        ));
+        let opaque = signed(r#"{"alg":"HS256"}"#, b"not JSON", secret)?;
+        assert_eq!(verify_hs256_raw(&opaque, secret)?.as_slice(), b"not JSON");
+        for (header, expected) in [
+            (r#"{"alg":"HS384"}"#, ErrorKind::InvalidAlgorithm),
+            (
+                r#"{"alg":"HS256","crit":["unknown"],"unknown":true}"#,
+                ErrorKind::InvalidToken,
+            ),
+            (
+                r#"{"alg":"HS256","crit":["b64"],"b64":false}"#,
+                ErrorKind::InvalidToken,
+            ),
+        ] {
+            let token = signed(header, payload, secret)?;
+            assert!(matches!(
+                verify_hs256_raw(&token, secret),
+                Err(AuthError::Jwt(error)) if error.kind() == &expected
+            ));
+        }
+        assert!(matches!(
+            verify_hs256_raw("invalid compact JWT", secret),
+            Err(AuthError::Jwt(error)) if error.kind() == &ErrorKind::InvalidToken
+        ));
+        Ok(())
+    }
 }

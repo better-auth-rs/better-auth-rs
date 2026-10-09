@@ -3,6 +3,7 @@ use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation, deco
 use serde::{Deserialize, Serialize};
 
 use better_auth_core::entity::{AuthSession, AuthUser};
+use better_auth_core::session::NativeSessionData;
 use better_auth_core::wire::{SessionView, UserView};
 use better_auth_core::{
     AuthContext, AuthError, AuthResult, CreateAccount, CreateSession, UpdateUser,
@@ -92,15 +93,15 @@ fn validate_role_input(role: &RoleInput, config: &AdminConfig) -> AuthResult<()>
 }
 
 fn require_user_permission(
-    user: &UserView,
+    session: &NativeSessionData,
     config: &AdminConfig,
     action: &str,
     message: &str,
 ) -> AuthResult<()> {
     let permission = std::collections::HashMap::from([("user".into(), vec![action.into()])]);
     if has_permission(
-        &user.id.field_value(),
-        &user.role.field_value(),
+        session.user_property("id")?,
+        session.user_property("role")?,
         config,
         &permission,
     )? {
@@ -166,19 +167,16 @@ pub(crate) async fn get_user_core(
 pub(crate) async fn create_user_core(
     body: &CreateUserRequest,
     req: Option<&better_auth_core::AuthRequest>,
-    session: Option<(
-        better_auth_core::wire::UserView,
-        better_auth_core::wire::SessionView,
-    )>,
+    session: Option<NativeSessionData>,
     config: &AdminConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<UserResponse<AdminUserView>> {
     let mut data = body.data.clone().unwrap_or_default();
     let data_role = data.remove("role");
     if (body.role.is_some() || data_role.is_some())
-        && let Some((user, _)) = &session
+        && let Some(session) = &session
     {
-        require_user_permission(user, config, "set-role", MESSAGE_CHANGE_ROLE)?;
+        require_user_permission(session, config, "set-role", MESSAGE_CHANGE_ROLE)?;
     }
     let role = match &body.role {
         Some(role) => Some(role.clone()),
@@ -191,9 +189,9 @@ pub(crate) async fn create_user_core(
         validate_role_input(role, config)?;
     }
     if has_ban_data(&data)
-        && let Some((user, _)) = &session
+        && let Some(session) = &session
     {
-        require_user_permission(user, config, "ban", "You are not allowed to ban users")?;
+        require_user_permission(session, config, "ban", "You are not allowed to ban users")?;
     }
     let email = body.email.to_lowercase();
     if !crate::plugins::json_body::valid_email(&email)? {
@@ -248,7 +246,7 @@ pub(crate) async fn create_user_core(
         ctx,
     );
     endpoint.path = Some("/admin/create-user");
-    endpoint.session = session.map(Into::into);
+    endpoint.session = session;
     let user =
         crate::plugins::user_admission::create_user_optional(create_user, "admin", &endpoint)
             .await?
@@ -292,7 +290,7 @@ pub(crate) async fn create_user_core(
 
 pub(crate) async fn update_user_core(
     body: &AdminUpdateUserRequest,
-    acting_user: &UserView,
+    acting_session: &NativeSessionData,
     config: &AdminConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<Option<AdminUserView>> {
@@ -314,8 +312,8 @@ pub(crate) async fn update_user_core(
         let permissions =
             std::collections::HashMap::from([("user".to_string(), vec!["set-role".to_string()])]);
         if !has_permission(
-            &acting_user.id.field_value(),
-            &acting_user.role.field_value(),
+            acting_session.user_property("id")?,
+            acting_session.user_property("role")?,
             config,
             &permissions,
         )? {
@@ -330,20 +328,22 @@ pub(crate) async fn update_user_core(
 
     if has_ban_data(&body.data) {
         require_user_permission(
-            acting_user,
+            acting_session,
             config,
             "ban",
             "You are not allowed to ban users",
         )?;
         if body.data.get("banned") == Some(&serde_json::Value::Bool(true))
-            && acting_user.id == body.user_id.as_str()
+            && acting_session
+                .user_property("id")?
+                .strict_equals(&body.user_id.clone().into())
         {
             return Err(AuthError::bad_request("You cannot ban yourself"));
         }
     }
     if body.data.contains_key("email") || body.data.contains_key("emailVerified") {
         require_user_permission(
-            acting_user,
+            acting_session,
             config,
             "set-email",
             "You are not allowed to update users email",
@@ -569,7 +569,7 @@ pub(crate) async fn unban_user_core(
 
 pub(crate) async fn impersonate_user_core(
     body: &UserIdRequest,
-    acting_user: &UserView,
+    acting_session: &NativeSessionData,
     ip_address: Option<&str>,
     user_agent: Option<&str>,
     config: &AdminConfig,
@@ -578,10 +578,6 @@ pub(crate) async fn impersonate_user_core(
     SessionUserResponse<SessionView, UserView>,
     better_auth_core::session::SessionData,
 )> {
-    if acting_user.id == body.user_id.as_str() {
-        return Err(AuthError::bad_request("Cannot impersonate yourself"));
-    }
-
     let mut target = ctx
         .database
         .get_user_by_id(&body.user_id)
@@ -596,7 +592,7 @@ pub(crate) async fn impersonate_user_core(
         )?
     {
         require_user_permission(
-            acting_user,
+            acting_session,
             config,
             "impersonate-admins",
             MESSAGE_CANNOT_IMPERSONATE_ADMINS,
@@ -641,7 +637,11 @@ pub(crate) async fn impersonate_user_core(
     .ok_or_else(|| AuthError::internal("Invalid impersonation expiration date"))?;
     let create_session = CreateSession {
         inherited_fields: Default::default(),
-        additional_fields: [("impersonatedBy".into(), acting_user.id.field_value())].into(),
+        additional_fields: [(
+            "impersonatedBy".into(),
+            acting_session.user_property("id")?.clone(),
+        )]
+        .into(),
         user_id: target.id().into_owned(),
         expires_at: expires_at.into(),
         ip_address: ip_address.map(|value| value.to_string()),
@@ -830,24 +830,4 @@ pub(crate) async fn set_user_password_core(
     }
 
     Ok(StatusResponse { status: true })
-}
-
-pub(crate) fn has_permission_core(
-    body: &HasPermissionRequest,
-    user: &UserView,
-    config: &AdminConfig,
-) -> AuthResult<PermissionResponse> {
-    let requested = body.requested_permissions().ok_or_else(|| {
-        AuthError::bad_request("invalid permission check. no permission(s) were passed.")
-    })?;
-
-    Ok(PermissionResponse {
-        error: None,
-        success: has_permission(
-            &user.id.field_value(),
-            &user.role.field_value(),
-            config,
-            requested,
-        )?,
-    })
 }

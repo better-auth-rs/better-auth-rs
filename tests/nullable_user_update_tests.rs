@@ -507,7 +507,10 @@ async fn native_user_field_update_reuses_mapping_and_binds_before_projection() -
             .ok_or("Expected selected User")?;
         assert_eq!(*lock(&events)?, ["output"]);
         assert_eq!(result.id, target.id);
-        assert_eq!(result.email, "projected@example.test");
+        assert_eq!(
+            result.email.typed()?.as_deref(),
+            Some("projected@example.test")
+        );
         assert_eq!(result.name.typed()?.as_deref(), Some(field));
         assert_eq!(
             store.get_user_by_id(target.id.typed()?).await?,

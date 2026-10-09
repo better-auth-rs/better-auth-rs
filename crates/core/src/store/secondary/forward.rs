@@ -165,6 +165,12 @@ impl<S: AuthSchema> OrganizationStore for SecondaryStore<S> {
     async fn list_user_organizations(&self, user_id: &str) -> AuthResult<Vec<Organization>> {
         self.inner.list_user_organizations(user_id).await
     }
+    async fn list_user_organizations_value(
+        &self,
+        user_id: &crate::FieldValue,
+    ) -> AuthResult<Vec<Organization>> {
+        self.inner.list_user_organizations_value(user_id).await
+    }
 }
 
 #[async_trait]

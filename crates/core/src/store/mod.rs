@@ -489,6 +489,22 @@ pub trait UserStore<S: AuthSchema>: Send + Sync {
         ids: &[String],
         limit: f64,
     ) -> AuthResult<Vec<crate::UserView>>;
+    /// Preserve native ID values in one limited query before output projection.
+    async fn list_users_by_id_values(
+        &self,
+        ids: &[crate::FieldValue],
+        limit: f64,
+    ) -> AuthResult<Vec<crate::UserView>> {
+        let ids = ids
+            .iter()
+            .map(|id| {
+                id.as_str().map(str::to_owned).ok_or_else(|| {
+                    AuthError::config("The store must support native user ID batch queries")
+                })
+            })
+            .collect::<AuthResult<Vec<_>>>()?;
+        self.list_users_by_ids(&ids, limit).await
+    }
     async fn get_user_by_email(&self, email: &str) -> AuthResult<Option<crate::UserView>>;
     /// Read the user and the schema-selected Account relationship, preserving single-record and page results.
     async fn get_user_with_accounts(&self, _email: &str) -> AuthResult<Option<UserAccounts>> {
@@ -1300,6 +1316,16 @@ pub trait OrganizationStore: Send + Sync {
     }
     async fn delete_organization(&self, id: &str) -> AuthResult<()>;
     async fn list_user_organizations(&self, user_id: &str) -> AuthResult<Vec<Organization>>;
+    /// Query membership with the original native User ID and existing join policy.
+    async fn list_user_organizations_value(
+        &self,
+        user_id: &crate::FieldValue,
+    ) -> AuthResult<Vec<Organization>> {
+        let user_id = user_id.as_str().ok_or_else(|| {
+            AuthError::config("The store must support native organization membership queries")
+        })?;
+        self.list_user_organizations(user_id).await
+    }
 }
 
 #[async_trait]

@@ -7,6 +7,7 @@
 use super::*;
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use better_auth_core::AuthError;
+use jsonwebtoken::Algorithm;
 use serde_json::{Value, json};
 
 const SECRET: &str = "email-verification-duration-contract-secret-at-least-32-characters";
@@ -107,7 +108,7 @@ fn email_verification_numeric_dates_match_all_pinned_jwts_and_expiry_boundaries(
 }
 
 #[test]
-fn fractional_expiration_keeps_signature_algorithm_and_required_claim_guards() -> AuthResult<()> {
+fn fractional_expiration_keeps_signature_algorithm_and_present_claim_guards() -> AuthResult<()> {
     let fixture = fixture()?;
     let case = &fixture["cases"][0];
     let token = case["jwt"]["token"]
@@ -138,10 +139,12 @@ fn fractional_expiration_keeps_signature_algorithm_and_required_claim_guards() -
             &claims,
             &EncodingKey::from_secret(SECRET.as_bytes()),
         )?;
-        assert!(
-            decode_email_verification_token_at(SECRET, &missing, now).is_err(),
-            "Missing {field}"
-        );
+        let decoded = decode_email_verification_token_at(SECRET, &missing, now);
+        if field == "email" {
+            assert!(matches!(decoded, Err(AuthError::Serialization(_))));
+        } else {
+            assert_eq!(serde_json::to_value(decoded?)?, Value::Object(claims));
+        }
     }
     for expiration in [Value::Null, json!("2000000001.5")] {
         let mut claims = case["jwt"]["claims"].clone();

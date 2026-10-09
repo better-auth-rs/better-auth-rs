@@ -14,8 +14,9 @@ use serde::Deserialize;
 use serde_json::json;
 use validator::Validate;
 
-use super::require_session;
+use super::require_native_session;
 use crate::plugins::organization::{OrganizationConfig, rbac::check_permission};
+use better_auth_core::session::NativeSessionData;
 
 type Permissions = HashMap<String, Vec<String>>;
 
@@ -270,16 +271,15 @@ async fn unused_name(
 }
 
 async fn authorize_member(
-    req: &AuthRequest,
+    session: &NativeSessionData,
     organization_id: Option<&str>,
     action: &str,
     config: &OrganizationConfig,
     ctx: &AuthContext<impl AuthSchema>,
 ) -> AuthResult<(FieldValue, String)> {
-    let (user, session) = require_session(req, ctx).await?;
     let organization_id = organization_id
         .map(FieldValue::from)
-        .unwrap_or_else(|| session.active_organization_id.field_value());
+        .unwrap_or_else(|| session.session.active_organization_id.field_value());
     let organization_id = organization_id
         .is_truthy()
         .then_some(organization_id)
@@ -296,7 +296,7 @@ async fn authorize_member(
         })?;
     let member = ctx
         .database
-        .get_member_value(&organization_id, &user.id.field_value())
+        .get_member_value(&organization_id, session.user_property("id")?)
         .await?
         .ok_or_else(|| AuthError::forbidden("You are not a member of this organization"))?;
     let permission = if action == "list" { "read" } else { action };
@@ -425,7 +425,7 @@ pub async fn handle_role_request(
     ctx: &AuthContext<impl AuthSchema>,
     config: &OrganizationConfig,
 ) -> AuthResult<Option<AuthResponse>> {
-    let (_, session) = require_session(req, ctx).await?;
+    let session = require_native_session(req, ctx).await?;
     let response = match (req.method(), req.path()) {
         (HttpMethod::Post, "/organization/create-role") => {
             let body: CreateRole = super::super::request::read(req, &config.schema)?;
@@ -435,7 +435,7 @@ pub async fn handle_role_request(
                 .organization_id
                 .as_deref()
                 .map(FieldValue::from)
-                .unwrap_or_else(|| session.active_organization_id.field_value())
+                .unwrap_or_else(|| session.session.active_organization_id.field_value())
                 .is_truthy()
             {
                 return Err(AuthError::Upstream {
@@ -453,9 +453,14 @@ pub async fn handle_role_request(
                     message: "That role name is already taken",
                 });
             }
-            let (organization_id, member_role) =
-                authorize_member(req, body.organization_id.as_deref(), "create", config, ctx)
-                    .await?;
+            let (organization_id, member_role) = authorize_member(
+                &session,
+                body.organization_id.as_deref(),
+                "create",
+                config,
+                ctx,
+            )
+            .await?;
             let maximum = config.role_limit(&organization_id).await?;
             let count = ctx
                 .database
@@ -506,7 +511,7 @@ pub async fn handle_role_request(
                 "read"
             };
             let (organization_id, _) = authorize_member(
-                req,
+                &session,
                 selector.organization_id.as_deref(),
                 action,
                 config,
@@ -538,7 +543,7 @@ pub async fn handle_role_request(
         (HttpMethod::Post, "/organization/delete-role") => {
             let selector: RoleSelector = super::super::request::read(req, &config.schema)?;
             let (organization_id, _) = authorize_member(
-                req,
+                &session,
                 selector.organization_id.as_deref(),
                 "delete",
                 config,
@@ -600,7 +605,7 @@ pub async fn handle_role_request(
             });
             let _ = require_ac(config)?;
             let (organization_id, member_role) = authorize_member(
-                req,
+                &session,
                 body.selector.organization_id.as_deref(),
                 "update",
                 config,

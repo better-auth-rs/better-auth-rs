@@ -46,6 +46,7 @@ on:
       - compat-tests/reference-server/contracts/device-reference-values-capture.mjs
       - compat-tests/reference-server/contracts/device-reference-defaults-capture.mjs
       - compat-tests/reference-server/contracts/email-verification-payload-capture.mjs
+      - compat-tests/reference-server/contracts/email-verification-claims-capture.mjs
       - compat-tests/reference-server/contracts/oauth-token-duration-capture.mjs
       - compat-tests/reference-server/contracts/memory-name-coercion-capture.mjs
       - compat-tests/reference-server/contracts/custom-model-join-reference-capture.mjs
@@ -79,8 +80,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - contract: oauth-native-session
-            regressions: []
+          - contract: email-verification-claims
+            regressions: [email-verification-payload]
             backend: ''
     runs-on: ubuntu-latest
     timeout-minutes: 10
