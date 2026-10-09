@@ -13,7 +13,7 @@ use better_auth::plugins::{
 use better_auth::server_api::EndpointInput;
 use better_auth::{AuthBuilder, AuthConfig, AuthError, AuthResult};
 use better_auth_core::store::database_hooks::{
-    DatabaseHookContext, DatabaseHookControl, DatabaseHookUpdate, DatabaseHooks, VerificationUpdate,
+    DatabaseHookContext, DatabaseHookControl, DatabaseHookUpdate, DatabaseHooks,
 };
 use better_auth_core::wire::{SessionView, UserView, VerificationView};
 use better_auth_core::{
@@ -72,9 +72,9 @@ impl DatabaseHooks<BundledSchema> for Hooks {
     }
     async fn before_update_verification(
         &self,
-        _: &VerificationUpdate,
+        _: &mut better_auth_core::FieldMap,
         context: &DatabaseHookContext<'_, BundledSchema>,
-    ) -> AuthResult<DatabaseHookUpdate<VerificationUpdate>> {
+    ) -> AuthResult<DatabaseHookUpdate<better_auth_core::FieldMap>> {
         self.state.event("verification:update.before");
         self.state.capture("verification:update.before", context);
         Ok(DatabaseHookUpdate::Continue)

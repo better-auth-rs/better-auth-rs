@@ -1,7 +1,6 @@
 use super::*;
 use crate::store::database_hooks::{
     DatabaseHookContext, DatabaseHookControl, DatabaseHookUpdate, DatabaseHooks, SessionUpdate,
-    VerificationUpdate,
 };
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -14,30 +13,22 @@ struct UpdateHooks {
 impl DatabaseHooks<StatelessSchema> for UpdateHooks {
     async fn before_update_account(
         &self,
-        data: &UpdateAccount,
+        data: &mut FieldMap,
         _: &DatabaseHookContext<'_, StatelessSchema>,
-    ) -> AuthResult<DatabaseHookUpdate<UpdateAccount>> {
-        self.observed
-            .lock()
-            .unwrap()
-            .push(if data.password.is_undefined() {
-                String::new()
-            } else {
-                data.password.typed()?.clone().unwrap_or_default()
-            });
-        if data.scope == Some("cancel".to_owned()) {
+    ) -> AuthResult<DatabaseHookUpdate<FieldMap>> {
+        self.observed.lock().unwrap().push(
+            data.get("password")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_owned(),
+        );
+        if data.get("scope").and_then(Value::as_str) == Some("cancel") {
             return Ok(DatabaseHookUpdate::Cancel);
         }
         Ok(DatabaseHookUpdate::Patch(if self.first {
-            UpdateAccount {
-                password: (Some("first-patch".into())).into(),
-                ..Default::default()
-            }
+            [("password".into(), "first-patch".into())].into()
         } else {
-            UpdateAccount {
-                scope: (Some("second-patch".into())).into(),
-                ..Default::default()
-            }
+            [("scope".into(), "second-patch".into())].into()
         }))
     }
     async fn after_update_account(
@@ -411,9 +402,9 @@ impl DatabaseHooks<StatelessSchema> for MissingUpdates {
     }
     async fn before_update_verification(
         &self,
-        _: &VerificationUpdate,
+        _: &mut FieldMap,
         _: &DatabaseHookContext<'_, StatelessSchema>,
-    ) -> AuthResult<DatabaseHookUpdate<VerificationUpdate>> {
+    ) -> AuthResult<DatabaseHookUpdate<FieldMap>> {
         Ok(DatabaseHookUpdate::Continue)
     }
     async fn after_update_verification(

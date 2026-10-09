@@ -8,12 +8,9 @@ use crate::schema::{
 use async_trait::async_trait;
 use better_auth_core::store::database_hooks::{
     DatabaseHookContext, DatabaseHookControl, DatabaseHookUpdate, DatabaseHooks, SessionUpdate,
-    VerificationUpdate,
 };
 use better_auth_core::store::{AuthStore, RuntimeStore};
-use better_auth_core::{
-    AuthConfig, AuthResult, AuthSchema, CreateAccount, CreateVerification, UpdateAccount,
-};
+use better_auth_core::{AuthConfig, AuthResult, AuthSchema, CreateAccount, CreateVerification};
 
 impl<S, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> RuntimeStore<S>
     for SeaOrmStore<S, O, P>
@@ -198,9 +195,9 @@ impl<S: AuthSchema> SeaOrmHooks<S> for PluginHook<S> {
 
     async fn before_update_account(
         &self,
-        _data: &UpdateAccount,
+        _data: &mut better_auth_core::FieldMap,
         ctx: &SeaOrmHookContext<'_, S>,
-    ) -> AuthResult<DatabaseHookUpdate<UpdateAccount>> {
+    ) -> AuthResult<DatabaseHookUpdate<better_auth_core::FieldMap>> {
         let context = DatabaseHookContext {
             config: ctx.config,
             request: ctx.request.clone(),
@@ -368,10 +365,9 @@ impl<S: AuthSchema> SeaOrmHooks<S> for PluginHook<S> {
 
     async fn before_update_verification(
         &self,
-        _id: &str,
-        _data: &VerificationUpdate,
+        _data: &mut better_auth_core::FieldMap,
         ctx: &SeaOrmHookContext<'_, S>,
-    ) -> AuthResult<DatabaseHookUpdate<VerificationUpdate>> {
+    ) -> AuthResult<DatabaseHookUpdate<better_auth_core::FieldMap>> {
         let context = DatabaseHookContext {
             config: ctx.config,
             request: ctx.request.clone(),

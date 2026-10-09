@@ -51,6 +51,16 @@ impl From<SessionData> for SessionSnapshot {
     }
 }
 
+impl From<NativeSessionData> for SessionSnapshot {
+    fn from(data: NativeSessionData) -> Self {
+        let relationship_array = matches!(&data.user, FieldValue::Array(_));
+        Self {
+            data,
+            relationship_array,
+        }
+    }
+}
+
 impl From<SessionData<JoinValue<UserView>>> for SessionSnapshot {
     fn from(data: SessionData<JoinValue<UserView>>) -> Self {
         let relationship_array = matches!(&data.user, JoinValue::Many(_));

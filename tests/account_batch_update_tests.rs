@@ -50,11 +50,14 @@ struct Hooks {
 impl<S: AuthSchema> DatabaseHooks<S> for Hooks {
     async fn before_update_account(
         &self,
-        original: &UpdateAccount,
+        original: &mut better_auth_core::FieldMap,
         ctx: &DatabaseHookContext<'_, S>,
-    ) -> AuthResult<DatabaseHookUpdate<UpdateAccount>> {
-        assert_eq!(original.password.typed()?.as_deref(), Some("requested"));
-        assert!(original.refresh_token.is_undefined());
+    ) -> AuthResult<DatabaseHookUpdate<better_auth_core::FieldMap>> {
+        assert_eq!(
+            original.get("password").and_then(FieldValue::as_str),
+            Some("requested")
+        );
+        assert!(!original.contains_key("refreshToken"));
         assert_eq!(ctx.transaction.is_some(), self.transactional);
         self.events
             .lock()
@@ -64,15 +67,9 @@ impl<S: AuthSchema> DatabaseHooks<S> for Hooks {
             return Ok(DatabaseHookUpdate::Cancel);
         }
         Ok(DatabaseHookUpdate::Patch(if self.first {
-            UpdateAccount {
-                password: Some("first-hook".into()).into(),
-                ..Default::default()
-            }
+            [("password".into(), "first-hook".into())].into()
         } else {
-            UpdateAccount {
-                refresh_token: Some("second-hook".into()).into(),
-                ..Default::default()
-            }
+            [("refreshToken".into(), "second-hook".into())].into()
         }))
     }
 

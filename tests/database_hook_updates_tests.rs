@@ -11,7 +11,6 @@ use better_auth_core::{
 };
 use better_auth_seaorm::{
     DatabaseHookUpdate, SeaOrmHookContext, SeaOrmHooks, SeaOrmStore, SessionUpdate,
-    VerificationUpdate,
     sea_orm::{Database, EntityTrait},
     store::__private_test_support::{bundled_schema::BundledSchema, migrator},
 };
@@ -62,24 +61,20 @@ impl SeaOrmHooks<BundledSchema> for PatchHook {
     }
     async fn before_update_account(
         &self,
-        update: &UpdateAccount,
+        update: &mut better_auth_core::FieldMap,
         _: &SeaOrmHookContext<'_, BundledSchema>,
-    ) -> AuthResult<DatabaseHookUpdate<UpdateAccount>> {
+    ) -> AuthResult<DatabaseHookUpdate<better_auth_core::FieldMap>> {
         assert_eq!(
-            update.password.typed().unwrap().as_deref(),
+            update
+                .get("password")
+                .and_then(better_auth_core::FieldValue::as_str),
             Some("requested")
         );
-        assert!(update.scope.is_undefined());
+        assert!(!update.contains_key("scope"));
         Ok(DatabaseHookUpdate::Patch(if self.first {
-            UpdateAccount {
-                scope: (Some("first-scope".into())).into(),
-                ..Default::default()
-            }
+            [("scope".into(), "first-scope".into())].into()
         } else {
-            UpdateAccount {
-                password: (Some("last-password".into())).into(),
-                ..Default::default()
-            }
+            [("password".into(), "last-password".into())].into()
         }))
     }
     async fn before_update_session(
@@ -111,29 +106,20 @@ impl SeaOrmHooks<BundledSchema> for PatchHook {
     }
     async fn before_update_verification(
         &self,
-        _: &str,
-        update: &VerificationUpdate,
+        update: &mut better_auth_core::FieldMap,
         _: &SeaOrmHookContext<'_, BundledSchema>,
-    ) -> AuthResult<DatabaseHookUpdate<VerificationUpdate>> {
+    ) -> AuthResult<DatabaseHookUpdate<better_auth_core::FieldMap>> {
         assert_eq!(
-            Some(update.value.typed().unwrap().as_str()),
+            update
+                .get("value")
+                .and_then(better_auth_core::FieldValue::as_str),
             Some("requested")
         );
-        assert!(update.identifier.is_undefined());
+        assert!(!update.contains_key("identifier"));
         Ok(DatabaseHookUpdate::Patch(if self.first {
-            VerificationUpdate {
-                identifier: (Some("moved".into()))
-                    .map(better_auth_core::SchemaValue::Typed)
-                    .unwrap_or_default(),
-                ..Default::default()
-            }
+            [("identifier".into(), "moved".into())].into()
         } else {
-            VerificationUpdate {
-                value: (Some("last-value".into()))
-                    .map(better_auth_core::SchemaValue::Typed)
-                    .unwrap_or_default(),
-                ..Default::default()
-            }
+            [("value".into(), "last-value".into())].into()
         }))
     }
     async fn after_update_user(

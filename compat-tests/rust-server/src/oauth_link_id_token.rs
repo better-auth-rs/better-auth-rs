@@ -12,7 +12,7 @@ use better_auth::plugins::{
 };
 use better_auth::{AuthBuilder, AuthConfig, AuthError, AuthResult, BetterAuth};
 use better_auth_core::store::AccountStore;
-use better_auth_core::{AuthUser, CreateAccount, UpdateAccount};
+use better_auth_core::{AuthUser, CreateAccount};
 use better_auth_seaorm::hooks::{HookControl, SeaOrmHookContext, SeaOrmHooks};
 use serde_json::{Value, json};
 use std::sync::{Arc, Mutex};
@@ -257,9 +257,9 @@ impl SeaOrmHooks<TestSchema> for OAuthLinkIdTokenFixture {
     }
     async fn before_update_account(
         &self,
-        _: &UpdateAccount,
+        _: &mut better_auth_core::FieldMap,
         ctx: &SeaOrmHookContext<'_, TestSchema>,
-    ) -> AuthResult<better_auth::seaorm::DatabaseHookUpdate<UpdateAccount>> {
+    ) -> AuthResult<better_auth::seaorm::DatabaseHookUpdate<better_auth_core::FieldMap>> {
         self.hook("account.update.before", ctx)?;
         Ok(if self.cancel("account.update.before").is_cancelled() {
             better_auth::seaorm::DatabaseHookUpdate::Cancel

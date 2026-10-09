@@ -1,6 +1,6 @@
 use super::hooks::CommittedWrite;
 use super::*;
-use crate::store::database_hooks::{DatabaseHookControl, DatabaseHookUpdate, DatabaseUpdateResult};
+use crate::store::database_hooks::{DatabaseHookControl, DatabaseUpdateResult};
 use crate::store::schema::EntityRole;
 
 impl EphemeralStore {
@@ -254,34 +254,33 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
     async fn update_account_by_id_value(
         &self,
         id: &Value,
-        mut update: UpdateAccount,
+        update: UpdateAccount,
     ) -> AuthResult<Option<AccountView>> {
-        let original = update.clone();
+        let mut prepared = crate::store::database_hooks::PreparedRecordWrite::new(update.fields()?);
         let transaction = EphemeralTransaction {
             store: self.clone(),
         };
         let context = self.hook_context(&transaction);
         for hook in &self.hooks {
-            match crate::observability::database::with_database_hook(
+            let outcome = crate::observability::database::with_database_hook(
                 context.config,
                 hook.hook_metadata(),
                 crate::observability::database::DatabaseHook::BeforeUpdateAccount,
-                hook.before_update_account(&original, &context),
+                hook.before_update_account(prepared.original_fields_mut(), &context),
             )
-            .await?
-            {
-                DatabaseHookUpdate::Continue => {}
-                DatabaseHookUpdate::Cancel => return Ok(None),
-                DatabaseHookUpdate::Patch(patch) => update.merge(patch),
+            .await?;
+            if !prepared.apply(outcome) {
+                return Ok(None);
             }
         }
+        crate::store::database_hooks::await_adapter_lookup().await;
         self.model_fields.canonicalize_id(EntityRole::Account)?;
         let id = self.memory_primary_id_query(id)?;
         let patch = self
             .config
             .account
             .field_schema()
-            .record_storage_fields_with_binding(update.fields()?, false, |_, field, value| {
+            .record_storage_fields_with_binding(prepared.into_fields(), false, |_, field, value| {
                 self.memory_plugin_field_input(field, value)
             })
             .await?;
@@ -317,25 +316,23 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
     async fn update_accounts(
         &self,
         selectors: &FieldMap,
-        mut update: UpdateAccount,
+        update: UpdateAccount,
     ) -> AuthResult<Option<u64>> {
-        let original = update.clone();
+        let mut prepared = crate::store::database_hooks::PreparedRecordWrite::new(update.fields()?);
         let transaction = EphemeralTransaction {
             store: self.clone(),
         };
         let context = self.hook_context(&transaction);
         for hook in &self.hooks {
-            match crate::observability::database::with_database_update_many_hook(
+            let outcome = crate::observability::database::with_database_update_many_hook(
                 context.config,
                 hook.hook_metadata(),
                 crate::observability::database::DatabaseHook::BeforeUpdateAccount,
-                hook.before_update_account(&original, &context),
+                hook.before_update_account(prepared.original_fields_mut(), &context),
             )
-            .await?
-            {
-                DatabaseHookUpdate::Continue => {}
-                DatabaseHookUpdate::Cancel => return Ok(None),
-                DatabaseHookUpdate::Patch(patch) => update.merge(patch),
+            .await?;
+            if !prepared.apply(outcome) {
+                return Ok(None);
             }
         }
         crate::store::database_hooks::await_adapter_lookup().await;
@@ -346,7 +343,7 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
             .map(|(name, value)| self.account_field_selector(&fields, name, value.clone()))
             .collect::<AuthResult<Vec<_>>>()?;
         let patch = fields
-            .record_storage_fields_with_binding(update.fields()?, false, |_, field, value| {
+            .record_storage_fields_with_binding(prepared.into_fields(), false, |_, field, value| {
                 self.memory_plugin_field_input(field, value)
             })
             .await?;

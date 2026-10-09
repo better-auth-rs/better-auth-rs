@@ -83,7 +83,7 @@ impl CreateAccount {
     }
 }
 
-/// Partial update passed to database hooks before adapter field policies.
+/// Typed update converted to logical fields before database hooks and adapter policies.
 #[derive(Debug, Clone, Default)]
 pub struct UpdateAccount {
     pub id: SchemaValue<String>,
@@ -152,49 +152,6 @@ impl UpdateAccount {
             let _ = fields.insert("updatedAt".into(), self.updated_at.field_value());
         }
         Ok(fields)
-    }
-    /// Merge only supplied fields; undefined retains the previous patch value.
-    pub fn merge(&mut self, patch: Self) {
-        if !patch.id.is_undefined() {
-            self.id = patch.id;
-        }
-        if !patch.account_id.is_undefined() {
-            self.account_id = patch.account_id;
-        }
-        if !patch.provider_id.is_undefined() {
-            self.provider_id = patch.provider_id;
-        }
-        if !patch.user_id.is_undefined() {
-            self.user_id = patch.user_id;
-        }
-        if !patch.access_token.is_undefined() {
-            self.access_token = patch.access_token;
-        }
-        if !patch.refresh_token.is_undefined() {
-            self.refresh_token = patch.refresh_token;
-        }
-        if !patch.id_token.is_undefined() {
-            self.id_token = patch.id_token;
-        }
-        if !patch.access_token_expires_at.is_undefined() {
-            self.access_token_expires_at = patch.access_token_expires_at;
-        }
-        if !patch.refresh_token_expires_at.is_undefined() {
-            self.refresh_token_expires_at = patch.refresh_token_expires_at;
-        }
-        if !patch.scope.is_undefined() {
-            self.scope = patch.scope;
-        }
-        if !patch.password.is_undefined() {
-            self.password = patch.password;
-        }
-        if !patch.created_at.is_undefined() {
-            self.created_at = patch.created_at;
-        }
-        if !patch.updated_at.is_undefined() {
-            self.updated_at = patch.updated_at;
-        }
-        self.additional_fields.extend(patch.additional_fields);
     }
 }
 
@@ -315,28 +272,6 @@ impl VerificationUpdate {
             let _ = fields.insert("updatedAt".into(), self.updated_at.field_value());
         }
         Ok(fields)
-    }
-    /// Merge only supplied fields; undefined retains the previous patch value.
-    pub fn merge(&mut self, patch: Self) {
-        if !patch.id.is_undefined() {
-            self.id = patch.id;
-        }
-        if !patch.identifier.is_undefined() {
-            self.identifier = patch.identifier;
-        }
-        if !patch.value.is_undefined() {
-            self.value = patch.value;
-        }
-        if !patch.expires_at.is_undefined() {
-            self.expires_at = patch.expires_at;
-        }
-        if !patch.created_at.is_undefined() {
-            self.created_at = patch.created_at;
-        }
-        if !patch.updated_at.is_undefined() {
-            self.updated_at = patch.updated_at;
-        }
-        self.additional_fields.extend(patch.additional_fields);
     }
 }
 

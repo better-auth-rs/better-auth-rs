@@ -86,7 +86,9 @@ async fn test_virtual_session_creates_no_db_session() {
         BeforeRequestAction::Respond(_) => {
             panic!("Expected InjectSession, got Respond");
         }
-        BeforeRequestAction::ReplaceBody(_) | BeforeRequestAction::MergeContext(_) => {
+        BeforeRequestAction::ReplaceBody(_)
+        | BeforeRequestAction::MergeContext(_)
+        | BeforeRequestAction::InjectNativeSession { .. } => {
             panic!("Expected InjectSession, got ReplaceBody");
         }
     }
@@ -149,7 +151,9 @@ async fn test_virtual_session_on_get_session() {
         BeforeRequestAction::InjectSession { .. } => {
             panic!("Expected Respond for /get-session, got InjectSession");
         }
-        BeforeRequestAction::ReplaceBody(_) | BeforeRequestAction::MergeContext(_) => {
+        BeforeRequestAction::ReplaceBody(_)
+        | BeforeRequestAction::MergeContext(_)
+        | BeforeRequestAction::InjectNativeSession { .. } => {
             panic!("Expected Respond for /get-session, got ReplaceBody");
         }
     }

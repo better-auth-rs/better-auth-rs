@@ -40,6 +40,11 @@ pub enum BeforeRequestAction {
     InjectSession {
         session: Box<crate::wire::SessionView>,
     },
+    /// Set the current Session from a trusted server hook without projecting its User value.
+    /// Authoritative reads still discard this value when the store owns sessions.
+    InjectNativeSession {
+        session: Box<crate::session::NativeSessionData>,
+    },
 }
 
 /// Plugin trait that all authentication plugins must implement.
@@ -107,9 +112,9 @@ pub trait AuthPlugin<S: AuthSchema>: Send + Sync + std::any::Any {
     ///
     /// Return `Some(BeforeRequestAction::Respond(..))` to short-circuit with a
     /// response, `Some(BeforeRequestAction::InjectSession { .. })` to attach a
-    /// virtual session, or `Some(BeforeRequestAction::ReplaceBody(..))` to rewrite
-    /// the request body. Session injection and body replacement continue through
-    /// the remaining hooks before normal route matching.
+    /// virtual session, or `Some(BeforeRequestAction::InjectNativeSession { .. })`
+    /// to supply the complete trusted Session. `Some(BeforeRequestAction::ReplaceBody(..))`
+    /// rewrites the request body. These actions continue through the remaining hooks.
     async fn before_request(
         &self,
         _req: &AuthRequest,
@@ -839,6 +844,7 @@ impl<S: AuthSchema> AuthContext<S> {
 #[cfg(test)]
 mod tests {
     mod async_body_dispatch;
+    mod native_session_hooks;
 
     use super::*;
     use crate::entity::AuthUser;

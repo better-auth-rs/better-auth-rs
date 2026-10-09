@@ -115,6 +115,8 @@ An application plugin can keep a typed repository for its own tables and share t
 
 `before_request` hooks run for registered endpoints in plugin registration order. `ReplaceBody` replaces the request body and continues the hook chain. `InjectSession` supplies a session for the remaining hooks and route handler. `Respond` skips the endpoint and all after hooks. Unmatched paths and methods return an empty HTTP 404 after `on_http_request`, without endpoint hooks. HTTP response hooks still run.
 
+Use `InjectNativeSession` in a trusted server hook to supply a complete `NativeSessionData`, including native User values and object identities. The dispatcher stores the value in the private request snapshot. HTTP JSON and cookies cannot set that snapshot. Later Session injection replaces the earlier source. Cached and stateless native Session reads can reuse the snapshot; authoritative reads backed by database or secondary storage clear the snapshot and read current storage. Cookie validation remains independent of this trusted hook action.
+
 `on_http_response(&AuthRequest, &mut AuthResponse, &AuthContext<S>) -> AuthResult<Option<AuthResponse>>` runs after HTTP routing, including route misses and body-decoding errors. Hooks run in registration order and may mutate the response. Returning `Some(response)` replaces the response and stops the chain. Disabled paths, early HTTP request responses, and native calls bypass this hook. `WithCallbacks` forwards this hook to its wrapped plugin.
 
 | Failure phase | HTTP behavior | Native behavior |

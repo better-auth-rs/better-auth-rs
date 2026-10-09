@@ -112,13 +112,15 @@ async fn serial_user_queries_bind_numbers_and_project_strings() -> AuthResult<()
     assert_eq!(deleted.id, "2");
     assert!(store.get_user_by_id("2").await?.is_none());
     assert_eq!(store.create_user(user("replacement")).await?.id, "10");
-    store.delete_user("10").await?;
     assert_eq!(
-        required(store.get_user_by_id("10").await?)?
-            .email
-            .typed()?
-            .as_deref(),
-        Some("replacement@serial-user.test")
+        stored_ids(&store)?,
+        [1, 3, 4, 5, 6, 7, 8, 9, 10, 10].map(|id| Value::Number(f64::from(id)))
+    );
+    store.delete_user("10").await?;
+    assert!(store.get_user_by_id("10").await?.is_none());
+    assert_eq!(
+        stored_ids(&store)?,
+        [1, 3, 4, 5, 6, 7, 8, 9].map(|id| Value::Number(f64::from(id)))
     );
     assert!(
         stored_ids(&store)?

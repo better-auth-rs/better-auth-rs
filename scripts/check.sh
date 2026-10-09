@@ -203,6 +203,7 @@ run_stage() {
           --test user_input_policy_tests --test protected_function_tests \
           --test user_verification_fields_tests --test user_record_values_tests \
           --test account_owner_batch_tests --test account_identity_tests --test account_native_selector_tests --test account_batch_update_tests \
+          --test account_verification_update_fields_tests \
           --test account_user_selected_relations_reference_tests \
           --test native_core_join_tests --test native_memory_join_tests --test session_user_join_reference_tests \
           --test memory_user_live_reads_tests --test api_key_number_name_tests \
@@ -245,6 +246,7 @@ run_stage() {
         ./compat-tests/reference-server/contracts/passkey-user-id.test.ts \
         ./compat-tests/reference-server/contracts/user-account-raw-column.test.ts \
         ./compat-tests/reference-server/contracts/account-owner-batch.test.ts \
+        ./compat-tests/reference-server/contracts/account-verification-update-fields.test.ts \
         ./compat-tests/reference-server/contracts/account-duplicates.test.ts \
         ./compat-tests/reference-server/contracts/account-user-selected-relations.test.ts \
         ./compat-tests/reference-server/contracts/native-core-joins.test.ts \

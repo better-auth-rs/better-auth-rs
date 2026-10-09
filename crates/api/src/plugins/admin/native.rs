@@ -1,7 +1,6 @@
-use super::{AdminConfig, AdminPlugin, AdminUserResponse, CreateAdminUser, MESSAGE_CREATE_USERS};
+use super::{AdminConfig, AdminPlugin, AdminUserResponse, CreateAdminUser};
 use better_auth_core::{
-    AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, AuthSchema, HttpMethod,
-    NativeRequest, wire::UserView,
+    AuthContext, AuthError, AuthResult, AuthRoute, AuthSchema, NativeRequest, wire::UserView,
 };
 use std::collections::HashMap;
 
@@ -24,57 +23,37 @@ impl<'a, S: AuthSchema> AdminApi<'a, S> {
     }
 
     /// Omit headers only for trusted server provisioning. Any supplied headers require a session.
+    /// Run endpoint hooks and return the final native User fields after response hooks.
     pub async fn create_user(
         &self,
         body: &CreateAdminUser,
         headers: Option<&HashMap<String, String>>,
     ) -> AuthResult<AdminUserResponse<UserView>> {
-        self.context
-            .with_native_context(
+        let response = self
+            .context
+            .dispatch_native(
                 NativeRequest {
                     request: None,
                     headers,
                 },
-                |context| async move {
-                    let request = AuthRequest::new(HttpMethod::Post, "/admin/create-user")
-                        .with_optional_headers(headers.cloned());
-                    let mut hook_context =
-                        better_auth_core::RequestHookContext::from_request(&request)?;
-                    hook_context.body =
-                        better_auth_core::FieldValue::from_json(serde_json::to_value(body)?)?;
-                    better_auth_core::with_request_hook_context_value(hook_context, async {
-                        let session = if headers.is_some() {
-                            let session = context
-                                .require_authoritative_native_session(&request)
-                                .await
-                                .map_err(|error| match error {
-                                    AuthError::Unauthenticated => {
-                                        AuthError::from(AuthResponse::new(401))
-                                    }
-                                    error => error,
-                                })?;
-                            self.plugin.authorize(
-                                &session,
-                                "user",
-                                "create",
-                                MESSAGE_CREATE_USERS,
-                            )?;
-                            Some(session)
-                        } else {
-                            None
-                        };
-                        super::handlers::create_user_core(
-                            body,
-                            None,
-                            session,
-                            &self.plugin.config,
-                            &context,
-                        )
-                        .await
-                    })
-                    .await
+                AuthRoute::post("/admin/create-user", "createUser")
+                    .body_validator(super::request::validate),
+                Some(serde_json::to_value(body)?),
+                None,
+                |request, context| async move {
+                    self.plugin.handle_create_user(&request, &context).await
                 },
             )
-            .await
+            .await?;
+        let result = response.body.field_value()?;
+        let user = result.model_property("user")?.as_object().ok_or_else(|| {
+            AuthError::internal("Admin create-user response must contain a user object")
+        })?;
+        Ok(AdminUserResponse {
+            user: UserView::try_from(user.clone())?,
+        })
     }
 }
+
+#[cfg(test)]
+mod tests;

@@ -921,16 +921,9 @@ impl OrganizationRoleStore for EphemeralStore {
     }
     async fn delete_organization_role_by_fields(&self, selectors: &FieldMap) -> AuthResult<()> {
         let selectors = self.organization_role_selectors(selectors)?;
-        let mut state = self.lock()?;
-        let selected = state
-            .organization_roles
-            .try_select_refs(|row| Self::organization_role_matches(row, &selectors))?
-            .into_iter()
-            .next();
-        if let Some(selected) = selected {
-            let _ = state.organization_roles.remove_ref(&selected)?;
-        }
-        Ok(())
+        self.lock()?.organization_roles.try_retain(|row| {
+            Self::organization_role_matches(row, &selectors).map(|matches| !matches)
+        })
     }
 }
 
@@ -1044,7 +1037,7 @@ async fn organization_role_batch_matches_native_scope_and_does_not_project_write
             .count_organization_roles_value(&Value::Number(7.0))
             .await
             .unwrap(),
-        1
+        0
     );
     assert_eq!(
         store

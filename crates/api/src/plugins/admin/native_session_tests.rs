@@ -4,16 +4,12 @@
     reason = "Admin regressions compare exact permission, callback, and storage outcomes"
 )]
 
-use std::{
-    collections::HashMap,
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 
 use better_auth_core::{
-    AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, CreateSession, CreateUser,
-    FieldMap, FieldValue, HttpMethod,
+    AuthContext, AuthError, AuthPlugin, AuthRequest, AuthResponse, AuthResult, CreateSession,
+    CreateUser, FieldMap, FieldValue, HttpMethod,
     config::CookieCacheConfig,
-    session::NativeSessionData,
     store::{EphemeralStore, StatelessSchema, StoreCapabilities},
     wire::{SessionView, UserView},
 };
@@ -23,7 +19,10 @@ use serde_json::{Value, json};
 use super::{AdminApi, AdminConfig, AdminPlugin, CreateAdminUser};
 use crate::plugins::{
     endpoint_context::EndpointContext,
-    test_helpers::{create_test_config, initialize_test_context},
+    test_helpers::{
+        create_test_config, initialize_test_context,
+        native_session::{NativeSessionHook, dispatch_plugin},
+    },
     user_admission::{UserValidationData, UserValidationRejection, ValidateUserInfo},
 };
 
@@ -31,6 +30,7 @@ struct Fixture {
     ctx: AuthContext<StatelessSchema>,
     session: SessionView,
     owner: UserView,
+    hook: NativeSessionHook,
 }
 
 impl Fixture {
@@ -52,6 +52,8 @@ impl Fixture {
             database: false,
             secondary: false,
         });
+        let hook =
+            NativeSessionHook::install(&mut ctx, AuthPlugin::<StatelessSchema>::routes(plugin));
         let owner = ctx
             .database
             .create_user(CreateUser {
@@ -78,38 +80,21 @@ impl Fixture {
             ctx,
             session,
             owner,
+            hook,
         })
     }
 
-    async fn request(&self, user: FieldValue, path: &str, body: Value) -> AuthResult<AuthRequest> {
-        let issuance = AuthRequest::new(HttpMethod::Post, "/sign-in/email");
-        self.ctx
-            .session_manager()
-            .set_native_session_cookie(
-                &issuance,
-                NativeSessionData {
-                    session: self.session.clone(),
-                    user,
-                },
-                None,
-            )
-            .await?;
-        let cookies = issuance
-            .take_response_headers()?
-            .get_all("set-cookie")
-            .map(|cookie| cookie.split(';').next().unwrap().to_owned())
-            .collect::<Vec<_>>()
-            .join("; ");
-        Ok(AuthRequest::from_parts(
-            HttpMethod::Post,
-            path.into(),
-            HashMap::from([
-                ("cookie".into(), cookies),
-                ("content-type".into(), "application/json".into()),
-            ]),
-            Some(serde_json::to_vec(&body)?),
-            None,
-        ))
+    fn request(&self, user: FieldValue, path: &str, body: Value) -> AuthResult<AuthRequest> {
+        self.hook
+            .request(&self.ctx, &self.session, user, HttpMethod::Post, path, body)
+    }
+
+    async fn dispatch(
+        &self,
+        request: &AuthRequest,
+        plugin: &AdminPlugin,
+    ) -> AuthResult<AuthResponse> {
+        Ok(dispatch_plugin(request, &self.ctx, plugin).await?.unwrap())
     }
 }
 
@@ -123,23 +108,21 @@ async fn admin_permission_reads_reject_null_and_deny_primitive_users_before_writ
     let plugin = AdminPlugin::new();
     let fixture = Fixture::new(&plugin).await?;
     for user in [FieldValue::Null, false.into(), 0.0.into(), "".into()] {
-        let request = fixture
-            .request(
-                user.clone(),
-                "/admin/update-user",
-                json!({"userId":fixture.owner.id,"data":{"name":"must not persist"}}),
-            )
-            .await?;
-        let error = plugin
-            .handle_update_user(&request, &fixture.ctx)
-            .await
-            .unwrap_err();
+        let request = fixture.request(
+            user.clone(),
+            "/admin/update-user",
+            json!({"userId":fixture.owner.id,"data":{"name":"must not persist"}}),
+        )?;
+        let error = fixture.dispatch(&request, &plugin).await.unwrap_err();
         if user.is_null() {
             assert!(matches!(error, AuthError::TypeError(ref message)
                 if message == "Cannot read properties of null (reading 'id')"));
         } else {
             assert_eq!(error.status_code(), 403);
-            assert_eq!(error.to_string(), "You are not allowed to update users");
+            assert_eq!(
+                body(&error.to_auth_response())["message"],
+                "You are not allowed to update users"
+            );
         }
         assert_eq!(
             fixture
@@ -201,9 +184,7 @@ async fn admin_create_retains_primitive_session_values_for_http_and_native_admis
             let email = format!("created-{index}-{native}@native-admin.test");
             let input =
                 json!({"email":email,"name":"Created","role":"user","data":{"banned":false}});
-            let request = fixture
-                .request(user.clone(), "/admin/create-user", input.clone())
-                .await?;
+            let request = fixture.request(user.clone(), "/admin/create-user", input.clone())?;
             if native {
                 let input: CreateAdminUser = serde_json::from_value(input)?;
                 let response = AdminApi::from_context(&fixture.ctx)?
@@ -214,7 +195,7 @@ async fn admin_create_retains_primitive_session_values_for_http_and_native_admis
                     FieldValue::from(email.clone())
                 );
             } else {
-                let response = plugin.handle_create_user(&request, &fixture.ctx).await?;
+                let response = fixture.dispatch(&request, &plugin).await?;
                 assert_eq!(body(&response)["user"]["email"], email);
                 assert!(request.new_session()?.is_none());
             }
@@ -244,43 +225,34 @@ async fn admin_has_permission_uses_user_truthiness_before_request_fallback() -> 
         "".into(),
         FieldMap::new().into(),
     ] {
-        let request = fixture
-            .request(
-                user.clone(),
-                "/admin/has-permission",
-                json!({"role":"admin","permissions":{"user":["create"]}}),
-            )
-            .await?;
-        let response = plugin.handle_has_permission(&request, &fixture.ctx).await?;
+        let request = fixture.request(
+            user.clone(),
+            "/admin/has-permission",
+            json!({"role":"admin","permissions":{"user":["create"]}}),
+        )?;
+        let response = fixture.dispatch(&request, &plugin).await?;
         assert_eq!(
             body(&response),
             json!({"error":null,"success":!user.is_truthy()})
         );
         if !user.is_truthy() {
-            let request = fixture
-                .request(
-                    user.clone(),
-                    "/admin/has-permission",
-                    json!({"userId":fixture.owner.id,"permissions":{"user":["create"]}}),
-                )
-                .await?;
+            let request = fixture.request(
+                user.clone(),
+                "/admin/has-permission",
+                json!({"userId":fixture.owner.id,"permissions":{"user":["create"]}}),
+            )?;
             assert_eq!(
-                body(&plugin.handle_has_permission(&request, &fixture.ctx).await?)["success"],
+                body(&fixture.dispatch(&request, &plugin).await?)["success"],
                 true
             );
-            let request = fixture
-                .request(
-                    user,
-                    "/admin/has-permission",
-                    json!({"permissions":{"user":["create"]}}),
-                )
-                .await?;
-            let error = plugin
-                .handle_has_permission(&request, &fixture.ctx)
-                .await
-                .unwrap_err();
+            let request = fixture.request(
+                user,
+                "/admin/has-permission",
+                json!({"permissions":{"user":["create"]}}),
+            )?;
+            let error = fixture.dispatch(&request, &plugin).await.unwrap_err();
             assert_eq!(error.status_code(), 400);
-            assert_eq!(error.to_string(), "user not found");
+            assert_eq!(body(&error.to_auth_response())["message"], "user not found");
         }
     }
     Ok(())
@@ -291,23 +263,24 @@ async fn admin_self_ban_compares_native_ids_without_string_coercion() -> AuthRes
     let plugin = AdminPlugin::new();
     for actor_id in [FieldValue::from("17"), FieldValue::from(17.0)] {
         let fixture = Fixture::new(&plugin).await?;
-        let request = fixture
-            .request(
-                FieldMap::from([
-                    ("id".into(), actor_id.clone()),
-                    ("role".into(), "admin".into()),
-                ])
-                .into(),
-                "/admin/update-user",
-                json!({"userId":"17","data":{"banned":true}}),
-            )
-            .await?;
-        let result = plugin.handle_update_user(&request, &fixture.ctx).await;
+        let request = fixture.request(
+            FieldMap::from([
+                ("id".into(), actor_id.clone()),
+                ("role".into(), "admin".into()),
+            ])
+            .into(),
+            "/admin/update-user",
+            json!({"userId":"17","data":{"banned":true}}),
+        )?;
+        let result = fixture.dispatch(&request, &plugin).await;
         let same_id = actor_id.strict_equals(&FieldValue::from("17"));
         if same_id {
             let error = result.unwrap_err();
             assert_eq!(error.status_code(), 400);
-            assert_eq!(error.to_string(), "You cannot ban yourself");
+            assert_eq!(
+                body(&error.to_auth_response())["message"],
+                "You cannot ban yourself"
+            );
         } else {
             assert_eq!(body(&result?)["banned"], true);
         }
@@ -340,18 +313,16 @@ async fn admin_impersonation_keeps_native_actor_ids_and_allows_authorized_self_t
         });
         let fixture = Fixture::new(&plugin).await?;
         for actor_id in [FieldValue::from("17"), FieldValue::from(17.0)] {
-            let request = fixture
-                .request(
-                    FieldMap::from([
-                        ("id".into(), actor_id.clone()),
-                        ("role".into(), "admin".into()),
-                    ])
-                    .into(),
-                    "/admin/impersonate-user",
-                    json!({"userId":"17"}),
-                )
-                .await?;
-            let result = plugin.handle_impersonate_user(&request, &fixture.ctx).await;
+            let request = fixture.request(
+                FieldMap::from([
+                    ("id".into(), actor_id.clone()),
+                    ("role".into(), "admin".into()),
+                ])
+                .into(),
+                "/admin/impersonate-user",
+                json!({"userId":"17"}),
+            )?;
+            let result = fixture.dispatch(&request, &plugin).await;
             if allow_admins {
                 let response = result?;
                 let output = body(&response);
@@ -372,7 +343,10 @@ async fn admin_impersonation_keeps_native_actor_ids_and_allows_authorized_self_t
             } else {
                 let error = result.unwrap_err();
                 assert_eq!(error.status_code(), 403);
-                assert_eq!(error.to_string(), "You cannot impersonate admins");
+                assert_eq!(
+                    body(&error.to_auth_response())["message"],
+                    "You cannot impersonate admins"
+                );
                 assert!(request.new_session()?.is_none());
                 assert_eq!(fixture.ctx.database.get_user_sessions("17").await?.len(), 1);
             }

@@ -1,9 +1,8 @@
 use super::*;
 use better_auth_core::{
-    CreateAccount, CreateVerification, FieldMap, UpdateAccount,
+    CreateAccount, CreateVerification, FieldMap,
     store::database_hooks::{
         DatabaseHookContext, DatabaseHookControl, DatabaseHookUpdate, DatabaseHooks, SessionUpdate,
-        VerificationUpdate,
     },
     wire::{AccountView, SessionView, VerificationView},
 };
@@ -92,9 +91,9 @@ impl<S: AuthSchema> DatabaseHooks<S> for DatabaseObserver {
 
     async fn before_update_account(
         &self,
-        _: &UpdateAccount,
+        _: &mut better_auth_core::FieldMap,
         _: &DatabaseHookContext<'_, S>,
-    ) -> AuthResult<DatabaseHookUpdate<UpdateAccount>> {
+    ) -> AuthResult<DatabaseHookUpdate<better_auth_core::FieldMap>> {
         self.record("account", "update", "before")?;
         Ok(DatabaseHookUpdate::Continue)
     }
@@ -194,9 +193,9 @@ impl<S: AuthSchema> DatabaseHooks<S> for DatabaseObserver {
 
     async fn before_update_verification(
         &self,
-        _: &VerificationUpdate,
+        _: &mut better_auth_core::FieldMap,
         _: &DatabaseHookContext<'_, S>,
-    ) -> AuthResult<DatabaseHookUpdate<VerificationUpdate>> {
+    ) -> AuthResult<DatabaseHookUpdate<better_auth_core::FieldMap>> {
         self.record("verification", "update", "before")?;
         Ok(DatabaseHookUpdate::Continue)
     }

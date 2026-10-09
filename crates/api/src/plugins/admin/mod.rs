@@ -219,7 +219,14 @@ impl AdminPlugin {
             self.authorize(session, "user", "create", MESSAGE_CREATE_USERS)?;
         }
         let response = create_user_core(&body, Some(req), session, &self.config, ctx).await?;
-        AuthResponse::json(200, &response).map_err(AuthError::from)
+        Ok(AuthResponse::native(
+            200,
+            better_auth_core::FieldMap::from([(
+                "user".into(),
+                better_auth_core::FieldMap::from(response.user).into(),
+            )])
+            .into(),
+        ))
     }
 
     async fn handle_update_user(

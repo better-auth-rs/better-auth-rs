@@ -10,7 +10,7 @@ use better_auth_core::wire::AccountView;
 use better_auth_core::{FieldValue, UserView};
 
 use crate::error::{AuthError, AuthResult};
-use crate::hooks::{DatabaseHookUpdate, DatabaseUpdateResult};
+use crate::hooks::DatabaseUpdateResult;
 use crate::schema::{AuthSchema, SeaOrmAccountModel, SeaOrmUserModel};
 use crate::types::{CreateAccount, UpdateAccount};
 
@@ -26,22 +26,22 @@ where
         db: &impl ConnectionTrait,
         transaction: Option<super::HookTransaction<'_, S>>,
         selectors: &better_auth_core::FieldMap,
-        mut update: UpdateAccount,
+        update: UpdateAccount,
     ) -> AuthResult<Option<u64>> {
         let hook_context = self.hook_context(transaction);
-        let original = update.clone();
+        let mut prepared =
+            better_auth_core::store::database_hooks::PreparedRecordWrite::new(update.fields()?);
         for hook in self.hooks() {
-            match better_auth_core::observability::database::with_database_update_many_hook(
-                hook_context.config,
-                hook.hook_metadata(),
-                better_auth_core::observability::database::DatabaseHook::BeforeUpdateAccount,
-                hook.before_update_account(&original, &hook_context),
-            )
-            .await?
-            {
-                DatabaseHookUpdate::Continue => {}
-                DatabaseHookUpdate::Cancel => return Ok(None),
-                DatabaseHookUpdate::Patch(patch) => update.merge(patch),
+            let outcome =
+                better_auth_core::observability::database::with_database_update_many_hook(
+                    hook_context.config,
+                    hook.hook_metadata(),
+                    better_auth_core::observability::database::DatabaseHook::BeforeUpdateAccount,
+                    hook.before_update_account(prepared.original_fields_mut(), &hook_context),
+                )
+                .await?;
+            if !prepared.apply(outcome) {
+                return Ok(None);
             }
         }
         better_auth_core::store::database_hooks::await_adapter_lookup().await;
@@ -53,17 +53,21 @@ where
         let backend = db.get_database_backend();
         let fields = self.config().account.field_schema();
         let input = fields
-            .record_storage_fields_with_binding(update.fields()?, false, |name, field, value| {
-                crate::reference_id::input_binding(
-                    name,
-                    field,
-                    value,
-                    self.config().advanced.database.generate_id(),
-                    S::Account::field_column,
-                    S::Account::native_json_field,
-                    backend,
-                )
-            })
+            .record_storage_fields_with_binding(
+                prepared.into_fields(),
+                false,
+                |name, field, value| {
+                    crate::reference_id::input_binding(
+                        name,
+                        field,
+                        value,
+                        self.config().advanced.database.generate_id(),
+                        S::Account::field_column,
+                        S::Account::native_json_field,
+                        backend,
+                    )
+                },
+            )
             .await?;
         let write = super::record_write::RecordWrite::<<S::Account as SeaOrmAccountModel>::Entity>::from_fields(input, S::Account::field_column)?;
         let mut query = write.update(backend)?;
@@ -667,40 +671,44 @@ where
     async fn update_account_by_id_value(
         &self,
         id: &FieldValue,
-        mut update: UpdateAccount,
+        update: UpdateAccount,
     ) -> AuthResult<Option<AccountView>> {
         let hook_context = self.hook_context(None);
-        let original = update.clone();
+        let mut prepared =
+            better_auth_core::store::database_hooks::PreparedRecordWrite::new(update.fields()?);
         for hook in self.hooks() {
-            match better_auth_core::observability::database::with_database_hook(
+            let outcome = better_auth_core::observability::database::with_database_hook(
                 hook_context.config,
                 hook.hook_metadata(),
                 better_auth_core::observability::database::DatabaseHook::BeforeUpdateAccount,
-                hook.before_update_account(&original, &hook_context),
+                hook.before_update_account(prepared.original_fields_mut(), &hook_context),
             )
-            .await?
-            {
-                DatabaseHookUpdate::Continue => {}
-                DatabaseHookUpdate::Cancel => return Ok(None),
-                DatabaseHookUpdate::Patch(patch) => update.merge(patch),
+            .await?;
+            if !prepared.apply(outcome) {
+                return Ok(None);
             }
         }
+        better_auth_core::store::database_hooks::await_adapter_lookup().await;
         let fields = self.config().account.field_schema();
         let backend = self.connection().get_database_backend();
         self.model_fields.canonicalize_id(EntityRole::Account)?;
         let account_id = self.account_selector("id", id)?;
         let input = fields
-            .record_storage_fields_with_binding(update.fields()?, false, |name, field, value| {
-                crate::reference_id::input_binding(
-                    name,
-                    field,
-                    value,
-                    self.config().advanced.database.generate_id(),
-                    S::Account::field_column,
-                    S::Account::native_json_field,
-                    backend,
-                )
-            })
+            .record_storage_fields_with_binding(
+                prepared.into_fields(),
+                false,
+                |name, field, value| {
+                    crate::reference_id::input_binding(
+                        name,
+                        field,
+                        value,
+                        self.config().advanced.database.generate_id(),
+                        S::Account::field_column,
+                        S::Account::native_json_field,
+                        backend,
+                    )
+                },
+            )
             .await?;
         let active = super::record_write::RecordWrite::<<S::Account as SeaOrmAccountModel>::Entity>::from_fields(input, S::Account::field_column)?;
         let account = match database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(

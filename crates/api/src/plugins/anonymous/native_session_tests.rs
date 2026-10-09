@@ -149,7 +149,7 @@ async fn anonymous_delete_reads_the_public_object_from_a_many_user_relationship(
     use better_auth_core::user_fields::{UserFieldConfig, UserFieldReference};
     for joins in [false, true] {
         let plugin = AnonymousPlugin::new();
-        let mut config = create_test_config();
+        let mut config = create_test_config().disable_session_refresh(true);
         config.advanced.database.joins = Some(joins);
         let _ = config.user.fields_mut().insert(
             "image".into(),

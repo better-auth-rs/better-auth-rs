@@ -10,7 +10,7 @@ use better_auth_core::schema::AuthSchema;
 pub use better_auth_core::store::database_hooks::{
     DatabaseHookUpdate, DatabaseUpdateResult, SessionUpdate, VerificationUpdate,
 };
-use better_auth_core::types::{CreateAccount, CreateVerification, UpdateAccount};
+use better_auth_core::types::{CreateAccount, CreateVerification};
 
 /// Control flow returned by SeaORM `before_*` hooks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -174,9 +174,9 @@ pub trait SeaOrmHooks<S: AuthSchema>: Send + Sync {
 
     async fn before_update_account(
         &self,
-        update: &UpdateAccount,
+        update: &mut better_auth_core::FieldMap,
         ctx: &SeaOrmHookContext<'_, S>,
-    ) -> AuthResult<DatabaseHookUpdate<UpdateAccount>> {
+    ) -> AuthResult<DatabaseHookUpdate<better_auth_core::FieldMap>> {
         let _ = (update, ctx);
         Ok(DatabaseHookUpdate::Continue)
     }
@@ -237,11 +237,10 @@ pub trait SeaOrmHooks<S: AuthSchema>: Send + Sync {
 
     async fn before_update_verification(
         &self,
-        identifier: &str,
-        update: &VerificationUpdate,
+        update: &mut better_auth_core::FieldMap,
         ctx: &SeaOrmHookContext<'_, S>,
-    ) -> AuthResult<DatabaseHookUpdate<VerificationUpdate>> {
-        let _ = (identifier, update, ctx);
+    ) -> AuthResult<DatabaseHookUpdate<better_auth_core::FieldMap>> {
+        let _ = (update, ctx);
         Ok(DatabaseHookUpdate::Continue)
     }
 

@@ -32,7 +32,7 @@ impl<S: AuthSchema> EndpointDispatcher<S> {
         }
     }
 
-    /// Dispatch a native-only endpoint without importing an ambient HTTP Request.
+    /// Dispatch a native endpoint without importing an ambient HTTP Request.
     pub async fn native<F, Fut>(
         &self,
         mut request: AuthRequest,
@@ -44,15 +44,14 @@ impl<S: AuthSchema> EndpointDispatcher<S> {
         F: FnOnce(AuthRequest) -> Fut,
         Fut: Future<Output = AuthResult<AuthResponse>>,
     {
-        if !route.server_only {
-            return Err(AuthError::config(
-                "Native facade requires a server-only endpoint",
-            ));
+        if route.server_only {
+            request.path = "/".into();
+            request.set_server_only();
+        } else {
+            request.path = route.path.clone();
         }
-        request.path = "/".into();
-        request.set_server_only();
         let mut scope = RequestHookContext::from_request(&request)?;
-        scope.path = None;
+        scope.path = (!route.server_only).then(|| route.path.clone());
         scope.body = request.input_field_value()?;
         scope.operation_id = Some(route.operation_id.clone());
         scope.meta = crate::RequestMeta::from_request_with_config(
@@ -68,15 +67,21 @@ impl<S: AuthSchema> EndpointDispatcher<S> {
             HttpMethod::Options => "OPTIONS",
             HttpMethod::Head => "HEAD",
         };
-        let name = format!("{method} /:virtual");
+        let route_path = if route.server_only {
+            "/:virtual"
+        } else {
+            &route.path
+        };
+        let name = format!("{method} {route_path}");
         let operation_id = route.operation_id.clone();
+        let route_path = route_path.to_owned();
         with_request_hook_context_value(
             scope,
             crate::observability::with_span(
                 &context.config.experimental.instrumentation,
                 &name,
                 crate::observability::SpanAttributes {
-                    route: Some("/:virtual"),
+                    route: Some(&route_path),
                     operation_id: Some(&operation_id),
                     ..Default::default()
                 },
@@ -306,7 +311,12 @@ fn apply_before_action(
             update_request_hook_context(internal)?;
         }
         Some(BeforeRequestAction::InjectSession { session }) => {
-            internal.set_virtual_session(*session)
+            internal.set_session_snapshot(None)?;
+            internal.set_virtual_session(*session);
+        }
+        Some(BeforeRequestAction::InjectNativeSession { session }) => {
+            internal.set_session_snapshot(Some((*session).into()))?;
+            internal.virtual_session = None;
         }
         None => (),
     }

@@ -11,6 +11,7 @@ use better_auth_core::{
 };
 use better_auth_core::{FieldMap, FieldValue, SchemaField, store::schema::EntityRole};
 use chrono::Utc;
+use sea_orm::sea_query::ExprTrait;
 use sea_orm::{Condition, EntityTrait, FromQueryResult, PaginatorTrait, QueryFilter, QuerySelect};
 
 impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema>

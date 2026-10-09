@@ -101,22 +101,18 @@ async fn verification_uses_email_selector_and_preserves_raw_nullable_hooks() -> 
         let calls = Arc::new(Mutex::new(Vec::new()));
         let before = calls.clone();
         let after = calls.clone();
-        let plugin = EmailVerificationPlugin::new()
-            .before_email_verification(Arc::new(move |user| {
-                before.lock().unwrap().push(("before", user.clone()));
-                Box::pin(async { Ok(()) })
-            }))
-            .after_email_verification(Arc::new(move |user| {
-                after.lock().unwrap().push(("after", user.clone()));
-                Box::pin(async { Ok(()) })
-            }));
+        let id_output_calls = Arc::new(AtomicUsize::new(0));
+        let id_outputs = id_output_calls.clone();
         let mut config = crate::plugins::test_helpers::create_test_config();
         let _ = config.user.fields_mut().insert(
             "id".into(),
             UserFieldConfig {
                 transform: Some(FieldTransforms {
                     input: None,
-                    output: Some(UserFieldTransform::new(|_| Ok(17.0.into()))),
+                    output: Some(UserFieldTransform::new(move |_| {
+                        let _ = id_outputs.fetch_add(1, Ordering::SeqCst);
+                        Ok(17.0.into())
+                    })),
                 }),
                 ..Default::default()
             },
@@ -129,9 +125,37 @@ async fn verification_uses_email_selector_and_preserves_raw_nullable_hooks() -> 
             },
         );
         let config = Arc::new(config);
+        let writer: Arc<dyn better_auth_core::store::AuthStore<StatelessSchema>> =
+            Arc::new(EphemeralStore::new(config.clone()));
+        let before_writer = writer.clone();
+        let plugin = EmailVerificationPlugin::new()
+            .before_email_verification(Arc::new(move |user| {
+                before.lock().unwrap().push(("before", user.clone()));
+                let writer = before_writer.clone();
+                let user = user.clone();
+                Box::pin(async move {
+                    let _ = writer
+                        .update_user_by_id_value(
+                            user.model_property("id")?,
+                            better_auth_core::UpdateUser {
+                                additional_fields: FieldMap::from([(
+                                    "id".into(),
+                                    "moved-by-verification-hook".into(),
+                                )]),
+                                ..Default::default()
+                            },
+                        )
+                        .await?;
+                    Ok(())
+                })
+            }))
+            .after_email_verification(Arc::new(move |user| {
+                after.lock().unwrap().push(("after", user.clone()));
+                Box::pin(async { Ok(()) })
+            }));
         let ctx = crate::plugins::test_helpers::initialize_test_context(
             config.clone(),
-            Arc::new(EphemeralStore::new(config)),
+            writer,
             &[&plugin, &CancelUpdate(cancel)],
         )
         .await?;
@@ -143,7 +167,8 @@ async fn verification_uses_email_selector_and_preserves_raw_nullable_hooks() -> 
                     .with_name("Hidden callback field"),
             )
             .await?;
-        assert_eq!(user.id.field_value(), FieldValue::from(17.0));
+        assert!(user.id.field_value().as_str().is_some());
+        assert_eq!(id_output_calls.load(Ordering::SeqCst), 0);
         assert!(!FieldMap::from(ctx.user_view(&user).await?).contains_key("name"));
         let request = raw_email_request(&ctx, "OWNER@NATIVE-EMAIL.TEST", None)?;
         let response = plugin.handle_verify_email(&request, &ctx).await?;
@@ -161,6 +186,14 @@ async fn verification_uses_email_selector_and_preserves_raw_nullable_hooks() -> 
             stored.email_verified.field_value(),
             FieldValue::Bool(!cancel)
         );
+        assert_eq!(stored.id.field_value(), "moved-by-verification-hook".into());
+        assert!(
+            ctx.database
+                .get_user_by_id_value(&user.id.field_value())
+                .await?
+                .is_none()
+        );
+        assert_eq!(id_output_calls.load(Ordering::SeqCst), 0);
         let calls = calls.lock().unwrap();
         assert_eq!(calls.len(), 2);
         assert_eq!(calls[0].0, "before");
@@ -175,6 +208,7 @@ async fn verification_uses_email_selector_and_preserves_raw_nullable_hooks() -> 
             let fields = calls[1].1.as_object().unwrap();
             assert_eq!(fields.get("name"), Some(&"Hidden callback field".into()));
             assert_eq!(fields.get("emailVerified"), Some(&true.into()));
+            assert_eq!(fields.get("id"), Some(&"moved-by-verification-hook".into()));
         }
     }
     Ok(())
@@ -204,7 +238,9 @@ async fn change_email_normalizes_storage_and_tokens_but_preserves_session_owners
                         Ok(None)
                     },
                 ));
-            let config = Arc::new(crate::plugins::test_helpers::create_test_config());
+            let config = Arc::new(
+                crate::plugins::test_helpers::create_test_config().disable_session_refresh(true),
+            );
             let ctx = crate::plugins::test_helpers::initialize_test_context(
                 config.clone(),
                 Arc::new(EphemeralStore::new(config)),
@@ -529,6 +565,11 @@ async fn session_reads_follow_token_branches_and_caught_failures_use_anonymous_f
     let _ = config.session.fields_mut().insert(
         "userId".into(),
         UserFieldConfig {
+            references: Some(better_auth_core::config::UserFieldReference {
+                model: "user".into(),
+                field: "id".into(),
+                ..Default::default()
+            }),
             transform: Some(FieldTransforms {
                 input: None,
                 output: Some(UserFieldTransform::new(move |value| {
@@ -674,6 +715,11 @@ async fn caught_session_failure_discards_nested_cookie_headers_but_keeps_outer_h
     let _ = config.session.fields_mut().insert(
         "userId".into(),
         UserFieldConfig {
+            references: Some(better_auth_core::config::UserFieldReference {
+                model: "user".into(),
+                field: "id".into(),
+                ..Default::default()
+            }),
             transform: Some(FieldTransforms {
                 input: None,
                 output: Some(UserFieldTransform::new(move |value| {

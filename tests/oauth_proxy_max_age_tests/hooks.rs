@@ -1,9 +1,8 @@
 use super::*;
 use better_auth_core::{
-    CreateVerification, UpdateAccount,
+    CreateVerification,
     store::database_hooks::{
         DatabaseHookContext, DatabaseHookControl, DatabaseHookUpdate, DatabaseHooks, SessionUpdate,
-        VerificationUpdate,
     },
     wire::{AccountView, SessionView, UserView, VerificationView},
 };
@@ -98,10 +97,10 @@ impl<S: AuthSchema> DatabaseHooks<S> for Hooks {
 
     async fn before_update_account(
         &self,
-        data: &UpdateAccount,
+        data: &mut better_auth_core::FieldMap,
         _: &DatabaseHookContext<'_, S>,
-    ) -> AuthResult<DatabaseHookUpdate<UpdateAccount>> {
-        self.events.push(json!({"kind": "hook", "model": "account", "operation": "update", "phase": "before", "data": values::observe(&data.fields()?.into())?}))?;
+    ) -> AuthResult<DatabaseHookUpdate<better_auth_core::FieldMap>> {
+        self.events.push(json!({"kind": "hook", "model": "account", "operation": "update", "phase": "before", "data": values::observe(&data.clone().into())?}))?;
         Ok(DatabaseHookUpdate::Continue)
     }
 
@@ -213,9 +212,9 @@ impl<S: AuthSchema> DatabaseHooks<S> for Hooks {
 
     async fn before_update_verification(
         &self,
-        _: &VerificationUpdate,
+        _: &mut better_auth_core::FieldMap,
         _: &DatabaseHookContext<'_, S>,
-    ) -> AuthResult<DatabaseHookUpdate<VerificationUpdate>> {
+    ) -> AuthResult<DatabaseHookUpdate<better_auth_core::FieldMap>> {
         self.record("verification", "update", "before")?;
         Ok(DatabaseHookUpdate::Continue)
     }

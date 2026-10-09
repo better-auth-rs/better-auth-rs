@@ -324,7 +324,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             async {
                 let mut state = self.lock()?;
                 if let Some(id) = self.next_serial_id(state.users.len()) {
-                    user.id = crate::SchemaValue::from_field(id);
+                    user.set_field("id", id);
                 }
                 Ok(state.users.push_ref(user))
             },
@@ -475,10 +475,13 @@ impl UserStore<StatelessSchema> for EphemeralStore {
         self.delete_user_accounts_with_hooks(id).await?;
         let snapshot: AuthResult<Option<UserView>> = async {
             self.model_fields.begin_id_query(EntityRole::User)?;
-            let stored_id =
-                crate::SchemaValue::<String>::from_field(self.memory_primary_id_query(id)?);
+            let stored_id = self.memory_primary_id_query(id)?;
             let user = self
-                .raw("user", "findMany", |state| state.users.get(&stored_id))
+                .raw("user", "findMany", |state| {
+                    state
+                        .users
+                        .find(|user| Self::user_matches_selector(user, "id", &stored_id))
+                })
                 .await?;
             match user {
                 Some(user) => self.output_user(user).await.map(Some),
@@ -508,10 +511,11 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             }
         }
         self.model_fields.begin_id_query(EntityRole::User)?;
-        let stored_id = crate::SchemaValue::<String>::from_field(self.memory_primary_id_query(id)?);
+        let stored_id = self.memory_primary_id_query(id)?;
         self.raw("user", "delete", |state| {
-            let _ = state.users.remove(&stored_id)?;
-            Ok(())
+            state
+                .users
+                .retain(|user| !Self::user_matches_selector(user, "id", &stored_id))
         })
         .await?;
         self.after(CommittedWrite::UserDeleted(user.clone()))

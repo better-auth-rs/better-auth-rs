@@ -232,3 +232,82 @@ async fn serial_user_delete_converts_native_boolean_before_selecting_owned_recor
     );
     Ok(())
 }
+
+struct UserSnapshots(Arc<Mutex<Vec<(&'static str, UserView)>>>);
+
+#[better_auth::database_hooks()]
+impl<S: AuthSchema> DatabaseHooks<S> for UserSnapshots {
+    async fn before_delete_user(
+        &self,
+        user: &UserView,
+        _: &DatabaseHookContext<'_, S>,
+    ) -> AuthResult<DatabaseHookControl> {
+        self.0.lock().unwrap().push(("before", user.clone()));
+        Ok(DatabaseHookControl::Continue)
+    }
+
+    async fn after_delete_user(
+        &self,
+        user: &UserView,
+        _: &DatabaseHookContext<'_, S>,
+    ) -> AuthResult<()> {
+        self.0.lock().unwrap().push(("after", user.clone()));
+        Ok(())
+    }
+}
+
+#[tokio::test]
+async fn native_user_delete_projects_one_hook_snapshot_and_removes_all_matching_rows()
+-> AuthResult<()> {
+    let config = Arc::new(AuthConfig::default());
+    let snapshots = Arc::new(Mutex::new(Vec::new()));
+    let base: Arc<dyn AuthStore<better_auth_core::store::StatelessSchema>> =
+        Arc::new(EphemeralStore::new(config.clone()));
+    let store = base.with_runtime(
+        config,
+        vec![Arc::new(UserSnapshots(snapshots.clone()))],
+        Default::default(),
+    )?;
+    let mut users = Vec::new();
+    for (id, email) in [
+        ("owner", "first@duplicate-delete.test"),
+        ("owner", "second@duplicate-delete.test"),
+        ("other", "other@duplicate-delete.test"),
+    ] {
+        users.push(
+            store
+                .create_user(CreateUser {
+                    id: Some(id.into()),
+                    email: Some(email.into()),
+                    ..Default::default()
+                })
+                .await?,
+        );
+    }
+    let native = FieldValue::Utf16String(Utf16String::from_units("owner".encode_utf16().collect()));
+    store.delete_user_value(&native).await?;
+    let first = users.first().unwrap();
+    assert_eq!(
+        *snapshots.lock().unwrap(),
+        vec![("before", first.clone()), ("after", first.clone())]
+    );
+    assert!(
+        store
+            .get_user_by_email("first@duplicate-delete.test")
+            .await?
+            .is_none()
+    );
+    assert!(
+        store
+            .get_user_by_email("second@duplicate-delete.test")
+            .await?
+            .is_none()
+    );
+    assert_eq!(
+        store
+            .get_user_by_email("other@duplicate-delete.test")
+            .await?,
+        users.last().cloned()
+    );
+    Ok(())
+}

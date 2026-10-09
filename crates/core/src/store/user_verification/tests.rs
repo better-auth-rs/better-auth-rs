@@ -5,15 +5,15 @@
 )]
 
 use std::sync::{
-    Arc, Mutex,
-    atomic::{AtomicU64, Ordering},
+    Arc, Mutex, Once,
+    atomic::{AtomicBool, AtomicU64, Ordering},
 };
 
 use chrono::{Duration, Utc};
 use tracing::{
     Event, Metadata, Subscriber,
     field::{Field, Visit},
-    instrument::WithSubscriber,
+    level_filters::LevelFilter,
     span::{Attributes, Id, Record},
 };
 
@@ -363,10 +363,27 @@ async fn lock_release_error_preserves_the_original_success_or_failure() -> AuthR
     Ok(())
 }
 
-#[derive(Clone, Default)]
-struct DatabaseOperations {
-    names: Events,
-    next_id: Arc<AtomicU64>,
+tokio::task_local! {
+    static ACTIVE_DATABASE_OPERATIONS: Events;
+}
+
+static DATABASE_TRACER: Once = Once::new();
+static DATABASE_TRACER_READY: AtomicBool = AtomicBool::new(false);
+static NEXT_DATABASE_SPAN: AtomicU64 = AtomicU64::new(0);
+
+struct DatabaseOperations;
+
+impl DatabaseOperations {
+    async fn capture<T>(names: Events, operation: impl std::future::Future<Output = T>) -> T {
+        // Keep callsite interest valid when parallel tests emit spans outside a capture scope.
+        DATABASE_TRACER.call_once(|| {
+            tracing::subscriber::set_global_default(Self)
+                .expect("Core unit tests must share the database operation subscriber");
+            DATABASE_TRACER_READY.store(true, Ordering::Release);
+            tracing::callsite::rebuild_interest_cache();
+        });
+        ACTIVE_DATABASE_OPERATIONS.scope(names, operation).await
+    }
 }
 
 #[derive(Default)]
@@ -383,17 +400,28 @@ impl Visit for SpanName {
 }
 
 impl Subscriber for DatabaseOperations {
-    fn enabled(&self, metadata: &Metadata<'_>) -> bool {
-        metadata.target() == "better-auth"
+    fn enabled(&self, _: &Metadata<'_>) -> bool {
+        true
+    }
+
+    fn max_level_hint(&self) -> Option<LevelFilter> {
+        // Publish the global dispatcher before enabling callsites.
+        Some(if DATABASE_TRACER_READY.load(Ordering::Acquire) {
+            LevelFilter::TRACE
+        } else {
+            LevelFilter::OFF
+        })
     }
 
     fn new_span(&self, attributes: &Attributes<'_>) -> Id {
-        let mut name = SpanName::default();
-        attributes.record(&mut name);
-        if let Some(name) = name.0 {
-            self.names.lock().unwrap().push(name);
+        if let Ok(names) = ACTIVE_DATABASE_OPERATIONS.try_with(Arc::clone) {
+            let mut name = SpanName::default();
+            attributes.record(&mut name);
+            if let Some(name) = name.0 {
+                names.lock().unwrap().push(name);
+            }
         }
-        Id::from_u64(self.next_id.fetch_add(1, Ordering::Relaxed) + 1)
+        Id::from_u64(NEXT_DATABASE_SPAN.fetch_add(1, Ordering::Relaxed) + 1)
     }
 
     fn record(&self, _: &Id, _: &Record<'_>) {}
@@ -413,15 +441,17 @@ async fn native_falsy_selectors_skip_user_reads_and_release_the_reservation() ->
     ] {
         let store = EphemeralStore::new(Arc::new(AuthConfig::default()));
         let session = seed_user(&store, text).await?;
-        let operations = DatabaseOperations::default();
+        let operations = Events::default();
         assert!(
-            revoke_unproven_account_access(&store, &native)
-                .with_subscriber(operations.clone())
-                .await?
-                .is_none()
+            DatabaseOperations::capture(
+                operations.clone(),
+                revoke_unproven_account_access(&store, &native),
+            )
+            .await?
+            .is_none()
         );
         assert_eq!(
-            *operations.names.lock().unwrap(),
+            *operations.lock().unwrap(),
             [
                 "db create verification",
                 "db findMany verification",

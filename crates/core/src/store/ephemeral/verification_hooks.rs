@@ -1,37 +1,36 @@
 use super::hooks::CommittedWrite;
 use super::*;
-use crate::store::database_hooks::{DatabaseHookControl, DatabaseHookUpdate, VerificationUpdate};
+use crate::store::database_hooks::{DatabaseHookControl, PreparedRecordWrite, VerificationUpdate};
 
 impl EphemeralStore {
     pub(super) async fn update_verification_with_hooks(
         &self,
         identifier: &str,
-        mut update: VerificationUpdate,
+        update: VerificationUpdate,
     ) -> AuthResult<Option<VerificationView>> {
-        let original = update.clone();
+        let mut prepared = PreparedRecordWrite::new(update.fields()?);
         let transaction = EphemeralTransaction {
             store: self.clone(),
         };
         let context = self.hook_context(&transaction);
         for hook in &self.hooks {
-            match crate::observability::database::with_database_hook(
+            let outcome = crate::observability::database::with_database_hook(
                 context.config,
                 hook.hook_metadata(),
                 crate::observability::database::DatabaseHook::BeforeUpdateVerification,
-                hook.before_update_verification(&original, &context),
+                hook.before_update_verification(prepared.original_fields_mut(), &context),
             )
-            .await?
-            {
-                DatabaseHookUpdate::Continue => {}
-                DatabaseHookUpdate::Cancel => return Ok(None),
-                DatabaseHookUpdate::Patch(patch) => update.merge(patch),
+            .await?;
+            if !prepared.apply(outcome) {
+                return Ok(None);
             }
         }
+        crate::store::database_hooks::await_adapter_lookup().await;
         let patch = self
             .config
             .verification
             .field_schema()
-            .record_storage_fields_with_binding(update.fields()?, false, |_, field, value| {
+            .record_storage_fields_with_binding(prepared.into_fields(), false, |_, field, value| {
                 self.memory_plugin_field_input(field, value)
             })
             .await?;

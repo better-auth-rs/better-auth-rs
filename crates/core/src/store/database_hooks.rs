@@ -2,7 +2,7 @@
 
 use crate::hooks::RequestHookContext;
 use crate::store::AuthTransaction;
-use crate::types::{CreateAccount, CreateVerification, UpdateAccount};
+use crate::types::{CreateAccount, CreateVerification};
 use crate::{AuthConfig, AuthResult, AuthSchema, FieldMap};
 use async_trait::async_trait;
 
@@ -258,9 +258,9 @@ pub trait DatabaseHooks<S: AuthSchema>: Send + Sync {
     /// Inspect the original account update and return a patch or cancellation.
     async fn before_update_account(
         &self,
-        _data: &UpdateAccount,
+        _data: &mut FieldMap,
         _ctx: &DatabaseHookContext<'_, S>,
-    ) -> AuthResult<DatabaseHookUpdate<UpdateAccount>> {
+    ) -> AuthResult<DatabaseHookUpdate<FieldMap>> {
         Ok(DatabaseHookUpdate::Continue)
     }
     /// Observe a committed single Account update or a batch affected row count.
@@ -357,9 +357,9 @@ pub trait DatabaseHooks<S: AuthSchema>: Send + Sync {
     /// Inspect the original verification update and return a patch or cancellation.
     async fn before_update_verification(
         &self,
-        _data: &VerificationUpdate,
+        _data: &mut FieldMap,
         _ctx: &DatabaseHookContext<'_, S>,
-    ) -> AuthResult<DatabaseHookUpdate<VerificationUpdate>> {
+    ) -> AuthResult<DatabaseHookUpdate<FieldMap>> {
         Ok(DatabaseHookUpdate::Continue)
     }
     /// Observe a committed verification update.

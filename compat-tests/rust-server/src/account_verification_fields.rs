@@ -202,10 +202,10 @@ impl SeaOrmHooks<Schema> for Hooks {
     }
     async fn before_update_account(
         &self,
-        data: &UpdateAccount,
+        data: &mut better_auth_core::FieldMap,
         _: &SeaOrmHookContext<'_, Schema>,
-    ) -> AuthResult<better_auth_seaorm::DatabaseHookUpdate<UpdateAccount>> {
-        self.before("account", "update", Value::Object(data.fields()?.json()?))?;
+    ) -> AuthResult<better_auth_seaorm::DatabaseHookUpdate<better_auth_core::FieldMap>> {
+        self.before("account", "update", Value::Object(data.json()?))?;
         Ok(better_auth_seaorm::DatabaseHookUpdate::Continue)
     }
     async fn after_update_account(
@@ -240,15 +240,10 @@ impl SeaOrmHooks<Schema> for Hooks {
     }
     async fn before_update_verification(
         &self,
-        _: &str,
-        data: &VerificationUpdate,
+        data: &mut better_auth_core::FieldMap,
         _: &SeaOrmHookContext<'_, Schema>,
-    ) -> AuthResult<better_auth_seaorm::DatabaseHookUpdate<VerificationUpdate>> {
-        self.before(
-            "verification",
-            "update",
-            Value::Object(data.fields()?.json()?),
-        )?;
+    ) -> AuthResult<better_auth_seaorm::DatabaseHookUpdate<better_auth_core::FieldMap>> {
+        self.before("verification", "update", Value::Object(data.json()?))?;
         Ok(better_auth_seaorm::DatabaseHookUpdate::Continue)
     }
     async fn after_update_verification(

@@ -6,6 +6,7 @@ use better_auth_core::{
     SchemaValue,
     config::{FieldTransforms, UserFieldConfig, UserFieldTransform},
     id::IdGeneration,
+    plugin::AuthPlugin,
     session::NativeSessionData,
     store::{EphemeralStore, StatelessSchema},
 };
@@ -167,24 +168,25 @@ pub(super) fn numeric_output(enabled: Arc<AtomicBool>) -> UserFieldConfig {
 }
 
 #[tokio::test]
-async fn native_member_page_preserves_numeric_ids_and_strict_join_identity() {
-    let numeric_users = Arc::new(AtomicBool::new(true));
+async fn native_member_page_preserves_projected_values_and_strict_join_identity() {
+    let numeric_member_ids = Arc::new(AtomicBool::new(false));
     let mut auth = test_helpers::create_test_config();
     auth.advanced.database.generate_id = Some(IdGeneration::Serial);
-    let _ = auth
-        .user
-        .fields_mut()
-        .insert("id".into(), numeric_output(numeric_users.clone()));
+    auth.advanced.database.joins = Some(true);
+    let _ = auth.user.fields_mut().insert(
+        "image".into(),
+        numeric_output(Arc::new(AtomicBool::new(true))),
+    );
     let mut config = OrganizationConfig::default();
     let _ = config.schema.member.fields_mut().insert(
         "userId".into(),
         UserFieldConfig {
             references: Some(better_auth_core::config::UserFieldReference {
                 model: "user".into(),
-                field: "id".into(),
+                field: "name".into(),
                 ..Default::default()
             }),
-            ..numeric_output(Arc::new(AtomicBool::new(true)))
+            ..numeric_output(numeric_member_ids.clone())
         },
     );
     let ctx = context(auth, &config).await;
@@ -198,10 +200,14 @@ async fn native_member_page_preserves_numeric_ids_and_strict_join_identity() {
     for index in 1..=2 {
         let mut input = CreateUser::new()
             .with_email(format!("native-{index}@example.test"))
-            .with_name(format!("Native {index}"));
-        input.image = Some(format!("https://example.test/{index}.png")).into();
+            .with_name(index.to_string());
+        input.image = Some(index.to_string()).into();
         let user = ctx.database.create_user(input).await.unwrap();
-        assert_eq!(user.id.field_value(), FieldValue::Number(f64::from(index)));
+        assert_eq!(user.id.field_value(), FieldValue::from(index.to_string()));
+        assert_eq!(
+            user.image.field_value(),
+            FieldValue::Number(f64::from(index))
+        );
         members.push(
             ctx.database
                 .create_member(CreateMember {
@@ -224,6 +230,11 @@ async fn native_member_page_preserves_numeric_ids_and_strict_join_identity() {
         )
         .await
         .unwrap();
+    let stored_session = ctx
+        .database
+        .get_session_by_token_value(&data.session.token.field_value())
+        .await
+        .unwrap();
     let request = test_helpers::create_auth_request_no_query(
         HttpMethod::Get,
         "/organization/list-members",
@@ -243,9 +254,29 @@ async fn native_member_page_preserves_numeric_ids_and_strict_join_identity() {
     });
     assert_eq!(response.body.json().unwrap(), Some(expected));
     let organizations = list_organizations_core(&data, &ctx).await.unwrap();
-    assert_eq!(organizations.len(), 1);
-    assert_eq!(organizations[0].id, organization.id);
-    numeric_users.store(false, Ordering::SeqCst);
+    assert_eq!(
+        serde_json::to_value(organizations).unwrap(),
+        serde_json::to_value([&organization]).unwrap()
+    );
+    // A non-ID reference preserves the numeric projection; native joins still match stored string keys.
+    numeric_member_ids.store(true, Ordering::SeqCst);
+    let projected = ctx
+        .database
+        .list_organization_members_value(&organization.id.field_value())
+        .await
+        .unwrap();
+    let mut expected_projected = members.clone();
+    for (member, id) in expected_projected.iter_mut().zip([1.0, 2.0]) {
+        member.user_id = SchemaValue::from_field(FieldValue::Number(id));
+    }
+    assert_eq!(projected, expected_projected);
+    assert_eq!(
+        ctx.database
+            .list_users_by_id_values(&[1.0.into(), 2.0.into()], 2.0)
+            .await
+            .unwrap(),
+        users
+    );
     assert!(matches!(
         list_members_core(&ListMembersQuery::default(), &config, &data, &ctx).await,
         Err(AuthError::Internal(message)) if message == "Unexpected error: User not found for member"
@@ -256,6 +287,35 @@ async fn native_member_page_preserves_numeric_ids_and_strict_join_identity() {
             .await
             .unwrap(),
         2
+    );
+    numeric_member_ids.store(false, Ordering::SeqCst);
+    assert_eq!(
+        ctx.database
+            .list_organization_members_value(&organization.id.field_value())
+            .await
+            .unwrap(),
+        members
+    );
+    assert_eq!(
+        ctx.database
+            .list_users_by_id_values(&[1.0.into(), 2.0.into()], 2.0)
+            .await
+            .unwrap(),
+        users
+    );
+    assert_eq!(
+        ctx.database
+            .get_organization_by_id_value(&organization.id.field_value())
+            .await
+            .unwrap(),
+        Some(organization)
+    );
+    assert_eq!(
+        ctx.database
+            .get_session_by_token_value(&data.session.token.field_value())
+            .await
+            .unwrap(),
+        stored_session
     );
 }
 
@@ -323,14 +383,29 @@ async fn active_member_role_returns_native_values_and_empty_target_uses_requeste
 
 #[tokio::test]
 async fn native_invitation_reads_preserve_email_fallback_and_verification_order() {
-    let config = OrganizationConfig::default();
+    for teams_enabled in [false, true] {
+        invitation_read_case(teams_enabled).await;
+    }
+}
+
+async fn invitation_read_case(teams_enabled: bool) {
+    let mut config = OrganizationConfig::default();
+    config.teams.enabled = teams_enabled;
     let ctx = context(test_helpers::create_test_config(), &config).await;
     let user = ctx
         .database
-        .create_user(CreateUser::new().with_email("recipient@example.test"))
+        .create_user(CreateUser {
+            email_verified: Some(true),
+            ..CreateUser::new().with_email("recipient@example.test")
+        })
         .await
         .unwrap();
     let mut data = session(&ctx, &user).await;
+    let stored_session = ctx
+        .database
+        .get_session_by_token_value(&data.session.token.field_value())
+        .await
+        .unwrap();
     let organization = ctx
         .database
         .create_organization(CreateOrganization::new("Invites", "invites"))
@@ -378,12 +453,30 @@ async fn native_invitation_reads_preserve_email_fallback_and_verification_order(
         list_user_invitations_core(None, None, &ctx).await,
         Err(AuthError::BadRequest(message)) if message == "Missing session headers, or email query parameter."
     ));
-    let expected = serde_json::json!([{
+    let mut expected = serde_json::json!([{
         "id": invitation.id, "organizationId": invitation.organization_id,
         "email": invitation.email, "role": invitation.role, "status": invitation.status,
         "inviterId": invitation.inviter_id, "expiresAt": invitation.expires_at,
         "createdAt": invitation.created_at, "organizationName": organization.name,
     }]);
+    if teams_enabled {
+        expected[0]["teamId"] = serde_json::Value::Null;
+    }
+    // The plugin applies invitation field presence after the core result.
+    let mut expected_core = expected.clone();
+    expected_core[0]["teamId"] = serde_json::Value::Null;
+    let assert_response =
+        |rows: &[UserInvitationResponse<better_auth_core::wire::InvitationView>]| {
+            let mut response = AuthResponse::json(200, &rows).unwrap();
+            assert_eq!(response.body.json().unwrap(), Some(expected_core.clone()));
+            super::super::shape_invitation_output(
+                "/organization/list-user-invitations",
+                &mut response,
+                &config,
+            )
+            .unwrap();
+            assert_eq!(response.body.json().unwrap(), Some(expected.clone()));
+        };
     for email in [FieldValue::Null, "".into(), false.into()] {
         data.user = FieldMap::from([
             ("email".into(), email),
@@ -393,12 +486,12 @@ async fn native_invitation_reads_preserve_email_fallback_and_verification_order(
         let rows = list_user_invitations_core(Some(&data), Some("RECIPIENT@example.test"), &ctx)
             .await
             .unwrap();
-        assert_eq!(serde_json::to_value(rows).unwrap(), expected);
+        assert_response(&rows);
     }
     let rows = list_user_invitations_core(None, Some("RECIPIENT@example.test"), &ctx)
         .await
         .unwrap();
-    assert_eq!(serde_json::to_value(rows).unwrap(), expected);
+    assert_response(&rows);
     data.user = FieldMap::from([
         ("email".into(), 17.0.into()),
         ("emailVerified".into(), true.into()),
@@ -419,12 +512,39 @@ async fn native_invitation_reads_preserve_email_fallback_and_verification_order(
         handle_list_user_invitations(&request, &ctx).await,
         Err(AuthError::BadRequest(message)) if message == "User email cannot be passed for client side API calls."
     ));
+    request.query = None;
+    let response = OrganizationPlugin::with_config(config)
+        .on_request(&request, &ctx)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(response.body.json().unwrap(), Some(expected));
     assert_eq!(
         ctx.database
             .list_organization_invitations_value(&organization.id.field_value())
             .await
-            .unwrap()
-            .len(),
-        1
+            .unwrap(),
+        vec![invitation]
+    );
+    assert_eq!(
+        ctx.database
+            .get_user_by_id_value(&user.id.field_value())
+            .await
+            .unwrap(),
+        Some(user)
+    );
+    assert_eq!(
+        ctx.database
+            .get_organization_by_id_value(&organization.id.field_value())
+            .await
+            .unwrap(),
+        Some(organization)
+    );
+    assert_eq!(
+        ctx.database
+            .get_session_by_token_value(&data.session.token.field_value())
+            .await
+            .unwrap(),
+        stored_session
     );
 }

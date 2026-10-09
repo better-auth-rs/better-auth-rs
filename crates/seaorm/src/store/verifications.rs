@@ -9,7 +9,7 @@ use sea_orm::{
 use better_auth_core::store::VerificationStore;
 
 use crate::error::AuthResult;
-use crate::hooks::{DatabaseHookUpdate, VerificationUpdate};
+use crate::hooks::VerificationUpdate;
 use crate::schema::{AuthSchema, SeaOrmVerificationModel};
 use crate::types::CreateVerification;
 use better_auth_core::store::VerificationCreateWriter;
@@ -42,7 +42,7 @@ where
                 let active = self
                     .new_verification_active(
                         self.connection(),
-                        Some(reservation_id.clone()),
+                        Some((id.to_owned(), reservation_id.clone())),
                         verification.with_timestamps(Utc::now().into()),
                     )
                     .await?;
@@ -497,25 +497,33 @@ where
     async fn new_verification_active(
         &self,
         db: &impl ConnectionTrait,
-        id: Option<<S::Verification as SeaOrmVerificationModel>::Id>,
+        id: Option<(String, <S::Verification as SeaOrmVerificationModel>::Id)>,
         input: CreateVerification,
     ) -> AuthResult<
         super::record_write::RecordWrite<<S::Verification as SeaOrmVerificationModel>::Entity>,
     > {
         let fields = self.config().verification.field_schema();
         let backend = db.get_database_backend();
+        let (mut logical_id, id) = id.map_or((None, None), |(logical, native)| {
+            (Some(logical.into()), Some(native))
+        });
         let input = fields
-            .record_storage_fields_with_binding(input.fields()?, true, |name, field, value| {
-                crate::reference_id::input_binding(
-                    name,
-                    field,
-                    value,
-                    self.config().advanced.database.generate_id(),
-                    S::Verification::field_column,
-                    S::Verification::native_json_field,
-                    backend,
-                )
-            })
+            .storage_fields_with_bound_id(
+                input.fields()?,
+                true,
+                || Ok(logical_id.take()),
+                |name, field, value| {
+                    crate::reference_id::input_binding(
+                        name,
+                        field,
+                        value,
+                        self.config().advanced.database.generate_id(),
+                        S::Verification::field_column,
+                        S::Verification::native_json_field,
+                        backend,
+                    )
+                },
+            )
             .await?;
         let mut active = super::record_write::RecordWrite::from_initialized_fields(
             input,
@@ -536,38 +544,42 @@ where
         db: &impl ConnectionTrait,
         tx: Option<super::HookTransaction<'_, S>>,
         identifier: &str,
-        mut update: VerificationUpdate,
+        update: VerificationUpdate,
     ) -> AuthResult<Option<VerificationView>> {
-        let original = update.clone();
+        let mut prepared =
+            better_auth_core::store::database_hooks::PreparedRecordWrite::new(update.fields()?);
         let context = self.hook_context(tx);
         for hook in self.hooks() {
-            match better_auth_core::observability::database::with_database_hook(
+            let outcome = better_auth_core::observability::database::with_database_hook(
                 context.config,
                 hook.hook_metadata(),
                 better_auth_core::observability::database::DatabaseHook::BeforeUpdateVerification,
-                hook.before_update_verification(identifier, &original, &context),
+                hook.before_update_verification(prepared.original_fields_mut(), &context),
             )
-            .await?
-            {
-                DatabaseHookUpdate::Continue => {}
-                DatabaseHookUpdate::Cancel => return Ok(None),
-                DatabaseHookUpdate::Patch(patch) => update.merge(patch),
+            .await?;
+            if !prepared.apply(outcome) {
+                return Ok(None);
             }
         }
+        better_auth_core::store::database_hooks::await_adapter_lookup().await;
         let fields = self.config().verification.field_schema();
         let backend = db.get_database_backend();
         let input = fields
-            .record_storage_fields_with_binding(update.fields()?, false, |name, field, value| {
-                crate::reference_id::input_binding(
-                    name,
-                    field,
-                    value,
-                    self.config().advanced.database.generate_id(),
-                    S::Verification::field_column,
-                    S::Verification::native_json_field,
-                    backend,
-                )
-            })
+            .record_storage_fields_with_binding(
+                prepared.into_fields(),
+                false,
+                |name, field, value| {
+                    crate::reference_id::input_binding(
+                        name,
+                        field,
+                        value,
+                        self.config().advanced.database.generate_id(),
+                        S::Verification::field_column,
+                        S::Verification::native_json_field,
+                        backend,
+                    )
+                },
+            )
             .await?;
         let active = super::record_write::RecordWrite::<
             <S::Verification as SeaOrmVerificationModel>::Entity,
@@ -742,7 +754,10 @@ where
             "verification",
             verification.id.field_value().as_str().map(str::to_owned),
         )?;
-        let parsed = id.as_deref().map(S::Verification::parse_id).transpose()?;
+        let parsed = id
+            .as_deref()
+            .map(|id| S::Verification::parse_id(id).map(|parsed| (id.to_owned(), parsed)))
+            .transpose()?;
         let mut active = self
             .new_verification_active(connection, parsed, verification)
             .await?;

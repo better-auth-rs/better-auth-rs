@@ -14,7 +14,6 @@ use better_auth_core::{
     CreateVerification, FieldMap, FieldValue, HttpMethod,
     config::CookieCacheConfig,
     id::IdGeneration,
-    session::NativeSessionData,
     store::{EphemeralStore, StatelessSchema, StoreCapabilities},
     user_fields::{UserFieldConfig, UserFieldReference},
     wire::{SessionView, UserView},
@@ -25,13 +24,17 @@ use serde_json::{Value, json};
 use super::{AfterDeleteUser, BeforeDeleteUser, UserManagementCallbacks, UserManagementPlugin};
 use crate::plugins::{
     email_verification::{EmailVerificationCallbacks, EmailVerificationPlugin},
-    test_helpers::{create_test_config, initialize_test_context},
+    test_helpers::{
+        create_test_config, initialize_test_context,
+        native_session::{NativeSessionHook, dispatch_plugin},
+    },
 };
 
 struct Fixture {
     ctx: AuthContext<StatelessSchema>,
     user: UserView,
     session: SessionView,
+    hook: NativeSessionHook,
 }
 
 impl Fixture {
@@ -56,6 +59,8 @@ impl Fixture {
             database: false,
             secondary: false,
         });
+        let hook =
+            NativeSessionHook::install(&mut ctx, plugins.iter().flat_map(|plugin| plugin.routes()));
         let user = ctx
             .database
             .create_user(CreateUser::new().with_email("owner@native-user.test"))
@@ -73,44 +78,23 @@ impl Fixture {
                 active_organization_id: None,
             })
             .await?;
-        Ok(Self { ctx, user, session })
+        Ok(Self {
+            ctx,
+            user,
+            session,
+            hook,
+        })
     }
 
-    async fn request(
+    fn request(
         &self,
         user: FieldValue,
         method: HttpMethod,
         path: &str,
         input: Value,
     ) -> AuthResult<AuthRequest> {
-        let issued = AuthRequest::new(HttpMethod::Post, "/sign-in/email");
-        self.ctx
-            .session_manager()
-            .set_native_session_cookie(
-                &issued,
-                NativeSessionData {
-                    user,
-                    session: self.session.clone(),
-                },
-                None,
-            )
-            .await?;
-        let cookie = issued
-            .take_response_headers()?
-            .get_all("set-cookie")
-            .map(|cookie| cookie.split(';').next().unwrap().to_owned())
-            .collect::<Vec<_>>()
-            .join("; ");
-        Ok(AuthRequest::from_parts(
-            method,
-            path.into(),
-            HashMap::from([
-                ("cookie".into(), cookie),
-                ("content-type".into(), "application/json".into()),
-            ]),
-            Some(serde_json::to_vec(&input)?),
-            None,
-        ))
+        self.hook
+            .request(&self.ctx, &self.session, user, method, path, input)
     }
 
     async fn verification(&self, token: &str, value: FieldValue) -> AuthResult<()> {
@@ -163,15 +147,15 @@ async fn change_email_spreads_raw_users_and_keeps_the_original_callback_session(
                 Err(better_auth_core::AuthError::internal("Immediate updates must use verification delivery even when emailVerified is truthy"))
             }));
         let fixture = Fixture::new(&[&verification, &management], true).await?;
-        let req = fixture
-            .request(
-                user.clone(),
-                HttpMethod::Post,
-                "/change-email",
-                json!({"newEmail":"NEW@native-user.test"}),
-            )
-            .await?;
-        let response = management.on_request(&req, &fixture.ctx).await?.unwrap();
+        let req = fixture.request(
+            user.clone(),
+            HttpMethod::Post,
+            "/change-email",
+            json!({"newEmail":"NEW@native-user.test"}),
+        )?;
+        let response = dispatch_plugin(&req, &fixture.ctx, &management)
+            .await?
+            .unwrap();
         assert_eq!(response.status, 200);
         let mut expected = user.enumerable_fields();
         let _ = expected.insert("email".into(), "new@native-user.test".into());
@@ -227,10 +211,8 @@ async fn deletion_hooks_receive_raw_users_before_required_id_access() -> AuthRes
             .before_delete(trace.clone())
             .after_delete(trace.clone());
         let fixture = Fixture::new(&[&plugin], true).await?;
-        let req = fixture
-            .request(user.clone(), HttpMethod::Post, "/delete-user", json!({}))
-            .await?;
-        let result = plugin.on_request(&req, &fixture.ctx).await;
+        let req = fixture.request(user.clone(), HttpMethod::Post, "/delete-user", json!({}))?;
+        let result = dispatch_plugin(&req, &fixture.ctx, &plugin).await;
         if user.is_null() {
             assert_eq!(
                 result.unwrap_err().to_string(),
@@ -287,18 +269,19 @@ async fn deletion_callback_consumes_mismatched_native_tokens_without_deleting() 
             .after_delete(trace.clone());
         let fixture = Fixture::new(&[&plugin], true).await?;
         fixture.verification("strict", token_value).await?;
-        let mut req = fixture
-            .request(
-                FieldMap::from([("id".into(), true.into())]).into(),
-                HttpMethod::Get,
-                "/delete-user/callback",
-                Value::Null,
-            )
-            .await?;
+        let mut req = fixture.request(
+            FieldMap::from([("id".into(), true.into())]).into(),
+            HttpMethod::Get,
+            "/delete-user/callback",
+            Value::Null,
+        )?;
         req.query = Some(json!({"token":"strict"}));
-        let error = plugin.on_request(&req, &fixture.ctx).await.unwrap_err();
+        let error = dispatch_plugin(&req, &fixture.ctx, &plugin)
+            .await
+            .unwrap_err();
         assert_eq!(error.status_code(), 404);
-        assert_eq!(error.to_string(), "Invalid token");
+        let response = error.to_auth_response();
+        assert_eq!(response.body.json()?.unwrap()["message"], "Invalid token");
         assert!(trace.0.lock().unwrap().is_empty());
         assert!(
             fixture
@@ -316,12 +299,7 @@ async fn deletion_callback_consumes_mismatched_native_tokens_without_deleting() 
                 .await?,
             Some(fixture.user)
         );
-        assert!(
-            req.take_response_headers()?
-                .get_all("set-cookie")
-                .next()
-                .is_none()
-        );
+        assert!(response.headers.get_all("set-cookie").next().is_none());
     }
     Ok(())
 }
@@ -362,16 +340,17 @@ async fn deletion_confirmation_keeps_raw_sender_payload_and_deletes_the_native_o
         .await?;
     let raw: FieldValue =
         FieldMap::from([("id".into(), true.into()), ("native".into(), 17.0.into())]).into();
-    let req = fixture
-        .request(
-            raw.clone(),
-            HttpMethod::Post,
-            "/delete-user",
-            json!({"callbackURL":""}),
-        )
-        .await?;
+    let req = fixture.request(
+        raw.clone(),
+        HttpMethod::Post,
+        "/delete-user",
+        json!({"callbackURL":""}),
+    )?;
     assert_eq!(
-        plugin.on_request(&req, &fixture.ctx).await?.unwrap().status,
+        dispatch_plugin(&req, &fixture.ctx, &plugin)
+            .await?
+            .unwrap()
+            .status,
         200
     );
     let (observed, token, url) = sent.lock().unwrap().clone().unwrap();
@@ -389,16 +368,14 @@ async fn deletion_confirmation_keeps_raw_sender_payload_and_deletes_the_native_o
         FieldValue::Bool(true)
     );
     assert!(trace.0.lock().unwrap().is_empty());
-    let mut req = fixture
-        .request(
-            raw.clone(),
-            HttpMethod::Get,
-            "/delete-user/callback",
-            Value::Null,
-        )
-        .await?;
+    let mut req = fixture.request(
+        raw.clone(),
+        HttpMethod::Get,
+        "/delete-user/callback",
+        Value::Null,
+    )?;
     req.query = Some(json!({"token":token,"callbackURL":""}));
-    let response = plugin.on_request(&req, &fixture.ctx).await?.unwrap();
+    let response = dispatch_plugin(&req, &fixture.ctx, &plugin).await?.unwrap();
     assert_eq!(response.status, 200);
     assert_eq!(
         *trace.0.lock().unwrap(),

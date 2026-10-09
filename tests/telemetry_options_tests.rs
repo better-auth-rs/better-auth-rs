@@ -513,9 +513,9 @@ impl DatabaseHooks<S> for Hooks {
     }
     async fn before_update_account(
         &self,
-        _: &core::UpdateAccount,
+        _: &mut better_auth_core::FieldMap,
         _: &DatabaseHookContext<'_, S>,
-    ) -> AuthResult<DatabaseHookUpdate<core::UpdateAccount>> {
+    ) -> AuthResult<DatabaseHookUpdate<better_auth_core::FieldMap>> {
         Err(AuthError::internal("must not invoke hook"))
     }
     async fn after_create_verification(

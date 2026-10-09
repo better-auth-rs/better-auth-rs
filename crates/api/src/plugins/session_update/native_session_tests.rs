@@ -14,7 +14,6 @@ use better_auth_core::{
     CreateSession, CreateUser, CreateVerification, FieldMap, FieldValue, HttpMethod,
     config::CookieCacheConfig,
     id::IdGeneration,
-    session::NativeSessionData,
     store::{EphemeralStore, StatelessSchema, StoreCapabilities},
     user_fields::UserFieldConfig,
     wire::SessionView,
@@ -25,13 +24,17 @@ use serde_json::{Value, json};
 use crate::plugins::{
     device_authorization::DeviceAuthorizationPlugin,
     phone_number::PhoneNumberPlugin,
-    test_helpers::{create_test_config, initialize_test_context},
+    test_helpers::{
+        create_test_config, initialize_test_context,
+        native_session::{NativeSessionHook, dispatch, dispatch_plugin},
+    },
     two_factor::{BackupCodeStorage, SendTwoFactorOtp, TwoFactorConfig, TwoFactorPlugin},
 };
 
 struct Fixture {
     ctx: AuthContext<StatelessSchema>,
     session: SessionView,
+    hook: NativeSessionHook,
 }
 
 impl Fixture {
@@ -50,12 +53,20 @@ impl Fixture {
             config.advanced.database.generate_id = Some(IdGeneration::Serial);
         }
         let config = Arc::new(config);
-        let ctx = initialize_test_context(
+        let mut ctx = initialize_test_context(
             config.clone(),
             Arc::new(EphemeralStore::new(config)),
             plugins,
         )
         .await?;
+        let hook = NativeSessionHook::install(
+            &mut ctx,
+            plugins.iter().flat_map(|plugin| plugin.routes()).chain(
+                AuthPlugin::<StatelessSchema>::routes(
+                    &crate::plugins::session_management::SessionManagementPlugin::new(),
+                ),
+            ),
+        );
         let user = ctx
             .database
             .create_user(CreateUser::new().with_email("owner@native-consumer.test"))
@@ -73,44 +84,25 @@ impl Fixture {
                 active_organization_id: None,
             })
             .await?;
-        Ok(Self { ctx, session })
+        Ok(Self { ctx, session, hook })
     }
 
-    async fn request(
+    fn request(
         &self,
         user: FieldValue,
         method: HttpMethod,
         path: &str,
         body: Value,
     ) -> AuthResult<AuthRequest> {
-        let issuance = AuthRequest::new(HttpMethod::Post, "/sign-in/email");
-        self.ctx
-            .session_manager()
-            .set_native_session_cookie(
-                &issuance,
-                NativeSessionData {
-                    session: self.session.clone(),
-                    user,
-                },
-                None,
-            )
-            .await?;
-        let cookies = issuance
-            .take_response_headers()?
-            .get_all("set-cookie")
-            .map(|cookie| cookie.split(';').next().unwrap().to_owned())
-            .collect::<Vec<_>>()
-            .join("; ");
-        Ok(AuthRequest::from_parts(
-            method,
-            path.into(),
-            HashMap::from([
-                ("cookie".into(), cookies),
-                ("content-type".into(), "application/json".into()),
-            ]),
-            Some(serde_json::to_vec(&body)?),
-            None,
-        ))
+        self.hook
+            .request(&self.ctx, &self.session, user, method, path, body)
+    }
+
+    async fn update(&self, request: &AuthRequest) -> AuthResult<AuthResponse> {
+        dispatch(request, &self.ctx, |request| async move {
+            super::handle(&request, &self.ctx).await
+        })
+        .await
     }
 
     async fn device(&self, owner: Option<&str>) -> AuthResult<()> {
@@ -153,15 +145,13 @@ async fn update_session_preserves_native_users_and_stateless_missing_row_fallbac
         .into(),
     ] {
         let fixture = Fixture::new(&[], false).await?;
-        let req = fixture
-            .request(
-                user.clone(),
-                HttpMethod::Post,
-                "/update-session",
-                json!({"label":"changed"}),
-            )
-            .await?;
-        let response = super::handle(&req, &fixture.ctx).await?;
+        let req = fixture.request(
+            user.clone(),
+            HttpMethod::Post,
+            "/update-session",
+            json!({"label":"changed"}),
+        )?;
+        let response = fixture.update(&req).await?;
         assert_eq!(body(&response)["session"]["label"], "changed");
         let published = req.new_session()?.unwrap();
         assert_eq!(published.user, user);
@@ -183,23 +173,21 @@ async fn update_session_preserves_native_users_and_stateless_missing_row_fallbac
             database: stateful,
             secondary: false,
         });
-        let req = fixture
-            .request(
-                false.into(),
-                HttpMethod::Post,
-                "/update-session",
-                json!({"label":"fallback"}),
-            )
-            .await?;
+        let req = fixture.request(
+            false.into(),
+            HttpMethod::Post,
+            "/update-session",
+            json!({"label":"fallback"}),
+        )?;
         fixture
             .ctx
             .database
             .delete_session(fixture.session.token.typed()?)
             .await?;
-        let result = super::handle(&req, &fixture.ctx).await;
+        let result = fixture.update(&req).await;
         if stateful {
             assert_eq!(
-                result.unwrap_err().error_payload().1.as_deref(),
+                body(&result.unwrap_err().to_auth_response())["code"].as_str(),
                 Some("FAILED_TO_GET_SESSION")
             );
             assert!(req.new_session()?.is_none());
@@ -233,24 +221,20 @@ async fn device_primitive_users_reach_state_guards_without_claiming_or_disclosin
     ] {
         let fixture = Fixture::new(&[&plugin], false).await?;
         fixture.device(None).await?;
-        let mut req = fixture
-            .request(user.clone(), HttpMethod::Get, "/device", Value::Null)
-            .await?;
+        let mut req = fixture.request(user.clone(), HttpMethod::Get, "/device", Value::Null)?;
         req.query = Some(json!({"user_code":"ABCD2345"}));
-        let response = plugin.on_request(&req, &fixture.ctx).await?.unwrap();
+        let response = dispatch_plugin(&req, &fixture.ctx, &plugin).await?.unwrap();
         assert_eq!(
             body(&response),
             json!({"user_code":"ABCD2345","status":"pending"})
         );
-        let req = fixture
-            .request(
-                user,
-                HttpMethod::Post,
-                "/device/approve",
-                json!({"userCode":"ABCD2345"}),
-            )
-            .await?;
-        let response = plugin.on_request(&req, &fixture.ctx).await?.unwrap();
+        let req = fixture.request(
+            user,
+            HttpMethod::Post,
+            "/device/approve",
+            json!({"userCode":"ABCD2345"}),
+        )?;
+        let response = dispatch_plugin(&req, &fixture.ctx, &plugin).await?.unwrap();
         assert_eq!(response.status, 400);
         assert_eq!(body(&response)["error"], "invalid_request");
         assert_eq!(
@@ -268,15 +252,13 @@ async fn device_primitive_users_reach_state_guards_without_claiming_or_disclosin
     }
     let fixture = Fixture::new(&[&plugin], false).await?;
     fixture.device(Some("owner")).await?;
-    let req = fixture
-        .request(
-            false.into(),
-            HttpMethod::Post,
-            "/device/deny",
-            json!({"userCode":"ABCD2345"}),
-        )
-        .await?;
-    let response = plugin.on_request(&req, &fixture.ctx).await?.unwrap();
+    let req = fixture.request(
+        false.into(),
+        HttpMethod::Post,
+        "/device/deny",
+        json!({"userCode":"ABCD2345"}),
+    )?;
+    let response = dispatch_plugin(&req, &fixture.ctx, &plugin).await?.unwrap();
     assert_eq!(response.status, 403);
     assert_eq!(body(&response)["error"], "access_denied");
     assert_eq!(
@@ -292,15 +274,13 @@ async fn device_primitive_users_reach_state_guards_without_claiming_or_disclosin
     );
     let fixture = Fixture::new(&[&plugin], false).await?;
     fixture.device(None).await?;
-    let req = fixture
-        .request(
-            FieldValue::Null,
-            HttpMethod::Post,
-            "/device/approve",
-            json!({"userCode":"ABCD2345"}),
-        )
-        .await?;
-    let response = plugin.on_request(&req, &fixture.ctx).await?.unwrap();
+    let req = fixture.request(
+        FieldValue::Null,
+        HttpMethod::Post,
+        "/device/approve",
+        json!({"userCode":"ABCD2345"}),
+    )?;
+    let response = dispatch_plugin(&req, &fixture.ctx, &plugin).await?.unwrap();
     assert_eq!(response.status, 400);
     assert_eq!(
         body(&response)["error_description"],
@@ -342,17 +322,15 @@ async fn phone_update_binds_native_actor_and_consumes_otp_before_user_failure() 
         } else {
             actor.clone()
         };
-        let req = fixture
-            .request(
-                user,
-                HttpMethod::Post,
-                "/phone-number/verify",
-                json!({
-                    "phoneNumber":"+15551234567", "code":"123456", "updatePhoneNumber":true
-                }),
-            )
-            .await?;
-        let result = plugin.on_request(&req, &fixture.ctx).await;
+        let req = fixture.request(
+            user,
+            HttpMethod::Post,
+            "/phone-number/verify",
+            json!({
+                "phoneNumber":"+15551234567", "code":"123456", "updatePhoneNumber":true
+            }),
+        )?;
+        let result = dispatch_plugin(&req, &fixture.ctx, &plugin).await;
         if actor.is_truthy() {
             let response = result?.unwrap();
             assert_eq!(response.status, 200);
@@ -364,7 +342,7 @@ async fn phone_update_binds_native_actor_and_consumes_otp_before_user_failure() 
             assert_eq!(delivered.lock().unwrap().len(), 1);
         } else {
             assert_eq!(
-                result.unwrap_err().error_payload().1.as_deref(),
+                body(&result.unwrap_err().to_auth_response())["code"].as_str(),
                 Some("FAILED_TO_UPDATE_USER")
             );
             assert_eq!(delivered.lock().unwrap().len(), 1);
@@ -403,16 +381,17 @@ async fn two_factor_primitive_users_preserve_sender_payload_and_branch_order() -
     });
     let fixture = Fixture::new(&[&plugin], false).await?;
     for user in [FieldValue::Bool(false), 0.0.into(), "".into()] {
-        let req = fixture
-            .request(
-                user.clone(),
-                HttpMethod::Post,
-                "/two-factor/send-otp",
-                json!({}),
-            )
-            .await?;
+        let req = fixture.request(
+            user.clone(),
+            HttpMethod::Post,
+            "/two-factor/send-otp",
+            json!({}),
+        )?;
         assert_eq!(
-            plugin.on_request(&req, &fixture.ctx).await?.unwrap().status,
+            dispatch_plugin(&req, &fixture.ctx, &plugin)
+                .await?
+                .unwrap()
+                .status,
             200
         );
         let (observed, code) = outbox.0.lock().unwrap().last().unwrap().clone();
@@ -429,34 +408,35 @@ async fn two_factor_primitive_users_preserve_sender_payload_and_branch_order() -
                 .field_value(),
             FieldValue::from(format!("{code}:0"))
         );
-        let req = fixture
-            .request(
-                user,
-                HttpMethod::Post,
-                "/two-factor/generate-backup-codes",
-                json!({"password":"password"}),
-            )
-            .await?;
-        let error = plugin.on_request(&req, &fixture.ctx).await.unwrap_err();
-        assert_eq!(error.status_code(), 400);
-        assert_eq!(error.to_string(), "Two factor isn't enabled");
-    }
-    let req = fixture
-        .request(
-            FieldValue::Null,
+        let req = fixture.request(
+            user,
             HttpMethod::Post,
-            "/two-factor/get-totp-uri",
+            "/two-factor/generate-backup-codes",
             json!({"password":"password"}),
-        )
-        .await?;
-    assert_eq!(
-        plugin
-            .on_request(&req, &fixture.ctx)
+        )?;
+        let error = dispatch_plugin(&req, &fixture.ctx, &plugin)
             .await
-            .unwrap_err()
-            .error_payload()
-            .1
-            .as_deref(),
+            .unwrap_err();
+        assert_eq!(error.status_code(), 400);
+        assert_eq!(
+            body(&error.to_auth_response())["message"],
+            "Two factor isn't enabled"
+        );
+    }
+    let req = fixture.request(
+        FieldValue::Null,
+        HttpMethod::Post,
+        "/two-factor/get-totp-uri",
+        json!({"password":"password"}),
+    )?;
+    assert_eq!(
+        body(
+            &dispatch_plugin(&req, &fixture.ctx, &plugin)
+                .await
+                .unwrap_err()
+                .to_auth_response()
+        )["code"]
+            .as_str(),
         Some("TOTP_NOT_CONFIGURED")
     );
     Ok(())
@@ -481,15 +461,13 @@ async fn two_factor_native_actor_keeps_backup_code_cas_and_response_fields() -> 
     let user: FieldValue =
         FieldMap::from([("id".into(), 17.0.into()), ("native".into(), false.into())]).into();
     for success in [true, false] {
-        let req = fixture
-            .request(
-                user.clone(),
-                HttpMethod::Post,
-                "/two-factor/verify-backup-code",
-                json!({"code":"used","disableSession":true}),
-            )
-            .await?;
-        let result = plugin.on_request(&req, &fixture.ctx).await;
+        let req = fixture.request(
+            user.clone(),
+            HttpMethod::Post,
+            "/two-factor/verify-backup-code",
+            json!({"code":"used","disableSession":true}),
+        )?;
+        let result = dispatch_plugin(&req, &fixture.ctx, &plugin).await;
         if success {
             let response = result?.unwrap();
             assert_eq!(
@@ -599,6 +577,7 @@ async fn consumers_read_real_many_relationships_without_a_typed_user_gate() -> A
         let fixture = Fixture {
             ctx: ctx.clone(),
             session: session.clone(),
+            hook: NativeSessionHook::default(),
         };
         fixture.device(None).await?;
         let req = request("/device/approve", json!({"userCode":"ABCD2345"}));
