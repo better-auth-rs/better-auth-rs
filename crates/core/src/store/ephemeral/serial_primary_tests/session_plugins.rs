@@ -290,10 +290,10 @@ struct SessionEvents(Events);
 impl DatabaseHooks<StatelessSchema> for SessionEvents {
     async fn before_update_session(
         &self,
-        update: &SessionUpdate,
+        update: &mut crate::FieldMap,
         _: &DatabaseHookContext<'_, StatelessSchema>,
-    ) -> AuthResult<crate::store::database_hooks::DatabaseHookUpdate<SessionUpdate>> {
-        let fields = update.clone().into_public_fields()?;
+    ) -> AuthResult<crate::store::database_hooks::DatabaseHookUpdate<crate::FieldMap>> {
+        let fields = update.clone();
         let patch = fields
             .iter()
             .map(|(name, value)| Ok((name.clone(), observe(value)?)))
@@ -322,7 +322,7 @@ impl DatabaseHooks<StatelessSchema> for SessionEvents {
 async fn serial_session_string_id_updates_match_upstream_id_contract() -> AuthResult<()> {
     let fixture = fixture()?;
     let cases = required(fixture.get("cases").and_then(JsonValue::as_array))?;
-    // SessionUpdate accepts omitted or String IDs. Native inputs and the configured ID slot remain Bun-only.
+    // This fixture checks string ID conversion. The shared ID-slot contracts cover native ID inputs.
     for (name, id) in [
         ("omitted", None),
         ("empty-string", Some("")),

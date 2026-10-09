@@ -183,6 +183,7 @@ run_stage() {
       if cargo check --workspace --locked --tests --features axum,seaorm2,redis-cache --keep-going; then
         cargo test --locked --no-fail-fast -p better-auth-core -p better-auth-api -p better-auth-seaorm --lib -- \
           session verification database_hooks lifecycle transaction create_readback user_fields user_query wire:: \
+          plugin::tests::response_headers:: types::tests::auth_response_json \
           user_column_defaults user_runtime_input_tests user_serial_tests api_key_start::tests protected_function_tests field_value:: record_bindings:: types_plugin::device::tests \
           member_delete:: serial_primary_tests::team_members:: native_team_mutations native_invitation_acceptance organization_role organization_fields:: organization_models:: cookie_utils::native_cookie_tests:: \
           user_view_preserves_adapter_order_through_cache_and_visibility \
@@ -247,6 +248,8 @@ run_stage() {
         ./compat-tests/reference-server/contracts/user-account-raw-column.test.ts \
         ./compat-tests/reference-server/contracts/account-owner-batch.test.ts \
         ./compat-tests/reference-server/contracts/account-verification-update-fields.test.ts \
+        ./compat-tests/reference-server/contracts/endpoint-content-type.test.ts \
+        ./compat-tests/reference-server/contracts/session-management-native.test.ts \
         ./compat-tests/reference-server/contracts/account-duplicates.test.ts \
         ./compat-tests/reference-server/contracts/account-user-selected-relations.test.ts \
         ./compat-tests/reference-server/contracts/native-core-joins.test.ts \

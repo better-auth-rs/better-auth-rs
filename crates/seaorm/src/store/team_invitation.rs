@@ -233,10 +233,7 @@ where
                     self.write_session_update(
                         &tx,
                         session_token,
-                        better_auth_core::store::database_hooks::SessionUpdate {
-                            additional_fields: [("activeTeamId".into(), (*team_id).into())].into(),
-                            ..Default::default()
-                        },
+                        [("activeTeamId".into(), (*team_id).into())].into(),
                     )
                     .await?
                     .ok_or(AuthError::SessionNotFound)?,
@@ -248,14 +245,10 @@ where
                 .write_session_update(
                     &tx,
                     session_token,
-                    better_auth_core::store::database_hooks::SessionUpdate {
-                        additional_fields: [(
-                            "activeOrganizationId".into(),
-                            invitation.organization_id.field_value(),
-                        )]
-                        .into(),
-                        ..Default::default()
-                    },
+                    [(
+                        "activeOrganizationId".into(),
+                        invitation.organization_id.field_value(),
+                    )].into(),
                 )
                 .await?
                 .ok_or(AuthError::SessionNotFound)?;

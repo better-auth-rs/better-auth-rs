@@ -111,45 +111,24 @@ impl OrganizationFields {
         }
     }
 
-    /// Resolve complete query declarations with whole-field replacements in native schema order.
+    /// Resolve query policies from the same declarations used for writes and output.
     #[doc(hidden)]
     pub fn query_schema_for(
+        &self,
+        role: better_auth_schema_registry::EntityRole,
+    ) -> crate::AuthResult<UserConfig> {
+        self.schema_for(role)
+    }
+
+    /// Resolve complete declarations with whole-field replacements in native schema order.
+    #[doc(hidden)]
+    pub fn schema_for(
         &self,
         role: better_auth_schema_registry::EntityRole,
     ) -> crate::AuthResult<UserConfig> {
         let configured = self.fields_for(role)?;
         let mut fields = crate::plugin_runtime::ModelFields::plugin_native_fields(role);
         fields.fields_mut().extend(configured.fields().clone());
-        Ok(fields)
-    }
-
-    /// Resolve configured read/write policies and native references while adapters own native defaults.
-    #[doc(hidden)]
-    pub fn schema_for(
-        &self,
-        role: better_auth_schema_registry::EntityRole,
-    ) -> crate::AuthResult<UserConfig> {
-        let mut fields = self.fields_for(role)?.clone();
-        let entity = better_auth_schema_registry::plugin_schemas()
-            .iter()
-            .flat_map(|plugin| plugin.extra_entities)
-            .find(|entity| entity.role == Some(role))
-            .ok_or_else(|| crate::AuthError::config("Missing organization schema"))?;
-        for (name, model) in better_auth_schema_registry::entity_foreign_keys(entity.table_name) {
-            let _ = fields
-                .fields_mut()
-                .entry(better_auth_schema_registry::canonical_field_name(
-                    role, name,
-                ))
-                .or_insert_with(|| crate::user_fields::UserFieldConfig {
-                    references: Some(crate::user_fields::UserFieldReference {
-                        model: (*model).into(),
-                        field: "id".into(),
-                        ..Default::default()
-                    }),
-                    ..Default::default()
-                });
-        }
         Ok(fields)
     }
 
@@ -184,7 +163,7 @@ mod tests {
     use better_auth_schema_registry::EntityRole;
 
     #[test]
-    fn query_declarations_replace_native_attributes_without_enabling_native_write_defaults() {
+    fn query_and_storage_share_complete_declarations_and_whole_field_replacements() {
         let fields = OrganizationFields {
             organization_role: UserConfig {
                 additional_fields: Some(
@@ -272,8 +251,17 @@ mod tests {
             .organization_fields(Default::default())
             .schema_for(EntityRole::OrganizationRole)
             .unwrap();
-        assert_eq!(storage.fields().len(), 3);
-        assert!(!storage.fields().contains_key("role"));
+        assert_eq!(
+            storage.fields().keys().collect::<Vec<_>>(),
+            query.fields().keys().collect::<Vec<_>>()
+        );
+        assert_eq!(storage.fields().get("role").unwrap().index, Some(true));
+        assert!(
+            storage
+                .fields()
+                .values()
+                .all(|field| field.required == Some(false))
+        );
         assert!(
             storage
                 .fields()

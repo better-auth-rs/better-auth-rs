@@ -62,6 +62,10 @@ Bearer transport accepts the raw token returned by sign-in or the signed token f
 
 Session lists preserve the storage adapter's result order, matching upstream. Clients that need a specific order should sort the returned sessions.
 
+`/list-sessions` accepts a valid cached Session. Database queries filter expired rows before the adapter limit and output policies. Custom stores must implement `SessionStore::get_user_session_snapshots_value` with this ordering when `only_active` is true; native owner values pass through the model's query policy. Secondary storage retains its cached projection.
+
+The three revocation routes reread authoritative Session storage when a database or secondary backend is present. Stateless calls can reuse the trusted native snapshot. `/revoke-session` compares the target owner with the current native User ID without coercion. `/revoke-other-sessions` filters projected expiry values and preserves the exact current token. These routes do not use a string conversion to equate different native values.
+
 ## Session Lifecycle
 
 1. A session is created after successful authentication.

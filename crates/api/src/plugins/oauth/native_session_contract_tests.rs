@@ -237,6 +237,7 @@ impl OAuthUserInfoHandler for Profile {
 struct Cache {
     events: Events,
     rows: Mutex<indexmap::IndexMap<String, String>>,
+    clock: Mutex<Option<i64>>,
 }
 
 impl Cache {
@@ -272,11 +273,28 @@ impl SecondaryStorage for Cache {
     }
 
     async fn set_native(&self, key: &FieldValue, value: &str, ttl: Option<f64>) -> AuthResult<()> {
+        let fields = FieldValue::parse_json(value)?;
+        let ttl = if key.as_str().unwrap().starts_with("verification:") {
+            let expires = text(&fields, "expiresAt")
+                .parse::<DateTime<Utc>>()
+                .unwrap()
+                .timestamp_millis();
+            let now = self.clock.lock().unwrap().unwrap();
+            assert_eq!(
+                ttl,
+                Some(((expires - now) as f64 / 1_000.0).floor().max(0.0)),
+                "Verification TTL must use the exact secondary-store clock read"
+            );
+            // The capture fixes Date.now; generated expiry is independently checked against the request window.
+            Some(600.0)
+        } else {
+            ttl
+        };
         self.events.push(object([
             ("kind", "cache".into()),
             ("operation", "set".into()),
             ("key", key.clone()),
-            ("value", FieldValue::parse_json(value)?),
+            ("value", fields),
             ("ttl", ttl.map_or(FieldValue::Undefined, Into::into)),
         ]))?;
         let _ = self
@@ -717,6 +735,7 @@ async fn run<S: AuthSchema>(
         Arc::new(Cache {
             events: events.clone(),
             rows: Default::default(),
+            clock: Default::default(),
         })
     });
     let mut provider = OAuthProvider::google("client", "secret");
@@ -753,7 +772,7 @@ async fn run<S: AuthSchema>(
     let mut context = initialize_test_context(config.clone(), raw.clone(), &borrowed).await?;
     let adapter = context.database.clone();
     seed(adapter.as_ref(), case, cache.as_deref()).await?;
-    context.database = Arc::new(if let Some(cache) = &cache {
+    let secondary = if let Some(cache) = &cache {
         SecondaryStore::new(
             adapter.clone(),
             cache.clone(),
@@ -766,7 +785,15 @@ async fn run<S: AuthSchema>(
             context.config.clone(),
             context.metadata.clone(),
         )
-    });
+    };
+    let secondary_clock = cache.clone();
+    context.database = Arc::new(secondary.with_clock(move || {
+        let now = Utc::now();
+        if let Some(cache) = &secondary_clock {
+            *cache.clock.lock().unwrap() = Some(now.timestamp_millis());
+        }
+        now
+    }));
     let on_error: Arc<dyn ApiErrorHandler<S>> = Arc::new(events.clone());
     context.extensions.insert(on_error);
     let dispatcher = EndpointDispatcher::new(

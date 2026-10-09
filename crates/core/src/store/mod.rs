@@ -65,7 +65,7 @@ pub struct SessionUpdateWriter {
     /// Receive the complete hook patch, before adapter field transformations.
     pub write: Box<
         dyn FnOnce(
-                database_hooks::SessionUpdate,
+                crate::FieldMap,
             ) -> TypedTransactionFuture<'static, Option<crate::wire::SessionView>>
             + Send,
     >,
@@ -978,8 +978,22 @@ pub trait SessionStore<S: AuthSchema>: Send + Sync {
         &self,
         user_id: &str,
     ) -> AuthResult<Vec<(crate::wire::SessionView, Option<crate::wire::SessionView>)>> {
+        self.get_user_session_snapshots_value(&user_id.into(), false)
+            .await
+    }
+    /// Preserve native selectors and apply the expiry predicate before the adapter limit and output policies.
+    async fn get_user_session_snapshots_value(
+        &self,
+        user_id: &crate::FieldValue,
+        only_active: bool,
+    ) -> AuthResult<Vec<(crate::wire::SessionView, Option<crate::wire::SessionView>)>> {
+        if only_active {
+            return Err(AuthError::config(
+                "The store must filter active Sessions before pagination and output policies",
+            ));
+        }
         Ok(self
-            .get_user_sessions(user_id)
+            .get_user_sessions_value(user_id)
             .await?
             .into_iter()
             .map(|session| (session, None))

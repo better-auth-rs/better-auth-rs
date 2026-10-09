@@ -19,8 +19,6 @@ pub struct ModelFields {
     custom_models: IndexMap<String, (String, UserConfig)>,
     user_plugin_fields: Vec<&'static str>,
     session_plugin_fields: Vec<&'static str>,
-    native_fields: IndexMap<EntityRole, IndexSet<String>>,
-    organization_output_order: IndexMap<EntityRole, Vec<String>>,
     organization: Option<crate::organization_fields::OrganizationFields>,
     id_history: Arc<Mutex<IdHistory>>,
 }
@@ -192,9 +190,6 @@ impl ModelFields {
 
     pub(crate) fn extend(&mut self, role: EntityRole, fields: UserConfig) {
         if let Some(fields) = fields.additional_fields {
-            if let Some(native) = self.native_fields.get_mut(&role) {
-                native.retain(|name| !fields.contains_key(name));
-            }
             self.models
                 .entry(role)
                 .or_default()
@@ -223,15 +218,13 @@ impl ModelFields {
 
     fn declare_native_fields(&mut self, role: EntityRole, fields: UserConfig) {
         let registered = self.models.entry(role).or_default().fields_mut();
-        let native = self.native_fields.entry(role).or_default();
         for (name, declaration) in Self::plugin_native_fields(role).fields() {
             let _ = registered.insert(name.clone(), declaration.clone());
-            let _ = native.insert(name.clone());
         }
         self.extend(role, fields);
     }
 
-    /// Resolve Organization model policies without replacing adapter-owned native defaults.
+    /// Resolve complete Organization declarations in their registered schema order.
     pub fn organization_fields(
         &self,
         fields: crate::organization_fields::OrganizationFields,
@@ -254,11 +247,6 @@ impl ModelFields {
                     .entry(name.clone())
                     .or_insert_with(|| field.clone());
             }
-            if let Some(native) = self.native_fields.get(&role) {
-                resolved
-                    .fields_mut()
-                    .retain(|name, _| !native.contains(name));
-            }
             *schema = resolved;
         }
         // Upstream initializes the dynamic-role update schema eagerly as partial.
@@ -278,25 +266,8 @@ impl ModelFields {
         self.models.iter().map(|(role, fields)| (*role, fields))
     }
 
-    pub(crate) fn organization_output_field_names(
-        &self,
-        role: EntityRole,
-        policies: &UserConfig,
-    ) -> Vec<String> {
-        let mut names = self
-            .organization_output_order
-            .get(&role)
-            .cloned()
-            .unwrap_or_else(|| {
-                let mut fields = Self::default();
-                fields.register_organization_schema(&Default::default(), true);
-                fields.fields(role).fields().keys().cloned().collect()
-            });
-        for name in policies.fields().keys() {
-            if !names.contains(name) {
-                names.push(name.clone());
-            }
-        }
+    pub(crate) fn organization_output_field_names(&self, policies: &UserConfig) -> Vec<String> {
+        let mut names: Vec<_> = policies.fields().keys().cloned().collect();
         names.retain(|name| name != "id");
         names.push("id".into());
         names
@@ -333,15 +304,6 @@ impl ModelFields {
         );
         adapter.verification.additional_fields = stored.additional_fields.unwrap_or_default();
         endpoint.verification.additional_fields = public.additional_fields.unwrap_or_default();
-        for (role, native) in &self.native_fields {
-            if let Some(fields) = self.models.get_mut(role) {
-                // Native slots determine read timing but are not configured adapter policies.
-                let _ = self
-                    .organization_output_order
-                    .insert(*role, fields.fields().keys().cloned().collect());
-                fields.fields_mut().retain(|name, _| !native.contains(name));
-            }
-        }
         (adapter, endpoint, self)
     }
 }

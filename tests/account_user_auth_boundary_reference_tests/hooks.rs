@@ -2,7 +2,7 @@ use super::*;
 use better_auth_core::{
     CreateVerification,
     store::database_hooks::{
-        DatabaseHookContext, DatabaseHookControl, DatabaseHookUpdate, DatabaseHooks, SessionUpdate,
+        DatabaseHookContext, DatabaseHookControl, DatabaseHookUpdate, DatabaseHooks,
     },
     wire::{AccountView, SessionView, UserView, VerificationView},
 };
@@ -179,28 +179,10 @@ impl<S: AuthSchema> DatabaseHooks<S> for Hooks {
     }
     async fn before_update_session(
         &self,
-        data: &SessionUpdate,
+        data: &mut better_auth_core::FieldMap,
         _: &DatabaseHookContext<'_, S>,
-    ) -> AuthResult<DatabaseHookUpdate<SessionUpdate>> {
-        self.unexpected(
-            "session",
-            "update",
-            "before",
-            &(
-                &data.id,
-                &data.token,
-                &data.user_id,
-                &data.expires_at,
-                &data.created_at,
-                &data.updated_at,
-                &data.ip_address,
-                &data.user_agent,
-                &data.impersonated_by,
-                &data.active_organization_id,
-                &data.active_team_id,
-                &data.additional_fields,
-            ),
-        )?;
+    ) -> AuthResult<DatabaseHookUpdate<better_auth_core::FieldMap>> {
+        self.unexpected("session", "update", "before", &data)?;
         Ok(DatabaseHookUpdate::Continue)
     }
     async fn after_update_session(

@@ -845,6 +845,7 @@ impl<S: AuthSchema> AuthContext<S> {
 mod tests {
     mod async_body_dispatch;
     mod native_session_hooks;
+    mod response_headers;
 
     use super::*;
     use crate::entity::AuthUser;

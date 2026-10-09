@@ -29,7 +29,12 @@ impl TeamStore for EphemeralStore {
                 .additional_fields
                 .remove("updatedAt")
                 .map(crate::SchemaValue::from_field)
-                .unwrap_or_else(|| input.updated_at.into()),
+                .unwrap_or_else(|| {
+                    input
+                        .updated_at
+                        .map(|value| Some(value).into())
+                        .unwrap_or_default()
+                }),
         };
         let mut team: Team = self
             .store_record(EntityRole::Team, team, None, input.additional_fields)
@@ -76,13 +81,6 @@ impl TeamStore for EphemeralStore {
         }
         if let Some(updated_at) = update.updated_at {
             let _ = patch.insert("updatedAt".into(), updated_at.into_field());
-        } else if !self
-            .organization_fields()?
-            .team
-            .fields()
-            .contains_key("updatedAt")
-        {
-            let _ = patch.insert("updatedAt".into(), Value::from(Utc::now()));
         }
         let patch = self
             .prepare_record_patch(EntityRole::Team, patch, update.additional_fields)
@@ -592,14 +590,6 @@ impl EphemeralStore {
                 .unwrap_or_default();
             let _ = patch.insert("permission".into(), value);
         }
-        if !self
-            .organization_fields()?
-            .organization_role
-            .fields()
-            .contains_key("updatedAt")
-        {
-            let _ = patch.insert("updatedAt".into(), Value::from(Utc::now()));
-        }
         for field in better_auth_schema_registry::core_fields(EntityRole::OrganizationRole) {
             let name = better_auth_schema_registry::canonical_field_name(
                 EntityRole::OrganizationRole,
@@ -666,7 +656,7 @@ impl OrganizationRoleStore for EphemeralStore {
             role: (input.role).into(),
             permission,
             created_at: (Utc::now()).into(),
-            updated_at: (None).into(),
+            updated_at: Default::default(),
         };
         if let Some(value) = input.additional_fields.remove("organizationId") {
             role.organization_id = crate::SchemaValue::from_field(value);

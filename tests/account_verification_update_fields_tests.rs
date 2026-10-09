@@ -6,16 +6,16 @@
 )]
 
 use better_auth_core::{
-    AuthConfig, AuthResult, AuthSchema, AuthStore, CreateAccount, CreateUser, CreateVerification,
-    FieldDate, FieldMap, FieldValue, UpdateAccount,
+    AuthConfig, AuthResult, AuthSchema, AuthStore, CreateAccount, CreateSession, CreateUser,
+    CreateVerification, FieldDate, FieldMap, FieldValue, UpdateAccount,
     store::{
         EphemeralStore,
         database_hooks::{
             DatabaseHookContext, DatabaseHookUpdate, DatabaseHooks, DatabaseUpdateResult,
-            VerificationUpdate,
+            SessionUpdate, VerificationUpdate,
         },
     },
-    wire::{AccountView, VerificationView},
+    wire::{AccountView, SessionView, VerificationView},
 };
 use better_auth_seaorm::{
     SeaOrmStore,
@@ -23,6 +23,9 @@ use better_auth_seaorm::{
     store::__private_test_support::{bundled_schema::BundledSchema, migrator},
 };
 use std::sync::{Arc, Mutex};
+
+#[path = "account_verification_update_fields_tests/session_secondary.rs"]
+mod session_secondary;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Patch {
@@ -36,6 +39,7 @@ enum Model {
     Account,
     AccountMany,
     Verification,
+    Session,
 }
 
 impl Model {
@@ -43,12 +47,15 @@ impl Model {
         match self {
             Self::Account | Self::AccountMany => ["accessToken", "scope", "accountId"],
             Self::Verification => ["identifier", "value", "expiresAt"],
+            Self::Session => ["ipAddress", "userAgent", "token"],
         }
     }
 
     fn mutation(self, late: bool) -> FieldValue {
         match self {
-            Self::Account | Self::AccountMany => if late { "late" } else { "in-place" }.into(),
+            Self::Account | Self::AccountMany | Self::Session => {
+                if late { "late" } else { "in-place" }.into()
+            }
             Self::Verification => FieldValue::Date(date(if late { 3 } else { 2 })),
         }
     }
@@ -107,6 +114,13 @@ impl Hooks {
 
 #[better_auth::database_hooks()]
 impl<S: AuthSchema> DatabaseHooks<S> for Hooks {
+    async fn before_update_session(
+        &self,
+        data: &mut FieldMap,
+        _: &DatabaseHookContext<'_, S>,
+    ) -> AuthResult<DatabaseHookUpdate<FieldMap>> {
+        self.before(data)
+    }
     async fn before_update_account(
         &self,
         data: &mut FieldMap,
@@ -141,6 +155,17 @@ impl<S: AuthSchema> DatabaseHooks<S> for Hooks {
             .lock()
             .unwrap()
             .push(data.unwrap().fields()?.into());
+        Ok(())
+    }
+    async fn after_update_session(
+        &self,
+        data: Option<&SessionView>,
+        _: &DatabaseHookContext<'_, S>,
+    ) -> AuthResult<()> {
+        self.after
+            .lock()
+            .unwrap()
+            .push(FieldMap::from(data.unwrap().clone()).into());
         Ok(())
     }
 }
@@ -189,6 +214,21 @@ async fn check<S: AuthSchema>(
                 })
                 .await?;
             (row.id.typed()?.clone(), row.fields()?)
+        }
+        Model::Session => {
+            let row = raw
+                .create_session(CreateSession {
+                    user_id: owner.id,
+                    expires_at: date(100),
+                    ip_address: Some("stored".into()),
+                    user_agent: Some("stored".into()),
+                    inherited_fields: Default::default(),
+                    additional_fields: Default::default(),
+                    impersonated_by: None,
+                    active_organization_id: None,
+                })
+                .await?;
+            (row.token.typed()?.clone(), row.into())
         }
     };
     let observed = Arc::new(Mutex::new(Vec::new()));
@@ -248,6 +288,22 @@ async fn check<S: AuthSchema>(
                 .unwrap()
                 .fields()?,
         ),
+        Model::Session => Some(
+            store
+                .update_session_with_writer(
+                    &id,
+                    SessionUpdate {
+                        ip_address: Some(Some("requested".into())),
+                        user_agent: Some(Some("requested".into())),
+                        updated_at: Some(original_date.as_date().unwrap().clone()),
+                        ..Default::default()
+                    },
+                    None,
+                )
+                .await?
+                .unwrap()
+                .into(),
+        ),
     };
     let [target, replacement, mutation] = model.keys();
     let mut expected = before;
@@ -293,6 +349,11 @@ async fn check<S: AuthSchema>(
             .await?
             .unwrap()
             .fields()?,
+        Model::Session => raw
+            .get_session(expected.get("token").unwrap().as_str().unwrap())
+            .await?
+            .unwrap()
+            .into(),
     };
     assert_eq!(stored, expected, "{model:?} {patch:?} sqlite={sqlite}");
     if let Some(result) = result {
@@ -321,9 +382,13 @@ async fn check<S: AuthSchema>(
 }
 
 #[tokio::test]
-async fn account_and_verification_updates_preserve_shallow_hook_fields_and_own_undefined()
--> AuthResult<()> {
-    for model in [Model::Account, Model::AccountMany, Model::Verification] {
+async fn native_record_updates_preserve_shallow_hook_fields_and_own_undefined() -> AuthResult<()> {
+    for model in [
+        Model::Account,
+        Model::AccountMany,
+        Model::Verification,
+        Model::Session,
+    ] {
         for patch in [Patch::Values, Patch::Empty, Patch::Continue] {
             check(
                 Arc::new(EphemeralStore::new(Arc::new(AuthConfig::default()))),

@@ -237,7 +237,7 @@ impl AuthError {
     /// Serialize an HTTP endpoint failure without exposing ordinary runtime errors.
     pub fn to_http_response(self) -> crate::AuthResponse {
         if self.is_api_error() {
-            self.to_auth_response()
+            self.to_auth_response().into_http_response()
         } else {
             crate::observability::logger::current().error(
                 "Authentication request failed",
@@ -465,7 +465,7 @@ impl From<crate::types::AuthResponse> for AuthError {
 #[cfg(feature = "axum")]
 impl axum::response::IntoResponse for AuthError {
     fn into_response(self) -> axum::response::Response {
-        let response = self.to_auth_response();
+        let response = self.to_auth_response().into_http_response();
         let body = match response.body.into_bytes() {
             Ok(body) => body,
             Err(error) => return error.into_response(),

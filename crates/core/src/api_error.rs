@@ -29,7 +29,7 @@ pub async fn handle_http_error<S: AuthSchema>(
     context: &AuthContext<S>,
 ) -> AuthResult<AuthResponse> {
     if error.is_found_redirect() {
-        return Ok(error.to_auth_response());
+        return Ok(error.to_auth_response().into_http_response());
     }
     if context.config.api_error.throw_errors() {
         return rethrow(error);
@@ -67,7 +67,7 @@ pub async fn handle_http_error<S: AuthSchema>(
 fn rethrow(error: AuthError) -> AuthResult<AuthResponse> {
     // The outer HTTP router still serializes thrown API errors, including callback replacements.
     if error.is_api_error() {
-        Ok(error.to_auth_response())
+        Ok(error.to_auth_response().into_http_response())
     } else {
         Err(error)
     }

@@ -457,7 +457,13 @@ impl<S: AuthSchema> BetterAuth<S> {
             .with_http_context(&original, |context| async move {
                 with_request_hook_context_value(request_context, async {
                     if let Some(response) = self.handle_http_phase(&req, &context).await? {
-                        return middleware::run_after(&self.middlewares, &req, response).await;
+                        return middleware::run_after(
+                            &self.middlewares,
+                            &req,
+                            response.into_http_response(),
+                        )
+                        .await
+                        .map(AuthResponse::into_http_response);
                     }
                     let original_request = req.clone();
                     let response = match self.parse_endpoint_http_body(&mut req, &context) {
@@ -513,16 +519,19 @@ impl<S: AuthSchema> BetterAuth<S> {
         mut response: AuthResponse,
         context: &AuthContext<S>,
     ) -> AuthResult<AuthResponse> {
+        response = response.into_http_response();
         for plugin in self.plugins.iter() {
             if let Some(replacement) = plugin
                 .on_http_response(request, &mut response, context)
                 .await?
             {
-                response = replacement;
+                response = replacement.into_http_response();
                 break;
             }
         }
-        middleware::run_after(&self.middlewares, request, response).await
+        middleware::run_after(&self.middlewares, request, response)
+            .await
+            .map(AuthResponse::into_http_response)
     }
 
     fn parse_endpoint_http_body(

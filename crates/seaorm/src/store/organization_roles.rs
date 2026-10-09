@@ -37,9 +37,6 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema>
     ) -> AuthResult<super::record_write::RecordWrite<Entity<O::OrganizationRole>>> {
         let config = self.organization_fields()?.organization_role;
         let mut core = FieldMap::new();
-        if !config.fields().contains_key("updatedAt") {
-            let _ = core.insert("updatedAt".into(), FieldValue::Date(Utc::now().into()));
-        }
         if let Some(role) = input.role {
             let _ = core.insert("role".into(), role.into());
         }
@@ -308,7 +305,7 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
             .filter(selectors)
             .exec(self.connection())
             .await
-            .map(|result| result.rows_affected.min(9_007_199_254_740_991))
+            .map(|result| std::cmp::min(result.rows_affected, 9_007_199_254_740_991))
             .map_err(map_db_err)
     }
     async fn delete_organization_role(&self, id: &str) -> AuthResult<()> {

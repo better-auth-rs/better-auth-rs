@@ -42,6 +42,137 @@ fn decode_output_record<T: MemoryOrganizationRecord>(mut fields: FieldMap) -> Au
 }
 
 #[tokio::test]
+async fn native_organization_defaults_and_replacements_survive_crud() {
+    use crate::{
+        CreateOrganizationRole, UpdateOrganizationRole, organization_fields::OrganizationFields,
+        store::OrganizationRoleStore, user_fields::UserFieldConfig,
+    };
+
+    let store = EphemeralStore::new(test_config());
+    let created = store
+        .create_organization_role(CreateOrganizationRole {
+            organization_id: "organization".into(),
+            role: "reader".into(),
+            permission: FieldMap::new().into(),
+            additional_fields: [("createdAt".into(), Value::Undefined)].into(),
+        })
+        .await
+        .unwrap();
+    assert!(created.created_at.field_value().as_date().is_some());
+    assert!(created.updated_at.is_undefined());
+    let changed = store
+        .update_organization_role_value(
+            &created.id.field_value(),
+            UpdateOrganizationRole {
+                role: Some("writer".into()),
+                additional_fields: [
+                    ("createdAt".into(), "2000-01-02T03:04:05.000Z".into()),
+                    ("updatedAt".into(), Value::Undefined),
+                ]
+                .into(),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        changed
+            .created_at
+            .field_value()
+            .as_date()
+            .unwrap()
+            .milliseconds(),
+        946_782_245_000.0
+    );
+    assert!(changed.updated_at.field_value().as_date().is_some());
+    assert_eq!(
+        store
+            .get_organization_role(created.id.typed().unwrap())
+            .await
+            .unwrap()
+            .unwrap(),
+        changed
+    );
+    assert_eq!(
+        store.list_organization_roles("organization").await.unwrap(),
+        vec![changed]
+    );
+    store
+        .delete_organization_role(created.id.typed().unwrap())
+        .await
+        .unwrap();
+    assert_eq!(
+        store
+            .count_organization_roles("organization")
+            .await
+            .unwrap(),
+        0
+    );
+
+    let mut fields = OrganizationFields::default();
+    for name in ["createdAt", "updatedAt"] {
+        let _ = fields
+            .organization_role
+            .fields_mut()
+            .insert(name.into(), UserFieldConfig::default());
+    }
+    let _ = fields.organization_role.fields_mut().insert(
+        "role".into(),
+        UserFieldConfig {
+            field_name: Some("permission".into()),
+            ..Default::default()
+        },
+    );
+    store.configure_organization_fields(fields).unwrap();
+    let created = store
+        .create_organization_role(CreateOrganizationRole {
+            organization_id: "organization".into(),
+            role: "reader".into(),
+            permission: FieldMap::new().into(),
+            additional_fields: [("createdAt".into(), Value::Undefined)].into(),
+        })
+        .await
+        .unwrap();
+    assert!(created.created_at.is_undefined());
+    assert!(created.updated_at.is_undefined());
+    assert_eq!(created.role.field_value(), Value::from("{}"));
+    assert_eq!(created.permission.field_value(), Value::from("{}"));
+    let changed = store
+        .update_organization_role_value(
+            &created.id.field_value(),
+            UpdateOrganizationRole {
+                role: Some("writer".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert!(changed.created_at.is_undefined());
+    assert!(changed.updated_at.is_undefined());
+    assert_eq!(changed.role.field_value(), Value::from("writer"));
+    assert_eq!(changed.permission.field_value(), Value::from("writer"));
+    assert_eq!(
+        store
+            .get_organization_role(created.id.typed().unwrap())
+            .await
+            .unwrap()
+            .unwrap(),
+        changed
+    );
+    store
+        .delete_organization_role_by_fields(&[("role".into(), "writer".into())].into())
+        .await
+        .unwrap();
+    assert_eq!(
+        store
+            .count_organization_roles("organization")
+            .await
+            .unwrap(),
+        0
+    );
+}
+
+#[tokio::test]
 async fn memory_team_preserves_replaced_date_values_and_durable_capacity() {
     use crate::{
         CreateTeam,
@@ -159,21 +290,23 @@ impl PreparedOrganizationFields {
             }
         }
         let mut fields = self.fields;
+        if let Some(id) = fields.get("id") {
+            let _ = record.insert("id".into(), id.clone());
+        }
+        let mut native_storage = Vec::new();
         for (name, field) in self.schema.fields() {
             if name == "id" {
                 continue;
             }
             let storage_name = resolve_field_name(field.field_name.as_deref(), name);
             if core_names.contains(name) {
-                if let Some(value) = fields.remove(storage_name) {
-                    let _ = record.insert(name.clone(), value);
-                } else if self.create {
-                    let _ = record.insert(name.clone(), Value::Null);
+                if let Some(value) = fields.get(storage_name) {
+                    let _ = record.insert(name.clone(), value.clone());
                 }
-            } else if self.create {
-                let _ = fields.entry(storage_name.to_owned()).or_insert(Value::Null);
+                native_storage.push(storage_name.to_owned());
             }
         }
+        fields.retain(|name, _| !native_storage.contains(name));
         record.extend(fields);
         decode_record(record)
     }
@@ -189,11 +322,6 @@ fn record_input<T: MemoryOrganizationRecord>(role: EntityRole, value: &T) -> Aut
         .into_iter()
         .filter(|(name, value)| core_names.contains(name) && !value.is_undefined())
         .collect();
-    for name in ["logo", "updatedAt"] {
-        if core.get(name) == Some(&Value::Null) {
-            let _ = core.remove(name);
-        }
-    }
     if role == EntityRole::Invitation {
         let _ = core.entry("teamId".to_owned()).or_insert(Value::Null);
     }
@@ -329,21 +457,9 @@ impl EphemeralStore {
         F: std::future::Future<Output = AuthResult<Vec<(usize, R)>>> + Send,
     {
         let schema = self.field_config(role)?;
-        if schema.fields().is_empty() {
-            let rows = values
-                .iter()
-                .enumerate()
-                .map(|(index, row)| {
-                    row.read(|value| Ok((index, decode_output_record(object(value)?)?)))
-                })
-                .collect::<AuthResult<Vec<_>>>()?;
-            let mut rows = complete(rows).await?;
-            rows.sort_unstable_by_key(|(index, _)| *index);
-            return Ok(rows.into_iter().map(|(_, row)| row).collect());
-        }
         let fields: IndexMap<_, _> = self
             .model_fields
-            .organization_output_field_names(role, &schema)
+            .organization_output_field_names(&schema)
             .into_iter()
             .map(|name| {
                 let field = schema.fields().get(&name).cloned().unwrap_or_default();
@@ -358,10 +474,9 @@ impl EphemeralStore {
             &mut rows,
             &fields,
             |(source, _), name, field| {
-                let configured = name != "id" && schema.fields().contains_key(name);
                 source.read(|row| {
                     let (_, storage) = record_fields(role, row, &schema)?;
-                    let key = if configured {
+                    let key = if name != "id" {
                         resolve_field_name(field.field_name.as_deref(), name)
                     } else {
                         name
@@ -370,9 +485,8 @@ impl EphemeralStore {
                 })
             },
             |(_, output), name, field, value| {
-                let configured = name != "id" && schema.fields().contains_key(name);
                 Box::pin(async move {
-                    if configured {
+                    if name != "id" {
                         let value = crate::user_fields::project_adapter_value(
                             value.unwrap_or_default(),
                             field,
@@ -403,12 +517,6 @@ impl EphemeralStore {
         values: Vec<T>,
     ) -> AuthResult<Vec<T>> {
         let schema = self.field_config(role)?;
-        if schema.fields().is_empty() {
-            return values
-                .iter()
-                .map(|value| decode_output_record(object(value)?))
-                .collect();
-        }
         let records = values
             .iter()
             .map(|value| record_output(role, value, &schema))
@@ -431,16 +539,6 @@ impl EphemeralStore {
         F: std::future::Future<Output = AuthResult<Vec<(usize, R)>>> + Send,
     {
         let schema = self.field_config(role)?;
-        if schema.fields().is_empty() {
-            let values = values
-                .iter()
-                .enumerate()
-                .map(|(index, value)| Ok((index, decode_output_record(object(value)?)?)))
-                .collect::<AuthResult<Vec<_>>>()?;
-            let mut rows = complete(values).await?;
-            rows.sort_unstable_by_key(|(index, _)| *index);
-            return Ok(rows.into_iter().map(|(_, row)| row).collect());
-        }
         let records = values
             .iter()
             .map(|value| record_output(role, value, &schema))
@@ -731,7 +829,7 @@ async fn builtin_policies_transform_typed_records_once_and_preserve_adapter_id()
         .await
         .unwrap();
     assert_eq!(team.name, "updated:in:out");
-    assert_eq!(team.updated_at, None);
+    assert!(team.updated_at.is_undefined());
     let role = store
         .create_organization_role(CreateOrganizationRole {
             additional_fields: Default::default(),
@@ -742,7 +840,7 @@ async fn builtin_policies_transform_typed_records_once_and_preserve_adapter_id()
         .await
         .unwrap();
     assert_eq!(role.role, "editor:in:out");
-    assert_eq!(role.updated_at, None);
+    assert!(role.updated_at.is_undefined());
     assert!(role.additional_fields.is_empty());
 }
 

@@ -198,7 +198,10 @@ pub(super) fn value(row: &QueryResult, column: &str) -> AuthResult<FieldValue> {
         return Ok(match raw.type_info().name() {
             "INTEGER" => FieldValue::Number(read!(row, i64) as f64),
             "REAL" => FieldValue::Number(read!(row, f64)),
-            "TEXT" => FieldValue::String(read!(row, String)),
+            // Bun replaces invalid UTF-8 when returning TEXT, after SQLite has retained the original bytes.
+            "TEXT" => String::from_utf8_lossy(&read!(row, Vec<u8>))
+                .into_owned()
+                .into(),
             kind => {
                 return Err(error(
                     column,

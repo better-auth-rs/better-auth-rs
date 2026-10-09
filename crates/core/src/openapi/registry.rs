@@ -145,7 +145,7 @@ impl OpenApiRegistry {
                     | EntityRole::Team
                     | EntityRole::OrganizationRole
             ) {
-                Some(registered_fields.organization_output_field_names(role, fields))
+                Some(registered_fields.organization_output_field_names(fields))
             } else {
                 declaration_order
                     .get(name)

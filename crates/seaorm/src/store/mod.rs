@@ -125,7 +125,9 @@ impl<S: AuthSchema> SeaOrmStore<S> {
             db,
             schema_revision: Default::default(),
             hooks: Vec::new(),
-            organization_fields: Default::default(),
+            organization_fields: Arc::new(std::sync::RwLock::new(
+                better_auth_core::organization_fields::OrganizationFields::default().into_storage(),
+            )),
             _schema: PhantomData,
         }
     }

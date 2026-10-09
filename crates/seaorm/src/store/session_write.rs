@@ -5,7 +5,7 @@ use sea_orm::{ActiveModelTrait, ConnectionTrait};
 
 use super::{SeaOrmStore, cancelled_by_hook};
 use crate::error::{AuthError, AuthResult};
-use crate::hooks::{DatabaseHookUpdate, SessionUpdate};
+use crate::hooks::SessionUpdate;
 use crate::schema::{AuthSchema, SeaOrmSessionModel};
 use crate::types::CreateSession;
 use better_auth_core::id::AdapterIdInput;
@@ -255,25 +255,26 @@ where
         db: &impl ConnectionTrait,
         tx: Option<super::HookTransaction<'_, S>>,
         token: &better_auth_core::FieldValue,
-        mut update: SessionUpdate,
+        update: SessionUpdate,
         secondary: Option<better_auth_core::store::SessionUpdateWriter>,
     ) -> AuthResult<Option<better_auth_core::wire::SessionView>> {
         let context = self.hook_context(tx);
-        let original = update.clone();
+        let mut prepared = better_auth_core::store::database_hooks::PreparedRecordWrite::new(
+            update.into_public_fields()?,
+        );
         for hook in self.hooks() {
-            match better_auth_core::observability::database::with_database_hook(
+            let outcome = better_auth_core::observability::database::with_database_hook(
                 context.config,
                 hook.hook_metadata(),
                 better_auth_core::observability::database::DatabaseHook::BeforeUpdateSession,
-                hook.before_update_session(token, &original, &context),
+                hook.before_update_session(prepared.original_fields_mut(), &context),
             )
-            .await?
-            {
-                DatabaseHookUpdate::Continue => {}
-                DatabaseHookUpdate::Cancel => return Ok(None),
-                DatabaseHookUpdate::Patch(patch) => update.merge(patch),
+            .await?;
+            if !prepared.apply(outcome) {
+                return Ok(None);
             }
         }
+        let update = prepared.into_fields();
         let (write_database, cached) = match secondary {
             Some(secondary) => {
                 let result = (secondary.write)(update.clone()).await?;
@@ -314,7 +315,7 @@ where
     pub(super) async fn prepare_session_update(
         &self,
         db: &impl ConnectionTrait,
-        update: SessionUpdate,
+        mut input: better_auth_core::FieldMap,
     ) -> AuthResult<(
         super::record_write::RecordWrite<<S::Session as SeaOrmSessionModel>::Entity>,
         better_auth_core::user_fields::UserConfig,
@@ -328,7 +329,6 @@ where
                 supports_native_uuid: backend == sea_orm::DbBackend::Postgres,
             },
         )?;
-        let mut input = update.into_public_fields()?;
         let schema = better_auth_core::store::session_create_schema(&self.config().session, &input);
         let mut supplied_id = input.remove("id");
         let fields = schema
@@ -372,7 +372,7 @@ where
         &self,
         db: &impl ConnectionTrait,
         token: &better_auth_core::FieldValue,
-        update: SessionUpdate,
+        update: better_auth_core::FieldMap,
     ) -> AuthResult<Option<better_auth_core::wire::SessionView>> {
         let backend = db.get_database_backend();
         let (active, schema) = self.prepare_session_update(db, update).await?;

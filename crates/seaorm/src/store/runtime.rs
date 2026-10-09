@@ -7,7 +7,7 @@ use crate::schema::{
 };
 use async_trait::async_trait;
 use better_auth_core::store::database_hooks::{
-    DatabaseHookContext, DatabaseHookControl, DatabaseHookUpdate, DatabaseHooks, SessionUpdate,
+    DatabaseHookContext, DatabaseHookControl, DatabaseHookUpdate, DatabaseHooks,
 };
 use better_auth_core::store::{AuthStore, RuntimeStore};
 use better_auth_core::{AuthConfig, AuthResult, AuthSchema, CreateAccount, CreateVerification};
@@ -278,10 +278,9 @@ impl<S: AuthSchema> SeaOrmHooks<S> for PluginHook<S> {
 
     async fn before_update_session(
         &self,
-        _id: &better_auth_core::FieldValue,
-        _data: &SessionUpdate,
+        _data: &mut better_auth_core::FieldMap,
         ctx: &SeaOrmHookContext<'_, S>,
-    ) -> AuthResult<DatabaseHookUpdate<SessionUpdate>> {
+    ) -> AuthResult<DatabaseHookUpdate<better_auth_core::FieldMap>> {
         let context = DatabaseHookContext {
             config: ctx.config,
             request: ctx.request.clone(),

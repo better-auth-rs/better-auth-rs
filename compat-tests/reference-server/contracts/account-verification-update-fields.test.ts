@@ -4,19 +4,21 @@ import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { getMigrations } from "better-auth/db/migration";
 import { getWithHooks } from "../node_modules/better-auth/dist/db/with-hooks.mjs";
+import "./session-update-secondary-contract";
 
 type Fields = Record<string, unknown>;
 type Mode = "values" | "empty" | "continue";
 const date = (offset: number) => new Date(4_102_444_800_000 + offset * 1000);
 
 for (const backend of ["memory", "sqlite"] as const) {
-  for (const operation of ["account", "accountMany", "verification"] as const) {
+  for (const operation of ["account", "accountMany", "verification", "session"] as const) {
     for (const mode of ["values", "empty", "continue"] as Mode[]) {
       test(`${backend} ${operation} ${mode} preserves original update fields and shallow detachment`, async () => {
-        const model = operation === "verification" ? "verification" : "account";
+        const model = operation === "accountMany" ? "account" : operation;
         const [target, replacement, mutation] = model === "account"
-          ? ["accessToken", "scope", "accountId"] : ["identifier", "value", "expiresAt"];
-        const mutate = (late: boolean) => model === "account" ? late ? "late" : "in-place" : date(late ? 3 : 2);
+          ? ["accessToken", "scope", "accountId"] : model === "session"
+            ? ["ipAddress", "userAgent", "token"] : ["identifier", "value", "expiresAt"];
+        const mutate = (late: boolean) => model === "verification" ? date(late ? 3 : 2) : late ? "late" : "in-place";
         const originalDate = date(1);
         const observed: Fields[] = [];
         const references: Fields[] = [];
@@ -40,12 +42,14 @@ for (const backend of ["memory", "sqlite"] as const) {
         } } });
         const memory: Record<string, Fields[]> = { user: [], session: [], account: [], verification: [] };
         const database = backend === "sqlite" ? new Database(":memory:") : undefined;
+        const pluginHooks = hooks(true);
+        const userHooks = hooks(false);
         const options = {
           database: database ?? memoryAdapter(memory),
           baseURL: "http://update-fields.test", secret: "account-verification-update-fields-at-least-32-characters",
           logger: { disabled: true }, telemetry: { enabled: false },
-          plugins: [{ id: "update-fields", init: () => ({ options: { databaseHooks: hooks(true) } }) }],
-          databaseHooks: hooks(false),
+          plugins: [{ id: "update-fields", init: () => ({ options: { databaseHooks: pluginHooks } }) }],
+          databaseHooks: userHooks,
         };
         try {
           if (database) await (await getMigrations(options)).runMigrations();
@@ -58,13 +62,17 @@ for (const backend of ["memory", "sqlite"] as const) {
           const created = await adapter.create<Fields>({ model, forceAllowId: true, data: {
             id: "record", createdAt: date(0), updatedAt: date(0),
             ...(model === "account" ? { accountId: "original", providerId: "credential", userId: "owner", accessToken: "stored", scope: "stored" }
+              : model === "session" ? { token: "original", userId: "owner", ipAddress: "stored", userAgent: "stored", expiresAt: date(100) }
               : { identifier: "original", value: "stored", expiresAt: date(0) }),
           } });
           const storage = () => structuredClone(database ? database.query(`SELECT * FROM ${model}`).all() : memory[model]);
           const rawBefore = storage();
           const before = structuredClone(created);
           const input = { [target]: "requested", [replacement]: "requested", updatedAt: originalDate };
-          const withHooks = getWithHooks(adapter, context);
+          const withHooks = getWithHooks(adapter, {
+            options: context.options,
+            hooks: [{ source: "plugin:update-fields", hooks: pluginHooks }, { source: "user", hooks: userHooks }],
+          });
           const where = [{ field: "id", value: "record" }];
           const result = operation === "accountMany"
             ? await withHooks.updateManyWithHooks(input, where, model)

@@ -94,6 +94,7 @@ pub struct AuthResponse {
     pub status: u16,
     pub headers: Headers,
     pub body: crate::ResponseBody,
+    json_response: bool,
     api_error: bool,
     error_headers: Option<Headers>,
     captured_headers: Option<Headers>,
@@ -791,6 +792,7 @@ impl AuthResponse {
         value: &T,
     ) -> Result<(), serde_json::Error> {
         self.body = crate::ResponseBody::Bytes(serde_json::to_vec(value)?);
+        self.json_response = true;
         self.api_error = false;
         self.error_headers = None;
         self.captured_headers = None;
@@ -810,6 +812,7 @@ impl AuthResponse {
             status,
             headers: Headers::new(),
             body: crate::ResponseBody::Bytes(Vec::new()),
+            json_response: false,
             api_error: false,
             error_headers: None,
             captured_headers: None,
@@ -820,19 +823,18 @@ impl AuthResponse {
     pub fn native(status: u16, value: crate::FieldValue) -> Self {
         let mut response = Self::new(status);
         response.body = crate::ResponseBody::Native(value);
-        let _ = response.headers.insert("content-type", "application/json");
+        response.json_response = true;
         response
     }
 
     pub fn json<T: Serialize>(status: u16, data: &T) -> Result<Self, serde_json::Error> {
         let body = crate::ResponseBody::Bytes(serde_json::to_vec(data)?);
-        let mut headers = Headers::new();
-        _ = headers.insert("content-type".to_string(), "application/json".to_string());
 
         Ok(Self {
             status,
-            headers,
+            headers: Headers::new(),
             body,
+            json_response: true,
             api_error: false,
             error_headers: None,
             captured_headers: None,
@@ -848,6 +850,7 @@ impl AuthResponse {
             status,
             headers,
             body,
+            json_response: false,
             api_error: false,
             error_headers: None,
             captured_headers: None,
@@ -866,10 +869,30 @@ impl AuthResponse {
             status,
             headers,
             body,
+            json_response: false,
             api_error: false,
             error_headers: None,
             captured_headers: None,
         }
+    }
+
+    /// Generate JSON transport headers after endpoint hooks finish.
+    /// Native results retain only explicitly supplied headers.
+    pub fn into_http_response(mut self) -> Self {
+        if self.json_response {
+            let _ = self.headers.insert("content-type", "application/json");
+            self.json_response = false;
+        }
+        self
+    }
+
+    /// Identify JSON output before or after HTTP headers are generated.
+    pub fn is_json(&self) -> bool {
+        self.json_response
+            || self
+                .headers
+                .get("content-type")
+                .is_some_and(|value| value.starts_with("application/json"))
     }
 
     pub fn with_header(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
@@ -1117,6 +1140,8 @@ mod tests {
     fn auth_response_json() {
         let resp = AuthResponse::json(200, &OkResponse { ok: true }).expect("json");
         assert_eq!(resp.status, 200);
+        assert!(resp.headers.is_empty());
+        let resp = resp.into_http_response();
         assert_eq!(
             resp.headers.get("content-type").unwrap(),
             "application/json"

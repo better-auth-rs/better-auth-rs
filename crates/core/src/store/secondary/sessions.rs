@@ -321,7 +321,7 @@ impl<S: AuthSchema> SecondaryStore<S> {
     async fn update_cached_session(
         &self,
         token: &FieldValue,
-        update: SessionUpdate,
+        mut patch: FieldMap,
     ) -> AuthResult<Option<crate::wire::SessionView>> {
         let Some(mut cached) = cache::decode(self.secondary()?.get_native(token).await?)
             .and_then(|value| value.as_object().cloned())
@@ -331,10 +331,8 @@ impl<S: AuthSchema> SecondaryStore<S> {
         let Some(session) = cached.get("session").and_then(FieldValue::as_object) else {
             return Ok(None);
         };
-        let original = cache::session(session.clone(), &[])?;
-        let created_at = original.created_at.clone();
-        let mut fields = FieldMap::from(original);
-        let mut patch = update.into_public_fields()?;
+        let mut fields = session.clone();
+        let created_at = fields.get("createdAt").cloned().unwrap_or_default();
         // Upstream uses nullish date defaults before parsing the cached session.
         for name in ["expiresAt", "updatedAt"] {
             if patch
@@ -346,7 +344,7 @@ impl<S: AuthSchema> SecondaryStore<S> {
         }
         fields.extend(patch);
         // Upstream retains the cached creation date, even when a before hook patches it.
-        let _ = fields.insert("createdAt".into(), created_at.into_field_value());
+        let _ = fields.insert("createdAt".into(), created_at);
         let mut updated = cache::session(fields, &["expiresAt", "createdAt", "updatedAt"])?;
         updated.filter_returned_fields(&self.config.session)?;
         let _ = cached.insert("session".into(), FieldMap::from(updated.clone()).into());
@@ -762,10 +760,22 @@ impl<S: AuthSchema> SessionStore<S> for SecondaryStore<S> {
         &self,
         user_id: &str,
     ) -> AuthResult<Vec<(crate::wire::SessionView, Option<SessionView>)>> {
+        self.get_user_session_snapshots_value(&user_id.into(), false)
+            .await
+    }
+
+    async fn get_user_session_snapshots_value(
+        &self,
+        user_id: &FieldValue,
+        only_active: bool,
+    ) -> AuthResult<Vec<(SessionView, Option<SessionView>)>> {
         if self.storage.is_none() {
-            return self.inner.get_user_session_snapshots(user_id).await;
+            return self
+                .inner
+                .get_user_session_snapshots_value(user_id, only_active)
+                .await;
         }
-        self.cached_user_session_snapshots(&user_id.into()).await
+        self.cached_user_session_snapshots(user_id).await
     }
 
     async fn update_session_expiry(

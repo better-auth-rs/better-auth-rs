@@ -415,12 +415,7 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for OrganizationPlugin {
         response: &mut AuthResponse,
         _ctx: &AuthContext<S>,
     ) -> AuthResult<()> {
-        if !response
-            .headers
-            .get("content-type")
-            .is_some_and(|value| value.starts_with("application/json"))
-            || response.body.is_empty()
-        {
+        if !response.is_json() || response.body.is_empty() {
             return Ok(());
         }
         if let better_auth_core::ResponseBody::Native(value) = &mut response.body {

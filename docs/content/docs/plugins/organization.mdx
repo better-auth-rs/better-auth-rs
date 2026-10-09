@@ -82,6 +82,8 @@ Other plugins can register Organization and Team adapter fields through `AuthIni
 
 Direct `configure_organization_fields` calls resolve Organization, Team, Member, Invitation, and OrganizationRole declarations in the built-in schema order. Overriding a built-in field retains its original position; additional fields follow in declaration order. Defaults, `on_update`, input transforms, and output transforms use this resolved order. Runtime plugin declarations retain their registration order instead of being sorted again. SeaORM validates the resolved fields against the selected typed columns.
 
+Query, write, and output policies use these complete declarations, including native fields. Replacing a native declaration also replaces its default, update callback, mapping, and reference policy. Missing fields remain absent unless a declaration supplies a value. Team and dynamic-role updates use declared `on_update` policies. Configure mappings before storing records: changing `field_name` after Memory rows exist does not migrate their physical representation.
+
 Memory Member queries preserve insertion order when sort values compare equal, for both ascending and descending order. Queries apply pagination before output transforms.
 
 In Memory Serial mode, native and declared `id` references use numeric storage values after defaults and input transforms. Output transforms receive the numeric value before the reference becomes a public string. Reference queries use the same numeric conversion. Explicit field declarations replace the native reference policy; retain `references` when the field must keep that conversion. Memory joins and cleanup use the relation keys captured before output transforms.

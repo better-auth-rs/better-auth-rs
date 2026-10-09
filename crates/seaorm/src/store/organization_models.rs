@@ -310,12 +310,15 @@ pub(super) fn validate_fields<M: SeaOrmOrganizationModel>(
     entity: &str,
     fields: &UserConfig,
 ) -> AuthResult<()> {
-    super::plugin_models::validate_field_columns(
-        &format!("Organization schema {entity}"),
-        fields,
-        M::column,
-        M::core_field_name,
-    )
+    for (name, field) in fields.fields() {
+        if name != "id" {
+            let storage = resolve_field_name(field.field_name.as_deref(), name);
+            let _ = M::column(storage).map_err(|error| {
+                AuthError::config(format!("Organization schema {entity}.{name}: {error}"))
+            })?;
+        }
+    }
+    Ok(())
 }
 
 /// Read a stored join key before output policies can replace its public value.
@@ -340,6 +343,82 @@ mod tests {
         store::{OrganizationRoleStore, OrganizationStore},
         user_fields::UserFieldConfig,
     };
+
+    #[tokio::test]
+    async fn native_role_dates_use_shared_declarations_for_create_update_and_readback() {
+        let db = sea_orm::Database::connect("sqlite::memory:").await.unwrap();
+        super::super::migrator::run_migrations(&db).await.unwrap();
+        let store = super::super::SeaOrmStore::<super::super::bundled_schema::BundledSchema>::new(
+            AuthConfig::new("organization-native-dates-secret-at-least-32-characters"),
+            db,
+        );
+        let organization = store
+            .create_organization(CreateOrganization::new("organization", "organization"))
+            .await
+            .unwrap();
+        let created = store
+            .create_organization_role(CreateOrganizationRole {
+                organization_id: organization.id.clone(),
+                role: "reader".into(),
+                permission: FieldMap::new().into(),
+                additional_fields: [("createdAt".into(), FieldValue::Undefined)].into(),
+            })
+            .await
+            .unwrap();
+        assert!(created.created_at.field_value().as_date().is_some());
+        assert_eq!(created.updated_at.field_value(), FieldValue::Null);
+        let changed = store
+            .update_organization_role_value(
+                &created.id.field_value(),
+                UpdateOrganizationRole {
+                    role: Some("writer".into()),
+                    additional_fields: [
+                        ("createdAt".into(), "2000-01-02T03:04:05.000Z".into()),
+                        ("updatedAt".into(), FieldValue::Undefined),
+                    ]
+                    .into(),
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            changed
+                .created_at
+                .field_value()
+                .as_date()
+                .unwrap()
+                .milliseconds(),
+            946_782_245_000.0
+        );
+        assert!(changed.updated_at.field_value().as_date().is_some());
+        assert_eq!(
+            store
+                .get_organization_role(created.id.typed().unwrap())
+                .await
+                .unwrap()
+                .unwrap(),
+            changed
+        );
+        assert_eq!(
+            store
+                .list_organization_roles(organization.id.typed().unwrap())
+                .await
+                .unwrap(),
+            vec![changed]
+        );
+        store
+            .delete_organization_role(created.id.typed().unwrap())
+            .await
+            .unwrap();
+        assert_eq!(
+            store
+                .count_organization_roles(organization.id.typed().unwrap())
+                .await
+                .unwrap(),
+            0
+        );
+    }
 
     #[tokio::test]
     async fn native_role_queries_and_replacement_mappings_use_complete_declarations() {

@@ -504,18 +504,54 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
     }
 
     async fn get_user_sessions_value(&self, user_id: &Value) -> AuthResult<Vec<SessionView>> {
+        Ok(self
+            .get_user_session_snapshots_value(user_id, false)
+            .await?
+            .into_iter()
+            .map(|(session, _)| session)
+            .collect())
+    }
+
+    async fn get_user_session_snapshots_value(
+        &self,
+        user_id: &Value,
+        only_active: bool,
+    ) -> AuthResult<Vec<(SessionView, Option<SessionView>)>> {
         self.model_fields.begin_id_query(EntityRole::Session)?;
         let user_id = self.memory_session_user_id_query(user_id.clone())?;
+        let schema = self.session_config.adapter_schema();
+        let now = if only_active {
+            let now = self.memory_field_query(&schema, "expiresAt", Utc::now().into())?;
+            Some(crate::user_query::bind_filter(
+                &schema.fields()["expiresAt"],
+                &now,
+            )?)
+        } else {
+            None
+        };
         let sessions: Vec<_> = self
             .raw("session", "findMany", |state| {
                 Ok(crate::query::paginate_memory(
                     state
                         .sessions
-                        .select_refs(|session| {
-                            crate::query::field_matches_equality(
-                                &session.user_id.field_value(),
+                        .try_select_refs(|session| {
+                            let fields = FieldMap::from(session.clone());
+                            Ok(crate::query::field_matches_equality(
+                                fields
+                                    .get(schema.record_storage_key("userId"))
+                                    .unwrap_or(&Value::Undefined),
                                 &user_id,
-                            )
+                            ) && match &now {
+                                Some(now) => {
+                                    crate::query::field_compare(
+                                        fields
+                                            .get(schema.record_storage_key("expiresAt"))
+                                            .unwrap_or(&Value::Undefined),
+                                        now,
+                                    )? == Some(std::cmp::Ordering::Greater)
+                                }
+                                None => true,
+                            })
                         })?
                         .into_iter()
                         .map(SessionSource::Live)
@@ -525,7 +561,12 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
                 ))
             })
             .await?;
-        self.output_sessions(sessions).await
+        Ok(self
+            .output_sessions(sessions)
+            .await?
+            .into_iter()
+            .map(|session| (session, None))
+            .collect())
     }
 
     async fn update_session_expiry(

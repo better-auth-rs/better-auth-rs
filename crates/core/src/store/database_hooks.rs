@@ -22,7 +22,7 @@ pub async fn await_adapter_lookup() {
     .await;
 }
 
-/// Partial session values supplied to update hooks.
+/// Typed Session update input converted to native fields before database hooks.
 #[derive(Clone, Default)]
 pub struct SessionUpdate {
     /// Replacement record ID.
@@ -129,29 +129,6 @@ impl PreparedRecordWrite {
             self.original.unwrap_or_else(|| self.fields.clone()),
             self.fields,
         )
-    }
-}
-
-impl SessionUpdate {
-    /// Merge supplied fields and shallow-merge application fields.
-    pub fn merge(&mut self, patch: Self) {
-        macro_rules! fields {
-            ($($field:ident),* $(,)?) => {$(if patch.$field.is_some() { self.$field = patch.$field; })*};
-        }
-        fields!(
-            id,
-            token,
-            user_id,
-            expires_at,
-            created_at,
-            updated_at,
-            ip_address,
-            user_agent,
-            impersonated_by,
-            active_organization_id,
-            active_team_id
-        );
-        self.additional_fields.extend(patch.additional_fields);
     }
 }
 
@@ -308,9 +285,9 @@ pub trait DatabaseHooks<S: AuthSchema>: Send + Sync {
     /// Inspect the original session update and return a patch or cancellation.
     async fn before_update_session(
         &self,
-        _data: &SessionUpdate,
+        _data: &mut FieldMap,
         _ctx: &DatabaseHookContext<'_, S>,
-    ) -> AuthResult<DatabaseHookUpdate<SessionUpdate>> {
+    ) -> AuthResult<DatabaseHookUpdate<FieldMap>> {
         Ok(DatabaseHookUpdate::Continue)
     }
     /// Observe a committed session update.
@@ -389,7 +366,7 @@ pub trait DatabaseHooks<S: AuthSchema>: Send + Sync {
 }
 
 impl SessionUpdate {
-    /// Serialize supplied fields using public names and adapter ID precedence, preserving explicit null values.
+    /// Convert typed input once to public fields before hooks, preserving native additional fields and adapter ID precedence.
     pub fn into_public_fields(self) -> AuthResult<crate::FieldMap> {
         let mut fields = self.additional_fields;
         if let Some(id) = self.id {

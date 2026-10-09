@@ -27,7 +27,7 @@ const SECRET: &str = "custom-session-native-fields-secret-at-least-32-characters
 const LIST_PATH: &str = "/multi-session/list-device-sessions";
 
 enum Event {
-    After,
+    After { returned: FieldValue },
     Customize { path: String, user: FieldValue },
 }
 
@@ -76,13 +76,16 @@ impl AfterEndpointHook<StatelessSchema> for AfterHook {
         response: &mut AuthResponse,
         _: &AuthContext<StatelessSchema>,
     ) -> AuthResult<()> {
+        let returned = response.body.field_value()?;
         self.trace
             .lock()
             .map_err(|_| AuthError::internal("Custom session trace lock poisoned"))?
-            .push(Event::After);
+            .push(Event::After {
+                returned: returned.clone(),
+            });
         let _ = response.headers.insert("x-after-hook", "observed");
         if self.replace_list && request.path() == LIST_PATH {
-            let FieldValue::Array(mut sessions) = response.body.field_value()? else {
+            let FieldValue::Array(mut sessions) = returned else {
                 return Err(AuthError::internal(
                     "Expected a device session list to replace",
                 ));
@@ -232,7 +235,7 @@ async fn check_native_fields(path: &str) {
     let phases = events
         .iter()
         .map(|event| match event {
-            Event::After => "after",
+            Event::After { .. } => "after",
             Event::Customize { .. } => "customize",
         })
         .collect::<Vec<_>>();
@@ -248,7 +251,7 @@ async fn check_native_fields(path: &str) {
         .iter()
         .find_map(|event| match event {
             Event::Customize { path, user } => Some((path, user)),
-            Event::After => None,
+            Event::After { .. } => None,
         })
         .unwrap();
     assert_eq!(callback_path, path);
@@ -259,7 +262,7 @@ async fn check_native_fields(path: &str) {
     ));
     let date = fields.get("nativeDate").unwrap();
     assert_eq!(date, &fixture.date);
-    assert_eq!(date.strict_equals(&fixture.date), path == LIST_PATH);
+    assert!(!date.strict_equals(&fixture.date));
     assert!(fields.contains_key("ownUndefined"));
     assert!(matches!(
         fields.get("ownUndefined"),
@@ -273,7 +276,28 @@ async fn check_native_fields(path: &str) {
     assert_eq!(left, &fixture.shared);
     assert_eq!(right, &fixture.shared);
     assert!(left.strict_equals(right));
-    assert_eq!(left.strict_equals(&fixture.shared), path == LIST_PATH);
+    assert!(!left.strict_equals(&fixture.shared));
+    if path == LIST_PATH {
+        let returned = events
+            .iter()
+            .find_map(|event| match event {
+                Event::After { returned } => Some(returned),
+                Event::Customize { .. } => None,
+            })
+            .unwrap();
+        let after_user = returned
+            .as_array()
+            .and_then(|sessions| sessions.first())
+            .and_then(FieldValue::as_object)
+            .and_then(|session| session.get("user"))
+            .unwrap();
+        // parseUserOutput clones the source; the later custom callback reuses that public result.
+        assert!(user.strict_equals(after_user));
+        let after_fields = after_user.as_object().unwrap();
+        assert!(date.strict_equals(after_fields.get("nativeDate").unwrap()));
+        assert!(left.strict_equals(after_fields.get("left").unwrap()));
+        assert!(right.strict_equals(after_fields.get("right").unwrap()));
+    }
 
     let body: Value = serde_json::from_slice(response.body.bytes().unwrap().as_ref()).unwrap();
     let data = if path == LIST_PATH {
@@ -321,13 +345,13 @@ async fn list_custom_callback_observes_global_after_hook_replacement() {
     let events = fixture.take_events().unwrap();
     assert!(matches!(
         events.as_slice(),
-        [Event::After, Event::Customize { .. }]
+        [Event::After { .. }, Event::Customize { .. }]
     ));
     let (path, user) = events
         .iter()
         .find_map(|event| match event {
             Event::Customize { path, user } => Some((path, user)),
-            Event::After => None,
+            Event::After { .. } => None,
         })
         .unwrap();
     assert_eq!(path, LIST_PATH);

@@ -120,6 +120,12 @@ fn driver_parameter(value: FieldValue, backend: DbBackend) -> AuthResult<SimpleE
             Value::BigInt(Some(i64::from(value)))
         }
         FieldValue::Bool(value) => Value::Bool(Some(value)),
+        FieldValue::String(value)
+            if backend == DbBackend::Sqlite
+                && matches!(value.chars().next(), Some('\u{feff}' | '\u{fffe}')) =>
+        {
+            Value::String(Some(utf16_string(&value.into(), backend)))
+        }
         FieldValue::String(value) => Value::String(Some(value)),
         FieldValue::Utf16String(value) => Value::String(Some(utf16_string(&value, backend))),
         FieldValue::Array(values) if backend == DbBackend::MySql => {
@@ -226,7 +232,15 @@ fn postgres_date(date: &FieldDate) -> AuthResult<String> {
 pub(super) fn utf16_string(value: &better_auth_core::Utf16String, backend: DbBackend) -> String {
     match backend {
         DbBackend::Sqlite => {
-            let mut input = value.as_utf16().iter().copied();
+            let (input, swap) = match value.as_utf16() {
+                [0xfeff, rest @ ..] => (rest, false),
+                [0xfffe, rest @ ..] => (rest, true),
+                units => (units, false),
+            };
+            // sqlite3_bind_text16 consumes one BOM and uses its byte order for the remaining units.
+            let mut input = input
+                .iter()
+                .map(|unit| if swap { unit.swap_bytes() } else { *unit });
             let mut units = Vec::with_capacity(value.as_utf16().len());
             while let Some(unit) = input.next() {
                 // Bun binds UTF-16; SQLite combines any surrogate with the next unit, even an ASCII unit.
@@ -274,6 +288,14 @@ mod tests {
             (vec![0xd800], "\u{fffd}\u{fffd}\u{fffd}"),
             (vec![0xdc00], "\u{fffd}\u{fffd}\u{fffd}"),
             (vec![0x61, 0, 0x62], "a\0b"),
+            (vec![0xfeff], ""),
+            (vec![0xfffe], ""),
+            (vec![0xfeff, 0x41], "A"),
+            (vec![0xfffe, 0x4100], "A"),
+            (vec![0xfffe, 0x41], "\u{4100}"),
+            (vec![0xfeff, 0xd800, 0x40], "\u{10040}"),
+            (vec![0x41, 0xfeff], "A\u{feff}"),
+            (vec![0xfeff, 0xfffe], "\u{fffe}"),
         ] {
             let value = better_auth_core::Utf16String::from_units(units);
             assert_eq!(utf16_string(&value, DbBackend::Sqlite), expected);
@@ -284,6 +306,105 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[tokio::test]
+    async fn sqlite_parameters_preserve_bom_conversion_for_both_string_representations()
+    -> AuthResult<()> {
+        use sea_orm::{ConnectionTrait, Database, sea_query::Alias};
+
+        let database = Database::connect("sqlite::memory:")
+            .await
+            .map_err(crate::store::map_db_err)?;
+        for (input, expected, hex) in [
+            ("\u{feff}", "", ""),
+            ("\u{feff}A", "A", "41"),
+            ("\u{fffe}\u{4100}", "A", "41"),
+            ("\u{fffe}A", "\u{4100}", "E48480"),
+            ("A\u{feff}", "A\u{feff}", "41EFBBBF"),
+            ("\u{feff}\u{fffe}", "\u{fffe}", "EFBFBE"),
+        ] {
+            for value in [
+                FieldValue::from(input),
+                FieldValue::Utf16String(input.into()),
+            ] {
+                let expression = parameter(value, DbBackend::Sqlite)?;
+                let query = Query::select()
+                    .expr_as(expression.clone(), Alias::new("value"))
+                    .expr_as(
+                        SimpleExpr::cust_with_exprs("hex(?)", [expression]),
+                        Alias::new("hex"),
+                    )
+                    .to_owned();
+                let row = database
+                    .query_one_raw(DbBackend::Sqlite.build(&query))
+                    .await
+                    .map_err(crate::store::map_db_err)?
+                    .ok_or_else(|| {
+                        AuthError::internal("SQLite parameter observation is missing")
+                    })?;
+                assert_eq!(
+                    super::super::plugin_rows::value(&row, "value")?,
+                    expected.into()
+                );
+                assert_eq!(
+                    row.try_get::<String>("", "hex")
+                        .map_err(crate::store::map_db_err)?,
+                    hex
+                );
+            }
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn sqlite_text_output_decodes_invalid_utf8_after_preserving_storage_bytes()
+    -> AuthResult<()> {
+        use sea_orm::{ConnectionTrait, Database, Statement};
+
+        let database = Database::connect("sqlite::memory:")
+            .await
+            .map_err(crate::store::map_db_err)?;
+        let _ = database
+            .execute_unprepared("CREATE TABLE observations (value TEXT)")
+            .await
+            .map_err(crate::store::map_db_err)?;
+        for (hex, expected) in [
+            ("EDA080", "\u{fffd}\u{fffd}\u{fffd}"),
+            ("EDB080", "\u{fffd}\u{fffd}\u{fffd}"),
+            ("F09F98", "\u{fffd}"),
+            ("EFBFBD", "\u{fffd}"),
+            ("610062", "a\0b"),
+        ] {
+            let _ = database
+                .execute_unprepared("DELETE FROM observations")
+                .await
+                .map_err(crate::store::map_db_err)?;
+            let _ = database
+                .execute_unprepared(&format!(
+                    "INSERT INTO observations VALUES (CAST(X'{hex}' AS TEXT))"
+                ))
+                .await
+                .map_err(crate::store::map_db_err)?;
+            let row = database
+                .query_one_raw(Statement::from_string(
+                    DbBackend::Sqlite,
+                    "SELECT value, hex(value) AS bytes FROM observations",
+                ))
+                .await
+                .map_err(crate::store::map_db_err)?
+                .ok_or_else(|| AuthError::internal("SQLite stored-text observation is missing"))?;
+            assert_eq!(
+                super::super::plugin_rows::value(&row, "value")?,
+                expected.into()
+            );
+            assert_eq!(
+                row.try_get::<String>("", "bytes")
+                    .map_err(crate::store::map_db_err)?,
+                hex
+            );
+        }
+        Ok(())
     }
 
     #[test]

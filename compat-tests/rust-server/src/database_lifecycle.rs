@@ -9,10 +9,7 @@ use axum::{
 use better_auth::{AuthBuilder, AuthConfig, AuthError, AuthResult, BetterAuth};
 use better_auth_core::{
     AuthSchema, CreateAccount, CreateSession, CreateUser, FieldMap, FieldValue,
-    store::{
-        SecondaryStorage,
-        database_hooks::{DatabaseHookUpdate, SessionUpdate},
-    },
+    store::{SecondaryStorage, database_hooks::DatabaseHookUpdate},
 };
 use better_auth_seaorm::{
     HookControl, SeaOrmHookContext, SeaOrmHooks, SeaOrmStore,
@@ -302,15 +299,11 @@ impl SeaOrmHooks<Schema> for Events {
     }
     async fn before_update_session(
         &self,
-        _: &FieldValue,
-        patch: &SessionUpdate,
+        patch: &mut better_auth_core::FieldMap,
         _: &SeaOrmHookContext<'_, Schema>,
-    ) -> AuthResult<DatabaseHookUpdate<SessionUpdate>> {
-        self.record(
-            "session.update.before",
-            Value::Object(patch.clone().into_public_fields()?.json()?),
-        )
-        .await?;
+    ) -> AuthResult<DatabaseHookUpdate<better_auth_core::FieldMap>> {
+        self.record("session.update.before", Value::Object(patch.json()?))
+            .await?;
         let options = self.options();
         if options["fail"] == "session.update.before" {
             return Err(rejected());
@@ -322,18 +315,12 @@ impl SeaOrmHooks<Schema> for Events {
             return Ok(DatabaseHookUpdate::Continue);
         };
         let mut fields = FieldMap::from_json(patch.as_object().unwrap().clone())?;
-        let mut update = SessionUpdate::default();
-        if let Some(value) = fields.remove("token") {
-            update.token = Some(value.as_str().unwrap().into());
+        for (name, value) in fields.iter_mut() {
+            if name.ends_with("At") && value.as_str().is_some() {
+                *value = better_auth_core::query::field_date(value)?.into();
+            }
         }
-        if let Some(value) = fields.remove("createdAt") {
-            update.created_at = Some(date(value.as_str().unwrap()).into());
-        }
-        if let Some(value) = fields.remove("updatedAt") {
-            update.updated_at = Some(date(value.as_str().unwrap()).into());
-        }
-        update.additional_fields = fields;
-        Ok(DatabaseHookUpdate::Patch(update))
+        Ok(DatabaseHookUpdate::Patch(fields))
     }
     async fn after_update_session(
         &self,

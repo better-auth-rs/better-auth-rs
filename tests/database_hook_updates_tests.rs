@@ -10,7 +10,7 @@ use better_auth_core::{
     store::{AccountStore, SessionStore, UserStore, VerificationStore, transaction},
 };
 use better_auth_seaorm::{
-    DatabaseHookUpdate, SeaOrmHookContext, SeaOrmHooks, SeaOrmStore, SessionUpdate,
+    DatabaseHookUpdate, SeaOrmHookContext, SeaOrmHooks, SeaOrmStore,
     sea_orm::{Database, EntityTrait},
     store::__private_test_support::{bundled_schema::BundledSchema, migrator},
 };
@@ -79,11 +79,10 @@ impl SeaOrmHooks<BundledSchema> for PatchHook {
     }
     async fn before_update_session(
         &self,
-        _: &better_auth_core::FieldValue,
-        update: &SessionUpdate,
+        update: &mut better_auth_core::FieldMap,
         _: &SeaOrmHookContext<'_, BundledSchema>,
-    ) -> AuthResult<DatabaseHookUpdate<SessionUpdate>> {
-        let fields = update.clone().into_public_fields()?;
+    ) -> AuthResult<DatabaseHookUpdate<better_auth_core::FieldMap>> {
+        let fields = update.clone();
         assert_eq!(
             fields
                 .get("activeOrganizationId")
@@ -92,16 +91,17 @@ impl SeaOrmHooks<BundledSchema> for PatchHook {
         );
         assert!(!fields.contains_key("token"));
         Ok(DatabaseHookUpdate::Patch(if self.first {
-            SessionUpdate {
-                token: Some("rotated-by-hook".into()),
-                user_agent: Some(Some("first-agent".into())),
-                ..Default::default()
-            }
+            [
+                ("token".into(), "rotated-by-hook".into()),
+                ("userAgent".into(), "first-agent".into()),
+            ]
+            .into()
         } else {
-            SessionUpdate {
-                active_organization_id: Some(None),
-                ..Default::default()
-            }
+            [(
+                "activeOrganizationId".into(),
+                better_auth_core::FieldValue::Null,
+            )]
+            .into()
         }))
     }
     async fn before_update_verification(

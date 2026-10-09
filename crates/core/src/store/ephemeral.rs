@@ -162,7 +162,9 @@ impl EphemeralStore {
             state: Arc::default(),
             verification_locks: Arc::default(),
             device_code_transaction: None,
-            organization_fields: Arc::default(),
+            organization_fields: Arc::new(RwLock::new(
+                crate::organization_fields::OrganizationFields::default().into_storage(),
+            )),
             hooks: Vec::new(),
             pending_hooks: None,
         }

@@ -128,11 +128,10 @@ pub trait SeaOrmHooks<S: AuthSchema>: Send + Sync {
 
     async fn before_update_session(
         &self,
-        token: &better_auth_core::FieldValue,
-        update: &SessionUpdate,
+        update: &mut better_auth_core::FieldMap,
         ctx: &SeaOrmHookContext<'_, S>,
-    ) -> AuthResult<DatabaseHookUpdate<SessionUpdate>> {
-        let _ = (token, update, ctx);
+    ) -> AuthResult<DatabaseHookUpdate<better_auth_core::FieldMap>> {
+        let _ = (update, ctx);
         Ok(DatabaseHookUpdate::Continue)
     }
 

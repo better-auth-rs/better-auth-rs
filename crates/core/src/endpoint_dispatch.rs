@@ -143,7 +143,11 @@ impl<S: AuthSchema> EndpointDispatcher<S> {
             if let Some(response) =
                 apply_before_action(action, &mut internal_req, req, &mut input_patch)?
             {
-                return Ok(response);
+                return Ok(if http {
+                    response.into_http_response()
+                } else {
+                    response
+                });
             }
         }
 
@@ -157,7 +161,11 @@ impl<S: AuthSchema> EndpointDispatcher<S> {
             if let Some(response) =
                 apply_before_action(action, &mut internal_req, req, &mut input_patch)?
             {
-                return Ok(response);
+                return Ok(if http {
+                    response.into_http_response()
+                } else {
+                    response
+                });
             }
         }
 
@@ -280,7 +288,11 @@ impl<S: AuthSchema> EndpointDispatcher<S> {
             response.capture_error_headers(response.headers.clone());
             Err(response.into())
         } else {
-            Ok(response)
+            Ok(if http {
+                response.into_http_response()
+            } else {
+                response
+            })
         }
     }
 }

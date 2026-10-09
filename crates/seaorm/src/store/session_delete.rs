@@ -7,7 +7,6 @@ use sea_orm::{
 
 use crate::SeaOrmStore;
 use crate::error::AuthResult;
-use crate::hooks::SessionUpdate;
 use crate::schema::{AuthSchema, SeaOrmSessionModel};
 
 use super::{HookTransaction, map_db_err};
@@ -120,11 +119,11 @@ where
             let (active, _) = self
                 .prepare_session_update(
                     db,
-                    SessionUpdate {
-                        expires_at: Some(Utc::now().into()),
-                        updated_at: Some(Utc::now().into()),
-                        ..Default::default()
-                    },
+                    [
+                        ("expiresAt".into(), Utc::now().into()),
+                        ("updatedAt".into(), Utc::now().into()),
+                    ]
+                    .into(),
                 )
                 .await?;
             database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(

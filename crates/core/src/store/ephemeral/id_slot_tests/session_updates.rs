@@ -174,32 +174,34 @@ async fn memory_session_id_alias_updates_preserve_storage_order_and_output() -> 
     Ok(())
 }
 
-struct TypedIdPatch;
+struct IdPatch;
 
 #[crate::database_hooks()]
-impl DatabaseHooks<StatelessSchema> for TypedIdPatch {
+impl DatabaseHooks<StatelessSchema> for IdPatch {
     async fn before_update_session(
         &self,
-        _: &SessionUpdate,
+        _: &mut crate::FieldMap,
         _: &DatabaseHookContext<'_, StatelessSchema>,
-    ) -> AuthResult<DatabaseHookUpdate<SessionUpdate>> {
-        Ok(DatabaseHookUpdate::Patch(SessionUpdate {
-            id: Some("300".into()),
-            updated_at: Some(date("2031-01-02T03:04:05.000Z")?),
-            ..Default::default()
-        }))
+    ) -> AuthResult<DatabaseHookUpdate<crate::FieldMap>> {
+        Ok(DatabaseHookUpdate::Patch(
+            [
+                ("id".into(), "300".into()),
+                ("updatedAt".into(), date("2031-01-02T03:04:05.000Z")?.into()),
+            ]
+            .into(),
+        ))
     }
 }
 
 #[tokio::test]
-async fn memory_session_secondary_updates_share_the_supplied_id_precedence() -> AuthResult<()> {
+async fn memory_session_secondary_updates_apply_hook_id_after_input_fields() -> AuthResult<()> {
     for write_database in [false, true] {
         let mut config = AuthConfig::default();
         config.advanced.database.generate_id = Some(IdGeneration::Serial);
         config.session.store_session_in_database = Some(write_database);
         let config = Arc::new(config);
         let inner =
-            Arc::new(EphemeralStore::new(config.clone()).with_hooks(vec![Arc::new(TypedIdPatch)]));
+            Arc::new(EphemeralStore::new(config.clone()).with_hooks(vec![Arc::new(IdPatch)]));
         let user = inner.create_user(user_input("owner")?).await?;
         let mut stored = seed()?;
         inner.lock()?.sessions.push(stored.clone());
@@ -230,7 +232,7 @@ async fn memory_session_secondary_updates_share_the_supplied_id_precedence() -> 
                 .await?,
         )?;
         let updated_at = date("2031-01-02T03:04:05.000Z")?;
-        cached_session.id = "2".into();
+        cached_session.id = "300".into();
         cached_session.updated_at = updated_at.clone().into();
         assert_eq!(result, cached_session);
         assert_eq!(
@@ -244,7 +246,7 @@ async fn memory_session_secondary_updates_share_the_supplied_id_precedence() -> 
             cached
         );
         if write_database {
-            stored.id = crate::SchemaValue::from_field(Value::Number(2.0));
+            stored.id = crate::SchemaValue::from_field(Value::Number(300.0));
             stored.updated_at = updated_at.into();
         }
         assert_eq!(inner.lock()?.sessions.snapshot()?, [stored]);

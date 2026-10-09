@@ -386,9 +386,9 @@ impl DatabaseHooks<StatelessSchema> for MissingUpdates {
     }
     async fn before_update_session(
         &self,
-        _: &SessionUpdate,
+        _: &mut crate::FieldMap,
         _: &DatabaseHookContext<'_, StatelessSchema>,
-    ) -> AuthResult<DatabaseHookUpdate<SessionUpdate>> {
+    ) -> AuthResult<DatabaseHookUpdate<crate::FieldMap>> {
         Ok(DatabaseHookUpdate::Continue)
     }
     async fn after_update_session(

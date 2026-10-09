@@ -314,8 +314,40 @@ where
         &self,
         user_id: &better_auth_core::FieldValue,
     ) -> AuthResult<Vec<better_auth_core::wire::SessionView>> {
+        Ok(self
+            .get_user_session_snapshots_value(user_id, false)
+            .await?
+            .into_iter()
+            .map(|(session, _)| session)
+            .collect())
+    }
+
+    async fn get_user_session_snapshots_value(
+        &self,
+        user_id: &better_auth_core::FieldValue,
+        only_active: bool,
+    ) -> AuthResult<
+        Vec<(
+            better_auth_core::wire::SessionView,
+            Option<better_auth_core::wire::SessionView>,
+        )>,
+    > {
         self.model_fields.begin_id_query(EntityRole::Session)?;
-        let condition = self.session_user_filter(user_id)?;
+        let mut condition = Condition::all().add(self.session_user_filter(user_id)?);
+        if only_active {
+            let schema = better_auth_core::store::session_create_schema(
+                &self.config().session,
+                &Default::default(),
+            );
+            let field = &schema.fields()["expiresAt"];
+            let backend = self.connection().get_database_backend();
+            let now = better_auth_core::FieldValue::from(Utc::now());
+            let bound = better_auth_core::user_query::bind_filter(field, &now)?;
+            let bound = super::value_filter::adapter_query_value(bound, &now, field, backend)?;
+            let now = super::record_bindings::parameter(bound, backend)?;
+            let expires_at = S::Session::field_column(schema.record_storage_key("expiresAt"))?;
+            condition = condition.add(expires_at.into_expr().gt(expires_at.save_as(now)));
+        }
         match database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
             self.config(),
             "findMany",
@@ -337,7 +369,12 @@ where
         )
         .await
         {
-            Ok(rows) => self.output_sessions(&rows, self.connection()).await,
+            Ok(rows) => Ok(self
+                .output_sessions(&rows, self.connection())
+                .await?
+                .into_iter()
+                .map(|session| (session, None))
+                .collect()),
             Err(error) => Err(error),
         }
     }

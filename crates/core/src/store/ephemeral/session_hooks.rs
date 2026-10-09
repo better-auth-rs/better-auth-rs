@@ -2,7 +2,7 @@ use super::hooks::CommittedWrite;
 use super::sessions::SessionSource;
 use super::sessions::session_token_matches;
 use super::*;
-use crate::store::database_hooks::{DatabaseHookControl, DatabaseHookUpdate, SessionUpdate};
+use crate::store::database_hooks::{DatabaseHookControl, PreparedRecordWrite, SessionUpdate};
 use crate::store::schema::EntityRole;
 
 impl EphemeralStore {
@@ -27,28 +27,27 @@ impl EphemeralStore {
     pub(super) async fn update_session_with_writer_by_token_value(
         &self,
         token: &crate::FieldValue,
-        mut update: SessionUpdate,
+        update: SessionUpdate,
         secondary: Option<crate::store::SessionUpdateWriter>,
     ) -> AuthResult<Option<SessionView>> {
-        let original = update.clone();
+        let mut prepared = PreparedRecordWrite::new(update.into_public_fields()?);
         let transaction = EphemeralTransaction {
             store: self.clone(),
         };
         let context = self.hook_context(&transaction);
         for hook in &self.hooks {
-            match crate::observability::database::with_database_hook(
+            let outcome = crate::observability::database::with_database_hook(
                 context.config,
                 hook.hook_metadata(),
                 crate::observability::database::DatabaseHook::BeforeUpdateSession,
-                hook.before_update_session(&original, &context),
+                hook.before_update_session(prepared.original_fields_mut(), &context),
             )
-            .await?
-            {
-                DatabaseHookUpdate::Continue => {}
-                DatabaseHookUpdate::Cancel => return Ok(None),
-                DatabaseHookUpdate::Patch(patch) => update.merge(patch),
+            .await?;
+            if !prepared.apply(outcome) {
+                return Ok(None);
             }
         }
+        let update = prepared.into_fields();
         let (write_database, cached) = match secondary {
             Some(secondary) => {
                 let result = (secondary.write)(update.clone()).await?;
@@ -70,11 +69,9 @@ impl EphemeralStore {
     async fn write_session_update(
         &self,
         token: &crate::FieldValue,
-        update: SessionUpdate,
+        update: FieldMap,
     ) -> AuthResult<Option<SessionView>> {
-        let fields = self
-            .bind_session_update_fields(update.into_public_fields()?)
-            .await?;
+        let fields = self.bind_session_update_fields(update).await?;
         let (column, token) = self.memory_session_token_query(token.clone())?;
         let session = self
             .raw("session", "update", |state| {

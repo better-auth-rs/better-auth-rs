@@ -75,8 +75,6 @@ impl<
         let mut core = Default::default();
         if let Some(updated_at) = update.updated_at {
             core = values([("updated_at", (updated_at).into_field())]);
-        } else if !config.fields().contains_key("updatedAt") {
-            core = values([("updated_at", FieldValue::Date((Utc::now()).into()))]);
         }
         for (name, value) in [
             ("name", update.name.map(|v| v.to_owned().into_field())),

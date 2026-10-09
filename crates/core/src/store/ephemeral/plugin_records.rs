@@ -4,7 +4,7 @@ use super::{
 };
 use crate::store::schema::EntityRole;
 use crate::user_fields::{project_adapter_value, project_source_fields_then};
-use crate::{AuthError, AuthResult, FieldMap, FieldValue, SchemaValue};
+use crate::{AuthError, AuthRecordFields, AuthResult, FieldMap, FieldValue, SchemaValue};
 
 impl State {
     fn plugin_rows(&self, role: EntityRole) -> AuthResult<&Rows<FieldMap>> {
@@ -273,6 +273,30 @@ impl EphemeralStore {
     /// Observe complete physical records without invoking output callbacks.
     #[doc(hidden)]
     pub fn plugin_storage_rows(&self, role: EntityRole) -> AuthResult<Vec<FieldMap>> {
-        self.lock()?.plugin_rows(role)?.snapshot()
+        self.storage_rows(role)
+    }
+
+    /// Observe complete physical records without applying query limits or output callbacks.
+    #[doc(hidden)]
+    pub fn storage_rows(&self, role: EntityRole) -> AuthResult<Vec<FieldMap>> {
+        let state = self.lock()?;
+        match role {
+            EntityRole::User => state
+                .users
+                .snapshot()?
+                .iter()
+                .map(AuthRecordFields::field_values)
+                .collect(),
+            // The adapter row excludes Rust's private Session active flag.
+            EntityRole::Session => Ok(state
+                .sessions
+                .snapshot()?
+                .into_iter()
+                .map(FieldMap::from)
+                .collect()),
+            EntityRole::Account => state.accounts.snapshot(),
+            EntityRole::Verification => state.verifications.snapshot(),
+            _ => state.plugin_rows(role)?.snapshot(),
+        }
     }
 }
