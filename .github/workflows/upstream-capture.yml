@@ -7,6 +7,8 @@ on:
       - .github/workflows/upstream-capture.yml
       - compat-tests/reference-server/package.json
       - compat-tests/reference-server/bun.lock
+      - compat-tests/reference-server/contracts/protected-function-*.mjs
+      - compat-tests/reference-server/contracts/server-catalog-shared.mjs
       - compat-tests/reference-server/contracts/device-where-capture.mjs
       - compat-tests/reference-server/contracts/device-where-scenarios.mjs
       - compat-tests/reference-server/contracts/device-where-transactions-capture.mjs
@@ -74,9 +76,22 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - contract: create-readback
-            script: compat-tests/reference-server/contracts/mysql-create-readback-capture.mjs
-            regressions: [native-plugin-replacements, native-atomic-update]
+          - contract: protected-function-input
+            regressions: []
+            backend: ''
+          - contract: protected-function
+            regressions: []
+            backend: memory
+          - contract: protected-function
+            regressions: []
+            backend: sqlite
+          - contract: protected-function
+            script: compat-tests/reference-server/contracts/protected-function-server-capture.mjs
+            regressions: []
+            backend: postgres
+          - contract: protected-function
+            script: compat-tests/reference-server/contracts/protected-function-server-capture.mjs
+            regressions: []
             backend: mysql
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -133,7 +148,9 @@ jobs:
           for regression in "${capture_regressions[@]}"; do
             regression_args+=("./compat-tests/reference-server/contracts/$regression.test.ts")
           done
-          bun --no-install test "${regression_args[@]}" 2>&1 | tee "$capture_dir/regression.log"
+          if (( ${#regression_args[@]} )); then
+            bun --no-install test "${regression_args[@]}" 2>&1 | tee "$capture_dir/regression.log"
+          fi
           capture_args=()
           capture_suffix=""
           if [[ -n "$CAPTURE_BACKEND" ]]; then
