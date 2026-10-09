@@ -334,7 +334,7 @@ mod tests {
             );
         let manager = SessionManager::new(Arc::new(config), test_database().await);
         manager.finish_response(&req, &mut response).unwrap();
-        let response = response.into_http_response();
+        let response = response.into_http_response().unwrap();
         let response = CorsMiddleware::new(cors)
             .after_request(&req, response)
             .await

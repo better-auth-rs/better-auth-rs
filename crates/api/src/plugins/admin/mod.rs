@@ -188,7 +188,7 @@ impl AdminPlugin {
         self.authorize(&session, "user", "set-role", MESSAGE_CHANGE_ROLE)?;
         let body: SetRoleRequest = request::read(req)?;
         let response = set_role_core(&body, &self.config, ctx).await?;
-        AuthResponse::json(None, &response).map_err(AuthError::from)
+        AuthResponse::json(None, &response)
     }
 
     async fn handle_get_user(
@@ -205,7 +205,7 @@ impl AdminPlugin {
                 .unwrap_or_default(),
         };
         let response = get_user_core(&query, ctx).await?;
-        AuthResponse::json(None, &response).map_err(AuthError::from)
+        AuthResponse::json(None, &response)
     }
 
     async fn handle_create_user(
@@ -238,7 +238,7 @@ impl AdminPlugin {
         self.authorize(&session, "user", "update", MESSAGE_UPDATE_USERS)?;
         let body: AdminUpdateUserRequest = request::read(req)?;
         let response = update_user_core(&body, &session, &self.config, ctx).await?;
-        AuthResponse::json(None, &response).map_err(AuthError::from)
+        AuthResponse::json(None, &response)
     }
 
     async fn handle_list_users(
@@ -258,7 +258,7 @@ impl AdminPlugin {
                 limit: None,
                 offset: None,
             });
-        AuthResponse::json(None, &response).map_err(AuthError::from)
+        AuthResponse::json(None, &response)
     }
 
     async fn handle_list_user_sessions(
@@ -270,7 +270,7 @@ impl AdminPlugin {
         self.authorize(&session, "session", "list", MESSAGE_LIST_USER_SESSIONS)?;
         let body: UserIdRequest = request::read(req)?;
         let response = list_user_sessions_core(&body, ctx).await?;
-        AuthResponse::json(None, &response).map_err(AuthError::from)
+        AuthResponse::json(None, &response)
     }
 
     async fn handle_ban_user(
@@ -283,7 +283,7 @@ impl AdminPlugin {
         let body: BanUserRequest = request::read(req)?;
         let response =
             ban_user_core(&body, session.user_property("id")?, &self.config, ctx).await?;
-        AuthResponse::json(None, &response).map_err(AuthError::from)
+        AuthResponse::json(None, &response)
     }
 
     async fn handle_unban_user(
@@ -295,7 +295,7 @@ impl AdminPlugin {
         self.authorize(&session, "user", "ban", MESSAGE_BAN_USERS)?;
         let body: UserIdRequest = request::read(req)?;
         let response = unban_user_core(&body, ctx).await?;
-        AuthResponse::json(None, &response).map_err(AuthError::from)
+        AuthResponse::json(None, &response)
     }
 
     async fn handle_impersonate_user(
@@ -397,7 +397,7 @@ impl AdminPlugin {
         self.authorize(&session, "session", "revoke", MESSAGE_REVOKE_USER_SESSIONS)?;
         let body: RevokeSessionRequest = request::read(req)?;
         let response = revoke_user_session_core(&body, ctx).await?;
-        AuthResponse::json(None, &response).map_err(AuthError::from)
+        AuthResponse::json(None, &response)
     }
 
     async fn handle_revoke_user_sessions(
@@ -409,7 +409,7 @@ impl AdminPlugin {
         self.authorize(&session, "session", "revoke", MESSAGE_REVOKE_USER_SESSIONS)?;
         let body: UserIdRequest = request::read(req)?;
         let response = revoke_user_sessions_core(&body, ctx).await?;
-        AuthResponse::json(None, &response).map_err(AuthError::from)
+        AuthResponse::json(None, &response)
     }
 
     async fn handle_remove_user(
@@ -421,7 +421,7 @@ impl AdminPlugin {
         self.authorize(&session, "user", "delete", MESSAGE_DELETE_USERS)?;
         let body: UserIdRequest = request::read(req)?;
         let response = remove_user_core(&body, session.user_property("id")?, ctx).await?;
-        AuthResponse::json(None, &response).map_err(AuthError::from)
+        AuthResponse::json(None, &response)
     }
 
     async fn handle_set_user_password(
@@ -433,7 +433,7 @@ impl AdminPlugin {
         self.authorize(&session, "user", "set-password", MESSAGE_SET_USER_PASSWORD)?;
         let body: SetUserPasswordRequest = request::read(req)?;
         let response = set_user_password_core(&body, ctx).await?;
-        AuthResponse::json(None, &response).map_err(AuthError::from)
+        AuthResponse::json(None, &response)
     }
 
     async fn handle_has_permission(
@@ -471,7 +471,7 @@ impl AdminPlugin {
             error: None,
             success: has_permission(&user_id, &role, &self.config, requested)?,
         };
-        AuthResponse::json(None, &response).map_err(AuthError::from)
+        AuthResponse::json(None, &response)
     }
 }
 

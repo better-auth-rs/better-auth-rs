@@ -159,44 +159,6 @@ pub fn session_field_schema(
     .ordered_declarations(&[])
 }
 
-/// Recover native values from the final physical fields without consuming shared aliases.
-#[doc(hidden)]
-pub fn session_create_native_fields(
-    schema: &crate::user_fields::UserConfig,
-    storage: &FieldMap,
-) -> FieldMap {
-    [
-        "token",
-        "userId",
-        "expiresAt",
-        "createdAt",
-        "updatedAt",
-        "ipAddress",
-        "userAgent",
-        "impersonatedBy",
-        "activeOrganizationId",
-        "activeTeamId",
-    ]
-    .into_iter()
-    .filter(|name| schema.fields().contains_key(*name))
-    .map(|name| {
-        let mut value = storage
-            .get(schema.record_storage_key(name))
-            .cloned()
-            .unwrap_or_default();
-        if matches!(name, "expiresAt" | "createdAt" | "updatedAt")
-            && let crate::FieldValue::String(text) = &value
-        {
-            value = crate::FieldValue::Date(
-                crate::utils::date::parse_date_constructor(text)
-                    .unwrap_or_else(crate::FieldDate::invalid),
-            );
-        }
-        (name.into(), value)
-    })
-    .collect()
-}
-
 /// Materialize secondary fields only after the complete before-hook chain.
 #[doc(hidden)]
 pub fn session_from_create_fields(fields: FieldMap) -> AuthResult<SessionView> {

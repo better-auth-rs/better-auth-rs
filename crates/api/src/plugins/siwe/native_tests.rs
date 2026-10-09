@@ -240,3 +240,134 @@ async fn large_chain_numbers_persist_before_cancelled_session_without_consuming_
     );
     Ok(())
 }
+
+#[tokio::test]
+async fn native_and_http_siwe_errors_preserve_api_errors_and_nonce_consumption() -> AuthResult<()> {
+    use better_auth_core::endpoint_dispatch::EndpointDispatcher;
+    for mode in [
+        "invalid-nonce",
+        "missing-nonce",
+        "invalid-signature",
+        "api-error",
+        "runtime-error",
+    ] {
+        for http in [false, true] {
+            let (mut plugin, ctx, reads, verified) = fixture(false).await?;
+            let calls = verified.clone();
+            plugin.get_nonce = Arc::new(|| Box::pin(async { Ok("short".into()) }));
+            plugin.verify_message = Arc::new(move |input| {
+                calls.lock().unwrap().push(input.chain_id);
+                Box::pin(async move {
+                    match mode {
+                        "api-error" => Err(AuthResponse::json(
+                            403,
+                            &json!({"code":"VERIFIER_REJECTED", "message":"verifier rejected"}),
+                        )?
+                        .into()),
+                        "runtime-error" => Err(AuthError::internal("verifier failed")),
+                        _ => Ok(false),
+                    }
+                })
+            });
+            let mut req = if mode == "invalid-nonce" {
+                AuthRequest::new(HttpMethod::Post, "/siwe/nonce")
+            } else {
+                let req = request(&ctx, "1").await?;
+                if mode == "missing-nonce" {
+                    ctx.database
+                        .delete_verification_by_identifier(&format!("siwe:{NONCE}"))
+                        .await?;
+                }
+                req.clone().with_original_request(req)
+            };
+            let (status, expected) = match mode {
+                "invalid-nonce" => (
+                    500,
+                    json!({"message":"SIWE getNonce must return an ERC-4361 nonce: 8-250 alphanumeric characters.","status":500,"code":"SIWE_INVALID_NONCE"}),
+                ),
+                "missing-nonce" => (
+                    401,
+                    json!({"message":"Unauthorized: Invalid or expired nonce","status":401,"code":"UNAUTHORIZED_INVALID_OR_EXPIRED_NONCE"}),
+                ),
+                "invalid-signature" => (
+                    401,
+                    json!({"message":"Unauthorized: Invalid SIWE signature","status":401}),
+                ),
+                "api-error" => (
+                    403,
+                    json!({"code":"VERIFIER_REJECTED","message":"verifier rejected"}),
+                ),
+                _ => (
+                    401,
+                    json!({"message":"Something went wrong. Please try again later.","error":"verifier failed","status":401}),
+                ),
+            };
+            let routes = AuthPlugin::<StatelessSchema>::routes(&plugin);
+            let route = routes
+                .iter()
+                .find(|route| route.path == req.path())
+                .unwrap()
+                .clone();
+            let dispatcher =
+                EndpointDispatcher::new(Arc::new(Vec::new()), Default::default(), routes);
+            let handler = |req: AuthRequest| {
+                let plugin = &plugin;
+                let ctx = &ctx;
+                async move {
+                    plugin
+                        .on_request(&req, ctx)
+                        .await?
+                        .ok_or_else(|| AuthError::not_found("SIWE endpoint"))
+                }
+            };
+            let response = if http {
+                dispatcher
+                    .run(&mut req, true, &ctx, None, handler)
+                    .await?
+                    .into_http_response()?
+            } else {
+                let error = dispatcher
+                    .native(req.clone(), route, &ctx, handler)
+                    .await
+                    .unwrap_err();
+                assert!(error.is_api_error(), "{mode}");
+                assert_eq!(error.status_code(), status, "{mode}");
+                error.to_auth_response()
+            };
+            assert_eq!(response.status, status, "{mode} HTTP={http}");
+            assert_eq!(response.body.json()?, Some(expected), "{mode} HTTP={http}");
+            assert_eq!(
+                response.headers.get("content-type").map(String::as_str),
+                http.then_some("application/json")
+            );
+            assert_eq!(response.headers.iter().count(), usize::from(http));
+            assert_eq!(
+                *verified.lock().unwrap(),
+                if matches!(mode, "invalid-nonce" | "missing-nonce") {
+                    vec![]
+                } else {
+                    vec![1.0]
+                }
+            );
+            assert_eq!(reads.load(Ordering::SeqCst), 0);
+            assert!(req.new_session()?.is_none());
+            assert!(req.take_response_headers()?.is_empty());
+            assert!(
+                ctx.database
+                    .get_verification_by_identifier(&format!("siwe:{NONCE}"))
+                    .await?
+                    .is_none()
+            );
+            assert!(ctx.database.get_user_by_id("1").await?.is_none());
+            assert!(ctx.database.get_user_accounts("1").await?.is_empty());
+            assert!(ctx.database.get_user_sessions("1").await?.is_empty());
+            assert!(
+                ctx.database
+                    .get_wallet_address_value(&ADDRESS.into(), Some(&1.0.into()))
+                    .await?
+                    .is_none()
+            );
+        }
+    }
+    Ok(())
+}

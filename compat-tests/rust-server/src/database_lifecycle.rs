@@ -8,7 +8,7 @@ use axum::{
 };
 use better_auth::{AuthBuilder, AuthConfig, AuthError, AuthResult, BetterAuth};
 use better_auth_core::{
-    AuthSchema, CreateAccount, CreateSession, CreateUser, FieldMap, FieldValue,
+    AuthSchema, CreateAccount, CreateUser, FieldMap, FieldValue,
     store::{SecondaryStorage, database_hooks::DatabaseHookUpdate},
 };
 use better_auth_seaorm::{
@@ -457,23 +457,19 @@ impl Fixture {
             let _ = account.insert(db).await.map_err(database_error)?;
         }
         for id in ["s1", "s2"] {
-            let mut session = Session::new_active(
-                Some(id.into()),
-                format!("{id}-token"),
-                CreateSession {
-                    inherited_fields: Default::default(),
-                    additional_fields: Default::default(),
-                    user_id: "u1".into(),
-                    expires_at: date(EXPIRES_AT).into(),
-                    ip_address: None,
-                    user_agent: None,
-                    impersonated_by: None,
-                    active_organization_id: None,
-                },
-                date(CREATED_AT),
-            )?;
-            Session::set_expires_at(&mut session, date(EXPIRES_AT))?;
+            let mut session = <<Session as SeaOrmSessionModel>::ActiveModel as Default>::default();
+            session.id = Set(id.into());
+            session.token = Set(format!("{id}-token"));
+            session.user_id = Set("u1".into());
+            session.expires_at = Set(date(EXPIRES_AT));
+            session.created_at = Set(date(CREATED_AT));
             session.updated_at = Set(date(UPDATED_AT));
+            session.ip_address = Set(None);
+            session.user_agent = Set(None);
+            session.impersonated_by = Set(None);
+            session.active_organization_id = Set(None);
+            session.active_team_id = Set(None);
+            session.active = Set(true);
             session.device_label = Set(Some(format!("{id}-old")));
             if self.events.stores_sessions {
                 let _ = session.insert(db).await.map_err(database_error)?;

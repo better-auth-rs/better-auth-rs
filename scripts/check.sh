@@ -183,7 +183,7 @@ run_stage() {
       if cargo check --workspace --locked --tests --features axum,seaorm2,redis-cache --keep-going; then
         cargo test --locked --no-fail-fast -p better-auth-core -p better-auth-api -p better-auth-seaorm --lib -- \
           session verification database_hooks lifecycle transaction create_readback user_fields user_query wire:: \
-          plugin::tests::response_headers:: plugin::tests::response_status:: types::tests::auth_response_json update_session_rejections_keep_native_api_errors_and_http_status \
+          plugin::tests::response_headers:: plugin::tests::response_status:: plugin::tests::response_values:: types::tests::auth_response_json update_session_rejections_keep_native_api_errors_and_http_status \
           store::ephemeral::organization store::ephemeral::memory_json_tests:: serial_primary_tests::organization:: \
           user_column_defaults user_runtime_input_tests user_serial_tests api_key_start::tests protected_function_tests field_value:: record_bindings:: value_filter::core_query_tests:: id_filter::tests:: members::tests:: device_code_consume::tests:: types_plugin::device::tests \
           member_delete:: serial_primary_tests::team_members:: native_team_mutations native_invitation_acceptance organization_role organization_fields:: organization_models:: cookie_utils::native_cookie_tests:: \
@@ -209,7 +209,8 @@ run_stage() {
           --test user_input_policy_tests --test protected_function_tests \
           --test user_verification_fields_tests --test user_record_values_tests \
           --test account_owner_batch_tests --test account_identity_tests --test account_native_selector_tests --test account_batch_update_tests \
-          --test account_verification_update_fields_tests \
+          --test account_verification_update_fields_tests --test verification_field_queries_tests \
+          --test verification_transaction_delete_tests \
           --test account_user_selected_relations_reference_tests \
           --test native_core_join_tests --test native_memory_join_tests --test session_user_join_reference_tests \
           --test memory_user_live_reads_tests --test api_key_number_name_tests \
@@ -221,6 +222,7 @@ run_stage() {
         cargo test --locked --features axum,seaorm2,redis-cache --test mysql_create_readback_tests -- --ignored || create_status=1
         cargo test --locked --features axum,seaorm2,redis-cache --test user_account_raw_column_tests -- --ignored || create_status=1
         cargo test --locked --features axum,seaorm2,redis-cache --test account_verification_update_fields_tests -- --ignored || create_status=1
+        cargo test --locked --features axum,seaorm2,redis-cache --test verification_transaction_delete_tests -- --ignored || create_status=1
         cargo test --locked -p better-auth-cli --test generate || create_status=1
         ./scripts/consumer-check.sh --lib --test session_native_values --test user_session_fields || create_status=1
         if cargo build --locked --manifest-path compat-tests/rust-server/Cargo.toml; then
@@ -234,7 +236,8 @@ run_stage() {
         create_status=1
       fi
       bun --no-install test ./compat-tests/reference-server/consumer-contracts/mysql-create-readback.test.ts \
-        ./compat-tests/reference-server/consumer-contracts/update-fields-server.test.ts || create_status=1
+        ./compat-tests/reference-server/consumer-contracts/update-fields-server.test.ts \
+        ./compat-tests/reference-server/consumer-contracts/verification-consume-hooks-server.test.ts || create_status=1
       bun --no-install test ./compat-tests/reference-server/contracts/email-verification-claims.test.ts \
         ./compat-tests/reference-server/contracts/email-verification-payload.test.ts \
         ./compat-tests/reference-server/contracts/sqlite-utf16-binding.test.ts \
@@ -255,7 +258,10 @@ run_stage() {
         ./compat-tests/reference-server/contracts/user-account-raw-column.test.ts \
         ./compat-tests/reference-server/contracts/account-owner-batch.test.ts \
         ./compat-tests/reference-server/contracts/account-verification-update-fields.test.ts \
+        ./compat-tests/reference-server/contracts/verification-field-queries.test.ts \
+        ./compat-tests/reference-server/contracts/verification-consume-hooks.test.ts \
         ./compat-tests/reference-server/contracts/endpoint-content-type.test.ts \
+        ./compat-tests/reference-server/contracts/siwe-native-errors.test.ts \
         ./compat-tests/reference-server/contracts/organization-physical-fields.test.ts \
         ./compat-tests/reference-server/contracts/session-management-native.test.ts \
         ./compat-tests/reference-server/contracts/account-duplicates.test.ts \

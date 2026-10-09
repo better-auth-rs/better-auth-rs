@@ -57,6 +57,7 @@ mod user_output;
 mod user_verification_tests;
 mod users;
 mod value_filter;
+mod verification_fields;
 mod verifications;
 mod wallets;
 
@@ -543,17 +544,12 @@ where
         Ok(consumed)
     }
     async fn delete_verification_by_identifier(&self, identifier: &str) -> AuthResult<()> {
-        use crate::schema::SeaOrmVerificationModel;
-        use sea_orm::ConnectionTrait;
         self.store
             .delete_single_verification(
                 &self.tx,
                 Some((&self.tx, self)),
-                value_filter::equals(
-                    S::Verification::identifier_column(),
-                    &identifier.into(),
-                    self.tx.get_database_backend(),
-                )?,
+                "identifier",
+                identifier.into(),
             )
             .await
     }

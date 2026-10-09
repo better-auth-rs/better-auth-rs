@@ -12,8 +12,8 @@ mod runtime;
 mod session_create;
 mod user_verification;
 pub use session_create::{
-    PreparedSessionCreate, SessionCreateWriter, session_create_native_fields,
-    session_create_schema, session_field_schema, session_from_create_fields,
+    PreparedSessionCreate, SessionCreateWriter, session_create_schema, session_field_schema,
+    session_from_create_fields,
 };
 #[doc(hidden)]
 pub use user_verification::revoke_unproven_account_access;

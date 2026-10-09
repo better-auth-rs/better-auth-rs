@@ -381,7 +381,7 @@ async fn check_signup_failure<S: AuthSchema>(
     );
     let response = match plugin.on_request(&request, &context).await {
         Ok(response) => response.unwrap(),
-        Err(error) => error.to_http_response(),
+        Err(error) => error.to_http_response().unwrap(),
     };
     let expected_status = match mode {
         "normalize" | "native" => 422,

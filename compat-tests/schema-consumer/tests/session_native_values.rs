@@ -57,7 +57,7 @@ fn derived_session_fields_preserve_native_replacements_until_typed_operations()
         ("activeOrganizationId".into(), FieldValue::Null),
         ("activeTeamId".into(), FieldValue::from_json(json!(false))?),
     ]);
-    let mut active = session::Model::new_active_from_fields(Some("session".into()), &fields)?;
+    let mut active = session::Model::new_active(Some("session".into()), &fields)?;
     session::Model::apply_fields(&mut active, fields.clone())?;
     let row = active.clone().try_into_model()?;
     for (name, actual) in [

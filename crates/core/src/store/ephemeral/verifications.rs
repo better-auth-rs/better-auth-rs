@@ -4,20 +4,24 @@ use crate::store::{
     VerificationCreateWriter,
     database_hooks::{DatabaseHookControl, VerificationUpdate},
 };
+use crate::{id::AdapterIdInput, store::schema::EntityRole};
 
 impl EphemeralStore {
     pub(super) async fn output_verifications(
         &self,
         records: &[FieldMap],
     ) -> AuthResult<Vec<VerificationView>> {
-        Ok(self
-            .config
-            .verification
-            .field_schema()
+        if !records.is_empty() {
+            self.model_fields
+                .begin_id_output(EntityRole::Verification)?;
+        }
+        let schema = self.config.verification.field_schema().adapter_fields(&[]);
+        let order = schema.fields().keys().cloned().collect::<Vec<_>>();
+        Ok(schema
             .project_memory_records(records)
             .await?
             .into_iter()
-            .map(VerificationView::from_adapter_fields)
+            .map(|fields| VerificationView::from_adapter_fields(fields.in_field_order(&order)))
             .collect())
     }
 
@@ -25,21 +29,87 @@ impl EphemeralStore {
         &self,
         record: &FieldMap,
     ) -> AuthResult<VerificationView> {
-        Ok(VerificationView::from_adapter_fields(
-            self.config
-                .verification
-                .field_schema()
-                .project_memory_records(std::slice::from_ref(record))
-                .await?
-                .remove(0),
-        ))
+        Ok(self
+            .output_verifications(std::slice::from_ref(record))
+            .await?
+            .remove(0))
     }
-    pub(super) fn verification_query(&self, name: &str, value: &str) -> AuthResult<Value> {
-        self.memory_field_query(
-            &self.config.verification.field_schema(),
-            name,
-            Value::String(value.to_owned()),
-        )
+
+    pub(super) fn verification_query(
+        &self,
+        name: &str,
+        value: impl Into<Value>,
+    ) -> AuthResult<Value> {
+        self.model_fields.begin_id_query(EntityRole::Verification)?;
+        let schema = self.config.verification.field_schema().adapter_fields(&[]);
+        let value = if name == "id" {
+            self.memory_primary_id_query(&value.into())?
+        } else {
+            self.memory_field_query(&schema, name, value.into())?
+        };
+        let field = schema
+            .fields()
+            .get(name)
+            .ok_or_else(|| AuthError::config(format!("Unknown verification field: {name}")))?;
+        crate::user_query::bind_filter(field, &value)
+    }
+
+    pub(super) async fn verification_storage_fields(
+        &self,
+        mut input: FieldMap,
+        create: bool,
+        forced_id: Option<Value>,
+    ) -> AuthResult<FieldMap> {
+        if let Some(id) = &forced_id {
+            let _ = input.insert("id".into(), id.clone());
+        }
+        let supplied = input.get("id").cloned();
+        self.model_fields.begin_id_input(
+            EntityRole::Verification,
+            AdapterIdInput {
+                force_allow_id: create && supplied.is_some(),
+                supports_native_uuid: false,
+            },
+        )?;
+        self.config
+            .verification
+            .field_schema()
+            .storage_fields_with_bound_id(
+                input,
+                create,
+                || {
+                    if let Some(id) = &forced_id {
+                        return Ok(Some(id.clone()));
+                    }
+                    let Some(policy) = self
+                        .model_fields
+                        .id_input_policy(EntityRole::Verification)?
+                    else {
+                        return Ok(supplied.clone());
+                    };
+                    if create {
+                        self.config
+                            .advanced
+                            .database
+                            .generate_id()
+                            .adapter_create_id_input("verification", supplied.clone(), policy)
+                    } else {
+                        supplied
+                            .clone()
+                            .map(|value| {
+                                self.config
+                                    .advanced
+                                    .database
+                                    .generate_id()
+                                    .adapter_id_input(value, policy)
+                            })
+                            .transpose()
+                            .map(Option::flatten)
+                    }
+                },
+                |_, field, value| self.memory_plugin_field_input(field, value),
+            )
+            .await
     }
 
     pub(super) fn verification_field<'a>(
@@ -60,39 +130,27 @@ impl EphemeralStore {
         identifier: &str,
     ) -> AuthResult<Option<FieldMap>> {
         let bound_identifier = self.verification_query("identifier", identifier)?;
-        let records: Vec<_> = self
+        let mut records = self
             .raw("verification", "findMany", |state| {
-                Ok(state
-                    .verifications
-                    .snapshot()?
-                    .iter()
-                    .filter(|row| {
-                        self.verification_field(row, "identifier")
-                            .unwrap_or(&Value::Undefined)
-                            .strict_equals(&bound_identifier)
-                    })
-                    .cloned()
-                    .collect())
+                state.verifications.select_refs(|row| {
+                    self.verification_field(row, "identifier")
+                        .unwrap_or(&Value::Undefined)
+                        .strict_equals(&bound_identifier)
+                })
             })
             .await?;
-        let mut latest = None;
-        for row in &records {
-            let newer = match latest {
-                None => true,
-                Some(current) => {
-                    crate::query::field_compare(
-                        self.verification_field(row, "createdAt")
-                            .unwrap_or(&Value::Undefined),
-                        self.verification_field(current, "createdAt")
-                            .unwrap_or(&Value::Undefined),
-                    )? == Some(std::cmp::Ordering::Greater)
-                }
-            };
-            if newer {
-                latest = Some(row);
-            }
-        }
-        Ok(latest.cloned())
+        crate::memory_sort::sort(&mut records, true, |row| {
+            row.read(|record| {
+                Ok(self
+                    .verification_field(record, "createdAt")
+                    .cloned()
+                    .unwrap_or_default())
+            })
+        })?;
+        records
+            .first()
+            .map(|row| row.read(|record| Ok(record.clone())))
+            .transpose()
     }
 }
 
@@ -150,17 +208,13 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
     }
 
     async fn reserve_verification(&self, id: &str, input: CreateVerification) -> AuthResult<bool> {
-        let mut record = self
-            .config
-            .verification
-            .field_schema()
-            .record_storage_fields_with_binding(
+        let record = self
+            .verification_storage_fields(
                 input.with_timestamps(Utc::now().into()).fields()?,
                 true,
-                |_, field, value| self.memory_plugin_field_input(field, value),
+                Some(id.into()),
             )
             .await?;
-        let _ = record.insert("id".into(), Value::String(id.to_owned()));
         let inserted = self
             .raw("verification", "create", |state| {
                 if state
@@ -210,20 +264,8 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
             return Ok(None);
         }
         let mut record = self
-            .config
-            .verification
-            .field_schema()
-            .record_storage_fields_with_binding(input.fields()?, true, |_, field, value| {
-                self.memory_plugin_field_input(field, value)
-            })
+            .verification_storage_fields(input.fields()?, true, None)
             .await?;
-        let supplied = record
-            .remove("id")
-            .and_then(|id| id.as_str().map(str::to_owned));
-        let id = self.generated_id("verification", supplied, self.lock()?.verifications.len())?;
-        if let Some(id) = id {
-            let _ = record.insert("id".into(), Value::String(id));
-        }
         self.raw("verification", "create", |state| {
             if let Some(id) = self.next_serial_id(state.verifications.len()) {
                 let _ = record.insert("id".into(), id);
@@ -382,6 +424,7 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
         Ok(())
     }
     async fn delete_verification(&self, id: &str) -> AuthResult<()> {
+        self.model_fields.begin_id_query(EntityRole::Verification)?;
         let bound_id = self.memory_primary_id_query(&Value::from(id))?;
         let (id, rows) = self
             .raw("verification", "findOne", |state| {
@@ -420,15 +463,14 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
         Ok(())
     }
     async fn delete_expired_verifications(&self) -> AuthResult<usize> {
-        let now = Utc::now();
+        let now = self.verification_query("expiresAt", Value::Date(Utc::now().into()))?;
         self.delete_verifications_with_hooks(
             |row| {
-                crate::SchemaValue::<crate::FieldDate>::from_field(
+                Ok(crate::query::field_compare(
                     self.verification_field(row, "expiresAt")
-                        .cloned()
-                        .unwrap_or_default(),
-                )
-                .is_before(now)
+                        .unwrap_or(&Value::Undefined),
+                    &now,
+                )? == Some(std::cmp::Ordering::Less))
             },
             true,
         )

@@ -44,7 +44,6 @@ impl<'a, S: AuthSchema> TwoFactorApi<'a, S> {
                     None,
                     &serde_json::json!({"code":self.plugin.generate_totp(&body.secret)?}),
                 )
-                .map_err(Into::into)
             })
             .await?;
         #[derive(serde::Deserialize)]

@@ -349,6 +349,113 @@ test("native status retains endpoint provenance across hook replacements", async
   }
 });
 
+test("native returned values retain identity and materialize by their actual type", async () => {
+  const encode = (value: string) => [...new TextEncoder().encode(value)];
+  const cases: [string, () => unknown, string, number[]][] = [
+    ["undefined", () => undefined, "application/json", []],
+    ["null", () => null, "application/json", encode("null")],
+    ["false", () => false, "application/json", encode("false")],
+    ["true", () => true, "application/json", encode("true")],
+    ["zero", () => 0, "application/json", encode("0")],
+    ["negative-zero", () => -0, "application/json", encode("0")],
+    ["number", () => 1.25, "application/json", encode("1.25")],
+    ["nan", () => NaN, "application/json", encode("NaN")],
+    ["infinity", () => Infinity, "application/json", encode("null")],
+    ["negative-infinity", () => -Infinity, "application/json", encode("null")],
+    ["empty-string", () => "", "application/json", []],
+    ["string", () => "hello 中", "text/plain", encode("hello 中")],
+    ["utf16", () => "\ud800A\udc00", "text/plain", encode("�A�")],
+    ["array", () => [undefined, NaN, new Date(0)], "application/json", encode('[null,null,"1970-01-01T00:00:00.000Z"]')],
+    ["object", () => ({ value: "hello", omitted: undefined }), "application/json", encode('{"value":"hello"}')],
+    ["date", () => new Date(0), "application/json", encode('"1970-01-01T00:00:00.000Z"')],
+    ["invalid-date", () => new Date(NaN), "application/json", encode("null")],
+    ["binary", () => new Uint8Array([0, 255, 65]), "application/octet-stream", [0, 255, 65]],
+    ["array-buffer", () => new Uint8Array([0, 255, 65]).buffer, "application/octet-stream", [0, 255, 65]],
+    ["binary-view", () => new Uint8Array([9, 0, 255, 65, 9]).subarray(1, 4), "application/octet-stream", [0, 255, 65]],
+    ["blob", () => new Blob([new Uint8Array([0, 255, 65])], { type: "IMAGE/PNG" }), "image/png", [0, 255, 65]],
+    ["blob-json-type", () => new Blob([new Uint8Array([0, 255, 65])], { type: "APPLICATION/JSON" }), "application/json", [0, 255, 65]],
+    ["blob-empty-type", () => new Blob([new Uint8Array([0, 255, 65])]), "application/octet-stream", [0, 255, 65]],
+    ["blob-invalid-type", () => new Blob([new Uint8Array([0, 255, 65])], { type: "text/中" }), "application/octet-stream", [0, 255, 65]],
+    ["response", () => new Response("explicit", { status: 207, headers: { "content-type": "text/plain" } }), "text/plain", encode("explicit")],
+    ["html", () => new Response("<p>explicit</p>", { status: 207, headers: { "content-type": "text/html; charset=utf-8" } }), "text/html; charset=utf-8", encode("<p>explicit</p>")],
+  ];
+  for (const [name, create, contentType, bytes] of cases) {
+    for (const phase of ["endpoint", "before", "after"]) {
+      for (const http of [false, true]) {
+        const value = create();
+        const fallback = { endpoint: true };
+        const observed: unknown[] = [];
+        const queue = (ctx: any, name: string) => {
+          ctx.setHeader(name, "1");
+          ctx.setHeader("authorization", "queued");
+          ctx.setHeader("content-type", "application/queued");
+        };
+        const auth = betterAuth({
+          baseURL: "http://value-contract.test", secret: "value-contract-secret-at-least-32-characters",
+          logger: { disabled: true }, telemetry: { enabled: false },
+          hooks: {
+            before: createAuthMiddleware(async ctx => {
+              if (phase === "before") { queue(ctx, "x-before"); return value; }
+            }),
+            after: createAuthMiddleware(async ctx => {
+              observed.push(ctx.context.returned);
+              ctx.setHeader("x-after", "1");
+              if (phase === "after") return value;
+            }),
+          },
+          plugins: [{
+            id: "value-contract",
+            endpoints: { valueContract: createAuthEndpoint("/value-contract", { method: "GET" }, async ctx => {
+              ctx.setStatus(201);
+              queue(ctx, "x-endpoint");
+              return ctx.json(phase === "endpoint" ? value : fallback);
+            }) },
+            hooks: { after: [{ matcher: () => true, handler: createAuthMiddleware(async ctx => { observed.push(ctx.context.returned); }) }] },
+          }],
+        });
+        const result: any = await auth.api.valueContract({ asResponse: http, returnHeaders: true, returnStatus: true });
+        const short = phase === "before" && value !== null && typeof value === "object";
+        const ignored = phase === "before" && !short || phase === "after" && value === undefined;
+        const expected = ignored ? fallback : value;
+        const explicit = expected instanceof Response;
+        expect(observed.length, `${name}/${phase}`).toBe(short ? 0 : 2);
+        if (!short) { expect(Object.is(observed[0], phase === "endpoint" ? value : fallback)).toBe(true); expect(Object.is(observed[1], expected)).toBe(true); }
+        const headers = new Headers(result.headers);
+        expect(headers.has("x-before")).toBe(short);
+        expect(headers.has("x-after")).toBe(!short);
+        expect(headers.has("x-endpoint")).toBe(!short);
+        if (http) {
+          expect(result.status).toBe(explicit ? 207 : short ? 200 : 201);
+          expect(headers.has("authorization")).toBe(false);
+          expect(headers.get("content-type")).toBe(explicit ? "application/queued" : ignored ? "application/json" : contentType);
+          expect([...new Uint8Array(await result.arrayBuffer())]).toStrictEqual(ignored ? encode('{"endpoint":true}') : bytes);
+        } else {
+          expect(Object.is(result.response, expected)).toBe(true);
+          expect(Object.hasOwn(result, "status")).toBe(!short);
+          expect(result.status).toBe(short ? undefined : 201);
+          expect(headers.get("authorization")).toBe("queued");
+          expect(headers.get("content-type")).toBe("application/queued");
+          if (explicit) expect(expected.headers.get("content-type")).toBe(contentType);
+        }
+      }
+    }
+  }
+});
+
+test("HTTP materialization distinguishes an absent body from an empty string", async () => {
+  for (const status of [204, 205, 304]) {
+    for (const value of [undefined, null, "", false, 0]) {
+      const auth = betterAuth({
+        baseURL: "http://value-contract.test", secret: "value-contract-secret-at-least-32-characters",
+        logger: { disabled: true }, telemetry: { enabled: false },
+        plugins: [{ id: "empty-contract", endpoints: { emptyContract: createAuthEndpoint("/empty-contract", { method: "GET" }, async ctx => { ctx.setStatus(status); return value; }) } }],
+      });
+      if (value === undefined) { const response = await auth.api.emptyContract({ asResponse: true }); expect(response.status).toBe(status); expect(response.body).toBeNull(); }
+      else await expect(auth.api.emptyContract({ asResponse: true })).rejects.toBeInstanceOf(TypeError);
+    }
+  }
+});
+
 test("update-session rejects invalid updates as native API errors and HTTP 400", async () => {
   const now = new Date();
   const session = {

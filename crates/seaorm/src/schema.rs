@@ -9,7 +9,7 @@ use sea_orm::{
 use better_auth_core::entity::{AuthSession, AuthUser};
 use better_auth_core::error::AuthResult;
 pub use better_auth_core::schema::AuthSchema;
-use better_auth_core::types::{CreateSession, CreateUser, UpdateUser};
+use better_auth_core::types::{CreateUser, UpdateUser};
 
 pub trait SeaOrmUserModel:
     AuthUser + IntoActiveModel<Self::ActiveModel> + Clone + Send + Sync + 'static + FromQueryResult
@@ -108,50 +108,13 @@ pub trait SeaOrmSessionModel:
         )))
     }
 
-    /// Initialize native and application columns from the complete creation-hook result.
-    /// The store replaces native columns with prepared values and applies configured fields after this method returns.
-    /// Leave `expires_at` unset so runtime Date values reach the SQL driver without typed decoding.
+    /// Initialize application-owned columns from prepared physical fields.
+    /// Inspect runtime values without decoding the complete field map into the typed model.
+    /// The store preserves prepared fields and copies only extra insert columns and the independent active column.
     fn new_active(
         id: Option<Self::Id>,
-        token: String,
-        create_session: CreateSession,
-        now: DateTime<Utc>,
-    ) -> AuthResult<Self::ActiveModel>;
-    /// Initialize application columns from logical creation fields before SQL binding.
-    /// The default bridge requires the native String and Date types accepted by `new_active`.
-    /// Override this method when application initialization must accept replacement field types.
-    /// The store applies prepared physical fields after this method returns.
-    fn new_active_from_fields(
-        id: Option<Self::Id>,
         fields: &better_auth_core::FieldMap,
-    ) -> AuthResult<Self::ActiveModel> {
-        let field = |name: &str| fields.get(name).cloned().unwrap_or_default();
-        let created_at: better_auth_core::FieldDate = field("createdAt").decode()?;
-        let now = created_at.to_datetime()?.ok_or_else(|| {
-            better_auth_core::AuthError::config(
-                "The Session constructor requires a valid createdAt Date",
-            )
-        })?;
-        let user_id = better_auth_core::SchemaValue::<String>::from_field(field("userId"));
-        if let Some(value) = user_id.as_str() {
-            let _ = Self::parse_user_id(value)?;
-        }
-        Self::new_active(
-            id,
-            field("token").decode()?,
-            CreateSession {
-                inherited_fields: Default::default(),
-                user_id,
-                expires_at: field("expiresAt").decode()?,
-                ip_address: field("ipAddress").decode()?,
-                user_agent: field("userAgent").decode()?,
-                impersonated_by: field("impersonatedBy").decode()?,
-                active_organization_id: field("activeOrganizationId").decode()?,
-                additional_fields: Default::default(),
-            },
-            now,
-        )
-    }
+    ) -> AuthResult<Self::ActiveModel>;
     fn set_expires_at(active: &mut Self::ActiveModel, expires_at: DateTime<Utc>) -> AuthResult<()>;
     fn set_updated_at(active: &mut Self::ActiveModel, updated_at: DateTime<Utc>) -> AuthResult<()>;
     /// Apply core and enabled plugin values returned by session update hooks.
@@ -262,7 +225,7 @@ pub trait SeaOrmVerificationModel:
 
     /// Initialize application-owned columns before the store binds adapter fields.
     /// Inspect `fields` as runtime values. Do not decode the complete field map into the typed model.
-    /// The store applies `fields` and the generated ID after this method returns.
+    /// The field map already contains the ID selected at its declaration slot.
     fn new_active(
         id: Option<Self::Id>,
         fields: &better_auth_core::FieldMap,

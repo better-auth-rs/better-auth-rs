@@ -609,7 +609,7 @@ impl DeviceAuthorizationPlugin {
             return device_error_response(400, "invalid_request", DEVICE_CODE_ALREADY_PROCESSED);
         }
 
-        AuthResponse::json(None, &DeviceActionResponse { success: true }).map_err(AuthError::from)
+        AuthResponse::json(None, &DeviceActionResponse { success: true })
     }
 
     async fn validate_client_id(&self, client_id: &str) -> AuthResult<bool> {
@@ -877,5 +877,4 @@ fn device_error_response(
             error_description: error_description.to_string(),
         },
     )
-    .map_err(AuthError::from)
 }

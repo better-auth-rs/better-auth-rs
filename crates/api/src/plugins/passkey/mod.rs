@@ -151,7 +151,7 @@ impl PasskeyPlugin {
     ) -> AuthResult<AuthResponse> {
         let data = ctx.require_native_session(req).await?;
         let result = list_user_passkeys_core(data.user_field("id"), ctx).await?;
-        AuthResponse::json(None, &result).map_err(AuthError::from)
+        AuthResponse::json(None, &result)
     }
 
     /// POST /passkey/delete-passkey
@@ -163,7 +163,7 @@ impl PasskeyPlugin {
         let data = ctx.require_native_session(req).await?;
         let body: DeletePasskeyRequest = types::read(req, types::deletion_body)?;
         let result = delete_passkey_core(&body, data.user_field("id"), ctx).await?;
-        AuthResponse::json(None, &result).map_err(AuthError::from)
+        AuthResponse::json(None, &result)
     }
 
     /// POST /passkey/update-passkey
@@ -175,7 +175,7 @@ impl PasskeyPlugin {
         let data = ctx.require_native_session(req).await?;
         let body: UpdatePasskeyRequest = types::read(req, types::update_body)?;
         let result = update_passkey_core(&body, data.user_field("id"), ctx).await?;
-        AuthResponse::json(None, &result).map_err(AuthError::from)
+        AuthResponse::json(None, &result)
     }
 }
 

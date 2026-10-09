@@ -847,6 +847,7 @@ mod tests {
     mod native_session_hooks;
     mod response_headers;
     mod response_status;
+    mod response_values;
 
     use super::*;
     use crate::entity::AuthUser;

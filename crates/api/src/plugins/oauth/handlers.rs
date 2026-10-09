@@ -933,7 +933,7 @@ pub(crate) async fn handle_social_sign_in(
 
     let flow = social_sign_in_core(req, &body, config, ctx).await?;
     let response = flow.response;
-    let mut auth_response = AuthResponse::json(None, &response).map_err(AuthError::from)?;
+    let mut auth_response = AuthResponse::json(None, &response)?;
 
     if let Some(url) = response.url.as_deref()
         && response.redirect
@@ -969,12 +969,12 @@ pub(crate) async fn handle_link_social(
             })?;
         let response =
             link_with_id_token_core(req, &body, id_token, provider, &session, ctx).await?;
-        return AuthResponse::json(None, &response).map_err(AuthError::from);
+        return AuthResponse::json(None, &response);
     }
 
     let flow = link_social_core(req, &body, &session, config, ctx).await?;
     let response = flow.response;
-    let mut auth_response = AuthResponse::json(None, &response).map_err(AuthError::from)?;
+    let mut auth_response = AuthResponse::json(None, &response)?;
 
     if let Some(url) = response.url.as_deref()
         && response.redirect

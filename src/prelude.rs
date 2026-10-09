@@ -2,7 +2,7 @@
 
 pub use crate::{
     ApiKeyStart, Argon2PasswordHasher, AuthBuilder, AuthConfig, AuthError, AuthResult, AuthSchema,
-    BetterAuth, SchemaValue, ScryptPasswordHasher,
+    BetterAuth, ResponseBlob, ResponseBody, SchemaValue, ScryptPasswordHasher,
 };
 pub use better_auth_core::PasswordHasher;
 pub use better_auth_core::entity::{

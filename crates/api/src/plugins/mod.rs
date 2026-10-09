@@ -71,7 +71,9 @@ pub(crate) mod test_helpers {
         ctx.session_manager()
             .finish_response(req, &mut response)
             .expect("endpoint response should finalize");
-        response.into_http_response()
+        response
+            .into_http_response()
+            .expect("endpoint response should materialize")
     }
 
     pub fn create_test_config() -> AuthConfig {

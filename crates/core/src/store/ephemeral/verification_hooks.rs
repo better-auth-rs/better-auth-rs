@@ -26,30 +26,26 @@ impl EphemeralStore {
             }
         }
         crate::store::database_hooks::await_adapter_lookup().await;
-        let patch = self
-            .config
-            .verification
-            .field_schema()
-            .record_storage_fields_with_binding(prepared.into_fields(), false, |_, field, value| {
-                self.memory_plugin_field_input(field, value)
-            })
-            .await?;
         let bound_identifier = self.verification_query("identifier", identifier)?;
+        let patch = self
+            .verification_storage_fields(prepared.into_fields(), false, None)
+            .await?;
         let record = self
             .raw("verification", "update", |state| {
-                Ok({
-                    let row = state.verifications.find_mut(|row| {
-                        self.verification_field(row, "identifier")
-                            .unwrap_or(&Value::Undefined)
-                            .strict_equals(&bound_identifier)
+                let rows = state.verifications.select_refs(|row| {
+                    self.verification_field(row, "identifier")
+                        .unwrap_or(&Value::Undefined)
+                        .strict_equals(&bound_identifier)
+                })?;
+                for row in &rows {
+                    row.write(|record| {
+                        record.extend(patch.clone());
+                        Ok(())
                     })?;
-                    if let Some(mut record) = row {
-                        record.extend(patch);
-                        Some(record.clone())
-                    } else {
-                        None
-                    }
-                })
+                }
+                rows.first()
+                    .map(|row| row.read(|record| Ok(record.clone())))
+                    .transpose()
             })
             .await?;
         let record = futures_util::future::OptionFuture::from(
@@ -174,6 +170,8 @@ impl EphemeralStore {
                 return Ok(None);
             }
         }
+        self.model_fields
+            .begin_id_query(crate::store::schema::EntityRole::Verification)?;
         let Some(consumed) = self
             .raw("verification", "consumeOne", |state| {
                 state.verifications.remove_first(|row| {

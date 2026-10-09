@@ -339,7 +339,7 @@ fn routes<S: AuthSchema>(auth: Arc<BetterAuth<S>>, events: Events, body: BodyTra
                                     key,
                                 },
                             )
-                            .map_err(Into::into),
+                            ,
                             Err(error) => error.into_response(),
                         })
                     }
@@ -354,7 +354,7 @@ fn routes<S: AuthSchema>(auth: Arc<BetterAuth<S>>, events: Events, body: BodyTra
                     let auth=auth.clone();
                     async move {
                         wire(auth.store().get_account("google",input["accountId"].as_str().unwrap()).await.and_then(|account| {
-                            AuthResponse::json(200,&account.map(|account|json!({"accessToken":account.access_token,"refreshToken":account.refresh_token,"idToken":account.id_token,"scope":account.scope,"expiresAt":account.access_token_expires_at}))).map_err(Into::into)
+                            AuthResponse::json(200,&account.map(|account|json!({"accessToken":account.access_token,"refreshToken":account.refresh_token,"idToken":account.id_token,"scope":account.scope,"expiresAt":account.access_token_expires_at})))
                         }))
                     }
                 }
@@ -374,7 +374,7 @@ fn routes<S: AuthSchema>(auth: Arc<BetterAuth<S>>, events: Events, body: BodyTra
                                 )
                                 .await
                                 .and_then(|record| {
-                                    AuthResponse::json(200, &record).map_err(Into::into)
+                                    AuthResponse::json(200, &record)
                                 }),
                         )
                     }
@@ -419,7 +419,6 @@ fn routes<S: AuthSchema>(auth: Arc<BetterAuth<S>>, events: Events, body: BodyTra
                                 .await
                                 .and_then(|_| {
                                     AuthResponse::json(200, &json!({"success":true}))
-                                        .map_err(Into::into)
                                 }),
                         )
                     }
@@ -500,7 +499,7 @@ fn routes<S: AuthSchema>(auth: Arc<BetterAuth<S>>, events: Events, body: BodyTra
                             let result = async {
                                 let api = auth.two_factor()?.with_request(better_auth_core::NativeRequest { request: original.as_ref(), headers: headers.as_ref() });
                                 if input["path"] == "generateTOTP" {
-                                    AuthResponse::json(200, &json!({"code":api.generate_totp(input.get("body").cloned()).await?})).map_err(Into::into)
+                                    AuthResponse::json(200, &json!({"code":api.generate_totp(input.get("body").cloned()).await?}))
                                 } else {
                                     Ok(AuthResponse::native(200, FieldMap::from([
                                         ("status".into(), true.into()),
@@ -555,7 +554,7 @@ fn routes<S: AuthSchema>(auth: Arc<BetterAuth<S>>, events: Events, body: BodyTra
                             .await;
                         wire(
                             result.and_then(|value| {
-                                AuthResponse::json(200, &value).map_err(Into::into)
+                                AuthResponse::json(200, &value)
                             }),
                         )
                     }
@@ -580,7 +579,7 @@ fn routes<S: AuthSchema>(auth: Arc<BetterAuth<S>>, events: Events, body: BodyTra
                             )
                             .await;
                         wire(result.and_then(|_| {
-                            AuthResponse::json(200, &json!({"success":true})).map_err(Into::into)
+                            AuthResponse::json(200, &json!({"success":true}))
                         }))
                     }
                 }

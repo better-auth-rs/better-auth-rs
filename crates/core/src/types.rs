@@ -97,7 +97,7 @@ pub struct AuthResponse {
     /// Endpoint headers during native dispatch, or merged headers after HTTP materialization.
     pub headers: Headers,
     pub body: crate::ResponseBody,
-    json_response: bool,
+    native_output: bool,
     metadata: Option<Box<ResponseMetadata>>,
     native_status: NativeResponseStatus,
     api_error_status: Option<u16>,

@@ -69,11 +69,11 @@ impl<'a, S: AuthSchema> EmailOtpApi<'a, S> {
                         .plugin
                         .create_otp(&endpoint, &email, body.kind, &body.kind.identifier(&email))
                         .await?;
-                    AuthResponse::json(None, &otp).map_err(Into::into)
+                    AuthResponse::json(None, &otp)
                 },
             )
             .await?;
-        Ok(serde_json::from_slice(&response.body.bytes()?)?)
+        response.body.field_value()?.decode()
     }
 
     /// Read a live plaintext or decrypted code without consuming it or changing attempts.
@@ -121,7 +121,7 @@ impl<'a, S: AuthSchema> EmailOtpApi<'a, S> {
                     } else {
                         None
                     };
-                    AuthResponse::json(None, &serde_json::json!({"otp":otp})).map_err(Into::into)
+                    AuthResponse::json(None, &serde_json::json!({"otp":otp}))
                 },
             )
             .await?;

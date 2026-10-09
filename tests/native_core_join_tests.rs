@@ -15,17 +15,17 @@ mod account;
 mod postgres;
 
 use better_auth_core::{
-    AuthConfig, AuthError, AuthResponse, AuthResult, AuthSchema, CreateAccount, CreateSession,
-    CreateUser, UpdateAccount, UpdateUser,
+    AuthConfig, AuthError, AuthResponse, AuthResult, AuthSchema, CreateAccount, CreateUser,
+    UpdateAccount, UpdateUser,
     store::{AccountStore, JoinValue, SessionStore, UserStore},
     user_fields::{FieldTransforms, UserFieldConfig, UserFieldTransform},
     wire::{SessionView, UserView},
 };
 use better_auth_seaorm::{
-    SeaOrmSessionModel, SeaOrmStore,
+    SeaOrmStore,
     sea_orm::{
         ActiveModelTrait, ConnectionTrait, Database, DatabaseConnection, EntityTrait, QueryOrder,
-        Schema,
+        Schema, Set,
     },
     store::entities,
 };
@@ -196,23 +196,20 @@ async fn seed(store: &Store, labels: &[&str], account_count: usize) {
             .await
             .unwrap();
         // The public session constructor generates tokens. Seed fixed ordinary rows to match the oracle's query order.
-        let mut session = entities::session::Model::new_active(
-            Some(format!("session-{suffix}")),
-            format!("ordinary-session-{suffix}"),
-            CreateSession {
-                inherited_fields: Default::default(),
-                user_id: user.id.clone(),
-                expires_at: expires_at.into(),
-                ip_address: None,
-                user_agent: Some(format!("{label}-agent")),
-                impersonated_by: None,
-                active_organization_id: None,
-                additional_fields: Default::default(),
-            },
-            now,
-        )
-        .unwrap();
-        entities::session::Model::set_expires_at(&mut session, expires_at).unwrap();
+        let session = entities::session::ActiveModel {
+            id: Set(format!("session-{suffix}")),
+            token: Set(format!("ordinary-session-{suffix}")),
+            user_id: Set(user.id.typed().unwrap().clone()),
+            expires_at: Set(expires_at),
+            created_at: Set(now),
+            updated_at: Set(now),
+            ip_address: Set(None),
+            user_agent: Set(Some(format!("{label}-agent"))),
+            impersonated_by: Set(None),
+            active_organization_id: Set(None),
+            active_team_id: Set(None),
+            active: Set(true),
+        };
         let _ = session.insert(store.connection()).await.unwrap();
         for index in 0..account_count {
             let _ = store

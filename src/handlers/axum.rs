@@ -297,7 +297,10 @@ fn transport_url(parts: &Parts) -> Result<Option<url::Url>, AuthError> {
 
 #[cfg(feature = "axum")]
 pub(super) fn convert_auth_response(auth_response: AuthResponse) -> Response {
-    let auth_response = auth_response.into_http_response();
+    let auth_response = match auth_response.into_http_response() {
+        Ok(response) => response,
+        Err(error) => return error.into_response(),
+    };
     let body = match auth_response.body.into_bytes() {
         Ok(body) => body,
         Err(error) => return error.into_response(),

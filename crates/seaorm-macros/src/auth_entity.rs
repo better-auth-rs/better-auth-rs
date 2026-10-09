@@ -315,7 +315,6 @@ pub(crate) fn derive_auth_entity(input: &DeriveInput) -> TokenStream {
             (ident, fields),
             &aliases,
             &has,
-            &extra_not_set,
             &extra_updates,
             &field_methods,
             (&seaorm_root, &core_root),
@@ -644,7 +643,6 @@ fn gen_session(
     model: (&Ident, &syn::FieldsNamed),
     aliases: &TokenStream,
     has: &dyn Fn(&str) -> bool,
-    extras: &[TokenStream],
     extra_updates: &[TokenStream],
     field_methods: &TokenStream,
     (seaorm_root, core_root): (&TokenStream, &TokenStream),
@@ -716,21 +714,6 @@ fn gen_session(
     };
     let active_insert =
         has("active").then(|| quote!(active: #seaorm_root::sea_orm::ActiveValue::Set(true),));
-    let initial_fields = native_fields
-        .into_iter()
-        .filter(|name| has(name) && *name != "expires_at")
-        .map(|name| {
-            let field = format_ident!("{name}");
-            let input = match name {
-                "token" => quote!(token),
-                "created_at" | "updated_at" => quote!(now),
-                "active_team_id" => quote!(None::<String>),
-                _ => quote!(create_session.#field),
-            };
-            let value = decode(name, input)?;
-            Ok(quote!(#field: #seaorm_root::sea_orm::ActiveValue::Set(#value)))
-        })
-        .collect::<syn::Result<Vec<_>>>()?;
     let setters = [
         "expires_at",
         "updated_at",
@@ -814,22 +797,6 @@ fn gen_session(
             }
 
             fn new_active(
-                id: ::std::option::Option<Self::Id>,
-                token: ::std::string::String,
-                create_session: #core_root::types::CreateSession,
-                now: #seaorm_root::sea_orm::entity::prelude::DateTimeUtc,
-            ) -> #core_root::AuthResult<Self::ActiveModel> {
-                Ok(Self::ActiveModel {
-                    id: id.map_or(#seaorm_root::sea_orm::ActiveValue::NotSet, #seaorm_root::sea_orm::ActiveValue::Set),
-                    user_id: match create_session.user_id { #core_root::SchemaValue::Typed(id) => #seaorm_root::sea_orm::ActiveValue::Set(Self::parse_user_id(&id)?), _ => #seaorm_root::sea_orm::ActiveValue::NotSet },
-                    expires_at: #seaorm_root::sea_orm::ActiveValue::NotSet,
-                    #(#initial_fields,)*
-                    #active_insert
-                    #(#extras,)*
-                })
-            }
-
-            fn new_active_from_fields(
                 id: Option<Self::Id>,
                 _fields: &#core_root::FieldMap,
             ) -> #core_root::AuthResult<Self::ActiveModel> {

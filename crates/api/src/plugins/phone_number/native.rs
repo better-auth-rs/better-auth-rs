@@ -69,7 +69,7 @@ impl<'a, S: AuthSchema> PhoneNumberApi<'a, S> {
                     self.plugin
                         .consume_with_context(&endpoint, otp.clone())
                         .await?;
-                    AuthResponse::json(None, &json!({"status":true})).map_err(Into::into)
+                    AuthResponse::json(None, &json!({"status":true}))
                 },
             )
             .await?;

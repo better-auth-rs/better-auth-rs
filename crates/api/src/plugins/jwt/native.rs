@@ -161,7 +161,7 @@ impl<'a, S: AuthSchema> JwtApi<'a, S> {
                     let token = JwtPlugin::with_config(effective_config)
                         .sign_in_endpoint(input.payload.clone(), options, &endpoint)
                         .await?;
-                    AuthResponse::json(None, &json!({"token":token})).map_err(Into::into)
+                    AuthResponse::json(None, &json!({"token":token}))
                 },
             )
             .await?;
@@ -217,7 +217,7 @@ impl<'a, S: AuthSchema> JwtApi<'a, S> {
                         .plugin
                         .verify_in_endpoint(&input.token, input.issuer.as_deref(), &endpoint)
                         .await?;
-                    AuthResponse::json(None, &json!({"payload":payload})).map_err(Into::into)
+                    AuthResponse::json(None, &json!({"payload":payload}))
                 },
             )
             .await?;

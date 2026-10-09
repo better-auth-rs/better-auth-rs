@@ -8,8 +8,8 @@ use better_auth::plugins::{
     AccountManagementPlugin, EmailPasswordPlugin, PasswordManagementPlugin, SessionManagementPlugin,
 };
 use better_auth::prelude::{
-    AuthAccount, AuthRequest, AuthResponse, AuthSession, AuthUser, AuthVerification, CreateSession,
-    CreateUser, HttpMethod, UpdateUser,
+    AuthAccount, AuthRequest, AuthResponse, AuthSession, AuthUser, AuthVerification, CreateUser,
+    HttpMethod, UpdateUser,
 };
 use better_auth::seaorm::sea_orm;
 use better_auth::seaorm::sea_orm::entity::prelude::*;
@@ -465,29 +465,11 @@ mod session {
                 .map_err(|_| AuthError::bad_request("Invalid session user id"))
         }
 
-        fn new_active(
-            id: Option<Self::Id>,
-            token: String,
-            create_session: CreateSession,
-            now: DateTime<Utc>,
-        ) -> AuthResult<Self::ActiveModel> {
-            let user_id = create_session
-                .user_id
-                .as_str()
-                .map(Self::parse_user_id)
-                .transpose()?;
+        fn new_active(id: Option<Self::Id>, _fields: &FieldMap) -> AuthResult<Self::ActiveModel> {
             Ok(ActiveModel {
                 id: id.map_or(NotSet, Set),
-                expires_at: NotSet,
-                token: Set(token),
-                created_at: Set(now),
-                updated_at: Set(now),
-                ip_address: Set(create_session.ip_address),
-                user_agent: Set(create_session.user_agent),
-                user_id: user_id.map_or(NotSet, Set),
-                impersonated_by: Set(create_session.impersonated_by),
-                active_organization_id: Set(create_session.active_organization_id),
                 active: Set(true),
+                ..Default::default()
             })
         }
 

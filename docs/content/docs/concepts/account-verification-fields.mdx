@@ -7,6 +7,8 @@ description: Configure adapter fields without changing endpoint input schemas.
 
 These definitions affect adapter writes and reads. They do not extend account or verification HTTP request schemas. A field that uses a built-in name replaces that built-in field's policy; the adapter retains ownership of `id`.
 
+Verification queries resolve the same declarations as writes and output. Mapped identifier, value, date, and reference fields control CRUD, expiry cleanup, and consumption. Query conversion applies the declared type and reference policy without running input transforms. Memory selects the latest row with the shared Memory comparator, including null ordering and string collation; SQL uses database sorting. Memory updates every matching identifier row, then projects the first result once.
+
 ## Database and Cache Order
 
 Database creation runs the before hooks, defaults and input transforms, the insert, and output transforms. Database hooks receive the resulting projection. An output-transform error happens after the insert. An enclosing database transaction can roll back that insert; a direct write remains stored.
@@ -25,9 +27,11 @@ Custom adapters can use `UserConfig::project_records_then` for storage maps or `
 
 `AuthSchema::Account` and `AuthSchema::Verification` describe persistence models. Store methods and database hooks return `AccountView` and `VerificationView`. Their fields use `SchemaValue<T>` so a transform can return another type or omit a field without forcing that result back into the database model.
 
-Read `typed()?` only when an operation needs the default type. Use `json()?` to retain replacement values and omission. `SchemaValue::InvalidDate` serializes as JSON null while preserving an invalid date's comparison and cache-expiry behavior. A genuine null and an invalid date can therefore have different effects before serialization.
+Read `typed()?` only when an operation needs the default type. Use `field_value()` to retain runtime values and object identities; `json()?` observes their JSON representation. An invalid `FieldDate` serializes as JSON null while preserving its comparison and cache-expiry behavior. A genuine null and an invalid date can therefore have different effects before serialization.
 
-`AuthEntity` implements `field_column`, `native_json_field`, `apply_fields`, and `record` for Account and Verification models. Rust field names, camelCase logical names, and Serde rename names resolve to the same column. A handwritten model must implement these methods and return an unvalidated runtime projection from `record`; do not deserialize transformed values back into the persistence model.
+`AuthEntity` implements `field_column`, `native_json_field`, `apply_fields`, and `record_fields` for Account and Verification models. Rust field names, camelCase logical names, and Serde rename names resolve to the same column. A handwritten model must implement these methods. `record_fields` extracts storage values into `AdapterRecord`; the default `record` method applies output policies. Store queries extract raw SQL values before output policies; do not deserialize transformed values back into the persistence model.
+
+`SeaOrmVerificationModel::new_active` receives prepared physical fields, including the ID selected at its declaration slot. The store calls the initializer only for declared application insert columns. Read replacement values from the field map without parsing the complete record or ID into the persistence model. Prepared fields take precedence over initializer values. An alias that targets the physical ID reaches the database's own conversion boundary.
 
 Custom adapters must return the runtime views from AccountStore and VerificationStore methods. Implement `create_verification_with_writer` to place the runtime cache writer between adapter output and the after hook. A transaction must enqueue the after hook only after that writer succeeds. The default implementation rejects an installed writer rather than changing the write order.
 
@@ -49,4 +53,4 @@ With `IdGeneration::Serial`, Memory converts declared references to an `id` fiel
 
 Account owner and identity queries apply the same declared reference policy. Verification identifier and value queries also apply the policy. Account relationship checks retain the canonical owner captured from storage before output transforms.
 
-Organization reference conversion remains unsupported in Memory. Values that convert to JavaScript `NaN` or infinity also remain unsupported because JSON cannot represent those numbers. Conversion errors propagate without substituting null.
+Declared Organization references use the same Memory reference conversion. Native conversion follows JavaScript number semantics, including `NaN` and infinity; JSON observation is a separate boundary. Conversion errors propagate without substituting null.

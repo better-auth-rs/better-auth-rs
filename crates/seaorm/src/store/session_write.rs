@@ -1,7 +1,7 @@
 //! Apply complete Session field policies while retaining lifecycle and transaction boundaries.
 
 use super::instrumentation::database_operation;
-use sea_orm::{ActiveModelTrait, ConnectionTrait};
+use sea_orm::ConnectionTrait;
 
 use super::{SeaOrmStore, cancelled_by_hook};
 use crate::error::{AuthError, AuthResult};
@@ -197,11 +197,14 @@ where
                 },
             )
             .await?;
-        let native = better_auth_core::store::session_create_native_fields(&schema, &fields);
-        let mut active = S::Session::new_active_from_fields(None, &native)?;
-        active.not_set(S::Session::id_column());
-        let mut record = super::record_write::RecordWrite::from_active(active);
-        record.apply_fields(fields, S::Session::field_column)?;
+        let mut initialized_columns = S::Session::extra_insert_columns();
+        initialized_columns.extend(S::Session::active_column());
+        let record = super::record_write::RecordWrite::from_initialized_fields(
+            fields,
+            S::Session::field_column,
+            initialized_columns,
+            |fields| S::Session::new_active(None, fields),
+        )?;
         let session = database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
             self.config(),
             "create",

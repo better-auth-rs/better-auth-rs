@@ -297,7 +297,7 @@ async fn verified_direct_sign_in_preserves_mapper_and_custom_handler_errors() {
         assert!(
             matches!(&error, better_auth_core::AuthError::Internal(message) if message == expected)
         );
-        let response = error.to_http_response();
+        let response = error.to_http_response().unwrap();
         assert_eq!(response.status, 500);
         assert!(response.body.is_empty());
         assert_eq!(

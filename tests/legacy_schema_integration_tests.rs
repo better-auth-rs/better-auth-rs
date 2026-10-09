@@ -301,6 +301,7 @@ mod session {
         pub impersonated_by: Option<String>,
         pub active_organization_id: Option<String>,
         pub active: bool,
+        pub initialization_source: String,
     }
 
     #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -370,6 +371,7 @@ mod session {
                     Ok(Column::ActiveOrganizationId)
                 }
                 "active" => Ok(Column::Active),
+                "initialization_source" => Ok(Column::InitializationSource),
                 _ => Err(AuthError::config(format!("Unknown model field: {name}"))),
             }
         }
@@ -443,28 +445,19 @@ mod session {
                 .parse()
                 .map_err(|_| AuthError::bad_request("Invalid session user id"))
         }
-        fn new_active(
-            id: Option<Self::Id>,
-            token: String,
-            create_session: CreateSession,
-            now: DateTime<Utc>,
-        ) -> AuthResult<Self::ActiveModel> {
-            let user_id = create_session.user_id.as_str().map(|id| {
-                id.parse()
-                    .expect("session user ids come from validated auth user identifiers")
-            });
+        fn extra_insert_columns() -> Vec<Column> {
+            vec![Column::InitializationSource]
+        }
+        fn new_active(id: Option<Self::Id>, fields: &FieldMap) -> AuthResult<Self::ActiveModel> {
+            let source = match fields.get("token") {
+                Some(FieldValue::Number(_)) => "runtime-number",
+                _ => "application",
+            };
             Ok(ActiveModel {
                 id: id.map_or(NotSet, Set),
-                expires_at: NotSet,
-                token: Set(token),
-                created_at: Set(now),
-                updated_at: Set(now),
-                ip_address: Set(create_session.ip_address),
-                user_agent: Set(create_session.user_agent),
-                user_id: user_id.map_or(NotSet, Set),
-                impersonated_by: Set(create_session.impersonated_by),
-                active_organization_id: Set(create_session.active_organization_id),
                 active: Set(true),
+                initialization_source: Set(source.to_owned()),
+                ..Default::default()
             })
         }
         fn set_expires_at(
@@ -1191,14 +1184,16 @@ async fn legacy_numeric_schema_store_verifications_use_public_string_ids() {
 }
 
 #[tokio::test]
-async fn legacy_numeric_session_rejects_invalid_user_id_before_constructor() {
+async fn handwritten_session_preserves_native_owner_values_until_sql_binding() {
     use better_auth_core::store::SessionStore;
 
     let mut config = test_config();
-    config.advanced.database.generate_id = Some(better_auth::config::IdGeneration::Random);
+    config.advanced.database.generate_id = Some(better_auth::config::IdGeneration::Custom(
+        better_auth_core::id::IdGenerator::new(|_| Ok(Some("1".into()))),
+    ));
     let database = test_database().await;
     let store = SeaOrmStore::<LegacySchema>::new(config, database.clone());
-    let error = store
+    let session = store
         .create_session(CreateSession {
             inherited_fields: Default::default(),
             user_id: "invalid-numeric-user-id".into(),
@@ -1210,23 +1205,44 @@ async fn legacy_numeric_session_rejects_invalid_user_id_before_constructor() {
             additional_fields: Default::default(),
         })
         .await
-        .expect_err("invalid user IDs must return an error before the constructor runs");
+        .expect("SQLite INTEGER affinity preserves a nonnumeric string in a non-primary column");
+    assert_eq!(session.user_id, "invalid-numeric-user-id");
+    let stored = database
+        .query_one_raw(sea_orm::Statement::from_string(
+            sea_orm::DbBackend::Sqlite,
+            "SELECT user_id, typeof(user_id) AS storage_type, active, initialization_source FROM sessions",
+        ))
+        .await
+        .expect("raw session lookup should succeed")
+        .expect("the raw Session should exist");
     assert_eq!(
-        error.to_string(),
-        AuthError::bad_request("Invalid session user id").to_string()
+        stored
+            .try_get::<String>("", "user_id")
+            .expect("raw owner should decode"),
+        "invalid-numeric-user-id"
+    );
+    assert_eq!(
+        stored
+            .try_get::<String>("", "storage_type")
+            .expect("storage type should decode"),
+        "text"
     );
     assert!(
-        session::Entity::find()
-            .all(&database)
-            .await
-            .expect("session lookup should succeed")
-            .is_empty()
+        stored
+            .try_get::<bool>("", "active")
+            .expect("active column should decode")
+    );
+    assert_eq!(
+        stored
+            .try_get::<String>("", "initialization_source")
+            .expect("initializer column should decode"),
+        "application"
     );
 }
 
 #[tokio::test]
 async fn handwritten_initializers_preserve_runtime_fields_until_sql_binding() {
-    use better_auth_core::store::{AccountStore, UserStore, VerificationStore};
+    use better_auth_core::store::{AccountStore, SessionStore, UserStore, VerificationStore};
     use better_auth_core::user_fields::{FieldTransforms, UserFieldConfig, UserFieldTransform};
 
     let mut config = test_config();
@@ -1247,6 +1263,20 @@ async fn handwritten_initializers_preserve_runtime_fields_until_sql_binding() {
         .verification
         .additional_fields
         .insert("value".into(), number_field(43.0));
+    config.verification.additional_fields.extend([
+        ("id".into(), UserFieldConfig::default()),
+        (
+            "idAlias".into(),
+            UserFieldConfig {
+                field_name: Some("id".into()),
+                ..Default::default()
+            },
+        ),
+    ]);
+    let _ = config
+        .session
+        .fields_mut()
+        .insert("token".into(), number_field(44.0));
     let database = test_database().await;
     let store = SeaOrmStore::<LegacySchema>::new(config, database.clone());
     let user = store
@@ -1282,10 +1312,16 @@ async fn handwritten_initializers_preserve_runtime_fields_until_sql_binding() {
             identifier: "runtime-verification".to_owned().into(),
             value: "input-value".to_owned().into(),
             expires_at: (Utc::now() + chrono::Duration::minutes(30)).into(),
+            additional_fields: [("idAlias".into(), "1.0".into())].into(),
             ..Default::default()
         })
         .await
-        .expect("SQLite should bind the transformed verification value");
+        .expect("SQLite must apply integer primary-key affinity after the initializer observes raw fields");
+    assert_eq!(verification.id, "1");
+    assert_eq!(
+        verification.additional_fields["idAlias"],
+        FieldValue::from("1")
+    );
     assert_eq!(verification.value, "43");
     let stored_verification = verification::Entity::find()
         .filter(verification::Column::Identifier.eq("runtime-verification"))
@@ -1293,6 +1329,98 @@ async fn handwritten_initializers_preserve_runtime_fields_until_sql_binding() {
         .await
         .expect("verification lookup should succeed")
         .expect("verification should exist");
+    assert_eq!(stored_verification.id, 1);
     assert_eq!(stored_verification.value, "43");
     assert_eq!(stored_verification.initialization_source, "runtime-number");
+    assert_eq!(
+        store
+            .get_verification_including_expired("runtime-verification")
+            .await
+            .expect("verification query should succeed"),
+        Some(verification)
+    );
+
+    let session = store
+        .create_session(CreateSession {
+            inherited_fields: FieldMap::new(),
+            user_id: user.id,
+            expires_at: (Utc::now() + chrono::Duration::minutes(30)).into(),
+            ip_address: None,
+            user_agent: None,
+            impersonated_by: None,
+            active_organization_id: None,
+            additional_fields: FieldMap::new(),
+        })
+        .await
+        .expect("SQLite should coerce the transformed token into the text column");
+    assert_eq!(session.token, "44");
+    let stored_session = session::Entity::find()
+        .one(&database)
+        .await
+        .expect("session lookup should succeed")
+        .expect("session should exist");
+    assert_eq!(stored_session.token, "44");
+    assert_eq!(stored_session.initialization_source, "runtime-number");
+    assert!(stored_session.active);
+}
+
+#[tokio::test]
+async fn handwritten_session_initializer_cannot_replace_prepared_physical_columns() {
+    use better_auth_core::store::SessionStore;
+    use better_auth_core::user_fields::{UserFieldConfig, UserFieldType};
+
+    let mut config = test_config();
+    let _ = config.session.fields_mut().insert(
+        "createdAt".into(),
+        UserFieldConfig {
+            field_name: Some("initialization_source".into()),
+            ..Default::default()
+        },
+    );
+    let _ = config.session.fields_mut().insert(
+        "physicalCreatedAt".into(),
+        UserFieldConfig {
+            field_type: UserFieldType::Date,
+            field_name: Some("created_at".into()),
+            ..Default::default()
+        },
+    );
+    let date: DateTime<Utc> = "2030-01-02T03:04:05Z"
+        .parse()
+        .expect("the fixture date should parse");
+    let database = test_database().await;
+    let store = SeaOrmStore::<LegacySchema>::new(config, database.clone());
+    let session = store
+        .create_session(CreateSession {
+            inherited_fields: FieldMap::new(),
+            user_id: "1".into(),
+            expires_at: (Utc::now() + chrono::Duration::minutes(30)).into(),
+            ip_address: None,
+            user_agent: None,
+            impersonated_by: None,
+            active_organization_id: None,
+            additional_fields: [
+                ("createdAt".into(), "not-a-date".into()),
+                ("physicalCreatedAt".into(), date.into()),
+            ]
+            .into(),
+        })
+        .await
+        .expect("the replacement createdAt declaration must reach its physical text column");
+    assert_eq!(
+        session.created_at.field_value(),
+        FieldValue::from("not-a-date")
+    );
+    assert_eq!(
+        session.additional_fields["physicalCreatedAt"],
+        FieldValue::from(date)
+    );
+    let stored = session::Entity::find()
+        .one(&database)
+        .await
+        .expect("typed physical lookup should succeed")
+        .expect("the Session should exist");
+    assert_eq!(stored.created_at, date);
+    assert_eq!(stored.initialization_source, "not-a-date");
+    assert!(stored.active);
 }

@@ -135,7 +135,7 @@ impl SiwePlugin {
             Err(cause) if cause.is_api_error() => Err(cause),
             Err(cause) => Err(AuthResponse::json(
                 401,
-                &json!({"message":"Something went wrong. Please try again later.","error":cause.to_string(),"status":401}),
+                &json!({"message":"Something went wrong. Please try again later.","error":cause.instrumentation_message(),"status":401}),
             )?.into()),
         }
     }

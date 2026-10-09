@@ -274,9 +274,9 @@ async fn json_headers_are_materialized_after_hooks_only_for_http() -> AuthResult
                     assert_eq!(headers(returned.captured_headers().unwrap()), captured);
                 }
                 let output = returned
-                    .into_http_response()
+                    .into_http_response()?
                     .with_header("content-type", "application/custom")
-                    .into_http_response();
+                    .into_http_response()?;
                 assert_eq!(
                     output.headers.get("content-type").map(String::as_str),
                     Some("application/custom")

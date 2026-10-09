@@ -108,7 +108,7 @@ fn auth_response_json() {
     let resp = AuthResponse::json(200, &OkResponse { ok: true }).expect("json");
     assert_eq!(resp.status, 200);
     assert!(resp.headers.is_empty());
-    let resp = resp.into_http_response();
+    let resp = resp.into_http_response().unwrap();
     assert_eq!(
         resp.headers.get("content-type").unwrap(),
         "application/json"

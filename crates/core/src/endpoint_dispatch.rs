@@ -144,11 +144,11 @@ impl<S: AuthSchema> EndpointDispatcher<S> {
             if let Some(response) =
                 apply_before_action(action, &mut internal_req, req, &mut input_patch)?
             {
-                return Ok(if http {
+                return if http {
                     response.into_http_response()
                 } else {
-                    response
-                });
+                    Ok(response)
+                };
             }
         }
 
@@ -163,14 +163,16 @@ impl<S: AuthSchema> EndpointDispatcher<S> {
             if let Some(response) =
                 apply_before_action(action, &mut internal_req, req, &mut input_patch)?
             {
-                return Ok(if http {
+                return if http {
                     response.into_http_response()
                 } else {
-                    response
-                });
+                    Ok(response)
+                };
             }
         }
 
+        // The endpoint owns a fresh accumulator; before-hook headers survive only a short circuit.
+        let _ = internal_req.take_response_headers()?;
         if http && internal_req.original_request().is_none() {
             internal_req = internal_req.with_original_request(req.clone());
         }
@@ -305,12 +307,10 @@ impl<S: AuthSchema> EndpointDispatcher<S> {
         if response.is_api_error() && !http {
             response.capture_error_headers(response.headers.clone());
             Err(response.into())
+        } else if http {
+            response.into_http_response()
         } else {
-            Ok(if http {
-                response.into_http_response()
-            } else {
-                response
-            })
+            Ok(response)
         }
     }
 }
@@ -329,6 +329,16 @@ fn apply_before_action(
 ) -> AuthResult<Option<AuthResponse>> {
     match action {
         Some(BeforeRequestAction::Respond(mut response)) => {
+            if !response.stops_before_hooks() {
+                for (name, value) in response.headers {
+                    if name.eq_ignore_ascii_case("set-cookie") {
+                        internal.append_response_header(&name, value)?;
+                    } else {
+                        internal.set_response_header(&name, value)?;
+                    }
+                }
+                return Ok(None);
+            }
             response.set_native_status(crate::NativeResponseStatus::Absent);
             response.merge_endpoint_headers(internal.take_response_headers()?);
             return Ok(Some(response));

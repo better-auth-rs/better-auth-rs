@@ -45,7 +45,7 @@ pub use request_runtime::{
 };
 mod response_body;
 mod runtime_extensions;
-pub use response_body::ResponseBody;
+pub use response_body::{ResponseBlob, ResponseBody};
 pub mod schema;
 pub mod session;
 pub mod store;

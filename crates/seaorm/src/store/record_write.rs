@@ -42,16 +42,6 @@ impl<E: EntityTrait> RecordWrite<E> {
         self.fields.is_empty()
     }
 
-    pub(super) fn from_active(active: impl ActiveModelTrait<Entity = E>) -> Self {
-        let mut write = Self::default();
-        for column in E::Column::iter() {
-            if let sea_orm::ActiveValue::Set(value) = active.get(column) {
-                write.set(column, value);
-            }
-        }
-        write
-    }
-
     pub(super) fn from_fields(
         fields: better_auth_core::FieldMap,
         column: impl Fn(&str) -> AuthResult<E::Column>,

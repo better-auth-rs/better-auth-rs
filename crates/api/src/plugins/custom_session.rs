@@ -40,14 +40,19 @@ impl CustomSessionInput {
     fn from_response(body: &ResponseBody) -> AuthResult<Option<Self>> {
         match body {
             ResponseBody::Native(FieldValue::Null | FieldValue::Undefined) => Ok(None),
+            ResponseBody::Empty => Ok(None),
             ResponseBody::Native(value) => Self::from_field_value(value).map(Some),
             ResponseBody::Bytes(bytes) => Ok(serde_json::from_slice(bytes)?),
+            ResponseBody::Binary(_) | ResponseBody::Blob(_) => Err(
+                better_auth_core::AuthError::type_error("Custom session input must be an object"),
+            ),
         }
     }
 
     fn list_from_response(body: &ResponseBody) -> AuthResult<Option<Vec<Self>>> {
         match body {
             ResponseBody::Native(FieldValue::Null | FieldValue::Undefined) => Ok(None),
+            ResponseBody::Empty => Ok(None),
             ResponseBody::Native(FieldValue::Array(values)) => values
                 .iter()
                 .map(Self::from_field_value)
@@ -57,6 +62,11 @@ impl CustomSessionInput {
                 "Device sessions response must be an array",
             )),
             ResponseBody::Bytes(bytes) => Ok(serde_json::from_slice(bytes)?),
+            ResponseBody::Binary(_) | ResponseBody::Blob(_) => {
+                Err(better_auth_core::AuthError::type_error(
+                    "Device sessions response must be an array",
+                ))
+            }
         }
     }
 }
@@ -121,7 +131,7 @@ impl<S: AuthSchema> CustomSessionPlugin<S> {
         let data = CustomSessionInput::from_response(&response.body)?;
         if let Some(data) = data {
             let value = self.callback.customize(data, request, context).await?;
-            response.body = ResponseBody::Bytes(serde_json::to_vec(&value)?);
+            response.replace_json(&value)?;
         }
         Ok(response)
     }
@@ -220,7 +230,7 @@ impl<S: AuthSchema> AuthPlugin<S> for CustomSessionPlugin<S> {
                         },
                     ))
                     .await?;
-                    response.body = ResponseBody::Bytes(serde_json::to_vec(&values)?);
+                    response.replace_json(&values)?;
                     for (name, value) in request.take_response_headers()? {
                         if name.eq_ignore_ascii_case("set-cookie") {
                             response.headers.append(name, value);

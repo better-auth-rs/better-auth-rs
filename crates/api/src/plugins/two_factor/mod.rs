@@ -629,7 +629,7 @@ impl TwoFactorPlugin {
         let data = ctx.require_native_session(req).await?;
 
         let response = get_totp_uri_core(&body, &data, &self.config, ctx).await?;
-        AuthResponse::json(None, &response).map_err(AuthError::from)
+        AuthResponse::json(None, &response)
     }
 
     async fn handle_verify_totp(
@@ -654,7 +654,7 @@ impl TwoFactorPlugin {
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let response = send_otp_core(req, &self.config, ctx).await?;
-        AuthResponse::json(None, &response).map_err(AuthError::from)
+        AuthResponse::json(None, &response)
     }
 
     async fn handle_verify_otp(
@@ -687,7 +687,7 @@ impl TwoFactorPlugin {
         let data = ctx.require_native_session(req).await?;
 
         let response = generate_backup_codes_core(&body, &data, &self.config, ctx).await?;
-        AuthResponse::json(None, &response).map_err(AuthError::from)
+        AuthResponse::json(None, &response)
     }
 
     async fn handle_verify_backup_code(

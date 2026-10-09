@@ -41,7 +41,7 @@ impl AuthPlugin<StatelessSchema> for Probe {
             better_auth_core::FieldValue::Null,
             ctx,
         );
-        AuthResponse::json(200,&json!({"query":req.query,"scope":current_request_hook_context().unwrap().query,"original":endpoint.request.map(|request|request.query.clone())})).map(Some).map_err(Into::into)
+        AuthResponse::json(200,&json!({"query":req.query,"scope":current_request_hook_context().unwrap().query,"original":endpoint.request.map(|request|request.query.clone())})).map(Some)
     }
     async fn after_request(
         &self,

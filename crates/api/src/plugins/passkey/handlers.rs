@@ -33,8 +33,7 @@ pub(super) fn response_message<T>(status: u16, message: &str) -> PasskeyHandlerR
                 code: AuthError::code_from_message(message),
                 message: message.to_string(),
             },
-        )
-        .map_err(AuthError::from)?,
+        )?,
     ))
 }
 

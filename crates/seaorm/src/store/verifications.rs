@@ -2,11 +2,14 @@ use super::instrumentation::database_operation;
 use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{
-    ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect,
-    SqliteTransactionMode, TransactionOptions, TransactionTrait, sea_query::ExprTrait,
+    ColumnTrait, ConnectionTrait, EntityTrait, IdenStatic, Iterable, QueryFilter, QueryOrder,
+    QuerySelect, QueryTrait, SqliteTransactionMode, TransactionOptions, TransactionTrait,
+    sea_query::{ExprTrait, Query},
 };
 
+use super::plugin_rows;
 use better_auth_core::store::VerificationStore;
+use better_auth_core::{FieldValue, id::AdapterIdInput, store::schema::EntityRole};
 
 use crate::error::AuthResult;
 use crate::hooks::VerificationUpdate;
@@ -42,8 +45,8 @@ where
                 let active = self
                     .new_verification_active(
                         self.connection(),
-                        Some((id.to_owned(), reservation_id.clone())),
                         verification.with_timestamps(Utc::now().into()),
+                        Some(id),
                     )
                     .await?;
                 let row = database_operation::<
@@ -80,15 +83,12 @@ where
                     self.config(),
                     "findOne",
                     async {
-                        <S::Verification as SeaOrmVerificationModel>::Entity::find()
-                            .filter(super::value_filter::equals_native(
-                                S::Verification::id_column(),
-                                reservation_id,
-                                self.connection().get_database_backend(),
-                            )?)
-                            .one(self.connection())
-                            .await
-                            .map_err(map_db_err)
+                        self.model_fields.begin_id_query(EntityRole::Verification)?;
+                        plugin_rows::one(
+                            self.connection(),
+                            <S::Verification as SeaOrmVerificationModel>::Entity::find()
+                                .filter(super::value_filter::equals_native(S::Verification::id_column(), reservation_id, self.connection().get_database_backend())?),
+                        ).await
                     },
                 )
                 .await?
@@ -140,16 +140,8 @@ where
     }
 
     async fn delete_verification_by_identifier(&self, identifier: &str) -> AuthResult<()> {
-        self.delete_single_verification(
-            self.connection(),
-            None,
-            super::value_filter::equals(
-                S::Verification::identifier_column(),
-                &identifier.into(),
-                self.connection().get_database_backend(),
-            )?,
-        )
-        .await
+        self.delete_single_verification(self.connection(), None, "identifier", identifier.into())
+            .await
     }
 
     async fn create_verification(
@@ -216,24 +208,25 @@ where
             self.config(),
             "findOne",
             async {
-                let now = super::record_bindings::Binding::Date(Utc::now().into())
-                    .bind(self.connection().get_database_backend())?;
-                let expires_at = S::Verification::expires_at_column();
-                <S::Verification as SeaOrmVerificationModel>::Entity::find()
-                    .filter(super::value_filter::equals(
-                        S::Verification::identifier_column(),
-                        &identifier.into(),
-                        self.connection().get_database_backend(),
-                    )?)
-                    .filter(super::value_filter::equals(
-                        S::Verification::value_column(),
-                        &value.into(),
-                        self.connection().get_database_backend(),
-                    )?)
-                    .filter(expires_at.into_expr().gt(expires_at.save_as(now)))
-                    .one(self.connection())
-                    .await
-                    .map_err(map_db_err)
+                let backend = self.connection().get_database_backend();
+                let (expires_at, now) = self.verification_query_field(
+                    "expiresAt",
+                    &FieldValue::Date(Utc::now().into()),
+                    backend,
+                )?;
+                let now = super::record_bindings::parameter(now, backend)?;
+                plugin_rows::one(
+                    self.connection(),
+                    <S::Verification as SeaOrmVerificationModel>::Entity::find()
+                        .filter(self.verification_selector(
+                            "identifier",
+                            &identifier.into(),
+                            backend,
+                        )?)
+                        .filter(self.verification_selector("value", &value.into(), backend)?)
+                        .filter(expires_at.into_expr().gt(expires_at.save_as(now))),
+                )
+                .await
             },
         )
         .await?
@@ -252,19 +245,20 @@ where
             self.config(),
             "findOne",
             async {
-                let now = super::record_bindings::Binding::Date(Utc::now().into())
-                    .bind(self.connection().get_database_backend())?;
-                let expires_at = S::Verification::expires_at_column();
-                <S::Verification as SeaOrmVerificationModel>::Entity::find()
-                    .filter(super::value_filter::equals(
-                        S::Verification::value_column(),
-                        &value.into(),
-                        self.connection().get_database_backend(),
-                    )?)
-                    .filter(expires_at.into_expr().gt(expires_at.save_as(now)))
-                    .one(self.connection())
-                    .await
-                    .map_err(map_db_err)
+                let backend = self.connection().get_database_backend();
+                let (expires_at, now) = self.verification_query_field(
+                    "expiresAt",
+                    &FieldValue::Date(Utc::now().into()),
+                    backend,
+                )?;
+                let now = super::record_bindings::parameter(now, backend)?;
+                plugin_rows::one(
+                    self.connection(),
+                    <S::Verification as SeaOrmVerificationModel>::Entity::find()
+                        .filter(self.verification_selector("value", &value.into(), backend)?)
+                        .filter(expires_at.into_expr().gt(expires_at.save_as(now))),
+                )
+                .await
             },
         )
         .await?
@@ -286,19 +280,24 @@ where
             self.config(),
             "findOne",
             async {
-                let now = super::record_bindings::Binding::Date(Utc::now().into())
-                    .bind(self.connection().get_database_backend())?;
-                let expires_at = S::Verification::expires_at_column();
-                <S::Verification as SeaOrmVerificationModel>::Entity::find()
-                    .filter(super::value_filter::equals(
-                        S::Verification::identifier_column(),
-                        &identifier.into(),
-                        self.connection().get_database_backend(),
-                    )?)
-                    .filter(expires_at.into_expr().gt(expires_at.save_as(now)))
-                    .one(self.connection())
-                    .await
-                    .map_err(map_db_err)
+                let backend = self.connection().get_database_backend();
+                let (expires_at, now) = self.verification_query_field(
+                    "expiresAt",
+                    &FieldValue::Date(Utc::now().into()),
+                    backend,
+                )?;
+                let now = super::record_bindings::parameter(now, backend)?;
+                plugin_rows::one(
+                    self.connection(),
+                    <S::Verification as SeaOrmVerificationModel>::Entity::find()
+                        .filter(self.verification_selector(
+                            "identifier",
+                            &identifier.into(),
+                            backend,
+                        )?)
+                        .filter(expires_at.into_expr().gt(expires_at.save_as(now))),
+                )
+                .await
             },
         )
         .await?
@@ -345,16 +344,8 @@ where
     }
 
     async fn delete_verification(&self, id: &str) -> AuthResult<()> {
-        self.delete_single_verification(
-            self.connection(),
-            None,
-            super::value_filter::equals_native(
-                S::Verification::id_column(),
-                self.parse_id(id, S::Verification::parse_id)?,
-                self.connection().get_database_backend(),
-            )?,
-        )
-        .await
+        self.delete_single_verification(self.connection(), None, "id", id.into())
+            .await
     }
 
     async fn delete_expired_verifications(&self) -> AuthResult<usize> {
@@ -384,9 +375,13 @@ where
         connection: &C,
         tx: Option<super::HookTransaction<'_, S>>,
     ) -> AuthResult<(usize, Vec<VerificationView>)> {
-        let now = super::record_bindings::Binding::Date(Utc::now().into())
-            .bind(connection.get_database_backend())?;
-        let expires_at = S::Verification::expires_at_column();
+        let backend = connection.get_database_backend();
+        let (expires_at, now) = self.verification_query_field(
+            "expiresAt",
+            &FieldValue::Date(Utc::now().into()),
+            backend,
+        )?;
+        let now = super::record_bindings::parameter(now, backend)?;
         let filter = expires_at.into_expr().lt(expires_at.save_as(now));
         // Only the upstream deleteMany snapshot is best-effort. Hook and write errors propagate.
         let snapshot: AuthResult<Vec<VerificationView>> = async {
@@ -394,15 +389,16 @@ where
                 self.config(),
                 "findMany",
                 async {
-                    <S::Verification as SeaOrmVerificationModel>::Entity::find()
-                        .filter(filter.clone())
-                        .limit(super::pagination::default_limit(
-                            self.config(),
-                            connection.get_database_backend(),
-                        )?)
-                        .all(connection)
-                        .await
-                        .map_err(map_db_err)
+                    plugin_rows::all(
+                        connection,
+                        <S::Verification as SeaOrmVerificationModel>::Entity::find()
+                            .filter(filter.clone())
+                            .limit(super::pagination::default_limit(
+                                self.config(),
+                                connection.get_database_backend(),
+                            )?),
+                    )
+                    .await
                 },
             )
             .await
@@ -449,118 +445,6 @@ where
     S::Account: crate::schema::SeaOrmAccountModel,
     S::Session: crate::schema::SeaOrmSessionModel,
 {
-    pub(super) async fn output_verifications(
-        &self,
-        rows: &[S::Verification],
-        db: &impl ConnectionTrait,
-    ) -> AuthResult<Vec<better_auth_core::wire::VerificationView>> {
-        let fields = self.config().verification.field_schema();
-        let records = rows
-            .iter()
-            .map(|row| row.record_fields(&fields))
-            .collect::<AuthResult<Vec<_>>>()?;
-        Ok(fields
-            .project_adapter_records(
-                records,
-                db.get_database_backend() == sea_orm::DbBackend::Postgres,
-                db.get_database_backend() != sea_orm::DbBackend::Sqlite,
-            )
-            .await?
-            .into_iter()
-            .map(better_auth_core::wire::VerificationView::from_adapter_fields)
-            .collect())
-    }
-
-    async fn output_verification_raw(
-        &self,
-        row: &sea_orm::QueryResult,
-        db: &impl ConnectionTrait,
-    ) -> AuthResult<VerificationView> {
-        let fields = self
-            .config()
-            .verification
-            .field_schema()
-            .adapter_fields(&[]);
-        let backend = db.get_database_backend();
-        let record = super::plugin_rows::record_from_columns::<
-            <S::Verification as SeaOrmVerificationModel>::Entity,
-        >(
-            row,
-            &fields,
-            backend,
-            S::Verification::id_column(),
-            S::Verification::field_column,
-        )?;
-        let projected = fields
-            .project_adapter_records_with_capabilities(
-                vec![record],
-                super::field_output::capabilities(backend),
-            )
-            .await?
-            .remove(0);
-        Ok(VerificationView::from_adapter_fields(
-            projected.in_field_order(&fields.fields().keys().cloned().collect::<Vec<_>>()),
-        ))
-    }
-
-    pub(super) async fn output_verification(
-        &self,
-        row: &S::Verification,
-        db: &impl ConnectionTrait,
-    ) -> AuthResult<VerificationView> {
-        row.record(
-            &self.config().verification.field_schema(),
-            db.get_database_backend() == sea_orm::DbBackend::Postgres,
-            db.get_database_backend() != sea_orm::DbBackend::Sqlite,
-        )
-        .await
-    }
-
-    async fn new_verification_active(
-        &self,
-        db: &impl ConnectionTrait,
-        id: Option<(String, <S::Verification as SeaOrmVerificationModel>::Id)>,
-        input: CreateVerification,
-    ) -> AuthResult<
-        super::record_write::RecordWrite<<S::Verification as SeaOrmVerificationModel>::Entity>,
-    > {
-        let fields = self.config().verification.field_schema();
-        let backend = db.get_database_backend();
-        let (mut logical_id, id) = id.map_or((None, None), |(logical, native)| {
-            (Some(logical.into()), Some(native))
-        });
-        let input = fields
-            .storage_fields_with_bound_id(
-                input.fields()?,
-                true,
-                || Ok(logical_id.take()),
-                |name, field, value| {
-                    crate::reference_id::input_binding(
-                        name,
-                        field,
-                        value,
-                        self.config().advanced.database.generate_id(),
-                        S::Verification::field_column,
-                        S::Verification::native_json_field,
-                        backend,
-                    )
-                },
-            )
-            .await?;
-        let mut active = super::record_write::RecordWrite::from_initialized_fields(
-            input,
-            S::Verification::field_column,
-            S::Verification::extra_insert_columns(),
-            |input| S::Verification::new_active(id.clone(), input),
-        )?;
-        if let Some(id) = id {
-            active.set(S::Verification::id_column(), id.into());
-        } else {
-            active.not_set(S::Verification::id_column());
-        }
-        Ok(active)
-    }
-
     pub(super) async fn update_verification_with_connection(
         &self,
         db: &impl ConnectionTrait,
@@ -586,10 +470,37 @@ where
         better_auth_core::store::database_hooks::await_adapter_lookup().await;
         let fields = self.config().verification.field_schema();
         let backend = db.get_database_backend();
+        let filter = self.verification_selector("identifier", &identifier.into(), backend)?;
+        self.model_fields.begin_id_input(
+            EntityRole::Verification,
+            AdapterIdInput {
+                force_allow_id: false,
+                supports_native_uuid: backend == sea_orm::DbBackend::Postgres,
+            },
+        )?;
+        let input = prepared.into_fields();
+        let supplied = input.get("id").cloned();
         let input = fields
-            .record_storage_fields_with_binding(
-                prepared.into_fields(),
+            .storage_fields_with_bound_id(
+                input,
                 false,
+                || match self
+                    .model_fields
+                    .id_input_policy(EntityRole::Verification)?
+                {
+                    Some(policy) => supplied
+                        .clone()
+                        .map(|value| {
+                            self.config()
+                                .advanced
+                                .database
+                                .generate_id()
+                                .adapter_id_input(value, policy)
+                        })
+                        .transpose()
+                        .map(Option::flatten),
+                    None => Ok(supplied.clone()),
+                },
                 |name, field, value| {
                     crate::reference_id::input_binding(
                         name,
@@ -606,11 +517,6 @@ where
         let active = super::record_write::RecordWrite::<
             <S::Verification as SeaOrmVerificationModel>::Entity,
         >::from_fields(input, S::Verification::field_column)?;
-        let filter = super::value_filter::equals(
-            S::Verification::identifier_column(),
-            &identifier.into(),
-            backend,
-        )?;
         let row =
             match database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(
                 self.config(),
@@ -652,21 +558,22 @@ where
         &self,
         db: &impl ConnectionTrait,
         tx: Option<super::HookTransaction<'_, S>>,
-        condition: sea_orm::sea_query::SimpleExpr,
+        name: &str,
+        value: FieldValue,
     ) -> AuthResult<()> {
-        // A failed findMany projection is caught before single-delete hooks or writes run.
+        // Single delete catches the complete snapshot query, including field resolution and projection.
         let snapshot: AuthResult<Option<VerificationView>> = async {
             match database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(
                 self.config(),
                 "findMany",
                 async {
-                    <S::Verification as SeaOrmVerificationModel>::Entity::find()
-                        .filter(condition.clone())
-                        .limit(1)
-                        .all(db)
-                        .await
-                        .map(|rows| rows.into_iter().next())
-                        .map_err(map_db_err)
+                    plugin_rows::one(
+                        db,
+                        <S::Verification as SeaOrmVerificationModel>::Entity::find().filter(
+                            self.verification_selector(name, &value, db.get_database_backend())?,
+                        ),
+                    )
+                    .await
                 },
             )
             .await?
@@ -699,7 +606,7 @@ where
             "delete",
             async {
                 <S::Verification as SeaOrmVerificationModel>::Entity::delete_many()
-                    .filter(condition)
+                    .filter(self.verification_selector(name, &value, db.get_database_backend())?)
                     .exec(db)
                     .await
                     .map_err(map_db_err)
@@ -776,20 +683,9 @@ where
             return Ok(None);
         }
         let actual = verification.fields()?;
-        let id = self.generated_id(
-            "verification",
-            verification.id.field_value().as_str().map(str::to_owned),
-        )?;
-        let parsed = id
-            .as_deref()
-            .map(|id| S::Verification::parse_id(id).map(|parsed| (id.to_owned(), parsed)))
-            .transpose()?;
-        let mut active = self
-            .new_verification_active(connection, parsed, verification)
+        let active = self
+            .new_verification_active(connection, verification, None)
             .await?;
-        if id.is_none() {
-            active.not_set(S::Verification::id_column());
-        }
         let row = database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(
             self.config(),
             "create",
@@ -840,16 +736,17 @@ where
             self.config(),
             "findMany",
             async {
-                <S::Verification as SeaOrmVerificationModel>::Entity::find()
-                    .filter(super::value_filter::equals(
-                        S::Verification::identifier_column(),
-                        &identifier.into(),
-                        connection.get_database_backend(),
-                    )?)
-                    .order_by_desc(S::Verification::created_at_column())
-                    .one(connection)
-                    .await
-                    .map_err(map_db_err)
+                plugin_rows::one(
+                    connection,
+                    <S::Verification as SeaOrmVerificationModel>::Entity::find()
+                        .filter(self.verification_selector(
+                            "identifier",
+                            &identifier.into(),
+                            connection.get_database_backend(),
+                        )?)
+                        .order_by_desc(self.verification_column("createdAt")?),
+                )
+                .await
             },
         )
         .await?
@@ -871,17 +768,18 @@ where
             <S::Verification as SeaOrmVerificationModel>::Entity,
             _,
         >(self.config(), "findMany", async {
-            <S::Verification as SeaOrmVerificationModel>::Entity::find()
-                .filter(super::value_filter::equals(
-                    S::Verification::identifier_column(),
-                    &identifier.into(),
-                    transaction.get_database_backend(),
-                )?)
-                .order_by_desc(<S::Verification as SeaOrmVerificationModel>::created_at_column())
-                .lock_exclusive()
-                .one(transaction)
-                .await
-                .map_err(map_db_err)
+            plugin_rows::one(
+                transaction,
+                <S::Verification as SeaOrmVerificationModel>::Entity::find()
+                    .filter(self.verification_selector(
+                        "identifier",
+                        &identifier.into(),
+                        transaction.get_database_backend(),
+                    )?)
+                    .order_by_desc(self.verification_column("createdAt")?)
+                    .lock_exclusive(),
+            )
+            .await
         })
         .await?
         else {
@@ -889,7 +787,7 @@ where
         };
         let snapshot = self.output_verification(&model, transaction).await?;
         if let Some(expected) = expected_value
-            && snapshot.value.typed()? != expected
+            && !snapshot.value.field_value().strict_equals(&expected.into())
         {
             return Ok(None);
         }
@@ -907,39 +805,21 @@ where
                 return Ok(None);
             }
         }
-        let id = self.parse_id(
-            snapshot.id.typed()?,
-            <S::Verification as SeaOrmVerificationModel>::parse_id,
-        )?;
-        let deleted =
-            database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(
-                self.config(),
-                "consumeOne",
-                async {
-                    <S::Verification as SeaOrmVerificationModel>::Entity::delete_many()
-                        .filter(super::value_filter::equals_native(
-                            S::Verification::id_column(),
-                            id,
-                            transaction.get_database_backend(),
-                        )?)
-                        .exec(transaction)
-                        .await
-                        .map_err(map_db_err)
-                },
-            )
-            .await?;
-        if deleted.rows_affected == 0 {
+        let Some(deleted) = self
+            .consume_verification_row(transaction, snapshot.id.field_value())
+            .await?
+        else {
             return Ok(None);
-        }
-        // consumeOne output runs before removing older rows, inside the same transaction.
-        let consumed = self.output_verification(&model, transaction).await?;
+        };
+        // Project the deleted row after before hooks, before removing older rows in the same transaction.
+        let consumed = self.output_verification_raw(&deleted, transaction).await?;
         let _ = database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(
             self.config(),
             "deleteMany",
             async {
                 <S::Verification as SeaOrmVerificationModel>::Entity::delete_many()
-                    .filter(super::value_filter::equals(
-                        S::Verification::identifier_column(),
+                    .filter(self.verification_selector(
+                        "identifier",
                         &identifier.into(),
                         transaction.get_database_backend(),
                     )?)
@@ -950,6 +830,65 @@ where
         )
         .await?;
         Ok(Some(consumed))
+    }
+
+    async fn consume_verification_row(
+        &self,
+        transaction: &crate::TransactionConnection,
+        id: FieldValue,
+    ) -> AuthResult<Option<sea_orm::QueryResult>> {
+        let backend = transaction.get_database_backend();
+        let primary = S::Verification::id_column();
+        let filter = self.verification_selector("id", &id, backend)?;
+        database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(
+            self.config(),
+            "consumeOne",
+            async {
+                if transaction.support_returning() {
+                    let target = <S::Verification as SeaOrmVerificationModel>::Entity::find()
+                        .select_only()
+                        .column(primary)
+                        .filter(filter)
+                        .limit(1);
+                    let mut query =
+                        <S::Verification as SeaOrmVerificationModel>::Entity::delete_many()
+                            .filter(primary.in_subquery(target.into_query()))
+                            .into_query();
+                    let _ =
+                        query.returning(Query::returning().exprs(
+                            <S::Verification as SeaOrmVerificationModel>::Column::iter().map(
+                                |column| column.select_as(column.into_returning_expr(backend)),
+                            ),
+                        ));
+                    return transaction
+                        .query_one_raw(backend.build(&query))
+                        .await
+                        .map_err(map_db_err);
+                }
+                // MySQL keeps the refreshed row lock and primary-key delete inside the caller's transaction.
+                let query = <S::Verification as SeaOrmVerificationModel>::Entity::find()
+                    .filter(filter)
+                    .limit(1)
+                    .lock_exclusive();
+                let Some(row) = transaction
+                    .query_one_raw(query.build(backend))
+                    .await
+                    .map_err(map_db_err)?
+                else {
+                    return Ok(None);
+                };
+                let stored_id = super::plugin_rows::value(&row, primary.as_str())?;
+                let stored_id = super::record_bindings::Binding::for_column(primary, stored_id)
+                    .bind(backend)?;
+                let deleted = <S::Verification as SeaOrmVerificationModel>::Entity::delete_many()
+                    .filter(primary.into_expr().eq(primary.save_as(stored_id)))
+                    .exec(transaction)
+                    .await
+                    .map_err(map_db_err)?;
+                Ok((deleted.rows_affected > 0).then_some(row))
+            },
+        )
+        .await
     }
 
     async fn consume_latest_verification(
