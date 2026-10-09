@@ -1,13 +1,14 @@
 use super::instrumentation::database_operation;
 use async_trait::async_trait;
 use chrono::Utc;
-use sea_orm::{ConnectionTrait, EntityTrait, QueryFilter, QuerySelect};
+use sea_orm::{ConnectionTrait, DbBackend, EntityTrait, QueryFilter, QuerySelect};
 
+use better_auth_core::id::AdapterIdInput;
 use better_auth_core::store::schema::EntityRole;
 use better_auth_core::store::{AccountOwner, AccountStore, ResolvedJoin};
-use better_auth_core::user_fields::AdapterRecord;
+use better_auth_core::user_fields::{AdapterRecord, UserConfig};
 use better_auth_core::wire::AccountView;
-use better_auth_core::{FieldValue, UserView};
+use better_auth_core::{FieldMap, FieldValue, UserView};
 
 use crate::error::{AuthError, AuthResult};
 use crate::hooks::DatabaseUpdateResult;
@@ -21,6 +22,52 @@ where
     S: AuthSchema,
     S::Account: SeaOrmAccountModel,
 {
+    async fn account_storage_fields(
+        &self,
+        fields: &UserConfig,
+        input: FieldMap,
+        create: bool,
+        backend: DbBackend,
+    ) -> AuthResult<FieldMap> {
+        let supplied = input.get("id").cloned();
+        let policy = self.config().advanced.database.generate_id();
+        self.model_fields.begin_id_input(
+            EntityRole::Account,
+            AdapterIdInput {
+                force_allow_id: create && supplied.is_some(),
+                supports_native_uuid: backend == DbBackend::Postgres,
+            },
+        )?;
+        fields
+            .storage_fields_with_bound_id(
+                input,
+                create,
+                || match self.model_fields.id_input_policy(EntityRole::Account)? {
+                    Some(input_policy) if create => {
+                        policy.adapter_create_id_input("account", supplied.clone(), input_policy)
+                    }
+                    Some(input_policy) => supplied
+                        .clone()
+                        .map(|value| policy.adapter_id_input(value, input_policy))
+                        .transpose()
+                        .map(Option::flatten),
+                    None => Ok(supplied.clone()),
+                },
+                |name, field, value| {
+                    crate::reference_id::input_binding(
+                        name,
+                        field,
+                        value,
+                        policy,
+                        S::Account::field_column,
+                        S::Account::native_json_field,
+                        backend,
+                    )
+                },
+            )
+            .await
+    }
+
     pub(super) async fn update_accounts_with_connection(
         &self,
         db: &impl ConnectionTrait,
@@ -53,22 +100,8 @@ where
                 self.bind_query_field(EntityRole::Account, &fields, name, value, backend)
             })
             .collect::<AuthResult<Vec<_>>>()?;
-        let input = fields
-            .record_storage_fields_with_binding(
-                prepared.into_fields(),
-                false,
-                |name, field, value| {
-                    crate::reference_id::input_binding(
-                        name,
-                        field,
-                        value,
-                        self.config().advanced.database.generate_id(),
-                        S::Account::field_column,
-                        S::Account::native_json_field,
-                        backend,
-                    )
-                },
-            )
+        let input = self
+            .account_storage_fields(&fields, prepared.into_fields(), false, backend)
             .await?;
         let write = super::record_write::RecordWrite::<<S::Account as SeaOrmAccountModel>::Entity>::from_fields(input, S::Account::field_column)?;
         let mut query = write.update(backend)?;
@@ -192,7 +225,7 @@ where
         db: &impl ConnectionTrait,
     ) -> AuthResult<Vec<better_auth_core::wire::AccountView>> {
         if !rows.is_empty() {
-            self.model_fields.canonicalize_id(EntityRole::Account)?;
+            self.model_fields.begin_id_output(EntityRole::Account)?;
         }
         let fields = self.config().account.field_schema();
         let records = rows
@@ -231,7 +264,7 @@ where
     }
 
     pub(super) async fn output_native_account(&self, account: &SqlRow) -> AuthResult<AccountView> {
-        self.model_fields.canonicalize_id(EntityRole::Account)?;
+        self.model_fields.begin_id_output(EntityRole::Account)?;
         let fields = self.config().account.field_schema();
         let backend = self.connection().get_database_backend();
         let record = account.native_record::<<S::Account as SeaOrmAccountModel>::Entity>(
@@ -370,46 +403,21 @@ where
                 return Ok(None);
             }
         }
-        self.model_fields.canonicalize_id(EntityRole::Account)?;
         let fields = self.config().account.field_schema();
-        let input = fields
-            .record_storage_fields_with_binding(
+        let input = self
+            .account_storage_fields(
+                &fields,
                 create_account.fields()?,
                 true,
-                |name, field, value| {
-                    crate::reference_id::input_binding(
-                        name,
-                        field,
-                        value,
-                        self.config().advanced.database.generate_id(),
-                        S::Account::field_column,
-                        S::Account::native_json_field,
-                        db.get_database_backend(),
-                    )
-                },
+                db.get_database_backend(),
             )
             .await?;
-        let id = self.generated_id(
-            "account",
-            input
-                .get("id")
-                .and_then(better_auth_core::FieldValue::as_str)
-                .map(str::to_owned),
-        )?;
-        let id = id.as_deref().map(S::Account::parse_id).transpose()?;
-        let mut active = super::record_write::RecordWrite::<
-            <S::Account as SeaOrmAccountModel>::Entity,
-        >::from_initialized_fields(
+        let active = super::record_write::RecordWrite::from_initialized_fields(
             input,
             S::Account::field_column,
             S::Account::extra_insert_columns(),
-            |input| S::Account::new_active(id.clone(), input),
+            |fields| S::Account::new_active(None, fields),
         )?;
-        if let Some(id) = id {
-            active.set(S::Account::id_column(), id.into());
-        } else {
-            active.not_set(S::Account::id_column());
-        }
         let account = database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(
             self.config(),
             "create",
@@ -546,6 +554,9 @@ where
         } else {
             (self.account_records(provider, account_id).await?, None)
         };
+        if !records.is_empty() {
+            self.model_fields.begin_id_output(EntityRole::Account)?;
+        }
         let fields = self.config().account.field_schema();
         let extracted = records
             .iter()
@@ -690,22 +701,8 @@ where
         let fields = self.config().account.field_schema();
         let backend = self.connection().get_database_backend();
         let account_id = self.bind_query_field(EntityRole::Account, &fields, "id", id, backend)?;
-        let input = fields
-            .record_storage_fields_with_binding(
-                prepared.into_fields(),
-                false,
-                |name, field, value| {
-                    crate::reference_id::input_binding(
-                        name,
-                        field,
-                        value,
-                        self.config().advanced.database.generate_id(),
-                        S::Account::field_column,
-                        S::Account::native_json_field,
-                        backend,
-                    )
-                },
-            )
+        let input = self
+            .account_storage_fields(&fields, prepared.into_fields(), false, backend)
             .await?;
         let active = super::record_write::RecordWrite::<<S::Account as SeaOrmAccountModel>::Entity>::from_fields(input, S::Account::field_column)?;
         let (column, value) = account_id.resolve(EntityRole::Account, &fields)?;

@@ -129,8 +129,10 @@ async function pendingFixture(backend: "memory" | "sqlite", limit?: number) {
   const before = raw();
   const reader = await betterAuth(options({
     status: { type: "string", transform: { output() { return "canceled"; } } },
-    expiresAt: { type: "date", transform: { output(value: Date) {
-      const milliseconds = value.getTime();
+    expiresAt: { type: "date", transform: { output(value: unknown) {
+      if (backend === "sqlite") expect(typeof value).toBe("string");
+      else expect(value).toBeInstanceOf(Date);
+      const milliseconds = backend === "sqlite" ? new Date(value as string).getTime() : (value as Date).getTime();
       const name = milliseconds === pendingPast.getTime() ? "first" : milliseconds === pendingFuture.getTime() ? "second" : "third";
       events.push(name);
       if (state.failLater) {
@@ -160,11 +162,12 @@ for (const backend of ["memory", "sqlite"] as const) {
           ["object", { toString: null }, false, true],
         ] as const) {
           state.replacement = replacement;
+          const projectedReplacement = backend === "sqlite" && label === "text" ? pendingLater : replacement;
           const first = adapter.findPendingInvitation({ organizationId: "organization", email: "RECIPIENT@pending.test" });
           if (failure && limit !== 0) await expect(first).rejects.toEqual(new TypeError("No default value"));
           else {
             const result = await first;
-            expect(result).toStrictEqual(active && limit !== 0 ? [{ ...stored[0], expiresAt: replacement, status: "canceled" }] : []);
+            expect(result).toStrictEqual(active && limit !== 0 ? [{ ...stored[0], expiresAt: projectedReplacement, status: "canceled" }] : []);
           }
           expect(events.splice(0), `${label}: getter output page`).toStrictEqual(limit === 0 ? [] : limit === 1 ? ["first"] : ["first", "second"]);
           const all = adapter.findPendingInvitations({ organizationId: "organization" });
@@ -173,7 +176,7 @@ for (const backend of ["memory", "sqlite"] as const) {
             const result = await all;
             expect(result.length).toBe(limit === 0 ? 0 : Number(active) + Number(limit !== 1));
             expect(result).toStrictEqual(limit === 0 ? [] : [
-              ...(active ? [{ ...stored[0], expiresAt: replacement, status: "canceled" }] : []),
+              ...(active ? [{ ...stored[0], expiresAt: projectedReplacement, status: "canceled" }] : []),
               ...(limit === 1 ? [] : [{ ...stored[2], status: "canceled" }]),
             ]);
           }

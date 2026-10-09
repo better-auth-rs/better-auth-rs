@@ -9,8 +9,7 @@ use better_auth::plugins::organization::{OrganizationConfig, OrganizationPlugin}
 use better_auth::server_api::EndpointInput;
 use better_auth::{AuthConfig, AuthError, AuthResult, AuthSchema, BetterAuth};
 use better_auth_core::store::{
-    EphemeralStore, InvitationStore, MemberStore, MemoryCacheAdapter, OrganizationStore,
-    secondary::SecondaryStore,
+    EphemeralStore, MemberStore, MemoryCacheAdapter, OrganizationStore, secondary::SecondaryStore,
 };
 use better_auth_core::{
     AuthStore, AuthUser, CreateMember, CreateOrganization, CreateSession, CreateUser, FieldValue,
@@ -352,6 +351,7 @@ async fn check_pending_invitation_output<S: AuthSchema>(
     inner: Arc<dyn AuthStore<S>>,
     config: AuthConfig,
     secondary: bool,
+    sqlite: bool,
 ) -> AuthResult<()> {
     use better_auth_core::user_fields::UserFieldType;
     use better_auth_core::{CreateInvitation, FieldDate, FieldMap, InvitationStatus, SchemaValue};
@@ -533,7 +533,11 @@ async fn check_pending_invitation_output<S: AuthSchema>(
             );
         } else if active && limit != Some(0.0) {
             let mut expected = stored[0].clone();
-            expected.expires_at = SchemaValue::from_field(replacement);
+            expected.expires_at = SchemaValue::from_field(if sqlite && label == "text" {
+                FieldValue::Date(FieldDate::from_milliseconds(later))
+            } else {
+                replacement
+            });
             expected.status = InvitationStatus::Canceled.into();
             assert_eq!(
                 result?,
@@ -642,6 +646,7 @@ async fn pending_invitations_project_the_complete_page_before_expiry_and_quota()
                 Arc::new(EphemeralStore::new(Arc::new(config.clone()))),
                 config.clone(),
                 secondary,
+                false,
             )
             .await?;
             let database = Database::connect("sqlite::memory:")
@@ -654,6 +659,7 @@ async fn pending_invitations_project_the_complete_page_before_expiry_and_quota()
                 Arc::new(SeaOrmStore::<BundledSchema>::new(config.clone(), database)),
                 config,
                 secondary,
+                true,
             )
             .await?;
         }

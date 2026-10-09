@@ -209,7 +209,7 @@ run_stage() {
           --test user_input_policy_tests --test protected_function_tests \
           --test user_verification_fields_tests --test user_record_values_tests \
           --test account_owner_batch_tests --test account_identity_tests --test account_native_selector_tests --test account_batch_update_tests --test account_live_output_tests \
-          --test id_memory_tests \
+          --test id_memory_tests --test account_id_input_tests \
           --test account_verification_update_fields_tests --test verification_field_queries_tests --test verification_live_output_tests --test query_binding_order_tests \
           --test verification_transaction_delete_tests \
           --test account_user_selected_relations_reference_tests \
@@ -261,6 +261,7 @@ run_stage() {
         ./compat-tests/reference-server/contracts/user-account-raw-column.test.ts \
         ./compat-tests/reference-server/contracts/account-owner-batch.test.ts \
         ./compat-tests/reference-server/contracts/account-live-output.test.ts \
+        ./compat-tests/reference-server/contracts/account-id-input.test.ts \
         ./compat-tests/reference-server/contracts/account-verification-update-fields.test.ts \
         ./compat-tests/reference-server/contracts/verification-field-queries.test.ts \
         ./compat-tests/reference-server/contracts/verification-live-output.test.ts \

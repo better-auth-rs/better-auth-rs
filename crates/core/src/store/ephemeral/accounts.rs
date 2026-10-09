@@ -1,10 +1,47 @@
 use super::hooks::CommittedWrite;
 use super::rows::RecordSource;
 use super::*;
+use crate::id::AdapterIdInput;
 use crate::store::database_hooks::{DatabaseHookControl, DatabaseUpdateResult};
 use crate::store::schema::EntityRole;
 
 impl EphemeralStore {
+    async fn account_storage_fields(&self, input: FieldMap, create: bool) -> AuthResult<FieldMap> {
+        let supplied = input.get("id").cloned();
+        self.model_fields.begin_id_input(
+            EntityRole::Account,
+            AdapterIdInput {
+                force_allow_id: create && supplied.is_some(),
+                supports_native_uuid: false,
+            },
+        )?;
+        self.config
+            .account
+            .field_schema()
+            .storage_fields_with_bound_id(
+                input,
+                create,
+                || {
+                    let Some(policy) = self.model_fields.id_input_policy(EntityRole::Account)?
+                    else {
+                        return Ok(supplied.clone());
+                    };
+                    let generation = self.config.advanced.database.generate_id();
+                    if create {
+                        generation.adapter_create_id_input("account", supplied.clone(), policy)
+                    } else {
+                        supplied
+                            .clone()
+                            .map(|value| generation.adapter_id_input(value, policy))
+                            .transpose()
+                            .map(Option::flatten)
+                    }
+                },
+                |_, field, value| self.memory_plugin_field_input(field, value),
+            )
+            .await
+    }
+
     fn account_field_selector(
         &self,
         fields: &crate::user_fields::UserConfig,
@@ -137,22 +174,7 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
                 return Ok(None);
             }
         }
-        self.model_fields.canonicalize_id(EntityRole::Account)?;
-        let mut fields = self
-            .config
-            .account
-            .field_schema()
-            .record_storage_fields_with_binding(input.fields()?, true, |_, field, value| {
-                self.memory_plugin_field_input(field, value)
-            })
-            .await?;
-        let supplied = fields
-            .remove("id")
-            .and_then(|id| id.as_str().map(str::to_owned));
-        let id = self.generated_id("account", supplied, self.lock()?.accounts.len())?;
-        if let Some(id) = id {
-            let _ = fields.insert("id".into(), Value::String(id));
-        }
+        let mut fields = self.account_storage_fields(input.fields()?, true).await?;
         let record = self
             .raw("account", "create", |state| {
                 if let Some(id) = self.next_serial_id(state.accounts.len()) {
@@ -275,15 +297,10 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
             }
         }
         crate::store::database_hooks::await_adapter_lookup().await;
-        self.model_fields.canonicalize_id(EntityRole::Account)?;
+        self.model_fields.begin_id_query(EntityRole::Account)?;
         let id = self.memory_primary_id_query(id)?;
         let patch = self
-            .config
-            .account
-            .field_schema()
-            .record_storage_fields_with_binding(prepared.into_fields(), false, |_, field, value| {
-                self.memory_plugin_field_input(field, value)
-            })
+            .account_storage_fields(prepared.into_fields(), false)
             .await?;
         let record = self
             .raw("account", "update", |state| {
@@ -343,10 +360,8 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
             .iter()
             .map(|(name, value)| self.account_field_selector(&fields, name, value.clone()))
             .collect::<AuthResult<Vec<_>>>()?;
-        let patch = fields
-            .record_storage_fields_with_binding(prepared.into_fields(), false, |_, field, value| {
-                self.memory_plugin_field_input(field, value)
-            })
+        let patch = self
+            .account_storage_fields(prepared.into_fields(), false)
             .await?;
         let count = self
             .raw("account", "updateMany", |state| {

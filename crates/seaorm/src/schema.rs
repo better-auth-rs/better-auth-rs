@@ -162,9 +162,9 @@ pub trait SeaOrmAccountModel:
     fn parse_id(id: &str) -> AuthResult<Self::Id>;
     fn parse_user_id(user_id: &str) -> AuthResult<Self::UserId>;
 
-    /// Initialize application-owned columns before the store binds adapter fields.
-    /// Inspect `fields` as runtime values. Do not decode the complete field map into the typed model.
-    /// The store applies `fields` and the generated ID after this method returns.
+    /// Initialize application-owned columns from prepared physical fields.
+    /// The store passes `None` for `id`; read the prepared ID from `fields` without narrowing runtime values.
+    /// The store preserves prepared fields and copies only declared extra insert columns.
     fn new_active(
         id: Option<Self::Id>,
         fields: &better_auth_core::FieldMap,

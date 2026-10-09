@@ -102,7 +102,10 @@ impl Storage {
                 let value = fields
                     .get(name)
                     .ok_or_else(|| AuthError::internal(format!("Expected Account date {name}")))?
-                    .json()?;
+                    .json()?
+                    .ok_or_else(|| {
+                        AuthError::internal(format!("Expected a JSON Account date {name}"))
+                    })?;
                 let _ = fields.insert(name.into(), FieldValue::from_json(value)?);
             }
         }
@@ -154,7 +157,7 @@ fn observed(events: &Events) -> AuthResult<Vec<Value>> {
 
 fn visible(row: Option<&AccountView>) -> AuthResult<Value> {
     match row {
-        Some(row) => row.internal_fields()?.json(),
+        Some(row) => row.internal_fields()?.json().map(Value::Object),
         None => Ok(Value::Null),
     }
 }
