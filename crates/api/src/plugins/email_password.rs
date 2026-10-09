@@ -228,7 +228,7 @@ impl EmailPasswordPlugin {
 
         let response = sign_up_core(&signup_req, endpoint_body, &self.config, req, ctx).await?;
 
-        Ok(AuthResponse::json(200, &response)?)
+        Ok(AuthResponse::json(None, &response)?)
     }
 
     async fn handle_sign_in(
@@ -252,7 +252,7 @@ impl EmailPasswordPlugin {
             ctx,
         )
         .await?;
-        Ok(AuthResponse::json(200, &result.response)?)
+        Ok(AuthResponse::json(None, &result.response)?)
     }
 
     async fn handle_sign_in_username(

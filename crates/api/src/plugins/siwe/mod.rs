@@ -99,10 +99,10 @@ impl SiwePlugin {
         }
         let nonce = (self.get_nonce)().await?;
         if !valid_nonce(&nonce) {
-            return Ok(AuthResponse::json(
+            return Err(AuthResponse::json(
                 500,
                 &json!({"message":"SIWE getNonce must return an ERC-4361 nonce: 8-250 alphanumeric characters.","status":500,"code":"SIWE_INVALID_NONCE"}),
-            )?);
+            )?.into());
         }
         let _ = ctx
             .database
@@ -113,7 +113,7 @@ impl SiwePlugin {
                 ..Default::default()
             })
             .await?;
-        Ok(AuthResponse::json(200, &json!({"nonce":nonce}))?)
+        Ok(AuthResponse::json(None, &json!({"nonce":nonce}))?)
     }
     async fn verify(
         &self,
@@ -132,11 +132,11 @@ impl SiwePlugin {
             .await
         {
             Ok(response) => Ok(response),
-            Err(cause @ (AuthError::Upstream { .. } | AuthError::BannedUser(_))) => Err(cause),
-            Err(cause) => Ok(AuthResponse::json(
+            Err(cause) if cause.is_api_error() => Err(cause),
+            Err(cause) => Err(AuthResponse::json(
                 401,
                 &json!({"message":"Something went wrong. Please try again later.","error":cause.to_string(),"status":401}),
-            )?),
+            )?.into()),
         }
     }
     async fn verify_inner(
@@ -351,10 +351,11 @@ impl SiwePlugin {
         .await
         .map_err(SessionIssueError::into_auth_error)?;
         let Some(data) = data else {
-            return Ok(AuthResponse::json(
+            return Err(AuthResponse::json(
                 500,
                 &json!({"message":"Internal Server Error","status":500}),
-            )?);
+            )?
+            .into());
         };
         let token = data
             .session
@@ -366,7 +367,7 @@ impl SiwePlugin {
             .set_native_session_cookie(req, data, None)
             .await?;
         Ok(AuthResponse::native(
-            200,
+            None,
             FieldMap::from([
                 ("token".into(), token),
                 ("success".into(), true.into()),
@@ -421,7 +422,7 @@ fn unauthorized(message: &str, code: Option<&str>) -> AuthResult<AuthResponse> {
     if let Some(code) = code {
         let _ = body.insert("code".into(), json!(code));
     }
-    Ok(AuthResponse::json(401, &body)?)
+    Err(AuthResponse::json(401, &body)?.into())
 }
 
 /// Convert a valid Ethereum address to its EIP-55 checksum representation.

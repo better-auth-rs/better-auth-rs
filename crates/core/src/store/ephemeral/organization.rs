@@ -141,9 +141,10 @@ impl OrganizationStore for EphemeralStore {
         let schema = self.field_config(EntityRole::Organization)?;
         let slug = self.organization_query(EntityRole::Organization, "slug", Value::from(slug))?;
         let rows = self.lock()?.organizations.snapshot()?;
-        match rows.into_iter().find(|row| {
-            organization_value(&row, &schema, "slug").strict_equals(&slug.field_value())
-        }) {
+        match rows
+            .into_iter()
+            .find(|row| organization_value(row, &schema, "slug").strict_equals(&slug.field_value()))
+        {
             Some(value) => self.output_organization(value).await.map(Some),
             None => Ok(None),
         }

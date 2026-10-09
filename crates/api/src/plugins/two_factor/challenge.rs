@@ -36,7 +36,7 @@ impl TwoFactorPlugin {
         delete_factor_session(&data.session, ctx).await?;
         req.clear_new_session()?;
         let challenge = begin_sign_in_challenge(&user, ctx, &mut response.headers).await?;
-        response.replace_returned(AuthResponse::json(200, &challenge)?);
+        response.replace_returned(AuthResponse::json(None, &challenge)?);
         Ok(())
     }
 }

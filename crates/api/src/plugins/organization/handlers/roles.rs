@@ -508,7 +508,7 @@ pub async fn handle_role_request(
                 .await?;
             role.permission = permission.clone().into();
             AuthResponse::native(
-                200,
+                None,
                 FieldMap::from_iter([
                     ("success".into(), true.into()),
                     ("roleData".into(), role.field_values()?.into()),
@@ -545,14 +545,14 @@ pub async fn handle_role_request(
                         Ok(role.field_values()?.into())
                     })
                     .collect::<AuthResult<Vec<FieldValue>>>()?;
-                AuthResponse::native(200, roles.into())
+                AuthResponse::native(None, roles.into())
             } else {
                 if req.query.is_none() {
                     return Err(AuthError::internal("Role lookup requires a query object"));
                 }
                 let mut role = select_role(&selector, &organization_id, ctx).await?;
                 role.permission = super::super::native_json::permission(&role.permission)?.into();
-                AuthResponse::native(200, role.field_values()?.into())
+                AuthResponse::native(None, role.field_values()?.into())
             }
         }
         (HttpMethod::Post, "/organization/delete-role") => {
@@ -597,7 +597,7 @@ pub async fn handle_role_request(
             ctx.database
                 .delete_organization_role_by_fields(&role_selectors(&selector, &organization_id)?)
                 .await?;
-            AuthResponse::json(200, &json!({"success":true}))?
+            AuthResponse::json(None, &json!({"success":true}))?
         }
         (HttpMethod::Post, "/organization/update-role") => {
             let body: UpdateRole = super::super::request::read(req, &config.schema)?;
@@ -682,7 +682,7 @@ pub async fn handle_role_request(
             });
             let _ = updated.insert("permission".into(), permission);
             AuthResponse::native(
-                200,
+                None,
                 FieldMap::from_iter([
                     ("success".into(), true.into()),
                     ("roleData".into(), updated.into()),
@@ -803,7 +803,8 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(response.status, 200);
-        assert_eq!(outputs.load(Ordering::SeqCst), 1);
+        // Authorization lists dynamic roles before the endpoint selects its target role.
+        assert_eq!(outputs.load(Ordering::SeqCst), 2);
         let FieldValue::Object(body) = response.body.field_value().unwrap() else {
             panic!("Expected native role response");
         };

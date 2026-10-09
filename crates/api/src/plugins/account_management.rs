@@ -134,7 +134,7 @@ impl AccountManagementPlugin {
         let data = ctx.require_native_session(req).await?;
         let filtered = list_accounts_core(data.user_field("id"), ctx).await?;
         Ok(AuthResponse::native(
-            200,
+            None,
             filtered
                 .into_iter()
                 .map(FieldValue::from)
@@ -164,6 +164,6 @@ impl AccountManagementPlugin {
 
         let response =
             unlink_account_core(data.user_field("id"), &unlink_req.account_id, ctx).await?;
-        Ok(AuthResponse::json(200, &response)?)
+        Ok(AuthResponse::json(None, &response)?)
     }
 }

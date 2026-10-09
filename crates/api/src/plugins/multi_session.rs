@@ -76,7 +76,7 @@ impl MultiSessionPlugin {
             data.user = data.public_user(&ctx.config.user)?;
             output.push(FieldValue::from(FieldMap::from(data)));
         }
-        Ok(AuthResponse::native(200, output.into()))
+        Ok(AuthResponse::native(None, output.into()))
     }
 
     async fn handle_set_active<S: AuthSchema>(
@@ -84,10 +84,7 @@ impl MultiSessionPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<S>,
     ) -> AuthResult<AuthResponse> {
-        let token = match token_body(req, "sessionToken") {
-            Ok(token) => token,
-            Err(response) => return Ok(response),
-        };
+        let token = token_body(req, "sessionToken")?;
         let name = cookie_name(&token, &ctx.config);
         let token = signed_device_token(req, &name, &ctx.config).ok_or_else(invalid_session)?;
         let session = match find_session(ctx, &token.into()).await? {
@@ -104,7 +101,7 @@ impl MultiSessionPlugin {
             .await?;
         data.session.filter_returned_fields(&ctx.config.session)?;
         data.user = data.public_user(&ctx.config.user)?;
-        Ok(AuthResponse::native(200, FieldMap::from(data).into()))
+        Ok(AuthResponse::native(None, FieldMap::from(data).into()))
     }
 
     async fn handle_revoke<S: AuthSchema>(
@@ -112,10 +109,7 @@ impl MultiSessionPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<S>,
     ) -> AuthResult<AuthResponse> {
-        let token = match token_body(req, "sessionToken") {
-            Ok(token) => token,
-            Err(response) => return Ok(response),
-        };
+        let token = token_body(req, "sessionToken")?;
         let current = ctx
             .require_native_session(req)
             .await
@@ -125,7 +119,7 @@ impl MultiSessionPlugin {
         ctx.database.delete_session(&token).await?;
         better_auth_core::utils::cookie_utils::remove_set_cookie_entries(req, None, &name)?;
         req.append_response_header("Set-Cookie", create_clear_cookie(&name, &ctx.config)?)?;
-        let response = AuthResponse::json(200, &serde_json::json!({ "status": true }))?;
+        let response = AuthResponse::json(None, &serde_json::json!({ "status": true }))?;
         if !current
             .session
             .token

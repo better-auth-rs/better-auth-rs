@@ -45,7 +45,11 @@ impl sea_orm_migration::MigrationTrait for RateLimitCounters {
 impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPluginSchema> SeaOrmStore<S, O, P> {
     async fn rate_limit_record(&self, key: &str) -> AuthResult<Option<RateLimitRecord>> {
         Entity::<P::RateLimit>::find()
-            .filter(P::RateLimit::column("key")?.eq(key))
+            .filter(super::value_filter::equals(
+                P::RateLimit::column("key")?,
+                &key.into(),
+                self.connection().get_database_backend(),
+            )?)
             .one(self.connection())
             .await
             .map_err(map_db_err)?
@@ -110,7 +114,11 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPluginSchema> RateLimi
                 let result = Entity::<P::RateLimit>::update_many()
                     .col_expr(P::RateLimit::column("count")?, Expr::value(1))
                     .col_expr(P::RateLimit::column("last_request")?, Expr::value(now))
-                    .filter(P::RateLimit::column("key")?.eq(key))
+                    .filter(super::value_filter::equals(
+                        P::RateLimit::column("key")?,
+                        &key.into(),
+                        self.connection().get_database_backend(),
+                    )?)
                     .filter(P::RateLimit::column("last_request")?.lte(row.last_request))
                     .exec(self.connection())
                     .await
@@ -148,7 +156,11 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPluginSchema> RateLimi
                     Expr::col(P::RateLimit::column("count")?).add(1),
                 )
                 .col_expr(P::RateLimit::column("last_request")?, Expr::value(now))
-                .filter(P::RateLimit::column("key")?.eq(key))
+                .filter(super::value_filter::equals(
+                    P::RateLimit::column("key")?,
+                    &key.into(),
+                    self.connection().get_database_backend(),
+                )?)
                 .filter(P::RateLimit::column("last_request")?.gt(now as f64 - window))
                 .filter(P::RateLimit::column("count")?.lt(rule.max_requests))
                 .exec(self.connection())

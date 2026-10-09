@@ -311,7 +311,7 @@ impl EphemeralStore {
         &self,
         role: EntityRole,
     ) -> AuthResult<crate::user_fields::UserConfig> {
-        self.organization_fields()?.schema_for(role)
+        self.organization_fields()?.fields_for(role).cloned()
     }
 
     fn bind_record_id(&self, fields: &mut FieldMap) -> AuthResult<()> {

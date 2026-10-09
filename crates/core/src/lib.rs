@@ -117,12 +117,12 @@ pub use types::{
     CreateSession, CreateTwoFactor, CreateUser, CreateVerification, CreateWalletAddress,
     DeviceCode, DeviceCodeOwnership, DeviceCodeWhere, ErrorCodeMessageResponse,
     ErrorMessageResponse, Headers, HealthCheckResponse, HttpMethod, Invitation, InvitationStatus,
-    ListUsersParams, Member, OkResponse, Organization, Passkey, PasskeyCredentialState,
-    PasskeyStorage, RateLimitErrorResponse, RequestMeta, StatusMessageResponse, StatusResponse,
-    SuccessMessageResponse, SuccessResponse, TwoFactor, TwoFactorStorage, UpdateAccount,
-    UpdateApiKey, UpdateDeviceCode, UpdateOrganization, UpdatePasskey, UpdatePasskeyAuthentication,
-    UpdateTwoFactor, UpdateUser, UpdateUserRequest, UpdateUserResponse, ValidationErrorResponse,
-    WalletAddress, WhereMode, WhereOperator,
+    ListUsersParams, Member, NativeResponseStatus, OkResponse, Organization, Passkey,
+    PasskeyCredentialState, PasskeyStorage, RateLimitErrorResponse, RequestMeta,
+    StatusMessageResponse, StatusResponse, SuccessMessageResponse, SuccessResponse, TwoFactor,
+    TwoFactorStorage, UpdateAccount, UpdateApiKey, UpdateDeviceCode, UpdateOrganization,
+    UpdatePasskey, UpdatePasskeyAuthentication, UpdateTwoFactor, UpdateUser, UpdateUserRequest,
+    UpdateUserResponse, ValidationErrorResponse, WalletAddress, WhereMode, WhereOperator,
 };
 pub use utils::password::{
     Argon2PasswordHasher, PasswordHasher, ScryptPasswordHasher, hash_password, verify_password,

@@ -156,7 +156,7 @@ impl EmailVerificationPlugin {
             config.send_verification_email = ctx.email_verification_policy.override_sender.clone();
         }
         let response = send_verification_email_core(&body, req, &config, ctx).await?;
-        Ok(AuthResponse::json(200, &response)?)
+        Ok(AuthResponse::json(None, &response)?)
     }
 
     async fn handle_verify_email(
@@ -195,7 +195,7 @@ impl EmailVerificationPlugin {
                 response.headers = headers;
                 Ok(response)
             }
-            VerifyEmailResult::Json { body } => Ok(AuthResponse::native(200, body)),
+            VerifyEmailResult::Json { body } => Ok(AuthResponse::native(None, body)),
         }
     }
 

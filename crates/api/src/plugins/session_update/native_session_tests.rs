@@ -210,6 +210,95 @@ async fn update_session_preserves_native_users_and_stateless_missing_row_fallbac
 }
 
 #[tokio::test]
+async fn update_session_rejections_keep_native_api_errors_and_http_status() -> AuthResult<()> {
+    use crate::plugins::{
+        admin::AdminPlugin,
+        organization::{OrganizationPlugin, OrganizationTeamsConfig},
+    };
+    use better_auth_core::{
+        AuthRoute, NativeResponseStatus, endpoint_dispatch::EndpointDispatcher,
+    };
+    let organization =
+        OrganizationPlugin::with_config(Default::default()).teams(OrganizationTeamsConfig {
+            enabled: true,
+            ..Default::default()
+        });
+    let admin = AdminPlugin::with_config(Default::default());
+    let fixture = Fixture::new(&[&organization, &admin], false).await?;
+    let stored = fixture
+        .ctx
+        .database
+        .get_session(fixture.session.token.typed()?)
+        .await?;
+    let dispatcher = fixture
+        .ctx
+        .extensions
+        .get::<Arc<EndpointDispatcher<StatelessSchema>>>()
+        .unwrap();
+    for field in [
+        None,
+        Some("unknown"),
+        Some("activeOrganizationId"),
+        Some("activeTeamId"),
+        Some("impersonatedBy"),
+    ] {
+        let input = field.map_or_else(|| json!({}), |field| json!({(field):"forbidden"}));
+        let expected = if let Some(field) = field.filter(|field| *field != "unknown") {
+            json!({"code":"FIELD_NOT_ALLOWED", "message":format!("{field} is not allowed to be set")})
+        } else {
+            json!({"message":"No fields to update"})
+        };
+        for http in [false, true] {
+            let mut request = fixture.request(
+                FieldMap::from([("id".into(), "owner".into())]).into(),
+                HttpMethod::Post,
+                "/update-session",
+                input.clone(),
+            )?;
+            let context = &fixture.ctx;
+            let handler =
+                move |request: AuthRequest| async move { super::handle(&request, context).await };
+            let result = if http {
+                dispatcher
+                    .run(&mut request, true, &fixture.ctx, None, handler)
+                    .await
+            } else {
+                dispatcher
+                    .native(
+                        request.clone(),
+                        AuthRoute::post("/update-session", "updateSession"),
+                        &fixture.ctx,
+                        handler,
+                    )
+                    .await
+            };
+            let response = if http {
+                result?
+            } else {
+                let error = result.unwrap_err();
+                assert_eq!(error.status_code(), 400);
+                error.to_auth_response()
+            };
+            assert!(response.is_api_error());
+            assert_eq!(response.api_error_status(), Some(400));
+            assert_eq!(response.native_status(), NativeResponseStatus::Value(400));
+            assert_eq!(response.status, 400);
+            assert_eq!(body(&response), expected);
+            assert!(request.new_session()?.is_none());
+            assert_eq!(
+                fixture
+                    .ctx
+                    .database
+                    .get_session(fixture.session.token.typed()?)
+                    .await?,
+                stored
+            );
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test]
 async fn device_primitive_users_reach_state_guards_without_claiming_or_disclosing() -> AuthResult<()>
 {
     let plugin = DeviceAuthorizationPlugin::new();
@@ -379,8 +468,8 @@ async fn two_factor_primitive_users_preserve_sender_payload_and_branch_order() -
         totp_disabled: true,
         ..Default::default()
     });
-    let fixture = Fixture::new(&[&plugin], false).await?;
     for user in [FieldValue::Bool(false), 0.0.into(), "".into()] {
+        let fixture = Fixture::new(&[&plugin], false).await?;
         let req = fixture.request(
             user.clone(),
             HttpMethod::Post,
@@ -423,6 +512,7 @@ async fn two_factor_primitive_users_preserve_sender_payload_and_branch_order() -
             "Two factor isn't enabled"
         );
     }
+    let fixture = Fixture::new(&[&plugin], false).await?;
     let req = fixture.request(
         FieldValue::Null,
         HttpMethod::Post,

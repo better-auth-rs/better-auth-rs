@@ -383,7 +383,9 @@ async fn generation_requires_session_before_client_policy_and_skips_both_generat
         })
     ));
     let request = request(&ctx, &data, "/one-time-token/generate")?;
-    let response = plugin.on_request(&request, &ctx).await?.unwrap();
+    let error = plugin.on_request(&request, &ctx).await.unwrap_err();
+    assert!(error.is_api_error());
+    let response = error.to_auth_response();
     assert_eq!(response.status, 400);
     assert_eq!(
         response.body.json()?,
@@ -403,9 +405,11 @@ async fn generation_requires_session_before_client_policy_and_skips_both_generat
     let explicit =
         request.with_original_request(AuthRequest::new(HttpMethod::Get, "/original-request"));
     let scope = RequestHookContext::from_request(&explicit)?;
-    let response = with_request_hook_context_value(scope, plugin.on_request(&explicit, &ctx))
-        .await?
-        .unwrap();
+    let error = with_request_hook_context_value(scope, plugin.on_request(&explicit, &ctx))
+        .await
+        .unwrap_err();
+    assert!(error.is_api_error());
+    let response = error.to_auth_response();
     assert_eq!(response.status, 400);
     assert_eq!(
         response.body.json()?,

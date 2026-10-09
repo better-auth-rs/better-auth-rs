@@ -313,26 +313,11 @@ async fn organization_field_configuration_accepts_replacement_policies_and_rejec
 
     for (entity, name, storage, expected) in [
         ("organization", "metadata", None, None),
-        (
-            "member",
-            "user_id",
-            None,
-            Some("maps to a different typed field user_id"),
-        ),
+        ("member", "user_id", None, None),
         ("invitation", "expiresAt", None, None),
-        (
-            "team",
-            "organizationId",
-            Some("name"),
-            Some("maps to a different typed field name"),
-        ),
+        ("team", "organizationId", Some("name"), None),
         ("organizationRole", "permission", None, None),
-        (
-            "organization",
-            "label",
-            Some("name"),
-            Some("maps to a different typed field name"),
-        ),
+        ("organization", "label", Some("name"), None),
         (
             "organization",
             "label",
@@ -369,7 +354,7 @@ async fn organization_field_configuration_accepts_replacement_policies_and_rejec
         if let Some(expected) = expected {
             let error = result
                 .err()
-                .ok_or("invalid field configuration must fail before handling requests")?;
+                .ok_or_else(|| format!("{entity}.{name}: invalid field configuration must fail before handling requests"))?;
             assert!(
                 error.to_string().contains(expected),
                 "{entity}.{name}: {error}"

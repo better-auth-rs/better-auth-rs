@@ -358,7 +358,7 @@ impl PhoneNumberPlugin {
             // The direct send endpoint propagates asynchronous failures without a handler.
             task.await?;
         }
-        Ok(AuthResponse::json(200, &json!({"message":"code sent"}))?)
+        Ok(AuthResponse::json(None, &json!({"message":"code sent"}))?)
     }
     async fn verify(
         &self,
@@ -472,7 +472,7 @@ impl PhoneNumberPlugin {
         .await?;
         if let Some(session) = existing_session {
             return Ok(AuthResponse::native(
-                200,
+                None,
                 better_auth_core::FieldMap::from([
                     ("status".into(), true.into()),
                     ("token".into(), session.session.token.field_value()),
@@ -486,7 +486,7 @@ impl PhoneNumberPlugin {
         }
         if body.get("disableSession") == Some(&Value::Bool(true)) {
             return Ok(AuthResponse::json(
-                200,
+                None,
                 &json!({"status":true,"token":null,"user":ctx.user_view(&user).await?}),
             )?);
         }
@@ -609,7 +609,7 @@ impl PhoneNumberPlugin {
         manager
             .set_native_session_cookie(req, issued, Some(dont_remember))
             .await?;
-        Ok(AuthResponse::native(200, output.into()))
+        Ok(AuthResponse::native(None, output.into()))
     }
     async fn request_reset(
         &self,
@@ -646,7 +646,7 @@ impl PhoneNumberPlugin {
             )
             .await;
         }
-        Ok(AuthResponse::json(200, &json!({"status":true}))?)
+        Ok(AuthResponse::json(None, &json!({"status":true}))?)
     }
     async fn reset(
         &self,
@@ -713,7 +713,7 @@ impl PhoneNumberPlugin {
                 .delete_user_sessions(user.id().typed()?)
                 .await?;
         }
-        Ok(AuthResponse::json(200, &json!({"status":true}))?)
+        Ok(AuthResponse::json(None, &json!({"status":true}))?)
     }
 }
 

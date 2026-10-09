@@ -169,37 +169,6 @@ impl<T: Clone + AuthRecordFields + FromFieldMap> Rows<T> {
             .map(Self)
     }
 }
-impl<T: Clone + MemoryRow> Rows<T> {
-    pub(super) fn get<Q: ?Sized>(&self, id: &Q) -> AuthResult<Option<T>>
-    where
-        SchemaValue<String>: PartialEq<Q>,
-    {
-        self.get_mut(id).map(|row| row.map(|row| row.clone()))
-    }
-    pub(super) fn get_mut<Q: ?Sized>(&self, id: &Q) -> AuthResult<Option<MutexGuard<'_, T>>>
-    where
-        SchemaValue<String>: PartialEq<Q>,
-    {
-        self.find_mut(|row| row.id() == id)
-    }
-    pub(super) fn replace<Q: ?Sized>(&mut self, id: &Q, row: T) -> AuthResult<bool>
-    where
-        SchemaValue<String>: PartialEq<Q>,
-    {
-        if let Some(mut stored) = self.get_mut(id)? {
-            *stored = row;
-            Ok(true)
-        } else {
-            Ok(false)
-        }
-    }
-    pub(super) fn remove<Q: ?Sized>(&mut self, id: &Q) -> AuthResult<Option<T>>
-    where
-        SchemaValue<String>: PartialEq<Q>,
-    {
-        self.remove_first(|row| row.id() == id)
-    }
-}
 pub(super) trait TransactionRow {
     fn transaction_id(&self) -> FieldValue;
 }
@@ -301,11 +270,7 @@ macro_rules! row_id {
         fn id(&self) -> &SchemaValue<String> { &self.id }
     })* };
 }
-row_id!(
-    crate::wire::UserView,
-    crate::TeamMember,
-    crate::wire::SessionView
-);
+row_id!(crate::wire::UserView, crate::TeamMember);
 
 #[cfg(test)]
 mod tests {

@@ -24,6 +24,14 @@ const MESSAGE_NOT_IMPERSONATING: &str = "You are not impersonating anyone";
 const MESSAGE_FAILED_TO_FIND_USER: &str = "Failed to find user";
 const MESSAGE_FAILED_TO_FIND_ADMIN_SESSION: &str = "Failed to find admin session";
 
+fn impersonation_error(message: &str) -> AuthError {
+    better_auth_core::AuthResponse::native(
+        500,
+        better_auth_core::FieldMap::from([("message".into(), message.into())]).into(),
+    )
+    .into()
+}
+
 fn joined_role(role: &RoleInput) -> String {
     role.joined()
 }
@@ -630,12 +638,12 @@ pub(crate) async fn stop_impersonating_core(
         .database
         .get_user_by_id_value(&admin_id)
         .await?
-        .ok_or_else(|| AuthError::internal(MESSAGE_FAILED_TO_FIND_USER))?;
+        .ok_or_else(|| impersonation_error(MESSAGE_FAILED_TO_FIND_USER))?;
 
     let admin_cookie = get_cookie(req, &related_cookie_name(&ctx.config, "admin_session"))
         .and_then(|value| verify_cookie_value(&value, ctx.config.signing_secret()))
         .filter(|value| !value.is_empty())
-        .ok_or_else(|| AuthError::internal(MESSAGE_FAILED_TO_FIND_ADMIN_SESSION))?;
+        .ok_or_else(|| impersonation_error(MESSAGE_FAILED_TO_FIND_ADMIN_SESSION))?;
     let mut parts = admin_cookie.split(':');
     let admin_token = parts.next().unwrap_or_default();
     let dont_remember = parts.next().is_some_and(|value| !value.is_empty());
@@ -643,14 +651,14 @@ pub(crate) async fn stop_impersonating_core(
         .database
         .get_session_snapshot(admin_token)
         .await?
-        .ok_or_else(|| AuthError::internal(MESSAGE_FAILED_TO_FIND_ADMIN_SESSION))?;
+        .ok_or_else(|| impersonation_error(MESSAGE_FAILED_TO_FIND_ADMIN_SESSION))?;
 
     if !admin_session
         .user_id()
         .field_value()
         .strict_equals(&admin_user.id.field_value())
     {
-        return Err(AuthError::internal(MESSAGE_FAILED_TO_FIND_ADMIN_SESSION));
+        return Err(impersonation_error(MESSAGE_FAILED_TO_FIND_ADMIN_SESSION));
     }
 
     let data = if let Some(data) = snapshot {
@@ -662,7 +670,7 @@ pub(crate) async fn stop_impersonating_core(
             .into()
     };
     if !data.user.is_truthy() {
-        return Err(AuthError::internal(MESSAGE_FAILED_TO_FIND_ADMIN_SESSION));
+        return Err(impersonation_error(MESSAGE_FAILED_TO_FIND_ADMIN_SESSION));
     }
     ctx.database
         .delete_session_by_token_value(&session.token().field_value())

@@ -12,7 +12,7 @@ use better_auth_core::{
 };
 use better_auth_core::{FieldValue, SchemaField};
 use chrono::Utc;
-use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect, TransactionTrait};
+use sea_orm::{EntityTrait, QueryFilter, QuerySelect, TransactionTrait};
 
 impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema>
     SeaOrmStore<S, O, P>
@@ -387,10 +387,11 @@ where
                         )
                     })?;
                     let row = Entity::<O::Organization>::find()
-                        .filter(
-                            O::Organization::column("id")?
-                                .eq(models::join_value(member, "organization_id")?),
-                        )
+                        .filter(super::value_filter::equals_native(
+                            O::Organization::column("id")?,
+                            models::join_value(member, "organization_id")?,
+                            self.connection().get_database_backend(),
+                        )?)
                         .one(self.connection())
                         .await
                         .map_err(map_db_err)?;

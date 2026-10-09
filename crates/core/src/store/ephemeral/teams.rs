@@ -102,9 +102,8 @@ impl TeamStore for EphemeralStore {
     async fn delete_team_value(&self, id: &Value) -> AuthResult<()> {
         let team_schema = self.field_config(EntityRole::Team)?;
         let invitation_schema = self.field_config(EntityRole::Invitation)?;
-        let public_id = id;
         let id = self.organization_query(EntityRole::Team, "id", id.clone())?;
-        let (organization_id, snapshot) = {
+        let (organization_id, public_id, snapshot) = {
             let state = self.lock()?;
             let team = state
                 .teams
@@ -115,6 +114,7 @@ impl TeamStore for EphemeralStore {
                 &team_schema,
                 "organizationId",
             ));
+            let public_id = Self::project_id(&super::organization_rows::id(&team))?.field_value();
             let invitation_org = self.organization_query(
                 EntityRole::Invitation,
                 "organizationId",
@@ -131,7 +131,7 @@ impl TeamStore for EphemeralStore {
                             .strict_equals(&"pending".into())
                 })
                 .collect();
-            (organization_id, pending)
+            (organization_id, public_id, pending)
         };
         let invitation_org = self.organization_query(
             EntityRole::Invitation,
@@ -152,7 +152,7 @@ impl TeamStore for EphemeralStore {
             };
             let retained: Vec<_> = ids
                 .split(',')
-                .filter(|team_id| !Value::from(*team_id).strict_equals(public_id))
+                .filter(|team_id| !Value::from(*team_id).strict_equals(&public_id))
                 .collect();
             if retained.len() == ids.split(',').count() {
                 continue;

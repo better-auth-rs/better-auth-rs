@@ -113,11 +113,8 @@ async fn sign_in_with_provider(
             "code".to_owned(),
             serde_json::Value::from("test-code".to_owned()),
         );
-    let mut response = plugin.on_request(&callback, ctx).await.unwrap().unwrap();
-    ctx.session_manager()
-        .finish_response(&callback, &mut response)
-        .unwrap();
-    response
+    let response = plugin.on_request(&callback, ctx).await.unwrap().unwrap();
+    crate::plugins::test_helpers::finalize_response(ctx, &callback, response)
 }
 
 #[tokio::test]

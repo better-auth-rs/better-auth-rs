@@ -81,7 +81,11 @@ where
                     "findOne",
                     async {
                         <S::Verification as SeaOrmVerificationModel>::Entity::find()
-                            .filter(S::Verification::id_column().eq(reservation_id))
+                            .filter(super::value_filter::equals_native(
+                                S::Verification::id_column(),
+                                reservation_id,
+                                self.connection().get_database_backend(),
+                            )?)
                             .one(self.connection())
                             .await
                             .map_err(map_db_err)
@@ -139,7 +143,11 @@ where
         self.delete_single_verification(
             self.connection(),
             None,
-            S::Verification::identifier_column().eq(identifier),
+            super::value_filter::equals(
+                S::Verification::identifier_column(),
+                &identifier.into(),
+                self.connection().get_database_backend(),
+            )?,
         )
         .await
     }
@@ -212,11 +220,16 @@ where
                     .bind(self.connection().get_database_backend())?;
                 let expires_at = S::Verification::expires_at_column();
                 <S::Verification as SeaOrmVerificationModel>::Entity::find()
-                    .filter(
-                        <S::Verification as SeaOrmVerificationModel>::identifier_column()
-                            .eq(identifier),
-                    )
-                    .filter(<S::Verification as SeaOrmVerificationModel>::value_column().eq(value))
+                    .filter(super::value_filter::equals(
+                        S::Verification::identifier_column(),
+                        &identifier.into(),
+                        self.connection().get_database_backend(),
+                    )?)
+                    .filter(super::value_filter::equals(
+                        S::Verification::value_column(),
+                        &value.into(),
+                        self.connection().get_database_backend(),
+                    )?)
                     .filter(expires_at.into_expr().gt(expires_at.save_as(now)))
                     .one(self.connection())
                     .await
@@ -243,7 +256,11 @@ where
                     .bind(self.connection().get_database_backend())?;
                 let expires_at = S::Verification::expires_at_column();
                 <S::Verification as SeaOrmVerificationModel>::Entity::find()
-                    .filter(<S::Verification as SeaOrmVerificationModel>::value_column().eq(value))
+                    .filter(super::value_filter::equals(
+                        S::Verification::value_column(),
+                        &value.into(),
+                        self.connection().get_database_backend(),
+                    )?)
                     .filter(expires_at.into_expr().gt(expires_at.save_as(now)))
                     .one(self.connection())
                     .await
@@ -273,10 +290,11 @@ where
                     .bind(self.connection().get_database_backend())?;
                 let expires_at = S::Verification::expires_at_column();
                 <S::Verification as SeaOrmVerificationModel>::Entity::find()
-                    .filter(
-                        <S::Verification as SeaOrmVerificationModel>::identifier_column()
-                            .eq(identifier),
-                    )
+                    .filter(super::value_filter::equals(
+                        S::Verification::identifier_column(),
+                        &identifier.into(),
+                        self.connection().get_database_backend(),
+                    )?)
                     .filter(expires_at.into_expr().gt(expires_at.save_as(now)))
                     .one(self.connection())
                     .await
@@ -330,7 +348,11 @@ where
         self.delete_single_verification(
             self.connection(),
             None,
-            S::Verification::id_column().eq(self.parse_id(id, S::Verification::parse_id)?),
+            super::value_filter::equals_native(
+                S::Verification::id_column(),
+                self.parse_id(id, S::Verification::parse_id)?,
+                self.connection().get_database_backend(),
+            )?,
         )
         .await
     }
@@ -584,7 +606,11 @@ where
         let active = super::record_write::RecordWrite::<
             <S::Verification as SeaOrmVerificationModel>::Entity,
         >::from_fields(input, S::Verification::field_column)?;
-        let filter = S::Verification::identifier_column().eq(identifier);
+        let filter = super::value_filter::equals(
+            S::Verification::identifier_column(),
+            &identifier.into(),
+            backend,
+        )?;
         let row =
             match database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(
                 self.config(),
@@ -815,7 +841,11 @@ where
             "findMany",
             async {
                 <S::Verification as SeaOrmVerificationModel>::Entity::find()
-                    .filter(S::Verification::identifier_column().eq(identifier))
+                    .filter(super::value_filter::equals(
+                        S::Verification::identifier_column(),
+                        &identifier.into(),
+                        connection.get_database_backend(),
+                    )?)
                     .order_by_desc(S::Verification::created_at_column())
                     .one(connection)
                     .await
@@ -842,10 +872,11 @@ where
             _,
         >(self.config(), "findMany", async {
             <S::Verification as SeaOrmVerificationModel>::Entity::find()
-                .filter(
-                    <S::Verification as SeaOrmVerificationModel>::identifier_column()
-                        .eq(identifier),
-                )
+                .filter(super::value_filter::equals(
+                    S::Verification::identifier_column(),
+                    &identifier.into(),
+                    transaction.get_database_backend(),
+                )?)
                 .order_by_desc(<S::Verification as SeaOrmVerificationModel>::created_at_column())
                 .lock_exclusive()
                 .one(transaction)
@@ -886,7 +917,11 @@ where
                 "consumeOne",
                 async {
                     <S::Verification as SeaOrmVerificationModel>::Entity::delete_many()
-                        .filter(<S::Verification as SeaOrmVerificationModel>::id_column().eq(id))
+                        .filter(super::value_filter::equals_native(
+                            S::Verification::id_column(),
+                            id,
+                            transaction.get_database_backend(),
+                        )?)
                         .exec(transaction)
                         .await
                         .map_err(map_db_err)
@@ -903,10 +938,11 @@ where
             "deleteMany",
             async {
                 <S::Verification as SeaOrmVerificationModel>::Entity::delete_many()
-                    .filter(
-                        <S::Verification as SeaOrmVerificationModel>::identifier_column()
-                            .eq(identifier),
-                    )
+                    .filter(super::value_filter::equals(
+                        S::Verification::identifier_column(),
+                        &identifier.into(),
+                        transaction.get_database_backend(),
+                    )?)
                     .exec(transaction)
                     .await
                     .map_err(map_db_err)

@@ -26,6 +26,31 @@ where
         &self,
         token: &better_auth_core::FieldValue,
     ) -> AuthResult<sea_orm::sea_query::SimpleExpr> {
+        let (column, value) = self.session_token_selector(token)?;
+        super::value_filter::equals(column, &value, self.connection().get_database_backend())
+    }
+
+    pub(super) fn session_tokens_filter(
+        &self,
+        tokens: &[String],
+    ) -> AuthResult<sea_orm::sea_query::SimpleExpr> {
+        let tokens = tokens
+            .iter()
+            .cloned()
+            .map(better_auth_core::FieldValue::from)
+            .collect::<Vec<_>>()
+            .into();
+        let (column, value) = self.session_token_selector(&tokens)?;
+        super::value_filter::is_in(column, &value, self.connection().get_database_backend())
+    }
+
+    fn session_token_selector(
+        &self,
+        token: &better_auth_core::FieldValue,
+    ) -> AuthResult<(
+        <S::Session as SeaOrmSessionModel>::Column,
+        better_auth_core::FieldValue,
+    )> {
         let field = self
             .config()
             .session
@@ -49,7 +74,7 @@ where
             field.field_name.as_deref(),
             "token",
         );
-        super::value_filter::equals(S::Session::field_column(name)?, &value, backend)
+        Ok((S::Session::field_column(name)?, value))
     }
 
     pub(super) async fn session_delete_snapshot(

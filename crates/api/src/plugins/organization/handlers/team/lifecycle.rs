@@ -113,7 +113,7 @@ pub(super) async fn create(
             })
             .await?;
     }
-    Ok(AuthResponse::json(200, &team)?)
+    Ok(AuthResponse::json(None, &team)?)
 }
 
 pub(super) async fn remove(
@@ -191,7 +191,7 @@ pub(super) async fn remove(
         hooks.after_delete_team(event).await?;
     }
     Ok(AuthResponse::json(
-        200,
+        None,
         &serde_json::json!({"message":"Team removed successfully."}),
     )?)
 }

@@ -206,7 +206,10 @@ async fn large_chain_numbers_persist_before_cancelled_session_without_consuming_
     let (plugin, ctx, reads, verified) = fixture(true).await?;
     let chain = 1e30;
     let request = request(&ctx, "1e30").await?;
-    let response = plugin.verify(&request, &ctx).await?;
+    let error = plugin.verify(&request, &ctx).await.unwrap_err();
+    assert!(error.is_api_error());
+    assert_eq!(error.status_code(), 500);
+    let response = error.to_auth_response();
     assert_eq!(response.status, 500);
     let body: Value = serde_json::from_slice(&response.body.bytes()?)?;
     assert_eq!(

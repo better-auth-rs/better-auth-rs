@@ -171,6 +171,7 @@ pub(super) fn numeric_output(enabled: Arc<AtomicBool>) -> UserFieldConfig {
 async fn native_member_page_preserves_projected_values_and_strict_join_identity() {
     let numeric_member_ids = Arc::new(AtomicBool::new(false));
     let mut auth = test_helpers::create_test_config();
+    auth.session.disable_session_refresh = Some(true);
     auth.advanced.database.generate_id = Some(IdGeneration::Serial);
     auth.advanced.database.joins = Some(true);
     let _ = auth.user.fields_mut().insert(
@@ -391,7 +392,9 @@ async fn native_invitation_reads_preserve_email_fallback_and_verification_order(
 async fn invitation_read_case(teams_enabled: bool) {
     let mut config = OrganizationConfig::default();
     config.teams.enabled = teams_enabled;
-    let ctx = context(test_helpers::create_test_config(), &config).await;
+    let mut auth = test_helpers::create_test_config();
+    auth.session.disable_session_refresh = Some(true);
+    let ctx = context(auth, &config).await;
     let user = ctx
         .database
         .create_user(CreateUser {

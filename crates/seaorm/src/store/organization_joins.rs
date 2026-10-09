@@ -172,7 +172,11 @@ where
                 self.config().advanced.database.generate_id(),
                 self.connection().get_database_backend(),
             )?,
-            OrganizationKey::Slug(slug) => O::Organization::column("slug")?.eq(slug),
+            OrganizationKey::Slug(slug) => super::value_filter::equals(
+                O::Organization::column("slug")?,
+                &slug.into(),
+                backend,
+            )?,
         };
         let query = Entity::<O::Organization>::find().filter(predicate).limit(1);
         let member_limit = input
@@ -211,7 +215,11 @@ where
                 self.connection().get_database_backend(),
             )?;
             let rows = Entity::<O::Invitation>::find()
-                .filter(O::Invitation::column("organization_id")?.eq(organization_id.clone()))
+                .filter(super::value_filter::equals_native(
+                    O::Invitation::column("organization_id")?,
+                    organization_id.clone(),
+                    backend,
+                )?)
                 .limit(limit)
                 .all(self.connection())
                 .await
@@ -223,7 +231,11 @@ where
                 None,
             )?;
             let rows = Entity::<O::Member>::find()
-                .filter(O::Member::column("organization_id")?.eq(organization_id.clone()))
+                .filter(super::value_filter::equals_native(
+                    O::Member::column("organization_id")?,
+                    organization_id.clone(),
+                    backend,
+                )?)
                 .limit(member_limit)
                 .all(self.connection())
                 .await
@@ -233,7 +245,11 @@ where
                 .await?;
             let teams = if input.include_teams {
                 let rows = Entity::<O::Team>::find()
-                    .filter(O::Team::column("organization_id")?.eq(organization_id))
+                    .filter(super::value_filter::equals_native(
+                        O::Team::column("organization_id")?,
+                        organization_id,
+                        backend,
+                    )?)
                     .limit(limit)
                     .all(self.connection())
                     .await
@@ -257,9 +273,11 @@ where
             super::plugin_rows::all(
                 self.connection(),
                 <S::User as SeaOrmUserModel>::Entity::find()
-                    .filter(
-                        S::User::id_column().is_in(members.iter().map(|(_, owner)| owner.clone())),
-                    )
+                    .filter(super::value_filter::is_in_native(
+                        S::User::id_column(),
+                        members.iter().map(|(_, owner)| owner.clone()),
+                        backend,
+                    )?)
                     .limit(limit),
             )
             .await?
@@ -420,7 +438,11 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPluginSchema> SeaOrmSt
         let fields = self.organization_fields()?;
         let backend = self.connection().get_database_backend();
         let parent = Entity::<O::Invitation>::find()
-            .filter(O::Invitation::column("email")?.eq(email.to_lowercase()))
+            .filter(super::value_filter::equals(
+                O::Invitation::column("email")?,
+                &email.to_lowercase().into(),
+                backend,
+            )?)
             .limit(super::pagination::default_limit(
                 self.config(),
                 self.connection().get_database_backend(),

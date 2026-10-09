@@ -28,7 +28,7 @@ impl UsernamePlugin {
             .get_user_by_field_value("username", &self.config.normalize(&username)?)
             .await?;
         Ok(AuthResponse::json(
-            200,
+            None,
             &json!({"available": found.is_none()}),
         )?)
     }
@@ -85,7 +85,7 @@ impl UsernamePlugin {
         .await;
         match result {
             Ok(result) => {
-                let mut response = AuthResponse::json(200, &result.response)?;
+                let mut response = AuthResponse::json(None, &result.response)?;
                 if let Some(callback) = body.callback_url.filter(|value| !value.is_empty()) {
                     let _ = response.headers.insert("Location", callback);
                 }

@@ -213,7 +213,7 @@ impl OneTimeTokenPlugin {
         endpoint.body = req.input_field_value()?;
         let token = self.generate_in_endpoint(data, &endpoint).await?;
         Ok(AuthResponse::json(
-            200,
+            None,
             &serde_json::json!({ "token": token }),
         )?)
     }
@@ -223,10 +223,7 @@ impl OneTimeTokenPlugin {
         req: &AuthRequest,
         ctx: &AuthContext<S>,
     ) -> AuthResult<AuthResponse> {
-        let token = match token_body(req, "token") {
-            Ok(token) => token,
-            Err(response) => return Ok(response),
-        };
+        let token = token_body(req, "token")?;
         let stored = self.config.store_token.encode(&token).await?;
         let Some(verification) = ctx
             .database
@@ -246,15 +243,12 @@ impl OneTimeTokenPlugin {
         if data.session.expires_at.is_before(Utc::now())? {
             return message_error("Session expired");
         }
-        Ok(AuthResponse::native(200, FieldMap::from(data).into()))
+        Ok(AuthResponse::native(None, FieldMap::from(data).into()))
     }
 }
 
 fn message_error(message: &str) -> AuthResult<AuthResponse> {
-    Ok(AuthResponse::json(
-        400,
-        &serde_json::json!({ "message": message }),
-    )?)
+    Err(AuthResponse::json(400, &serde_json::json!({ "message": message }))?.into())
 }
 
 pub(crate) fn session_required(error: AuthError) -> AuthError {
@@ -293,12 +287,10 @@ pub(crate) fn session_token_body(
         body,
     ))
 }
-pub(crate) fn token_body(req: &AuthRequest, field: &str) -> Result<String, AuthResponse> {
+pub(crate) fn token_body(req: &AuthRequest, field: &str) -> AuthResult<String> {
     match req.validated_body::<String>() {
         Some(body) => Ok(body.clone()),
-        None => token_input(req, field)
-            .map(|(body, _)| body)
-            .map_err(|error| error.to_auth_response()),
+        None => token_input(req, field).map(|(body, _)| body),
     }
 }
 

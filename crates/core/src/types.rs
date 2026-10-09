@@ -53,6 +53,7 @@ pub struct AuthRequest {
     pub(crate) virtual_session: Option<crate::wire::SessionView>,
     /// Cookie updates from session middleware, shared by normalized request clones.
     response_headers: std::sync::Arc<std::sync::Mutex<Headers>>,
+    response_status: std::sync::Arc<std::sync::Mutex<Option<u16>>>,
     server_only: bool,
     server_context: std::sync::Arc<std::sync::Mutex<crate::FieldMap>>,
     headers_present: bool,
@@ -91,15 +92,43 @@ impl RequestMeta {
 /// Authentication response wrapper
 #[derive(Debug, Clone)]
 pub struct AuthResponse {
+    /// Effective HTTP status. Assigning this field does not record an endpoint `setStatus` call.
     pub status: u16,
     /// Endpoint headers during native dispatch, or merged headers after HTTP materialization.
     pub headers: Headers,
     pub body: crate::ResponseBody,
     json_response: bool,
-    api_error: bool,
+    metadata: Option<Box<ResponseMetadata>>,
+    native_status: NativeResponseStatus,
+    api_error_status: Option<u16>,
+}
+
+#[derive(Debug, Clone, Default)]
+struct ResponseMetadata {
     error_headers: Option<Headers>,
     captured_headers: Option<Headers>,
     explicit_response_headers: Option<Headers>,
+}
+
+/// Status property returned by native endpoint dispatch with `returnStatus` enabled.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NativeResponseStatus {
+    /// A before hook returned before the endpoint created a status property.
+    Absent,
+    /// The endpoint returned an own `status: undefined` property.
+    Undefined,
+    /// The endpoint set a status, or dispatch caught an endpoint API error.
+    Value(u16),
+}
+
+impl NativeResponseStatus {
+    /// Read an explicit status without collapsing property presence in the enum.
+    pub fn value(self) -> Option<u16> {
+        match self {
+            Self::Value(value) => Some(value),
+            Self::Absent | Self::Undefined => None,
+        }
+    }
 }
 
 /// Response headers preserving repeated header names such as `Set-Cookie`.
@@ -474,6 +503,7 @@ impl AuthRequest {
             endpoint_body: None,
             virtual_session: None,
             response_headers: Default::default(),
+            response_status: Default::default(),
             server_only: false,
             server_context: Default::default(),
             headers_present: true,
@@ -505,6 +535,7 @@ impl AuthRequest {
             endpoint_body: None,
             virtual_session: None,
             response_headers: Default::default(),
+            response_status: Default::default(),
             server_only: false,
             server_context: Default::default(),
             headers_present: true,
@@ -723,10 +754,18 @@ impl AuthRequest {
             .cloned())
     }
 
-    /// Retain shared endpoint context while isolating a nested endpoint's response headers.
+    /// Retain shared endpoint context while isolating a nested endpoint's response headers and status.
     pub(crate) fn with_separate_response_headers(&self) -> Self {
         Self {
             response_headers: Default::default(),
+            response_status: Default::default(),
+            ..self.clone()
+        }
+    }
+
+    pub(crate) fn with_separate_response_status(&self) -> Self {
+        Self {
+            response_status: Default::default(),
             ..self.clone()
         }
     }
@@ -777,6 +816,24 @@ impl AuthRequest {
             .lock()
             .map_err(|_| crate::AuthError::internal("Session response headers lock poisoned"))?;
         Ok(std::mem::take(&mut *headers))
+    }
+
+    /// Set the active endpoint's native status. Hook statuses remain local to that hook.
+    pub fn set_response_status(&self, status: u16) -> crate::AuthResult<()> {
+        *self
+            .response_status
+            .lock()
+            .map_err(|_| crate::AuthError::internal("Endpoint response status lock poisoned"))? =
+            Some(status);
+        Ok(())
+    }
+
+    pub(crate) fn take_response_status(&self) -> crate::AuthResult<Option<u16>> {
+        Ok(self
+            .response_status
+            .lock()
+            .map_err(|_| crate::AuthError::internal("Endpoint response status lock poisoned"))?
+            .take())
     }
 
     pub fn body_as_json<T: for<'de> Deserialize<'de>>(&self) -> Result<T, serde_json::Error> {

@@ -254,7 +254,7 @@ mod tests {
                     WhereMode::Insensitive,
                     vec![0xd800, 0x41],
                     "\u{10061}",
-                    1,
+                    i64::from(encoding == "UTF-8"),
                 ),
                 (
                     WhereOperator::Eq,
@@ -268,14 +268,14 @@ mod tests {
                     WhereMode::Insensitive,
                     vec![0xd800, 0x41],
                     "\u{10061}",
-                    1,
+                    i64::from(encoding == "UTF-8"),
                 ),
                 (
                     WhereOperator::NotIn,
                     WhereMode::Insensitive,
                     vec![0xd800, 0x41],
                     "\u{10061}",
-                    0,
+                    i64::from(encoding != "UTF-8"),
                 ),
                 (
                     WhereOperator::Contains,

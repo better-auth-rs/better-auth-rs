@@ -804,7 +804,7 @@ pub(crate) async fn sign_in_verified_profile(
         .set_native_session_cookie(req, outcome.issued, None)
         .await?;
     Ok(AuthResponse::native(
-        200,
+        None,
         better_auth_core::FieldMap::from([
             ("token".into(), outcome.session.token().field_value()),
             (

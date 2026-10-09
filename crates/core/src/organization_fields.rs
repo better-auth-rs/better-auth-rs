@@ -94,7 +94,7 @@ pub struct OrganizationFields {
 }
 
 impl OrganizationFields {
-    fn fields_for(
+    pub(crate) fn fields_for(
         &self,
         role: better_auth_schema_registry::EntityRole,
     ) -> crate::AuthResult<&UserConfig> {

@@ -414,17 +414,21 @@ async fn serial_invitation_cookie_projects_ids_without_changing_session_update_o
         );
         assert_eq!(cookie.active_team_id.typed().unwrap().as_deref(), Some("1"));
         let state = store.lock()?;
-        let raw = required(state.sessions.find(|row| row.token == session.token)?)?;
-        assert_eq!(raw.id.field_value(), Value::Number(1.0));
+        let raw = required(
+            state
+                .sessions
+                .find(|row| row.get("token") == Some(&session.token.field_value()))?,
+        )?;
+        assert_eq!(raw.get("id"), Some(&Value::Number(1.0)));
         assert_eq!(
-            raw.user_id.field_value(),
+            raw.get("userId").cloned().unwrap_or_default(),
             Value::Number(if override_user_id { 7.0 } else { 1.0 })
         );
         assert_eq!(
-            raw.active_organization_id.typed().unwrap().as_deref(),
+            raw.get("activeOrganizationId").and_then(Value::as_str),
             Some("1")
         );
-        assert_eq!(raw.active_team_id.typed().unwrap().as_deref(), Some("1"));
+        assert_eq!(raw.get("activeTeamId").and_then(Value::as_str), Some("1"));
         assert_eq!(
             organization_id(required(state.members.snapshot()?.first())?).field_value(),
             Value::Number(1.0)

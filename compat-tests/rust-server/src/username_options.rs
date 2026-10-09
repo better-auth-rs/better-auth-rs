@@ -26,7 +26,7 @@ use better_auth_core::{
 };
 use better_auth_seaorm::{
     SeaOrmStore,
-    hooks::{DatabaseHookUpdate, HookControl, SeaOrmHookContext, SeaOrmHooks},
+    hooks::{DatabaseHookUpdate, SeaOrmHookContext, SeaOrmHooks},
     sea_orm::{
         ConnectionTrait, DatabaseConnection, DbBackend, Schema as DatabaseSchema, Statement,
     },

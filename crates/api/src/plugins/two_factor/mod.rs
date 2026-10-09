@@ -591,7 +591,7 @@ impl TwoFactorPlugin {
 
         let (response, set_cookie_headers) =
             enable_core(req, &body, &data, &self.config, ctx).await?;
-        let mut auth_response = AuthResponse::json(200, &response)?;
+        let mut auth_response = AuthResponse::json(None, &response)?;
         for cookie in set_cookie_headers {
             auth_response = auth_response.with_appended_header("Set-Cookie", cookie);
         }
@@ -608,7 +608,7 @@ impl TwoFactorPlugin {
 
         let (response, set_cookie_headers) =
             disable_core(&body, &data, req, &self.config, ctx).await?;
-        let mut auth_response = AuthResponse::json(200, &response)?;
+        let mut auth_response = AuthResponse::json(None, &response)?;
         for cookie in set_cookie_headers {
             auth_response = auth_response.with_appended_header("Set-Cookie", cookie);
         }
@@ -629,7 +629,7 @@ impl TwoFactorPlugin {
         let data = ctx.require_native_session(req).await?;
 
         let response = get_totp_uri_core(&body, &data, &self.config, ctx).await?;
-        AuthResponse::json(200, &response).map_err(AuthError::from)
+        AuthResponse::json(None, &response).map_err(AuthError::from)
     }
 
     async fn handle_verify_totp(
@@ -641,7 +641,7 @@ impl TwoFactorPlugin {
 
         let (response, set_cookie_headers) =
             verify_totp_core(req, &body, &self.config, ctx).await?;
-        let mut auth_response = AuthResponse::native(200, response.into_field_value());
+        let mut auth_response = AuthResponse::native(None, response.into_field_value());
         for cookie in set_cookie_headers {
             auth_response = auth_response.with_appended_header("Set-Cookie", cookie);
         }
@@ -654,7 +654,7 @@ impl TwoFactorPlugin {
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let response = send_otp_core(req, &self.config, ctx).await?;
-        AuthResponse::json(200, &response).map_err(AuthError::from)
+        AuthResponse::json(None, &response).map_err(AuthError::from)
     }
 
     async fn handle_verify_otp(
@@ -665,7 +665,7 @@ impl TwoFactorPlugin {
         let body: VerifyOtpRequest = request::read(req, false)?;
 
         let (response, set_cookie_headers) = verify_otp_core(req, &body, &self.config, ctx).await?;
-        let mut auth_response = AuthResponse::native(200, response.into_field_value());
+        let mut auth_response = AuthResponse::native(None, response.into_field_value());
         for cookie in set_cookie_headers {
             auth_response = auth_response.with_appended_header("Set-Cookie", cookie);
         }
@@ -687,7 +687,7 @@ impl TwoFactorPlugin {
         let data = ctx.require_native_session(req).await?;
 
         let response = generate_backup_codes_core(&body, &data, &self.config, ctx).await?;
-        AuthResponse::json(200, &response).map_err(AuthError::from)
+        AuthResponse::json(None, &response).map_err(AuthError::from)
     }
 
     async fn handle_verify_backup_code(
@@ -699,7 +699,7 @@ impl TwoFactorPlugin {
 
         let (response, set_cookie_headers) =
             verify_backup_code_core(req, &body, &self.config, ctx).await?;
-        let mut auth_response = AuthResponse::native(200, response.into_field_value());
+        let mut auth_response = AuthResponse::native(None, response.into_field_value());
         for cookie in set_cookie_headers {
             auth_response = auth_response.with_appended_header("Set-Cookie", cookie);
         }

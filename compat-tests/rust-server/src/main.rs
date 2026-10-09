@@ -35,7 +35,6 @@ use better_auth::plugins::{
     user_management::SendChangeEmailConfirmation,
 };
 use better_auth::prelude::{AuthUser, CreateAccount, CreateVerification};
-use better_auth::wire::UserView;
 use better_auth::{AuthBuilder, AuthConfig};
 use better_auth_seaorm::sea_orm::{DatabaseConnection, DbErr, EntityTrait};
 use better_auth_seaorm::store::entities::{

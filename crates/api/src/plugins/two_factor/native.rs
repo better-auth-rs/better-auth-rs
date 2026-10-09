@@ -41,7 +41,7 @@ impl<'a, S: AuthSchema> TwoFactorApi<'a, S> {
                     .validated_body::<request::GenerateTotpRequest>()
                     .ok_or_else(|| AuthError::internal("Missing validated TOTP input"))?;
                 AuthResponse::json(
-                    200,
+                    None,
                     &serde_json::json!({"code":self.plugin.generate_totp(&body.secret)?}),
                 )
                 .map_err(Into::into)
@@ -75,7 +75,7 @@ impl<'a, S: AuthSchema> TwoFactorApi<'a, S> {
                         .view_backup_codes(&body.user_id, &context)
                         .await?;
                     Ok(AuthResponse::native(
-                        200,
+                        None,
                         FieldMap::from([
                             ("status".into(), true.into()),
                             ("backupCodes".into(), codes),

@@ -61,20 +61,26 @@ fn observe_fields(fields: FieldMap) -> AuthResult<JsonValue> {
 }
 
 fn observe_session(row: &SessionView, trace: &Trace) -> AuthResult<JsonValue> {
+    assert!(row.active);
+    observe_session_fields(row.clone().into(), trace)
+}
+
+fn observe_session_fields(mut row: FieldMap, trace: &Trace) -> AuthResult<JsonValue> {
     let generated = trace_lock(trace)?.generated.clone();
-    let mut row = row.clone();
     if let Some(generated) = generated {
         // Rust creates the token and dates internally. Normalize only the same generated values across every observation.
-        assert_eq!(row.token, generated.token);
-        assert_eq!(row.created_at, generated.created_at);
-        if row.updated_at == generated.updated_at {
-            row.updated_at = date(CREATED_AT)?.into();
+        assert_eq!(row.get("token"), Some(&generated.token.field_value()));
+        assert_eq!(
+            row.get("createdAt"),
+            Some(&generated.created_at.field_value())
+        );
+        if row.get("updatedAt") == Some(&generated.updated_at.field_value()) {
+            let _ = row.insert("updatedAt".into(), date(CREATED_AT)?.into());
         }
-        row.token = "live-session-desk".into();
-        row.created_at = date(CREATED_AT)?.into();
+        let _ = row.insert("token".into(), "live-session-desk".into());
+        let _ = row.insert("createdAt".into(), date(CREATED_AT)?.into());
     }
-    assert!(row.active);
-    observe_fields(row.into())
+    observe_fields(row)
 }
 
 fn observe_user(row: &UserView, raw: bool) -> AuthResult<JsonValue> {
@@ -114,7 +120,7 @@ fn observe_memory(store: &EphemeralStore, trace: &Trace) -> AuthResult<JsonValue
         .sessions
         .snapshot()?
         .iter()
-        .map(|row| observe_session(row, trace))
+        .map(|row| observe_session_fields(row.clone(), trace))
         .collect::<AuthResult<Vec<_>>>()?;
     assert!(state.accounts.snapshot()?.is_empty());
     assert!(state.verifications.snapshot()?.is_empty());
@@ -170,13 +176,11 @@ fn reader(writer: &EphemeralStore, path: &str, trace: &Trace) -> EphemeralStore 
                                     )?;
                                     let stored = required(
                                         writer.lock()?.sessions.find(|row| {
-                                            row.additional_fields
-                                                .get("label")
-                                                .and_then(Value::as_str)
-                                                == Some(label)
+                                            row.get("label").and_then(Value::as_str) == Some(label)
                                         })?,
                                         "Callback writer must find the selected Session",
                                     )?;
+                                    let stored = SessionView::from_field_values(stored)?;
                                     if create {
                                         assert!(!stored.token.typed().unwrap().is_empty());
                                         let ended = Utc::now().timestamp_millis() as f64;

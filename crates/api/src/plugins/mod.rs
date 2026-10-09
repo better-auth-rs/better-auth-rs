@@ -62,7 +62,7 @@ pub(crate) mod test_helpers {
 
     pub type TestDatabase = dyn better_auth_core::store::AuthStore<BundledSchema>;
 
-    /// Apply the dispatch response boundary after invoking an internal handler directly.
+    /// Materialize HTTP output after invoking an internal handler directly.
     pub fn finalize_response(
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
         req: &AuthRequest,
@@ -71,7 +71,7 @@ pub(crate) mod test_helpers {
         ctx.session_manager()
             .finish_response(req, &mut response)
             .expect("endpoint response should finalize");
-        response
+        response.into_http_response()
     }
 
     pub fn create_test_config() -> AuthConfig {

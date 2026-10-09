@@ -117,23 +117,24 @@ impl<S: AuthSchema> EndpointDispatcher<S> {
 
         // Build a request with the stripped path for all subsequent dispatch
         let mut internal_req = if stripped_path != req.path() {
-            let mut r = req.clone();
+            let mut r = req.with_separate_response_status();
             r.path = stripped_path.to_string();
             r
         } else {
-            req.clone()
+            req.with_separate_response_status()
         };
         internal_req.set_endpoint_body(internal_req.unvalidated_input()?);
         update_request_hook_context(&internal_req)?;
 
         let mut input_patch = crate::endpoint_input::EndpointInputPatch::default();
         if let Some(hook) = &self.hooks.before {
+            let hook_request = internal_req.with_separate_response_status();
             let action = match crate::observability::instrumentation::with_endpoint_hook(
                 &context.config,
-                &internal_req,
+                &hook_request,
                 "before",
                 "user",
-                hook.before(&internal_req, context),
+                hook.before(&hook_request, context),
             )
             .await
             {
@@ -154,7 +155,8 @@ impl<S: AuthSchema> EndpointDispatcher<S> {
         // Run plugin before_request hooks (e.g. API-key → session emulation)
         // Plugins now see the normalised (base_path-stripped) path.
         for plugin in self.plugins.iter() {
-            let action = match plugin.before_request(&internal_req, context).await {
+            let hook_request = internal_req.with_separate_response_status();
+            let action = match plugin.before_request(&hook_request, context).await {
                 Ok(action) => action,
                 Err(error) => return Err(endpoint_error(error, &internal_req)?),
             };
@@ -259,30 +261,46 @@ impl<S: AuthSchema> EndpointDispatcher<S> {
             },
         )
         .await;
+        let endpoint_status = internal_req.take_response_status()?;
         let mut response = match result {
-            Ok(response) => response,
-            Err(error) if error.is_api_error() => error.to_auth_response(),
+            Ok(mut response) => {
+                let status = endpoint_status
+                    .map_or(response.native_status(), crate::NativeResponseStatus::Value);
+                response.set_native_status(status);
+                response
+            }
+            Err(error) if error.is_api_error() => {
+                let status = error.status_code();
+                let mut response = error.to_auth_response();
+                response.set_native_status(crate::NativeResponseStatus::Value(status));
+                response
+            }
             Err(error) => return Err(error),
         };
+        let native_status = response.native_status();
         context
             .session_manager()
             .finish_response(&internal_req, &mut response)?;
         if let Some(hook) = &self.hooks.after {
+            let hook_request = internal_req.with_separate_response_status();
             let result = crate::observability::instrumentation::with_endpoint_hook(
                 &context.config,
-                &internal_req,
+                &hook_request,
                 "after",
                 "user",
-                hook.after(&internal_req, &mut response, context),
+                hook.after(&hook_request, &mut response, context),
             )
             .await;
-            apply_after_result(result, &internal_req, &mut response)?;
+            apply_after_result(result, &hook_request, &mut response)?;
+            response.set_native_status(native_status);
         }
         for plugin in self.plugins.iter() {
+            let hook_request = internal_req.with_separate_response_status();
             let result = plugin
-                .after_request(&internal_req, &mut response, context)
+                .after_request(&hook_request, &mut response, context)
                 .await;
-            apply_after_result(result, &internal_req, &mut response)?;
+            apply_after_result(result, &hook_request, &mut response)?;
+            response.set_native_status(native_status);
         }
         if response.is_api_error() && !http {
             response.capture_error_headers(response.headers.clone());
@@ -311,6 +329,7 @@ fn apply_before_action(
 ) -> AuthResult<Option<AuthResponse>> {
     match action {
         Some(BeforeRequestAction::Respond(mut response)) => {
+            response.set_native_status(crate::NativeResponseStatus::Absent);
             response.merge_endpoint_headers(internal.take_response_headers()?);
             return Ok(Some(response));
         }

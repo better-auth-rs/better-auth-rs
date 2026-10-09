@@ -384,7 +384,7 @@ async fn trusted_member_capacity_failure_cleans_up_native_identifiers() {
         .add_member(
             AddMemberInput {
                 additional_fields: Default::default(),
-                user_id: user.id.clone(),
+                user_id: user.id.display_string().unwrap().into(),
                 organization_id: organization.id.clone(),
                 role: RoleInput::One("member".into()).into(),
                 team_id: team.id.display_string().unwrap().into(),
@@ -393,13 +393,16 @@ async fn trusted_member_capacity_failure_cleans_up_native_identifiers() {
             &ctx,
         )
         .await;
-    assert!(matches!(
-        result,
-        Err(AuthError::Upstream {
-            code: "TEAM_MEMBER_LIMIT_REACHED",
-            ..
-        })
-    ));
+    assert!(
+        matches!(
+            &result,
+            Err(AuthError::Upstream {
+                code: "TEAM_MEMBER_LIMIT_REACHED",
+                ..
+            })
+        ),
+        "{result:?}"
+    );
     assert_eq!(
         ctx.database
             .count_organization_members_value(&organization.id.field_value())

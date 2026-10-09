@@ -1,5 +1,5 @@
 //! Real native dispatch paired with the complete Better Auth 1.7.6 Session capture.
-//! Upstream replay retains nativeStatus. Rust exposes only the effective HTTP status and cannot report an unset native status.
+//! Native status provenance, effective HTTP status, headers, storage, and hook events remain distinct observations.
 
 #![expect(
     clippy::unwrap_used,
@@ -135,7 +135,10 @@ fn returned(response: &AuthResponse) -> AuthResult<FieldValue> {
             ("kind", "api-error".into()),
             ("name", "APIError".into()),
             ("message", message.into()),
-            ("status", f64::from(response.status).into()),
+            (
+                "status",
+                f64::from(response.api_error_status().unwrap()).into(),
+            ),
             ("body", value),
         ])
     } else {
@@ -546,6 +549,11 @@ async fn check(case: &Value) -> AuthResult<()> {
         .await?;
         clock.end = Utc::now().timestamp_millis();
         assert_eq!(
+            observe_native_status(&response, clock.shift)?,
+            case["cacheSetup"]["nativeStatus"],
+            "{name} cache setup native status"
+        );
+        assert_eq!(
             json!(response.status),
             case["cacheSetup"]["status"],
             "{name} effective HTTP status"
@@ -601,6 +609,7 @@ async fn check(case: &Value) -> AuthResult<()> {
     let result = match result {
         Ok(response) => {
             let mut result = observe(&returned(&response)?, clock.shift)?;
+            result["nativeStatus"] = observe_native_status(&response, clock.shift)?;
             result["status"] = json!(response.status);
             result["headers"] = clock.actual_headers(&response.headers)?;
             result
@@ -621,8 +630,6 @@ async fn check(case: &Value) -> AuthResult<()> {
         Err(error) => return Err(error),
     };
     let mut expected = case["result"].clone();
-    // AuthResponse carries the effective HTTP status; upstream replay alone verifies native status provenance.
-    let _ = expected.as_object_mut().unwrap().remove("nativeStatus");
     expected["headers"] = clock.expected_headers(&case["result"]["headers"])?;
     assert_eq!(result, expected, "{name} complete native result");
     let events = hooks.events.lock().unwrap().clone();
@@ -637,6 +644,19 @@ async fn check(case: &Value) -> AuthResult<()> {
         "{name} complete final storage"
     );
     Ok(())
+}
+
+fn observe_native_status(response: &AuthResponse, shift: i64) -> AuthResult<Value> {
+    let value = match response.native_status() {
+        better_auth_core::NativeResponseStatus::Undefined => FieldValue::Undefined,
+        better_auth_core::NativeResponseStatus::Value(status) => {
+            FieldValue::Number(f64::from(status))
+        }
+        better_auth_core::NativeResponseStatus::Absent => {
+            panic!("Endpoint status property is absent")
+        }
+    };
+    observe(&value, shift)
 }
 
 #[tokio::test]

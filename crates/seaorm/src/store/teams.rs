@@ -269,7 +269,11 @@ impl<
                         )
                     })?;
                     let row = Entity::<O::Team>::find()
-                        .filter(O::Team::column("id")?.eq(models::join_value(member, "team_id")?))
+                        .filter(super::value_filter::equals_native(
+                            O::Team::column("id")?,
+                            models::join_value(member, "team_id")?,
+                            self.connection().get_database_backend(),
+                        )?)
                         .one(self.connection())
                         .await
                         .map_err(map_db_err)?;

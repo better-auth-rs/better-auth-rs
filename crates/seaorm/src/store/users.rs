@@ -46,7 +46,11 @@ where
             .transpose()?;
         let query = async {
             let filter = match parsed_id {
-                Some(id) => S::User::id_column().eq(id),
+                Some(id) => super::value_filter::equals_native(
+                    S::User::id_column(),
+                    id,
+                    db.get_database_backend(),
+                )?,
                 None => super::value_filter::equals(
                     S::User::id_column(),
                     id,

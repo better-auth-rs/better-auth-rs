@@ -6,7 +6,7 @@ import { getMigrations } from "better-auth/db/migration";
 import { getWithHooks } from "../node_modules/better-auth/dist/db/with-hooks.mjs";
 
 type Fields = Record<string, unknown>;
-const date = (offset: number) => new Date(4_102_444_800_000 + offset * 1000);
+const date = (offset: number) => new Date(1_893_456_000_000 + offset * 1000);
 
 for (const backend of ["memory", "sqlite"] as const) {
   for (const writeDatabase of [false, true]) {

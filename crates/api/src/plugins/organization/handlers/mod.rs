@@ -144,7 +144,7 @@ pub async fn handle_has_permission(
     let session = require_native_session(req, ctx).await?;
     let body: HasPermissionRequest = super::request::read(req, &config.schema)?;
     let response = has_permission_core(&body, &session, config, ctx).await?;
-    Ok(AuthResponse::json(200, &response)?)
+    Ok(AuthResponse::json(None, &response)?)
 }
 
 #[cfg(test)]

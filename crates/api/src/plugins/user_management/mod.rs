@@ -264,7 +264,7 @@ impl UserManagementPlugin {
             })?;
         let body = request::change_email(req)?;
         let response = change_email_core(&body, &data, req, &self.config, ctx).await?;
-        Ok(AuthResponse::json(200, &response)?)
+        Ok(AuthResponse::json(None, &response)?)
     }
 
     /// `POST /delete-user`
@@ -276,7 +276,7 @@ impl UserManagementPlugin {
         let data = ctx.require_native_session(req).await?;
         let body = request::delete_user(req)?;
         let response = delete_user_core(&body, &data, req, &self.config, ctx).await?;
-        let mut response = AuthResponse::json(200, &response)?;
+        let mut response = AuthResponse::json(None, &response)?;
         for (name, value) in req.take_response_headers()? {
             response.headers.append(name, value);
         }
@@ -317,7 +317,7 @@ impl UserManagementPlugin {
             return Ok(response);
         }
 
-        let mut response = AuthResponse::json(200, &response)?;
+        let mut response = AuthResponse::json(None, &response)?;
         for (name, value) in req.take_response_headers()? {
             response.headers.append(name, value);
         }

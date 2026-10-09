@@ -46,10 +46,11 @@ pub(super) async fn handle(
         .retain(|name, _| !protected_fields.contains(&name.as_str()));
     let fields = schema.parse_input(&better_auth_core::FieldMap::from_json(body)?, false)?;
     if fields.is_empty() {
-        return Ok(AuthResponse::json(
+        return Err(AuthResponse::json(
             400,
             &serde_json::json!({ "message": "No fields to update" }),
-        )?);
+        )?
+        .into());
     }
     let updated = ctx
         .database
@@ -81,16 +82,17 @@ pub(super) async fn handle(
         .await?;
     data.session.filter_returned_fields(&ctx.config.session)?;
     Ok(AuthResponse::json(
-        200,
+        None,
         &serde_json::json!({ "session": data.session }),
     )?)
 }
 
 fn field_not_allowed(name: &str) -> AuthResult<AuthResponse> {
-    Ok(AuthResponse::json(
+    Err(AuthResponse::json(
         400,
         &serde_json::json!({
             "code": "FIELD_NOT_ALLOWED", "message": format!("{name} is not allowed to be set"),
         }),
-    )?)
+    )?
+    .into())
 }

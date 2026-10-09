@@ -126,9 +126,9 @@ impl MemberStore for EphemeralStore {
         let schema = self.field_config(EntityRole::Member)?;
         let rows = self.lock()?.members.snapshot()?;
         match rows.into_iter().find(|row| {
-            organization_value(&row, &schema, "organizationId")
+            organization_value(row, &schema, "organizationId")
                 .strict_equals(&organization_id.field_value())
-                && organization_value(&row, &schema, "userId").strict_equals(&user_id.field_value())
+                && organization_value(row, &schema, "userId").strict_equals(&user_id.field_value())
         }) {
             Some(value) => self.output_member(value).await.map(Some),
             None => Ok(None),

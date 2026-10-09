@@ -87,7 +87,7 @@ impl<'a, S: AuthSchema> OrganizationApi<'a, S> {
                 .plugin
                 .add_member_core(input.clone(), &request, &endpoint)
                 .await?;
-            Ok(AuthResponse::native(200, member.field_values()?.into()))
+            Ok(AuthResponse::native(None, member.field_values()?.into()))
         };
         match body {
             MemberInput::Json(body) => {

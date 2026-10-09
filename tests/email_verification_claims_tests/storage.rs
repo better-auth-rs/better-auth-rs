@@ -45,13 +45,22 @@ pub(super) async fn seed<S: AuthSchema>(store: &dyn AuthStore<S>, existing: bool
                 impersonated_by: None,
                 active_organization_id: None,
                 additional_fields: FieldMap::from([
-                    ("id".into(), "claims-existing-session".into()),
                     ("token".into(), "existing-claims-session-token".into()),
                     ("createdAt".into(), date.clone().into()),
-                    ("updatedAt".into(), date.into()),
+                    ("updatedAt".into(), date.clone().into()),
                 ]),
             })
             .await?;
+        let _ = store
+            .update_session_fields(
+                "existing-claims-session-token",
+                FieldMap::from([
+                    ("id".into(), "claims-existing-session".into()),
+                    ("updatedAt".into(), date.into()),
+                ]),
+            )
+            .await?
+            .ok_or(AuthError::SessionNotFound)?;
     }
     Ok(())
 }

@@ -134,7 +134,7 @@ impl ApiKeyVerificationError {
                 let body: serde_json::Value =
                     serde_json::from_slice(&error.to_auth_response().body.bytes()?)?;
                 return Ok(AuthResponse::json(
-                    200,
+                    None,
                     &serde_json::json!({"valid":false,"error":body,"key":null}),
                 )?);
             }
@@ -148,7 +148,7 @@ impl ApiKeyVerificationError {
             }
         };
         Ok(AuthResponse::json(
-            200,
+            None,
             &serde_json::json!({"valid":false,"error":error,"key":null}),
         )?)
     }
@@ -360,7 +360,7 @@ impl ApiKeyPlugin {
                 .contains(&name.as_str())
             });
             return Ok(Some(BeforeRequestAction::Respond(AuthResponse::native(
-                200,
+                None,
                 better_auth_core::FieldMap::from([
                     ("user".into(), better_auth_core::FieldMap::from(user).into()),
                     ("session".into(), fields.into()),

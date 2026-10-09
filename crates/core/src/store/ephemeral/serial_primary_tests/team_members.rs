@@ -94,7 +94,7 @@ async fn acceptance_consumes_projected_fields_and_keeps_the_original_claim_for_c
             store
                 .lock()?
                 .sessions
-                .find(|row| row.token == session.token)?,
+                .find(|row| row.get("token") == Some(&session.token.field_value()))?,
         )?;
         let mut fields = OrganizationFields::default();
         for (name, output) in [
@@ -162,15 +162,22 @@ async fn acceptance_consumes_projected_fields_and_keeps_the_original_claim_for_c
         );
         assert_eq!(state.members.len(), maximum);
         assert_eq!(state.team_members.len(), maximum);
-        let persisted = required(state.sessions.find(|row| row.token == session.token)?)?;
+        let persisted = required(
+            state
+                .sessions
+                .find(|row| row.get("token") == Some(&session.token.field_value()))?,
+        )?;
         if maximum == 0 {
             assert_eq!(persisted, original_session);
         } else {
             assert_eq!(
-                persisted.active_organization_id.field_value(),
+                persisted
+                    .get("activeOrganizationId")
+                    .cloned()
+                    .unwrap_or_default(),
                 Value::Number(2.0)
             );
-            assert_eq!(persisted.active_team_id.field_value(), Value::from("2"));
+            assert_eq!(persisted.get("activeTeamId"), Some(&Value::from("2")));
         }
     }
     Ok(())

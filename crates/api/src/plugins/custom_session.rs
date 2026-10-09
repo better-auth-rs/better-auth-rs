@@ -115,7 +115,7 @@ impl<S: AuthSchema> CustomSessionPlugin<S> {
             Ok(response) => response,
             Err(_) => {
                 let _ = request.take_response_headers()?;
-                return Ok(AuthResponse::json(200, &Value::Null)?);
+                return Ok(AuthResponse::json(None, &Value::Null)?);
             }
         };
         let data = CustomSessionInput::from_response(&response.body)?;

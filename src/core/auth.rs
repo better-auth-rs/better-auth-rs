@@ -743,7 +743,7 @@ impl<S: AuthSchema> BetterAuth<S> {
     ) -> AuthResult<Option<AuthResponse>> {
         match (req.method(), req.path()) {
             (HttpMethod::Get, core_paths::OK) => {
-                Ok(Some(AuthResponse::json(200, &OkResponse { ok: true })?))
+                Ok(Some(AuthResponse::json(None, &OkResponse { ok: true })?))
             }
             (HttpMethod::Get, core_paths::ERROR) => Ok(Some(context.error_page_response(req)?)),
             (HttpMethod::Get, core_paths::OPENAPI_SPEC) => {
@@ -752,7 +752,7 @@ impl<S: AuthSchema> BetterAuth<S> {
                     .get::<OpenApiRegistry>()
                     .ok_or_else(|| AuthError::config("OpenAPI registry is not initialized"))?
                     .generate(context.base_url());
-                Ok(Some(AuthResponse::json(200, &spec)?))
+                Ok(Some(AuthResponse::json(None, &spec)?))
             }
             (HttpMethod::Post, core_paths::UPDATE_USER) => {
                 Ok(Some(self.handle_update_user(req, context).await?))
@@ -860,7 +860,7 @@ impl<S: AuthSchema> BetterAuth<S> {
             )
             .await?;
         Ok(AuthResponse::json(
-            200,
+            None,
             &better_auth_core::StatusResponse { status: true },
         )?)
     }

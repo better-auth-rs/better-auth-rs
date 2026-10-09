@@ -69,7 +69,7 @@ impl<'a, S: AuthSchema> EmailOtpApi<'a, S> {
                         .plugin
                         .create_otp(&endpoint, &email, body.kind, &body.kind.identifier(&email))
                         .await?;
-                    AuthResponse::json(200, &otp).map_err(Into::into)
+                    AuthResponse::json(None, &otp).map_err(Into::into)
                 },
             )
             .await?;
@@ -121,7 +121,7 @@ impl<'a, S: AuthSchema> EmailOtpApi<'a, S> {
                     } else {
                         None
                     };
-                    AuthResponse::json(200, &serde_json::json!({"otp":otp})).map_err(Into::into)
+                    AuthResponse::json(None, &serde_json::json!({"otp":otp})).map_err(Into::into)
                 },
             )
             .await?;

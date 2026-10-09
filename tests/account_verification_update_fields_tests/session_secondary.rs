@@ -149,7 +149,7 @@ async fn check<S: AuthSchema>(
     );
     let inner = raw.with_runtime(config.clone(), hooks, Default::default())?;
     let runtime = SecondaryStore::new(inner, cache.clone(), config, Default::default())?
-        .with_clock(|| chrono::DateTime::from_timestamp_millis(4_102_444_800_000).unwrap());
+        .with_clock(|| chrono::DateTime::from_timestamp_millis(1_893_456_000_000).unwrap());
     let result = runtime
         .update_session_fields(
             &token,
@@ -225,8 +225,8 @@ async fn check<S: AuthSchema>(
     );
     let references = json!([{"token":token,"expiresAt":date(expiration).milliseconds()}]);
     assert_eq!(
-        serde_json::from_str::<Value>(&values[&reference_key])?,
-        references
+        FieldValue::from_json(serde_json::from_str::<Value>(&values[&reference_key])?)?,
+        FieldValue::from_json(references)?
     );
     let writes = cache.writes.lock().unwrap();
     assert_eq!(writes.len(), 2);

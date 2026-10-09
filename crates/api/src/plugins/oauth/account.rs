@@ -46,13 +46,14 @@ pub(super) fn account_body(
 }
 
 fn invalid_selection(location: &str, message: String) -> AuthResult<AuthResponse> {
-    Ok(AuthResponse::json(
+    Err(AuthResponse::json(
         400,
         &better_auth_core::ErrorCodeMessageResponse {
             code: Some("VALIDATION_ERROR".into()),
             message: format!("[{location}] {message}"),
         },
-    )?)
+    )?
+    .into())
 }
 
 impl AccountSelection {
@@ -439,7 +440,7 @@ async fn valid_access_token(
 }
 
 fn token_response(value: &impl serde::Serialize, cookies: Vec<String>) -> AuthResult<AuthResponse> {
-    let mut response = AuthResponse::json(200, value)?;
+    let mut response = AuthResponse::json(None, value)?;
     for cookie in cookies {
         response = response.with_appended_header("Set-Cookie", cookie);
     }

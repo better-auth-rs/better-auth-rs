@@ -199,7 +199,7 @@ impl AnonymousPlugin {
             .set_native_session_cookie(req, issued.clone(), None)
             .await?;
         Ok(AuthResponse::native(
-            200,
+            None,
             better_auth_core::FieldMap::from([
                 ("token".into(), issued.session.token().field_value()),
                 (
@@ -266,7 +266,7 @@ impl AnonymousPlugin {
             })?;
         ctx.session_manager().clear_cookies(req)?;
         Ok(AuthResponse::json(
-            200,
+            None,
             &serde_json::json!({"success":true}),
         )?)
     }

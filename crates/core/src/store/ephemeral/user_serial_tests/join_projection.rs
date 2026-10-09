@@ -22,8 +22,9 @@ async fn serial_array_owners_join_only_after_fallback_projection() -> AuthResult
         assert_eq!(stored_ids(&store)?, [Value::Number(1.0)]);
         assert_eq!(
             required(store.lock()?.sessions.snapshot()?.first())?
-                .user_id
-                .field_value(),
+                .get("userId")
+                .cloned()
+                .unwrap_or_default(),
             raw_owner
         );
         let single = required(

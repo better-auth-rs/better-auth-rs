@@ -343,7 +343,7 @@ impl DeviceAuthorizationPlugin {
             )?;
 
             return Ok(AuthResponse::json(
-                200,
+                None,
                 &DeviceCodeResponse {
                     device_code,
                     user_code,
@@ -446,7 +446,7 @@ impl DeviceAuthorizationPlugin {
         }
 
         Ok(AuthResponse::native(
-            200,
+            None,
             FieldMap::from([
                 ("access_token".into(), token),
                 ("token_type".into(), "Bearer".into()),
@@ -530,7 +530,7 @@ impl DeviceAuthorizationPlugin {
                 ("scope".into(), device_code.scope.into_field_value()),
             ]));
         }
-        Ok(AuthResponse::native(200, response.into()))
+        Ok(AuthResponse::native(None, response.into()))
     }
 
     async fn handle_device_approve(
@@ -609,7 +609,7 @@ impl DeviceAuthorizationPlugin {
             return device_error_response(400, "invalid_request", DEVICE_CODE_ALREADY_PROCESSED);
         }
 
-        AuthResponse::json(200, &DeviceActionResponse { success: true }).map_err(AuthError::from)
+        AuthResponse::json(None, &DeviceActionResponse { success: true }).map_err(AuthError::from)
     }
 
     async fn validate_client_id(&self, client_id: &str) -> AuthResult<bool> {

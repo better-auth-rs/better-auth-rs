@@ -287,13 +287,7 @@ impl EphemeralStore {
                 .iter()
                 .map(AuthRecordFields::field_values)
                 .collect(),
-            // The adapter row excludes Rust's private Session active flag.
-            EntityRole::Session => Ok(state
-                .sessions
-                .snapshot()?
-                .into_iter()
-                .map(FieldMap::from)
-                .collect()),
+            EntityRole::Session => state.sessions.snapshot(),
             EntityRole::Account => state.accounts.snapshot(),
             EntityRole::Verification => state.verifications.snapshot(),
             _ => state.plugin_rows(role)?.snapshot(),

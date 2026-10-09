@@ -107,7 +107,7 @@ fn raw_memory(store: &EphemeralStore) -> AuthResult<JsonValue> {
         .sessions
         .snapshot()?
         .iter()
-        .map(|session| observe_fields(&session.field_values()?))
+        .map(observe_fields)
         .collect::<AuthResult<Vec<_>>>()?;
     Ok(json!({
         "user":users,

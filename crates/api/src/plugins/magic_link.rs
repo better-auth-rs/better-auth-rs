@@ -215,7 +215,7 @@ impl MagicLinkPlugin {
                 .await?;
         }
         Ok(AuthResponse::json(
-            200,
+            None,
             &serde_json::json!({ "status": true }),
         )?)
     }
@@ -326,7 +326,7 @@ impl MagicLinkPlugin {
             .await?;
         let response = if req.query_string("callbackURL")?.is_none_or(str::is_empty) {
             AuthResponse::native(
-                200,
+                None,
                 better_auth_core::FieldMap::from([
                     ("token".into(), session.token().field_value()),
                     (

@@ -88,17 +88,26 @@ fn put_field(value: &mut Value, name: &str, field: FieldValue) -> AuthResult<()>
     Ok(())
 }
 
-fn member_event(event: OrganizationMemberEvent<'_>) -> Value {
-    json!({"organization":event.organization,"member":event.member,"user":event.user})
+fn member_event(event: OrganizationMemberEvent<'_>) -> AuthResult<Value> {
+    Ok(json!({"organization":event.organization,"member":event.member,"user":event.user.json()?}))
 }
-fn invitation_event(event: OrganizationInvitationEvent<'_>) -> Value {
-    json!({"organization":event.organization,"invitation":event.invitation,"user":event.user})
+fn invitation_event(event: OrganizationInvitationEvent<'_>) -> AuthResult<Value> {
+    Ok(
+        json!({"organization":event.organization,"invitation":event.invitation,"user":event.user.json()?}),
+    )
 }
-fn team_event(event: OrganizationTeamEvent<'_>) -> Value {
-    json!({"organization":event.organization,"team":event.team,"user":event.user})
+fn team_event(event: OrganizationTeamEvent<'_>) -> AuthResult<Value> {
+    Ok(
+        json!({"organization":event.organization,"team":event.team,"user":event.user.map(FieldValue::json).transpose()?.flatten()}),
+    )
 }
-fn team_target(target: OrganizationTeamMemberTarget<'_>, member: Option<&TeamMember>) -> Value {
-    json!({"organization":target.organization,"team":target.team,"user":target.user,"teamMember":member})
+fn team_target(
+    target: OrganizationTeamMemberTarget<'_>,
+    member: Option<&TeamMember>,
+) -> AuthResult<Value> {
+    Ok(
+        json!({"organization":target.organization,"team":target.team,"user":target.user.json()?,"teamMember":member}),
+    )
 }
 
 impl OrganizationCallbacks {
@@ -201,14 +210,14 @@ impl OrganizationPolicy for OrganizationCallbacks {
         &self,
         user: &FieldValue,
     ) -> AuthResult<Option<bool>> {
-        self.record("allowCreate", json!({"user":user}), None)
+        self.record("allowCreate", json!({"user":user.json()?}), None)
             .await?;
         Ok(Some(
             self.state.lock().await.limits.get("allowCreate") != Some(&Value::Bool(false)),
         ))
     }
     async fn organization_limit_reached(&self, user: &FieldValue) -> AuthResult<Option<bool>> {
-        self.record("organizationLimit", json!({"user":user}), None)
+        self.record("organizationLimit", json!({"user":user.json()?}), None)
             .await?;
         Ok(Some(
             self.state.lock().await.limits.get("organizationLimit") == Some(&Value::Bool(true)),
@@ -219,7 +228,7 @@ impl OrganizationPolicy for OrganizationCallbacks {
         event: OrganizationMemberEvent<'_>,
         _ctx: OrganizationEndpoint<'_>,
     ) -> AuthResult<Option<usize>> {
-        self.limit("invitationLimit", member_event(event), None)
+        self.limit("invitationLimit", member_event(event)?, None)
             .await
             .map(Some)
     }
@@ -228,7 +237,7 @@ impl OrganizationPolicy for OrganizationCallbacks {
         data: OrganizationTeamLimit<'_>,
         ctx: OrganizationEndpoint<'_>,
     ) -> AuthResult<Option<usize>> {
-        self.limit("maximumTeams", json!({"organizationId":data.organization_id.json()?,"session":data.session.map(|session| json!({"user":session.user,"session":session.session}))}), Some(ctx.request.is_some())).await.map(Some)
+        self.limit("maximumTeams", json!({"organizationId":data.organization_id.json()?,"session":data.session.map(|session| Ok::<_, AuthError>(json!({"user":session.user.json()?,"session":session.session}))).transpose()?}), Some(ctx.request.is_some())).await.map(Some)
     }
     async fn maximum_roles_per_organization(
         &self,
@@ -278,7 +287,7 @@ impl OrganizationHooks for OrganizationCallbacks {
         put_field(&mut organization, "metadata", data.metadata.field_value())?;
         self.record(
             "beforeCreateOrganization",
-            json!({"organization":organization,"user":user}),
+            json!({"organization":organization,"user":user.json()?}),
             None,
         )
         .await?;
@@ -292,7 +301,7 @@ impl OrganizationHooks for OrganizationCallbacks {
         &self,
         event: OrganizationMemberEvent<'_>,
     ) -> AuthResult<()> {
-        self.record("afterCreateOrganization", member_event(event), None)
+        self.record("afterCreateOrganization", member_event(event)?, None)
             .await
     }
     async fn before_update_organization(
@@ -316,7 +325,7 @@ impl OrganizationHooks for OrganizationCallbacks {
         )?;
         self.record(
             "beforeUpdateOrganization",
-            json!({"organization":organization,"member":actor.member,"user":actor.user}),
+            json!({"organization":organization,"member":actor.member,"user":actor.user.json()?}),
             None,
         )
         .await?;
@@ -343,7 +352,7 @@ impl OrganizationHooks for OrganizationCallbacks {
     ) -> AuthResult<()> {
         self.record(
             "afterUpdateOrganization",
-            json!({"organization":organization,"member":actor.member,"user":actor.user}),
+            json!({"organization":organization,"member":actor.member,"user":actor.user.json()?}),
             None,
         )
         .await
@@ -355,7 +364,7 @@ impl OrganizationHooks for OrganizationCallbacks {
     ) -> AuthResult<()> {
         self.record(
             "beforeDeleteOrganization",
-            json!({"organization":event.organization,"user":event.user}),
+            json!({"organization":event.organization,"user":event.user.json()?}),
             Some(ctx.request.is_some()),
         )
         .await
@@ -367,7 +376,7 @@ impl OrganizationHooks for OrganizationCallbacks {
     ) -> AuthResult<()> {
         self.record(
             "afterDeleteOrganization",
-            json!({"organization":event.organization,"user":event.user}),
+            json!({"organization":event.organization,"user":event.user.json()?}),
             Some(ctx.request.is_some()),
         )
         .await
@@ -388,7 +397,7 @@ impl OrganizationHooks for OrganizationCallbacks {
         )?;
         self.record(
             "beforeAddMember",
-            json!({"member":member,"organization":event.organization,"user":event.user}),
+            json!({"member":member,"organization":event.organization,"user":event.user.json()?}),
             None,
         )
         .await?;
@@ -398,15 +407,15 @@ impl OrganizationHooks for OrganizationCallbacks {
         Ok(())
     }
     async fn after_add_member(&self, event: OrganizationMemberEvent<'_>) -> AuthResult<()> {
-        self.record("afterAddMember", member_event(event), None)
+        self.record("afterAddMember", member_event(event)?, None)
             .await
     }
     async fn before_remove_member(&self, event: OrganizationMemberEvent<'_>) -> AuthResult<()> {
-        self.record("beforeRemoveMember", member_event(event), None)
+        self.record("beforeRemoveMember", member_event(event)?, None)
             .await
     }
     async fn after_remove_member(&self, event: OrganizationMemberEvent<'_>) -> AuthResult<()> {
-        self.record("afterRemoveMember", member_event(event), None)
+        self.record("afterRemoveMember", member_event(event)?, None)
             .await
     }
     async fn before_update_member_role(
@@ -414,7 +423,7 @@ impl OrganizationHooks for OrganizationCallbacks {
         role: &mut String,
         event: OrganizationMemberEvent<'_>,
     ) -> AuthResult<()> {
-        let mut data = member_event(event);
+        let mut data = member_event(event)?;
         data["newRole"] = json!(role);
         self.record("beforeUpdateMemberRole", data, None).await?;
         *role = "member".into();
@@ -425,7 +434,7 @@ impl OrganizationHooks for OrganizationCallbacks {
         previous_role: &str,
         event: OrganizationMemberEvent<'_>,
     ) -> AuthResult<()> {
-        let mut data = member_event(event);
+        let mut data = member_event(event)?;
         data["previousRole"] = json!(previous_role);
         self.record("afterUpdateMemberRole", data, None).await
     }
@@ -439,7 +448,7 @@ impl OrganizationHooks for OrganizationCallbacks {
         put_field(&mut invitation, "expiresAt", data.expires_at.field_value())?;
         self.record(
             "beforeCreateInvitation",
-            json!({"invitation":invitation,"organization":event.organization,"user":event.user}),
+            json!({"invitation":invitation,"organization":event.organization,"user":event.user.json()?}),
             None,
         )
         .await?;
@@ -450,14 +459,14 @@ impl OrganizationHooks for OrganizationCallbacks {
         &self,
         event: OrganizationInvitationEvent<'_>,
     ) -> AuthResult<()> {
-        self.record("afterCreateInvitation", invitation_event(event), None)
+        self.record("afterCreateInvitation", invitation_event(event)?, None)
             .await
     }
     async fn before_accept_invitation(
         &self,
         event: OrganizationInvitationEvent<'_>,
     ) -> AuthResult<()> {
-        self.record("beforeAcceptInvitation", invitation_event(event), None)
+        self.record("beforeAcceptInvitation", invitation_event(event)?, None)
             .await
     }
     async fn after_accept_invitation(
@@ -465,7 +474,7 @@ impl OrganizationHooks for OrganizationCallbacks {
         member: &Member,
         event: OrganizationInvitationEvent<'_>,
     ) -> AuthResult<()> {
-        let mut data = invitation_event(event);
+        let mut data = invitation_event(event)?;
         data["member"] = json!(member);
         self.record("afterAcceptInvitation", data, None).await
     }
@@ -473,28 +482,28 @@ impl OrganizationHooks for OrganizationCallbacks {
         &self,
         event: OrganizationInvitationEvent<'_>,
     ) -> AuthResult<()> {
-        self.record("beforeRejectInvitation", invitation_event(event), None)
+        self.record("beforeRejectInvitation", invitation_event(event)?, None)
             .await
     }
     async fn after_reject_invitation(
         &self,
         event: OrganizationInvitationEvent<'_>,
     ) -> AuthResult<()> {
-        self.record("afterRejectInvitation", invitation_event(event), None)
+        self.record("afterRejectInvitation", invitation_event(event)?, None)
             .await
     }
     async fn before_cancel_invitation(
         &self,
         event: OrganizationInvitationEvent<'_>,
     ) -> AuthResult<()> {
-        self.record("beforeCancelInvitation", invitation_event(event), None)
+        self.record("beforeCancelInvitation", invitation_event(event)?, None)
             .await
     }
     async fn after_cancel_invitation(
         &self,
         event: OrganizationInvitationEvent<'_>,
     ) -> AuthResult<()> {
-        self.record("afterCancelInvitation", invitation_event(event), None)
+        self.record("afterCancelInvitation", invitation_event(event)?, None)
             .await
     }
     async fn before_create_team(
@@ -522,7 +531,7 @@ impl OrganizationHooks for OrganizationCallbacks {
         )?;
         self.record(
             "beforeCreateTeam",
-            json!({"team":team,"organization":organization,"user":user}),
+            json!({"team":team,"organization":organization,"user":user.map(FieldValue::json).transpose()?.flatten()}),
             None,
         )
         .await?;
@@ -530,7 +539,7 @@ impl OrganizationHooks for OrganizationCallbacks {
         Ok(())
     }
     async fn after_create_team(&self, event: OrganizationTeamEvent<'_>) -> AuthResult<()> {
-        self.record("afterCreateTeam", team_event(event), None)
+        self.record("afterCreateTeam", team_event(event)?, None)
             .await
     }
     async fn before_update_team(
@@ -538,7 +547,7 @@ impl OrganizationHooks for OrganizationCallbacks {
         updates: &mut UpdateTeam,
         event: OrganizationTeamEvent<'_>,
     ) -> AuthResult<()> {
-        self.record("beforeUpdateTeam", team_event(event), None)
+        self.record("beforeUpdateTeam", team_event(event)?, None)
             .await?;
         if let Some(name) = &mut updates.name {
             if !name.display_string()?.is_empty() {
@@ -548,24 +557,24 @@ impl OrganizationHooks for OrganizationCallbacks {
         Ok(())
     }
     async fn after_update_team(&self, event: OrganizationTeamEvent<'_>) -> AuthResult<()> {
-        self.record("afterUpdateTeam", team_event(event), None)
+        self.record("afterUpdateTeam", team_event(event)?, None)
             .await
     }
     async fn before_delete_team(&self, event: OrganizationTeamEvent<'_>) -> AuthResult<()> {
-        self.record("beforeDeleteTeam", team_event(event), None)
+        self.record("beforeDeleteTeam", team_event(event)?, None)
             .await
     }
     async fn after_delete_team(&self, event: OrganizationTeamEvent<'_>) -> AuthResult<()> {
-        self.record("afterDeleteTeam", team_event(event), None)
+        self.record("afterDeleteTeam", team_event(event)?, None)
             .await
     }
     async fn before_add_team_member(
         &self,
         target: OrganizationTeamMemberTarget<'_>,
     ) -> AuthResult<()> {
-        let mut data = team_target(target, None);
+        let mut data = team_target(target, None)?;
         data["teamMember"] =
-            json!({"teamId":target.team.id,"userId":target.user.model_property("id")?});
+            json!({"teamId":target.team.id,"userId":target.user.model_property("id")?.json()?});
         self.record("beforeAddTeamMember", data, None).await
     }
     async fn after_add_team_member(
@@ -575,7 +584,7 @@ impl OrganizationHooks for OrganizationCallbacks {
     ) -> AuthResult<()> {
         self.record(
             "afterAddTeamMember",
-            team_target(target, Some(member)),
+            team_target(target, Some(member))?,
             None,
         )
         .await
@@ -587,7 +596,7 @@ impl OrganizationHooks for OrganizationCallbacks {
     ) -> AuthResult<()> {
         self.record(
             "beforeRemoveTeamMember",
-            team_target(target, Some(member)),
+            team_target(target, Some(member))?,
             None,
         )
         .await
@@ -599,7 +608,7 @@ impl OrganizationHooks for OrganizationCallbacks {
     ) -> AuthResult<()> {
         self.record(
             "afterRemoveTeamMember",
-            team_target(target, Some(member)),
+            team_target(target, Some(member))?,
             None,
         )
         .await
@@ -612,7 +621,7 @@ impl TeamMemberLimitPolicy for OrganizationCallbacks {
         &self,
         data: OrganizationTeamMemberLimit<'_>,
     ) -> AuthResult<usize> {
-        self.limit("maximumMembersPerTeam", json!({"organizationId":data.organization_id.json()?,"teamId":data.team_id.json()?,"session":{"user":data.session.user,"session":data.session.session}}), None).await
+        self.limit("maximumMembersPerTeam", json!({"organizationId":data.organization_id.json()?,"teamId":data.team_id.json()?,"session":{"user":data.session.user.json()?,"session":data.session.session}}), None).await
     }
 }
 
@@ -621,7 +630,7 @@ impl MembershipLimitPolicy for OrganizationCallbacks {
     async fn membership_limit(&self, event: OrganizationUser<'_>) -> AuthResult<usize> {
         self.limit(
             "membershipLimit",
-            json!({"user":event.user,"organization":event.organization}),
+            json!({"user":event.user.json()?,"organization":event.organization}),
             None,
         )
         .await

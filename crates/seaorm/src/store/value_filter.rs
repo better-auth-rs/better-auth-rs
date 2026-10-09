@@ -95,6 +95,64 @@ pub(super) fn equals(
     Ok(column.into_expr().eq(column.save_as(value)))
 }
 
+pub(super) fn equals_native(
+    column: impl ColumnTrait,
+    value: impl Into<sea_orm::Value>,
+    backend: DbBackend,
+) -> AuthResult<SimpleExpr> {
+    let value = super::record_bindings::Binding::Native(value.into()).bind(backend)?;
+    Ok(column.into_expr().eq(column.save_as(value)))
+}
+
+pub(super) fn is_in(
+    column: impl ColumnTrait,
+    value: &FieldValue,
+    backend: DbBackend,
+) -> AuthResult<SimpleExpr> {
+    let values = value
+        .as_array()
+        .unwrap_or_else(|| std::slice::from_ref(value));
+    in_bindings(
+        column,
+        values
+            .iter()
+            .cloned()
+            .map(super::record_bindings::Binding::Raw)
+            .collect(),
+        backend,
+    )
+}
+
+pub(super) fn is_in_native(
+    column: impl ColumnTrait,
+    values: impl IntoIterator<Item = impl Into<sea_orm::Value>>,
+    backend: DbBackend,
+) -> AuthResult<SimpleExpr> {
+    in_bindings(
+        column,
+        values
+            .into_iter()
+            .map(|value| super::record_bindings::Binding::Native(value.into()))
+            .collect(),
+        backend,
+    )
+}
+
+fn in_bindings(
+    column: impl ColumnTrait,
+    values: Vec<super::record_bindings::Binding>,
+    backend: DbBackend,
+) -> AuthResult<SimpleExpr> {
+    let values = super::record_bindings::bind(backend, values)?;
+    Ok(column
+        .into_expr()
+        .is_in(values.into_iter().map(|value| column.save_as(value))))
+}
+
+#[cfg(test)]
+#[path = "core_query_binding_tests.rs"]
+mod core_query_tests;
+
 #[cfg(test)]
 mod tests {
     use super::*;

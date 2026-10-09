@@ -1,7 +1,7 @@
 use super::instrumentation::database_operation;
 use async_trait::async_trait;
 use chrono::Utc;
-use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QuerySelect};
+use sea_orm::{ConnectionTrait, EntityTrait, QueryFilter, QuerySelect};
 
 use better_auth_core::store::schema::EntityRole;
 use better_auth_core::store::{AccountOwner, AccountStore, ResolvedJoin};
@@ -512,8 +512,8 @@ where
                 <S::User as SeaOrmUserModel>::Entity,
             >(
                 <S::Account as SeaOrmAccountModel>::Entity::find()
-                    .filter(S::Account::provider_id_column().eq(provider))
-                    .filter(S::Account::account_id_column().eq(account_id))
+                    .filter(self.account_selector("providerId", &provider.into())?)
+                    .filter(self.account_selector("accountId", &account_id.into())?)
                     .limit(2),
                 (
                     S::Account::field_column(&relation.from)?,

@@ -27,6 +27,9 @@ use std::sync::{Arc, Mutex};
 #[path = "account_verification_update_fields_tests/session_secondary.rs"]
 mod session_secondary;
 
+#[path = "account_verification_update_fields_tests/server.rs"]
+mod server;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Patch {
     Values,
@@ -61,8 +64,9 @@ impl Model {
     }
 }
 
+// Keep the shared date within the MySQL TIMESTAMP range.
 fn date(offset: u32) -> FieldDate {
-    FieldDate::from_milliseconds(4_102_444_800_000.0 + f64::from(offset) * 1_000.0)
+    FieldDate::from_milliseconds(1_893_456_000_000.0 + f64::from(offset) * 1_000.0)
 }
 
 struct Hooks {
@@ -172,7 +176,7 @@ impl<S: AuthSchema> DatabaseHooks<S> for Hooks {
 
 async fn check<S: AuthSchema>(
     raw: Arc<dyn AuthStore<S>>,
-    sqlite: bool,
+    sql: bool,
     model: Model,
     patch: Patch,
 ) -> AuthResult<()> {
@@ -314,10 +318,7 @@ async fn check<S: AuthSchema>(
     );
     match patch {
         Patch::Values => {
-            let _ = expected.insert(
-                replacement.into(),
-                if sqlite { "7".into() } else { 7.into() },
-            );
+            let _ = expected.insert(replacement.into(), if sql { "7".into() } else { 7.into() });
         }
         Patch::Empty | Patch::Continue => {
             let value = if patch == Patch::Empty {
@@ -355,7 +356,7 @@ async fn check<S: AuthSchema>(
             .unwrap()
             .into(),
     };
-    assert_eq!(stored, expected, "{model:?} {patch:?} sqlite={sqlite}");
+    assert_eq!(stored, expected, "{model:?} {patch:?} sql={sql}");
     if let Some(result) = result {
         assert_eq!(result, expected);
     }

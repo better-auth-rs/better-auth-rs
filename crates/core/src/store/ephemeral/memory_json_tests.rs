@@ -162,8 +162,11 @@ impl Fixture {
     ) -> AuthResult<JsonValue> {
         let state = self.store.lock()?;
         let fields = match model {
-            "user" => state.users.get(id)?.map(|row| row.additional_fields),
-            "session" => state.sessions.get(id)?.map(|row| row.additional_fields),
+            "user" => state
+                .users
+                .find(|row| row.id == *id)?
+                .map(|row| row.additional_fields),
+            "session" => state.sessions.get(id)?,
             "organization" => state.organizations.get(id)?,
             "member" => state.members.get(id)?,
             "invitation" => state.invitations.get(id)?,

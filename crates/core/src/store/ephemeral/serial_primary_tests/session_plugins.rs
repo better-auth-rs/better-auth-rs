@@ -80,7 +80,7 @@ impl Model {
                 .sessions
                 .snapshot()?
                 .into_iter()
-                .map(|row| row.id.field_value())
+                .map(|row| row.get("id").cloned().unwrap_or_default())
                 .collect::<Vec<_>>(),
             Self::Jwk => state
                 .jwks
@@ -346,10 +346,12 @@ async fn serial_session_string_id_updates_match_upstream_id_contract() -> AuthRe
             .with_hooks(vec![Arc::new(SessionEvents(events.clone()))]);
         let seeded = Model::Session.create(&store, "first").await?;
         let seed_events = take_events(&events)?;
-        let token = required(store.lock()?.sessions.snapshot()?.first())?
-            .token
-            .typed()?
-            .clone();
+        let token = required(
+            required(store.lock()?.sessions.snapshot()?.first())?
+                .get("token")
+                .and_then(Value::as_str),
+        )?
+        .to_owned();
         let before = Model::Session.raw_ids(&store)?;
         let updated = required(
             store

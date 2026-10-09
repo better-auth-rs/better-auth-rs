@@ -2,7 +2,7 @@
 
 use super::account_joins::{native_relation, user_value};
 use super::rows::RowRef;
-use super::sessions::{SessionSource, session_token_matches};
+use super::sessions::{SessionSource, session_token_matches, session_tokens_match};
 use super::*;
 use crate::session::SessionData;
 use crate::store::schema::resolve_field_name;
@@ -97,19 +97,18 @@ impl EphemeralStore {
 
     pub(super) async fn session_user_relations(
         &self,
-        tokens: &[Value],
+        token_query: Value,
         only_active: bool,
         single: bool,
         relation: &ResolvedJoin,
     ) -> AuthResult<Vec<SessionSnapshot>> {
         use crate::store::schema::EntityRole;
         self.model_fields.begin_id_query(EntityRole::Session)?;
-        let tokens = tokens
-            .iter()
-            .map(|token| self.memory_session_token_query(token.clone()))
-            .collect::<AuthResult<Vec<_>>>()?;
+        let (token_column, token_query) = self.memory_session_token_query(token_query)?;
         let native = self.config.advanced.database.joins == Some(true);
-        let now = Utc::now();
+        let expiry = only_active
+            .then(|| self.memory_session_field_query("expiresAt", Utc::now().into()))
+            .transpose()?;
         let rows = self
             .raw(
                 "session",
@@ -117,9 +116,21 @@ impl EphemeralStore {
                 |state| {
                     let sessions = crate::query::paginate_memory(
                         state.sessions.try_select_refs(|session| {
-                            Ok(tokens.iter().any(|(column, token)| {
-                                session_token_matches(session, column, token)
-                            }) && (!only_active || session.expires_at.is_after(now)?))
+                            let token_matches = if single {
+                                session_token_matches(session, &token_column, &token_query)
+                            } else {
+                                session_tokens_match(session, &token_column, &token_query)?
+                            };
+                            Ok(token_matches
+                                && match &expiry {
+                                    Some((column, now)) => {
+                                        crate::query::field_compare(
+                                            session.get(column).unwrap_or(&Value::Undefined),
+                                            now,
+                                        )? == Some(std::cmp::Ordering::Greater)
+                                    }
+                                    None => true,
+                                })
                         })?,
                         Some(if single {
                             1.0
@@ -135,11 +146,7 @@ impl EphemeralStore {
                                 return Ok((SessionSource::Live(source), None));
                             }
                             let session = source.read(|session| Ok(session.clone()))?;
-                            let value = session
-                                .field_values()?
-                                .get(&relation.from)
-                                .cloned()
-                                .unwrap_or_default();
+                            let value = session.get(&relation.from).cloned().unwrap_or_default();
                             let users = native_relation(
                                 state.users.select_refs(|user| {
                                     user_value(user, &relation.logical_to, &relation.to)

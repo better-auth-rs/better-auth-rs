@@ -71,6 +71,15 @@ impl<'a, S: AuthSchema> EndpointContext<'a, S> {
             .append_response_header(name, value.into())
     }
 
+    /// Set the native endpoint status. Before and after hook statuses do not propagate.
+    pub fn set_status(&self, status: u16) -> AuthResult<()> {
+        self.input_request
+            .ok_or_else(|| {
+                better_auth_core::AuthError::internal("Endpoint response is unavailable")
+            })?
+            .set_response_status(status)
+    }
+
     /// Identity supplied to the most recent session-cookie write in this endpoint.
     pub fn new_session(&self) -> AuthResult<Option<better_auth_core::session::NativeSessionData>> {
         self.input_request

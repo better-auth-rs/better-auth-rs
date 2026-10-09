@@ -410,9 +410,9 @@ async fn invitation_member_output_failure_compensates_without_member_seat_or_ses
     assert_eq!(
         state
             .sessions
-            .find(|row| row.token == session.token)?
+            .find(|row| row.get("token") == Some(&session.token.field_value()))?
             .unwrap(),
-        session
+        FieldMap::from(session)
     );
     Ok(())
 }

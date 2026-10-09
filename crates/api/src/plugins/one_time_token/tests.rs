@@ -23,7 +23,9 @@ async fn expired_session_writes_cookie_and_new_session_before_rejecting_transfer
     let plugin = OneTimeTokenPlugin::new();
     let token = plugin.generate(&ctx, session.clone(), user).await.unwrap();
     let request = verify_request(&token);
-    let response = plugin.handle_verify(&request, &ctx).await.unwrap();
+    let error = plugin.handle_verify(&request, &ctx).await.unwrap_err();
+    assert!(error.is_api_error());
+    let response = error.to_auth_response();
     let response = finalize_response(&ctx, &request, response);
     assert_eq!(response.status, 400);
     assert_eq!(
@@ -116,9 +118,29 @@ async fn concurrent_redemption_issues_one_cookie_and_expired_proofs_cannot_authe
         plugin.handle_verify(&first_request, &ctx),
         plugin.handle_verify(&second_request, &ctx)
     );
+    assert_eq!(
+        usize::from(first.is_err()) + usize::from(second.is_err()),
+        1
+    );
+    assert!(
+        first
+            .as_ref()
+            .err()
+            .or(second.as_ref().err())
+            .unwrap()
+            .is_api_error()
+    );
     let responses = [
-        finalize_response(&ctx, &first_request, first.unwrap()),
-        finalize_response(&ctx, &second_request, second.unwrap()),
+        finalize_response(
+            &ctx,
+            &first_request,
+            first.unwrap_or_else(AuthError::to_auth_response),
+        ),
+        finalize_response(
+            &ctx,
+            &second_request,
+            second.unwrap_or_else(AuthError::to_auth_response),
+        ),
     ];
     assert_eq!(
         responses
@@ -144,7 +166,9 @@ async fn concurrent_redemption_issues_one_cookie_and_expired_proofs_cannot_authe
     let expired = OneTimeTokenPlugin::new().expires_in(Duration::seconds(-1));
     let token = expired.generate(&ctx, session, user).await.unwrap();
     let request = verify_request(&token);
-    let response = expired.handle_verify(&request, &ctx).await.unwrap();
+    let error = expired.handle_verify(&request, &ctx).await.unwrap_err();
+    assert!(error.is_api_error());
+    let response = error.to_auth_response();
     let response = finalize_response(&ctx, &request, response);
     assert_eq!(response.status, 400);
     assert!(!response.headers.contains_key("set-cookie"));
@@ -201,7 +225,9 @@ async fn custom_hashing_does_not_extend_token_lifetime() {
     assert!(expires_at < completed.timestamp_millis() as f64);
     for attempt in ["verification", "replay"] {
         let request = verify_request(&token);
-        let response = plugin.handle_verify(&request, &ctx).await.unwrap();
+        let error = plugin.handle_verify(&request, &ctx).await.unwrap_err();
+        assert!(error.is_api_error());
+        let response = error.to_auth_response();
         let response = finalize_response(&ctx, &request, response);
         assert_eq!(response.status, 400, "{attempt}");
         assert_eq!(

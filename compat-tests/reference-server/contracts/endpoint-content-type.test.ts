@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { betterAuth } from "better-auth";
 import { createAuthEndpoint, createAuthMiddleware } from "better-auth/api";
+import { admin, organization } from "better-auth/plugins";
 import { APIError, kAPIErrorHeaderSymbol } from "better-call";
 
 const errorBody = { code: "FIXTURE_ERROR", message: "fixture rejection" };
@@ -59,6 +60,11 @@ test("JSON headers materialize after endpoint hooks and preserve explicit native
         }
         const failed = mode.endsWith("error");
         expect(Boolean(thrown)).toBe(failed && !http);
+        if (http) expect(returned.status).toBe(failed ? 400 : 200);
+        else if (!failed) {
+          expect(Object.hasOwn(returned, "status")).toBe(mode !== "before");
+          expect(returned.status).toBeUndefined();
+        }
         const expectedBody = failed ? errorBody : { phase: mode === "before" ? "before" : mode.startsWith("replace") ? "after" : "endpoint" };
         const expectedHeaders: Record<string, string> = contentType ? { "content-type": contentType } : {};
         if (mode === "before") expectedHeaders["x-before"] = "1";
@@ -195,7 +201,7 @@ test("explicit Responses retain owned headers while queued headers merge only fo
             }) }] },
           }],
         });
-        const returned: any = await auth.api.explicitHeaderContract({ asResponse: http, returnHeaders: true });
+        const returned: any = await auth.api.explicitHeaderContract({ asResponse: http, returnHeaders: true, returnStatus: true });
         const response = http ? returned : returned.response;
         const phase = mode === "before" ? "before" : "after";
         const cookies = mode === "before" ? ["before=1"] : ["endpoint=1", "after=1"];
@@ -211,6 +217,8 @@ test("explicit Responses retain owned headers while queued headers merge only fo
             cookies: ["owned=1", ...cookies],
           });
         } else {
+          expect(Object.hasOwn(returned, "status")).toBe(mode !== "before");
+          expect(returned.status).toBeUndefined();
           expect(headerValues(returned.headers)).toStrictEqual({ entries: queued(phase), cookies });
           expect(headerValues(response.headers)).toStrictEqual(ownedHeaders);
         }
@@ -227,5 +235,145 @@ test("explicit Responses retain owned headers while queued headers merge only fo
         ]);
       }
     }
+  }
+});
+
+test("native status retains endpoint provenance across hook replacements", async () => {
+  type Output = "json" | "response" | "return-error" | "throw-error";
+  type Case = [string, Output | null, Output, 200 | 201 | undefined, Output | null, number | "undefined" | "absent", number];
+  const cases: Case[] = [
+    ["default-json", null, "json", undefined, null, "undefined", 200],
+    ["set-200-json", null, "json", 200, null, 200, 200],
+    ["set-201-json", null, "json", 201, null, 201, 201],
+    ["default-response", null, "response", undefined, null, "undefined", 207],
+    ["set-response", null, "response", 201, null, 201, 207],
+    ["throw-error", null, "throw-error", undefined, null, 400, 400],
+    ["set-throw-error", null, "throw-error", 201, null, 400, 400],
+    ["return-error", null, "return-error", undefined, null, "undefined", 400],
+    ["set-return-error", null, "return-error", 201, null, 201, 201],
+    ["replace-json", null, "json", 201, "json", 201, 201],
+    ["replace-response", null, "json", 201, "response", 201, 207],
+    ["replace-return-error", null, "json", 201, "return-error", 201, 201],
+    ["replace-throw-error", null, "json", 201, "throw-error", 201, 201],
+    ["error-to-json", null, "throw-error", undefined, "json", 400, 400],
+    ["error-to-response", null, "throw-error", undefined, "response", 400, 207],
+    ["error-to-error", null, "throw-error", undefined, "throw-error", 400, 400],
+    ["response-to-json", null, "response", undefined, "json", "undefined", 200],
+    ["default-to-error", null, "json", undefined, "throw-error", "undefined", 409],
+    ["returned-error-to-json", null, "return-error", undefined, "json", "undefined", 200],
+    ["before-json", "json", "json", 201, null, "absent", 200],
+    ["before-response", "response", "json", 201, null, "absent", 207],
+    ["before-return-error", "return-error", "json", 201, null, "absent", 418],
+    ["before-throw-error", "throw-error", "json", 201, null, "absent", 418],
+  ];
+  const returned = (kind: Output, phase: string, status: 400 | 409 | 418, ctx: any) => {
+    if (kind === "json") return ctx.json({ phase });
+    if (kind === "response") return new Response(phase, { status: 207 });
+    const error = new APIError(status, { code: "STATUS_ERROR", message: phase });
+    if (kind === "throw-error") throw error;
+    return error;
+  };
+  const observation = async (value: any) => {
+    if (value instanceof APIError) return { kind: "error", status: value.statusCode, body: value.body };
+    if (value instanceof Response) return { kind: "response", status: value.status, body: await value.clone().text() };
+    return { kind: "json", body: value };
+  };
+  const expectedObservation = (kind: Output, phase: string, status: number) => {
+    if (kind === "json") return { kind: "json", body: { phase } };
+    if (kind === "response") return { kind: "response", status: 207, body: phase };
+    return { kind: "error", status, body: { code: "STATUS_ERROR", message: phase } };
+  };
+  for (const [name, before, endpoint, status, after, native, expectedHTTP] of cases) {
+    for (const http of [false, true]) {
+      const events: unknown[] = [];
+      let retainedBefore: (() => void) | undefined;
+      const auth = betterAuth({
+        baseURL: "http://status-contract.test", secret: "status-contract-secret-at-least-32-characters",
+        logger: { disabled: true }, telemetry: { enabled: false },
+        hooks: {
+          before: createAuthMiddleware(async ctx => {
+            ctx.setStatus(202);
+            retainedBefore = () => ctx.setStatus(205);
+            if (before) return returned(before, "before", 418, ctx);
+          }),
+          after: createAuthMiddleware(async ctx => {
+            events.push(await observation(ctx.context.returned));
+            ctx.setStatus(203);
+            if (after) return returned(after, "after", 409, ctx);
+          }),
+        },
+        plugins: [{
+          id: "status-contract",
+          endpoints: { statusContract: createAuthEndpoint("/status-contract", { method: "GET" }, async ctx => {
+            if (status !== undefined) ctx.setStatus(status);
+            retainedBefore!();
+            return returned(endpoint, "endpoint", 400, ctx);
+          }) },
+          hooks: { after: [{ matcher: () => true, handler: createAuthMiddleware(async ctx => {
+            events.push(await observation(ctx.context.returned));
+            ctx.setStatus(206);
+          }) }] },
+        }],
+      });
+      let result: any;
+      let thrown: APIError | undefined;
+      try {
+        result = await auth.api.statusContract({ asResponse: http, returnHeaders: true, returnStatus: true });
+      } catch (error) {
+        expect(error, name).toBeInstanceOf(APIError);
+        thrown = error as APIError;
+      }
+      const finalKind = before ?? after ?? endpoint;
+      const failed = finalKind.endsWith("error");
+      const shouldThrow = before === "throw-error" || (!http && before === null && failed);
+      expect(Boolean(thrown), name).toBe(shouldThrow);
+      const phase = before ? "before" : after ? "after" : "endpoint";
+      const errorStatus = before ? 418 : after ? 409 : 400;
+      if (thrown) {
+        expect(thrown.statusCode, name).toBe(errorStatus);
+        expect(thrown.body, name).toStrictEqual({ code: "STATUS_ERROR", message: phase });
+      } else if (http) {
+        expect(result.status, name).toBe(expectedHTTP);
+        expect(finalKind === "response" ? await result.text() : await result.json(), name)
+          .toStrictEqual(finalKind === "response" ? phase : failed ? { code: "STATUS_ERROR", message: phase } : { phase });
+      } else {
+        expect(Object.hasOwn(result, "status"), name).toBe(native !== "absent");
+        expect(result.status, name).toBe(typeof native === "number" ? native : undefined);
+        expect(await observation(result.response), name).toStrictEqual(expectedObservation(finalKind, phase, errorStatus));
+      }
+      expect(events, name).toStrictEqual(before ? [] : [
+        expectedObservation(endpoint, "endpoint", 400),
+        expectedObservation(finalKind, phase, after ? 409 : 400),
+      ]);
+    }
+  }
+});
+
+test("update-session rejects invalid updates as native API errors and HTTP 400", async () => {
+  const now = new Date();
+  const session = {
+    user: { id: "owner", email: "owner@status.test", emailVerified: true, name: "Owner", createdAt: now, updatedAt: now },
+    session: { id: "session", userId: "owner", token: "token", createdAt: now, updatedAt: now, expiresAt: new Date("2099-01-01") },
+  };
+  const auth = betterAuth({
+    baseURL: "http://status-contract.test", secret: "status-contract-secret-at-least-32-characters",
+    logger: { disabled: true }, telemetry: { enabled: false },
+    plugins: [organization({ teams: { enabled: true } }), admin()],
+    hooks: { before: createAuthMiddleware(async () => ({ context: { session } })) },
+  });
+  for (const field of [undefined, "unknown", "activeOrganizationId", "activeTeamId", "impersonatedBy"]) {
+    const body = field ? { [field]: "forbidden" } : {};
+    const expected = field && field !== "unknown"
+      ? { code: "FIELD_NOT_ALLOWED", message: `${field} is not allowed to be set` }
+      : { message: "No fields to update" };
+    let caught: APIError | undefined;
+    try { await auth.api.updateSession({ body, returnStatus: true, returnHeaders: true }); }
+    catch (error) { expect(error).toBeInstanceOf(APIError); caught = error as APIError; }
+    expect(caught?.statusCode).toBe(400);
+    expect(caught?.body).toStrictEqual(expected);
+    const response = await auth.api.updateSession({ body, asResponse: true });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toStrictEqual(expected);
+    expect(session.session).toStrictEqual({ id: "session", userId: "owner", token: "token", createdAt: now, updatedAt: now, expiresAt: new Date("2099-01-01") });
   }
 });

@@ -25,7 +25,7 @@ macro_rules! body {
 }
 
 fn success() -> AuthResult<AuthResponse> {
-    Ok(AuthResponse::json(200, &json!({"success": true}))?)
+    Ok(AuthResponse::json(None, &json!({"success": true}))?)
 }
 fn user_not_found() -> AuthError {
     AuthError::Upstream {
@@ -145,7 +145,7 @@ impl EmailOtpPlugin {
             None => FieldValue::Null,
         };
         Ok(AuthResponse::native(
-            200,
+            None,
             FieldMap::from([
                 ("status".into(), true.into()),
                 ("token".into(), FieldValue::Null),
@@ -484,7 +484,7 @@ impl EmailOtpPlugin {
             ("token".into(), token),
             ("user".into(), better_auth_core::FieldMap::from(user).into()),
         ]);
-        Ok(AuthResponse::native(200, body.into()))
+        Ok(AuthResponse::native(None, body.into()))
     }
 }
 

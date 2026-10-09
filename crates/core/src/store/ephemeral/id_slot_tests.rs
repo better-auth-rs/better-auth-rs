@@ -108,7 +108,7 @@ fn memory(store: &EphemeralStore, slot: &str) -> AuthResult<JsonValue> {
         .sessions
         .snapshot()?
         .iter()
-        .map(|row| observe(session_fields(row, slot), true))
+        .map(|row| observe(row.clone(), true))
         .collect::<AuthResult<Vec<_>>>()?;
     Ok(
         json!({"user":users, "account":[], "session":sessions, "verification":[], "jwks":[], "walletAddress":[]}),

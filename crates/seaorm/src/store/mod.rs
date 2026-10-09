@@ -544,12 +544,16 @@ where
     }
     async fn delete_verification_by_identifier(&self, identifier: &str) -> AuthResult<()> {
         use crate::schema::SeaOrmVerificationModel;
-        use sea_orm::ColumnTrait;
+        use sea_orm::ConnectionTrait;
         self.store
             .delete_single_verification(
                 &self.tx,
                 Some((&self.tx, self)),
-                S::Verification::identifier_column().eq(identifier),
+                value_filter::equals(
+                    S::Verification::identifier_column(),
+                    &identifier.into(),
+                    self.tx.get_database_backend(),
+                )?,
             )
             .await
     }

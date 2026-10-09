@@ -292,9 +292,9 @@ impl SessionManagementPlugin {
                 if let Some(needs_refresh) = resolved.needs_refresh {
                     let _ = fields.insert("needsRefresh".into(), needs_refresh.into());
                 }
-                AuthResponse::native(200, fields.into())
+                AuthResponse::native(None, fields.into())
             }
-            None => AuthResponse::native(200, FieldValue::Null),
+            None => AuthResponse::native(None, FieldValue::Null),
         };
         let _ = response.headers.insert("Cache-Control", "no-store");
         let _ = response.headers.insert("Pragma", "no-cache");
@@ -329,7 +329,7 @@ impl SessionManagementPlugin {
             sessions.retain(|session| !session.impersonated_by.field_value().is_truthy());
         }
         Ok(AuthResponse::native(
-            200,
+            None,
             sessions
                 .into_iter()
                 .map(|session| FieldMap::from(session).into())
@@ -351,7 +351,7 @@ impl SessionManagementPlugin {
         };
 
         let response = revoke_session_core(&data, &revoke_req.token, ctx).await?;
-        Ok(AuthResponse::json(200, &response)?)
+        Ok(AuthResponse::json(None, &response)?)
     }
 
     async fn handle_revoke_sessions(
@@ -361,7 +361,7 @@ impl SessionManagementPlugin {
     ) -> AuthResult<AuthResponse> {
         let data = ctx.require_authoritative_native_session(req).await?;
         let response = revoke_sessions_core(&data, ctx).await?;
-        Ok(AuthResponse::json(200, &response)?)
+        Ok(AuthResponse::json(None, &response)?)
     }
 
     async fn handle_revoke_other_sessions(
@@ -371,7 +371,7 @@ impl SessionManagementPlugin {
     ) -> AuthResult<AuthResponse> {
         let data = ctx.require_authoritative_native_session(req).await?;
         let response = revoke_other_sessions_core(&data, ctx).await?;
-        Ok(AuthResponse::json(200, &response)?)
+        Ok(AuthResponse::json(None, &response)?)
     }
 }
 
@@ -395,7 +395,7 @@ pub(crate) async fn handle_sign_out(
         );
     }
     ctx.session_manager().clear_cookies(req)?;
-    let mut response = AuthResponse::json(200, &SuccessResponse { success: true })?;
+    let mut response = AuthResponse::json(None, &SuccessResponse { success: true })?;
     for (name, value) in req.take_response_headers()? {
         response.headers.append(name, value);
     }

@@ -114,22 +114,25 @@ impl EphemeralStore {
     }
 
     pub(super) fn memory_session_token_query(&self, value: Value) -> AuthResult<(String, Value)> {
-        let schema = self.session_config.adapter_schema();
-        let value = self.memory_field_query(&schema, "token", value)?;
-        let value = match schema.fields().get("token") {
+        self.memory_session_field_query("token", value)
+    }
+
+    pub(super) fn memory_session_field_query(
+        &self,
+        name: &str,
+        value: Value,
+    ) -> AuthResult<(String, Value)> {
+        let schema = crate::store::session_create_schema(&self.session_config, &FieldMap::new());
+        let value = self.memory_field_query(&schema, name, value)?;
+        let value = match schema.fields().get(name) {
             Some(field) => crate::user_query::bind_filter(field, &value)?,
             None => value,
         };
-        Ok((schema.record_storage_key("token").to_owned(), value))
+        Ok((schema.record_storage_key(name).to_owned(), value))
     }
 
     pub(super) fn memory_session_user_id_query(&self, value: Value) -> AuthResult<Value> {
-        match self.session_config.fields().get("userId") {
-            Some(field) => crate::user_query::bind_filter(
-                field,
-                &self.memory_field_query(&self.session_config.field_schema(), "userId", value)?,
-            ),
-            None => self.memory_primary_id_query(&value),
-        }
+        self.memory_session_field_query("userId", value)
+            .map(|(_, value)| value)
     }
 }

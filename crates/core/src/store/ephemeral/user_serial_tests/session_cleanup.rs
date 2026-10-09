@@ -37,7 +37,7 @@ fn raw_owners(store: &EphemeralStore) -> AuthResult<(Vec<Value>, Vec<Value>)> {
         .sessions
         .snapshot()?
         .into_iter()
-        .map(|session| session.user_id.field_value())
+        .map(|session| session.get("userId").cloned().unwrap_or_default())
         .collect();
     let accounts = state
         .accounts

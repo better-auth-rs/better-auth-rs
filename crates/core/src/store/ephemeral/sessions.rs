@@ -8,12 +8,12 @@ use crate::store::schema::resolve_field_name;
 use crate::user_fields::{FieldTransforms, UserFieldTransform};
 
 pub(super) enum SessionSource {
-    Live(RowRef<SessionView>),
-    Snapshot(Box<SessionView>),
+    Live(RowRef<FieldMap>),
+    Snapshot(Box<FieldMap>),
 }
 
 impl SessionSource {
-    fn read<T>(&self, read: impl FnOnce(&SessionView) -> AuthResult<T>) -> AuthResult<T> {
+    fn read<T>(&self, read: impl FnOnce(&FieldMap) -> AuthResult<T>) -> AuthResult<T> {
         match self {
             Self::Live(source) => source.read(read),
             Self::Snapshot(row) => read(row),
@@ -46,20 +46,35 @@ impl EphemeralStore {
         if !sessions.is_empty() {
             self.model_fields.begin_id_output(EntityRole::Session)?;
         }
-        let schema = self.session_config.adapter_schema();
+        let schema = crate::store::session_create_schema(&self.session_config, &FieldMap::new());
         let mut rows: Vec<_> = sessions
             .into_iter()
             .map(|source| {
-                let mut session = source.read(|row| Ok(row.clone()))?;
-                session.additional_fields.clear();
-                session.field_order = crate::store::session_create_schema(
-                    &self.session_config,
-                    &source.read(|row| row.field_values())?,
-                )
-                .fields()
-                .keys()
-                .cloned()
-                .collect();
+                let stored = source.read(|row| Ok(row.clone()))?;
+                let implicit: FieldMap = ["impersonatedBy", "activeOrganizationId", "activeTeamId"]
+                    .into_iter()
+                    .filter(|name| {
+                        !schema.fields().contains_key(*name)
+                            && !schema.fields().iter().any(|(logical, field)| {
+                                resolve_field_name(field.field_name.as_deref(), logical) == *name
+                            })
+                    })
+                    .filter_map(|name| stored.get(name).map(|value| (name.into(), value.clone())))
+                    .collect();
+                let session = SessionView {
+                    active: true,
+                    visible_fields: Some(Default::default()),
+                    field_order: crate::store::session_create_schema(
+                        &self.session_config,
+                        &implicit,
+                    )
+                    .fields()
+                    .keys()
+                    .cloned()
+                    .collect(),
+                    additional_fields: implicit,
+                    ..Default::default()
+                };
                 Ok((session, source))
             })
             .collect::<AuthResult<_>>()?;
@@ -69,12 +84,10 @@ impl EphemeralStore {
             |(_, source), name, field| {
                 source.read(|row| {
                     if name == "id" {
-                        return Ok(row.id.field_value());
+                        return Ok(row.get("id").cloned().unwrap_or_default());
                     }
-                    let storage = row.field_values()?;
-                    Ok(storage
+                    Ok(row
                         .get(resolve_field_name(field.field_name.as_deref(), name))
-                        .or_else(|| storage.get(name))
                         .cloned()
                         .unwrap_or_default())
                 })
@@ -95,26 +108,18 @@ impl EphemeralStore {
                         };
                         Self::project_id(&crate::SchemaValue::from_field(value))?.into_field_value()
                     } else {
-                        field.adapter_output(value, field.references_id()).await?
+                        field
+                            .adapter_output_from_raw(
+                                value,
+                                crate::user_fields::FieldOutputCapabilities::json_only(false),
+                            )
+                            .await?
                     };
                     let _ = session.additional_fields.insert(name.to_owned(), value);
                     Ok(())
                 })
             },
-            |_, (session, _)| {
-                let mut session = session.clone();
-                if self.session_config.fields().contains_key("userId") {
-                    session.user_id = crate::SchemaValue::from_field(
-                        session
-                            .additional_fields
-                            .remove("userId")
-                            .unwrap_or_default(),
-                    );
-                } else {
-                    session.user_id = Self::project_id(&session.user_id)?;
-                }
-                Ok(session.into_projected_fields())
-            },
+            |_, (session, _)| Ok(session.clone().into_projected_fields()),
             complete,
         )
         .await
@@ -132,7 +137,7 @@ impl EphemeralStore {
                 supports_native_uuid: false,
             },
         )?;
-        let mut additional_fields = schema
+        let mut storage = schema
             .storage_fields_with_bound_id(
                 fields,
                 true,
@@ -162,29 +167,12 @@ impl EphemeralStore {
                 },
             )
             .await?;
-        let mut native = crate::store::session_create_native_fields(&schema, &additional_fields);
-        let id = additional_fields.remove("id").unwrap_or_default();
-        let _ = native.insert("id".into(), id);
-        let mut session = crate::store::session_from_create_fields(native.clone())?;
-        // Physical aliases must remain independent of the typed logical members used by store queries.
-        for (name, canonical) in native {
-            match additional_fields.get(&name) {
-                Some(value) if value.strict_equals(&canonical) => {
-                    let _ = additional_fields.remove(&name);
-                }
-                None if name != "id" => {
-                    let _ = additional_fields.insert(name, crate::FieldValue::Undefined);
-                }
-                _ => {}
-            }
-        }
-        session.additional_fields = additional_fields;
         let source = self
             .raw("session", "create", |state| {
                 if let Some(id) = self.next_serial_id(state.sessions.len()) {
-                    session.id = crate::SchemaValue::from_field(id);
+                    let _ = storage.insert("id".into(), id);
                 }
-                Ok(SessionSource::Live(state.sessions.push_ref(session)))
+                Ok(SessionSource::Live(state.sessions.push_ref(storage)))
             })
             .await?;
         self.output_session(source).await
@@ -455,7 +443,7 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
             |_, _| false,
         )?;
         Ok(self
-            .session_user_relations(std::slice::from_ref(token), false, true, &relation)
+            .session_user_relations(token.clone(), false, true, &relation)
             .await?
             .into_iter()
             .next())
@@ -480,7 +468,7 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
             .iter()
             .map(|token| token.as_str().into())
             .collect::<Vec<_>>();
-        self.session_user_relations(&tokens, only_active, false, &relation)
+        self.session_user_relations(tokens.into(), only_active, false, &relation)
             .await
     }
 
@@ -519,7 +507,7 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
     ) -> AuthResult<Vec<(SessionView, Option<SessionView>)>> {
         self.model_fields.begin_id_query(EntityRole::Session)?;
         let user_id = self.memory_session_user_id_query(user_id.clone())?;
-        let schema = self.session_config.adapter_schema();
+        let schema = crate::store::session_create_schema(&self.session_config, &FieldMap::new());
         let now = if only_active {
             let now = self.memory_field_query(&schema, "expiresAt", Utc::now().into())?;
             Some(crate::user_query::bind_filter(
@@ -535,7 +523,7 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
                     state
                         .sessions
                         .try_select_refs(|session| {
-                            let fields = FieldMap::from(session.clone());
+                            let fields = session;
                             Ok(crate::query::field_matches_equality(
                                 fields
                                     .get(schema.record_storage_key("userId"))
@@ -643,21 +631,25 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
     }
 
     async fn delete_sessions(&self, tokens: &[String]) -> AuthResult<()> {
-        self.delete_sessions_with_hooks(
-            |row| Ok(tokens.iter().any(|token| row.token == token.as_str())),
-            false,
-        )
-        .await
-        .map(|_| ())
+        let tokens = tokens
+            .iter()
+            .map(|token| token.as_str().into())
+            .collect::<Vec<_>>();
+        let (column, tokens) = self.memory_session_token_query(tokens.into())?;
+        self.delete_sessions_with_hooks(|row| session_tokens_match(row, &column, &tokens), false)
+            .await
+            .map(|_| ())
     }
 
     async fn end_sessions(&self, tokens: &[String]) -> AuthResult<()> {
-        self.delete_sessions_with_hooks(
-            |row| Ok(tokens.iter().any(|token| row.token == token.as_str())),
-            true,
-        )
-        .await
-        .map(|_| ())
+        let tokens = tokens
+            .iter()
+            .map(|token| token.as_str().into())
+            .collect::<Vec<_>>();
+        let (column, tokens) = self.memory_session_token_query(tokens.into())?;
+        self.delete_sessions_with_hooks(|row| session_tokens_match(row, &column, &tokens), true)
+            .await
+            .map(|_| ())
     }
 
     async fn delete_user_sessions(&self, user_id: &str) -> AuthResult<()> {
@@ -685,11 +677,11 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
         user_id: &Value,
         preserve: bool,
     ) -> AuthResult<Option<usize>> {
-        let user_id = self.memory_session_user_id_query(user_id.clone())?;
+        let (column, user_id) = self.memory_session_field_query("userId", user_id.clone())?;
         self.delete_sessions_with_hooks(
             |row| {
                 Ok(crate::query::field_matches_equality(
-                    &row.user_id.field_value(),
+                    row.get(&column).unwrap_or(&Value::Undefined),
                     &user_id,
                 ))
             },
@@ -699,9 +691,17 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
     }
 
     async fn delete_expired_sessions(&self) -> AuthResult<usize> {
-        let now = Utc::now();
+        let (column, now) = self.memory_session_field_query("expiresAt", Utc::now().into())?;
         self.delete_sessions_with_hooks(
-            |row| Ok(row.expires_at.is_before_or_equal(now)? || !row.active),
+            |row| {
+                Ok(matches!(
+                    crate::query::field_compare(
+                        row.get(&column).unwrap_or(&Value::Undefined),
+                        &now
+                    )?,
+                    Some(std::cmp::Ordering::Less | std::cmp::Ordering::Equal)
+                ))
+            },
             false,
         )
         .await
@@ -744,6 +744,8 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
 mod live_output_tests;
 #[cfg(test)]
 mod native_owner_tests;
+#[cfg(test)]
+mod physical_tests;
 
 #[tokio::test]
 async fn invitation_fields_update_atomically_with_team_membership() {
@@ -893,16 +895,24 @@ async fn invitation_fields_update_atomically_with_team_membership() {
 }
 
 pub(super) fn session_token_matches(
-    row: &SessionView,
+    fields: &FieldMap,
     column: &str,
     token: &crate::FieldValue,
 ) -> bool {
-    let fields = crate::FieldMap::from(row.clone());
     crate::query::field_matches_equality(
-        fields
-            .get(column)
-            .or_else(|| fields.get("token"))
-            .unwrap_or(&crate::FieldValue::Undefined),
+        fields.get(column).unwrap_or(&crate::FieldValue::Undefined),
         token,
     )
+}
+
+pub(super) fn session_tokens_match(
+    fields: &FieldMap,
+    column: &str,
+    tokens: &crate::FieldValue,
+) -> AuthResult<bool> {
+    let tokens = tokens
+        .as_array()
+        .ok_or_else(|| AuthError::internal("Value must be an array"))?;
+    let actual = fields.get(column).unwrap_or(&crate::FieldValue::Undefined);
+    Ok(tokens.iter().any(|token| actual.same_value_zero(token)))
 }

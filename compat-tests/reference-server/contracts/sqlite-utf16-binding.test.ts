@@ -160,10 +160,10 @@ for (const encoding of ["UTF-8", "UTF-16le", "UTF-16be"]) {
     }
     database.exec("CREATE TABLE device_code (scope TEXT)");
     for (const [operator, mode, units, actual, matched] of [
-      ["eq", "insensitive", [0xd800, 0x41], "\u{10061}", 1],
+      ["eq", "insensitive", [0xd800, 0x41], "\u{10061}", encoding === "UTF-8" ? 1 : 0],
       ["eq", "insensitive", [0xd800, 0x41], "\u{10041}", 0],
-      ["in", "insensitive", [0xd800, 0x41], "\u{10061}", 1],
-      ["not_in", "insensitive", [0xd800, 0x41], "\u{10061}", 0],
+      ["in", "insensitive", [0xd800, 0x41], "\u{10061}", encoding === "UTF-8" ? 1 : 0],
+      ["not_in", "insensitive", [0xd800, 0x41], "\u{10061}", encoding === "UTF-8" ? 0 : 1],
       ["contains", "insensitive", [0xd800], "x\u{10025}", 1],
       ["contains", "insensitive", [0xd800], "x\u{10025}y", 0],
       ["contains", "sensitive", [0xfeff, 0x41], "xA", 0],

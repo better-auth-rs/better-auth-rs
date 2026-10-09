@@ -46,7 +46,7 @@ impl OAuthStateLink {
             .ok_or_else(|| AuthError::bad_request("Invalid OAuth state link email"))?;
         let user_id = fields
             .get("userId")
-            .unwrap_or(&FieldValue::Undefined)
+            .ok_or_else(|| AuthError::bad_request("Invalid OAuth state link user ID"))?
             .display_utf16()?;
         Ok(Self(FieldMap::from([
             ("email".into(), email.clone()),

@@ -144,9 +144,13 @@ async fn memory_session_id_slot_nested_create_preserves_complete_runtime_records
         )?;
         assert_eq!(*inner, expected_inner);
         assert_eq!(outer, expected_outer);
+        let mut raw_outer: FieldMap = expected_outer.clone().into();
+        if expected_outer.id.is_undefined() {
+            let _ = raw_outer.remove("id");
+        }
         assert_eq!(
             store.lock()?.sessions.snapshot()?,
-            vec![expected_inner.clone(), expected_outer]
+            vec![FieldMap::from(expected_inner.clone()), raw_outer]
         );
         let mut inner_memory = before.clone();
         inner_memory["session"] = json!([observe(session_fields(&expected_inner, slot), true)?]);
@@ -209,23 +213,26 @@ async fn memory_session_id_slot_live_writer_preserves_read_and_stored_records() 
         let mut owner = user_input("owner")?;
         owner.additional_fields.clear();
         let _ = writer.create_user(owner).await?;
-        writer.lock()?.sessions.push(SessionView {
-            field_order: Default::default(),
-            visible_fields: Some(Default::default()),
-            id: crate::SchemaValue::from_field(Value::Number(1.0)),
-            expires_at: date(EXPIRES_AT)?.into(),
-            token: "slot-selected".into(),
-            created_at: date(CREATED_AT)?.into(),
-            updated_at: date(CREATED_AT)?.into(),
-            ip_address: None.into(),
-            user_agent: None.into(),
-            user_id: crate::SchemaValue::from_field(Value::Number(1.0)),
-            impersonated_by: None.into(),
-            active_organization_id: None.into(),
-            active_team_id: None.into(),
-            active: true,
-            additional_fields: [("label".into(), "selected".into())].into(),
-        });
+        writer.lock()?.sessions.push(
+            SessionView {
+                field_order: Default::default(),
+                visible_fields: Some(Default::default()),
+                id: crate::SchemaValue::from_field(Value::Number(1.0)),
+                expires_at: date(EXPIRES_AT)?.into(),
+                token: "slot-selected".into(),
+                created_at: date(CREATED_AT)?.into(),
+                updated_at: date(CREATED_AT)?.into(),
+                ip_address: None.into(),
+                user_agent: None.into(),
+                user_id: crate::SchemaValue::from_field(Value::Number(1.0)),
+                impersonated_by: None.into(),
+                active_organization_id: None.into(),
+                active_team_id: None.into(),
+                active: true,
+                additional_fields: [("label".into(), "selected".into())].into(),
+            }
+            .into(),
+        );
         let trace = Events::default();
         let output_trace = trace.clone();
         let output_writer = writer.clone();

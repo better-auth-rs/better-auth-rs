@@ -241,7 +241,7 @@ impl<S: AuthSchema> AuthPlugin<S> for JwtPlugin {
                 })?;
             endpoint.session = Some(session.clone());
             let token = self.sign_session(Some(session), &endpoint).await?;
-            return Ok(Some(AuthResponse::json(200, &json!({"token": token}))?));
+            return Ok(Some(AuthResponse::json(None, &json!({"token": token}))?));
         }
         Ok(None)
     }
@@ -425,7 +425,7 @@ impl JwtPlugin {
             public.push(FieldValue::from(value));
         }
         Ok(AuthResponse::native(
-            200,
+            None,
             FieldMap::from([("keys".into(), public.into())]).into(),
         ))
     }

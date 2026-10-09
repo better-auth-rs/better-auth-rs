@@ -75,7 +75,7 @@ struct Fixture {
 }
 
 impl Fixture {
-    async fn new(cancel: bool, auto_sign_in: bool, numeric_id: bool) -> AuthResult<Self> {
+    async fn new(cancel: bool, auto_sign_in: bool, serial_id: bool) -> AuthResult<Self> {
         let calls = Calls::default();
         let before = calls.clone();
         let after = calls.clone();
@@ -120,7 +120,7 @@ impl Fixture {
             enabled: Some(true),
             ..Default::default()
         });
-        if numeric_id {
+        if serial_id {
             config.advanced.database.generate_id = Some(IdGeneration::Serial);
             let _ = config.user.fields_mut().insert(
                 "id".into(),
@@ -270,17 +270,17 @@ async fn cancelled_verification_keeps_null_callbacks_and_consumes_otp_before_ses
 }
 
 #[tokio::test]
-async fn numeric_user_id_updates_and_refreshes_the_selected_native_session_cache() -> AuthResult<()>
+async fn serial_user_id_updates_and_refreshes_the_selected_native_session_cache() -> AuthResult<()>
 {
     let fixture = Fixture::new(false, false, true).await?;
-    assert_eq!(fixture.user.id.field_value(), 1.0.into());
+    assert_eq!(fixture.user.id.field_value(), "1".into());
     let request = fixture.request(true).await?;
     let selected = fixture
         .ctx
         .native_session(&request, better_auth_core::session::SessionRead::Cached)
         .await?
         .unwrap();
-    assert_eq!(selected.user_property("id")?, &FieldValue::from(1.0));
+    assert_eq!(selected.user_property("id")?, &FieldValue::from("1"));
     assert_eq!(
         selected.user_property("emailVerified")?,
         &FieldValue::from(false)
@@ -297,7 +297,7 @@ async fn numeric_user_id_updates_and_refreshes_the_selected_native_session_cache
         .get_user_by_email(EMAIL)
         .await?
         .unwrap();
-    assert_eq!(stored.id.field_value(), 1.0.into());
+    assert_eq!(stored.id.field_value(), "1".into());
     assert_eq!(stored.email_verified.field_value(), true.into());
     assert_eq!(
         response.body.json()?,

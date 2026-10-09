@@ -721,7 +721,7 @@ pub async fn handle_invite_member(
     let session = require_native_session(req, ctx).await?;
     let body: InviteMemberRequest = super::super::request::read(req, &config.schema)?;
     let invitation = invite_member_core(&body, &session, config, ctx, Some(req)).await?;
-    Ok(AuthResponse::json(200, &invitation)?)
+    Ok(AuthResponse::json(None, &invitation)?)
 }
 
 pub async fn handle_get_invitation(
@@ -738,11 +738,12 @@ pub async fn handle_get_invitation(
         })?;
     let query = crate::plugins::query_input::parse::<GetInvitationQuery>(&req.query)?;
     match get_invitation_core(&query, &session, config, ctx).await? {
-        Some(response) => Ok(AuthResponse::json(200, &response)?),
-        None => Ok(AuthResponse::json(
+        Some(response) => Ok(AuthResponse::json(None, &response)?),
+        None => Err(AuthResponse::json(
             400,
             &serde_json::json!({ "message": "Invitation not found!" }),
-        )?),
+        )?
+        .into()),
     }
 }
 
@@ -753,7 +754,7 @@ pub async fn handle_list_invitations(
     let session = require_native_session(req, ctx).await?;
     let query = crate::plugins::query_input::parse::<ListInvitationsQuery>(&req.query)?;
     let invitations = list_invitations_core(&query, &session, ctx).await?;
-    Ok(AuthResponse::json(200, &invitations)?)
+    Ok(AuthResponse::json(None, &invitations)?)
 }
 
 pub async fn handle_list_user_invitations(
@@ -775,7 +776,7 @@ pub async fn handle_list_user_invitations(
         ));
     }
     let invitations = list_user_invitations_core(session.as_ref(), email, ctx).await?;
-    Ok(AuthResponse::json(200, &invitations)?)
+    Ok(AuthResponse::json(None, &invitations)?)
 }
 
 pub async fn handle_accept_invitation(
@@ -786,7 +787,7 @@ pub async fn handle_accept_invitation(
     let session = require_native_session(req, ctx).await?;
     let body: AcceptInvitationRequest = super::super::request::read(req, &config.schema)?;
     let (response, snapshot) = accept_invitation_core(&body, &session, config, ctx).await?;
-    let response = AuthResponse::json(200, &response)?;
+    let response = AuthResponse::json(None, &response)?;
     if let Some(snapshot) = snapshot {
         let manager = ctx.session_manager();
         // Upstream writes the team cookie before updating the active organization in the transaction.
@@ -812,7 +813,7 @@ pub async fn handle_reject_invitation(
     let session = require_native_session(req, ctx).await?;
     let body: RejectInvitationRequest = super::super::request::read(req, &config.schema)?;
     let response = reject_invitation_core(&body, &session, config, ctx).await?;
-    Ok(AuthResponse::json(200, &response)?)
+    Ok(AuthResponse::json(None, &response)?)
 }
 
 pub async fn handle_cancel_invitation(
@@ -823,7 +824,7 @@ pub async fn handle_cancel_invitation(
     let session = require_native_session(req, ctx).await?;
     let body: CancelInvitationRequest = super::super::request::read(req, &config.schema)?;
     let response = cancel_invitation_core(&body, &session, config, ctx).await?;
-    Ok(AuthResponse::json(200, &response)?)
+    Ok(AuthResponse::json(None, &response)?)
 }
 
 #[cfg(test)]

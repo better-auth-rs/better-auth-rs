@@ -1,4 +1,4 @@
-use super::sessions::session_token_matches;
+use super::sessions::{SessionSource, session_token_matches};
 use super::*;
 use crate::store::TeamMemberLimits;
 use crate::{SchemaValue, TeamMember};
@@ -279,24 +279,6 @@ impl EphemeralStore {
             }
             reservations.push((team_id.clone(), prepared));
         }
-        let member = Member {
-            additional_fields: Default::default(),
-            id: self
-                .generated_id("member", None, member_count)?
-                .map(SchemaValue::Typed)
-                .unwrap_or_default(),
-            organization_id: invitation.organization_id.clone(),
-            user_id: SchemaValue::from_field(user_id.clone()),
-            role: invitation.role.clone(),
-            created_at: Utc::now().into(),
-        };
-        let mut member = self
-            .store_record(EntityRole::Member, member, None, FieldMap::new())
-            .await?;
-        if let Some(id) = self.next_serial_id(member_count) {
-            let _ = member.insert("id".into(), id);
-        }
-        let output = self.output_member(member.clone()).await?;
         for (team_id, _) in &reservations {
             memberships.push(TeamMember {
                 id: self
@@ -326,20 +308,60 @@ impl EphemeralStore {
         } else {
             None
         };
-        let organization_patch = if session_token.is_some() {
-            Some(
-                self.bind_session_update_fields(
+        let mut prepared_session = if let Some((column, token)) = &session_token {
+            let source = self
+                .lock()?
+                .sessions
+                .first_ref(|row| session_token_matches(row, column, token))?
+                .ok_or(AuthError::SessionNotFound)?;
+            let original = source.read(|row| Ok(row.clone()))?;
+            let mut fields = original.clone();
+            let cookie = if let Some(patch) = &team_patch {
+                fields.extend(patch.clone());
+                Some(
+                    self.output_session(SessionSource::Snapshot(Box::new(fields.clone())))
+                        .await?,
+                )
+            } else {
+                None
+            };
+            Some((source, original, fields, cookie))
+        } else {
+            None
+        };
+        let member = Member {
+            additional_fields: Default::default(),
+            id: self
+                .generated_id("member", None, member_count)?
+                .map(SchemaValue::Typed)
+                .unwrap_or_default(),
+            organization_id: invitation.organization_id.clone(),
+            user_id: SchemaValue::from_field(user_id.clone()),
+            role: invitation.role.clone(),
+            created_at: Utc::now().into(),
+        };
+        let mut member = self
+            .store_record(EntityRole::Member, member, None, FieldMap::new())
+            .await?;
+        if let Some(id) = self.next_serial_id(member_count) {
+            let _ = member.insert("id".into(), id);
+        }
+        let output = self.output_member(member.clone()).await?;
+        if let Some((_, _, fields, _)) = &mut prepared_session {
+            let patch = self
+                .bind_session_update_fields(
                     [(
                         "activeOrganizationId".into(),
                         invitation.organization_id.field_value(),
                     )]
                     .into(),
                 )
-                .await?,
-            )
-        } else {
-            None
-        };
+                .await?;
+            fields.extend(patch);
+            let _ = self
+                .output_session(SessionSource::Snapshot(Box::new(fields.clone())))
+                .await?;
+        }
         let mut state = self.lock()?;
         claim.validate(
             &state,
@@ -353,15 +375,24 @@ impl EphemeralStore {
         }) {
             return Err(AuthError::bad_request("User is already a member"));
         }
-        let session = session_token
-            .as_ref()
-            .map(|(column, token)| {
-                state
-                    .sessions
-                    .find(|row| session_token_matches(row, column, token))?
-                    .ok_or(AuthError::SessionNotFound)
-            })
-            .transpose()?;
+        if let Some((source, original, _, _)) = &prepared_session {
+            if !state.sessions.contains_ref(source) {
+                return Err(AuthError::SessionNotFound);
+            }
+            let unchanged = source.read(|row| {
+                Ok(row.keys().eq(original.keys())
+                    && row.iter().all(|(name, value)| {
+                        original
+                            .get(name)
+                            .is_some_and(|original| value.same_value_zero(original))
+                    }))
+            })?;
+            if !unchanged {
+                return Err(AuthError::conflict(
+                    "Session changed while field transforms were pending",
+                ));
+            }
+        }
         let current_members = state.team_members.snapshot()?;
         for id in &team_ids {
             let team = state
@@ -422,25 +453,6 @@ impl EphemeralStore {
             teams.push(prepared.apply(&state.teams, actual)?);
         }
         // Validate the complete staged result before publishing any member, seat, or session delta.
-        let (session, cookie_session) = if let Some(mut session) = session {
-            let cookie_session = if let Some(fields) = &team_patch {
-                self.apply_session_storage_fields(&mut session, fields);
-                let mut cookie = session.clone();
-                cookie.id = Self::project_id(&cookie.id)?;
-                if !self.session_config.fields().contains_key("userId") {
-                    cookie.user_id = Self::project_id(&cookie.user_id)?;
-                }
-                Some(cookie)
-            } else {
-                None
-            };
-            if let Some(fields) = &organization_patch {
-                self.apply_session_storage_fields(&mut session, fields);
-            }
-            (Some(session), cookie_session)
-        } else {
-            (None, None)
-        };
         if matches!(
             self.config.advanced.database.generate_id(),
             crate::id::IdGeneration::Serial
@@ -463,17 +475,15 @@ impl EphemeralStore {
             })?;
         }
         state.members.push(member);
-        if let Some(session) = session {
-            let mut stored = state
-                .sessions
-                .find_mut(|row| {
-                    row.token
-                        .field_value()
-                        .strict_equals(&session.token.field_value())
-                })?
-                .ok_or(AuthError::SessionNotFound)?;
-            *stored = session;
-        }
+        let cookie_session = if let Some((source, _, fields, cookie)) = prepared_session {
+            source.write(|row| {
+                *row = fields;
+                Ok(())
+            })?;
+            cookie
+        } else {
+            None
+        };
         Ok((output, cookie_session))
     }
 }
@@ -582,6 +592,126 @@ mod tests {
         );
         assert_eq!(state.team_members.len(), 0);
         assert_eq!(state.sessions.len(), 0);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn session_cookie_projection_failure_or_replacement_keeps_acceptance_atomic()
+    -> AuthResult<()> {
+        use crate::store::TeamStore;
+        for mode in ["team-failure", "organization-failure", "replace"] {
+            let replace = mode == "replace";
+            let writer = EphemeralStore::new(test_config());
+            let team = writer
+                .create_team(crate::CreateTeam {
+                    name: "Session projection team".into(),
+                    organization_id: "organization".into(),
+                    ..Default::default()
+                })
+                .await?;
+            let mut invitation = CreateInvitation::new(
+                "organization",
+                "recipient@example.com",
+                "member",
+                "inviter",
+                (Utc::now() + chrono::Duration::days(1)).into(),
+            );
+            invitation.team_id = Some(team.id.typed()?.clone());
+            let invitation = writer.create_invitation(invitation).await?;
+            let session = writer
+                .create_session(CreateSession {
+                    inherited_fields: FieldMap::new(),
+                    additional_fields: [("token".into(), "invitation-session".into())].into(),
+                    user_id: "recipient".into(),
+                    expires_at: (Utc::now() + chrono::Duration::days(1)).into(),
+                    ip_address: None,
+                    user_agent: None,
+                    impersonated_by: None,
+                    active_organization_id: None,
+                })
+                .await?;
+            let original = writer.lock()?.sessions.snapshot()?;
+            let original_team = writer.lock()?.teams.snapshot()?;
+            let calls = Arc::new(AtomicUsize::new(0));
+            let mut reader = writer.clone();
+            let _ = reader.session_config.fields_mut().insert(
+                "activeTeamId".into(),
+                UserFieldConfig {
+                    field_name: Some("currentTeam".into()),
+                    transform: Some(FieldTransforms {
+                        output: Some(UserFieldTransform::new({
+                            let writer = writer.clone();
+                            let calls = calls.clone();
+                            let team_id = team.id.field_value();
+                            move |value| {
+                                let call = calls.fetch_add(1, Ordering::SeqCst) + 1;
+                                assert_eq!(value, team_id);
+                                if mode == "team-failure"
+                                    || (mode == "organization-failure" && call == 2)
+                                {
+                                    return Err(AuthError::internal(
+                                        "Session cookie projection failed",
+                                    ));
+                                }
+                                if !replace {
+                                    return Ok(value);
+                                }
+                                let mut state = writer.lock()?;
+                                let source = state
+                                    .sessions
+                                    .first_ref(|row| {
+                                        row.get("token") == Some(&Value::from("invitation-session"))
+                                    })?
+                                    .ok_or(AuthError::SessionNotFound)?;
+                                let mut replacement = state
+                                    .sessions
+                                    .remove_ref(&source)?
+                                    .ok_or(AuthError::SessionNotFound)?;
+                                let _ = replacement
+                                    .insert("ipAddress".into(), "concurrent-writer".into());
+                                state.sessions.push(replacement);
+                                Ok(value)
+                            }
+                        })),
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                },
+            );
+            let result = reader
+                .accept_invitation_with_teams(
+                    invitation.id.typed()?,
+                    "recipient",
+                    Some(session.token.typed()?),
+                    true,
+                    TeamMemberLimits::Fixed(Some(1)),
+                )
+                .await;
+            if replace {
+                assert!(matches!(result, Err(AuthError::SessionNotFound)));
+            } else {
+                assert!(
+                    matches!(result, Err(AuthError::Internal(message)) if message == "Session cookie projection failed")
+                );
+            }
+            assert_eq!(
+                calls.load(Ordering::SeqCst),
+                if mode == "team-failure" { 1 } else { 2 }
+            );
+            let state = writer.lock()?;
+            assert_eq!(state.members.len(), 0);
+            assert_eq!(state.team_members.len(), 0);
+            assert_eq!(state.teams.snapshot()?, original_team);
+            let mut expected = original;
+            if replace {
+                let _ = expected[0].insert("ipAddress".into(), "concurrent-writer".into());
+            }
+            assert_eq!(state.sessions.snapshot()?, expected);
+            assert_eq!(
+                state.invitations.snapshot()?[0]["status"],
+                Value::from("pending")
+            );
+        }
         Ok(())
     }
 }

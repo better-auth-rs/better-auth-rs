@@ -12,7 +12,7 @@ pub(super) struct State {
     pub(super) jwks: Rows<FieldMap>,
     pub(super) users: Rows<UserView>,
     pub(super) wallets: Rows<FieldMap>,
-    pub(super) sessions: Rows<SessionView>,
+    pub(super) sessions: Rows<FieldMap>,
     pub(super) accounts: Rows<crate::FieldMap>,
     pub(super) verifications: Rows<crate::FieldMap>,
     pub(super) two_factors: Rows<FieldMap>,

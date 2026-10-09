@@ -12,14 +12,17 @@ fn observed_value(value: &Value) -> AuthResult<JsonValue> {
     }
 }
 
-fn observed_session(session: &SessionView, updated: bool, raw: bool) -> AuthResult<JsonValue> {
-    let mut normalized = session.clone();
+fn observed_session(mut fields: FieldMap, updated: bool, raw: bool) -> AuthResult<JsonValue> {
+    let id = required(fields.get("id"))?.clone();
     // The Store owns token and creation time; compare those values before normalizing adapter observations.
-    normalized.token = TOKEN.into();
-    normalized.created_at = date(CREATED_AT)?.into();
-    normalized.updated_at = date(if updated { CHANGED_AT } else { CREATED_AT })?.into();
-    let mut value = observe(normalized.into(), raw)?;
-    value["id"] = observed_value(&session.id.field_value())?;
+    let _ = fields.insert("token".into(), TOKEN.into());
+    let _ = fields.insert("createdAt".into(), date(CREATED_AT)?.into());
+    let _ = fields.insert(
+        "updatedAt".into(),
+        date(if updated { CHANGED_AT } else { CREATED_AT })?.into(),
+    );
+    let mut value = observe(fields, raw)?;
+    value["id"] = observed_value(&id)?;
     Ok(value)
 }
 
@@ -102,9 +105,9 @@ async fn memory_session_undefined_id_alias_matches_complete_upstream_observation
     expected_stored.id = crate::SchemaValue::from_field(Value::Number(1.0));
     expected_stored.user_id = crate::SchemaValue::from_field(Value::Number(1.0));
     expected_stored.additional_fields.clear();
-    assert_eq!(*stored, expected_stored);
+    assert_eq!(*stored, FieldMap::from(expected_stored.clone()));
     let mut before = memory(&store, "after-label")?;
-    before["session"] = json!([observed_session(stored, false, true)?]);
+    before["session"] = json!([observed_session(stored.clone(), false, true)?]);
     let seed_events = events(&trace)?;
     trace
         .lock()
@@ -129,14 +132,14 @@ async fn memory_session_undefined_id_alias_matches_complete_upstream_observation
     let rows = store.lock()?.sessions.snapshot()?;
     assert_eq!(rows.len(), 1);
     let stored = required(rows.first())?;
-    assert!(matches!(stored.id.field_value(), Value::Number(number) if number.is_nan()));
+    assert!(matches!(stored.get("id"), Some(Value::Number(number)) if number.is_nan()));
     let mut comparable = stored.clone();
-    comparable.id = "NaN".into();
+    let _ = comparable.insert("id".into(), "NaN".into());
     expected_stored.id = "NaN".into();
     expected_stored.updated_at = date(CHANGED_AT)?.into();
-    assert_eq!(comparable, expected_stored);
+    assert_eq!(comparable, FieldMap::from(expected_stored));
     let mut after = memory(&store, "after-label")?;
-    after["session"] = json!([observed_session(stored, true, true)?]);
+    after["session"] = json!([observed_session(stored.clone(), true, true)?]);
     let actual = json!({
         "model":"session", "slot":"after-alias", "operation":"update-undefined-id-alias", "idGeneration":"serial",
         "setup":[{
@@ -145,13 +148,13 @@ async fn memory_session_undefined_id_alias_matches_complete_upstream_observation
                 "createdAt":{"type":"date", "value":CREATED_AT}, "updatedAt":{"type":"date", "value":CREATED_AT},
                 "ipAddress":"", "userAgent":"", "aliasId":"seed",
             }},
-            "before":empty, "result":observed_session(&created, false, false)?, "after":before,
+            "before":empty, "result":observed_session(created.clone().into(), false, false)?, "after":before,
         }],
         "seedEvents":seed_events, "before":before,
         "input":{"model":"session", "where":[{"field":"token", "value":TOKEN}], "update":{
             "aliasId":"clear", "updatedAt":{"type":"date", "value":CHANGED_AT},
         }},
-        "events":events(&trace)?, "result":observed_session(&updated, true, false)?, "error":null, "after":after,
+        "events":events(&trace)?, "result":observed_session(updated.into(), true, false)?, "error":null, "after":after,
     });
     assert_eq!(actual, *expected);
     Ok(())

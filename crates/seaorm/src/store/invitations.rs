@@ -113,7 +113,11 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> I
                 "organizationId",
                 organization_id,
             )?)
-            .filter(O::Invitation::column("email")?.eq(email.to_lowercase()))
+            .filter(super::value_filter::equals(
+                O::Invitation::column("email")?,
+                &email.to_lowercase().into(),
+                self.connection().get_database_backend(),
+            )?)
             .filter(O::Invitation::column("status")?.eq("pending"))
             .filter(expires_at.into_expr().gt(expires_at.save_as(now)))
             .one(self.connection())
@@ -244,7 +248,11 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> I
         }
         let fields = self.organization_fields()?;
         let rows = Entity::<O::Invitation>::find()
-            .filter(O::Invitation::column("email")?.eq(email.to_lowercase()))
+            .filter(super::value_filter::equals(
+                O::Invitation::column("email")?,
+                &email.to_lowercase().into(),
+                self.connection().get_database_backend(),
+            )?)
             .limit(super::pagination::default_limit(
                 self.config(),
                 self.connection().get_database_backend(),
@@ -266,10 +274,11 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> I
                         )
                     })?;
                     let organization = Entity::<O::Organization>::find()
-                        .filter(
-                            O::Organization::column("id")?
-                                .eq(models::join_value(row, "organization_id")?),
-                        )
+                        .filter(super::value_filter::equals_native(
+                            O::Organization::column("id")?,
+                            models::join_value(row, "organization_id")?,
+                            self.connection().get_database_backend(),
+                        )?)
                         .one(self.connection())
                         .await
                         .map_err(map_db_err)?;

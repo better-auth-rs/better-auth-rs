@@ -261,7 +261,7 @@ pub(crate) async fn handle_team_request(
                     })
                     .await?;
             }
-            AuthResponse::json(200, &updated)?
+            AuthResponse::json(None, &updated)?
         }
         (HttpMethod::Get, "/organization/list-teams") => {
             let org =
@@ -278,7 +278,7 @@ pub(crate) async fn handle_team_request(
                 ));
             }
             AuthResponse::json(
-                200,
+                None,
                 &ctx.database.list_organization_teams_value(&org).await?,
             )?
         }
@@ -288,7 +288,7 @@ pub(crate) async fn handle_team_request(
             let team_id = match body.team_id {
                 NullableStringField::Null => {
                     if !session.active_team_id.field_value().is_truthy() {
-                        return Ok(Some(AuthResponse::json(200, &serde_json::Value::Null)?));
+                        return Ok(Some(AuthResponse::json(None, &serde_json::Value::Null)?));
                     }
                     let updated = ctx
                         .database
@@ -308,13 +308,13 @@ pub(crate) async fn handle_team_request(
                             None,
                         )
                         .await?;
-                    return Ok(Some(AuthResponse::json(200, &serde_json::Value::Null)?));
+                    return Ok(Some(AuthResponse::json(None, &serde_json::Value::Null)?));
                 }
                 NullableStringField::Value(id) if !id.is_empty() => FieldValue::from(id),
                 _ => session.active_team_id.field_value(),
             };
             if !team_id.is_truthy() {
-                return Ok(Some(AuthResponse::json(200, &serde_json::Value::Null)?));
+                return Ok(Some(AuthResponse::json(None, &serde_json::Value::Null)?));
             }
             let org = resolve_organization_id(None, None, session, ctx).await?;
             let team = find_team(&team_id, &org, ctx).await?;
@@ -344,7 +344,7 @@ pub(crate) async fn handle_team_request(
                     None,
                 )
                 .await?;
-            AuthResponse::json(200, &team)?
+            AuthResponse::json(None, &team)?
         }
         (HttpMethod::Get, "/organization/list-user-teams") => {
             let target = req
@@ -399,7 +399,7 @@ pub(crate) async fn handle_team_request(
                     .into_iter()
                     .filter(|team| team.organization_id.field_value().strict_equals(&org))
                     .collect::<Vec<_>>();
-                AuthResponse::json(200, &teams)?
+                AuthResponse::json(None, &teams)?
             } else {
                 let mut teams = Vec::new();
                 for team in ctx.database.list_user_teams_value(&target).await? {
@@ -412,7 +412,7 @@ pub(crate) async fn handle_team_request(
                         teams.push(team);
                     }
                 }
-                AuthResponse::json(200, &teams)?
+                AuthResponse::json(None, &teams)?
             }
         }
         (HttpMethod::Get, "/organization/list-team-members") => {
@@ -445,7 +445,7 @@ pub(crate) async fn handle_team_request(
             {
                 return Err(AuthError::bad_request("User is not a member of the team"));
             }
-            AuthResponse::json(200, &ctx.database.list_team_members_value(&team_id).await?)?
+            AuthResponse::json(None, &ctx.database.list_team_members_value(&team_id).await?)?
         }
         (
             HttpMethod::Post,
@@ -523,7 +523,7 @@ pub(crate) async fn handle_team_request(
                 if let Some(hooks) = &config.hooks {
                     hooks.after_add_team_member(&member, target).await?;
                 }
-                AuthResponse::json(200, &member)?
+                AuthResponse::json(None, &member)?
             } else {
                 let member = ctx
                     .database
@@ -540,7 +540,7 @@ pub(crate) async fn handle_team_request(
                     hooks.after_remove_team_member(&member, target).await?;
                 }
                 AuthResponse::json(
-                    200,
+                    None,
                     &serde_json::json!({"message":"Team member removed successfully."}),
                 )?
             }

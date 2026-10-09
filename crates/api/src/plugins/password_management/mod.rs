@@ -218,7 +218,7 @@ impl PasswordManagementPlugin {
     ) -> AuthResult<AuthResponse> {
         let body = request::request_reset(req)?;
         let response = request_password_reset_core(&body, &self.config, req, ctx).await?;
-        Ok(AuthResponse::json(200, &response)?)
+        Ok(AuthResponse::json(None, &response)?)
     }
 
     async fn handle_reset_password(
@@ -231,7 +231,7 @@ impl PasswordManagementPlugin {
             body.token = req.query_string("token")?.map(str::to_owned);
         }
         let response = reset_password_core(&body, req, ctx).await?;
-        Ok(AuthResponse::json(200, &response)?)
+        Ok(AuthResponse::json(None, &response)?)
     }
 
     async fn handle_change_password(
@@ -249,7 +249,7 @@ impl PasswordManagementPlugin {
         let meta = RequestMeta::from_request_with_config(req, &ctx.config.advanced.ip_address);
 
         let response = change_password_core(&body, &user, &self.config, req, &meta, ctx).await?;
-        Ok(AuthResponse::json(200, &response)?)
+        Ok(AuthResponse::json(None, &response)?)
     }
 
     async fn handle_verify_password(
@@ -268,7 +268,7 @@ impl PasswordManagementPlugin {
             );
         };
         let response = verify_password_core(&body, &user, ctx).await?;
-        Ok(AuthResponse::json(200, &response)?)
+        Ok(AuthResponse::json(None, &response)?)
     }
 
     async fn handle_reset_password_token(

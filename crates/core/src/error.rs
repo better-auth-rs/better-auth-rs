@@ -247,10 +247,10 @@ impl AuthError {
         }
     }
 
-    /// HTTP status code for this error.
+    /// Status owned by this error. Dispatch can preserve a different endpoint status for HTTP output.
     pub fn status_code(&self) -> u16 {
         match self {
-            Self::Response(response) => response.0.status,
+            Self::Response(response) => response.0.api_error_status().unwrap_or(response.0.status),
             Self::FieldInput { .. } => 400,
             Self::Upstream { status, .. } => *status,
             // 400

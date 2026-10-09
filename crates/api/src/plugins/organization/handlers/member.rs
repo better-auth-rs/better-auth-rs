@@ -533,7 +533,7 @@ pub async fn handle_get_active_member(
 ) -> AuthResult<AuthResponse> {
     let session = require_native_session(req, ctx).await?;
     let response = get_active_member_core(&session, ctx).await?;
-    Ok(AuthResponse::json(200, &response)?)
+    Ok(AuthResponse::json(None, &response)?)
 }
 
 /// Handle list members request
@@ -545,7 +545,7 @@ pub async fn handle_list_members(
     let session = require_native_session(req, ctx).await?;
     let query = crate::plugins::query_input::parse::<ListMembersQuery>(&req.query)?;
     let response = list_members_core(&query, config, &session, ctx).await?;
-    Ok(AuthResponse::json(200, &response)?)
+    Ok(AuthResponse::json(None, &response)?)
 }
 
 /// Handle get active member role request
@@ -556,7 +556,7 @@ pub async fn handle_get_active_member_role(
     let session = require_native_session(req, ctx).await?;
     let query = crate::plugins::query_input::parse::<GetActiveMemberRoleQuery>(&req.query)?;
     let response = get_active_member_role_core(&query, &session, ctx).await?;
-    Ok(AuthResponse::json(200, &response)?)
+    Ok(AuthResponse::json(None, &response)?)
 }
 
 /// Handle remove member request
@@ -568,7 +568,7 @@ pub async fn handle_remove_member(
     let session = require_native_session(req, ctx).await?;
     let body: RemoveMemberRequest = super::super::request::read(req, &config.schema)?;
     let response = remove_member_core(&body, &session, config, ctx).await?;
-    Ok(AuthResponse::json(200, &response)?)
+    Ok(AuthResponse::json(None, &response)?)
 }
 
 /// Handle update member role request
@@ -581,12 +581,13 @@ pub async fn handle_update_member_role(
     let body: UpdateMemberRoleRequest = super::super::request::read(req, &config.schema)?;
     let response = match update_member_role_core(&body, &session, config, ctx).await {
         Err(AuthError::BadRequest(message)) if message.starts_with("ROLE_NOT_FOUND: ") => {
-            return Ok(AuthResponse::json(
+            return Err(AuthResponse::json(
                 400,
                 &serde_json::json!({ "code": "ROLE_NOT_FOUND", "message": message }),
-            )?);
+            )?
+            .into());
         }
         result => result?,
     };
-    Ok(AuthResponse::json(200, &response)?)
+    Ok(AuthResponse::json(None, &response)?)
 }

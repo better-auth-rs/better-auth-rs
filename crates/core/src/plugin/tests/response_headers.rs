@@ -33,9 +33,9 @@ fn response(phase: &str, content_type: Option<&str>) -> AuthResult<AuthResponse>
         )?
         .with_header("x-error", "1")
     } else if phase == "endpoint" {
-        AuthResponse::native(200, crate::FieldValue::from_json(json!({"phase":phase}))?)
+        AuthResponse::native(None, crate::FieldValue::from_json(json!({"phase":phase}))?)
     } else {
-        AuthResponse::json(200, &json!({"phase":phase}))?
+        AuthResponse::json(None, &json!({"phase":phase}))?
     };
     if let Some(content_type) = content_type {
         let _ = response.headers.insert("CoNtEnT-TyPe", content_type);
@@ -190,6 +190,17 @@ async fn json_headers_are_materialized_after_hooks_only_for_http() -> AuthResult
                     Ok(value) => value,
                     Err(error) => error.to_auth_response(),
                 };
+                assert_eq!(returned.status, if failed { 400 } else { 200 });
+                if !failed {
+                    assert_eq!(
+                        returned.native_status(),
+                        if mode == "before" {
+                            crate::NativeResponseStatus::Absent
+                        } else {
+                            crate::NativeResponseStatus::Undefined
+                        }
+                    );
+                }
                 let expected_body = if failed {
                     json!({"code":"FIXTURE_ERROR","message":"fixture rejection"})
                 } else {
@@ -336,7 +347,7 @@ async fn json_http_output_strips_request_headers_but_native_output_preserves_the
                     }
                     request.append_response_header("Set-Cookie", "first=1".into())?;
                     request.append_response_header("Set-Cookie", "second=2".into())?;
-                    let returned = AuthResponse::json(if failed { 400 } else { 200 }, &body)?;
+                    let returned = AuthResponse::json(failed.then_some(400), &body)?;
                     if failed {
                         Err(returned.into())
                     } else {
@@ -517,7 +528,7 @@ async fn explicit_responses_keep_owned_headers_separate_until_http_materializati
                 let handler = |request: AuthRequest| async move {
                     queue_explicit_headers(&request, "endpoint", override_type)?;
                     if mode == "replace" {
-                        Ok(AuthResponse::json(200, &json!({"phase":"endpoint"}))?)
+                        Ok(AuthResponse::json(None, &json!({"phase":"endpoint"}))?)
                     } else {
                         Ok(explicit_response())
                     }
@@ -530,6 +541,14 @@ async fn explicit_responses_keep_owned_headers_separate_until_http_materializati
                     dispatcher.native(request, route, &context, handler).await?
                 };
                 assert_eq!(returned.status, 207);
+                assert_eq!(
+                    returned.native_status(),
+                    if mode == "before" {
+                        crate::NativeResponseStatus::Absent
+                    } else {
+                        crate::NativeResponseStatus::Undefined
+                    }
+                );
                 assert_eq!(returned.body.bytes()?.as_ref(), b"explicit body");
                 let phases: &[&str] = if mode == "before" {
                     &["before"]
