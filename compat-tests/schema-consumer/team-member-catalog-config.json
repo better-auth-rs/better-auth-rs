@@ -1,0 +1,37 @@
+{
+  "default": {},
+  "legacy": {
+    "teamMember": {
+      "modelName": "team_member",
+      "fields": {
+        "teamId": "team_id",
+        "userId": "user_id",
+        "membershipKey": "membership_key",
+        "createdAt": "created_at"
+      }
+    }
+  },
+  "custom": {
+    "user": { "modelName": "team_member_catalog_users" },
+    "organization": { "modelName": "team_member_catalog_organizations" },
+    "team": {
+      "modelName": "team_member_catalog_teams",
+      "fields": {
+        "organizationId": "organization_id",
+        "name": "label",
+        "memberCount": "member_count",
+        "createdAt": "created_at",
+        "updatedAt": "updated_at"
+      }
+    },
+    "teamMember": {
+      "modelName": "team_member_catalog_members",
+      "fields": {
+        "teamId": "group_id",
+        "userId": "subject_id",
+        "membershipKey": "dedupe_key",
+        "createdAt": "joined_at"
+      }
+    }
+  }
+}

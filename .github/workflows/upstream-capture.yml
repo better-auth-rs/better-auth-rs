@@ -12,6 +12,8 @@ on:
       - compat-tests/reference-server/contracts/jwt-native-session-capture.mjs
       - compat-tests/reference-server/contracts/oauth-native-session-capture.mjs
       - compat-tests/reference-server/contracts/session-management-native-capture.mjs
+      - compat-tests/reference-server/contracts/team-member-catalog-capture.mjs
+      - compat-tests/schema-consumer/team-member-catalog-config.json
       - compat-tests/reference-server/contracts/server-catalog-shared.mjs
       - compat-tests/reference-server/contracts/device-where-capture.mjs
       - compat-tests/reference-server/contracts/device-where-scenarios.mjs
@@ -81,9 +83,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - contract: session-management-native
+          - contract: team-member-catalog
             regressions: []
-            backend: ''
+            backend: sqlite
+          - contract: team-member-catalog
+            regressions: []
+            backend: postgres
+          - contract: team-member-catalog
+            regressions: []
+            backend: mysql
     runs-on: ubuntu-latest
     timeout-minutes: 10
     services:
