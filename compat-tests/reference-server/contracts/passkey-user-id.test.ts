@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
 import { betterAuth } from "better-auth";
 import { passkey } from "@better-auth/passkey";
-import { createHMAC } from "@better-auth/utils/hmac";
+import { serializeSignedCookie } from "better-call";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { getMigrations } from "better-auth/db/migration";
 import { authenticator, type RegistrationOptions } from "../../client-tests/tests/phase8/authenticator";
@@ -27,6 +27,7 @@ async function setup(sqlite: boolean, existing: boolean, passkeyOwner?: object) 
       async get(key: string) { return sessions.get(key) ?? null; },
       async set(key: string, value: string) { sessions.set(key, value); },
       async delete(key: string) { sessions.delete(key); },
+      async getAndDelete(key: string) { const value = sessions.get(key) ?? null; sessions.delete(key); return value; },
     },
     logger: { disabled: true }, telemetry: { enabled: false }, rateLimit: { enabled: false },
     session: { storeSessionInDatabase: true },
@@ -61,8 +62,7 @@ async function setup(sqlite: boolean, existing: boolean, passkeyOwner?: object) 
         session: { ...session, expiresAt: new Date("2100-01-01T00:00:00.000Z") },
         user: { ...user, id },
       }));
-      const signature = await createHMAC("SHA-256", "base64").sign(secret, session.token);
-      return `${context.authCookies.sessionToken.name}=${encodeURIComponent(`${session.token}.${signature}`)}`;
+      return (await serializeSignedCookie(context.authCookies.sessionToken.name, session.token, secret)).split(";", 1)[0];
     },
   };
 }

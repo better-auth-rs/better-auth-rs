@@ -149,7 +149,7 @@ async fn native_user_input_declarations_preserve_default_protection() -> AuthRes
         FieldMap::new()
     );
     for name in FIELDS {
-        let input = [(name.into(), json!(true))].into();
+        let input = [(name.into(), json!(true))].into_iter().collect();
         if ["banned", "isAnonymous", "twoFactorEnabled"].contains(&name) {
             assert_eq!(context.parse_user_input(&input, true)?, defaults());
         } else {
@@ -157,7 +157,7 @@ async fn native_user_input_declarations_preserve_default_protection() -> AuthRes
         }
         denied(context.parse_user_input(&input, false), name);
         for value in [Value::Null, json!(false), json!(0), json!("")] {
-            let input = [(name.into(), value)].into();
+            let input = [(name.into(), value)].into_iter().collect();
             assert_eq!(context.parse_user_input(&input, true)?, defaults());
             assert_eq!(context.parse_user_input(&input, false)?, FieldMap::new());
         }

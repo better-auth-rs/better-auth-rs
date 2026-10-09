@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { betterAuth } from "better-auth";
+import { serializeSignedCookie } from "better-call";
 import { admin } from "better-auth/plugins";
 import { build, cases, email, observe, options, owner, revive, secret, user } from "./user-runtime-contract";
 
@@ -84,10 +85,8 @@ for (const sample of cases.roleConsumers) {
       ...options(memory, { role: { transform: { output() { return revive(sample.value); } } } }),
       plugins: [admin()],
     });
-    const { createHMAC } = await import("@better-auth/utils/hmac");
-    const signature = await createHMAC("SHA-256", "base64").sign(secret, "runtime-token");
     const response = await auth.handler(new Request("http://localhost:3000/api/auth/admin/list-users", {
-      headers: { cookie: `better-auth.session_token=${encodeURIComponent(`runtime-token.${signature}`)}`, origin: "http://localhost:3000" },
+      headers: { cookie: await sessionCookie(), origin: "http://localhost:3000" },
     }));
     expect(response.status).toBe(sample.status);
     expect(response.headers.get("set-cookie")).toBeNull();
@@ -104,9 +103,7 @@ function authenticatedMemory() {
 }
 
 async function sessionCookie() {
-  const { createHMAC } = await import("@better-auth/utils/hmac");
-  const signature = await createHMAC("SHA-256", "base64").sign(secret, "runtime-token");
-  return `better-auth.session_token=${encodeURIComponent(`runtime-token.${signature}`)}`;
+  return (await serializeSignedCookie("better-auth.session_token", "runtime-token", secret)).split(";", 1)[0];
 }
 
 for (const sample of cases.emailConsumers) {

@@ -3,7 +3,7 @@ import { Database } from "bun:sqlite";
 import { readFileSync } from "node:fs";
 import { betterAuth } from "better-auth";
 import { apiKey } from "@better-auth/api-key";
-import { createHMAC } from "@better-auth/utils/hmac";
+import { serializeSignedCookie } from "better-call";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { getMigrations } from "better-auth/db/migration";
 import { organization } from "better-auth/plugins";
@@ -46,8 +46,8 @@ async function harness(mode: "memory" | "sqlite" | "secondary", organizationKeys
   if (database) await (await getMigrations(options)).runMigrations();
   const auth = betterAuth(options);
   const context = await auth.$context;
-  const signature = await createHMAC("SHA-256", "base64").sign(secret, "actor-token");
-  const headers = new Headers({ cookie: `better-auth.session_token=${encodeURIComponent(`actor-token.${signature}`)}` });
+  const cookie = (await serializeSignedCookie("better-auth.session_token", "actor-token", secret)).split(";", 1)[0];
+  const headers = new Headers({ cookie });
   const actor = (value: unknown) => {
     const now = new Date();
     sessions.values.set("actor-token", JSON.stringify({

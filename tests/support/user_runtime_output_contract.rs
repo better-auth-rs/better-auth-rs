@@ -1,5 +1,5 @@
 use better_auth_core::{
-    AuthConfig, AuthError, AuthResult, CreateUser, FieldMap, FieldValue, UserView,
+    AuthConfig, AuthError, AuthResult, CreateUser, FieldMap, FieldValue, UpdateUser, UserView,
     store::{EphemeralStore, UserStore},
     user_fields::{FieldTransforms, UserFieldConfig, UserFieldTransform, UserFieldType},
 };
@@ -125,4 +125,29 @@ pub(crate) fn native_user() -> FieldMap {
             FieldMap::from([("seed".into(), true.into())]).into(),
         ),
     ])
+}
+
+pub(crate) async fn write(
+    store: &dyn UserStore<better_auth_core::store::StatelessSchema>,
+    create: bool,
+    fields: FieldMap,
+) -> AuthResult<UserView> {
+    if create {
+        store
+            .create_user(CreateUser {
+                additional_fields: fields,
+                ..Default::default()
+            })
+            .await
+    } else {
+        store
+            .update_user(
+                OWNER,
+                UpdateUser {
+                    additional_fields: fields,
+                    ..Default::default()
+                },
+            )
+            .await
+    }
 }

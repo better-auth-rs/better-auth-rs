@@ -1,0 +1,2431 @@
+{
+  "version": "1.7.6",
+  "cases": [
+    {
+      "result": "string",
+      "operations": [
+        {
+          "action": "create",
+          "input": "missing",
+          "data": {},
+          "inputOwnKeys": [],
+          "inputHasOwn": false,
+          "inputHasField": false,
+          "inheritedValue": null,
+          "returned": true,
+          "result": {
+            "protectedValue": "factory-value"
+          },
+          "ownKeys": [
+            "protectedValue"
+          ],
+          "nullPrototype": true,
+          "ownsField": true,
+          "sameDefault": false,
+          "sameReturned": false,
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": [
+            {
+              "phase": "default",
+              "arguments": [],
+              "thisIsDeclaration": true,
+              "thisType": "object"
+            }
+          ]
+        },
+        {
+          "action": "create",
+          "input": "own-undefined",
+          "data": {
+            "protectedValue": {
+              "type": "undefined"
+            }
+          },
+          "inputOwnKeys": [
+            "protectedValue"
+          ],
+          "inputHasOwn": true,
+          "inputHasField": true,
+          "inheritedValue": null,
+          "returned": true,
+          "result": {
+            "protectedValue": {
+              "type": "function",
+              "identity": "default-function"
+            }
+          },
+          "ownKeys": [
+            "protectedValue"
+          ],
+          "nullPrototype": true,
+          "ownsField": true,
+          "sameDefault": true,
+          "sameReturned": false,
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        },
+        {
+          "action": "create",
+          "input": "null",
+          "data": {
+            "protectedValue": null
+          },
+          "inputOwnKeys": [
+            "protectedValue"
+          ],
+          "inputHasOwn": true,
+          "inputHasField": true,
+          "inheritedValue": null,
+          "returned": true,
+          "result": {
+            "protectedValue": {
+              "type": "function",
+              "identity": "default-function"
+            }
+          },
+          "ownKeys": [
+            "protectedValue"
+          ],
+          "nullPrototype": true,
+          "ownsField": true,
+          "sameDefault": true,
+          "sameReturned": false,
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        },
+        {
+          "action": "create",
+          "input": "false",
+          "data": {
+            "protectedValue": false
+          },
+          "inputOwnKeys": [
+            "protectedValue"
+          ],
+          "inputHasOwn": true,
+          "inputHasField": true,
+          "inheritedValue": null,
+          "returned": true,
+          "result": {
+            "protectedValue": {
+              "type": "function",
+              "identity": "default-function"
+            }
+          },
+          "ownKeys": [
+            "protectedValue"
+          ],
+          "nullPrototype": true,
+          "ownsField": true,
+          "sameDefault": true,
+          "sameReturned": false,
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        },
+        {
+          "action": "create",
+          "input": "zero",
+          "data": {
+            "protectedValue": 0
+          },
+          "inputOwnKeys": [
+            "protectedValue"
+          ],
+          "inputHasOwn": true,
+          "inputHasField": true,
+          "inheritedValue": null,
+          "returned": true,
+          "result": {
+            "protectedValue": {
+              "type": "function",
+              "identity": "default-function"
+            }
+          },
+          "ownKeys": [
+            "protectedValue"
+          ],
+          "nullPrototype": true,
+          "ownsField": true,
+          "sameDefault": true,
+          "sameReturned": false,
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        },
+        {
+          "action": "create",
+          "input": "empty-string",
+          "data": {
+            "protectedValue": ""
+          },
+          "inputOwnKeys": [
+            "protectedValue"
+          ],
+          "inputHasOwn": true,
+          "inputHasField": true,
+          "inheritedValue": null,
+          "returned": true,
+          "result": {
+            "protectedValue": {
+              "type": "function",
+              "identity": "default-function"
+            }
+          },
+          "ownKeys": [
+            "protectedValue"
+          ],
+          "nullPrototype": true,
+          "ownsField": true,
+          "sameDefault": true,
+          "sameReturned": false,
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        },
+        {
+          "action": "create",
+          "input": "truthy",
+          "data": {
+            "protectedValue": "submitted"
+          },
+          "inputOwnKeys": [
+            "protectedValue"
+          ],
+          "inputHasOwn": true,
+          "inputHasField": true,
+          "inheritedValue": null,
+          "returned": true,
+          "result": {
+            "protectedValue": {
+              "type": "function",
+              "identity": "default-function"
+            }
+          },
+          "ownKeys": [
+            "protectedValue"
+          ],
+          "nullPrototype": true,
+          "ownsField": true,
+          "sameDefault": true,
+          "sameReturned": false,
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        },
+        {
+          "action": "create",
+          "input": "inherited",
+          "data": {},
+          "inputOwnKeys": [],
+          "inputHasOwn": false,
+          "inputHasField": true,
+          "inheritedValue": "inherited",
+          "returned": true,
+          "result": {
+            "protectedValue": {
+              "type": "function",
+              "identity": "default-function"
+            }
+          },
+          "ownKeys": [
+            "protectedValue"
+          ],
+          "nullPrototype": true,
+          "ownsField": true,
+          "sameDefault": true,
+          "sameReturned": false,
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        },
+        {
+          "action": "update",
+          "input": "missing",
+          "data": {},
+          "inputOwnKeys": [],
+          "inputHasOwn": false,
+          "inputHasField": false,
+          "inheritedValue": null,
+          "returned": true,
+          "result": {},
+          "ownKeys": [],
+          "nullPrototype": true,
+          "ownsField": false,
+          "sameDefault": false,
+          "sameReturned": false,
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        },
+        {
+          "action": "update",
+          "input": "own-undefined",
+          "data": {
+            "protectedValue": {
+              "type": "undefined"
+            }
+          },
+          "inputOwnKeys": [
+            "protectedValue"
+          ],
+          "inputHasOwn": true,
+          "inputHasField": true,
+          "inheritedValue": null,
+          "returned": true,
+          "result": {},
+          "ownKeys": [],
+          "nullPrototype": true,
+          "ownsField": false,
+          "sameDefault": false,
+          "sameReturned": false,
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        },
+        {
+          "action": "update",
+          "input": "null",
+          "data": {
+            "protectedValue": null
+          },
+          "inputOwnKeys": [
+            "protectedValue"
+          ],
+          "inputHasOwn": true,
+          "inputHasField": true,
+          "inheritedValue": null,
+          "returned": true,
+          "result": {},
+          "ownKeys": [],
+          "nullPrototype": true,
+          "ownsField": false,
+          "sameDefault": false,
+          "sameReturned": false,
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        },
+        {
+          "action": "update",
+          "input": "false",
+          "data": {
+            "protectedValue": false
+          },
+          "inputOwnKeys": [
+            "protectedValue"
+          ],
+          "inputHasOwn": true,
+          "inputHasField": true,
+          "inheritedValue": null,
+          "returned": true,
+          "result": {},
+          "ownKeys": [],
+          "nullPrototype": true,
+          "ownsField": false,
+          "sameDefault": false,
+          "sameReturned": false,
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        },
+        {
+          "action": "update",
+          "input": "zero",
+          "data": {
+            "protectedValue": 0
+          },
+          "inputOwnKeys": [
+            "protectedValue"
+          ],
+          "inputHasOwn": true,
+          "inputHasField": true,
+          "inheritedValue": null,
+          "returned": true,
+          "result": {},
+          "ownKeys": [],
+          "nullPrototype": true,
+          "ownsField": false,
+          "sameDefault": false,
+          "sameReturned": false,
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        },
+        {
+          "action": "update",
+          "input": "empty-string",
+          "data": {
+            "protectedValue": ""
+          },
+          "inputOwnKeys": [
+            "protectedValue"
+          ],
+          "inputHasOwn": true,
+          "inputHasField": true,
+          "inheritedValue": null,
+          "returned": true,
+          "result": {},
+          "ownKeys": [],
+          "nullPrototype": true,
+          "ownsField": false,
+          "sameDefault": false,
+          "sameReturned": false,
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        },
+        {
+          "action": "update",
+          "input": "truthy",
+          "data": {
+            "protectedValue": "submitted"
+          },
+          "inputOwnKeys": [
+            "protectedValue"
+          ],
+          "inputHasOwn": true,
+          "inputHasField": true,
+          "inheritedValue": null,
+          "returned": false,
+          "error": {
+            "name": "APIError",
+            "message": "protectedValue is not allowed to be set",
+            "properties": {
+              "status": "BAD_REQUEST",
+              "body": {
+                "message": "protectedValue is not allowed to be set",
+                "code": "FIELD_NOT_ALLOWED"
+              },
+              "headers": {},
+              "statusCode": 400
+            }
+          },
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        },
+        {
+          "action": "update",
+          "input": "inherited",
+          "data": {},
+          "inputOwnKeys": [],
+          "inputHasOwn": false,
+          "inputHasField": true,
+          "inheritedValue": "inherited",
+          "returned": false,
+          "error": {
+            "name": "APIError",
+            "message": "protectedValue is not allowed to be set",
+            "properties": {
+              "status": "BAD_REQUEST",
+              "body": {
+                "message": "protectedValue is not allowed to be set",
+                "code": "FIELD_NOT_ALLOWED"
+              },
+              "headers": {},
+              "statusCode": 400
+            }
+          },
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        }
+      ],
+      "functions": [
+        {
+          "identity": "returned-function",
+          "name": "returnedFunction",
+          "length": 0,
+          "source": "function returnedFunction() {\n    counts.returnedFunction += 1;\n    events.push({ phase: \"returned-function\", arguments: observe([...arguments]) });\n    return \"returned-function-value\";\n  }",
+          "string": "function returnedFunction() {\n    counts.returnedFunction += 1;\n    events.push({ phase: \"returned-function\", arguments: observe([...arguments]) });\n    return \"returned-function-value\";\n  }",
+          "ownKeys": [
+            "length",
+            "name",
+            "prototype"
+          ]
+        },
+        {
+          "identity": "default-function",
+          "name": "protectedDefault",
+          "length": 0,
+          "source": "function protectedDefault() {\n    counts.factory += 1;\n    events.push({\n      phase: \"default\",\n      arguments: observe([...arguments]),\n      thisIsDeclaration: this === field,\n      thisType: typeof this\n    });\n    switch (scenario.result) {\n      case \"string\":\n        return \"factory-value\";\n      case \"undefined\":\n        return;\n      case \"date\":\n        return new Date(protectedFunctionDate);\n      case \"object\":\n        return { source: \"factory\", ownUndefined: void 0 };\n      case \"function\":\n        return returnedFunction;\n      case \"throws\":\n        throw Error(\"protected-default-failed\");\n      default:\n        throw Error(`Unknown factory result: ${scenario.result}`);\n    }\n  }",
+          "string": "function protectedDefault() {\n    counts.factory += 1;\n    events.push({\n      phase: \"default\",\n      arguments: observe([...arguments]),\n      thisIsDeclaration: this === field,\n      thisType: typeof this\n    });\n    switch (scenario.result) {\n      case \"string\":\n        return \"factory-value\";\n      case \"undefined\":\n        return;\n      case \"date\":\n        return new Date(protectedFunctionDate);\n      case \"object\":\n        return { source: \"factory\", ownUndefined: void 0 };\n      case \"function\":\n        return returnedFunction;\n      case \"throws\":\n        throw Error(\"protected-default-failed\");\n      default:\n        throw Error(`Unknown factory result: ${scenario.result}`);\n    }\n  }",
+          "ownKeys": [
+            "length",
+            "name",
+            "prototype"
+          ]
+        }
+      ]
+    },
+    {
+      "result": "undefined",
+      "operations": [
+        {
+          "action": "create",
+          "input": "missing",
+          "data": {},
+          "inputOwnKeys": [],
+          "inputHasOwn": false,
+          "inputHasField": false,
+          "inheritedValue": null,
+          "returned": true,
+          "result": {
+            "protectedValue": {
+              "type": "undefined"
+            }
+          },
+          "ownKeys": [
+            "protectedValue"
+          ],
+          "nullPrototype": true,
+          "ownsField": true,
+          "sameDefault": false,
+          "sameReturned": false,
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": [
+            {
+              "phase": "default",
+              "arguments": [],
+              "thisIsDeclaration": true,
+              "thisType": "object"
+            }
+          ]
+        },
+        {
+          "action": "create",
+          "input": "own-undefined",
+          "data": {
+            "protectedValue": {
+              "type": "undefined"
+            }
+          },
+          "inputOwnKeys": [
+            "protectedValue"
+          ],
+          "inputHasOwn": true,
+          "inputHasField": true,
+          "inheritedValue": null,
+          "returned": true,
+          "result": {
+            "protectedValue": {
+              "type": "function",
+              "identity": "default-function"
+            }
+          },
+          "ownKeys": [
+            "protectedValue"
+          ],
+          "nullPrototype": true,
+          "ownsField": true,
+          "sameDefault": true,
+          "sameReturned": false,
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        },
+        {
+          "action": "create",
+          "input": "null",
+          "data": {
+            "protectedValue": null
+          },
+          "inputOwnKeys": [
+            "protectedValue"
+          ],
+          "inputHasOwn": true,
+          "inputHasField": true,
+          "inheritedValue": null,
+          "returned": true,
+          "result": {
+            "protectedValue": {
+              "type": "function",
+              "identity": "default-function"
+            }
+          },
+          "ownKeys": [
+            "protectedValue"
+          ],
+          "nullPrototype": true,
+          "ownsField": true,
+          "sameDefault": true,
+          "sameReturned": false,
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        },
+        {
+          "action": "create",
+          "input": "false",
+          "data": {
+            "protectedValue": false
+          },
+          "inputOwnKeys": [
+            "protectedValue"
+          ],
+          "inputHasOwn": true,
+          "inputHasField": true,
+          "inheritedValue": null,
+          "returned": true,
+          "result": {
+            "protectedValue": {
+              "type": "function",
+              "identity": "default-function"
+            }
+          },
+          "ownKeys": [
+            "protectedValue"
+          ],
+          "nullPrototype": true,
+          "ownsField": true,
+          "sameDefault": true,
+          "sameReturned": false,
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        },
+        {
+          "action": "create",
+          "input": "zero",
+          "data": {
+            "protectedValue": 0
+          },
+          "inputOwnKeys": [
+            "protectedValue"
+          ],
+          "inputHasOwn": true,
+          "inputHasField": true,
+          "inheritedValue": null,
+          "returned": true,
+          "result": {
+            "protectedValue": {
+              "type": "function",
+              "identity": "default-function"
+            }
+          },
+          "ownKeys": [
+            "protectedValue"
+          ],
+          "nullPrototype": true,
+          "ownsField": true,
+          "sameDefault": true,
+          "sameReturned": false,
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        },
+        {
+          "action": "create",
+          "input": "empty-string",
+          "data": {
+            "protectedValue": ""
+          },
+          "inputOwnKeys": [
+            "protectedValue"
+          ],
+          "inputHasOwn": true,
+          "inputHasField": true,
+          "inheritedValue": null,
+          "returned": true,
+          "result": {
+            "protectedValue": {
+              "type": "function",
+              "identity": "default-function"
+            }
+          },
+          "ownKeys": [
+            "protectedValue"
+          ],
+          "nullPrototype": true,
+          "ownsField": true,
+          "sameDefault": true,
+          "sameReturned": false,
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        },
+        {
+          "action": "create",
+          "input": "truthy",
+          "data": {
+            "protectedValue": "submitted"
+          },
+          "inputOwnKeys": [
+            "protectedValue"
+          ],
+          "inputHasOwn": true,
+          "inputHasField": true,
+          "inheritedValue": null,
+          "returned": true,
+          "result": {
+            "protectedValue": {
+              "type": "function",
+              "identity": "default-function"
+            }
+          },
+          "ownKeys": [
+            "protectedValue"
+          ],
+          "nullPrototype": true,
+          "ownsField": true,
+          "sameDefault": true,
+          "sameReturned": false,
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        },
+        {
+          "action": "create",
+          "input": "inherited",
+          "data": {},
+          "inputOwnKeys": [],
+          "inputHasOwn": false,
+          "inputHasField": true,
+          "inheritedValue": "inherited",
+          "returned": true,
+          "result": {
+            "protectedValue": {
+              "type": "function",
+              "identity": "default-function"
+            }
+          },
+          "ownKeys": [
+            "protectedValue"
+          ],
+          "nullPrototype": true,
+          "ownsField": true,
+          "sameDefault": true,
+          "sameReturned": false,
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        },
+        {
+          "action": "update",
+          "input": "missing",
+          "data": {},
+          "inputOwnKeys": [],
+          "inputHasOwn": false,
+          "inputHasField": false,
+          "inheritedValue": null,
+          "returned": true,
+          "result": {},
+          "ownKeys": [],
+          "nullPrototype": true,
+          "ownsField": false,
+          "sameDefault": false,
+          "sameReturned": false,
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        },
+        {
+          "action": "update",
+          "input": "own-undefined",
+          "data": {
+            "protectedValue": {
+              "type": "undefined"
+            }
+          },
+          "inputOwnKeys": [
+            "protectedValue"
+          ],
+          "inputHasOwn": true,
+          "inputHasField": true,
+          "inheritedValue": null,
+          "returned": true,
+          "result": {},
+          "ownKeys": [],
+          "nullPrototype": true,
+          "ownsField": false,
+          "sameDefault": false,
+          "sameReturned": false,
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        },
+        {
+          "action": "update",
+          "input": "null",
+          "data": {
+            "protectedValue": null
+          },
+          "inputOwnKeys": [
+            "protectedValue"
+          ],
+          "inputHasOwn": true,
+          "inputHasField": true,
+          "inheritedValue": null,
+          "returned": true,
+          "result": {},
+          "ownKeys": [],
+          "nullPrototype": true,
+          "ownsField": false,
+          "sameDefault": false,
+          "sameReturned": false,
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        },
+        {
+          "action": "update",
+          "input": "false",
+          "data": {
+            "protectedValue": false
+          },
+          "inputOwnKeys": [
+            "protectedValue"
+          ],
+          "inputHasOwn": true,
+          "inputHasField": true,
+          "inheritedValue": null,
+          "returned": true,
+          "result": {},
+          "ownKeys": [],
+          "nullPrototype": true,
+          "ownsField": false,
+          "sameDefault": false,
+          "sameReturned": false,
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        },
+        {
+          "action": "update",
+          "input": "zero",
+          "data": {
+            "protectedValue": 0
+          },
+          "inputOwnKeys": [
+            "protectedValue"
+          ],
+          "inputHasOwn": true,
+          "inputHasField": true,
+          "inheritedValue": null,
+          "returned": true,
+          "result": {},
+          "ownKeys": [],
+          "nullPrototype": true,
+          "ownsField": false,
+          "sameDefault": false,
+          "sameReturned": false,
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        },
+        {
+          "action": "update",
+          "input": "empty-string",
+          "data": {
+            "protectedValue": ""
+          },
+          "inputOwnKeys": [
+            "protectedValue"
+          ],
+          "inputHasOwn": true,
+          "inputHasField": true,
+          "inheritedValue": null,
+          "returned": true,
+          "result": {},
+          "ownKeys": [],
+          "nullPrototype": true,
+          "ownsField": false,
+          "sameDefault": false,
+          "sameReturned": false,
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        },
+        {
+          "action": "update",
+          "input": "truthy",
+          "data": {
+            "protectedValue": "submitted"
+          },
+          "inputOwnKeys": [
+            "protectedValue"
+          ],
+          "inputHasOwn": true,
+          "inputHasField": true,
+          "inheritedValue": null,
+          "returned": false,
+          "error": {
+            "name": "APIError",
+            "message": "protectedValue is not allowed to be set",
+            "properties": {
+              "status": "BAD_REQUEST",
+              "body": {
+                "message": "protectedValue is not allowed to be set",
+                "code": "FIELD_NOT_ALLOWED"
+              },
+              "headers": {},
+              "statusCode": 400
+            }
+          },
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        },
+        {
+          "action": "update",
+          "input": "inherited",
+          "data": {},
+          "inputOwnKeys": [],
+          "inputHasOwn": false,
+          "inputHasField": true,
+          "inheritedValue": "inherited",
+          "returned": false,
+          "error": {
+            "name": "APIError",
+            "message": "protectedValue is not allowed to be set",
+            "properties": {
+              "status": "BAD_REQUEST",
+              "body": {
+                "message": "protectedValue is not allowed to be set",
+                "code": "FIELD_NOT_ALLOWED"
+              },
+              "headers": {},
+              "statusCode": 400
+            }
+          },
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        }
+      ],
+      "functions": [
+        {
+          "identity": "returned-function",
+          "name": "returnedFunction",
+          "length": 0,
+          "source": "function returnedFunction() {\n    counts.returnedFunction += 1;\n    events.push({ phase: \"returned-function\", arguments: observe([...arguments]) });\n    return \"returned-function-value\";\n  }",
+          "string": "function returnedFunction() {\n    counts.returnedFunction += 1;\n    events.push({ phase: \"returned-function\", arguments: observe([...arguments]) });\n    return \"returned-function-value\";\n  }",
+          "ownKeys": [
+            "length",
+            "name",
+            "prototype"
+          ]
+        },
+        {
+          "identity": "default-function",
+          "name": "protectedDefault",
+          "length": 0,
+          "source": "function protectedDefault() {\n    counts.factory += 1;\n    events.push({\n      phase: \"default\",\n      arguments: observe([...arguments]),\n      thisIsDeclaration: this === field,\n      thisType: typeof this\n    });\n    switch (scenario.result) {\n      case \"string\":\n        return \"factory-value\";\n      case \"undefined\":\n        return;\n      case \"date\":\n        return new Date(protectedFunctionDate);\n      case \"object\":\n        return { source: \"factory\", ownUndefined: void 0 };\n      case \"function\":\n        return returnedFunction;\n      case \"throws\":\n        throw Error(\"protected-default-failed\");\n      default:\n        throw Error(`Unknown factory result: ${scenario.result}`);\n    }\n  }",
+          "string": "function protectedDefault() {\n    counts.factory += 1;\n    events.push({\n      phase: \"default\",\n      arguments: observe([...arguments]),\n      thisIsDeclaration: this === field,\n      thisType: typeof this\n    });\n    switch (scenario.result) {\n      case \"string\":\n        return \"factory-value\";\n      case \"undefined\":\n        return;\n      case \"date\":\n        return new Date(protectedFunctionDate);\n      case \"object\":\n        return { source: \"factory\", ownUndefined: void 0 };\n      case \"function\":\n        return returnedFunction;\n      case \"throws\":\n        throw Error(\"protected-default-failed\");\n      default:\n        throw Error(`Unknown factory result: ${scenario.result}`);\n    }\n  }",
+          "ownKeys": [
+            "length",
+            "name",
+            "prototype"
+          ]
+        }
+      ]
+    },
+    {
+      "result": "throws",
+      "operations": [
+        {
+          "action": "create",
+          "input": "missing",
+          "data": {},
+          "inputOwnKeys": [],
+          "inputHasOwn": false,
+          "inputHasField": false,
+          "inheritedValue": null,
+          "returned": false,
+          "error": {
+            "name": "Error",
+            "message": "protected-default-failed",
+            "properties": {
+              "originalLine": 111,
+              "originalColumn": 20,
+              "line": 97,
+              "column": 32,
+              "sourceURL": "/home/runner/work/better-auth-rs/better-auth-rs/compat-tests/reference-server/contracts/protected-function-shared.mjs"
+            }
+          },
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": [
+            {
+              "phase": "default",
+              "arguments": [],
+              "thisIsDeclaration": true,
+              "thisType": "object"
+            }
+          ]
+        },
+        {
+          "action": "create",
+          "input": "own-undefined",
+          "data": {
+            "protectedValue": {
+              "type": "undefined"
+            }
+          },
+          "inputOwnKeys": [
+            "protectedValue"
+          ],
+          "inputHasOwn": true,
+          "inputHasField": true,
+          "inheritedValue": null,
+          "returned": true,
+          "result": {
+            "protectedValue": {
+              "type": "function",
+              "identity": "default-function"
+            }
+          },
+          "ownKeys": [
+            "protectedValue"
+          ],
+          "nullPrototype": true,
+          "ownsField": true,
+          "sameDefault": true,
+          "sameReturned": false,
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        },
+        {
+          "action": "create",
+          "input": "null",
+          "data": {
+            "protectedValue": null
+          },
+          "inputOwnKeys": [
+            "protectedValue"
+          ],
+          "inputHasOwn": true,
+          "inputHasField": true,
+          "inheritedValue": null,
+          "returned": true,
+          "result": {
+            "protectedValue": {
+              "type": "function",
+              "identity": "default-function"
+            }
+          },
+          "ownKeys": [
+            "protectedValue"
+          ],
+          "nullPrototype": true,
+          "ownsField": true,
+          "sameDefault": true,
+          "sameReturned": false,
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        },
+        {
+          "action": "create",
+          "input": "false",
+          "data": {
+            "protectedValue": false
+          },
+          "inputOwnKeys": [
+            "protectedValue"
+          ],
+          "inputHasOwn": true,
+          "inputHasField": true,
+          "inheritedValue": null,
+          "returned": true,
+          "result": {
+            "protectedValue": {
+              "type": "function",
+              "identity": "default-function"
+            }
+          },
+          "ownKeys": [
+            "protectedValue"
+          ],
+          "nullPrototype": true,
+          "ownsField": true,
+          "sameDefault": true,
+          "sameReturned": false,
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        },
+        {
+          "action": "create",
+          "input": "zero",
+          "data": {
+            "protectedValue": 0
+          },
+          "inputOwnKeys": [
+            "protectedValue"
+          ],
+          "inputHasOwn": true,
+          "inputHasField": true,
+          "inheritedValue": null,
+          "returned": true,
+          "result": {
+            "protectedValue": {
+              "type": "function",
+              "identity": "default-function"
+            }
+          },
+          "ownKeys": [
+            "protectedValue"
+          ],
+          "nullPrototype": true,
+          "ownsField": true,
+          "sameDefault": true,
+          "sameReturned": false,
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        },
+        {
+          "action": "create",
+          "input": "empty-string",
+          "data": {
+            "protectedValue": ""
+          },
+          "inputOwnKeys": [
+            "protectedValue"
+          ],
+          "inputHasOwn": true,
+          "inputHasField": true,
+          "inheritedValue": null,
+          "returned": true,
+          "result": {
+            "protectedValue": {
+              "type": "function",
+              "identity": "default-function"
+            }
+          },
+          "ownKeys": [
+            "protectedValue"
+          ],
+          "nullPrototype": true,
+          "ownsField": true,
+          "sameDefault": true,
+          "sameReturned": false,
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        },
+        {
+          "action": "create",
+          "input": "truthy",
+          "data": {
+            "protectedValue": "submitted"
+          },
+          "inputOwnKeys": [
+            "protectedValue"
+          ],
+          "inputHasOwn": true,
+          "inputHasField": true,
+          "inheritedValue": null,
+          "returned": true,
+          "result": {
+            "protectedValue": {
+              "type": "function",
+              "identity": "default-function"
+            }
+          },
+          "ownKeys": [
+            "protectedValue"
+          ],
+          "nullPrototype": true,
+          "ownsField": true,
+          "sameDefault": true,
+          "sameReturned": false,
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        },
+        {
+          "action": "create",
+          "input": "inherited",
+          "data": {},
+          "inputOwnKeys": [],
+          "inputHasOwn": false,
+          "inputHasField": true,
+          "inheritedValue": "inherited",
+          "returned": true,
+          "result": {
+            "protectedValue": {
+              "type": "function",
+              "identity": "default-function"
+            }
+          },
+          "ownKeys": [
+            "protectedValue"
+          ],
+          "nullPrototype": true,
+          "ownsField": true,
+          "sameDefault": true,
+          "sameReturned": false,
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        },
+        {
+          "action": "update",
+          "input": "missing",
+          "data": {},
+          "inputOwnKeys": [],
+          "inputHasOwn": false,
+          "inputHasField": false,
+          "inheritedValue": null,
+          "returned": true,
+          "result": {},
+          "ownKeys": [],
+          "nullPrototype": true,
+          "ownsField": false,
+          "sameDefault": false,
+          "sameReturned": false,
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        },
+        {
+          "action": "update",
+          "input": "own-undefined",
+          "data": {
+            "protectedValue": {
+              "type": "undefined"
+            }
+          },
+          "inputOwnKeys": [
+            "protectedValue"
+          ],
+          "inputHasOwn": true,
+          "inputHasField": true,
+          "inheritedValue": null,
+          "returned": true,
+          "result": {},
+          "ownKeys": [],
+          "nullPrototype": true,
+          "ownsField": false,
+          "sameDefault": false,
+          "sameReturned": false,
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        },
+        {
+          "action": "update",
+          "input": "null",
+          "data": {
+            "protectedValue": null
+          },
+          "inputOwnKeys": [
+            "protectedValue"
+          ],
+          "inputHasOwn": true,
+          "inputHasField": true,
+          "inheritedValue": null,
+          "returned": true,
+          "result": {},
+          "ownKeys": [],
+          "nullPrototype": true,
+          "ownsField": false,
+          "sameDefault": false,
+          "sameReturned": false,
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        },
+        {
+          "action": "update",
+          "input": "false",
+          "data": {
+            "protectedValue": false
+          },
+          "inputOwnKeys": [
+            "protectedValue"
+          ],
+          "inputHasOwn": true,
+          "inputHasField": true,
+          "inheritedValue": null,
+          "returned": true,
+          "result": {},
+          "ownKeys": [],
+          "nullPrototype": true,
+          "ownsField": false,
+          "sameDefault": false,
+          "sameReturned": false,
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        },
+        {
+          "action": "update",
+          "input": "zero",
+          "data": {
+            "protectedValue": 0
+          },
+          "inputOwnKeys": [
+            "protectedValue"
+          ],
+          "inputHasOwn": true,
+          "inputHasField": true,
+          "inheritedValue": null,
+          "returned": true,
+          "result": {},
+          "ownKeys": [],
+          "nullPrototype": true,
+          "ownsField": false,
+          "sameDefault": false,
+          "sameReturned": false,
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        },
+        {
+          "action": "update",
+          "input": "empty-string",
+          "data": {
+            "protectedValue": ""
+          },
+          "inputOwnKeys": [
+            "protectedValue"
+          ],
+          "inputHasOwn": true,
+          "inputHasField": true,
+          "inheritedValue": null,
+          "returned": true,
+          "result": {},
+          "ownKeys": [],
+          "nullPrototype": true,
+          "ownsField": false,
+          "sameDefault": false,
+          "sameReturned": false,
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        },
+        {
+          "action": "update",
+          "input": "truthy",
+          "data": {
+            "protectedValue": "submitted"
+          },
+          "inputOwnKeys": [
+            "protectedValue"
+          ],
+          "inputHasOwn": true,
+          "inputHasField": true,
+          "inheritedValue": null,
+          "returned": false,
+          "error": {
+            "name": "APIError",
+            "message": "protectedValue is not allowed to be set",
+            "properties": {
+              "status": "BAD_REQUEST",
+              "body": {
+                "message": "protectedValue is not allowed to be set",
+                "code": "FIELD_NOT_ALLOWED"
+              },
+              "headers": {},
+              "statusCode": 400
+            }
+          },
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        },
+        {
+          "action": "update",
+          "input": "inherited",
+          "data": {},
+          "inputOwnKeys": [],
+          "inputHasOwn": false,
+          "inputHasField": true,
+          "inheritedValue": "inherited",
+          "returned": false,
+          "error": {
+            "name": "APIError",
+            "message": "protectedValue is not allowed to be set",
+            "properties": {
+              "status": "BAD_REQUEST",
+              "body": {
+                "message": "protectedValue is not allowed to be set",
+                "code": "FIELD_NOT_ALLOWED"
+              },
+              "headers": {},
+              "statusCode": 400
+            }
+          },
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        }
+      ],
+      "functions": [
+        {
+          "identity": "returned-function",
+          "name": "returnedFunction",
+          "length": 0,
+          "source": "function returnedFunction() {\n    counts.returnedFunction += 1;\n    events.push({ phase: \"returned-function\", arguments: observe([...arguments]) });\n    return \"returned-function-value\";\n  }",
+          "string": "function returnedFunction() {\n    counts.returnedFunction += 1;\n    events.push({ phase: \"returned-function\", arguments: observe([...arguments]) });\n    return \"returned-function-value\";\n  }",
+          "ownKeys": [
+            "length",
+            "name",
+            "prototype"
+          ]
+        },
+        {
+          "identity": "default-function",
+          "name": "protectedDefault",
+          "length": 0,
+          "source": "function protectedDefault() {\n    counts.factory += 1;\n    events.push({\n      phase: \"default\",\n      arguments: observe([...arguments]),\n      thisIsDeclaration: this === field,\n      thisType: typeof this\n    });\n    switch (scenario.result) {\n      case \"string\":\n        return \"factory-value\";\n      case \"undefined\":\n        return;\n      case \"date\":\n        return new Date(protectedFunctionDate);\n      case \"object\":\n        return { source: \"factory\", ownUndefined: void 0 };\n      case \"function\":\n        return returnedFunction;\n      case \"throws\":\n        throw Error(\"protected-default-failed\");\n      default:\n        throw Error(`Unknown factory result: ${scenario.result}`);\n    }\n  }",
+          "string": "function protectedDefault() {\n    counts.factory += 1;\n    events.push({\n      phase: \"default\",\n      arguments: observe([...arguments]),\n      thisIsDeclaration: this === field,\n      thisType: typeof this\n    });\n    switch (scenario.result) {\n      case \"string\":\n        return \"factory-value\";\n      case \"undefined\":\n        return;\n      case \"date\":\n        return new Date(protectedFunctionDate);\n      case \"object\":\n        return { source: \"factory\", ownUndefined: void 0 };\n      case \"function\":\n        return returnedFunction;\n      case \"throws\":\n        throw Error(\"protected-default-failed\");\n      default:\n        throw Error(`Unknown factory result: ${scenario.result}`);\n    }\n  }",
+          "ownKeys": [
+            "length",
+            "name",
+            "prototype"
+          ]
+        }
+      ]
+    },
+    {
+      "result": "function",
+      "operations": [
+        {
+          "action": "create",
+          "input": "missing",
+          "data": {},
+          "inputOwnKeys": [],
+          "inputHasOwn": false,
+          "inputHasField": false,
+          "inheritedValue": null,
+          "returned": true,
+          "result": {
+            "protectedValue": {
+              "type": "function",
+              "identity": "returned-function"
+            }
+          },
+          "ownKeys": [
+            "protectedValue"
+          ],
+          "nullPrototype": true,
+          "ownsField": true,
+          "sameDefault": false,
+          "sameReturned": true,
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": [
+            {
+              "phase": "default",
+              "arguments": [],
+              "thisIsDeclaration": true,
+              "thisType": "object"
+            }
+          ]
+        },
+        {
+          "action": "create",
+          "input": "own-undefined",
+          "data": {
+            "protectedValue": {
+              "type": "undefined"
+            }
+          },
+          "inputOwnKeys": [
+            "protectedValue"
+          ],
+          "inputHasOwn": true,
+          "inputHasField": true,
+          "inheritedValue": null,
+          "returned": true,
+          "result": {
+            "protectedValue": {
+              "type": "function",
+              "identity": "default-function"
+            }
+          },
+          "ownKeys": [
+            "protectedValue"
+          ],
+          "nullPrototype": true,
+          "ownsField": true,
+          "sameDefault": true,
+          "sameReturned": false,
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        },
+        {
+          "action": "create",
+          "input": "null",
+          "data": {
+            "protectedValue": null
+          },
+          "inputOwnKeys": [
+            "protectedValue"
+          ],
+          "inputHasOwn": true,
+          "inputHasField": true,
+          "inheritedValue": null,
+          "returned": true,
+          "result": {
+            "protectedValue": {
+              "type": "function",
+              "identity": "default-function"
+            }
+          },
+          "ownKeys": [
+            "protectedValue"
+          ],
+          "nullPrototype": true,
+          "ownsField": true,
+          "sameDefault": true,
+          "sameReturned": false,
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        },
+        {
+          "action": "create",
+          "input": "false",
+          "data": {
+            "protectedValue": false
+          },
+          "inputOwnKeys": [
+            "protectedValue"
+          ],
+          "inputHasOwn": true,
+          "inputHasField": true,
+          "inheritedValue": null,
+          "returned": true,
+          "result": {
+            "protectedValue": {
+              "type": "function",
+              "identity": "default-function"
+            }
+          },
+          "ownKeys": [
+            "protectedValue"
+          ],
+          "nullPrototype": true,
+          "ownsField": true,
+          "sameDefault": true,
+          "sameReturned": false,
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        },
+        {
+          "action": "create",
+          "input": "zero",
+          "data": {
+            "protectedValue": 0
+          },
+          "inputOwnKeys": [
+            "protectedValue"
+          ],
+          "inputHasOwn": true,
+          "inputHasField": true,
+          "inheritedValue": null,
+          "returned": true,
+          "result": {
+            "protectedValue": {
+              "type": "function",
+              "identity": "default-function"
+            }
+          },
+          "ownKeys": [
+            "protectedValue"
+          ],
+          "nullPrototype": true,
+          "ownsField": true,
+          "sameDefault": true,
+          "sameReturned": false,
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        },
+        {
+          "action": "create",
+          "input": "empty-string",
+          "data": {
+            "protectedValue": ""
+          },
+          "inputOwnKeys": [
+            "protectedValue"
+          ],
+          "inputHasOwn": true,
+          "inputHasField": true,
+          "inheritedValue": null,
+          "returned": true,
+          "result": {
+            "protectedValue": {
+              "type": "function",
+              "identity": "default-function"
+            }
+          },
+          "ownKeys": [
+            "protectedValue"
+          ],
+          "nullPrototype": true,
+          "ownsField": true,
+          "sameDefault": true,
+          "sameReturned": false,
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        },
+        {
+          "action": "create",
+          "input": "truthy",
+          "data": {
+            "protectedValue": "submitted"
+          },
+          "inputOwnKeys": [
+            "protectedValue"
+          ],
+          "inputHasOwn": true,
+          "inputHasField": true,
+          "inheritedValue": null,
+          "returned": true,
+          "result": {
+            "protectedValue": {
+              "type": "function",
+              "identity": "default-function"
+            }
+          },
+          "ownKeys": [
+            "protectedValue"
+          ],
+          "nullPrototype": true,
+          "ownsField": true,
+          "sameDefault": true,
+          "sameReturned": false,
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        },
+        {
+          "action": "create",
+          "input": "inherited",
+          "data": {},
+          "inputOwnKeys": [],
+          "inputHasOwn": false,
+          "inputHasField": true,
+          "inheritedValue": "inherited",
+          "returned": true,
+          "result": {
+            "protectedValue": {
+              "type": "function",
+              "identity": "default-function"
+            }
+          },
+          "ownKeys": [
+            "protectedValue"
+          ],
+          "nullPrototype": true,
+          "ownsField": true,
+          "sameDefault": true,
+          "sameReturned": false,
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        },
+        {
+          "action": "update",
+          "input": "missing",
+          "data": {},
+          "inputOwnKeys": [],
+          "inputHasOwn": false,
+          "inputHasField": false,
+          "inheritedValue": null,
+          "returned": true,
+          "result": {},
+          "ownKeys": [],
+          "nullPrototype": true,
+          "ownsField": false,
+          "sameDefault": false,
+          "sameReturned": false,
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        },
+        {
+          "action": "update",
+          "input": "own-undefined",
+          "data": {
+            "protectedValue": {
+              "type": "undefined"
+            }
+          },
+          "inputOwnKeys": [
+            "protectedValue"
+          ],
+          "inputHasOwn": true,
+          "inputHasField": true,
+          "inheritedValue": null,
+          "returned": true,
+          "result": {},
+          "ownKeys": [],
+          "nullPrototype": true,
+          "ownsField": false,
+          "sameDefault": false,
+          "sameReturned": false,
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        },
+        {
+          "action": "update",
+          "input": "null",
+          "data": {
+            "protectedValue": null
+          },
+          "inputOwnKeys": [
+            "protectedValue"
+          ],
+          "inputHasOwn": true,
+          "inputHasField": true,
+          "inheritedValue": null,
+          "returned": true,
+          "result": {},
+          "ownKeys": [],
+          "nullPrototype": true,
+          "ownsField": false,
+          "sameDefault": false,
+          "sameReturned": false,
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        },
+        {
+          "action": "update",
+          "input": "false",
+          "data": {
+            "protectedValue": false
+          },
+          "inputOwnKeys": [
+            "protectedValue"
+          ],
+          "inputHasOwn": true,
+          "inputHasField": true,
+          "inheritedValue": null,
+          "returned": true,
+          "result": {},
+          "ownKeys": [],
+          "nullPrototype": true,
+          "ownsField": false,
+          "sameDefault": false,
+          "sameReturned": false,
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        },
+        {
+          "action": "update",
+          "input": "zero",
+          "data": {
+            "protectedValue": 0
+          },
+          "inputOwnKeys": [
+            "protectedValue"
+          ],
+          "inputHasOwn": true,
+          "inputHasField": true,
+          "inheritedValue": null,
+          "returned": true,
+          "result": {},
+          "ownKeys": [],
+          "nullPrototype": true,
+          "ownsField": false,
+          "sameDefault": false,
+          "sameReturned": false,
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        },
+        {
+          "action": "update",
+          "input": "empty-string",
+          "data": {
+            "protectedValue": ""
+          },
+          "inputOwnKeys": [
+            "protectedValue"
+          ],
+          "inputHasOwn": true,
+          "inputHasField": true,
+          "inheritedValue": null,
+          "returned": true,
+          "result": {},
+          "ownKeys": [],
+          "nullPrototype": true,
+          "ownsField": false,
+          "sameDefault": false,
+          "sameReturned": false,
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        },
+        {
+          "action": "update",
+          "input": "truthy",
+          "data": {
+            "protectedValue": "submitted"
+          },
+          "inputOwnKeys": [
+            "protectedValue"
+          ],
+          "inputHasOwn": true,
+          "inputHasField": true,
+          "inheritedValue": null,
+          "returned": false,
+          "error": {
+            "name": "APIError",
+            "message": "protectedValue is not allowed to be set",
+            "properties": {
+              "status": "BAD_REQUEST",
+              "body": {
+                "message": "protectedValue is not allowed to be set",
+                "code": "FIELD_NOT_ALLOWED"
+              },
+              "headers": {},
+              "statusCode": 400
+            }
+          },
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        },
+        {
+          "action": "update",
+          "input": "inherited",
+          "data": {},
+          "inputOwnKeys": [],
+          "inputHasOwn": false,
+          "inputHasField": true,
+          "inheritedValue": "inherited",
+          "returned": false,
+          "error": {
+            "name": "APIError",
+            "message": "protectedValue is not allowed to be set",
+            "properties": {
+              "status": "BAD_REQUEST",
+              "body": {
+                "message": "protectedValue is not allowed to be set",
+                "code": "FIELD_NOT_ALLOWED"
+              },
+              "headers": {},
+              "statusCode": 400
+            }
+          },
+          "counts": {
+            "factory": 1,
+            "returnedFunction": 0,
+            "validator": 0,
+            "input": 0,
+            "output": 0,
+            "admission": 0,
+            "before": 0,
+            "after": 0,
+            "generateId": 0
+          },
+          "events": []
+        }
+      ],
+      "functions": [
+        {
+          "identity": "returned-function",
+          "name": "returnedFunction",
+          "length": 0,
+          "source": "function returnedFunction() {\n    counts.returnedFunction += 1;\n    events.push({ phase: \"returned-function\", arguments: observe([...arguments]) });\n    return \"returned-function-value\";\n  }",
+          "string": "function returnedFunction() {\n    counts.returnedFunction += 1;\n    events.push({ phase: \"returned-function\", arguments: observe([...arguments]) });\n    return \"returned-function-value\";\n  }",
+          "ownKeys": [
+            "length",
+            "name",
+            "prototype"
+          ]
+        },
+        {
+          "identity": "default-function",
+          "name": "protectedDefault",
+          "length": 0,
+          "source": "function protectedDefault() {\n    counts.factory += 1;\n    events.push({\n      phase: \"default\",\n      arguments: observe([...arguments]),\n      thisIsDeclaration: this === field,\n      thisType: typeof this\n    });\n    switch (scenario.result) {\n      case \"string\":\n        return \"factory-value\";\n      case \"undefined\":\n        return;\n      case \"date\":\n        return new Date(protectedFunctionDate);\n      case \"object\":\n        return { source: \"factory\", ownUndefined: void 0 };\n      case \"function\":\n        return returnedFunction;\n      case \"throws\":\n        throw Error(\"protected-default-failed\");\n      default:\n        throw Error(`Unknown factory result: ${scenario.result}`);\n    }\n  }",
+          "string": "function protectedDefault() {\n    counts.factory += 1;\n    events.push({\n      phase: \"default\",\n      arguments: observe([...arguments]),\n      thisIsDeclaration: this === field,\n      thisType: typeof this\n    });\n    switch (scenario.result) {\n      case \"string\":\n        return \"factory-value\";\n      case \"undefined\":\n        return;\n      case \"date\":\n        return new Date(protectedFunctionDate);\n      case \"object\":\n        return { source: \"factory\", ownUndefined: void 0 };\n      case \"function\":\n        return returnedFunction;\n      case \"throws\":\n        throw Error(\"protected-default-failed\");\n      default:\n        throw Error(`Unknown factory result: ${scenario.result}`);\n    }\n  }",
+          "ownKeys": [
+            "length",
+            "name",
+            "prototype"
+          ]
+        }
+      ]
+    }
+  ]
+}

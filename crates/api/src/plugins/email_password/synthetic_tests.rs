@@ -177,12 +177,7 @@ async fn duplicate_signup_filters_custom_synthetic_user_without_writes() -> Auth
         }}))
     );
     let response = crate::plugins::test_helpers::finalize_response(&context, &request, response);
-    assert!(
-        !response
-            .headers
-            .keys()
-            .any(|name| name.eq_ignore_ascii_case("set-cookie"))
-    );
+    assert!(!response.headers.contains_key("set-cookie"));
     let (users, total) = context.database.list_users(Default::default()).await?;
     assert_eq!(total, 1);
     assert_eq!(FieldMap::from(users[0].clone()), before);

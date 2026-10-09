@@ -66,6 +66,8 @@ mod teams;
 mod transactions;
 mod two_factor;
 #[cfg(test)]
+mod user_runtime_input_tests;
+#[cfg(test)]
 mod user_serial_tests;
 mod user_verification;
 mod users;

@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { betterAuth } from "better-auth";
 import { apiKey } from "@better-auth/api-key";
-import { createHMAC } from "@better-auth/utils/hmac";
+import { serializeSignedCookie } from "better-call";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { organization } from "better-auth/plugins";
 
@@ -75,8 +75,8 @@ test("API Key typed and HTTP creation cannot replace the authenticated user", as
     session: { id: "actor-session", userId: owner.id, token: "actor-token", createdAt: now, updatedAt: now, expiresAt: new Date("2100-01-01T00:00:00Z") },
     user: owner,
   }));
-  const signature = await createHMAC("SHA-256", "base64").sign(secret, "actor-token");
-  const response = await f.http({ userId: "other-user" }, `better-auth.session_token=${encodeURIComponent(`actor-token.${signature}`)}`);
+  const cookie = (await serializeSignedCookie("better-auth.session_token", "actor-token", secret)).split(";", 1)[0];
+  const response = await f.http({ userId: "other-user" }, cookie);
   expect(response.status).toBe(expected.status);
   expect(await response.json()).toStrictEqual(expected.body);
   expect(f.callbacks).toStrictEqual([]);

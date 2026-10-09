@@ -183,7 +183,7 @@ run_stage() {
       if cargo check --workspace --locked --tests --features axum,seaorm2,redis-cache --keep-going; then
         cargo test --locked --no-fail-fast -p better-auth-core -p better-auth-api -p better-auth-seaorm --lib -- \
           session verification database_hooks lifecycle transaction create_readback user_fields user_query wire:: \
-          user_column_defaults \
+          user_column_defaults user_runtime_input_tests \
           user_view_preserves_adapter_order_through_cache_and_visibility \
           plugins::jwt:: plugins::api_key:: plugins::passkey:: plugins::organization:: plugins::test_utils:: \
           plugins::user_admission:: \
@@ -224,6 +224,8 @@ run_stage() {
         ./compat-tests/reference-server/contracts/user-admission-input.test.ts \
         ./compat-tests/reference-server/contracts/user-input-policy.test.ts \
         ./compat-tests/reference-server/contracts/phone-signup-input.test.ts \
+        ./compat-tests/reference-server/contracts/protected-function.test.ts \
+        ./compat-tests/reference-server/contracts/protected-function-server.test.ts \
         ./compat-tests/reference-server/contracts/user-synthetic-output.test.ts \
         ./compat-tests/reference-server/contracts/api-key-actor-reference.test.ts \
         ./compat-tests/reference-server/contracts/api-key-create-gate.test.ts \

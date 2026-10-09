@@ -71,7 +71,7 @@ for (const create of [true, false]) {
           update: { before: async (data: unknown) => { events.push(["before", structuredClone(data)]); }, after: async (data: unknown) => { events.push(["after", structuredClone(data)]); } },
         } },
       });
-      const { internalAdapter } = await auth.$context;
+      const { internalAdapter, adapter } = await auth.$context;
       const input = user();
       const result = create ? await internalAdapter.createUser(input) : await internalAdapter.updateUser(owner, input);
       const count = "calls" in field ? field.calls : 1;
@@ -85,7 +85,11 @@ for (const create of [true, false]) {
       expect(observe(events[1][1][field.name])).toStrictEqual(observe(expected));
       const expectedRecord = observe({ ...input, [field.name]: expected });
       expect(observe(result)).toStrictEqual(expectedRecord);
-      expect(observe(memory.user[0])).toStrictEqual(expectedRecord);
+      expect(observe(await adapter.findOne({ model: "user", where: [{ field: "id", value: owner }] }))).toStrictEqual(expectedRecord);
+      // Memory stores JSON text and omits undefined writes before adapter output.
+      const expectedStorage = { ...input, metadata: '{"seed":true}', [field.name]: expected };
+      if (create && expected === undefined) delete expectedStorage[field.name];
+      expect(observe(memory.user[0])).toStrictEqual(observe(expectedStorage));
       expect(observe(events[1][1])).toStrictEqual(expectedRecord);
     });
   }
@@ -104,7 +108,7 @@ for (const create of [true, false]) {
       plugins: [{ id: "runtime-input-first", init() { return { options: { databaseHooks: { user: hooks("first", first) } } }; } }],
       databaseHooks: { user: hooks("second", second) },
     });
-    const { internalAdapter } = await auth.$context;
+    const { internalAdapter, adapter } = await auth.$context;
     const input = user();
     const result = create ? await internalAdapter.createUser(input) : await internalAdapter.updateUser(owner, input);
     expect(events.map(event => event[0])).toStrictEqual(["first", "second", "after", "after"]);
@@ -115,9 +119,11 @@ for (const create of [true, false]) {
       expect(observe(events[3][1][name])).toStrictEqual(observe(value));
     }
     const expectedRecord = observe({ ...input, ...first, ...second });
-    for (const record of [result, memory.user[0], events[2][1], events[3][1]]) {
+    expect(observe(await adapter.findOne({ model: "user", where: [{ field: "id", value: owner }] }))).toStrictEqual(expectedRecord);
+    for (const record of [result, events[2][1], events[3][1]]) {
       expect(observe(record)).toStrictEqual(expectedRecord);
     }
+    expect(observe(memory.user[0])).toStrictEqual(observe({ ...input, metadata: '{"seed":true}', ...first, ...second }));
     expect(events[0][1].email).toBe(input.email);
     expect(observe(events[1][1].email)).toStrictEqual(observe(create ? first.email : input.email));
   });

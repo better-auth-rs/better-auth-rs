@@ -1,4 +1,4 @@
-use better_auth_core::{AuthError, AuthResult, FieldDate, FieldMap, FieldValue};
+use better_auth::{AuthError, AuthResult, FieldDate, FieldMap, FieldValue};
 use serde_json::{Value, json};
 
 pub(super) fn observe(value: &FieldValue) -> AuthResult<Value> {

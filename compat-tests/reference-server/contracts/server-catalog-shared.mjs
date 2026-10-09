@@ -79,7 +79,8 @@ async function mysql(tableNames, configuration, observeRows) {
     try {
       const url = new URL(connectionString);
       url.pathname = `/${name}`;
-      const pool = createPool(url.href);
+      // Preserve session settings across raw queries and adapter operations in each isolated capture.
+      const pool = createPool({ uri: url.href, connectionLimit: 1 });
       try {
         return await observe(pool, async (sql, values) => (await pool.query(sql, values))[0], "mysql", tableNames, configuration, observeRows);
       } finally {

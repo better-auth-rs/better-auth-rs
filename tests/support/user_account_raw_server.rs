@@ -101,6 +101,9 @@ pub(super) async fn complete_storage(database: &DatabaseConnection) -> TestResul
             DbBackend::Sqlite => {
                 format!("SELECT name FROM pragma_table_info('{table}') ORDER BY cid")
             }
+            _ => {
+                return Err(format!("Unsupported raw-column snapshot backend: {backend:?}").into());
+            }
         };
         let columns = database
             .query_all_raw(Statement::from_string(backend, sql))
@@ -122,6 +125,9 @@ pub(super) async fn complete_storage(database: &DatabaseConnection) -> TestResul
             DbBackend::Postgres => "row_to_json(stored)::TEXT".to_owned(),
             DbBackend::MySql => format!("CAST(JSON_OBJECT({fields}) AS CHAR)"),
             DbBackend::Sqlite => format!("json_object({fields})"),
+            _ => {
+                return Err(format!("Unsupported raw-column snapshot backend: {backend:?}").into());
+            }
         };
         let rows = database
             .query_all_raw(Statement::from_string(
