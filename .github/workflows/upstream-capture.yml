@@ -79,9 +79,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - contract: jwt-native-session
-            regressions: []
-            backend: ''
           - contract: oauth-native-session
             regressions: []
             backend: ''

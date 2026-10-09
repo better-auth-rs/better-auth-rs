@@ -217,13 +217,29 @@ async function captureCase(backend, operation, strategy, scenario, existing = fa
       )), replacements);
     }
     const observed = events.splice(0);
+    const registeredModels = Object.keys(context.tables);
+    assert.deepEqual([...registeredModels].sort(), models.filter(model => scenario.many || model !== "verification").sort());
     const stored = {};
-    for (const model of models) stored[model] = await inspectMany({ model });
-    for (const model of ["account", "verification"]) for (const row of stored[model]) {
-      if (!row.id.startsWith("linked-")) replacements.set(row.id, `<${model}-id>`);
+    for (const model of models) {
+      if (Object.hasOwn(context.tables, model)) {
+        stored[model] = await inspectMany({ model });
+      } else if (sqlite) {
+        const tableExists = Boolean(sqlite.query("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").get(model));
+        assert.equal(tableExists, false, "An unregistered verification model must not create a database table");
+        stored[model] = { modelRegistered: false, tableExists };
+      } else {
+        assert.deepEqual(memory[model], [], "An unregistered verification model must not write to the Memory bucket");
+        stored[model] = { modelRegistered: false, rows: memory[model] };
+      }
+    }
+    for (const model of ["account", "verification"]) {
+      if (!Object.hasOwn(context.tables, model)) continue;
+      for (const row of stored[model]) {
+        if (!row.id.startsWith("linked-")) replacements.set(row.id, `<${model}-id>`);
+      }
     }
     return normalize({ backend, operation, strategy, scenario: scenario.name, existing,
-      result, pending: native(pending), callback, events: observed, stored: native(stored),
+      result, pending: native(pending), callback, events: observed, registeredModels, stored: native(stored),
       cache: [...cache].map(([key, value]) => ({ key, value: JSON.parse(value) })) }, replacements);
   } finally { sqlite?.close(); }
 }
@@ -236,6 +252,7 @@ export async function captureOAuthNativeSession() {
   class FixedDate extends OriginalDate {
     constructor(...args) { super(...(args.length ? args : [timestamp])); }
     static now() { return timestamp; }
+    static [Symbol.hasInstance](value) { return value instanceof OriginalDate; }
   }
   globalThis.Date = FixedDate;
   try {
