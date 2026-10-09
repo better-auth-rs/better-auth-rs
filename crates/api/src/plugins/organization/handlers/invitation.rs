@@ -228,32 +228,42 @@ pub(crate) async fn invite_member_core(
                     ));
                 }
             }
-            let mut teams = Vec::with_capacity(requested.len());
             for team_id in requested {
-                let team = ctx
+                let _ = ctx
                     .database
-                    .get_team_value(team_id)
+                    .get_team_details_value(team_id, Some(&org_id), false)
                     .await?
-                    .filter(|team| team.organization_id.field_value().strict_equals(&org_id))
-                    .ok_or_else(|| AuthError::bad_request("Team not found"))?;
-                teams.push(team);
+                    .ok_or_else(|| AuthError::bad_request("Team not found"))?
+                    .into_public_parts(&config.schema.team)?;
             }
-            for team in &teams {
-                let team_id = team.id.field_value();
-                let limit = config
-                    .team_member_limit(OrganizationTeamMemberLimit {
-                        organization_id: &org_id,
-                        team_id: &team_id,
-                        session: OrganizationSession {
-                            user: &session.user,
-                            session: &session.session,
-                        },
-                    })
-                    .await?;
-                if let Some(limit) = limit
-                    && ctx.database.count_team_members_value(&team_id).await? >= limit as u64
-                {
-                    return Err(AuthError::forbidden("Team member limit reached"));
+            if config.teams.maximum_members_per_team.is_some()
+                || config.teams.maximum_members_per_team_callback.is_some()
+            {
+                for team_id in requested {
+                    let team = ctx
+                        .database
+                        .get_team_details_value(team_id, Some(&org_id), true)
+                        .await?
+                        .ok_or_else(|| AuthError::bad_request("Team not found"))?;
+                    let (_, members) = team.into_public_parts(&config.schema.team)?;
+                    let members = members.ok_or_else(|| {
+                        AuthError::internal("Team membership projection was omitted")
+                    })?;
+                    let limit = config
+                        .team_member_limit(OrganizationTeamMemberLimit {
+                            organization_id: &org_id,
+                            team_id,
+                            session: OrganizationSession {
+                                user: &session.user,
+                                session: &session.session,
+                            },
+                        })
+                        .await?;
+                    if let Some(limit) = limit
+                        && members.len() >= limit
+                    {
+                        return Err(AuthError::forbidden("Team member limit reached"));
+                    }
                 }
             }
         }

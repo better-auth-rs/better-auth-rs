@@ -198,12 +198,18 @@ pub(crate) fn generate_schema(
             }
         })
     });
+    let foreign_key_imports = (database != Database::Mysql).then(|| {
+        quote! {
+            use better_auth::seaorm::sea_orm::sea_query::{ForeignKey, ForeignKeyAction};
+        }
+    });
     let tokens = quote! {
         use better_auth::AuthSchema;
         use better_auth::seaorm::sea_orm;
         use better_auth::seaorm::sea_orm::entity::prelude::*;
         use better_auth::seaorm::sea_orm::{ConnectionTrait, Schema};
-        use better_auth::seaorm::sea_orm::sea_query::{Alias, ForeignKey, ForeignKeyAction, Index, Table};
+        use better_auth::seaorm::sea_orm::sea_query::{Alias, Index, Table};
+        #foreign_key_imports
         use better_auth::seaorm::AuthEntity;
 
         #(#arrays)*
@@ -343,23 +349,31 @@ fn gen_entity(entity: &Entity, generation: IdGeneration, config: &SchemaConfig) 
     }
 }
 
-fn gen_table(
+fn gen_foreign_keys(
     entity: &Entity,
     entities: &[Entity],
-    generation: IdGeneration,
     database: Database,
-) -> Result<TokenStream, String> {
-    let module = &entity.module;
+) -> Result<Vec<TokenStream>, String> {
+    // MySQL ignores the inline REFERENCES clauses emitted by upstream migrations.
+    if database == Database::Mysql {
+        return Ok(Vec::new());
+    }
     let table = &entity.table;
+    let foreign_key = |column: &str, target: &str, target_column: &str, action: TokenStream| {
+        let name = (database == Database::Sqlite).then(|| {
+            let name = format!("fk_{table}_{column}");
+            quote!(.name(#name))
+        });
+        quote! {
+            .foreign_key(ForeignKey::create()
+                #name
+                .from(Alias::new(#table), Alias::new(#column))
+                .to(Alias::new(#target), Alias::new(#target_column))
+                .on_delete(ForeignKeyAction::#action))
+        }
+    };
     let mut foreign_keys = registry::entity_foreign_keys(entity.registry_table)
         .iter()
-        .filter(|entry| {
-            !(database == Database::Mysql
-                && (entity.role == Some(EntityRole::WalletAddress)
-                    || entity.passkey_native_schema
-                    || entity.two_factor_native_schema)
-                && entry.0 == "user_id")
-        })
         .filter(|entry| {
             entity
                 .fields
@@ -378,19 +392,7 @@ fn gen_table(
                 .find(|entity| entity.registry_table == *target)
                 .map(|entity| entity.table.as_str())
                 .ok_or_else(|| format!("foreign key target `{target}` is missing"))?;
-            let name = format!("fk_{table}_{column}");
-            let name = (!(database == Database::Postgres
-                && (entity.role == Some(EntityRole::WalletAddress)
-                    || entity.passkey_native_schema
-                    || entity.two_factor_native_schema)))
-                .then(|| quote!(.name(#name)));
-            Ok(quote! {
-                .foreign_key(ForeignKey::create()
-                    #name
-                    .from(Alias::new(#table), Alias::new(#column))
-                    .to(Alias::new(#target), Alias::new("id"))
-                    .on_delete(ForeignKeyAction::Cascade))
-            })
+            Ok(foreign_key(column, target, "id", quote!(Cascade)))
         })
         .collect::<Result<Vec<_>, String>>()?;
     for field in &entity.fields {
@@ -411,7 +413,6 @@ fn gen_table(
             })
             .unwrap_or((&reference.model, &reference.field));
         let column = &field.column;
-        let name = format!("fk_{table}_{column}");
         let action = match reference.on_delete.unwrap_or_default() {
             OnDelete::NoAction => quote!(NoAction),
             OnDelete::Restrict => quote!(Restrict),
@@ -419,14 +420,20 @@ fn gen_table(
             OnDelete::SetNull => quote!(SetNull),
             OnDelete::SetDefault => quote!(SetDefault),
         };
-        foreign_keys.push(quote! {
-            .foreign_key(ForeignKey::create()
-                .name(#name)
-                .from(Alias::new(#table), Alias::new(#column))
-                .to(Alias::new(#target), Alias::new(#target_column))
-                .on_delete(ForeignKeyAction::#action))
-        });
+        foreign_keys.push(foreign_key(column, target, target_column, action));
     }
+    Ok(foreign_keys)
+}
+
+fn gen_table(
+    entity: &Entity,
+    entities: &[Entity],
+    generation: IdGeneration,
+    database: Database,
+) -> Result<TokenStream, String> {
+    let module = &entity.module;
+    let table = &entity.table;
+    let foreign_keys = gen_foreign_keys(entity, entities, database)?;
     let types: Vec<_> = entity
         .fields
         .iter()

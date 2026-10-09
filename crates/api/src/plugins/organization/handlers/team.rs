@@ -143,6 +143,7 @@ pub(crate) async fn find_team(
     team_id: &FieldValue,
     organization_id: &FieldValue,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+    config: &OrganizationConfig,
 ) -> AuthResult<Team> {
     ctx.database
         .get_team_value(team_id)
@@ -152,8 +153,8 @@ pub(crate) async fn find_team(
                 .field_value()
                 .strict_equals(organization_id)
         })
-        .map(|team| crate::plugins::organization::fields::team(team, ctx))
         .ok_or_else(|| AuthError::bad_request("Team not found"))
+        .and_then(|team| crate::plugins::organization::fields::team(team, config))
 }
 
 async fn authorize(
@@ -227,7 +228,7 @@ pub(crate) async fn handle_team_request(
                 ctx,
             )
             .await?;
-            let team = find_team(&body.team_id.as_str().into(), &org, ctx).await?;
+            let team = find_team(&body.team_id.as_str().into(), &org, ctx, config).await?;
             let organization = ctx
                 .database
                 .get_organization_by_id_value(&org)
@@ -252,7 +253,7 @@ pub(crate) async fn handle_team_request(
                 .database
                 .update_team_value(&team.id.field_value(), updates)
                 .await?;
-            let updated = crate::plugins::organization::fields::team(updated, ctx);
+            let updated = crate::plugins::organization::fields::team(updated, config)?;
             if let Some(hooks) = &config.hooks {
                 hooks
                     .after_update_team(OrganizationTeamEvent {
@@ -317,7 +318,7 @@ pub(crate) async fn handle_team_request(
                 return Ok(Some(AuthResponse::json(None, &serde_json::Value::Null)?));
             }
             let org = resolve_organization_id(None, None, session, ctx).await?;
-            let team = find_team(&team_id, &org, ctx).await?;
+            let team = find_team(&team_id, &org, ctx, config).await?;
             if ctx
                 .database
                 .get_team_member_value(&team_id, data.user_property("id")?)
@@ -490,7 +491,7 @@ pub(crate) async fn handle_team_request(
                     "User is not a member of the organization",
                 ));
             }
-            let team = find_team(&body.team_id.as_str().into(), &org, ctx).await?;
+            let team = find_team(&body.team_id.as_str().into(), &org, ctx, config).await?;
             let organization = ctx
                 .database
                 .get_organization_by_id_value(&org)

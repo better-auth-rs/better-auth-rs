@@ -74,6 +74,15 @@ where
         self.get_team_value_with_connection(self.connection(), id)
             .await
     }
+    async fn get_team_details_value(
+        &self,
+        team_id: &FieldValue,
+        organization_id: Option<&FieldValue>,
+        include_members: bool,
+    ) -> AuthResult<Option<better_auth_core::store::TeamDetails>> {
+        self.read_team_details(team_id, organization_id, include_members)
+            .await
+    }
     async fn update_team(&self, id: &str, update: UpdateTeam) -> AuthResult<Team> {
         self.update_team_value(&id.into(), update).await
     }

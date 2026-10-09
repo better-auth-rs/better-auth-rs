@@ -1053,7 +1053,7 @@ pub trait SessionStore<S: AuthSchema>: Send + Sync {
 mod joins;
 pub use joins::{
     AccountOwner, InvitationOrganization, JoinValue, MemberUser, OrganizationDetails,
-    OrganizationDetailsQuery, OrganizationKey, ResolvedJoin, UserAccounts,
+    OrganizationDetailsQuery, OrganizationKey, ResolvedJoin, TeamDetails, UserAccounts,
 };
 
 #[async_trait]
@@ -2038,6 +2038,17 @@ pub trait WalletStore: Send + Sync {
 pub trait TeamStore: Send + Sync {
     async fn create_team(&self, input: crate::CreateTeam) -> AuthResult<crate::Team>;
     async fn get_team(&self, id: &str) -> AuthResult<Option<crate::Team>>;
+    /// Bind the team and optional organization predicates before projecting the requested relationship.
+    async fn get_team_details_value(
+        &self,
+        _team_id: &crate::FieldValue,
+        _organization_id: Option<&crate::FieldValue>,
+        _include_members: bool,
+    ) -> AuthResult<Option<TeamDetails>> {
+        Err(crate::AuthError::config(
+            "This store does not support scoped team relationships",
+        ))
+    }
     /// Query an ID supplied by a replacement Organization field schema.
     async fn get_team_value(&self, id: &crate::FieldValue) -> AuthResult<Option<crate::Team>> {
         match id.as_str() {

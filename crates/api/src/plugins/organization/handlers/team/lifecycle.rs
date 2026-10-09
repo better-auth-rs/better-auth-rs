@@ -103,7 +103,7 @@ pub(super) async fn create(
         .database
         .create_team(data.into_create(created_at, Some(created_at)))
         .await?;
-    let team = fields::team(team, ctx);
+    let team = fields::team(team, config)?;
     if let Some(hooks) = &config.hooks {
         hooks
             .after_create_team(OrganizationTeamEvent {
@@ -164,7 +164,7 @@ pub(super) async fn remove(
         )
         .await?;
     }
-    let team = find_team(&body.team_id.as_str().into(), &org, ctx).await?;
+    let team = find_team(&body.team_id.as_str().into(), &org, ctx, config).await?;
     if !config.teams.allow_removing_all_teams
         && ctx.database.count_organization_teams_value(&org).await? <= 1
     {

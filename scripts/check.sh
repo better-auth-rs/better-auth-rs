@@ -86,6 +86,9 @@ run_stage() {
         ./compat-tests/reference-server/contracts/organization-query-limits.test.ts \
         ./compat-tests/reference-server/contracts/organization-physical-fields.test.ts \
         ./compat-tests/reference-server/contracts/organization-plugin-fields.test.ts \
+        ./compat-tests/reference-server/contracts/model-alias-order.test.ts \
+        ./compat-tests/reference-server/contracts/team-details-null-selector.test.ts \
+        ./compat-tests/reference-server/contracts/native-join-property-collision.test.ts \
         ./compat-tests/reference-server/contracts/organization-serial-references.test.ts \
         ./compat-tests/reference-server/contracts/organization-direct-order.test.ts \
         ./compat-tests/reference-server/contracts/account-id-input.test.ts \
@@ -101,10 +104,11 @@ run_stage() {
         ./compat-tests/reference-server/contracts/member-organization-role-catalog.test.ts \
         ./compat-tests/reference-server/contracts/invitation-catalog.test.ts \
         ./compat-tests/reference-server/contracts/team-catalog.test.ts || organization_status=1
+      bun --no-install test ./compat-tests/reference-server/consumer-contracts/team-member-catalog.test.ts --test-name-pattern sqlite || organization_status=1
       cargo clippy --workspace --locked --features axum,seaorm2,redis-cache -- -D warnings || organization_status=1
       cargo clippy --locked --features axum,seaorm2,redis-cache \
         --test organization_id_input_tests --test account_id_input_tests \
-        --test verification_field_queries_tests --test plugin_model_fields_tests -- -D warnings || organization_status=1
+        --test verification_field_queries_tests --test plugin_model_fields_tests --test model_alias_order_tests -- -D warnings || organization_status=1
       cargo test --locked --no-fail-fast -p better-auth-core -p better-auth-seaorm --lib || organization_status=1
       cargo test --locked -p better-auth-api --lib -- \
         plugins::organization::handlers::native_mutation_tests:: \
@@ -121,7 +125,7 @@ run_stage() {
         --test organization_field_alias_tests --test organization_async_field_tests \
         --test organization_join_continuation_tests --test organization_serial_reference_tests \
         --test organization_member_join_reference_tests --test session_field_queries_tests \
-        --test account_id_input_tests --test account_owner_batch_tests \
+        --test account_id_input_tests --test account_owner_batch_tests --test model_alias_order_tests \
         --test account_live_output_tests --test memory_account_live_page_tests \
         --test verification_field_queries_tests --test verification_live_output_tests \
         --test user_runtime_output_tests \
@@ -132,7 +136,7 @@ run_stage() {
         --test plugin_model_fields_tests -- organization:: organization_order:: || organization_status=1
       cargo test --locked -p better-auth-seaorm-macros || organization_status=1
       cargo test --locked -p better-auth-cli --test generate || organization_status=1
-      ./scripts/consumer-check.sh --lib --test session_native_values --test user_session_fields || organization_status=1
+      ./scripts/consumer-check.sh --lib --test session_native_values --test user_session_fields --test generated_plugin_catalog || organization_status=1
       return "$organization_status"
       ;;
     memory-query)

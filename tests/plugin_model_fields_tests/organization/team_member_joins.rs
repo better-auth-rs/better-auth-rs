@@ -263,18 +263,9 @@ async fn replacement_relation<S: AuthSchema>(
     let mut expected_events = member_events(&storage)?;
     match relation {
         Relation::Missing => {
-            if let Err(AuthError::TypeError(message)) = &result {
-                let backend = if matches!(&storage, Storage::Memory(_)) {
-                    "memory"
-                } else {
-                    "sqlite"
-                };
-                eprintln!(
-                    "TeamMember missing join error: backend={backend} joins={joins} class=TypeError message={message:?}"
-                );
-            }
             assert!(
-                matches!(&result, Err(AuthError::TypeError(_))),
+                matches!(&result, Err(AuthError::TypeError(message))
+                    if message == "Cannot destructure property 'memberCount' from null or undefined value"),
                 "{result:?}"
             );
         }

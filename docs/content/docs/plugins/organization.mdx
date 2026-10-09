@@ -269,6 +269,8 @@ Teams are disabled by default. When enabled, organization creation creates a def
 
 Team members must also belong to the organization. Adding an existing team member returns the existing membership, including when the team is full. The store reserves capacity atomically for concurrent additions. A session's `activeTeamId` identifies its selected team. Team selection checks organization membership and team membership; deleting the selected team is rejected until the caller clears or changes the selection.
 
+Invitation creation binds the requested team and organization before output projection. When a team limit is configured, creation projects the membership page before calling the limit callback and compares that page's length with the limit. The page follows the configured default query limit. Invitation acceptance uses the atomic membership operation when reserving capacity.
+
 ### Dynamic roles
 
 Enable persisted roles and provide access-control statements:

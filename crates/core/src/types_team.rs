@@ -92,6 +92,21 @@ impl PartialEq for TeamMember {
 }
 
 impl Team {
+    /// Clone configured public output before removing fields with `returned: false`.
+    pub fn filter_output_fields(
+        mut self,
+        schema: &crate::user_fields::UserConfig,
+    ) -> crate::AuthResult<Self> {
+        let _ = self.additional_fields.shift_remove("memberCount");
+        if schema.additional_fields.is_none() {
+            return Ok(self);
+        }
+        let mut fields = crate::StructuredCloneContext::new()
+            .clone_map(&crate::AuthRecordFields::field_values(&self)?)?;
+        schema.filter_returned_fields(&mut fields);
+        crate::FromFieldMap::from_field_values(fields)
+    }
+
     /// Apply the Organization adapter's object rest operation to a projected relationship.
     #[doc(hidden)]
     pub fn from_membership_join(
@@ -106,7 +121,9 @@ impl Team {
                 .collect()
         } else {
             records.into_iter().next().ok_or_else(|| {
-                crate::AuthError::type_error("Cannot destructure a null Team relationship")
+                crate::AuthError::type_error(
+                    "Cannot destructure property 'memberCount' from null or undefined value",
+                )
             })?
         };
         let _ = fields.shift_remove("memberCount");

@@ -20,6 +20,10 @@ mod server_catalog_indexes;
 mod server_catalog_support;
 #[path = "tests/sqlite_catalog.rs"]
 mod sqlite_catalog;
+#[path = "tests/team_member_catalog.rs"]
+mod team_member_catalog;
+#[path = "tests/team_member_catalog_storage.rs"]
+mod team_member_catalog_storage;
 #[path = "tests/two_factor_catalog.rs"]
 mod two_factor_catalog;
 #[path = "tests/two_factor_catalog_storage.rs"]

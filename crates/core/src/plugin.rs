@@ -500,6 +500,7 @@ impl<S: AuthSchema> AuthInitContext<S> {
     }
 
     /// Merge complete adapter field declarations for a supported model in registration order.
+    /// Reset any preceding name override to the adapter's native table-name mapping.
     /// Model-specific restrictions apply until the model uses the shared native field policies.
     pub fn register_model_fields(
         &mut self,
@@ -515,6 +516,20 @@ impl<S: AuthSchema> AuthInitContext<S> {
             self.registered_model_field_names.push((role, names));
         }
         Ok(())
+    }
+
+    /// Merge a native model declaration at its first schema position.
+    /// Omitted or empty names reset the declared name to the logical model name.
+    /// Field-only registration resets name overrides to the adapter's native table-name mapping.
+    /// Storage adapters retain responsibility for the physical model and migrations.
+    pub fn register_model_schema(
+        &mut self,
+        role: crate::store::schema::EntityRole,
+        model_name: Option<&str>,
+        fields: crate::user_fields::UserConfig,
+    ) -> AuthResult<()> {
+        self.register_model_fields(role, fields)?;
+        self.plugin_fields.set_model_name(role, model_name)
     }
 
     /// Declare a custom model for runtime reference resolution and adapter schema metadata.

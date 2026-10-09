@@ -738,6 +738,16 @@ impl<S: AuthSchema> WalletStore for SecondaryStore<S> {
 
 #[async_trait]
 impl<S: AuthSchema> TeamStore for SecondaryStore<S> {
+    async fn get_team_details_value(
+        &self,
+        team_id: &crate::FieldValue,
+        organization_id: Option<&crate::FieldValue>,
+        include_members: bool,
+    ) -> AuthResult<Option<super::super::TeamDetails>> {
+        self.inner
+            .get_team_details_value(team_id, organization_id, include_members)
+            .await
+    }
     async fn get_team_value(&self, id: &crate::FieldValue) -> AuthResult<Option<Team>> {
         self.inner.get_team_value(id).await
     }

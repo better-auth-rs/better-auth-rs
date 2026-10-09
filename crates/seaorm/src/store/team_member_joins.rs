@@ -33,10 +33,11 @@ where
             .limit(super::pagination::default_limit(self.config(), backend)?);
         let membership_fields = self.model_fields.plugin_fields(EntityRole::TeamMember);
         let team_fields = self.organization_query_schema(EntityRole::Team)?;
+        let runtime = self.model_fields.organization_join_schema(self.config());
         let relation = ResolvedJoin::resolve(
             (EntityRole::TeamMember, "teamMember", &membership_fields),
             (EntityRole::Team, "team", &team_fields),
-            &self.model_fields,
+            &runtime,
             super::model_names::table_matches::<S, O, P>,
         )?;
         let native = self.config().advanced.database.joins == Some(true);
@@ -134,10 +135,11 @@ where
                         let relation = &relation;
                         let membership_fields = &membership_fields;
                         let team_fields = &team_fields;
+                        let runtime = &runtime;
                         async move {
                             let field = relation.fallback_from(
                                 (EntityRole::TeamMember, "teamMember", membership_fields),
-                                &self.model_fields,
+                                runtime,
                             )?;
                             let value = output.get(&field).cloned().unwrap_or_default();
                             self.selected_member_teams(relation, team_fields, value)

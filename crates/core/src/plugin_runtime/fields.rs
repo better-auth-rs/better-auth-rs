@@ -9,6 +9,7 @@ use crate::store::schema::{EntityRole, resolve_field_name};
 use crate::user_fields::{AdapterRecord, UserConfig, UserFieldType};
 use crate::{AuthConfig, AuthError, AuthResult, FieldMap, FieldValue as Value};
 use indexmap::{IndexMap, IndexSet};
+use models::ModelDeclaration;
 use std::sync::{Arc, LazyLock, Mutex};
 
 /// Plugin field policies consumed by the selected adapter during auth initialization.
@@ -16,7 +17,8 @@ use std::sync::{Arc, LazyLock, Mutex};
 pub struct ModelFields {
     models: IndexMap<EntityRole, UserConfig>,
     schema_models: Option<Vec<(EntityRole, &'static str)>>,
-    custom_models: IndexMap<String, (String, UserConfig)>,
+    declarations: IndexMap<ModelDeclaration, Option<String>>,
+    custom_models: IndexMap<String, UserConfig>,
     user_plugin_fields: Vec<&'static str>,
     session_plugin_fields: Vec<&'static str>,
     organization: Option<crate::organization_fields::OrganizationFields>,
@@ -142,7 +144,9 @@ impl ModelFields {
         &self.session_plugin_fields
     }
 
-    pub(crate) fn organization_join_schema(&self, config: &AuthConfig) -> Self {
+    /// Resolve standalone Organization store relationships without changing configured plugin model availability.
+    #[doc(hidden)]
+    pub fn organization_join_schema(&self, config: &AuthConfig) -> Self {
         let mut schema = self.clone();
         if schema.schema_models.is_none() {
             // Direct OrganizationStore calls support every organization model before plugin initialization.
@@ -190,10 +194,17 @@ impl ModelFields {
             }
         }
         self.extend(role, fields);
+        let _ = self
+            .declarations
+            .insert(ModelDeclaration::Native(role), None);
         Ok(())
     }
 
     pub(crate) fn extend(&mut self, role: EntityRole, fields: UserConfig) {
+        let _ = self
+            .declarations
+            .entry(ModelDeclaration::Native(role))
+            .or_default();
         if let Some(fields) = fields.additional_fields {
             self.models
                 .entry(role)
@@ -223,6 +234,9 @@ impl ModelFields {
     }
 
     fn declare_native_fields(&mut self, role: EntityRole, fields: UserConfig) {
+        let _ = self
+            .declarations
+            .insert(ModelDeclaration::Native(role), None);
         let registered = self.models.entry(role).or_default().fields_mut();
         for (name, declaration) in Self::plugin_native_fields(role).fields() {
             let _ = registered.insert(name.clone(), declaration.clone());

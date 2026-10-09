@@ -326,3 +326,128 @@ fn legacy_user_defaults_do_not_reach_native_or_replaced_fields() {
     }
     fs::remove_dir_all(directory).unwrap();
 }
+
+#[test]
+fn generated_references_use_backend_constraints_and_preserve_field_types() {
+    let directory = std::env::temp_dir().join(format!(
+        "better-auth-cli-backend-references-{}",
+        std::process::id()
+    ));
+    fs::create_dir(&directory).unwrap();
+    let config = directory.join("schema.json");
+    fs::write(
+        &config,
+        r#"{
+            "user": { "modelName": "app_users" },
+            "organization": {
+                "modelName": "app_organizations",
+                "additionalFields": {
+                    "owner": {
+                        "type": "number",
+                        "references": { "model": "user", "field": "id" }
+                    },
+                    "externalOwner": {
+                        "type": "string",
+                        "required": false,
+                        "references": {
+                            "model": "external_tenants",
+                            "field": "tenant_code",
+                            "onDelete": "restrict"
+                        }
+                    }
+                }
+            },
+            "teamMember": { "fields": { "teamId": "group_id", "userId": "subject_id" } }
+        }"#,
+    )
+    .unwrap();
+    for database in ["sqlite", "postgres", "mysql"] {
+        let result = Command::new(env!("CARGO_BIN_EXE_better-auth-rs"))
+            .args([
+                "generate",
+                "--plugins",
+                "all",
+                "--database",
+                database,
+                "--schema-config",
+            ])
+            .arg(&config)
+            .output()
+            .unwrap();
+        assert!(
+            result.status.success(),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        let source = String::from_utf8(result.stdout).unwrap();
+        let physical_foreign_keys = database != "mysql";
+        assert_eq!(
+            source.contains(".foreign_key("),
+            physical_foreign_keys,
+            "{database}"
+        );
+        assert_eq!(
+            source.contains("ForeignKey"),
+            physical_foreign_keys,
+            "{database}"
+        );
+        for constraint in [
+            "fk_session_userId",
+            "fk_teamMember_group_id",
+            "fk_teamMember_subject_id",
+            "fk_app_organizations_owner",
+            "fk_app_organizations_externalOwner",
+        ] {
+            assert_eq!(
+                source.contains(constraint),
+                database == "sqlite",
+                "{database}: {constraint}"
+            );
+        }
+        assert_eq!(source.contains("\"fk_"), database == "sqlite", "{database}");
+        assert_eq!(
+            source.contains("ForeignKeyAction::Restrict"),
+            physical_foreign_keys,
+            "{database}"
+        );
+        for (module, field, ty, reference) in [
+            ("session", "user_id", "String", None),
+            ("team_member", "team_id", "String", None),
+            ("team_member", "user_id", "String", None),
+            (
+                "organization",
+                "owner",
+                "better_auth :: seaorm :: ReferenceId",
+                Some(true),
+            ),
+            (
+                "organization",
+                "external_owner",
+                "Option < String >",
+                Some(false),
+            ),
+        ] {
+            let entity = model(&source, module);
+            let field = entity
+                .fields
+                .iter()
+                .find(|candidate| candidate.ident.as_ref().unwrap() == field)
+                .unwrap();
+            assert_eq!(
+                field.ty.to_token_stream().to_string(),
+                ty,
+                "{database}: {module}"
+            );
+            if let Some(reference) = reference {
+                assert!(
+                    field
+                        .to_token_stream()
+                        .to_string()
+                        .contains(&format!("reference = {reference}")),
+                    "{database}: {module}"
+                );
+            }
+        }
+    }
+    fs::remove_dir_all(directory).unwrap();
+}

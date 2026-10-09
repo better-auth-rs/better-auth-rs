@@ -158,14 +158,11 @@ pub(super) fn created_organization(
     response
 }
 
-pub(super) fn team(mut team: Team, ctx: &AuthContext<impl AuthSchema>) -> Team {
-    let _ = team.additional_fields.remove("memberCount");
-    if let Some(fields) = ctx.extensions.get::<OrganizationFields>() {
-        fields
-            .team
-            .filter_returned_fields(&mut team.additional_fields);
-    }
-    team
+pub(super) fn team(
+    team: Team,
+    config: &super::OrganizationConfig,
+) -> better_auth_core::AuthResult<Team> {
+    team.filter_output_fields(&config.schema.team)
 }
 
 enum ResponseFields {

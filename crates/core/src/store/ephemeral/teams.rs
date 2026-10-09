@@ -7,6 +7,15 @@ use crate::{
 use better_auth_schema_registry::EntityRole;
 #[async_trait]
 impl TeamStore for EphemeralStore {
+    async fn get_team_details_value(
+        &self,
+        team_id: &Value,
+        organization_id: Option<&Value>,
+        include_members: bool,
+    ) -> AuthResult<Option<crate::store::TeamDetails>> {
+        self.read_team_details(team_id, organization_id, include_members)
+            .await
+    }
     async fn create_team(&self, mut input: CreateTeam) -> AuthResult<Team> {
         let team = Team {
             field_order: Default::default(),
@@ -467,16 +476,16 @@ impl TeamStore for EphemeralStore {
                 {
                     return Ok(None);
                 }
-                if let Some(staged) = &staged {
-                    if matches!(
+                if let Some(staged) = &staged
+                    && matches!(
                         self.config.advanced.database.generate_id(),
                         crate::id::IdGeneration::Serial
-                    ) && state.team_members.len() != staged.base.len()
-                    {
-                        return Err(AuthError::conflict(
-                            "Team membership allocation changed while field transforms were pending",
-                        ));
-                    }
+                    )
+                    && state.team_members.len() != staged.base.len()
+                {
+                    return Err(AuthError::conflict(
+                        "Team membership allocation changed while field transforms were pending",
+                    ));
                 }
                 let (source, fields) = prepared.apply(&state.teams, actual)?;
                 if let Some(staged) = &staged {

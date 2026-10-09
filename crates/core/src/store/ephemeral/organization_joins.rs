@@ -4,11 +4,65 @@ use crate::store::{MemberUser, OrganizationDetails, OrganizationDetailsQuery, Or
 use better_auth_schema_registry::EntityRole;
 
 mod member_user;
+mod team_details;
+#[cfg(test)]
+mod tests;
 
 struct OrganizationChildren {
     invitations: Vec<RowRef<FieldMap>>,
     members: Vec<RowRef<FieldMap>>,
     teams: Option<Vec<RowRef<FieldMap>>>,
+}
+
+struct NativeRelationship {
+    parent: FieldMap,
+    children: Vec<RowRef<FieldMap>>,
+    ids: Vec<Value>,
+}
+
+fn native_relationships(
+    parents: Vec<FieldMap>,
+    children: &super::rows::Rows<FieldMap>,
+    relation: &crate::store::ResolvedJoin,
+    limit: f64,
+) -> AuthResult<Vec<NativeRelationship>> {
+    let mut groups = indexmap::IndexMap::new();
+    for parent in parents {
+        let id = parent
+            .get("id")
+            .unwrap_or(&Value::Undefined)
+            .display_utf16()?;
+        let from = parent.get(&relation.from).cloned().unwrap_or_default();
+        let group = groups
+            .entry(id.as_utf16().to_vec())
+            .or_insert_with(|| NativeRelationship {
+                parent,
+                children: Vec::new(),
+                ids: Vec::new(),
+            });
+        let matches = children.select_refs(|row| {
+            row.get(&relation.to)
+                .unwrap_or(&Value::Undefined)
+                .strict_equals(&from)
+        })?;
+        if !relation.many {
+            group.children = matches.into_iter().take(1).collect();
+            continue;
+        }
+        let mut added = 0_usize;
+        for child in matches {
+            if added as f64 >= limit {
+                break;
+            }
+            let id = child.read(|row| Ok(row.get("id").cloned().unwrap_or_default()))?;
+            if !group.ids.iter().any(|seen| seen.same_value_zero(&id)) {
+                group.ids.push(id);
+                group.children.push(child);
+                added += 1;
+            }
+        }
+    }
+    Ok(groups.into_values().collect())
 }
 
 fn child_page(rows: Vec<RowRef<FieldMap>>, limit: f64) -> AuthResult<Vec<RowRef<FieldMap>>> {
@@ -347,36 +401,20 @@ impl EphemeralStore {
         let limit = self.config.advanced.database.find_many_limit();
         let (members, teams) = {
             let state = self.lock()?;
-            let rows = crate::query::paginate_memory(
-                state
-                    .team_members
-                    .snapshot()?
-                    .into_iter()
-                    .filter(|row| {
-                        organization_value(row, &member_schema, "userId")
-                            .strict_equals(&user_id.field_value())
-                    })
-                    .collect(),
-                Some(limit),
-                None,
-            );
-            let teams = rows
-                .iter()
-                .map(|member| {
-                    let from = member.get(&join.from).unwrap_or(&Value::Undefined);
-                    let matched = state.teams.select_refs(|team| {
-                        team.get(&join.to)
-                            .unwrap_or(&Value::Undefined)
-                            .strict_equals(from)
-                    })?;
-                    if join.many {
-                        child_page(matched, limit)
-                    } else {
-                        Ok(matched.into_iter().take(1).collect())
-                    }
+            let rows = state
+                .team_members
+                .snapshot()?
+                .into_iter()
+                .filter(|row| {
+                    organization_value(row, &member_schema, "userId")
+                        .strict_equals(&user_id.field_value())
                 })
-                .collect::<AuthResult<Vec<_>>>()?;
-            (rows, teams)
+                .collect();
+            let groups = native_relationships(rows, &state.teams, &join, limit)?;
+            crate::query::paginate_memory(groups, Some(limit), None)
+                .into_iter()
+                .map(|group| (group.parent, group.children))
+                .unzip::<_, _, Vec<_>, Vec<_>>()
         };
         let projected = self
             .output_records_batches_then(

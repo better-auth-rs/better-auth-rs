@@ -9,6 +9,12 @@ use better_auth_seaorm::sea_orm::{
 };
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
+#[path = "team_member_details.rs"]
+mod details;
+#[path = "team_member_duplicate_ids.rs"]
+mod duplicate_ids;
+#[path = "team_member_invitation.rs"]
+mod invitation;
 #[path = "team_member_joins.rs"]
 mod joins;
 #[path = "team_member_recovery.rs"]
@@ -173,6 +179,20 @@ impl Storage {
                             ("memberCount", "member_count"),
                         ],
                     ),
+                    EntityRole::Invitation => (
+                        "invitation",
+                        &[
+                            ("id", "id"),
+                            ("organizationId", "organization_id"),
+                            ("email", "email"),
+                            ("role", "role"),
+                            ("status", "status"),
+                            ("inviterId", "inviter_id"),
+                            ("teamId", "team_id"),
+                            ("expiresAt", "expires_at"),
+                            ("createdAt", "created_at"),
+                        ],
+                    ),
                     _ => return Err(AuthError::internal("Unsupported TeamMember snapshot role")),
                 };
                 database
@@ -265,8 +285,21 @@ async fn reader<S: AuthSchema>(
     joins: bool,
     member_id: &'static str,
 ) -> AuthResult<BetterAuth<S>> {
+    reader_with_limit(raw, fields, team_fields, before, joins, member_id, None).await
+}
+
+async fn reader_with_limit<S: AuthSchema>(
+    raw: Arc<dyn AuthStore<S>>,
+    fields: UserConfig,
+    team_fields: Option<UserConfig>,
+    before: bool,
+    joins: bool,
+    member_id: &'static str,
+    limit: Option<f64>,
+) -> AuthResult<BetterAuth<S>> {
     let mut config = config();
     config.advanced.database.joins = Some(joins);
+    config.advanced.database.default_find_many_limit = limit;
     config.advanced.database.generate_id =
         Some(IdGeneration::Custom(IdGenerator::new(move |request| {
             Ok(Some(if request.model == "teamMember" {

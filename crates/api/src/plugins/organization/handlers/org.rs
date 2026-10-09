@@ -177,7 +177,7 @@ pub(crate) async fn create_organization_core(
                     .await?
             }
         };
-        let team = crate::plugins::organization::fields::team(team, ctx);
+        let team = crate::plugins::organization::fields::team(team, config)?;
         let team_member = ctx
             .database
             .add_team_member_value(&team.id.field_value(), user.model_property("id")?, None)

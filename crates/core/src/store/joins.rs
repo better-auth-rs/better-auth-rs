@@ -396,3 +396,59 @@ pub struct OrganizationDetails {
     /// Team page when requested; omission remains distinct from an empty page.
     pub teams: Option<Vec<crate::Team>>,
 }
+
+/// A projected team and its requested membership relationship.
+#[derive(Debug, Clone)]
+pub struct TeamDetails {
+    pub team: crate::Team,
+    /// Preserve omission and singular relationships until the public consumer runs.
+    pub members: Option<JoinValue<crate::TeamMember>>,
+}
+
+impl TeamDetails {
+    #[doc(hidden)]
+    pub fn from_adapter_output(
+        mut output: crate::FieldMap,
+        members: Option<(Vec<crate::FieldMap>, bool)>,
+    ) -> AuthResult<Self> {
+        use crate::FromFieldMap;
+        let _ = output.shift_remove("teamMember");
+        let _ = output.shift_remove("memberCount");
+        let members = members
+            .map(|(rows, many)| -> AuthResult<_> {
+                let rows = rows
+                    .into_iter()
+                    .map(crate::TeamMember::from_field_values)
+                    .collect::<AuthResult<Vec<_>>>()?;
+                Ok(if many {
+                    JoinValue::Many(rows)
+                } else {
+                    JoinValue::One(rows.into_iter().next())
+                })
+            })
+            .transpose()?;
+        Ok(Self {
+            team: crate::Team::from_field_values(output)?,
+            members,
+        })
+    }
+
+    /// Apply public Team output before consuming the membership relationship as an array.
+    pub fn into_public_parts(
+        self,
+        schema: &UserConfig,
+    ) -> AuthResult<(crate::Team, Option<Vec<crate::TeamMember>>)> {
+        let team = self.team.filter_output_fields(schema)?;
+        let members = self
+            .members
+            .map(|members| match members {
+                JoinValue::Many(members) => Ok(members),
+                JoinValue::One(None) => Ok(Vec::new()),
+                JoinValue::One(Some(_)) => {
+                    Err(AuthError::type_error("members.map is not a function"))
+                }
+            })
+            .transpose()?;
+        Ok((team, members))
+    }
+}

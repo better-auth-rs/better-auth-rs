@@ -8,18 +8,18 @@ import { getMigrations } from "better-auth/db/migration";
 import { organization } from "better-auth/plugins";
 
 const { getOrgAdapter } = await import(new URL("../node_modules/better-auth/dist/plugins/organization/adapter.mjs", import.meta.url).href);
-type Backend = "memory" | "sqlite";
-type Fields = Record<string, unknown>;
-type Policies = Record<string, DBFieldAttribute>;
-type Events = unknown[][];
-const date = (offset: number) => new Date(1_893_456_000_000 + offset * 1000);
-const storedDate = (backend: Backend, offset: number) => backend === "sqlite" ? date(offset).toISOString() : date(offset);
-const membershipKey = (teamId: string, userId: string) => createHash("sha256").update(JSON.stringify([teamId, userId])).digest("base64url");
-const team = (id: string, name: string, memberCount = 0) => ({
+export type Backend = "memory" | "sqlite";
+export type Fields = Record<string, unknown>;
+export type Policies = Record<string, DBFieldAttribute>;
+export type Events = unknown[][];
+export const date = (offset: number) => new Date(1_893_456_000_000 + offset * 1000);
+export const storedDate = (backend: Backend, offset: number) => backend === "sqlite" ? date(offset).toISOString() : date(offset);
+export const membershipKey = (teamId: string, userId: string) => createHash("sha256").update(JSON.stringify([teamId, userId])).digest("base64url");
+export const team = (id: string, name: string, memberCount = 0) => ({
   id, name, memberCount, organizationId: "organization", createdAt: date(0), updatedAt: date(0),
 });
 
-async function setup(backend: Backend, fields: Policies, config: {
+export async function setup(backend: Backend, fields: Policies, config: {
   order?: "before" | "after"; joins?: boolean; teamFields?: Policies; memberId?: string;
 } = {}) {
   const memory: Record<string, Fields[]> = Object.fromEntries([
@@ -50,15 +50,23 @@ async function setup(backend: Backend, fields: Policies, config: {
     await context.adapter.create({ model: "team", forceAllowId: true, data: row });
   }
   return {
+    options, context,
     org: getOrgAdapter(context, organizationOptions),
-    async reader(readerFields: Policies, teamFields: Policies) {
-      const reader = await betterAuth({ ...options, plugins: [organization(organizationOptions), {
+    createMember: (data: Fields) => context.adapter.create({ model: "teamMember", data, forceAllowId: true }),
+    async reader(readerFields: Policies, teamFields: Policies, readerOptions: { limit?: number; memberId?: string } = {}) {
+      const memberId = readerOptions.memberId;
+      const reader = await betterAuth({ ...options, advanced: { database: {
+        ...options.advanced?.database,
+        ...(readerOptions.limit === undefined ? {} : { defaultFindManyLimit: readerOptions.limit }),
+        ...(memberId === undefined ? {} : { generateId: ({ model }: { model: string }) => model === "teamMember" ? memberId : `${model}-a` }),
+      } }, plugins: [organization(organizationOptions), {
         id: "ordinary-team-member-reader-fields", schema: { teamMember: { fields: readerFields }, team: { fields: teamFields } },
       }] }).$context;
       return getOrgAdapter(reader, organizationOptions);
     },
     rawMembers: () => structuredClone(database ? database.query("SELECT * FROM teamMember ORDER BY id").all() : memory.teamMember),
     rawTeams: () => structuredClone(database ? database.query("SELECT * FROM team ORDER BY id").all() : memory.team),
+    rawInvitations: () => structuredClone(database ? database.query("SELECT * FROM invitation ORDER BY id").all() : memory.invitation),
     stored: (row: Fields) => Object.fromEntries(Object.entries(row).map(([key, value]) => [
       key, backend === "sqlite" && value instanceof Date ? value.toISOString() : value,
     ])),
@@ -357,11 +365,8 @@ for (const backend of ["memory", "sqlite"] as const) {
           if (relation === "missing") {
             let caught: unknown;
             try { await reader.listTeamsByUser({ userId: "user-a" }); } catch (error) { caught = error; }
-            console.info("TeamMember missing join error", {
-              backend, joins, error: caught,
-              ...(caught instanceof Error ? { class: caught.name, message: caught.message } : {}),
-            });
             expect(caught).toBeInstanceOf(TypeError);
+            expect((caught as TypeError).message).toBe("Cannot destructure property 'memberCount' from null or undefined value");
           } else if (relation === "many-first-error") {
             await expect(reader.listTeamsByUser({ userId: "user-a" })).rejects.toBe(failure);
           } else {

@@ -44,6 +44,7 @@ mod session_output;
 mod session_write;
 mod sessions;
 mod team_capacity;
+mod team_details;
 mod team_invitation;
 mod team_member_fields;
 mod team_member_joins;

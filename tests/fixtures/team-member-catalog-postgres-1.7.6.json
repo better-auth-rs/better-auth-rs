@@ -1,0 +1,598 @@
+{
+  "version": "1.7.6",
+  "database": "postgres",
+  "input": {
+    "seedAt": "2030-01-02T03:04:05.123Z",
+    "users": [
+      "user-a",
+      "user-b"
+    ],
+    "organization": "org",
+    "teams": [
+      "team-a",
+      "team-b"
+    ]
+  },
+  "cases": [
+    {
+      "name": "default",
+      "configuration": {},
+      "columns": [
+        {
+          "table": "teamMember",
+          "position": "1",
+          "name": "id",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "teamMember",
+          "position": "2",
+          "name": "teamId",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "teamMember",
+          "position": "3",
+          "name": "userId",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "teamMember",
+          "position": "4",
+          "name": "membershipKey",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "YES",
+          "default": null
+        },
+        {
+          "table": "teamMember",
+          "position": "5",
+          "name": "createdAt",
+          "type": "timestamp with time zone",
+          "nativeType": "timestamptz",
+          "maxLength": null,
+          "datetimePrecision": "6",
+          "nullable": "YES",
+          "default": null
+        }
+      ],
+      "migration": {
+        "initialSql": "create table \"user\" (\"id\" text not null primary key, \"name\" text not null, \"email\" text not null unique, \"emailVerified\" boolean not null, \"image\" text, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz default CURRENT_TIMESTAMP not null);\n\ncreate table \"session\" (\"id\" text not null primary key, \"expiresAt\" timestamptz not null, \"token\" text not null unique, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz not null, \"ipAddress\" text, \"userAgent\" text, \"userId\" text not null references \"user\" (\"id\") on delete cascade, \"activeOrganizationId\" text, \"activeTeamId\" text);\n\ncreate table \"account\" (\"id\" text not null primary key, \"accountId\" text not null, \"providerId\" text not null, \"userId\" text not null references \"user\" (\"id\") on delete cascade, \"accessToken\" text, \"refreshToken\" text, \"idToken\" text, \"accessTokenExpiresAt\" timestamptz, \"refreshTokenExpiresAt\" timestamptz, \"scope\" text, \"password\" text, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz not null);\n\ncreate table \"verification\" (\"id\" text not null primary key, \"identifier\" text not null, \"value\" text not null, \"expiresAt\" timestamptz not null, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz default CURRENT_TIMESTAMP not null);\n\ncreate table \"organization\" (\"id\" text not null primary key, \"name\" text not null, \"slug\" text not null unique, \"logo\" text, \"createdAt\" timestamptz not null, \"metadata\" text);\n\ncreate table \"team\" (\"id\" text not null primary key, \"name\" text not null, \"memberCount\" integer not null, \"organizationId\" text not null references \"organization\" (\"id\") on delete cascade, \"createdAt\" timestamptz not null, \"updatedAt\" timestamptz);\n\ncreate table \"teamMember\" (\"id\" text not null primary key, \"teamId\" text not null references \"team\" (\"id\") on delete cascade, \"userId\" text not null references \"user\" (\"id\") on delete cascade, \"membershipKey\" text unique, \"createdAt\" timestamptz);\n\ncreate table \"member\" (\"id\" text not null primary key, \"organizationId\" text not null references \"organization\" (\"id\") on delete cascade, \"userId\" text not null references \"user\" (\"id\") on delete cascade, \"role\" text not null, \"createdAt\" timestamptz not null);\n\ncreate table \"invitation\" (\"id\" text not null primary key, \"organizationId\" text not null references \"organization\" (\"id\") on delete cascade, \"email\" text not null, \"role\" text, \"teamId\" text, \"status\" text not null, \"expiresAt\" timestamptz not null, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"inviterId\" text not null references \"user\" (\"id\") on delete cascade);\n\ncreate index \"session_userId_idx\" on \"session\" (\"userId\");\n\ncreate index \"account_userId_idx\" on \"account\" (\"userId\");\n\ncreate index \"verification_identifier_idx\" on \"verification\" (\"identifier\");\n\ncreate index \"team_organizationId_idx\" on \"team\" (\"organizationId\");\n\ncreate index \"teamMember_teamId_idx\" on \"teamMember\" (\"teamId\");\n\ncreate index \"teamMember_userId_idx\" on \"teamMember\" (\"userId\");\n\ncreate index \"member_organizationId_idx\" on \"member\" (\"organizationId\");\n\ncreate index \"member_userId_idx\" on \"member\" (\"userId\");\n\ncreate index \"invitation_organizationId_idx\" on \"invitation\" (\"organizationId\");\n\ncreate index \"invitation_email_idx\" on \"invitation\" (\"email\");",
+        "repeatedSql": ";"
+      },
+      "observation": {
+        "indexes": [
+          {
+            "table": "teamMember",
+            "name": "teamMember_membershipKey_key",
+            "unique": "YES",
+            "position": "1",
+            "column": "membershipKey"
+          },
+          {
+            "table": "teamMember",
+            "name": "teamMember_pkey",
+            "unique": "YES",
+            "position": "1",
+            "column": "id"
+          },
+          {
+            "table": "teamMember",
+            "name": "teamMember_teamId_idx",
+            "unique": "NO",
+            "position": "1",
+            "column": "teamId"
+          },
+          {
+            "table": "teamMember",
+            "name": "teamMember_userId_idx",
+            "unique": "NO",
+            "position": "1",
+            "column": "userId"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "teamMember",
+            "name": "teamMember_teamId_fkey",
+            "position": "1",
+            "column": "teamId",
+            "targetTable": "team",
+            "targetColumn": "id",
+            "onUpdate": "NO ACTION",
+            "onDelete": "CASCADE"
+          },
+          {
+            "table": "teamMember",
+            "name": "teamMember_userId_fkey",
+            "position": "1",
+            "column": "userId",
+            "targetTable": "user",
+            "targetColumn": "id",
+            "onUpdate": "NO ACTION",
+            "onDelete": "CASCADE"
+          }
+        ],
+        "storage": {
+          "inserted": [
+            [
+              {
+                "id": "member-a",
+                "teamId": "team-a",
+                "userId": "user-a",
+                "membershipKey": "key-a",
+                "createdAt": null
+              }
+            ],
+            [
+              {
+                "id": "member-a",
+                "teamId": "team-a",
+                "userId": "user-a",
+                "membershipKey": "key-a",
+                "createdAt": null
+              },
+              {
+                "id": "member-b",
+                "teamId": "team-a",
+                "userId": "user-a",
+                "membershipKey": "key-b",
+                "createdAt": null
+              }
+            ]
+          ],
+          "rejected": [
+            {
+              "name": "duplicateKey",
+              "kind": "unique",
+              "rows": [
+                {
+                  "id": "member-a",
+                  "teamId": "team-a",
+                  "userId": "user-a",
+                  "membershipKey": "key-a",
+                  "createdAt": null
+                },
+                {
+                  "id": "member-b",
+                  "teamId": "team-a",
+                  "userId": "user-a",
+                  "membershipKey": "key-b",
+                  "createdAt": null
+                }
+              ]
+            },
+            {
+              "name": "duplicateId",
+              "kind": "unique",
+              "rows": [
+                {
+                  "id": "member-a",
+                  "teamId": "team-a",
+                  "userId": "user-a",
+                  "membershipKey": "key-a",
+                  "createdAt": null
+                },
+                {
+                  "id": "member-b",
+                  "teamId": "team-a",
+                  "userId": "user-a",
+                  "membershipKey": "key-b",
+                  "createdAt": null
+                }
+              ]
+            },
+            {
+              "name": "missingTeam",
+              "kind": "foreign-key",
+              "rows": [
+                {
+                  "id": "member-a",
+                  "teamId": "team-a",
+                  "userId": "user-a",
+                  "membershipKey": "key-a",
+                  "createdAt": null
+                },
+                {
+                  "id": "member-b",
+                  "teamId": "team-a",
+                  "userId": "user-a",
+                  "membershipKey": "key-b",
+                  "createdAt": null
+                }
+              ]
+            },
+            {
+              "name": "missingUser",
+              "kind": "foreign-key",
+              "rows": [
+                {
+                  "id": "member-a",
+                  "teamId": "team-a",
+                  "userId": "user-a",
+                  "membershipKey": "key-a",
+                  "createdAt": null
+                },
+                {
+                  "id": "member-b",
+                  "teamId": "team-a",
+                  "userId": "user-a",
+                  "membershipKey": "key-b",
+                  "createdAt": null
+                }
+              ]
+            }
+          ],
+          "afterNullKeys": [
+            {
+              "id": "member-a",
+              "teamId": "team-a",
+              "userId": "user-a",
+              "membershipKey": "key-a",
+              "createdAt": null
+            },
+            {
+              "id": "member-b",
+              "teamId": "team-a",
+              "userId": "user-a",
+              "membershipKey": "key-b",
+              "createdAt": null
+            },
+            {
+              "id": "member-c",
+              "teamId": "team-b",
+              "userId": "user-b",
+              "membershipKey": null,
+              "createdAt": null
+            },
+            {
+              "id": "member-d",
+              "teamId": "team-b",
+              "userId": "user-b",
+              "membershipKey": null,
+              "createdAt": null
+            }
+          ],
+          "afterTeamDelete": [
+            {
+              "id": "member-c",
+              "teamId": "team-b",
+              "userId": "user-b",
+              "membershipKey": null,
+              "createdAt": null
+            },
+            {
+              "id": "member-d",
+              "teamId": "team-b",
+              "userId": "user-b",
+              "membershipKey": null,
+              "createdAt": null
+            }
+          ],
+          "afterUserDelete": []
+        }
+      }
+    },
+    {
+      "name": "custom",
+      "configuration": {
+        "user": {
+          "modelName": "team_member_catalog_users"
+        },
+        "organization": {
+          "modelName": "team_member_catalog_organizations"
+        },
+        "team": {
+          "modelName": "team_member_catalog_teams",
+          "fields": {
+            "organizationId": "organization_id",
+            "name": "label",
+            "memberCount": "member_count",
+            "createdAt": "created_at",
+            "updatedAt": "updated_at"
+          }
+        },
+        "teamMember": {
+          "modelName": "team_member_catalog_members",
+          "fields": {
+            "teamId": "group_id",
+            "userId": "subject_id",
+            "membershipKey": "dedupe_key",
+            "createdAt": "joined_at"
+          }
+        }
+      },
+      "columns": [
+        {
+          "table": "team_member_catalog_members",
+          "position": "1",
+          "name": "id",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "team_member_catalog_members",
+          "position": "2",
+          "name": "group_id",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "team_member_catalog_members",
+          "position": "3",
+          "name": "subject_id",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "NO",
+          "default": null
+        },
+        {
+          "table": "team_member_catalog_members",
+          "position": "4",
+          "name": "dedupe_key",
+          "type": "text",
+          "nativeType": "text",
+          "maxLength": null,
+          "datetimePrecision": null,
+          "nullable": "YES",
+          "default": null
+        },
+        {
+          "table": "team_member_catalog_members",
+          "position": "5",
+          "name": "joined_at",
+          "type": "timestamp with time zone",
+          "nativeType": "timestamptz",
+          "maxLength": null,
+          "datetimePrecision": "6",
+          "nullable": "YES",
+          "default": null
+        }
+      ],
+      "migration": {
+        "initialSql": "create table \"team_member_catalog_users\" (\"id\" text not null primary key, \"name\" text not null, \"email\" text not null unique, \"emailVerified\" boolean not null, \"image\" text, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz default CURRENT_TIMESTAMP not null);\n\ncreate table \"session\" (\"id\" text not null primary key, \"expiresAt\" timestamptz not null, \"token\" text not null unique, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz not null, \"ipAddress\" text, \"userAgent\" text, \"userId\" text not null references \"team_member_catalog_users\" (\"id\") on delete cascade, \"activeOrganizationId\" text, \"activeTeamId\" text);\n\ncreate table \"account\" (\"id\" text not null primary key, \"accountId\" text not null, \"providerId\" text not null, \"userId\" text not null references \"team_member_catalog_users\" (\"id\") on delete cascade, \"accessToken\" text, \"refreshToken\" text, \"idToken\" text, \"accessTokenExpiresAt\" timestamptz, \"refreshTokenExpiresAt\" timestamptz, \"scope\" text, \"password\" text, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz not null);\n\ncreate table \"verification\" (\"id\" text not null primary key, \"identifier\" text not null, \"value\" text not null, \"expiresAt\" timestamptz not null, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz default CURRENT_TIMESTAMP not null);\n\ncreate table \"team_member_catalog_organizations\" (\"id\" text not null primary key, \"name\" text not null, \"slug\" text not null unique, \"logo\" text, \"createdAt\" timestamptz not null, \"metadata\" text);\n\ncreate table \"team_member_catalog_teams\" (\"id\" text not null primary key, \"label\" text not null, \"member_count\" integer not null, \"organization_id\" text not null references \"team_member_catalog_organizations\" (\"id\") on delete cascade, \"created_at\" timestamptz not null, \"updated_at\" timestamptz);\n\ncreate table \"team_member_catalog_members\" (\"id\" text not null primary key, \"group_id\" text not null references \"team_member_catalog_teams\" (\"id\") on delete cascade, \"subject_id\" text not null references \"team_member_catalog_users\" (\"id\") on delete cascade, \"dedupe_key\" text unique, \"joined_at\" timestamptz);\n\ncreate table \"member\" (\"id\" text not null primary key, \"organizationId\" text not null references \"team_member_catalog_organizations\" (\"id\") on delete cascade, \"userId\" text not null references \"team_member_catalog_users\" (\"id\") on delete cascade, \"role\" text not null, \"createdAt\" timestamptz not null);\n\ncreate table \"invitation\" (\"id\" text not null primary key, \"organizationId\" text not null references \"team_member_catalog_organizations\" (\"id\") on delete cascade, \"email\" text not null, \"role\" text, \"teamId\" text, \"status\" text not null, \"expiresAt\" timestamptz not null, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"inviterId\" text not null references \"team_member_catalog_users\" (\"id\") on delete cascade);\n\ncreate index \"session_userId_idx\" on \"session\" (\"userId\");\n\ncreate index \"account_userId_idx\" on \"account\" (\"userId\");\n\ncreate index \"verification_identifier_idx\" on \"verification\" (\"identifier\");\n\ncreate index \"team_member_catalog_teams_organization_id_idx\" on \"team_member_catalog_teams\" (\"organization_id\");\n\ncreate index \"team_member_catalog_members_group_id_idx\" on \"team_member_catalog_members\" (\"group_id\");\n\ncreate index \"team_member_catalog_members_subject_id_idx\" on \"team_member_catalog_members\" (\"subject_id\");\n\ncreate index \"member_organizationId_idx\" on \"member\" (\"organizationId\");\n\ncreate index \"member_userId_idx\" on \"member\" (\"userId\");\n\ncreate index \"invitation_organizationId_idx\" on \"invitation\" (\"organizationId\");\n\ncreate index \"invitation_email_idx\" on \"invitation\" (\"email\");",
+        "repeatedSql": ";"
+      },
+      "observation": {
+        "indexes": [
+          {
+            "table": "team_member_catalog_members",
+            "name": "team_member_catalog_members_dedupe_key_key",
+            "unique": "YES",
+            "position": "1",
+            "column": "dedupe_key"
+          },
+          {
+            "table": "team_member_catalog_members",
+            "name": "team_member_catalog_members_group_id_idx",
+            "unique": "NO",
+            "position": "1",
+            "column": "group_id"
+          },
+          {
+            "table": "team_member_catalog_members",
+            "name": "team_member_catalog_members_pkey",
+            "unique": "YES",
+            "position": "1",
+            "column": "id"
+          },
+          {
+            "table": "team_member_catalog_members",
+            "name": "team_member_catalog_members_subject_id_idx",
+            "unique": "NO",
+            "position": "1",
+            "column": "subject_id"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "team_member_catalog_members",
+            "name": "team_member_catalog_members_group_id_fkey",
+            "position": "1",
+            "column": "group_id",
+            "targetTable": "team_member_catalog_teams",
+            "targetColumn": "id",
+            "onUpdate": "NO ACTION",
+            "onDelete": "CASCADE"
+          },
+          {
+            "table": "team_member_catalog_members",
+            "name": "team_member_catalog_members_subject_id_fkey",
+            "position": "1",
+            "column": "subject_id",
+            "targetTable": "team_member_catalog_users",
+            "targetColumn": "id",
+            "onUpdate": "NO ACTION",
+            "onDelete": "CASCADE"
+          }
+        ],
+        "storage": {
+          "inserted": [
+            [
+              {
+                "id": "member-a",
+                "teamId": "team-a",
+                "userId": "user-a",
+                "membershipKey": "key-a",
+                "createdAt": null
+              }
+            ],
+            [
+              {
+                "id": "member-a",
+                "teamId": "team-a",
+                "userId": "user-a",
+                "membershipKey": "key-a",
+                "createdAt": null
+              },
+              {
+                "id": "member-b",
+                "teamId": "team-a",
+                "userId": "user-a",
+                "membershipKey": "key-b",
+                "createdAt": null
+              }
+            ]
+          ],
+          "rejected": [
+            {
+              "name": "duplicateKey",
+              "kind": "unique",
+              "rows": [
+                {
+                  "id": "member-a",
+                  "teamId": "team-a",
+                  "userId": "user-a",
+                  "membershipKey": "key-a",
+                  "createdAt": null
+                },
+                {
+                  "id": "member-b",
+                  "teamId": "team-a",
+                  "userId": "user-a",
+                  "membershipKey": "key-b",
+                  "createdAt": null
+                }
+              ]
+            },
+            {
+              "name": "duplicateId",
+              "kind": "unique",
+              "rows": [
+                {
+                  "id": "member-a",
+                  "teamId": "team-a",
+                  "userId": "user-a",
+                  "membershipKey": "key-a",
+                  "createdAt": null
+                },
+                {
+                  "id": "member-b",
+                  "teamId": "team-a",
+                  "userId": "user-a",
+                  "membershipKey": "key-b",
+                  "createdAt": null
+                }
+              ]
+            },
+            {
+              "name": "missingTeam",
+              "kind": "foreign-key",
+              "rows": [
+                {
+                  "id": "member-a",
+                  "teamId": "team-a",
+                  "userId": "user-a",
+                  "membershipKey": "key-a",
+                  "createdAt": null
+                },
+                {
+                  "id": "member-b",
+                  "teamId": "team-a",
+                  "userId": "user-a",
+                  "membershipKey": "key-b",
+                  "createdAt": null
+                }
+              ]
+            },
+            {
+              "name": "missingUser",
+              "kind": "foreign-key",
+              "rows": [
+                {
+                  "id": "member-a",
+                  "teamId": "team-a",
+                  "userId": "user-a",
+                  "membershipKey": "key-a",
+                  "createdAt": null
+                },
+                {
+                  "id": "member-b",
+                  "teamId": "team-a",
+                  "userId": "user-a",
+                  "membershipKey": "key-b",
+                  "createdAt": null
+                }
+              ]
+            }
+          ],
+          "afterNullKeys": [
+            {
+              "id": "member-a",
+              "teamId": "team-a",
+              "userId": "user-a",
+              "membershipKey": "key-a",
+              "createdAt": null
+            },
+            {
+              "id": "member-b",
+              "teamId": "team-a",
+              "userId": "user-a",
+              "membershipKey": "key-b",
+              "createdAt": null
+            },
+            {
+              "id": "member-c",
+              "teamId": "team-b",
+              "userId": "user-b",
+              "membershipKey": null,
+              "createdAt": null
+            },
+            {
+              "id": "member-d",
+              "teamId": "team-b",
+              "userId": "user-b",
+              "membershipKey": null,
+              "createdAt": null
+            }
+          ],
+          "afterTeamDelete": [
+            {
+              "id": "member-c",
+              "teamId": "team-b",
+              "userId": "user-b",
+              "membershipKey": null,
+              "createdAt": null
+            },
+            {
+              "id": "member-d",
+              "teamId": "team-b",
+              "userId": "user-b",
+              "membershipKey": null,
+              "createdAt": null
+            }
+          ],
+          "afterUserDelete": []
+        }
+      }
+    }
+  ]
+}

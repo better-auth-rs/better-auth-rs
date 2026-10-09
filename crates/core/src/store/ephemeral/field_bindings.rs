@@ -97,21 +97,6 @@ impl EphemeralStore {
             .adapter_id_query(value.clone())
     }
 
-    pub(super) fn memory_reference_id_input(
-        &self,
-        value: Value,
-    ) -> AuthResult<crate::SchemaValue<String>> {
-        let value = if matches!(
-            self.config.advanced.database.generate_id(),
-            crate::id::IdGeneration::Serial
-        ) {
-            crate::id::serial_reference_value(value)?
-        } else {
-            value
-        };
-        Ok(crate::SchemaValue::from_field(value))
-    }
-
     pub(super) fn memory_session_token_query(&self, value: Value) -> AuthResult<(String, Value)> {
         self.memory_session_field_query("token", value)
     }
