@@ -55,7 +55,9 @@ impl ResponseBody {
             Self::Empty => Ok(FieldValue::Undefined),
             Self::Native(value) => Ok(value.clone()),
             Self::Bytes(bytes) if bytes.is_empty() => Ok(FieldValue::Undefined),
-            Self::Bytes(bytes) => FieldValue::from_json(serde_json::from_slice(bytes)?),
+            Self::Bytes(bytes) => FieldValue::parse_json(
+                serde_json::from_slice::<&serde_json::value::RawValue>(bytes)?.get(),
+            ),
             Self::Binary(_) | Self::Blob(_) => Err(AuthError::type_error(
                 "Binary and Blob results are not field values",
             )),

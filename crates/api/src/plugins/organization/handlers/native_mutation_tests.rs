@@ -398,15 +398,16 @@ async fn trusted_member_capacity_failure_cleans_up_native_identifiers() {
             &ctx,
         )
         .await;
-    assert!(
-        matches!(
-            &result,
-            Err(AuthError::Upstream {
-                code: "TEAM_MEMBER_LIMIT_REACHED",
-                ..
-            })
-        ),
-        "{result:?}"
+    let error = result.unwrap_err();
+    assert!(error.is_api_error());
+    let response = error.to_auth_response();
+    assert_eq!(response.status, 403);
+    assert_eq!(
+        response.body.json().unwrap(),
+        Some(serde_json::json!({
+            "code": "TEAM_MEMBER_LIMIT_REACHED",
+            "message": "Team member limit reached"
+        }))
     );
     assert_eq!(
         ctx.database

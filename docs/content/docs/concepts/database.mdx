@@ -14,6 +14,8 @@ Raw `DATE` columns follow the default `pg` and `mysql2` query parsers. Finite da
 
 Organization projection uses the actual database backend for native and configured fields. SQLite `Json` model values restore JSON text before output callbacks; SQL NULL remains null. Native `metadata` and `permission` values follow the same rule across single, batch, and joined reads. A typed `Json` model does not retain the original text's whitespace or byte layout.
 
+Organization, Member, Invitation, Team, and OrganizationRole apply native and additional input through one ordered field traversal for creates and updates. The adapter resolves ID defaults and conversion at the ID declaration slot, after preceding callbacks. Native insert methods preserve dynamic ID values until that boundary. Aliases that target the same storage column follow declaration order. A callback that reads or writes the same model can change the runtime ID policy observed by later fields. Output converts ID at its declaration slot, and derived Organization models consume that projected value. Batch projection initializes the runtime ID policy for each row before reading fields. An output callback runs its synchronous prefix before the next row starts; field conversion resumes after the callback await boundary. Memory serial insertion, SQL bindings, invitation claims, and atomic capacity updates retain their backend boundaries.
+
 Custom callers of `SeaOrmOrganizationModel::record` and `::records` must pass `DbBackend`. `AdapterRecord::map_storage_fields` also requires the backend's `FieldOutputCapabilities`; the adapter owns ID projection.
 
 The supported public path is:

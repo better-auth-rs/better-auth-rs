@@ -33,14 +33,6 @@ fn decode_record<T: MemoryOrganizationRecord>(fields: FieldMap) -> AuthResult<T>
     T::from_field_values(fields)
 }
 
-fn decode_output_record<T: MemoryOrganizationRecord>(mut fields: FieldMap) -> AuthResult<T> {
-    if let Some(id) = fields.get_mut("id") {
-        *id = EphemeralStore::project_id(&crate::SchemaValue::from_field(id.clone()))?
-            .into_field_value();
-    }
-    decode_record(fields)
-}
-
 #[tokio::test]
 async fn native_organization_defaults_and_replacements_survive_crud() {
     use crate::{
@@ -314,56 +306,75 @@ impl EphemeralStore {
         self.organization_fields()?.fields_for(role).cloned()
     }
 
-    fn bind_record_id(&self, fields: &mut FieldMap) -> AuthResult<()> {
-        if matches!(
-            self.config.advanced.database.generate_id(),
-            crate::id::IdGeneration::Serial
-        ) && let Some(id) = fields.remove("id")
-        {
-            let number = crate::query::field_number(&id)?;
-            if id.is_truthy() && !number.is_nan() {
-                let _ = fields.insert("id".into(), Value::Number(number));
-            }
-        }
-        Ok(())
-    }
-
     pub(super) async fn prepare_record_patch(
         &self,
         role: EntityRole,
-        mut core: FieldMap,
+        core: FieldMap,
         extras: FieldMap,
     ) -> AuthResult<PreparedOrganizationFields> {
-        let schema = self.field_config(role)?;
-        self.bind_record_id(&mut core)?;
-        let fields = schema
-            .organization_storage_fields_with_binding(core, extras, false, |_, field, value| {
-                self.memory_plugin_field_input(field, value)
-            })
+        let fields = self
+            .organization_storage_fields(role, core, extras, false)
             .await?;
         Ok(PreparedOrganizationFields { fields })
     }
 
-    pub(super) async fn store_record<T: MemoryOrganizationRecord>(
+    pub(super) async fn create_record<T: MemoryOrganizationRecord>(
         &self,
         role: EntityRole,
         value: T,
-        patch: Option<FieldMap>,
         extras: FieldMap,
     ) -> AuthResult<FieldMap> {
+        self.organization_storage_fields(role, record_input(role, &value)?, extras, true)
+            .await
+    }
+
+    async fn organization_storage_fields(
+        &self,
+        role: EntityRole,
+        core: FieldMap,
+        extras: FieldMap,
+        create: bool,
+    ) -> AuthResult<FieldMap> {
         let schema = self.field_config(role)?;
-        let create = patch.is_none();
-        let mut core = match patch {
-            Some(patch) => patch,
-            None => record_input(role, &value)?,
+        let model = match role {
+            EntityRole::Organization => "organization",
+            EntityRole::Member => "member",
+            EntityRole::Invitation => "invitation",
+            EntityRole::Team => "team",
+            EntityRole::OrganizationRole => "organizationRole",
+            _ => return Err(AuthError::config("Expected an organization entity role")),
         };
-        self.bind_record_id(&mut core)?;
-        let fields = schema
-            .organization_storage_fields_with_binding(core, extras, create, |_, field, value| {
-                self.memory_plugin_field_input(field, value)
-            })
-            .await?;
-        Ok(fields)
+        let supplied = core.get("id").or_else(|| extras.get("id")).cloned();
+        self.model_fields.begin_id_input(
+            role,
+            crate::id::AdapterIdInput {
+                force_allow_id: create && supplied.is_some(),
+                supports_native_uuid: false,
+            },
+        )?;
+        schema
+            .organization_storage_fields_with_bound_id(
+                core,
+                extras,
+                create,
+                || {
+                    let Some(policy) = self.model_fields.id_input_policy(role)? else {
+                        return Ok(supplied.clone());
+                    };
+                    let generation = self.config.advanced.database.generate_id();
+                    if create {
+                        generation.adapter_create_id_input(model, supplied.clone(), policy)
+                    } else {
+                        supplied
+                            .clone()
+                            .map(|value| generation.adapter_id_input(value, policy))
+                            .transpose()
+                            .map(Option::flatten)
+                    }
+                },
+                |_, field, value| self.memory_plugin_field_input(field, value),
+            )
+            .await
     }
 
     pub(super) async fn output_record_refs<T: MemoryOrganizationRecord>(
@@ -385,23 +396,19 @@ impl EphemeralStore {
         F: std::future::Future<Output = AuthResult<Vec<(usize, R)>>> + Send,
     {
         let schema = self.field_config(role)?;
-        let fields: IndexMap<_, _> = self
-            .model_fields
-            .organization_output_field_names(&schema)
-            .into_iter()
-            .map(|name| {
-                let field = schema.fields().get(&name).cloned().unwrap_or_default();
-                (name, field)
-            })
-            .collect();
+        let fields = schema.adapter_fields(&[]);
         let mut rows = values
             .into_iter()
-            .map(|row| (row, FieldMap::new()))
+            .map(|row| (row, FieldMap::new(), false))
             .collect::<Vec<_>>();
         crate::user_fields::project_source_fields_batches_then(
             &mut rows,
-            &fields,
-            |(source, _), name, field| {
+            fields.fields(),
+            |(source, _, started), name, field| {
+                if !*started {
+                    self.model_fields.begin_id_output(role)?;
+                    *started = true;
+                }
                 source.read(|storage| {
                     let key = if name != "id" {
                         resolve_field_name(field.field_name.as_deref(), name)
@@ -411,7 +418,7 @@ impl EphemeralStore {
                     Ok(storage.get(key).cloned())
                 })
             },
-            |(_, output), name, field, value| {
+            |(_, output, _), name, field, value| {
                 Box::pin(async move {
                     if name != "id" {
                         let value = crate::user_fields::project_adapter_value(
@@ -432,7 +439,7 @@ impl EphemeralStore {
                     Ok(())
                 })
             },
-            |_, (_, output)| decode_record(std::mem::take(output)),
+            |_, (_, output, _)| decode_record(std::mem::take(output)),
             complete,
         )
         .await
@@ -444,12 +451,15 @@ impl EphemeralStore {
         values: Vec<FieldMap>,
     ) -> AuthResult<Vec<T>> {
         let schema = self.field_config(role)?;
-        let records = values.into_iter().map(record_output).collect();
+        let records = values
+            .into_iter()
+            .map(|value| record_output(value).with_id_output(&self.model_fields, role))
+            .collect();
         schema
             .organization_output_memory_records(records)
             .await?
             .into_iter()
-            .map(decode_output_record)
+            .map(decode_record)
             .collect()
     }
 
@@ -463,11 +473,14 @@ impl EphemeralStore {
         F: std::future::Future<Output = AuthResult<Vec<(usize, R)>>> + Send,
     {
         let schema = self.field_config(role)?;
-        let records = values.into_iter().map(record_output).collect();
+        let records = values
+            .into_iter()
+            .map(|value| record_output(value).with_id_output(&self.model_fields, role))
+            .collect();
         schema
             .organization_output_memory_records_batches_then(
                 records,
-                |_, fields| decode_output_record(fields),
+                |_, fields| decode_record(fields),
                 complete,
             )
             .await
@@ -490,44 +503,51 @@ impl EphemeralStore {
 }
 
 #[tokio::test]
-async fn organization_id_slot_preserves_bound_zero_alias() {
+async fn organization_id_slot_preserves_declaration_order_for_bound_alias() {
     use crate::organization_fields::OrganizationFields;
     use crate::user_fields::{UserConfig, UserFieldConfig, UserFieldReference};
 
-    let mut config = AuthConfig::default();
-    config.advanced.database.generate_id = Some(crate::id::IdGeneration::Serial);
-    let store = EphemeralStore::new(Arc::new(config));
-    store
-        .configure_organization_fields(OrganizationFields {
-            organization: UserConfig {
-                additional_fields: Some(
-                    [(
-                        "aliasId".into(),
-                        UserFieldConfig {
-                            field_name: Some("id".into()),
-                            references: Some(UserFieldReference {
-                                model: "organization".into(),
-                                field: "id".into(),
-                                ..Default::default()
-                            }),
-                            ..Default::default()
-                        },
-                    )]
-                    .into(),
-                ),
+    for id_first in [false, true] {
+        let mut config = AuthConfig::default();
+        config.advanced.database.generate_id = Some(crate::id::IdGeneration::Serial);
+        let store = EphemeralStore::new(Arc::new(config));
+        let mut fields = UserConfig::default();
+        if id_first {
+            let _ = fields
+                .fields_mut()
+                .insert("id".into(), UserFieldConfig::default());
+        }
+        let _ = fields.fields_mut().insert(
+            "aliasId".into(),
+            UserFieldConfig {
+                field_name: Some("id".into()),
+                references: Some(UserFieldReference {
+                    model: "organization".into(),
+                    field: "id".into(),
+                    ..Default::default()
+                }),
+                ..Default::default()
             },
-            ..Default::default()
-        })
-        .unwrap();
-    let patch = store
-        .prepare_record_patch(
-            EntityRole::Organization,
-            [("id".into(), Value::from("7"))].into(),
-            [("aliasId".into(), Value::from("0"))].into(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(patch.fields, [("id".into(), Value::Number(0.0))].into());
+        );
+        store
+            .configure_organization_fields(OrganizationFields {
+                organization: fields,
+                ..Default::default()
+            })
+            .unwrap();
+        let patch = store
+            .prepare_record_patch(
+                EntityRole::Organization,
+                [("id".into(), Value::from("7"))].into(),
+                [("aliasId".into(), Value::from("0"))].into(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            patch.fields,
+            [("id".into(), Value::Number(if id_first { 0.0 } else { 7.0 }))].into()
+        );
+    }
 }
 
 #[tokio::test]

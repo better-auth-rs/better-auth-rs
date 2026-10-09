@@ -12,10 +12,7 @@ impl TeamStore for EphemeralStore {
             additional_fields: [("memberCount".into(), Value::Number(0.0))]
                 .into_iter()
                 .collect(),
-            id: self
-                .generated_id("team", input.id, self.lock()?.teams.len())?
-                .map(crate::SchemaValue::Typed)
-                .unwrap_or_default(),
+            id: input.id.map(crate::SchemaValue::Typed).unwrap_or_default(),
             name: input.name,
             organization_id: input.organization_id,
             created_at: input
@@ -35,7 +32,7 @@ impl TeamStore for EphemeralStore {
                 }),
         };
         let mut team = self
-            .store_record(EntityRole::Team, team, None, input.additional_fields)
+            .create_record(EntityRole::Team, team, input.additional_fields)
             .await?;
         {
             let mut state = self.lock()?;
@@ -151,7 +148,8 @@ impl TeamStore for EphemeralStore {
                     FieldMap::new(),
                 )
                 .await?;
-            let invitation_id = self.organization_primary_id(&invitation.id)?;
+            let invitation_id =
+                self.organization_query(EntityRole::Invitation, "id", invitation.id.field_value())?;
             let current = self
                 .lock()?
                 .invitations
@@ -599,7 +597,7 @@ impl OrganizationRoleStore for EphemeralStore {
             "role",
             Value::from(input.role.clone()),
         )?;
-        let count = {
+        {
             let state = self.lock()?;
             if state.organization_roles.snapshot()?.iter().any(|role| {
                 organization_value(role, &schema, "organizationId")
@@ -609,7 +607,6 @@ impl OrganizationRoleStore for EphemeralStore {
             }) {
                 return Err(AuthError::bad_request("Role already exists"));
             }
-            state.organization_roles.len()
         };
         let permission = crate::SchemaValue::from_field(
             input
@@ -620,10 +617,7 @@ impl OrganizationRoleStore for EphemeralStore {
         );
         let mut role = OrganizationRole {
             additional_fields: Default::default(),
-            id: self
-                .generated_id("organizationRole", None, count)?
-                .map(crate::SchemaValue::Typed)
-                .unwrap_or_default(),
+            id: Default::default(),
             organization_id: input.organization_id,
             role: (input.role).into(),
             permission,
@@ -646,12 +640,7 @@ impl OrganizationRoleStore for EphemeralStore {
             role.updated_at = crate::SchemaValue::from_field(value);
         }
         let mut role = self
-            .store_record(
-                EntityRole::OrganizationRole,
-                role,
-                None,
-                input.additional_fields,
-            )
+            .create_record(EntityRole::OrganizationRole, role, input.additional_fields)
             .await?;
         {
             let mut state = self.lock()?;

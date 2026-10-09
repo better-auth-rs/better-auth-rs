@@ -29,8 +29,6 @@ use std::sync::{
     Arc, Mutex, OnceLock, Weak,
     atomic::{AtomicBool, Ordering},
 };
-use tracing::instrument::WithSubscriber;
-use tracing_subscriber::prelude::*;
 
 #[path = "account_user_auth_boundary_reference_tests/recorder.rs"]
 mod recorder;
@@ -155,20 +153,16 @@ fn priority_config(events: &Events) -> AuthConfig {
 }
 
 async fn priority<S: AuthSchema>(fixture: Fixture<S>, events: Events) -> TestResult {
-    let result = fixture
-        .store
-        .update_session_fields_by_token_value(
+    let result = events
+        .capture(fixture.store.update_session_fields_by_token_value(
             &bad_token(),
             [("ipAddress".into(), "changed".into())].into(),
-        )
-        .with_subscriber(tracing_subscriber::registry().with(events.clone()))
+        ))
         .await;
     assert!(matches!(result, Err(AuthError::TypeError(message)) if message == "No default value"));
     assert_eq!(events.take()?, Vec::<Value>::new());
-    let result = fixture
-        .store
-        .get_session_snapshot_value(&bad_token())
-        .with_subscriber(tracing_subscriber::registry().with(events.clone()))
+    let result = events
+        .capture(fixture.store.get_session_snapshot_value(&bad_token()))
         .await;
     assert!(matches!(result, Err(AuthError::TypeError(message)) if message == "No default value"));
     assert_eq!(events.take()?, Vec::<Value>::new());

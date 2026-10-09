@@ -12,6 +12,7 @@ pub struct AdapterRecord {
     output: FieldMap,
     storage: FieldMap,
     raw_storage: Option<FieldOutputCapabilities>,
+    output_initializer: Option<Box<dyn FnOnce() -> AuthResult<()> + Send + Sync>>,
 }
 
 impl AdapterRecord {
@@ -21,7 +22,26 @@ impl AdapterRecord {
             output: core,
             storage,
             raw_storage: None,
+            output_initializer: None,
         }
+    }
+
+    /// Replace the runtime ID policy when this row starts output conversion.
+    #[doc(hidden)]
+    pub fn with_id_output(
+        mut self,
+        runtime: &crate::plugin_runtime::ModelFields,
+        role: crate::store::schema::EntityRole,
+    ) -> Self {
+        self.output_initializer = Some(runtime.id_output_initializer(role));
+        self
+    }
+
+    fn begin_output(&mut self) -> AuthResult<()> {
+        if let Some(initialize) = self.output_initializer.take() {
+            initialize()?;
+        }
+        Ok(())
     }
 
     /// Restore raw adapter values before output policies. `None` retains the extracted value.
@@ -308,10 +328,11 @@ impl UserConfig {
     where
         F: std::future::Future<Output = AuthResult<R>> + Send,
     {
-        let mut rows = self.organization_records(records)?;
+        let schema = self.adapter_fields(&[]);
+        let mut rows = schema.organization_records(records);
         super::batch::project_fields_then(
             &mut rows,
-            self.fields(),
+            schema.fields(),
             |row, name, field| {
                 Box::pin(project_organization_field(
                     row,
@@ -373,10 +394,11 @@ impl UserConfig {
     where
         F: std::future::Future<Output = AuthResult<Vec<(usize, R)>>> + Send,
     {
-        let mut rows = self.organization_records(records)?;
+        let schema = self.adapter_fields(&[]);
+        let mut rows = schema.organization_records(records);
         super::batch::project_fields_batches_then(
             &mut rows,
-            self.fields(),
+            schema.fields(),
             |row, name, field| {
                 Box::pin(project_organization_field(
                     row,
@@ -391,17 +413,17 @@ impl UserConfig {
         .await
     }
 
-    fn organization_records(
-        &self,
-        records: Vec<AdapterRecord>,
-    ) -> AuthResult<Vec<OrganizationRecord>> {
+    fn organization_records(&self, records: Vec<AdapterRecord>) -> Vec<OrganizationRecord> {
         records
             .into_iter()
             .map(|mut record| {
+                if let Some(id) = record.output.shift_remove("id") {
+                    let _ = record.storage.insert("id".into(), id);
+                }
                 record
                     .output
-                    .retain(|name, _| name == "id" || !self.fields().contains_key(name));
-                Ok(record)
+                    .retain(|name, _| !self.fields().contains_key(name));
+                record
             })
             .collect()
     }
@@ -510,19 +532,16 @@ impl UserConfig {
         .await
     }
 
-    /// Bind a complete record after its storage policies, while retaining force-allowed IDs.
+    /// Bind a complete record with force-allowed IDs in their declaration slot.
     pub async fn record_storage_fields_with_binding(
         &self,
         input: FieldMap,
         create: bool,
         bind: impl Fn(&str, &super::UserFieldConfig, Value) -> AuthResult<Value>,
     ) -> AuthResult<FieldMap> {
-        let mut output = FieldMap::new();
-        if let Some(id) = input.get("id") {
-            let _ = output.insert("id".into(), id.clone());
-        }
-        output.extend(self.storage_fields_async(input, create, true, bind).await?);
-        Ok(output)
+        let id = input.get("id").cloned();
+        self.storage_fields_with_bound_id(input, create, || Ok(id.clone()), bind)
+            .await
     }
 
     /// Project stored values without applying endpoint visibility or decoding replacement types.
@@ -646,15 +665,19 @@ async fn project_organization_field(
     field: &UserFieldConfig,
     supports_native_json: bool,
 ) -> AuthResult<()> {
-    if name == "id" {
-        return Ok(());
-    }
+    record.begin_output()?;
     let value = record
         .storage
         .get(resolve_field_name(field.field_name.as_deref(), name))
         .cloned()
         .unwrap_or_default();
-    let value = if let Some(capabilities) = record.raw_storage {
+    let value = if name == "id" {
+        if value.is_null() || value.is_undefined() {
+            value
+        } else {
+            value.display_utf16()?.into()
+        }
+    } else if let Some(capabilities) = record.raw_storage {
         field.adapter_output_from_raw(value, capabilities).await?
     } else {
         field.adapter_output(value, supports_native_json).await?
@@ -711,6 +734,7 @@ async fn project_adapter_field_with_capabilities(
     field: &UserFieldConfig,
     capabilities: FieldOutputCapabilities,
 ) -> AuthResult<()> {
+    record.begin_output()?;
     if name == "id" {
         return Ok(());
     }

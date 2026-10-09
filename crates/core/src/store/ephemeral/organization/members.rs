@@ -64,21 +64,9 @@ impl MemberStore for EphemeralStore {
     }
 
     async fn insert_member(&self, mut record: Member) -> AuthResult<Member> {
-        record.id = self
-            .generated_id(
-                "member",
-                if record.id.is_undefined() {
-                    None
-                } else {
-                    Some(record.id.typed()?.clone())
-                },
-                self.lock()?.members.len(),
-            )?
-            .map(crate::SchemaValue::Typed)
-            .unwrap_or_default();
         let fields = std::mem::take(&mut record.additional_fields);
         let mut record = self
-            .store_record(EntityRole::Member, record, None, fields)
+            .create_record(EntityRole::Member, record, fields)
             .await?;
         {
             let mut state = self.lock()?;
@@ -91,20 +79,16 @@ impl MemberStore for EphemeralStore {
     }
 
     async fn create_member(&self, input: CreateMember) -> AuthResult<Member> {
-        let count = self.lock()?.members.len();
         let member = Member {
             additional_fields: Default::default(),
-            id: self
-                .generated_id("member", None, count)?
-                .map(crate::SchemaValue::Typed)
-                .unwrap_or_default(),
+            id: Default::default(),
             organization_id: input.organization_id,
             user_id: input.user_id,
             role: input.role,
             created_at: (Utc::now()).into(),
         };
         let mut member = self
-            .store_record(EntityRole::Member, member, None, input.additional_fields)
+            .create_record(EntityRole::Member, member, input.additional_fields)
             .await?;
         {
             let mut state = self.lock()?;

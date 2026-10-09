@@ -117,19 +117,13 @@ impl EphemeralStore {
     }
 
     pub(super) async fn output_users(&self, users: Vec<UserView>) -> AuthResult<Vec<UserView>> {
-        if !users.is_empty() {
-            self.model_fields.begin_id_output(EntityRole::User)?;
-        }
-        let storage = users
+        let sources = users
             .iter()
-            .map(|user| self.user_storage_fields(user))
+            .map(|user| {
+                super::rows::RecordSource::Snapshot(Box::new(self.user_storage_fields(user)))
+            })
             .collect::<Vec<_>>();
-        let mut schema = self.user_schema();
-        if let Some(id) = schema.fields_mut().get_mut("id") {
-            id.field_name = Some("id".into());
-        }
-        schema
-            .output_memory_fields_many(&storage)
+        self.project_record_sources(EntityRole::User, &self.user_schema(), sources)
             .await?
             .into_iter()
             .map(UserView::try_from)

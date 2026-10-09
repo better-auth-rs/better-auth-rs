@@ -105,7 +105,9 @@ async fn core_writes<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPlugin
         .create_session(CreateSession {
             inherited_fields: Default::default(),
             user_id: user.id.clone(),
-            expires_at: FieldDate::from_milliseconds(user.created_at.milliseconds() + 3_600_000.0),
+            expires_at: FieldDate::from_milliseconds(
+                user.created_at.typed().unwrap().milliseconds() + 3_600_000.0,
+            ),
             ip_address: None,
             user_agent: None,
             impersonated_by: None,
@@ -134,8 +136,10 @@ async fn core_writes<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPlugin
         .create_verification(CreateVerification {
             identifier: "proof".into(),
             value: "proof-value".into(),
-            expires_at: FieldDate::from_milliseconds(user.created_at.milliseconds() + 3_600_000.0)
-                .into(),
+            expires_at: FieldDate::from_milliseconds(
+                user.created_at.typed().unwrap().milliseconds() + 3_600_000.0,
+            )
+            .into(),
             ..Default::default()
         })
         .await
@@ -341,7 +345,9 @@ async fn plugin_writes<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPlug
             device_code: "generated-device".into(),
             user_code: "generated-user-code".into(),
             user_id: None,
-            expires_at: FieldDate::from_milliseconds(user.created_at.milliseconds() + 300_000.0),
+            expires_at: FieldDate::from_milliseconds(
+                user.created_at.typed().unwrap().milliseconds() + 300_000.0,
+            ),
             status: "pending".into(),
             last_polled_at: None,
             polling_interval: Some(5.0),

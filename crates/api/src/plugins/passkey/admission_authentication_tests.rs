@@ -438,7 +438,13 @@ async fn signed_authentication_consumes_projected_admin_bans_after_counter_write
                 user: fixture.ctx.user_view(&stored_owner).await?,
             })
             .into();
-            assert_eq!(response.body.field_value()?, expected, "{name}");
+            assert_eq!(
+                response.body.field_value()?,
+                FieldValue::parse_json(
+                    &expected.stringify()?.ok_or("Missing serialized response")?
+                )?,
+                "{name}"
+            );
             assert_eq!(
                 FieldValue::parse_json(std::str::from_utf8(&response.body.bytes()?)?)?,
                 FieldValue::parse_json(

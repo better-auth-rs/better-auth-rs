@@ -27,19 +27,20 @@ impl EphemeralStore {
     where
         F: std::future::Future<Output = AuthResult<Vec<(usize, R)>>> + Send,
     {
-        if !users.is_empty() {
-            self.model_fields
-                .begin_id_output(crate::store::schema::EntityRole::User)?;
-        }
         let fields = self.user_schema();
         let mut rows = users
             .into_iter()
-            .map(|user| (user, (), FieldMap::new()))
+            .map(|user| (user, false, FieldMap::new()))
             .collect::<Vec<_>>();
         project_source_fields_batches_then(
             &mut rows,
             fields.fields(),
-            |(source, _, _), name, field| {
+            |(source, started, _), name, field| {
+                if !*started {
+                    self.model_fields
+                        .begin_id_output(crate::store::schema::EntityRole::User)?;
+                    *started = true;
+                }
                 let physical = resolve_field_name(field.field_name.as_deref(), name);
                 source.read(|user| Ok(FieldMap::from(user.clone()).get(physical).cloned()))
             },

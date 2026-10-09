@@ -79,9 +79,16 @@ where
             };
             (member, None)
         };
-        let member = member
-            .record(&fields, self.connection().get_database_backend())
-            .await?;
+        let member = super::organization_models::record(
+            &member,
+            &fields,
+            self.connection().get_database_backend(),
+            (
+                &self.model_fields,
+                better_auth_core::store::schema::EntityRole::Member,
+            ),
+        )
+        .await?;
         let users = match selected_users {
             Some(users) => users,
             None => {

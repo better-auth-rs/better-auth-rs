@@ -27,6 +27,7 @@ fn kind(value: &FieldValue) -> &'static str {
         FieldValue::String(_) | FieldValue::Utf16String(_) => "string",
         FieldValue::Array(_) => "array",
         FieldValue::Object(_) | FieldValue::Date(_) => "object",
+        FieldValue::Function(_) => "function",
     }
 }
 

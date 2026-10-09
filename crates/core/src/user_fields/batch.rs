@@ -3,12 +3,20 @@ use crate::AuthResult;
 use futures_util::{
     Stream, StreamExt,
     future::BoxFuture,
-    stream::{self, FuturesUnordered},
+    stream::{self, BoxStream, FuturesUnordered},
 };
 use indexmap::IndexMap;
-use std::future::Future;
+use std::{
+    future::{Future, poll_fn},
+    task::Poll,
+};
 
 type ReadyRow<'a, T> = (usize, &'a mut T, usize);
+
+async fn start_callback<T>(callback: &mut BoxFuture<'_, T>) -> Poll<T> {
+    // JavaScript runs each callback's synchronous prefix before starting the next row.
+    poll_fn(|cx| Poll::Ready(callback.as_mut().poll(cx))).await
+}
 
 fn source_projection_results<'a, T: Send, V: Send + 'a, R: Send + 'a>(
     rows: &'a mut [T],
@@ -19,7 +27,7 @@ fn source_projection_results<'a, T: Send, V: Send + 'a, R: Send + 'a>(
             + Sync
         ),
     complete: &'a (impl Fn(usize, &mut T) -> AuthResult<R> + Sync),
-) -> impl Stream<Item = AuthResult<(usize, R)>> + Send + 'a {
+) -> BoxStream<'a, AuthResult<(usize, R)>> {
     let capacity = rows.len().max(1);
     let ready: Vec<_> = rows
         .iter_mut()
@@ -47,12 +55,20 @@ fn source_projection_results<'a, T: Send, V: Send + 'a, R: Send + 'a>(
                             }
                         };
                         position += 1;
-                        if is_async(field) {
+                        if field.output_transform().is_some() {
                             // Capture only this field. Later fields must observe writes made while awaiting.
-                            pending.push(Box::pin(async move {
-                                apply(row, name, field, value).await?;
-                                Ok((index, row, position))
-                            }));
+                            let mut callback: BoxFuture<'a, AuthResult<ReadyRow<'a, T>>> =
+                                Box::pin(async move {
+                                    apply(row, name, field, value).await?;
+                                    Ok((index, row, position))
+                                });
+                            match start_callback(&mut callback).await {
+                                Poll::Ready(Ok(row)) => {
+                                    pending.push(Box::pin(std::future::ready(Ok(row))))
+                                }
+                                Poll::Ready(Err(error)) => completed.push(Err(error)),
+                                Poll::Pending => pending.push(callback),
+                            }
                             break;
                         }
                         if let Err(error) = apply(row, name, field, value).await {
@@ -77,6 +93,15 @@ fn source_projection_results<'a, T: Send, V: Send + 'a, R: Send + 'a>(
         },
     )
     .flat_map(stream::iter)
+    .boxed()
+}
+
+fn source_apply<T, F>(apply: F) -> F
+where
+    F: for<'a> Fn(&'a mut T, &'a str, &'a UserFieldConfig, ()) -> BoxFuture<'a, AuthResult<()>>
+        + Sync,
+{
+    apply
 }
 
 /// Continue completed live rows without delaying their child reads behind suspended peers.
@@ -92,28 +117,9 @@ pub(crate) async fn project_source_fields_batches_then<T: Send, I: Send, V: Send
 where
     F: Future<Output = AuthResult<Vec<(usize, R)>>> + Send,
 {
-    if !fields.values().any(is_async) {
-        return project_fields_batches_then(
-            rows,
-            fields,
-            |row, name, field| match read(row, name, field) {
-                Ok(value) => apply(row, name, field, value),
-                Err(error) => Box::pin(std::future::ready(Err(error))),
-            },
-            extract,
-            complete,
-        )
-        .await;
-    }
     let capacity = rows.len().max(1);
     let pending = source_projection_results(rows, fields, &read, &apply, &extract);
     continue_projection_batches(pending, capacity, None, complete).await
-}
-
-fn is_async(field: &UserFieldConfig) -> bool {
-    field
-        .output_transform()
-        .is_some_and(super::UserFieldTransform::is_async)
 }
 
 fn collect_result<T>(
@@ -164,7 +170,18 @@ pub(crate) async fn project_fields_then<T: Send, R: Send, F>(
 where
     F: Future<Output = AuthResult<R>> + Send,
 {
-    let (mut first_error, mut pending) = projection_tasks(rows, fields, &project, &complete).await;
+    let capacity = rows.len().max(1);
+    let read = |_: &mut T, _: &str, _: &UserFieldConfig| Ok(());
+    let apply = source_apply(|row, name, field, ()| project(row, name, field));
+    let extract = |index, row: &mut T| Ok(complete(index, row));
+    let pending = source_projection_results(rows, fields, &read, &apply, &extract)
+        .map(|result| async move {
+            let (index, complete) = result?;
+            Ok((index, complete.await?))
+        })
+        .buffer_unordered(capacity);
+    futures_util::pin_mut!(pending);
+    let mut first_error = None;
     let mut completed = Vec::new();
     while let Some(result) = pending.next().await {
         collect_result(result, &mut first_error, &mut completed);
@@ -172,60 +189,6 @@ where
     // A failed row must not cancel other started rows. Complete their callbacks,
     // then propagate the first original error, preserving the synchronous batch contract.
     finish_projection(first_error, completed)
-}
-
-type ProjectionTasks<'a, R> = FuturesUnordered<BoxFuture<'a, AuthResult<(usize, R)>>>;
-
-fn projection_tasks<'a, T: Send, R: Send + 'a, F>(
-    rows: &'a mut [T],
-    fields: &'a IndexMap<String, UserFieldConfig>,
-    project: &'a (
-            impl for<'b> Fn(&'b mut T, &'b str, &'b UserFieldConfig) -> BoxFuture<'b, AuthResult<()>>
-            + Sync
-        ),
-    complete: &'a (impl Fn(usize, &mut T) -> F + Sync),
-) -> BoxFuture<'a, (Option<crate::AuthError>, ProjectionTasks<'a, R>)>
-where
-    F: Future<Output = AuthResult<R>> + Send + 'a,
-{
-    // Erase the scheduler future so request callers do not expand every nested Send obligation.
-    Box::pin(async move {
-        let mut first_error = None;
-        let pending: FuturesUnordered<BoxFuture<'_, AuthResult<(usize, R)>>> =
-            FuturesUnordered::new();
-        if fields.values().any(is_async) {
-            for (index, row) in rows.iter_mut().enumerate() {
-                pending.push(Box::pin(async move {
-                    for (name, field) in fields {
-                        project(row, name, field).await?;
-                    }
-                    Ok((index, complete(index, row).await?))
-                }));
-            }
-        } else {
-            let mut active = vec![true; rows.len()];
-            for (name, field) in fields {
-                for (row, active) in rows.iter_mut().zip(&mut active) {
-                    if !*active {
-                        continue;
-                    }
-                    if let Err(error) = project(row, name, field).await {
-                        *active = false;
-                        if first_error.is_none() {
-                            first_error = Some(error);
-                        }
-                    }
-                }
-            }
-            for ((index, row), active) in rows.iter_mut().enumerate().zip(active) {
-                if active {
-                    let future = complete(index, row);
-                    pending.push(Box::pin(async move { Ok((index, future.await?)) }));
-                }
-            }
-        }
-        (first_error, pending)
-    })
 }
 
 /// Continue currently ready rows together without waiting for suspended peer rows.
@@ -242,9 +205,10 @@ where
     F: Future<Output = AuthResult<Vec<(usize, R)>>> + Send,
 {
     let capacity = rows.len().max(1);
-    let extract = |index, row: &mut T| std::future::ready(extract(index, row));
-    let (first_error, pending) = projection_tasks(rows, fields, &project, &extract).await;
-    continue_projection_batches(pending, capacity, first_error, complete).await
+    let read = |_: &mut T, _: &str, _: &UserFieldConfig| Ok(());
+    let apply = source_apply(|row, name, field, ()| project(row, name, field));
+    let pending = source_projection_results(rows, fields, &read, &apply, &extract);
+    continue_projection_batches(pending, capacity, None, complete).await
 }
 
 async fn continue_projection_batches<V: Send, R: Send, F>(

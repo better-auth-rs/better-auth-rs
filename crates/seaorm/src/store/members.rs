@@ -179,27 +179,26 @@ where
 {
     async fn insert_member(&self, record: Member) -> AuthResult<Member> {
         let config = self.organization_fields()?.member;
-        let core = self.create_fields(
-            "member",
-            if record.id.is_undefined() {
-                None
-            } else {
-                Some(record.id.typed()?.clone())
-            },
+        let core = models::with_id(
             models::values([
                 ("organization_id", record.organization_id.into_field_value()),
                 ("user_id", record.user_id.into_field_value()),
                 ("role", record.role.into_field_value()),
                 ("created_at", record.created_at.into_field_value()),
             ]),
-        )?;
-        models::active::<O::Member>(
+            (!record.id.is_undefined()).then(|| record.id.field_value()),
+        );
+        let row = models::active::<O::Member>(
             core,
             record.additional_fields,
             &config,
-            true,
+            Some("member"),
             self.connection().get_database_backend(),
             self.config().advanced.database.generate_id(),
+            (
+                &self.model_fields,
+                better_auth_core::store::schema::EntityRole::Member,
+            ),
         )
         .await?
         .insert(
@@ -212,8 +211,16 @@ where
             },
         )
         .await?
-        .ok_or_else(|| AuthError::internal("Member creation returned no record"))?
-        .record(&config, self.connection().get_database_backend())
+        .ok_or_else(|| AuthError::internal("Member creation returned no record"))?;
+        models::record(
+            &row,
+            &config,
+            self.connection().get_database_backend(),
+            (
+                &self.model_fields,
+                better_auth_core::store::schema::EntityRole::Member,
+            ),
+        )
         .await
     }
 
@@ -279,13 +286,17 @@ where
             .await
             .map_err(map_db_err)?;
         match row {
-            Some(row) => row
-                .record(
-                    &self.organization_fields()?.member,
-                    self.connection().get_database_backend(),
-                )
-                .await
-                .map(Some),
+            Some(row) => models::record(
+                &row,
+                &self.organization_fields()?.member,
+                self.connection().get_database_backend(),
+                (
+                    &self.model_fields,
+                    better_auth_core::store::schema::EntityRole::Member,
+                ),
+            )
+            .await
+            .map(Some),
             None => Ok(None),
         }
     }
@@ -310,13 +321,17 @@ where
             .await
             .map_err(map_db_err)?;
         match row {
-            Some(row) => row
-                .record(
-                    &self.organization_fields()?.member,
-                    self.connection().get_database_backend(),
-                )
-                .await
-                .map(Some),
+            Some(row) => models::record(
+                &row,
+                &self.organization_fields()?.member,
+                self.connection().get_database_backend(),
+                (
+                    &self.model_fields,
+                    better_auth_core::store::schema::EntityRole::Member,
+                ),
+            )
+            .await
+            .map(Some),
             None => Ok(None),
         }
     }
@@ -403,6 +418,10 @@ where
             rows,
             &self.organization_fields()?.member,
             self.connection().get_database_backend(),
+            (
+                &self.model_fields,
+                better_auth_core::store::schema::EntityRole::Member,
+            ),
         )
         .await
     }
@@ -476,6 +495,10 @@ where
                 rows,
                 &self.organization_fields()?.member,
                 self.connection().get_database_backend(),
+                (
+                    &self.model_fields,
+                    better_auth_core::store::schema::EntityRole::Member,
+                ),
             )
             .await?,
             total,
@@ -732,15 +755,11 @@ impl<
         scope: super::create_readback::ReadbackScope<'_>,
         member: CreateMember,
     ) -> AuthResult<Member> {
-        let mut core = self.create_fields(
-            "member",
-            None,
-            values([
-                ("organization_id", member.organization_id.into_field_value()),
-                ("user_id", member.user_id.into_field_value()),
-                ("created_at", FieldValue::Date(Utc::now().into())),
-            ]),
-        )?;
+        let mut core = values([
+            ("organization_id", member.organization_id.into_field_value()),
+            ("user_id", member.user_id.into_field_value()),
+            ("created_at", FieldValue::Date(Utc::now().into())),
+        ]);
         if let Some(role) = Some(member.role.field_value()).filter(|value| !value.is_undefined()) {
             let _ = core.insert("role".into(), role);
         }
@@ -751,6 +770,11 @@ impl<
             member.additional_fields,
             &self.organization_fields()?.member,
             self.config().advanced.database.generate_id(),
+            (
+                &self.model_fields,
+                better_auth_core::store::schema::EntityRole::Member,
+                "member",
+            ),
         )
         .await
     }
@@ -770,13 +794,17 @@ impl<
             .await
             .map_err(map_db_err)?;
         match row {
-            Some(row) => row
-                .record(
-                    &self.organization_fields()?.member,
-                    db.get_database_backend(),
-                )
-                .await
-                .map(Some),
+            Some(row) => models::record(
+                &row,
+                &self.organization_fields()?.member,
+                db.get_database_backend(),
+                (
+                    &self.model_fields,
+                    better_auth_core::store::schema::EntityRole::Member,
+                ),
+            )
+            .await
+            .map(Some),
             None => Ok(None),
         }
     }
@@ -815,12 +843,16 @@ impl<
         else {
             return Ok(());
         };
-        let member = member
-            .record(
-                &self.organization_fields()?.member,
-                db.get_database_backend(),
-            )
-            .await?;
+        let member = models::record(
+            &member,
+            &self.organization_fields()?.member,
+            db.get_database_backend(),
+            (
+                &self.model_fields,
+                better_auth_core::store::schema::EntityRole::Member,
+            ),
+        )
+        .await?;
         self.delete_member_for_user_with_connection(
             db,
             member_id,
@@ -863,9 +895,15 @@ impl<
             teams,
             &self.organization_fields()?.team,
             db.get_database_backend(),
+            (
+                &self.model_fields,
+                better_auth_core::store::schema::EntityRole::Team,
+            ),
         )
         .await?;
         for team in teams {
+            self.model_fields
+                .begin_id_query(better_auth_core::store::schema::EntityRole::Team)?;
             let _ = Entity::<O::Team>::update_many()
                 .col_expr(
                     O::Team::column("member_count")?,
@@ -894,6 +932,10 @@ impl<
                 deleted.rows_affected,
                 &self.organization_fields()?.team,
                 self.config().advanced.database.generate_id(),
+                (
+                    &self.model_fields,
+                    better_auth_core::store::schema::EntityRole::Team,
+                ),
             )
             .await?;
         }

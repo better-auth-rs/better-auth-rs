@@ -41,6 +41,26 @@ impl UserFieldTransform {
         }
     }
 
+    pub(crate) async fn call_output(&self, value: Value) -> TransformResult {
+        let result = match &self.0 {
+            Callback::Sync(callback) => Ok(callback(value)?),
+            Callback::Async(callback) => callback(value).await,
+        };
+        let mut resumed = false;
+        // Output conversion follows JavaScript's await, including synchronous callback results.
+        std::future::poll_fn(|cx| {
+            if resumed {
+                std::task::Poll::Ready(())
+            } else {
+                resumed = true;
+                cx.waker().wake_by_ref();
+                std::task::Poll::Pending
+            }
+        })
+        .await;
+        result
+    }
+
     /// Invoke a callback at a synchronous policy boundary.
     /// Async callbacks return a configuration error before application work starts.
     pub fn call_sync(&self, value: Value) -> TransformResult {
@@ -50,9 +70,5 @@ impl UserFieldTransform {
                 "Async field transforms require an adapter boundary; public-input parsing is synchronous",
             )),
         }
-    }
-
-    pub(crate) fn is_async(&self) -> bool {
-        matches!(self.0, Callback::Async(_))
     }
 }

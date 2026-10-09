@@ -44,6 +44,53 @@ fn input() -> FieldMap {
 }
 
 #[tokio::test]
+async fn record_boundaries_resolve_id_aliases_in_declaration_order() {
+    for id_first in [false, true] {
+        let mut fields = UserConfig::default();
+        if id_first {
+            let _ = fields
+                .fields_mut()
+                .insert("id".into(), UserFieldConfig::default());
+        }
+        let _ = fields.fields_mut().insert(
+            "alias".into(),
+            UserFieldConfig {
+                field_name: Some("id".into()),
+                ..Default::default()
+            },
+        );
+        let input: FieldMap = [
+            ("id".into(), Value::Number(7.0)),
+            ("alias".into(), Value::Number(0.0)),
+        ]
+        .into();
+        for organization in [false, true] {
+            let actual = if organization {
+                fields
+                    .organization_storage_fields_with_binding(
+                        input.clone(),
+                        FieldMap::new(),
+                        false,
+                        |_, _, value| Ok(value),
+                    )
+                    .await
+            } else {
+                fields
+                    .record_storage_fields_with_binding(input.clone(), false, |_, _, value| {
+                        Ok(value)
+                    })
+                    .await
+            }
+            .unwrap();
+            assert_eq!(
+                actual,
+                [("id".into(), Value::Number(if id_first { 0.0 } else { 7.0 }))].into()
+            );
+        }
+    }
+}
+
+#[tokio::test]
 async fn callback_undefined_reaches_reference_binding_before_omission() {
     for boundary in ["fields", "record", "organization", "adapter-id"] {
         let trace = Trace::default();

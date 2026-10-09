@@ -168,7 +168,7 @@ impl UserConfig {
         create: bool,
         bind: impl Fn(&str, &UserFieldConfig, Value) -> AuthResult<Value>,
     ) -> AuthResult<FieldMap> {
-        self.storage_fields_async(input, create, false, bind).await
+        self.storage_fields_async(input, create, bind).await
     }
 }
 
@@ -245,7 +245,7 @@ impl UserFieldConfig {
         capabilities: FieldOutputCapabilities,
     ) -> AuthResult<Value> {
         if let Some(transform) = self.output_transform() {
-            value = transform.call(value).await?;
+            value = transform.call_output(value).await?;
         }
         self.finish_output(value, capabilities)
     }

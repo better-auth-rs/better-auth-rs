@@ -224,9 +224,6 @@ where
         rows: &[SqlRow],
         db: &impl ConnectionTrait,
     ) -> AuthResult<Vec<better_auth_core::wire::AccountView>> {
-        if !rows.is_empty() {
-            self.model_fields.begin_id_output(EntityRole::Account)?;
-        }
         let fields = self.config().account.field_schema();
         let records = rows
             .iter()
@@ -237,6 +234,7 @@ where
                     S::Account::id_column(),
                     S::Account::field_column,
                 )
+                .map(|record| record.with_id_output(&self.model_fields, EntityRole::Account))
             })
             .collect::<AuthResult<Vec<_>>>()?;
         Ok(fields
@@ -264,15 +262,16 @@ where
     }
 
     pub(super) async fn output_native_account(&self, account: &SqlRow) -> AuthResult<AccountView> {
-        self.model_fields.begin_id_output(EntityRole::Account)?;
         let fields = self.config().account.field_schema();
         let backend = self.connection().get_database_backend();
-        let record = account.native_record::<<S::Account as SeaOrmAccountModel>::Entity>(
-            &fields,
-            backend,
-            S::Account::id_column(),
-            S::Account::field_column,
-        )?;
+        let record = account
+            .native_record::<<S::Account as SeaOrmAccountModel>::Entity>(
+                &fields,
+                backend,
+                S::Account::id_column(),
+                S::Account::field_column,
+            )?
+            .with_id_output(&self.model_fields, EntityRole::Account);
         // Projection preserves the one selected child.
         Ok(AccountView::from_adapter_fields(
             super::plugin_rows::ordered_output(
@@ -554,19 +553,18 @@ where
         } else {
             (self.account_records(provider, account_id).await?, None)
         };
-        if !records.is_empty() {
-            self.model_fields.begin_id_output(EntityRole::Account)?;
-        }
         let fields = self.config().account.field_schema();
         let extracted = records
             .iter()
             .map(|record| {
-                record.record::<<S::Account as SeaOrmAccountModel>::Entity>(
-                    &fields,
-                    self.connection().get_database_backend(),
-                    S::Account::id_column(),
-                    S::Account::field_column,
-                )
+                record
+                    .record::<<S::Account as SeaOrmAccountModel>::Entity>(
+                        &fields,
+                        self.connection().get_database_backend(),
+                        S::Account::id_column(),
+                        S::Account::field_column,
+                    )
+                    .map(|record| record.with_id_output(&self.model_fields, EntityRole::Account))
             })
             .collect::<AuthResult<Vec<_>>>()?;
         let backend = self.connection().get_database_backend();

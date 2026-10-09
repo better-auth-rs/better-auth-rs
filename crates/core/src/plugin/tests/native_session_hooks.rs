@@ -124,18 +124,21 @@ fn dispatcher(hook: &Inject) -> EndpointDispatcher<StatelessSchema> {
 async fn trusted_hooks_preserve_native_user_identity_for_http_and_native_consumers()
 -> AuthResult<()> {
     let shared: FieldValue = FieldMap::from([("native".into(), FieldValue::Undefined)]).into();
-    for user in [
-        FieldValue::Null,
-        FieldValue::Undefined,
-        false.into(),
-        0.0.into(),
-        "".into(),
-        vec![shared.clone(), shared.clone()].into(),
-        FieldMap::from([
-            ("id".into(), 17.0.into()),
-            ("shared".into(), shared.clone()),
-        ])
-        .into(),
+    for (user, body) in [
+        (FieldValue::Null, Some("null")),
+        (FieldValue::Undefined, None),
+        (false.into(), Some("false")),
+        (0.0.into(), Some("0")),
+        ("".into(), Some("")),
+        (vec![shared.clone(), shared.clone()].into(), Some("[{},{}]")),
+        (
+            FieldMap::from([
+                ("id".into(), 17.0.into()),
+                ("shared".into(), shared.clone()),
+            ])
+            .into(),
+            Some(r#"{"id":17,"shared":{}}"#),
+        ),
     ] {
         for (http, stateful) in [(true, true), (false, true), (true, false), (false, false)] {
             let (mut context, mut data) = fixture().await?;
@@ -190,7 +193,24 @@ async fn trusted_hooks_preserve_native_user_identity_for_http_and_native_consume
                     )
                     .await?
             };
-            assert!(response.body.field_value()?.strict_equals(&user));
+            assert_eq!(response.status, 200);
+            assert_eq!(response.is_native(), !http);
+            if http {
+                assert_eq!(
+                    response.headers.get("content-type").map(String::as_str),
+                    Some("application/json")
+                );
+                assert_eq!(
+                    matches!(response.body, crate::ResponseBody::Empty),
+                    body.is_none()
+                );
+                assert_eq!(
+                    response.body.bytes()?.as_ref(),
+                    body.unwrap_or_default().as_bytes()
+                );
+            } else {
+                assert!(response.body.field_value()?.strict_equals(&user));
+            }
             assert_eq!(hook.calls.load(Ordering::SeqCst), 1);
             assert_eq!(
                 context

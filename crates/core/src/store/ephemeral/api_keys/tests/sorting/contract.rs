@@ -330,7 +330,7 @@ async fn all_name_sort_cases_match_rows_errors_callbacks_and_storage() -> AuthRe
                         "{name}: {operation_name}"
                     );
                 }
-                Err(AuthError::Internal(message)) => {
+                Err(AuthError::TypeError(message)) => {
                     assert_eq!(
                         operation["returned"], false,
                         "{name}: {operation_name}: {message}"

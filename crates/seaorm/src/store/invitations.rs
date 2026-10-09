@@ -47,6 +47,10 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema>
             rows,
             &self.organization_fields()?.invitation,
             connection.get_database_backend(),
+            (
+                &self.model_fields,
+                better_auth_core::store::schema::EntityRole::Invitation,
+            ),
         )
         .await?;
         rows.into_iter()
@@ -70,9 +74,7 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> I
 {
     async fn create_invitation(&self, mut input: CreateInvitation) -> AuthResult<Invitation> {
         let config = self.organization_fields()?.invitation;
-        let mut core = self.create_fields(
-            "invitation",
-            input.id,
+        let mut core = models::with_id(
             values([
                 ("organization_id", (input.organization_id).into_field()),
                 ("email", (input.email).into_field()),
@@ -96,7 +98,8 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> I
                         .into_field(),
                 ),
             ]),
-        )?;
+            input.id.map(FieldValue::from),
+        );
         for (public, stored) in [
             ("status", "status"),
             ("createdAt", "created_at"),
@@ -114,6 +117,11 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> I
             input.additional_fields,
             &config,
             self.config().advanced.database.generate_id(),
+            (
+                &self.model_fields,
+                better_auth_core::store::schema::EntityRole::Invitation,
+                "invitation",
+            ),
         )
         .await
     }
@@ -131,10 +139,17 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> I
             )
             .await?;
         match row {
-            Some(row) => row
-                .record(&config, self.connection().get_database_backend())
-                .await
-                .map(Some),
+            Some(row) => models::record(
+                &row,
+                &config,
+                self.connection().get_database_backend(),
+                (
+                    &self.model_fields,
+                    better_auth_core::store::schema::EntityRole::Invitation,
+                ),
+            )
+            .await
+            .map(Some),
             None => Ok(None),
         }
     }
@@ -235,6 +250,10 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> I
             rows,
             &self.organization_fields()?.invitation,
             self.connection().get_database_backend(),
+            (
+                &self.model_fields,
+                better_auth_core::store::schema::EntityRole::Invitation,
+            ),
         )
         .await
     }
@@ -280,6 +299,10 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> I
             &rows,
             &fields.invitation,
             self.connection().get_database_backend(),
+            (
+                &self.model_fields,
+                better_auth_core::store::schema::EntityRole::Invitation,
+            ),
             |index, invitation| {
                 let rows = &rows;
                 let fields = &fields;
@@ -289,6 +312,9 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> I
                             "Invitation projection lost its stored join index",
                         )
                     })?;
+                    self.model_fields.begin_id_query(
+                        better_auth_core::store::schema::EntityRole::Organization,
+                    )?;
                     let organization = Entity::<O::Organization>::find()
                         .filter(super::value_filter::equals_native(
                             O::Organization::column("id")?,
@@ -300,9 +326,14 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> I
                         .map_err(map_db_err)?;
                     let organization = match organization {
                         Some(row) => Some(
-                            row.record(
+                            models::record(
+                                &row,
                                 &fields.organization,
                                 self.connection().get_database_backend(),
+                                (
+                                    &self.model_fields,
+                                    better_auth_core::store::schema::EntityRole::Organization,
+                                ),
                             )
                             .await?,
                         ),

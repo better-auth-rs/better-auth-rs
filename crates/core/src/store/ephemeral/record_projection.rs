@@ -28,18 +28,19 @@ impl EphemeralStore {
     where
         F: std::future::Future<Output = AuthResult<Vec<(usize, R)>>> + Send,
     {
-        if !sources.is_empty() {
-            self.model_fields.begin_id_output(role)?;
-        }
         let schema = configured.adapter_fields(&[]);
         let mut rows: Vec<_> = sources
             .into_iter()
-            .map(|source| (FieldMap::new(), source))
+            .map(|source| (FieldMap::new(), source, false))
             .collect();
         project_source_fields_batches_then(
             &mut rows,
             schema.fields(),
-            |(_, source), name, field| {
+            |(_, source, started), name, field| {
+                if !*started {
+                    self.model_fields.begin_id_output(role)?;
+                    *started = true;
+                }
                 source.read(|row| {
                     Ok(row
                         .get(resolve_field_name(field.field_name.as_deref(), name))
@@ -47,7 +48,7 @@ impl EphemeralStore {
                         .unwrap_or_default())
                 })
             },
-            |(output, _), name, field, value| {
+            |(output, _, _), name, field, value| {
                 Box::pin(async move {
                     let value = if name == "id" {
                         Self::project_id(&SchemaValue::from_field(value))?.into_field_value()
@@ -58,7 +59,7 @@ impl EphemeralStore {
                     Ok(())
                 })
             },
-            |_, (output, _)| Ok(std::mem::take(output)),
+            |_, (output, _, _)| Ok(std::mem::take(output)),
             complete,
         )
         .await

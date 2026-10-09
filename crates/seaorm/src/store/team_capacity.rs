@@ -33,7 +33,12 @@ async fn update<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
     value: SimpleExpr,
     fields: &UserConfig,
     policy: &better_auth_core::id::IdGeneration,
+    runtime: (
+        &better_auth_core::plugin_runtime::ModelFields,
+        better_auth_core::store::schema::EntityRole,
+    ),
 ) -> AuthResult<bool> {
+    runtime.0.begin_id_query(runtime.1)?;
     let mut update = Entity::<M>::update_many()
         .col_expr(M::column("member_count")?, value)
         .filter(super::value_filter::equals_id(
@@ -47,7 +52,7 @@ async fn update<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
     }
     let changed = update.exec(conn).await.map_err(map_db_err)?.rows_affected > 0;
     if changed && let Some(row) = find_stored_team::<M, _>(conn, id, policy).await? {
-        let _ = row.record(fields, conn.get_database_backend()).await?;
+        let _ = models::record(&row, fields, conn.get_database_backend(), runtime).await?;
     }
     Ok(changed)
 }
@@ -59,24 +64,27 @@ pub(super) async fn reserve<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
     maximum: Option<usize>,
     fields: &UserConfig,
     policy: &better_auth_core::id::IdGeneration,
+    runtime: (
+        &better_auth_core::plugin_runtime::ModelFields,
+        better_auth_core::store::schema::EntityRole,
+    ),
 ) -> AuthResult<bool> {
+    runtime.0.begin_id_query(runtime.1)?;
+    let selector =
+        super::value_filter::equals_id(M::column("id")?, id, policy, conn.get_database_backend())?;
     let active = models::active::<M>(
         models::values([("member_count", (actual).into_field())]),
         Default::default(),
         fields,
-        false,
+        None,
         conn.get_database_backend(),
         policy,
+        runtime,
     )
     .await?;
     let changed = active
         .update(conn.get_database_backend())?
-        .filter(super::value_filter::equals_id(
-            M::column("id")?,
-            id,
-            policy,
-            conn.get_database_backend(),
-        )?)
+        .filter(selector)
         .filter(M::column("member_count")?.lt(actual))
         .exec(conn)
         .await
@@ -84,7 +92,7 @@ pub(super) async fn reserve<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
         .rows_affected
         > 0;
     if changed && let Some(row) = find_stored_team::<M, _>(conn, id, policy).await? {
-        let _ = row.record(fields, conn.get_database_backend()).await?;
+        let _ = models::record(&row, fields, conn.get_database_backend(), runtime).await?;
     }
     update::<M, _>(
         conn,
@@ -95,6 +103,7 @@ pub(super) async fn reserve<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
         Expr::col(M::column("member_count")?).add(1),
         fields,
         policy,
+        runtime,
     )
     .await
 }
@@ -105,6 +114,10 @@ pub(super) async fn release<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
     deleted: u64,
     fields: &UserConfig,
     policy: &better_auth_core::id::IdGeneration,
+    runtime: (
+        &better_auth_core::plugin_runtime::ModelFields,
+        better_auth_core::store::schema::EntityRole,
+    ),
 ) -> AuthResult<()> {
     if deleted > 0 {
         let _ = update::<M, _>(
@@ -114,6 +127,7 @@ pub(super) async fn release<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
             Expr::col(M::column("member_count")?).sub(deleted),
             fields,
             policy,
+            runtime,
         )
         .await?;
     }

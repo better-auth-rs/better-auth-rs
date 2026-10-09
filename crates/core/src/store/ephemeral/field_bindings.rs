@@ -22,19 +22,14 @@ impl EphemeralStore {
         name: &str,
         value: Value,
     ) -> AuthResult<crate::SchemaValue<String>> {
+        self.model_fields.begin_id_query(role)?;
         if name == "id" {
-            return self.organization_primary_id(&crate::SchemaValue::from_field(value));
+            return self
+                .memory_primary_id_query(&value)
+                .map(crate::SchemaValue::from_field);
         }
         let value = self.memory_field_query(&self.field_config(role)?, name, value)?;
         Ok(crate::SchemaValue::from_field(value))
-    }
-
-    pub(super) fn organization_primary_id(
-        &self,
-        value: &crate::SchemaValue<String>,
-    ) -> AuthResult<crate::SchemaValue<String>> {
-        self.memory_primary_id_query(&value.field_value())
-            .map(crate::SchemaValue::from_field)
     }
 
     pub(super) fn organization_reference_query(

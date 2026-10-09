@@ -86,9 +86,13 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema>
             core,
             input.additional_fields,
             &config,
-            false,
+            None,
             self.connection().get_database_backend(),
             self.config().advanced.database.generate_id(),
+            (
+                &self.model_fields,
+                better_auth_core::store::schema::EntityRole::OrganizationRole,
+            ),
         )
         .await
     }
@@ -108,16 +112,12 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
             .stringify()?
             .map(FieldValue::String)
             .unwrap_or_default();
-        let mut core = self.create_fields(
-            "organizationRole",
-            None,
-            values([
-                ("organizationId", (input.organization_id).into_field()),
-                ("role", (input.role).into_field()),
-                ("permission", permission),
-                ("createdAt", FieldValue::Date((Utc::now()).into())),
-            ]),
-        )?;
+        let mut core = values([
+            ("organizationId", (input.organization_id).into_field()),
+            ("role", (input.role).into_field()),
+            ("permission", permission),
+            ("createdAt", FieldValue::Date((Utc::now()).into())),
+        ]);
         for name in [
             "organizationId",
             "role",
@@ -136,6 +136,11 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
             input.additional_fields,
             &config,
             self.config().advanced.database.generate_id(),
+            (
+                &self.model_fields,
+                better_auth_core::store::schema::EntityRole::OrganizationRole,
+                "organizationRole",
+            ),
         )
         .await
     }
@@ -154,10 +159,17 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
             .await
             .map_err(map_db_err)?;
         match row {
-            Some(row) => row
-                .record(&config, self.connection().get_database_backend())
-                .await
-                .map(Some),
+            Some(row) => models::record(
+                &row,
+                &config,
+                self.connection().get_database_backend(),
+                (
+                    &self.model_fields,
+                    better_auth_core::store::schema::EntityRole::OrganizationRole,
+                ),
+            )
+            .await
+            .map(Some),
             None => Ok(None),
         }
     }
@@ -189,6 +201,10 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
             rows,
             &self.organization_fields()?.organization_role,
             self.connection().get_database_backend(),
+            (
+                &self.model_fields,
+                better_auth_core::store::schema::EntityRole::OrganizationRole,
+            ),
         )
         .await
     }
@@ -244,6 +260,10 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
             rows,
             &self.organization_fields()?.organization_role,
             self.connection().get_database_backend(),
+            (
+                &self.model_fields,
+                better_auth_core::store::schema::EntityRole::OrganizationRole,
+            ),
         )
         .await
     }
@@ -324,10 +344,14 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
         )
         .await?
         .ok_or_else(|| better_auth_core::AuthError::not_found("Role not found"))?;
-        O::OrganizationRole::from_query_result(&row, "")
-            .map_err(map_db_err)?
-            .record(&config, backend)
-            .await
+        let row = O::OrganizationRole::from_query_result(&row, "").map_err(map_db_err)?;
+        models::record(
+            &row,
+            &config,
+            backend,
+            (&self.model_fields, EntityRole::OrganizationRole),
+        )
+        .await
     }
     async fn update_organization_roles(
         &self,

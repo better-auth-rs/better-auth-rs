@@ -72,13 +72,15 @@ impl ModelFields {
     /// Replace the ID input policy when a nonempty output conversion starts.
     #[doc(hidden)]
     pub fn begin_id_output(&self, role: EntityRole) -> AuthResult<()> {
-        let mut history = self
-            .id_history
-            .lock()
-            .map_err(|_| AuthError::internal("Adapter schema history lock poisoned"))?;
-        let _ = history.canonical.insert(role);
-        let _ = history.input.shift_remove(&role);
-        Ok(())
+        begin_id_output(&self.id_history, role)
+    }
+
+    pub(crate) fn id_output_initializer(
+        &self,
+        role: EntityRole,
+    ) -> Box<dyn FnOnce() -> AuthResult<()> + Send + Sync> {
+        let history = self.id_history.clone();
+        Box::new(move || begin_id_output(&history, role))
     }
 
     /// Read the current ID policy after preceding field callbacks have completed.
@@ -309,4 +311,13 @@ impl ModelFields {
         endpoint.verification.additional_fields = public.additional_fields.unwrap_or_default();
         (adapter, endpoint, self)
     }
+}
+
+fn begin_id_output(history: &Mutex<IdHistory>, role: EntityRole) -> AuthResult<()> {
+    let mut history = history
+        .lock()
+        .map_err(|_| AuthError::internal("Adapter schema history lock poisoned"))?;
+    let _ = history.canonical.insert(role);
+    let _ = history.input.shift_remove(&role);
+    Ok(())
 }

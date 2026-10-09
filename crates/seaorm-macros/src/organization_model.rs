@@ -95,17 +95,6 @@ pub(super) fn generate(
                 });
                 continue;
             }
-            if name == "id" {
-                output_values.push(quote!(let _ = projected.remove(#public_name);));
-                output.push(if name == "id" {
-                    quote!(#ident: #core_root::SchemaValue::Typed(self.#ident.to_string()))
-                } else if name == "created_at" {
-                    quote!(#ident: self.#ident.into())
-                } else {
-                    quote!(#ident: self.#ident.to_owned())
-                });
-                continue;
-            }
             if matches!(name.as_str(), "created_at" | "updated_at" | "expires_at") {
                 output_values.push(quote! {
                     let value = projected.remove(#public_name);

@@ -223,10 +223,8 @@ async fn deletion<S: AuthSchema>(
     );
     let retained = fixture.store.create_session(input("retained", "2")).await?;
     enabled.store(true, Ordering::SeqCst);
-    fixture
-        .store
-        .delete_session("candidate")
-        .with_subscriber(tracing_subscriber::registry().with(events.clone()))
+    events
+        .capture(fixture.store.delete_session("candidate"))
         .await?;
     let model = if fixture.database.is_some() {
         "sessions"

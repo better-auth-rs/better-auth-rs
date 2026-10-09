@@ -25,9 +25,6 @@ where
         rows: &[SqlRow],
         db: &impl ConnectionTrait,
     ) -> AuthResult<Vec<UserView>> {
-        if !rows.is_empty() {
-            self.model_fields.begin_id_output(EntityRole::User)?;
-        }
         let backend = db.get_database_backend();
         let fields = self.user_field_schema().adapter_fields(&[]);
         let records = rows
@@ -39,6 +36,7 @@ where
                     S::User::id_column(),
                     S::User::field_column,
                 )
+                .map(|record| record.with_id_output(&self.model_fields, EntityRole::User))
             })
             .collect::<AuthResult<Vec<_>>>()?;
         fields
@@ -68,9 +66,6 @@ where
         &self,
         pages: Vec<&[SqlRow]>,
     ) -> AuthResult<Vec<Vec<FieldMap>>> {
-        if pages.iter().any(|page| !page.is_empty()) {
-            self.model_fields.begin_id_output(EntityRole::User)?;
-        }
         let fields = self.user_field_schema().adapter_fields(&[]);
         let backend = self.connection().get_database_backend();
         let pages = super::joins::project_child_pages(&fields, pages, backend, &|row| {
@@ -80,6 +75,7 @@ where
                 S::User::id_column(),
                 S::User::field_column,
             )
+            .map(|record| record.with_id_output(&self.model_fields, EntityRole::User))
         })
         .await?;
         Ok(pages

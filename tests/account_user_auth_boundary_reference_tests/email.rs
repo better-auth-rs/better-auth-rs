@@ -83,8 +83,8 @@ async fn contract<S: AuthSchema>(
     assert!(harness.flow.is_none());
     assert!(events.take()?.is_empty());
     let start = chrono::Utc::now().timestamp_millis();
-    let response = http::request(harness.auth, &case.request)
-        .with_subscriber(tracing_subscriber::registry().with(events.clone()))
+    let response = events
+        .capture(http::request(harness.auth, &case.request))
         .await?;
     let end = chrono::Utc::now().timestamp_millis();
     let mut observed = events.take()?;

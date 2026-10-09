@@ -105,6 +105,10 @@ where
         records: Vec<AdapterRecord>,
         backend: DbBackend,
     ) -> AuthResult<Vec<VerificationView>> {
+        let records = records
+            .into_iter()
+            .map(|record| record.with_id_output(&self.model_fields, EntityRole::Verification))
+            .collect();
         Ok(fields
             .project_adapter_records_with_capabilities(
                 records,
@@ -122,10 +126,6 @@ where
         rows: &[SqlRow],
         db: &impl ConnectionTrait,
     ) -> AuthResult<Vec<VerificationView>> {
-        if !rows.is_empty() {
-            self.model_fields
-                .begin_id_output(EntityRole::Verification)?;
-        }
         let fields = self
             .config()
             .verification
@@ -163,8 +163,6 @@ where
         row: &sea_orm::QueryResult,
         db: &impl ConnectionTrait,
     ) -> AuthResult<VerificationView> {
-        self.model_fields
-            .begin_id_output(EntityRole::Verification)?;
         let fields = self
             .config()
             .verification

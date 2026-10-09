@@ -48,13 +48,7 @@ where
 
     async fn insert_organization(&self, record: Organization) -> AuthResult<Organization> {
         let config = self.organization_fields()?.organization;
-        let core = self.create_fields(
-            "organization",
-            if record.id.is_undefined() {
-                None
-            } else {
-                Some(record.id.typed()?.clone())
-            },
+        let core = models::with_id(
             values([
                 ("name", record.name.into_field_value()),
                 ("slug", record.slug.into_field_value()),
@@ -63,14 +57,19 @@ where
                 ("created_at", record.created_at.into_field_value()),
                 ("auth_updated_at", FieldValue::Date((Utc::now()).into())),
             ]),
-        )?;
-        models::active::<O::Organization>(
+            (!record.id.is_undefined()).then(|| record.id.field_value()),
+        );
+        let row = models::active::<O::Organization>(
             core,
             record.additional_fields,
             &config,
-            true,
+            Some("organization"),
             self.connection().get_database_backend(),
             self.config().advanced.database.generate_id(),
+            (
+                &self.model_fields,
+                better_auth_core::store::schema::EntityRole::Organization,
+            ),
         )
         .await?
         .insert(
@@ -83,8 +82,16 @@ where
             },
         )
         .await?
-        .ok_or_else(|| AuthError::internal("Organization creation returned no record"))?
-        .record(&config, self.connection().get_database_backend())
+        .ok_or_else(|| AuthError::internal("Organization creation returned no record"))?;
+        models::record(
+            &row,
+            &config,
+            self.connection().get_database_backend(),
+            (
+                &self.model_fields,
+                better_auth_core::store::schema::EntityRole::Organization,
+            ),
+        )
         .await
     }
     async fn delete_organization_records(&self, id: &str) -> AuthResult<()> {
@@ -125,14 +132,13 @@ where
     async fn create_organization(&self, org: CreateOrganization) -> AuthResult<Organization> {
         let config = self.organization_fields()?.organization;
         let now = Utc::now();
-        let mut core = self.create_fields(
-            "organization",
-            org.id,
+        let mut core = models::with_id(
             values([
                 ("created_at", FieldValue::Date((now).into())),
                 ("auth_updated_at", FieldValue::Date((now).into())),
             ]),
-        )?;
+            org.id.map(FieldValue::from),
+        );
         for (name, value) in [
             (
                 "name",
@@ -161,12 +167,16 @@ where
             core,
             org.additional_fields,
             &config,
-            true,
+            Some("organization"),
             self.connection().get_database_backend(),
             self.config().advanced.database.generate_id(),
+            (
+                &self.model_fields,
+                better_auth_core::store::schema::EntityRole::Organization,
+            ),
         )
         .await?;
-        active
+        let row = active
             .insert(
                 self.connection(),
                 super::create_readback::CreateReadback {
@@ -177,9 +187,17 @@ where
                 },
             )
             .await?
-            .ok_or_else(|| AuthError::internal("Organization creation returned no record"))?
-            .record(&config, self.connection().get_database_backend())
-            .await
+            .ok_or_else(|| AuthError::internal("Organization creation returned no record"))?;
+        models::record(
+            &row,
+            &config,
+            self.connection().get_database_backend(),
+            (
+                &self.model_fields,
+                better_auth_core::store::schema::EntityRole::Organization,
+            ),
+        )
+        .await
     }
 
     async fn get_organization_by_id(&self, id: &str) -> AuthResult<Option<Organization>> {
@@ -215,10 +233,17 @@ where
             .await
             .map_err(map_db_err)?;
         match row {
-            Some(row) => row
-                .record(&config, self.connection().get_database_backend())
-                .await
-                .map(Some),
+            Some(row) => models::record(
+                &row,
+                &config,
+                self.connection().get_database_backend(),
+                (
+                    &self.model_fields,
+                    better_auth_core::store::schema::EntityRole::Organization,
+                ),
+            )
+            .await
+            .map(Some),
             None => Ok(None),
         }
     }
@@ -246,6 +271,10 @@ where
                 .map_err(map_db_err)?,
             &config,
             self.connection().get_database_backend(),
+            (
+                &self.model_fields,
+                better_auth_core::store::schema::EntityRole::Organization,
+            ),
         )
         .await
     }
@@ -356,6 +385,10 @@ where
             &rows,
             &config.member,
             self.connection().get_database_backend(),
+            (
+                &self.model_fields,
+                better_auth_core::store::schema::EntityRole::Member,
+            ),
             |index, _| {
                 let rows = &rows;
                 let config = &config;
@@ -365,6 +398,9 @@ where
                             "Member projection lost its stored join index",
                         )
                     })?;
+                    self.model_fields.begin_id_query(
+                        better_auth_core::store::schema::EntityRole::Organization,
+                    )?;
                     let row = Entity::<O::Organization>::find()
                         .filter(super::value_filter::equals_native(
                             O::Organization::column("id")?,
@@ -375,13 +411,17 @@ where
                         .await
                         .map_err(map_db_err)?;
                     match row {
-                        Some(row) => row
-                            .record(
-                                &config.organization,
-                                self.connection().get_database_backend(),
-                            )
-                            .await
-                            .map(Some),
+                        Some(row) => models::record(
+                            &row,
+                            &config.organization,
+                            self.connection().get_database_backend(),
+                            (
+                                &self.model_fields,
+                                better_auth_core::store::schema::EntityRole::Organization,
+                            ),
+                        )
+                        .await
+                        .map(Some),
                         None => Ok(None),
                     }
                 }
@@ -415,13 +455,17 @@ impl<
             .await
             .map_err(map_db_err)?;
         match row {
-            Some(row) => row
-                .record(
-                    &self.organization_fields()?.organization,
-                    db.get_database_backend(),
-                )
-                .await
-                .map(Some),
+            Some(row) => models::record(
+                &row,
+                &self.organization_fields()?.organization,
+                db.get_database_backend(),
+                (
+                    &self.model_fields,
+                    better_auth_core::store::schema::EntityRole::Organization,
+                ),
+            )
+            .await
+            .map(Some),
             None => Ok(None),
         }
     }

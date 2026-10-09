@@ -129,7 +129,9 @@ async fn user_and_session_references_keep_aliases_bindings_and_single_output_tra
             inherited_fields: Default::default(),
             additional_fields: Default::default(),
             user_id: user.id.clone(),
-            expires_at: FieldDate::from_milliseconds(user.created_at.milliseconds() + 3_600_000.0),
+            expires_at: FieldDate::from_milliseconds(
+                user.created_at.typed().unwrap().milliseconds() + 3_600_000.0,
+            ),
             ip_address: None,
             user_agent: None,
             impersonated_by: None,

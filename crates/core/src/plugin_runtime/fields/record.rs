@@ -11,9 +11,10 @@ impl ModelFields {
         records: Vec<AdapterRecord>,
         capabilities: FieldOutputCapabilities,
     ) -> AuthResult<Vec<T>> {
-        if !records.is_empty() {
-            self.begin_id_output(role)?;
-        }
+        let records = records
+            .into_iter()
+            .map(|record| record.with_id_output(self, role))
+            .collect();
         let schema = self.plugin_fields(role).adapter_fields(&[]);
         schema
             .project_adapter_records_with_capabilities(records, capabilities)

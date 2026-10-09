@@ -14,8 +14,6 @@ use better_auth_seaorm::{SeaOrmStore, sea_orm::DatabaseConnection};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::sync::{Arc, Mutex};
-use tracing::instrument::WithSubscriber;
-use tracing_subscriber::prelude::*;
 
 #[path = "account_user_auth_boundary_reference_tests/callbacks.rs"]
 mod callbacks;
@@ -74,9 +72,8 @@ async fn contract<S: AuthSchema>(
     let harness = http::auth(store, options, scenario, &events).await?;
     let request = match (&harness.flow, &case.setup) {
         (Some(flow), Some(setup)) => {
-            let request = flow
-                .prepare(harness.auth.clone(), setup, &case.request)
-                .with_subscriber(tracing_subscriber::registry().with(events.clone()))
+            let request = events
+                .capture(flow.prepare(harness.auth.clone(), setup, &case.request))
                 .await?;
             assert!(
                 events.take()?.is_empty(),
@@ -92,8 +89,8 @@ async fn contract<S: AuthSchema>(
         _ => return Err("OAuth setup must match the callback scenario".into()),
     };
     let start = chrono::Utc::now().timestamp_millis();
-    let response = http::request(harness.auth, &request)
-        .with_subscriber(tracing_subscriber::registry().with(events.clone()))
+    let response = events
+        .capture(http::request(harness.auth, &request))
         .await?;
     let end = chrono::Utc::now().timestamp_millis();
     let mut observed = events.take()?;

@@ -332,17 +332,14 @@ impl EphemeralStore {
         };
         let member = Member {
             additional_fields: Default::default(),
-            id: self
-                .generated_id("member", None, member_count)?
-                .map(SchemaValue::Typed)
-                .unwrap_or_default(),
+            id: Default::default(),
             organization_id: invitation.organization_id.clone(),
             user_id: SchemaValue::from_field(user_id.clone()),
             role: invitation.role.clone(),
             created_at: Utc::now().into(),
         };
         let mut member = self
-            .store_record(EntityRole::Member, member, None, FieldMap::new())
+            .create_record(EntityRole::Member, member, FieldMap::new())
             .await?;
         if let Some(id) = self.next_serial_id(member_count) {
             let _ = member.insert("id".into(), id);

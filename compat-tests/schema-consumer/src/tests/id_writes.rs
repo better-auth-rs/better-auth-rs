@@ -220,7 +220,9 @@ pub(super) async fn reference_writes<
             device_code: "alias-device".into(),
             user_code: "0x10".into(),
             user_id: None,
-            expires_at: FieldDate::from_milliseconds(user.created_at.milliseconds() + 300_000.0),
+            expires_at: FieldDate::from_milliseconds(
+                user.created_at.typed().unwrap().milliseconds() + 300_000.0,
+            ),
             status: "pending".into(),
             last_polled_at: None,
             polling_interval: Some(5.0),

@@ -22,9 +22,7 @@ impl<
 > TeamStore for SeaOrmStore<S, O, P>
 {
     async fn create_team(&self, mut input: CreateTeam) -> AuthResult<Team> {
-        let mut core = self.create_fields(
-            "team",
-            input.id,
+        let mut core = models::with_id(
             values([
                 ("organization_id", (input.organization_id).into_field()),
                 (
@@ -36,7 +34,8 @@ impl<
                 ),
                 ("member_count", (0).into_field()),
             ]),
-        )?;
+            input.id.map(FieldValue::from),
+        );
         if let Some(name) = Some(input.name.field_value()).filter(|value| !value.is_undefined()) {
             let _ = core.insert("name".into(), name);
         }
@@ -55,6 +54,11 @@ impl<
             input.additional_fields,
             &self.organization_fields()?.team,
             self.config().advanced.database.generate_id(),
+            (
+                &self.model_fields,
+                better_auth_core::store::schema::EntityRole::Team,
+                "team",
+            ),
         )
         .await
     }
@@ -113,12 +117,14 @@ impl<
                 id,
             )
             .await?
-            .ok_or_else(|| AuthError::not_found("Team not found"))?
-            .record(
-                &Default::default(),
-                self.connection().get_database_backend(),
-            )
-            .await?;
+            .ok_or_else(|| AuthError::not_found("Team not found"))?;
+        let team = models::record(
+            &team,
+            &Default::default(),
+            self.connection().get_database_backend(),
+            (&self.model_fields, EntityRole::Team),
+        )
+        .await?;
         let public_id = team.id.field_value();
         let _ = Entity::<O::TeamMember>::delete_many()
             .filter(self.organization_field_equals::<O::TeamMember>(
@@ -193,6 +199,10 @@ impl<
             rows,
             &self.organization_fields()?.team,
             self.connection().get_database_backend(),
+            (
+                &self.model_fields,
+                better_auth_core::store::schema::EntityRole::Team,
+            ),
         )
         .await
     }
@@ -241,6 +251,10 @@ impl<
             &rows,
             &better_auth_core::user_fields::UserConfig::default(),
             self.connection().get_database_backend(),
+            (
+                &self.model_fields,
+                better_auth_core::store::schema::EntityRole::TeamMember,
+            ),
             |index, _| {
                 let rows = &rows;
                 let config = &config;
@@ -250,6 +264,8 @@ impl<
                             "Team member projection lost its stored join index",
                         )
                     })?;
+                    self.model_fields
+                        .begin_id_query(better_auth_core::store::schema::EntityRole::Team)?;
                     let row = Entity::<O::Team>::find()
                         .filter(super::value_filter::equals_native(
                             O::Team::column("id")?,
@@ -260,10 +276,17 @@ impl<
                         .await
                         .map_err(map_db_err)?;
                     match row {
-                        Some(row) => row
-                            .record(config, self.connection().get_database_backend())
-                            .await
-                            .map(Some),
+                        Some(row) => models::record(
+                            &row,
+                            config,
+                            self.connection().get_database_backend(),
+                            (
+                                &self.model_fields,
+                                better_auth_core::store::schema::EntityRole::Team,
+                            ),
+                        )
+                        .await
+                        .map(Some),
                         None => Ok(None),
                     }
                 }
@@ -295,13 +318,17 @@ impl<
             .await
             .map_err(map_db_err)?;
         match row {
-            Some(row) => row
-                .record(
-                    &Default::default(),
-                    self.connection().get_database_backend(),
-                )
-                .await
-                .map(Some),
+            Some(row) => models::record(
+                &row,
+                &Default::default(),
+                self.connection().get_database_backend(),
+                (
+                    &self.model_fields,
+                    better_auth_core::store::schema::EntityRole::TeamMember,
+                ),
+            )
+            .await
+            .map(Some),
             None => Ok(None),
         }
     }
@@ -330,6 +357,10 @@ impl<
             rows,
             &Default::default(),
             self.connection().get_database_backend(),
+            (
+                &self.model_fields,
+                better_auth_core::store::schema::EntityRole::TeamMember,
+            ),
         )
         .await
     }
@@ -382,6 +413,8 @@ impl<
         user_id: &FieldValue,
     ) -> AuthResult<()> {
         let tx = self.connection().begin().await.map_err(map_db_err)?;
+        self.model_fields
+            .begin_id_query(better_auth_core::store::schema::EntityRole::Team)?;
         let _ = Entity::<O::Team>::update_many()
             .col_expr(
                 O::Team::column("member_count")?,
@@ -410,6 +443,10 @@ impl<
             deleted.rows_affected,
             &self.organization_fields()?.team,
             self.config().advanced.database.generate_id(),
+            (
+                &self.model_fields,
+                better_auth_core::store::schema::EntityRole::Team,
+            ),
         )
         .await?;
         tx.commit().await.map_err(map_db_err)
@@ -436,10 +473,17 @@ impl<
             )
             .await?;
         match row {
-            Some(row) => row
-                .record(&config, db.get_database_backend())
-                .await
-                .map(Some),
+            Some(row) => models::record(
+                &row,
+                &config,
+                db.get_database_backend(),
+                (
+                    &self.model_fields,
+                    better_auth_core::store::schema::EntityRole::Team,
+                ),
+            )
+            .await
+            .map(Some),
             None => Ok(None),
         }
     }
@@ -452,6 +496,8 @@ impl<
         maximum: Option<usize>,
     ) -> AuthResult<Option<TeamMember>> {
         // Lock the aggregate before reading membership or capacity, including on SQLite.
+        self.model_fields
+            .begin_id_query(better_auth_core::store::schema::EntityRole::Team)?;
         let locked = Entity::<O::Team>::update_many()
             .col_expr(
                 O::Team::column("member_count")?,
@@ -479,9 +525,16 @@ impl<
             .map_err(map_db_err)?
         {
             return Ok(Some(
-                member
-                    .record(&Default::default(), db.get_database_backend())
-                    .await?,
+                models::record(
+                    &member,
+                    &Default::default(),
+                    db.get_database_backend(),
+                    (
+                        &self.model_fields,
+                        better_auth_core::store::schema::EntityRole::TeamMember,
+                    ),
+                )
+                .await?,
             ));
         }
         let count = Entity::<O::TeamMember>::find()
@@ -500,6 +553,10 @@ impl<
             maximum,
             &self.organization_fields()?.team,
             self.config().advanced.database.generate_id(),
+            (
+                &self.model_fields,
+                better_auth_core::store::schema::EntityRole::Team,
+            ),
         )
         .await?
         {
@@ -508,25 +565,26 @@ impl<
         let member = models::insert::<O::TeamMember, _>(
             db,
             super::create_readback::ReadbackScope::Transaction,
-            self.create_fields(
-                "teamMember",
-                None,
-                values([
-                    ("team_id", team_id.clone()),
-                    ("user_id", user_id.clone()),
-                    (
-                        "membership_key",
-                        (better_auth_core::organization_fields::team_membership_key_values(
-                            team_id, user_id,
-                        )?)
-                        .into_field(),
-                    ),
-                    ("created_at", FieldValue::Date((Utc::now()).into())),
-                ]),
-            )?,
+            values([
+                ("team_id", team_id.clone()),
+                ("user_id", user_id.clone()),
+                (
+                    "membership_key",
+                    (better_auth_core::organization_fields::team_membership_key_values(
+                        team_id, user_id,
+                    )?)
+                    .into_field(),
+                ),
+                ("created_at", FieldValue::Date((Utc::now()).into())),
+            ]),
             Default::default(),
             &Default::default(),
             self.config().advanced.database.generate_id(),
+            (
+                &self.model_fields,
+                better_auth_core::store::schema::EntityRole::TeamMember,
+                "teamMember",
+            ),
         )
         .await?;
         Ok(Some(member))

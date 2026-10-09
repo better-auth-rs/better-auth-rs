@@ -289,7 +289,7 @@ impl UserConfig {
 
     /// Map configured fields to application storage columns and await adapter transforms.
     pub async fn storage_fields(&self, input: FieldMap, create: bool) -> AuthResult<FieldMap> {
-        self.storage_fields_async(input, create, false, |_, _, value| Ok(value))
+        self.storage_fields_async(input, create, |_, _, value| Ok(value))
             .await
     }
 
@@ -297,14 +297,10 @@ impl UserConfig {
         &self,
         input: FieldMap,
         create: bool,
-        preserve_id: bool,
         bind: impl Fn(&str, &UserFieldConfig, Value) -> AuthResult<Value>,
     ) -> AuthResult<FieldMap> {
         let mut output = FieldMap::new();
         for (name, field) in self.fields() {
-            if preserve_id && name == "id" {
-                continue;
-            }
             if let Some(value) = field.storage_input(input.get(name), create).await? {
                 let storage = resolve_field_name(field.field_name.as_deref(), name);
                 let value = bind(storage, field, value)?;

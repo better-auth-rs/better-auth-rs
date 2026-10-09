@@ -5,10 +5,7 @@ impl InvitationStore for EphemeralStore {
     async fn create_invitation(&self, mut input: CreateInvitation) -> AuthResult<Invitation> {
         let mut invitation = Invitation {
             additional_fields: Default::default(),
-            id: self
-                .generated_id("invitation", input.id, self.lock()?.invitations.len())?
-                .map(crate::SchemaValue::Typed)
-                .unwrap_or_default(),
+            id: input.id.map(crate::SchemaValue::Typed).unwrap_or_default(),
             organization_id: input.organization_id,
             email: (input.email).into(),
             role: input.role.into(),
@@ -31,12 +28,7 @@ impl InvitationStore for EphemeralStore {
             invitation.inviter_id = crate::SchemaValue::Dynamic(value);
         }
         let mut invitation = self
-            .store_record(
-                EntityRole::Invitation,
-                invitation,
-                None,
-                input.additional_fields,
-            )
+            .create_record(EntityRole::Invitation, invitation, input.additional_fields)
             .await?;
         {
             let mut state = self.lock()?;
@@ -212,7 +204,11 @@ impl InvitationStore for EphemeralStore {
                     let organization = if owner.is_null() || owner.is_undefined() {
                         None
                     } else {
-                        let id = self.organization_primary_id(&invitation.organization_id)?;
+                        let id = self.organization_query(
+                            EntityRole::Organization,
+                            "id",
+                            invitation.organization_id.field_value(),
+                        )?;
                         self.lock()?
                             .organizations
                             .first_ref(|row| organization_id(row) == id)?

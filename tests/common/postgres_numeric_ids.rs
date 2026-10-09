@@ -318,7 +318,8 @@ async fn live_postgres_numeric_ids_preserve_defaults_references_and_transactions
 
 async fn verify_serial_coercion(database: DatabaseConnection) -> TestResult {
     run_app_migrations(&database).await?;
-    if database.get_database_backend() == sea_orm::DbBackend::Postgres {
+    let backend = database.get_database_backend();
+    if backend == sea_orm::DbBackend::Postgres {
         for table in ["sessions", "accounts"] {
             sql(
                 &database,
@@ -466,8 +467,13 @@ async fn verify_serial_coercion(database: DatabaseConnection) -> TestResult {
             .await?
             .is_none()
     );
-    for invalid in ["invalid", "1.5"] {
-        assert!(auth.store().get_user_by_id(invalid).await.is_err());
+    for selector in ["invalid", "1.5"] {
+        let result = auth.store().get_user_by_id(selector).await;
+        if backend == sea_orm::DbBackend::Sqlite {
+            assert!(result?.is_none(), "SQLite selector {selector}");
+        } else {
+            assert!(result.is_err(), "PostgreSQL selector {selector}");
+        }
     }
     // A database-generated identity does not enable the serial adapter's Number conversion.
     let mut config = test_config();
@@ -476,7 +482,16 @@ async fn verify_serial_coercion(database: DatabaseConnection) -> TestResult {
         .store(SeaOrmStore::<LegacySchema>::new(config, database))
         .build()
         .await?;
-    assert!(ordinary.store().get_user_by_id("1.6e1").await.is_err());
+    let result = ordinary.store().get_user_by_id("1.6e1").await;
+    if backend == sea_orm::DbBackend::Sqlite {
+        // SQLite's INTEGER affinity converts numeric text without the serial adapter policy.
+        assert_eq!(
+            result?.expect("SQLite numeric-text owner").id.typed()?,
+            "16"
+        );
+    } else {
+        assert!(result.is_err());
+    }
     assert!(ordinary.store().get_user_by_id("16").await?.is_some());
     Ok(())
 }

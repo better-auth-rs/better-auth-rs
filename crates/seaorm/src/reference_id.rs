@@ -443,53 +443,65 @@ mod tests {
                 .into(),
             ),
         };
-        let mut core: FieldMap = [
-            ("id".into(), FieldValue::from("007")),
-            ("nativeOwner".into(), FieldValue::from("003")),
-            ("configuredOwner".into(), FieldValue::from("0004")),
-        ]
-        .into();
-        let column = |_: &str| Ok(crate::store::entities::user::Column::Id);
-        super::prepare_core_fields(
-            &mut core,
-            &IdGeneration::Serial,
-            Some(&config),
-            column,
-            |_| true,
-        )
-        .unwrap();
-        assert_eq!(core["id"], FieldValue::from("7"));
-        let fields = config
-            .organization_storage_fields_with_binding(
-                core,
-                [
-                    ("firstAlias".into(), FieldValue::from("0011")),
-                    ("secondAlias".into(), FieldValue::from("abc")),
-                ]
-                .into(),
-                false,
-                |name, field, value| {
-                    input_binding(
-                        name,
-                        field,
-                        value,
-                        &IdGeneration::Serial,
-                        column,
-                        |_| false,
-                        sea_orm::DbBackend::Sqlite,
-                    )
-                },
-            )
-            .await
-            .unwrap();
-        assert_eq!(
-            fields,
-            [
-                ("id".into(), FieldValue::from("abc")),
-                ("nativeOwner".into(), FieldValue::from("3")),
+        for id_first in [false, true] {
+            let mut core: FieldMap = [
+                ("id".into(), FieldValue::from("007")),
+                ("nativeOwner".into(), FieldValue::from("003")),
                 ("configuredOwner".into(), FieldValue::from("0004")),
             ]
-            .into()
-        );
+            .into();
+            let column = |_: &str| Ok(crate::store::entities::user::Column::Id);
+            super::prepare_core_fields(
+                &mut core,
+                &IdGeneration::Serial,
+                Some(&config),
+                column,
+                |_| true,
+            )
+            .unwrap();
+            assert_eq!(core["id"], FieldValue::from("7"));
+            let mut config = config.clone();
+            if id_first {
+                let _ =
+                    config
+                        .fields_mut()
+                        .shift_insert(0, "id".into(), UserFieldConfig::default());
+            }
+            let fields = config
+                .organization_storage_fields_with_binding(
+                    core,
+                    [
+                        ("firstAlias".into(), FieldValue::from("0011")),
+                        ("secondAlias".into(), FieldValue::from("abc")),
+                    ]
+                    .into(),
+                    false,
+                    |name, field, value| {
+                        input_binding(
+                            name,
+                            field,
+                            value,
+                            &IdGeneration::Serial,
+                            column,
+                            |_| false,
+                            sea_orm::DbBackend::Sqlite,
+                        )
+                    },
+                )
+                .await
+                .unwrap();
+            assert_eq!(
+                fields,
+                [
+                    (
+                        "id".into(),
+                        FieldValue::from(if id_first { "abc" } else { "7" })
+                    ),
+                    ("nativeOwner".into(), FieldValue::from("3")),
+                    ("configuredOwner".into(), FieldValue::from("0004")),
+                ]
+                .into()
+            );
+        }
     }
 }

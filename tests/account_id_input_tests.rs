@@ -281,6 +281,7 @@ enum Case {
     Native(create::Native),
     Update(update::Id, bool),
     Reentrant(reentrant::Read, bool),
+    BatchOutputReset,
 }
 
 fn cases() -> Vec<Case> {
@@ -322,7 +323,8 @@ fn cases() -> Vec<Case> {
             cases.push(Case::Reentrant(read, id_first));
         }
     }
-    assert_eq!(cases.len(), 27);
+    cases.push(Case::BatchOutputReset);
+    assert_eq!(cases.len(), 28);
     cases
 }
 
@@ -337,6 +339,7 @@ async fn check<S: AuthSchema>(
         Case::Native(id) => create::native(base, storage, id).await,
         Case::Update(id, many) => update::check(base, storage, id, many).await,
         Case::Reentrant(read, id_first) => reentrant::check(base, storage, read, id_first).await,
+        Case::BatchOutputReset => reentrant::batch_output_reset(base, storage).await,
     }
     .map_err(|error| AuthError::internal(format!("{case:?}: {error}")))
 }

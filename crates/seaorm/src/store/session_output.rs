@@ -47,9 +47,6 @@ where
         backend: DbBackend,
     ) -> AuthResult<Vec<AdapterRecord>> {
         self.validate_session_fields()?;
-        if !rows.is_empty() {
-            self.model_fields.begin_id_output(EntityRole::Session)?;
-        }
         rows.iter()
             .map(|row| {
                 row.record::<<S::Session as SeaOrmSessionModel>::Entity>(
@@ -58,6 +55,7 @@ where
                     S::Session::id_column(),
                     S::Session::field_column,
                 )
+                .map(|record| record.with_id_output(&self.model_fields, EntityRole::Session))
             })
             .collect()
     }

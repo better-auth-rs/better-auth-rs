@@ -16,21 +16,9 @@ impl OrganizationStore for EphemeralStore {
     }
 
     async fn insert_organization(&self, mut record: Organization) -> AuthResult<Organization> {
-        record.id = self
-            .generated_id(
-                "organization",
-                if record.id.is_undefined() {
-                    None
-                } else {
-                    Some(record.id.typed()?.clone())
-                },
-                self.lock()?.organizations.len(),
-            )?
-            .map(crate::SchemaValue::Typed)
-            .unwrap_or_default();
         let fields = std::mem::take(&mut record.additional_fields);
         let mut record = self
-            .store_record(EntityRole::Organization, record, None, fields)
+            .create_record(EntityRole::Organization, record, fields)
             .await?;
         {
             let mut state = self.lock()?;
@@ -77,14 +65,13 @@ impl OrganizationStore for EphemeralStore {
         let schema = self.field_config(EntityRole::Organization)?;
         let slug =
             self.organization_query(EntityRole::Organization, "slug", input.slug.field_value())?;
-        let count = {
+        {
             let state = self.lock()?;
             if state.organizations.snapshot()?.iter().any(|org| {
                 organization_value(org, &schema, "slug").strict_equals(&slug.field_value())
             }) {
                 return Err(AuthError::bad_request("Organization already exists"));
             }
-            state.organizations.len()
         };
         let metadata = crate::organization_fields::metadata_input(
             (!input.metadata.is_undefined()).then(|| input.metadata.field_value()),
@@ -94,10 +81,7 @@ impl OrganizationStore for EphemeralStore {
         .unwrap_or_default();
         let org = Organization {
             additional_fields: Default::default(),
-            id: self
-                .generated_id("organization", input.id, count)?
-                .map(crate::SchemaValue::Typed)
-                .unwrap_or_default(),
+            id: input.id.map(crate::SchemaValue::Typed).unwrap_or_default(),
             name: input.name,
             slug: input.slug,
             logo: input.logo,
@@ -105,7 +89,7 @@ impl OrganizationStore for EphemeralStore {
             created_at: (Utc::now()).into(),
         };
         let mut org = self
-            .store_record(EntityRole::Organization, org, None, input.additional_fields)
+            .create_record(EntityRole::Organization, org, input.additional_fields)
             .await?;
         {
             let mut state = self.lock()?;
@@ -317,7 +301,11 @@ impl OrganizationStore for EphemeralStore {
                     if owner.is_null() || owner.is_undefined() {
                         continue;
                     }
-                    let id = self.organization_primary_id(&member.organization_id)?;
+                    let id = self.organization_query(
+                        EntityRole::Organization,
+                        "id",
+                        member.organization_id.field_value(),
+                    )?;
                     if let Some(organization) = self
                         .lock()?
                         .organizations

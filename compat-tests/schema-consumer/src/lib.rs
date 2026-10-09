@@ -81,7 +81,7 @@ mod tests {
     #[tokio::test]
     async fn generated_legacy_user_defaults_do_not_activate_plugin_fields() {
         use better_auth::seaorm::sea_orm::EntityTrait;
-        use better_auth::{CreateUser, FieldMap, store::UserStore};
+        use better_auth::{__private_core::store::UserStore, FieldMap, prelude::CreateUser};
 
         let database = Database::connect("sqlite::memory:").await.unwrap();
         generated::create_auth_tables(&database).await.unwrap();

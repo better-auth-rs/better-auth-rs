@@ -156,7 +156,61 @@ async function reentrantCase(backend: Backend, found: boolean, idFirst: boolean)
   } finally { fixture.close(); }
 }
 
+async function batchOutputResetCase(backend: Backend) {
+  const fixture = await setup(backend);
+  try {
+    const second = row("second", "second-subject", "second");
+    await fixture.seed(second);
+    const events: unknown[] = [];
+    let reader: Awaited<ReturnType<typeof fixture.reader>>;
+    const probe: Field = { type: "string", fieldName: "accessToken", transform: {
+      async input(value) {
+        events.push(["probe-input", value]);
+        if (value === "outer") events.push(["nested-list", await reader.context.adapter.findMany({
+          model: "account", where: [{ field: "userId", value: "owner" }],
+        })]);
+        return value;
+      },
+      async output(value) {
+        events.push(["probe-output", value]);
+        if (value === "retained") {
+          // Direct adapter lookup installs the ID policy before the callback's first await.
+          const pending = reader.context.adapter.findMany({
+            model: "account", where: [{ field: "userId", value: "missing" }],
+          });
+          events.push(["missing-started", value]);
+          events.push(["nested-missing", await pending]);
+        }
+        return value;
+      },
+    } };
+    reader = await fixture.reader({
+      account: { additionalFields: { probe, id: idSentinel() } },
+      advanced: { database: { generateId: generator(events) } },
+    }, events);
+    const raw = { ...withoutId(row(undefined)), accessToken: "outer" };
+    const projected = { ...raw, id: undefined, probe: "outer" };
+    await created(() => reader.withHooks.createWithHooks({
+      ...withoutId(row(undefined)), probe: "outer",
+    }, "account"), backend === "memory" ? projected : null);
+    expect(events).toStrictEqual([
+      ["probe-input", "outer"],
+      ["probe-output", "retained"],
+      ["missing-started", "retained"],
+      ["probe-output", "second"],
+      ["nested-missing", []],
+      ["nested-list", [{ ...retained(), probe: "retained" }, { ...second, probe: "second" }]],
+      ...(backend === "memory" ? [["probe-output", "outer"], ["after-create", projected]] : []),
+    ]);
+    expect(fixture.storage()).toStrictEqual([
+      fixture.stored(retained()), fixture.stored(second),
+      ...(backend === "memory" ? [fixture.stored(raw)] : []),
+    ]);
+  } finally { fixture.close(); }
+}
+
 for (const backend of ["memory", "sqlite"] as const) {
+  test(`${backend} Account batch output resets ID policy for each row`, () => batchOutputResetCase(backend));
   for (const slot of ["implicit", "before-alias", "after-alias"] as const) {
     for (const mode of ["generated", "supplied", "generator-error", "field-error"] as const) {
       test(`${backend} Account ID ${slot} ${mode} preserves input order and storage`, () => slotCase(backend, slot, mode));

@@ -27,11 +27,35 @@ impl UserConfig {
         create: bool,
         bind: impl Fn(&str, &UserFieldConfig, Value) -> AuthResult<Value>,
     ) -> AuthResult<FieldMap> {
+        let id = core.get("id").or_else(|| extras.get("id")).cloned();
+        self.organization_storage_fields_with_bound_id(
+            core,
+            extras,
+            create,
+            || Ok(id.clone()),
+            bind,
+        )
+        .await
+    }
+
+    /// Preserve backend-owned columns and resolve the adapter ID at its declaration slot.
+    #[doc(hidden)]
+    pub async fn organization_storage_fields_with_bound_id(
+        &self,
+        core: FieldMap,
+        extras: FieldMap,
+        create: bool,
+        resolve_id: impl FnMut() -> AuthResult<Option<Value>>,
+        bind: impl Fn(&str, &UserFieldConfig, Value) -> AuthResult<Value>,
+    ) -> AuthResult<FieldMap> {
         let mut output = core.clone();
-        output.retain(|name, _| name == "id" || !self.fields().contains_key(name));
+        output.retain(|name, _| name != "id" && !self.fields().contains_key(name));
         let mut input = extras;
         input.extend(core);
-        output.extend(self.storage_fields_async(input, create, true, bind).await?);
+        output.extend(
+            self.storage_fields_with_bound_id(input, create, resolve_id, bind)
+                .await?,
+        );
         Ok(output)
     }
 
@@ -80,14 +104,6 @@ impl UserConfig {
     /// Project a database result while retaining row order and per-row field order.
     pub async fn output_fields_many(&self, storage: &[FieldMap]) -> AuthResult<Vec<FieldMap>> {
         self.output_fields_many_with_json(storage, |_| true).await
-    }
-
-    pub(crate) async fn output_memory_fields_many(
-        &self,
-        storage: &[FieldMap],
-    ) -> AuthResult<Vec<FieldMap>> {
-        self.output_fields_many_with_json(storage, UserFieldConfig::references_id)
-            .await
     }
 
     async fn output_fields_many_with_json(

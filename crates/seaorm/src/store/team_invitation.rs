@@ -61,9 +61,13 @@ where
             values([("status", status.to_owned().into_field())]),
             Default::default(),
             &config,
-            false,
+            None,
             self.connection().get_database_backend(),
             self.config().advanced.database.generate_id(),
+            (
+                &self.model_fields,
+                better_auth_core::store::schema::EntityRole::Invitation,
+            ),
         )
         .await?;
         let backend = self.connection().get_database_backend();
@@ -90,10 +94,17 @@ where
         tx.commit().await.map_err(map_db_err)?;
         // Output transforms run after the claim is committed, before the member transaction starts.
         match row {
-            Some(row) => row
-                .record(&config, self.connection().get_database_backend())
-                .await
-                .map(Some),
+            Some(row) => models::record(
+                &row,
+                &config,
+                self.connection().get_database_backend(),
+                (
+                    &self.model_fields,
+                    better_auth_core::store::schema::EntityRole::Invitation,
+                ),
+            )
+            .await
+            .map(Some),
             None => Ok(None),
         }
     }
@@ -121,6 +132,7 @@ where
             };
             for team_id in &team_ids {
                 let team_value = FieldValue::from(*team_id);
+                self.model_fields.begin_id_query(better_auth_core::store::schema::EntityRole::Team)?;
                 let locked = Entity::<O::Team>::update_many()
                     .col_expr(
                         O::Team::column("member_count")?,
@@ -157,18 +169,16 @@ where
                         maximum,
                         &config.team,
                         self.config().advanced.database.generate_id(),
-                    )
+(&self.model_fields, better_auth_core::store::schema::EntityRole::Team),
+)
                     .await?
                     {
                         return Err(AuthError::forbidden("Team member limit reached"));
                     }
                     let _ = models::insert::<O::TeamMember, _>(
-                        &tx,
-                        super::create_readback::ReadbackScope::Transaction,
-                        self.create_fields(
-                            "teamMember",
-                            None,
-                            values([
+&tx,
+super::create_readback::ReadbackScope::Transaction,
+values([
                                 ("team_id", team_value.clone()),
                                 ("user_id", user_id.clone()),
                                 (
@@ -180,31 +190,28 @@ where
                                 ),
                                 ("created_at", FieldValue::Date((Utc::now()).into())),
                             ]),
-                        )?,
-                        Default::default(),
-                        &Default::default(),
-                        self.config().advanced.database.generate_id(),
-                    )
+Default::default(),
+&Default::default(),
+self.config().advanced.database.generate_id(),
+(&self.model_fields, better_auth_core::store::schema::EntityRole::TeamMember, "teamMember"),
+)
                     .await?;
                 }
             }
             let member = models::insert::<O::Member, _>(
-                &tx,
-                super::create_readback::ReadbackScope::Transaction,
-                self.create_fields(
-                    "member",
-                    None,
-                    values([
+&tx,
+super::create_readback::ReadbackScope::Transaction,
+values([
                         ("organization_id", invitation.organization_id.field_value()),
                         ("user_id", user_id.clone()),
                         ("role", invitation.role.field_value()),
                         ("created_at", FieldValue::Date((Utc::now()).into())),
                     ]),
-                )?,
-                Default::default(),
-                &config.member,
-                self.config().advanced.database.generate_id(),
-            )
+Default::default(),
+&config.member,
+self.config().advanced.database.generate_id(),
+(&self.model_fields, better_auth_core::store::schema::EntityRole::Member, "member"),
+)
             .await?;
             let Some(session_token) = session_token else {
                 return Ok((member, None));

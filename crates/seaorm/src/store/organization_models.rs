@@ -1,6 +1,8 @@
 use crate::SeaOrmOrganizationModel;
 use better_auth_core::store::schema::{EntityRole, resolve_field_name};
-use better_auth_core::{AuthError, AuthResult, user_fields::UserConfig};
+use better_auth_core::{
+    AuthError, AuthResult, id::AdapterIdInput, plugin_runtime::ModelFields, user_fields::UserConfig,
+};
 use better_auth_core::{FieldMap, FieldValue};
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, ConnectionTrait, DbBackend, EntityTrait, QueryFilter,
@@ -103,9 +105,10 @@ impl<S: crate::schema::AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate:
             core,
             input,
             config,
-            false,
+            None,
             conn.get_database_backend(),
             self.config().advanced.database.generate_id(),
+            (&self.model_fields, role),
         )
         .await?;
         let (column, value) = self.resolve_organization_query_field::<M>(role, selector)?;
@@ -119,10 +122,14 @@ impl<S: crate::schema::AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate:
         )
         .await?
         .ok_or_else(|| AuthError::not_found("Organization record not found"))?;
-        M::from_query_result(&row, "")
-            .map_err(super::map_db_err)?
-            .record(config, conn.get_database_backend())
-            .await
+        let row = M::from_query_result(&row, "").map_err(super::map_db_err)?;
+        record(
+            &row,
+            config,
+            conn.get_database_backend(),
+            (&self.model_fields, role),
+        )
+        .await
     }
 }
 
@@ -160,13 +167,21 @@ pub(super) fn values<const N: usize>(fields: [(&str, FieldValue); N]) -> FieldMa
         .collect()
 }
 
+pub(super) fn with_id(mut fields: FieldMap, supplied: Option<FieldValue>) -> FieldMap {
+    if let Some(id) = supplied {
+        let _ = fields.insert("id".into(), id);
+    }
+    fields
+}
+
 pub(super) async fn active<M: SeaOrmOrganizationModel>(
     core: FieldMap,
     input: FieldMap,
     config: &UserConfig,
-    create: bool,
+    model: Option<&str>,
     backend: sea_orm::DbBackend,
     policy: &better_auth_core::id::IdGeneration,
+    (runtime, role): (&ModelFields, EntityRole),
 ) -> AuthResult<super::record_write::RecordWrite<Entity<M>>> {
     let mut core = core
         .into_iter()
@@ -178,6 +193,16 @@ pub(super) async fn active<M: SeaOrmOrganizationModel>(
             ))
         })
         .collect::<AuthResult<FieldMap>>()?;
+    let supplied = core.get("id").or_else(|| input.get("id")).cloned();
+    runtime.begin_id_input(
+        role,
+        AdapterIdInput {
+            force_allow_id: model.is_some() && supplied.is_some(),
+            supports_native_uuid: backend == DbBackend::Postgres,
+        },
+    )?;
+    // The primary key binds at its declaration slot, after preceding field callbacks.
+    let raw_id = core.remove("id");
     crate::reference_id::prepare_core_fields(
         &mut core,
         policy,
@@ -185,11 +210,25 @@ pub(super) async fn active<M: SeaOrmOrganizationModel>(
         M::column,
         M::is_id_reference,
     )?;
+    if let Some(id) = raw_id {
+        let _ = core.insert("id".into(), id);
+    }
     let fields = config
-        .organization_storage_fields_with_binding(
+        .organization_storage_fields_with_bound_id(
             core,
             input,
-            create,
+            model.is_some(),
+            || match runtime.id_input_policy(role)? {
+                Some(current) => match model {
+                    Some(model) => policy.adapter_create_id_input(model, supplied.clone(), current),
+                    None => supplied
+                        .clone()
+                        .map(|value| policy.adapter_id_input(value, current))
+                        .transpose()
+                        .map(Option::flatten),
+                },
+                None => Ok(supplied.clone()),
+            },
             |storage_name, field, value| {
                 let column = M::column(storage_name)?;
                 let native_json = matches!(
@@ -208,9 +247,10 @@ pub(super) async fn active<M: SeaOrmOrganizationModel>(
             },
         )
         .await?;
+    let declarations = config.adapter_fields(&[]);
     let mut active = super::record_write::RecordWrite::<Entity<M>>::default();
     for (name, value) in fields {
-        let configured = config.fields().iter().any(|(logical, field)| {
+        let configured = declarations.fields().iter().any(|(logical, field)| {
             resolve_field_name(field.field_name.as_deref(), logical) == name
         });
         let column = M::column(&name)?;
@@ -230,14 +270,16 @@ pub(super) async fn insert<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
     input: FieldMap,
     config: &UserConfig,
     policy: &better_auth_core::id::IdGeneration,
+    (runtime, role, model): (&ModelFields, EntityRole, &str),
 ) -> AuthResult<M::Record> {
-    active::<M>(
+    let row = active::<M>(
         core,
         input,
         config,
-        true,
+        Some(model),
         conn.get_database_backend(),
         policy,
+        (runtime, role),
     )
     .await?
     .insert(
@@ -250,23 +292,49 @@ pub(super) async fn insert<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
         },
     )
     .await?
-    .ok_or_else(|| AuthError::internal("Organization record creation returned no record"))?
-    .record(config, conn.get_database_backend())
-    .await
+    .ok_or_else(|| AuthError::internal("Organization record creation returned no record"))?;
+    record(&row, config, conn.get_database_backend(), (runtime, role)).await
+}
+
+pub(super) async fn record<M: SeaOrmOrganizationModel>(
+    row: &M,
+    config: &UserConfig,
+    backend: DbBackend,
+    (runtime, role): (&ModelFields, EntityRole),
+) -> AuthResult<M::Record> {
+    let record = record_fields(row, config, backend)?.with_id_output(runtime, role);
+    let mut projected = config
+        .organization_output_records(vec![record], backend == DbBackend::Postgres)
+        .await?;
+    row.record_from_fields(config, projected.remove(0))
 }
 
 pub(super) async fn project<M: SeaOrmOrganizationModel>(
     rows: Vec<M>,
     config: &UserConfig,
     backend: DbBackend,
+    (runtime, role): (&ModelFields, EntityRole),
 ) -> AuthResult<Vec<M::Record>> {
-    M::records(&rows, config, backend).await
+    let records = rows
+        .iter()
+        .map(|row| {
+            record_fields(row, config, backend).map(|record| record.with_id_output(runtime, role))
+        })
+        .collect::<AuthResult<Vec<_>>>()?;
+    let projected = config
+        .organization_output_records(records, backend == DbBackend::Postgres)
+        .await?;
+    rows.iter()
+        .zip(projected)
+        .map(|(row, fields)| row.record_from_fields(config, fields))
+        .collect()
 }
 
 pub(super) async fn project_then<M: SeaOrmOrganizationModel, R: Send, F>(
     rows: &[M],
     config: &UserConfig,
     backend: DbBackend,
+    (runtime, role): (&ModelFields, EntityRole),
     complete: impl Fn(usize, M::Record) -> F + Sync,
 ) -> AuthResult<Vec<R>>
 where
@@ -275,7 +343,9 @@ where
 {
     let records = rows
         .iter()
-        .map(|row| record_fields(row, config, backend))
+        .map(|row| {
+            record_fields(row, config, backend).map(|record| record.with_id_output(runtime, role))
+        })
         .collect::<AuthResult<Vec<_>>>()?;
     config
         .organization_output_records_then(
@@ -298,6 +368,7 @@ pub(super) async fn project_batches_then<M: SeaOrmOrganizationModel, R: Send, F>
     rows: &[M],
     config: &UserConfig,
     backend: DbBackend,
+    (runtime, role): (&ModelFields, EntityRole),
     complete: impl Fn(Vec<(usize, M::Record)>) -> F + Sync,
 ) -> AuthResult<Vec<R>>
 where
@@ -306,7 +377,9 @@ where
 {
     let records = rows
         .iter()
-        .map(|row| record_fields(row, config, backend))
+        .map(|row| {
+            record_fields(row, config, backend).map(|record| record.with_id_output(runtime, role))
+        })
         .collect::<AuthResult<Vec<_>>>()?;
     config
         .organization_output_records_batches_then(

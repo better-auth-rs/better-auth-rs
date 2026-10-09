@@ -451,5 +451,12 @@ fn materialization_preserves_binary_and_utf16_boundaries() -> AuthResult<()> {
         value.into_http_response()?.body.bytes()?.as_ref(),
         "�".as_bytes()
     );
+    let object: FieldValue = FieldMap::from([
+        ("text".into(), Utf16String::from_units(vec![0xd800]).into()),
+        ("date".into(), "2030-01-01T00:00:00.000Z".into()),
+    ])
+    .into();
+    let response = AuthResponse::json(None, &object)?.into_http_response()?;
+    assert_eq!(response.body.field_value()?, object);
     Ok(())
 }

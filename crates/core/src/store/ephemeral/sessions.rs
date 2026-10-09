@@ -29,9 +29,6 @@ impl EphemeralStore {
     where
         F: std::future::Future<Output = AuthResult<Vec<(usize, R)>>> + Send,
     {
-        if !sessions.is_empty() {
-            self.model_fields.begin_id_output(EntityRole::Session)?;
-        }
         let schema = crate::store::session_create_schema(&self.session_config, &FieldMap::new());
         let mut rows: Vec<_> = sessions
             .into_iter()
@@ -61,13 +58,17 @@ impl EphemeralStore {
                     additional_fields: implicit,
                     ..Default::default()
                 };
-                Ok((session, source))
+                Ok((session, source, false))
             })
             .collect::<AuthResult<_>>()?;
         crate::user_fields::project_source_fields_batches_then(
             &mut rows,
             schema.fields(),
-            |(_, source), name, field| {
+            |(_, source, started), name, field| {
+                if !*started {
+                    self.model_fields.begin_id_output(EntityRole::Session)?;
+                    *started = true;
+                }
                 source.read(|row| {
                     if name == "id" {
                         return Ok(row.get("id").cloned().unwrap_or_default());
@@ -78,7 +79,7 @@ impl EphemeralStore {
                         .unwrap_or_default())
                 })
             },
-            |(session, _), name, field, value| {
+            |(session, _, _), name, field, value| {
                 Box::pin(async move {
                     if !session.field_order.iter().any(|field| field == name) {
                         session.field_order.push(name.into());
@@ -89,7 +90,7 @@ impl EphemeralStore {
                     }
                     let value = if resolve_field_name(field.field_name.as_deref(), name) == "id" {
                         let value = match field.output_transform() {
-                            Some(transform) => transform.call(value).await?,
+                            Some(transform) => transform.call_output(value).await?,
                             None => value,
                         };
                         Self::project_id(&crate::SchemaValue::from_field(value))?.into_field_value()
@@ -105,7 +106,7 @@ impl EphemeralStore {
                     Ok(())
                 })
             },
-            |_, (session, _)| Ok(session.clone().into_projected_fields()),
+            |_, (session, _, _)| Ok(session.clone().into_projected_fields()),
             complete,
         )
         .await

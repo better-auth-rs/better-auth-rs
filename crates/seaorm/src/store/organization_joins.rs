@@ -27,10 +27,14 @@ async fn project_sequential<M: SeaOrmOrganizationModel>(
     rows: Vec<M>,
     config: &UserConfig,
     backend: sea_orm::DbBackend,
+    runtime: (
+        &better_auth_core::plugin_runtime::ModelFields,
+        better_auth_core::store::schema::EntityRole,
+    ),
 ) -> AuthResult<Vec<M::Record>> {
     let mut result = Vec::with_capacity(rows.len());
     for row in rows {
-        result.push(row.record(config, backend).await?);
+        result.push(models::record(&row, config, backend, runtime).await?);
     }
     Ok(result)
 }
@@ -194,15 +198,43 @@ where
             (organization, None)
         };
         let organization_id = models::join_value(&organization, "id")?;
-        let organization = organization.record(&fields.organization, backend).await?;
+        let organization = models::record(
+            &organization,
+            &fields.organization,
+            backend,
+            (
+                &self.model_fields,
+                better_auth_core::store::schema::EntityRole::Organization,
+            ),
+        )
+        .await?;
         let (invitations, members, teams) = if let Some(children) = children {
-            let invitations =
-                project_sequential(children.invitations, &fields.invitation, backend).await?;
+            let invitations = project_sequential(
+                children.invitations,
+                &fields.invitation,
+                backend,
+                (
+                    &self.model_fields,
+                    better_auth_core::store::schema::EntityRole::Invitation,
+                ),
+            )
+            .await?;
             let members = self
                 .project_members_with_owners(children.members, &fields.member, backend)
                 .await?;
             let teams = match children.teams {
-                Some(rows) => Some(project_sequential(rows, &fields.team, backend).await?),
+                Some(rows) => Some(
+                    project_sequential(
+                        rows,
+                        &fields.team,
+                        backend,
+                        (
+                            &self.model_fields,
+                            better_auth_core::store::schema::EntityRole::Team,
+                        ),
+                    )
+                    .await?,
+                ),
                 None => None,
             };
             (invitations, members, teams)
@@ -211,6 +243,8 @@ where
                 self.config(),
                 self.connection().get_database_backend(),
             )?;
+            self.model_fields
+                .begin_id_query(better_auth_core::store::schema::EntityRole::Invitation)?;
             let rows = Entity::<O::Invitation>::find()
                 .filter(super::value_filter::equals_native(
                     O::Invitation::column("organization_id")?,
@@ -221,12 +255,23 @@ where
                 .all(self.connection())
                 .await
                 .map_err(map_db_err)?;
-            let invitations = project_sequential(rows, &fields.invitation, backend).await?;
+            let invitations = project_sequential(
+                rows,
+                &fields.invitation,
+                backend,
+                (
+                    &self.model_fields,
+                    better_auth_core::store::schema::EntityRole::Invitation,
+                ),
+            )
+            .await?;
             let (member_limit, _) = super::pagination::sql_pagination(
                 self.connection().get_database_backend(),
                 Some(member_limit),
                 None,
             )?;
+            self.model_fields
+                .begin_id_query(better_auth_core::store::schema::EntityRole::Member)?;
             let rows = Entity::<O::Member>::find()
                 .filter(super::value_filter::equals_native(
                     O::Member::column("organization_id")?,
@@ -241,6 +286,8 @@ where
                 .project_members_with_owners(rows, &fields.member, backend)
                 .await?;
             let teams = if input.include_teams {
+                self.model_fields
+                    .begin_id_query(better_auth_core::store::schema::EntityRole::Team)?;
                 let rows = Entity::<O::Team>::find()
                     .filter(super::value_filter::equals_native(
                         O::Team::column("organization_id")?,
@@ -251,7 +298,18 @@ where
                     .all(self.connection())
                     .await
                     .map_err(map_db_err)?;
-                Some(project_sequential(rows, &fields.team, backend).await?)
+                Some(
+                    project_sequential(
+                        rows,
+                        &fields.team,
+                        backend,
+                        (
+                            &self.model_fields,
+                            better_auth_core::store::schema::EntityRole::Team,
+                        ),
+                    )
+                    .await?,
+                )
             } else {
                 None
             };
@@ -318,7 +376,19 @@ where
         let mut members = Vec::with_capacity(rows.len());
         for row in rows {
             let owner = models::join_value(&row, "user_id")?;
-            members.push((row.record(fields, backend).await?, owner));
+            members.push((
+                models::record(
+                    &row,
+                    fields,
+                    backend,
+                    (
+                        &self.model_fields,
+                        better_auth_core::store::schema::EntityRole::Member,
+                    ),
+                )
+                .await?,
+                owner,
+            ));
         }
         Ok(members)
     }
@@ -359,6 +429,10 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPluginSchema> SeaOrmSt
             &members,
             &fields.member,
             backend,
+            (
+                &self.model_fields,
+                better_auth_core::store::schema::EntityRole::Member,
+            ),
             |ready| {
                 let rows = &rows;
                 let fields = &fields;
@@ -384,6 +458,10 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPluginSchema> SeaOrmSt
                                 organizations,
                                 &fields.organization,
                                 backend,
+                                (
+                                    &self.model_fields,
+                                    better_auth_core::store::schema::EntityRole::Organization,
+                                ),
                             )
                             .await?,
                         )
@@ -423,6 +501,10 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPluginSchema> SeaOrmSt
             teams,
             &self.organization_fields()?.team,
             self.connection().get_database_backend(),
+            (
+                &self.model_fields,
+                better_auth_core::store::schema::EntityRole::Team,
+            ),
         )
         .await
     }
@@ -461,6 +543,10 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPluginSchema> SeaOrmSt
             &invitations,
             &fields.invitation,
             backend,
+            (
+                &self.model_fields,
+                better_auth_core::store::schema::EntityRole::Invitation,
+            ),
             |ready| {
                 let rows = &rows;
                 let fields = &fields;
@@ -483,6 +569,10 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPluginSchema> SeaOrmSt
                         organizations,
                         &fields.organization,
                         backend,
+                        (
+                            &self.model_fields,
+                            better_auth_core::store::schema::EntityRole::Organization,
+                        ),
                     )
                     .await?
                     .into_iter();

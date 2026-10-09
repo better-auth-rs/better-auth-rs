@@ -6,6 +6,42 @@ import { walletPlugin } from "./wallet-additional-fields";
 
 const date = (offset: number) => new Date(1_893_456_000_000 + offset * 1000);
 
+for (const generateId of ["serial", false] as const) {
+  test(`SQLite User ID queries preserve driver comparisons with generateId=${generateId}`, async () => {
+    const database = new Database(":memory:");
+    try {
+      database.exec(`CREATE TABLE user (id INTEGER PRIMARY KEY NOT NULL, name TEXT NOT NULL, email TEXT NOT NULL, emailVerified INTEGER NOT NULL, image TEXT, createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL);
+        INSERT INTO user VALUES (0, 'Zero', 'zero@query-binding-order.test', 0, NULL, '2030-01-01T00:00:00.000Z', '2030-01-01T00:00:00.000Z'),
+          (16, 'Owner', 'owner@query-binding-order.test', 1, NULL, '2030-01-01T00:00:00.000Z', '2030-01-01T00:00:00.000Z');`);
+      const raw = () => database.query("SELECT * FROM user ORDER BY id").all();
+      const before = raw();
+      const { adapter } = await betterAuth({
+        database, baseURL: "http://query-binding-order.test",
+        secret: "query-binding-order-contract-at-least-32-characters",
+        logger: { disabled: true }, telemetry: { enabled: false },
+        advanced: { database: { generateId } },
+      }).$context;
+      const read = (value: string) => adapter.findOne({ model: "user", where: [{ field: "id", value }] });
+      const owner = {
+        id: "16", name: "Owner", email: "owner@query-binding-order.test", emailVerified: true,
+        image: null, createdAt: date(0), updatedAt: date(0),
+      };
+      expect(await read("invalid")).toBeNull();
+      expect(await read("1.5")).toBeNull();
+      expect(await read("1.6e1")).toStrictEqual(owner);
+      expect(await read("16")).toStrictEqual(owner);
+      expect(await read("0x10")).toStrictEqual(generateId === "serial" ? owner : null);
+      expect(await read("")).toStrictEqual(generateId === "serial" ? {
+        id: "0", name: "Zero", email: "zero@query-binding-order.test", emailVerified: false,
+        image: null, createdAt: date(0), updatedAt: date(0),
+      } : null);
+      expect(raw()).toStrictEqual(before);
+    } finally {
+      database.close();
+    }
+  });
+}
+
 for (const rejectedInput of [false, true]) {
   test(`SQLite User input ${rejectedInput ? "failure precedes" : "runs before"} the second query binding`, async () => {
     const database = new Database(":memory:");
