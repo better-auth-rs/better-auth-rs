@@ -711,7 +711,7 @@ pub async fn handle_create_organization(
                 .await?;
         }
     }
-    Ok(AuthResponse::json(None, &response)?)
+    AuthResponse::json(None, &response)
 }
 
 /// Handle update organization request
@@ -731,7 +731,7 @@ pub async fn handle_update_organization(
     };
     let body: UpdateOrganizationRequest = super::super::request::read(req, &config.schema)?;
     let updated = update_organization_core(&body, &session, config, ctx).await?;
-    Ok(AuthResponse::json(None, &updated)?)
+    AuthResponse::json(None, &updated)
 }
 
 /// Handle delete organization request
@@ -749,7 +749,7 @@ pub async fn handle_delete_organization(
         })?;
     let body: DeleteOrganizationRequest = super::super::request::read(req, &config.schema)?;
     let response = delete_organization_core(&body, &session, Some(req), config, ctx).await?;
-    Ok(AuthResponse::json(None, &response)?)
+    AuthResponse::json(None, &response)
 }
 
 /// Handle list organizations request
@@ -759,7 +759,7 @@ pub async fn handle_list_organizations(
 ) -> AuthResult<AuthResponse> {
     let session = require_native_session(req, ctx).await?;
     let organizations = list_organizations_core(&session, ctx).await?;
-    Ok(AuthResponse::json(None, &organizations)?)
+    AuthResponse::json(None, &organizations)
 }
 
 /// Get organization metadata for a member, without expanding members or invitations.
@@ -779,7 +779,7 @@ pub async fn handle_get_organization(
             .map(better_auth_core::FieldValue::from)
             .unwrap_or_else(|| session.session.active_organization_id.field_value());
         if !id.is_truthy() {
-            return Ok(AuthResponse::json(None, &serde_json::Value::Null)?);
+            return AuthResponse::json(None, &serde_json::Value::Null);
         }
         ctx.database.get_organization_by_id_value(&id).await?
     }
@@ -805,10 +805,10 @@ pub async fn handle_get_organization(
             "User is not a member of the organization",
         ));
     }
-    Ok(AuthResponse::json(
+    AuthResponse::json(
         None,
         &crate::plugins::organization::fields::organization(&organization, ctx),
-    )?)
+    )
 }
 
 /// Handle get full organization request
@@ -820,7 +820,7 @@ pub async fn handle_get_full_organization(
     let session = require_native_session(req, ctx).await?;
     let query = crate::plugins::query_input::parse::<GetFullOrganizationQuery>(&req.query)?;
     let response = get_full_organization_core(&query, &session, config, ctx).await?;
-    Ok(AuthResponse::json(None, &response)?)
+    AuthResponse::json(None, &response)
 }
 
 /// Handle check slug request
@@ -831,7 +831,7 @@ pub async fn handle_check_slug(
     let _ = request_only_session(req, ctx).await?;
     let body: CheckSlugRequest = super::super::request::read(req, &Default::default())?;
     let response = check_slug_core(&body, ctx).await?;
-    Ok(AuthResponse::json(None, &response)?)
+    AuthResponse::json(None, &response)
 }
 
 /// Handle set active organization request
@@ -842,7 +842,7 @@ pub async fn handle_set_active_organization(
     let session = require_native_session(req, ctx).await?;
     let body: SetActiveOrganizationRequest = super::super::request::read(req, &Default::default())?;
     let organization = set_active_organization_core(req, &body, &session, ctx).await?;
-    Ok(AuthResponse::json(None, &organization)?)
+    AuthResponse::json(None, &organization)
 }
 
 /// Handle leave organization request
@@ -854,7 +854,7 @@ pub async fn handle_leave_organization(
     let session = require_native_session(req, ctx).await?;
     let body: LeaveOrganizationRequest = super::super::request::read(req, &config.schema)?;
     let response = leave_organization_core(&body, &session, config, ctx).await?;
-    Ok(AuthResponse::json(None, &response)?)
+    AuthResponse::json(None, &response)
 }
 
 #[cfg(test)]

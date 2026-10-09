@@ -49,7 +49,11 @@ async fn active_query<S: AuthSchema>(
     mut config: AuthConfig,
 ) -> AuthResult<()> {
     let owner = raw
-        .create_user(CreateUser::new().with_email("list-filter@example.test"))
+        .create_user(
+            CreateUser::new()
+                .with_email("list-filter@example.test")
+                .with_name("Session owner"),
+        )
         .await?;
     let expired = seed(
         raw.as_ref(),
@@ -162,15 +166,17 @@ async fn session_lists_preserve_native_owner_selectors_without_string_coercion()
         )
         .await?;
         let context = AuthContext::new(config, store);
-        for (owner, expected) in [
-            (7.0.into(), numeric),
-            ("7".into(), text),
-            (FieldValue::Undefined, missing),
+        // Replacing the declaration removes the native userId reference output conversion.
+        let numeric_output = if renamed { 7.0.into() } else { "7".into() };
+        for (owner, expected, output_owner) in [
+            (7.0.into(), numeric, numeric_output),
+            ("7".into(), text, "7".into()),
+            (FieldValue::Undefined, missing, FieldValue::Undefined),
         ] {
             let listed = super::list_sessions_core(&owner, &context).await?;
             assert_eq!(listed.len(), 1);
             assert_eq!(listed[0].token, expected.token);
-            assert_eq!(listed[0].user_id.field_value(), owner);
+            assert_eq!(listed[0].user_id.field_value(), output_owner);
         }
     }
     Ok(())

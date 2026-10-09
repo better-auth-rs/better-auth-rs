@@ -859,9 +859,6 @@ impl<S: AuthSchema> BetterAuth<S> {
                 None,
             )
             .await?;
-        Ok(AuthResponse::json(
-            None,
-            &better_auth_core::StatusResponse { status: true },
-        )?)
+        AuthResponse::json(None, &better_auth_core::StatusResponse { status: true })
     }
 }

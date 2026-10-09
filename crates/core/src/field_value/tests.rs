@@ -60,7 +60,7 @@ fn ordinary_object_primitive_conversion_checks_only_the_selected_method() -> Aut
                 crate::query::field_compare(&value, &FieldValue::Null).map(drop),
                 crate::query::field_compare(&FieldValue::Null, &value).map(drop),
             ] {
-                assert!(matches!(result, Err(AuthError::Internal(message))
+                assert!(matches!(result, Err(AuthError::TypeError(message))
                     if message == "No default value"));
             }
         }

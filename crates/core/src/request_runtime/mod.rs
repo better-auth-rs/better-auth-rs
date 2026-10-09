@@ -416,7 +416,7 @@ async fn origins(
 fn native_url_error(message: String) -> AuthError {
     match AuthResponse::json(500, &serde_json::json!({ "message": message })) {
         Ok(response) => response.into(),
-        Err(error) => error.into(),
+        Err(error) => error,
     }
 }
 

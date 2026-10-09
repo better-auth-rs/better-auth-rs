@@ -198,6 +198,14 @@ mod tests {
             Some(&FieldValue::Undefined)
         );
 
+        assert!(matches!(
+            OAuthStatePayload::parse(&serde_json::to_string(&payload)?),
+            Err(AuthError::BadRequest(message)) if message == "Invalid OAuth state link user ID"
+        ));
+        payload.link = Some(super::super::state::OAuthStateLink::new(
+            7.into(),
+            "owner@example.test".into(),
+        ));
         let parsed = OAuthStatePayload::parse(&serde_json::to_string(&payload)?)?;
         publish_parsed(&request, &parsed, Some("/error"))?;
         let parsed = get_oauth_state(&request)?
@@ -215,7 +223,7 @@ mod tests {
                 .get("link")
                 .and_then(FieldValue::as_object)
                 .and_then(|link| link.get("userId")),
-            Some(&"undefined".into())
+            Some(&"7".into())
         );
         Ok(())
     }

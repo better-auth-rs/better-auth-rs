@@ -264,7 +264,7 @@ impl UserManagementPlugin {
             })?;
         let body = request::change_email(req)?;
         let response = change_email_core(&body, &data, req, &self.config, ctx).await?;
-        Ok(AuthResponse::json(None, &response)?)
+        AuthResponse::json(None, &response)
     }
 
     /// `POST /delete-user`

@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::sync::Notify;
 
 #[tokio::test]
-async fn native_team_deletion_compares_invitation_tokens_without_stringifying_the_selector()
+async fn native_team_deletion_compares_invitation_tokens_with_the_projected_team_id()
 -> AuthResult<()> {
     for selector in [Value::Number(1.0), Value::from("1")] {
         let store = serial_store();
@@ -26,14 +26,7 @@ async fn native_team_deletion_compares_invitation_tokens_without_stringifying_th
         assert!(store.get_team("1").await?.is_none());
         assert!(store.list_team_members("1").await?.is_empty());
         let invitation = required(store.get_invitation_by_id(invitation.id.typed()?).await?)?;
-        assert_eq!(
-            invitation.team_id.typed()?.as_deref(),
-            Some(if selector.is_number() {
-                "1,other"
-            } else {
-                "other"
-            })
-        );
+        assert_eq!(invitation.team_id.typed()?.as_deref(), Some("other"));
     }
     Ok(())
 }

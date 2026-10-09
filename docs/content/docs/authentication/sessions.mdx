@@ -112,6 +112,8 @@ A `disableRefresh=true` query parameter prevents refresh for the request. Sessio
 
 Session record updates merge native and application values before defaults, update factories, transforms, and physical mapping. Native Store methods ending in `_by_token_value` retain replacement tokens through lookup, update, and deletion. The string convenience methods use the same implementations. Organization and team selectors retain their native values until adapter query conversion. `is_session_fresh` returns `AuthResult<bool>` because a replaced date can fail the upstream date-method operation; callers must propagate that error.
 
+Session queries bind the complete declaration before update callbacks or join resolution. Lists, joins, and deletion snapshots retain raw SQL values until output callbacks finish. Memory updates change every matching row and project the first result; SQL keeps its statement and snapshot boundaries. Preserved revocation uses the declared `expiresAt` mapping and `updatedAt` update factory. Deletion binds its selector separately for the snapshot and the write, so callback-driven queries retain their runtime ID effects.
+
 ## Secondary Storage
 
 `BetterAuth::secondary_storage` installs a backend for server-side session and user snapshots. Sessions use that backend by default. Set `session.store_session_in_database = Some(true)` to retain database rows and permit fallback on a missing cache entry. Set `session.preserve_session_in_database = Some(true)` to keep expired audit rows after revocation and disable that fallback. Malformed cached JSON never restores a session through database fallback.

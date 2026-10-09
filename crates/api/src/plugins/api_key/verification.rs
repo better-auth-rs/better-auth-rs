@@ -88,7 +88,7 @@ impl ApiKeyValidationError {
     }
 
     fn response(&self) -> AuthResult<AuthResponse> {
-        Ok(AuthResponse::json(self.status(), self)?)
+        AuthResponse::json(self.status(), self)
     }
 }
 
@@ -133,10 +133,10 @@ impl ApiKeyVerificationError {
             Self::Rejected(error) => {
                 let body: serde_json::Value =
                     serde_json::from_slice(&error.to_auth_response().body.bytes()?)?;
-                return Ok(AuthResponse::json(
+                return AuthResponse::json(
                     None,
                     &serde_json::json!({"valid":false,"error":body,"key":null}),
-                )?);
+                );
             }
             Self::Validation(error) => error,
             Self::Internal(error) => {
@@ -147,10 +147,10 @@ impl ApiKeyVerificationError {
                 ApiKeyValidationError::invalid_constant(ApiKeyErrorCode::InvalidApiKey)
             }
         };
-        Ok(AuthResponse::json(
+        AuthResponse::json(
             None,
             &serde_json::json!({"valid":false,"error":error,"key":null}),
-        )?)
+        )
     }
 }
 

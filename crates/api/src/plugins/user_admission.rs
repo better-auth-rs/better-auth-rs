@@ -99,7 +99,7 @@ impl UserValidationRejection {
             &serde_json::json!({"code": self.error, "message": self.message()}),
         ) {
             Ok(response) => response.into(),
-            Err(error) => error.into(),
+            Err(error) => error,
         }
     }
 }

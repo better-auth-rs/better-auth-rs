@@ -1,12 +1,13 @@
 use super::instrumentation::database_operation;
+use better_auth_core::{FieldValue, store::schema::EntityRole};
 use chrono::Utc;
 use sea_orm::{
-    ColumnTrait, Condition, ConnectionTrait, EntityTrait, QueryFilter, QuerySelect,
+    ColumnTrait, Condition, ConnectionTrait, DbBackend, EntityTrait, QueryFilter, QuerySelect,
     sea_query::ExprTrait,
 };
 
 use crate::SeaOrmStore;
-use crate::error::AuthResult;
+use crate::error::{AuthError, AuthResult};
 use crate::schema::{AuthSchema, SeaOrmSessionModel};
 
 use super::{HookTransaction, map_db_err};
@@ -24,103 +25,115 @@ where
 {
     pub(super) fn session_token_filter(
         &self,
-        token: &better_auth_core::FieldValue,
+        token: &FieldValue,
+        backend: DbBackend,
     ) -> AuthResult<sea_orm::sea_query::SimpleExpr> {
-        let (column, value) = self.session_token_selector(token)?;
-        super::value_filter::equals(column, &value, self.connection().get_database_backend())
+        let (column, value) = self.session_query_field("token", token, backend)?;
+        super::value_filter::equals(column, &value, backend)
     }
 
     pub(super) fn session_tokens_filter(
         &self,
         tokens: &[String],
+        backend: DbBackend,
     ) -> AuthResult<sea_orm::sea_query::SimpleExpr> {
         let tokens = tokens
             .iter()
             .cloned()
-            .map(better_auth_core::FieldValue::from)
+            .map(FieldValue::from)
             .collect::<Vec<_>>()
             .into();
-        let (column, value) = self.session_token_selector(&tokens)?;
-        super::value_filter::is_in(column, &value, self.connection().get_database_backend())
+        let (column, value) = self.session_query_field("token", &tokens, backend)?;
+        super::value_filter::is_in(column, &value, backend)
     }
 
-    fn session_token_selector(
+    pub(super) fn session_user_filter(
         &self,
-        token: &better_auth_core::FieldValue,
-    ) -> AuthResult<(
-        <S::Session as SeaOrmSessionModel>::Column,
-        better_auth_core::FieldValue,
-    )> {
-        let field = self
-            .config()
-            .session
+        user_id: &FieldValue,
+        backend: DbBackend,
+    ) -> AuthResult<sea_orm::sea_query::SimpleExpr> {
+        let (column, value) = self.session_query_field("userId", user_id, backend)?;
+        super::value_filter::equals(column, &value, backend)
+    }
+
+    pub(super) fn session_live_filter(
+        &self,
+        now: &FieldValue,
+        backend: DbBackend,
+    ) -> AuthResult<sea_orm::sea_query::SimpleExpr> {
+        let (column, value) = self.session_query_field("expiresAt", now, backend)?;
+        let value = super::record_bindings::parameter(value, backend)?;
+        Ok(column.into_expr().gt(column.save_as(value)))
+    }
+
+    pub(super) fn session_query_field(
+        &self,
+        name: &str,
+        original: &FieldValue,
+        backend: DbBackend,
+    ) -> AuthResult<(<S::Session as SeaOrmSessionModel>::Column, FieldValue)> {
+        self.model_fields.begin_id_query(EntityRole::Session)?;
+        let schema = better_auth_core::store::session_create_schema(
+            &self.config().session,
+            &Default::default(),
+        );
+        let field = schema
             .fields()
-            .get("token")
-            .cloned()
-            .unwrap_or_default();
-        let backend = self.connection().get_database_backend();
-        let value = if field.references_id() {
+            .get(name)
+            .ok_or_else(|| AuthError::config(format!("Unknown session field: {name}")))?;
+        let value = if name == "id" || field.references_id() {
             self.config()
                 .advanced
                 .database
                 .generate_id()
-                .adapter_id_query(token.clone())?
+                .adapter_id_query(original.clone())?
         } else {
-            token.clone()
+            original.clone()
         };
-        let value = better_auth_core::user_query::bind_filter(&field, &value)?;
-        let value = super::value_filter::adapter_query_value(value, token, &field, backend)?;
-        let name = better_auth_core::store::schema::resolve_field_name(
-            field.field_name.as_deref(),
-            "token",
-        );
-        Ok((S::Session::field_column(name)?, value))
-    }
-
-    pub(super) async fn session_delete_snapshot(
-        &self,
-        session: S::Session,
-    ) -> AuthResult<better_auth_core::wire::SessionView> {
-        self.output_session(&session, self.connection()).await
+        let value = better_auth_core::user_query::bind_filter(field, &value)?;
+        let value = super::value_filter::adapter_query_value(value, original, field, backend)?;
+        Ok((
+            S::Session::field_column(schema.record_storage_key(name))?,
+            value,
+        ))
     }
 
     pub(super) async fn delete_sessions_with_connection(
         &self,
         db: &impl ConnectionTrait,
         transaction: Option<HookTransaction<'_, S>>,
-        mut condition: Condition,
+        bind: impl Fn() -> AuthResult<Condition> + Send + Sync,
         preserve: bool,
     ) -> AuthResult<Option<usize>> {
-        self.model_fields
-            .begin_id_query(better_auth_core::store::schema::EntityRole::Session)?;
-        let now = Utc::now();
-        if preserve {
-            let now = super::record_bindings::Binding::Date(now.into())
-                .bind(db.get_database_backend())?;
-            let expires_at = S::Session::expires_at_column();
-            condition = condition.add(expires_at.into_expr().gt(expires_at.save_as(now)));
-        }
-        let snapshot = database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
-            self.config(),
-            "findMany",
-            async {
-                <S::Session as SeaOrmSessionModel>::Entity::find()
-                    .filter(condition.clone())
-                    .limit(super::pagination::default_limit(
-                        self.config(),
-                        db.get_database_backend(),
-                    )?)
-                    .all(db)
+        let backend = db.get_database_backend();
+        let live_since = preserve.then(|| FieldValue::from(Utc::now()));
+        let bind_condition = || -> AuthResult<Condition> {
+            let mut condition = bind()?;
+            if let Some(now) = &live_since {
+                condition = condition.add(self.session_live_filter(now, backend)?);
+            }
+            Ok(condition)
+        };
+        // Upstream catches snapshot conversion, query and projection failures before the batch write.
+        let sessions = async {
+            let condition = bind_condition()?;
+            let sessions = database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
+                self.config(),
+                "findMany",
+                async {
+                    super::plugin_rows::all(
+                        db,
+                        <S::Session as SeaOrmSessionModel>::Entity::find()
+                            .filter(condition)
+                            .limit(super::pagination::default_limit(self.config(), backend)?),
+                    )
                     .await
-                    .map_err(map_db_err)
-            },
-        )
-        .await;
-        // Upstream deleteManyWithHooks ignores snapshot failures only. The batch write still runs.
-        let sessions = match snapshot {
-            Ok(sessions) => self.output_sessions(&sessions, db).await,
-            Err(error) => Err(error),
+                },
+            )
+            .await?;
+            self.output_sessions(&sessions, db).await
         }
+        .await
         .unwrap_or_default();
         let context = self.hook_context(transaction);
         for session in &sessions {
@@ -140,23 +153,16 @@ where
         }
 
         // One statement preserves the all-before/all-write/all-after batch boundary.
-        let count = if preserve {
-            let (active, _) = self
-                .prepare_session_update(
-                    db,
-                    [
-                        ("expiresAt".into(), Utc::now().into()),
-                        ("updatedAt".into(), Utc::now().into()),
-                    ]
-                    .into(),
-                )
-                .await?;
+        let update = preserve.then(|| [("expiresAt".into(), Utc::now().into())].into());
+        let condition = bind_condition()?;
+        let count = if let Some(update) = update {
+            let (active, _) = self.prepare_session_update(db, update).await?;
             database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
                 self.config(),
                 "updateMany",
                 async {
                     active
-                        .update(db.get_database_backend())?
+                        .update(backend)?
                         .filter(condition)
                         .exec(db)
                         .await
@@ -166,8 +172,6 @@ where
             .await?
             .rows_affected
         } else {
-            self.model_fields
-                .begin_id_query(better_auth_core::store::schema::EntityRole::Session)?;
             database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
                 self.config(),
                 "deleteMany",

@@ -360,7 +360,12 @@ async fn trusted_member_capacity_failure_cleans_up_native_identifiers() {
             ..numeric_output(Arc::new(AtomicBool::new(true)))
         },
     );
-    let ctx = context(auth, &config).await;
+    let mut ctx = context(auth, &config).await;
+    ctx.extensions.insert(Arc::new(
+        better_auth_core::endpoint_dispatch::EndpointDispatcher::<
+            better_auth_core::store::StatelessSchema,
+        >::new(Arc::new(Vec::new()), Default::default(), []),
+    ));
     let user = ctx
         .database
         .create_user(CreateUser::new().with_email("org-capacity@example.test"))

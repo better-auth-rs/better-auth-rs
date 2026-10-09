@@ -225,7 +225,7 @@ where
         .await?;
         match session {
             Some(session) => self
-                .output_session_raw(&session, &schema, db)
+                .output_session_raw(&session.into(), &schema, db)
                 .await
                 .map(Some),
             None => Ok(None),
@@ -378,8 +378,8 @@ where
         update: better_auth_core::FieldMap,
     ) -> AuthResult<Option<better_auth_core::wire::SessionView>> {
         let backend = db.get_database_backend();
+        let filter = self.session_token_filter(token, backend)?;
         let (active, schema) = self.prepare_session_update(db, update).await?;
-        let filter = self.session_token_filter(token)?;
         let session = database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
             self.config(),
             "update",
@@ -390,8 +390,11 @@ where
             ),
         )
         .await?;
-        match session.as_ref() {
-            Some(row) => self.output_session_raw(row, &schema, db).await.map(Some),
+        match session {
+            Some(row) => self
+                .output_session_raw(&row.into(), &schema, db)
+                .await
+                .map(Some),
             None => Ok(None),
         }
     }

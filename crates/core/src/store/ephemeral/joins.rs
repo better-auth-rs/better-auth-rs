@@ -5,8 +5,8 @@ use super::rows::RowRef;
 use super::sessions::{SessionSource, session_token_matches, session_tokens_match};
 use super::*;
 use crate::session::SessionData;
+use crate::store::JoinValue;
 use crate::store::schema::resolve_field_name;
-use crate::store::{JoinValue, ResolvedJoin};
 use crate::user_fields::{project_adapter_value, project_source_fields_batches_then};
 
 type UserRef = RowRef<UserView>;
@@ -100,15 +100,14 @@ impl EphemeralStore {
         token_query: Value,
         only_active: bool,
         single: bool,
-        relation: &ResolvedJoin,
     ) -> AuthResult<Vec<SessionSnapshot>> {
         use crate::store::schema::EntityRole;
-        self.model_fields.begin_id_query(EntityRole::Session)?;
         let (token_column, token_query) = self.memory_session_token_query(token_query)?;
         let native = self.config.advanced.database.joins == Some(true);
         let expiry = only_active
             .then(|| self.memory_session_field_query("expiresAt", Utc::now().into()))
             .transpose()?;
+        let relation = SessionData::resolve_schema(&self.config, &self.model_fields, |_, _| false)?;
         let rows = self
             .raw(
                 "session",
@@ -152,7 +151,7 @@ impl EphemeralStore {
                                     user_value(user, &relation.logical_to, &relation.to)
                                         .strict_equals(&value)
                                 })?,
-                                relation,
+                                &relation,
                                 self.config.advanced.database.find_many_limit(),
                                 |user| user.id.field_value(),
                             )?;
@@ -177,7 +176,7 @@ impl EphemeralStore {
                         Some(user) => user.clone(),
                         None => {
                             self.fallback_join_users(
-                                relation,
+                                &relation,
                                 (EntityRole::Session, "session", fields),
                                 &session.field_values()?,
                             )

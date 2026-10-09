@@ -351,7 +351,7 @@ impl SessionManagementPlugin {
         };
 
         let response = revoke_session_core(&data, &revoke_req.token, ctx).await?;
-        Ok(AuthResponse::json(None, &response)?)
+        AuthResponse::json(None, &response)
     }
 
     async fn handle_revoke_sessions(
@@ -361,7 +361,7 @@ impl SessionManagementPlugin {
     ) -> AuthResult<AuthResponse> {
         let data = ctx.require_authoritative_native_session(req).await?;
         let response = revoke_sessions_core(&data, ctx).await?;
-        Ok(AuthResponse::json(None, &response)?)
+        AuthResponse::json(None, &response)
     }
 
     async fn handle_revoke_other_sessions(
@@ -371,7 +371,7 @@ impl SessionManagementPlugin {
     ) -> AuthResult<AuthResponse> {
         let data = ctx.require_authoritative_native_session(req).await?;
         let response = revoke_other_sessions_core(&data, ctx).await?;
-        Ok(AuthResponse::json(None, &response)?)
+        AuthResponse::json(None, &response)
     }
 }
 

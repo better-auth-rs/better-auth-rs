@@ -220,7 +220,8 @@ impl MemoryFixture {
         let created = self.trace.sessions.lock().unwrap().clone();
         assert_eq!(created.len(), 1);
         let stored = self
-            .raw
+            .ctx
+            .database
             .get_session(created[0].token.typed().unwrap())
             .await?
             .ok_or("Missing issued Session")?;

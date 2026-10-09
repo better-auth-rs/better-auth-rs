@@ -27,7 +27,7 @@ enum Output {
 
 fn returned(kind: Output, phase: &str, error_status: u16) -> AuthResult<AuthResponse> {
     match kind {
-        Output::Json => Ok(AuthResponse::json(None, &json!({"phase":phase}))?),
+        Output::Json => AuthResponse::json(None, &json!({"phase":phase})),
         Output::Response => Ok(AuthResponse::text(207, phase)),
         Output::ReturnError | Output::ThrowError => {
             let error = AuthResponse::json(

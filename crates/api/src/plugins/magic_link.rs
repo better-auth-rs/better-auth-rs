@@ -214,10 +214,7 @@ impl MagicLinkPlugin {
                 .send(&message)
                 .await?;
         }
-        Ok(AuthResponse::json(
-            None,
-            &serde_json::json!({ "status": true }),
-        )?)
+        AuthResponse::json(None, &serde_json::json!({ "status": true }))
     }
 
     async fn handle_verify<S: AuthSchema>(

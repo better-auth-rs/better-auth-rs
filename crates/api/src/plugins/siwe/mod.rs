@@ -113,7 +113,7 @@ impl SiwePlugin {
                 ..Default::default()
             })
             .await?;
-        Ok(AuthResponse::json(None, &json!({"nonce":nonce}))?)
+        AuthResponse::json(None, &json!({"nonce":nonce}))
     }
     async fn verify(
         &self,

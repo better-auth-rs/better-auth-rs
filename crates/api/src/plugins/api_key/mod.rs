@@ -741,7 +741,7 @@ impl ApiKeyPlugin {
             client,
         )?;
         let response = create_key_for_user(&body, &actor, self, ctx, original).await?;
-        Ok(AuthResponse::json(None, &response)?)
+        AuthResponse::json(None, &response)
     }
 
     async fn handle_get(
@@ -756,7 +756,7 @@ impl ApiKeyPlugin {
         let config_id = req.query_string("configId")?;
         let response =
             get_key_core(id, config_id, session.user_field("id").clone(), self, ctx).await?;
-        Ok(AuthResponse::json(None, &response)?)
+        AuthResponse::json(None, &response)
     }
 
     async fn handle_list(
@@ -767,7 +767,7 @@ impl ApiKeyPlugin {
         let session = ctx.require_native_session(req).await?;
         let query = ListKeysQuery::from_request(req)?;
         let response = list_keys_core(session.user_field("id").clone(), &query, self, ctx).await?;
-        Ok(AuthResponse::json(None, &response)?)
+        AuthResponse::json(None, &response)
     }
 
     async fn handle_update(
@@ -808,7 +808,7 @@ impl ApiKeyPlugin {
         } else {
             update_key_for_user(&body, &actor, self, ctx).await?
         };
-        Ok(AuthResponse::json(None, &response)?)
+        AuthResponse::json(None, &response)
     }
 
     async fn handle_delete(
@@ -822,7 +822,7 @@ impl ApiKeyPlugin {
             return Err(api_key_error(ApiKeyErrorCode::UserBanned));
         }
         let response = delete_key_core(&body, session.user_field("id").clone(), self, ctx).await?;
-        Ok(AuthResponse::json(None, &response)?)
+        AuthResponse::json(None, &response)
     }
 }
 

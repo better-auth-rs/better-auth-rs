@@ -99,11 +99,18 @@ where
         &self,
         token: &better_auth_core::FieldValue,
     ) -> AuthResult<()> {
-        self.model_fields.begin_id_query(EntityRole::Session)?;
-        let condition = Condition::all().add(self.session_token_filter(token)?);
-        self.delete_sessions_with_connection(self.connection(), None, condition, true)
-            .await
-            .map(|_| ())
+        let db = self.connection();
+        self.delete_sessions_with_connection(
+            db,
+            None,
+            || {
+                Ok(Condition::all()
+                    .add(self.session_token_filter(token, db.get_database_backend())?))
+            },
+            true,
+        )
+        .await
+        .map(|_| ())
     }
 
     async fn create_session(
@@ -126,10 +133,9 @@ where
         &self,
         token: &better_auth_core::FieldValue,
     ) -> AuthResult<Option<better_auth_core::wire::SessionView>> {
-        self.model_fields.begin_id_query(EntityRole::Session)?;
         let db = self.connection();
         let query = <S::Session as SeaOrmSessionModel>::Entity::find()
-            .filter(self.session_token_filter(token)?)
+            .filter(self.session_token_filter(token, db.get_database_backend())?)
             .filter(
                 Condition::all()
                     .add_option(S::Session::active_column().map(|column| column.eq(true))),
@@ -146,7 +152,10 @@ where
             &Default::default(),
         );
         match row {
-            Some(row) => self.output_session_raw(&row, &schema, db).await.map(Some),
+            Some(row) => self
+                .output_session_raw(&row.into(), &schema, db)
+                .await
+                .map(Some),
             None => Ok(None),
         }
     }
@@ -159,14 +168,14 @@ where
         &self,
         token: &better_auth_core::FieldValue,
     ) -> AuthResult<Option<SessionSnapshot>> {
+        let filter = self.session_token_filter(token, self.connection().get_database_backend())?;
         let relation = SessionData::resolve_schema(
             self.config(),
             &self.model_fields,
             super::model_names::table_matches::<S, O, P>,
         )?;
-        self.model_fields.begin_id_query(EntityRole::Session)?;
         let parent = <S::Session as SeaOrmSessionModel>::Entity::find()
-            .filter(self.session_token_filter(token)?)
+            .filter(filter)
             .filter(
                 Condition::all()
                     .add_option(S::Session::active_column().map(|column| column.eq(true))),
@@ -176,7 +185,7 @@ where
             let rows = database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
                 self.config(),
                 "findOne",
-                async { parent.all(self.connection()).await.map_err(map_db_err) },
+                super::plugin_rows::all(self.connection(), parent),
             )
             .await?;
             return Ok(self
@@ -213,7 +222,7 @@ where
                         relation.many,
                         self.config().advanced.database.find_many_limit(),
                     )?;
-                    Ok((session.model::<S::Session>()?, users))
+                    Ok((session, users))
                 })
                 .collect::<AuthResult<Vec<_>>>()?
                 .into_iter()
@@ -230,21 +239,18 @@ where
         tokens: &[String],
         only_active: bool,
     ) -> AuthResult<Vec<SessionSnapshot>> {
+        let backend = self.connection().get_database_backend();
+        let mut condition = Condition::all()
+            .add(self.session_tokens_filter(tokens, backend)?)
+            .add_option(S::Session::active_column().map(|column| column.eq(true)));
+        if only_active {
+            condition = condition.add(self.session_live_filter(&Utc::now().into(), backend)?);
+        }
         let relation = SessionData::resolve_schema(
             self.config(),
             &self.model_fields,
             super::model_names::table_matches::<S, O, P>,
         )?;
-        self.model_fields.begin_id_query(EntityRole::Session)?;
-        let mut condition = Condition::all()
-            .add(self.session_tokens_filter(tokens)?)
-            .add_option(S::Session::active_column().map(|column| column.eq(true)));
-        if only_active {
-            let now = super::record_bindings::Binding::Date(Utc::now().into())
-                .bind(self.connection().get_database_backend())?;
-            let expires_at = S::Session::expires_at_column();
-            condition = condition.add(expires_at.into_expr().gt(expires_at.save_as(now)));
-        }
         let (rows, native_users) = database_operation::<
             <S::Session as SeaOrmSessionModel>::Entity,
             _,
@@ -280,18 +286,16 @@ where
                                 relation.many,
                                 self.config().advanced.database.find_many_limit(),
                             )?;
-                            Ok((session.model::<S::Session>()?, users))
+                            Ok((session, users))
                         })
                         .collect::<AuthResult<Vec<_>>>()?
                         .into_iter()
                         .unzip();
                 Ok((rows, Some(users)))
             } else {
-                parent
-                    .all(self.connection())
+                super::plugin_rows::all(self.connection(), parent)
                     .await
                     .map(|rows| (rows, None))
-                    .map_err(map_db_err)
             }
         })
         .await?;
@@ -332,39 +336,27 @@ where
             Option<better_auth_core::wire::SessionView>,
         )>,
     > {
-        self.model_fields.begin_id_query(EntityRole::Session)?;
-        let mut condition = Condition::all().add(self.session_user_filter(user_id)?);
+        let backend = self.connection().get_database_backend();
+        let mut condition = Condition::all().add(self.session_user_filter(user_id, backend)?);
         if only_active {
-            let schema = better_auth_core::store::session_create_schema(
-                &self.config().session,
-                &Default::default(),
-            );
-            let field = &schema.fields()["expiresAt"];
-            let backend = self.connection().get_database_backend();
-            let now = better_auth_core::FieldValue::from(Utc::now());
-            let bound = better_auth_core::user_query::bind_filter(field, &now)?;
-            let bound = super::value_filter::adapter_query_value(bound, &now, field, backend)?;
-            let now = super::record_bindings::parameter(bound, backend)?;
-            let expires_at = S::Session::field_column(schema.record_storage_key("expiresAt"))?;
-            condition = condition.add(expires_at.into_expr().gt(expires_at.save_as(now)));
+            condition = condition.add(self.session_live_filter(&Utc::now().into(), backend)?);
         }
         match database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
             self.config(),
             "findMany",
             async {
-                <S::Session as SeaOrmSessionModel>::Entity::find()
-                    .filter(condition)
-                    .filter(
-                        Condition::all()
-                            .add_option(S::Session::active_column().map(|column| column.eq(true))),
-                    )
-                    .limit(super::pagination::default_limit(
-                        self.config(),
-                        self.connection().get_database_backend(),
-                    )?)
-                    .all(self.connection())
-                    .await
-                    .map_err(map_db_err)
+                super::plugin_rows::all(
+                    self.connection(),
+                    <S::Session as SeaOrmSessionModel>::Entity::find()
+                        .filter(condition)
+                        .filter(
+                            Condition::all().add_option(
+                                S::Session::active_column().map(|column| column.eq(true)),
+                            ),
+                        )
+                        .limit(super::pagination::default_limit(self.config(), backend)?),
+                )
+                .await
             },
         )
         .await
@@ -431,25 +423,28 @@ where
         &self,
         token: &better_auth_core::FieldValue,
     ) -> AuthResult<()> {
-        self.model_fields.begin_id_query(EntityRole::Session)?;
-        let snapshot = database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
-            self.config(),
-            "findOne",
-            async {
-                <S::Session as SeaOrmSessionModel>::Entity::find()
-                    .filter(self.session_token_filter(token)?)
-                    .one(self.connection())
-                    .await
-                    .map_err(map_db_err)
-            },
-        )
+        let db = self.connection();
+        let backend = db.get_database_backend();
+        let snapshot = async {
+            let filter = self.session_token_filter(token, backend)?;
+            let sessions = database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
+                self.config(),
+                "findMany",
+                super::plugin_rows::all(
+                    db,
+                    <S::Session as SeaOrmSessionModel>::Entity::find()
+                        .filter(filter)
+                        .limit(1),
+                ),
+            )
+            .await?;
+            self.output_sessions(&sessions, db)
+                .await
+                .map(|sessions| sessions.into_iter().next())
+        }
         .await;
-        // Upstream deleteWithHooks treats only snapshot-read errors as a missing record.
-        let session = match snapshot.ok().flatten() {
-            Some(session) => self.session_delete_snapshot(session).await.ok(),
-            None => None,
-        };
-        let Some(session) = session else {
+        // Upstream catches snapshot conversion, query and projection failures before single-row hooks.
+        let Some(session) = snapshot.ok().flatten() else {
             return Ok(());
         };
         let context = self.hook_context(None);
@@ -466,14 +461,14 @@ where
                 return Ok(());
             }
         }
-        self.model_fields.begin_id_query(EntityRole::Session)?;
+        let filter = self.session_token_filter(token, backend)?;
         let _ = database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
             self.config(),
             "delete",
             async {
                 <S::Session as SeaOrmSessionModel>::Entity::delete_many()
-                    .filter(self.session_token_filter(token)?)
-                    .exec(self.connection())
+                    .filter(filter)
+                    .exec(db)
                     .await
                     .map_err(map_db_err)
             },
@@ -492,17 +487,33 @@ where
     }
 
     async fn delete_sessions(&self, tokens: &[String]) -> AuthResult<()> {
-        let condition = Condition::all().add(self.session_tokens_filter(tokens)?);
-        self.delete_sessions_with_connection(self.connection(), None, condition, false)
-            .await
-            .map(|_| ())
+        let db = self.connection();
+        self.delete_sessions_with_connection(
+            db,
+            None,
+            || {
+                Ok(Condition::all()
+                    .add(self.session_tokens_filter(tokens, db.get_database_backend())?))
+            },
+            false,
+        )
+        .await
+        .map(|_| ())
     }
 
     async fn end_sessions(&self, tokens: &[String]) -> AuthResult<()> {
-        let condition = Condition::all().add(self.session_tokens_filter(tokens)?);
-        self.delete_sessions_with_connection(self.connection(), None, condition, true)
-            .await
-            .map(|_| ())
+        let db = self.connection();
+        self.delete_sessions_with_connection(
+            db,
+            None,
+            || {
+                Ok(Condition::all()
+                    .add(self.session_tokens_filter(tokens, db.get_database_backend())?))
+            },
+            true,
+        )
+        .await
+        .map(|_| ())
     }
 
     async fn delete_user_sessions(&self, user_id: &str) -> AuthResult<()> {
@@ -533,21 +544,37 @@ where
         user_id: &better_auth_core::FieldValue,
         preserve: bool,
     ) -> AuthResult<Option<usize>> {
-        let condition = Condition::all().add(self.session_user_filter(user_id)?);
-        self.delete_sessions_with_connection(self.connection(), None, condition, preserve)
-            .await
+        let db = self.connection();
+        self.delete_sessions_with_connection(
+            db,
+            None,
+            || {
+                Ok(Condition::all()
+                    .add(self.session_user_filter(user_id, db.get_database_backend())?))
+            },
+            preserve,
+        )
+        .await
     }
 
     async fn delete_expired_sessions(&self) -> AuthResult<usize> {
-        let now = super::record_bindings::Binding::Date(Utc::now().into())
-            .bind(self.connection().get_database_backend())?;
-        let expires_at = S::Session::expires_at_column();
-        let condition = Condition::any()
-            .add(expires_at.into_expr().lt(expires_at.save_as(now)))
-            .add_option(S::Session::active_column().map(|column| column.eq(false)));
-        self.delete_sessions_with_connection(self.connection(), None, condition, false)
-            .await
-            .map(Option::unwrap_or_default)
+        let db = self.connection();
+        let backend = db.get_database_backend();
+        let now = Utc::now().into();
+        self.delete_sessions_with_connection(
+            db,
+            None,
+            || {
+                let (column, value) = self.session_query_field("expiresAt", &now, backend)?;
+                let value = super::record_bindings::parameter(value, backend)?;
+                Ok(Condition::any()
+                    .add(column.into_expr().lt(column.save_as(value)))
+                    .add_option(S::Session::active_column().map(|column| column.eq(false))))
+            },
+            false,
+        )
+        .await
+        .map(Option::unwrap_or_default)
     }
 
     async fn update_session_active_organization(
@@ -678,39 +705,5 @@ where
         )
         .await?
         .ok_or(AuthError::SessionNotFound)
-    }
-}
-
-impl<S, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> SeaOrmStore<S, O, P>
-where
-    S: AuthSchema,
-    S::Session: SeaOrmSessionModel,
-{
-    pub(super) fn session_user_filter(
-        &self,
-        user_id: &better_auth_core::FieldValue,
-    ) -> AuthResult<sea_orm::sea_query::SimpleExpr> {
-        let schema = better_auth_core::store::session_create_schema(
-            &self.config().session,
-            &Default::default(),
-        );
-        let field = &schema.fields()["userId"];
-        let backend = self.connection().get_database_backend();
-        let value = if field.references_id() {
-            self.config()
-                .advanced
-                .database
-                .generate_id()
-                .adapter_id_query(user_id.clone())?
-        } else {
-            user_id.clone()
-        };
-        let value = better_auth_core::user_query::bind_filter(field, &value)?;
-        let value = super::value_filter::adapter_query_value(value, user_id, field, backend)?;
-        let name = better_auth_core::store::schema::resolve_field_name(
-            field.field_name.as_deref(),
-            "userId",
-        );
-        super::value_filter::equals(S::Session::field_column(name)?, &value, backend)
     }
 }

@@ -265,10 +265,7 @@ impl AnonymousPlugin {
                 )
             })?;
         ctx.session_manager().clear_cookies(req)?;
-        Ok(AuthResponse::json(
-            None,
-            &serde_json::json!({"success":true}),
-        )?)
+        AuthResponse::json(None, &serde_json::json!({"success":true}))
     }
     async fn link<S: AuthSchema>(
         &self,

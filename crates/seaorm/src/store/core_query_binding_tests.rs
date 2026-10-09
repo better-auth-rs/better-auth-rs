@@ -341,7 +341,7 @@ async fn organization_relations_rebind_stored_keys_through_the_write_policy() ->
             let member = store
                 .create_member(CreateMember::new(organization_id, owner_id, "owner"))
                 .await?;
-            let team = store
+            let mut team = store
                 .create_team(CreateTeam {
                     id: Some(team_id.into()),
                     organization_id: organization_id.into(),
@@ -350,6 +350,11 @@ async fn organization_relations_rebind_stored_keys_through_the_write_policy() ->
                 })
                 .await?;
             let _ = required(store.add_team_member(&team.id, owner_id, Some(1)).await?)?;
+            assert_eq!(
+                team.additional_fields
+                    .insert("memberCount".into(), 1.into()),
+                Some(0.into())
+            );
             let mut input = CreateInvitation::new(
                 organization_id,
                 "\u{feff}invited@example.test",
@@ -359,7 +364,7 @@ async fn organization_relations_rebind_stored_keys_through_the_write_policy() ->
             );
             input.id = Some("invitation\u{ffff}".into());
             input.team_id = Some(team_id.into());
-            let invitation = store.create_invitation(input).await?;
+            let mut invitation = store.create_invitation(input).await?;
             assert_eq!(invitation.email, "invited@example.test");
             assert_eq!(
                 required(
@@ -399,6 +404,16 @@ async fn organization_relations_rebind_stored_keys_through_the_write_policy() ->
             assert_eq!(required(details.members.first())?.member, member);
             assert_eq!(required(details.members.first())?.user.id, owner.id);
             assert_eq!(required(details.teams)?, [team]);
+            store
+                .delete_team_value(&format!("\u{feff}{team_id}").into())
+                .await?;
+            assert!(store.get_team(team_id).await?.is_none());
+            assert!(store.list_team_members(team_id).await?.is_empty());
+            invitation.team_id = None.into();
+            assert_eq!(
+                required(store.get_invitation_by_id(invitation.id.typed()?).await?)?,
+                invitation
+            );
             let updated = store
                 .update_invitation_status(invitation.id.typed()?, InvitationStatus::Accepted)
                 .await?;

@@ -25,7 +25,7 @@ macro_rules! body {
 }
 
 fn success() -> AuthResult<AuthResponse> {
-    Ok(AuthResponse::json(None, &json!({"success": true}))?)
+    AuthResponse::json(None, &json!({"success": true}))
 }
 fn user_not_found() -> AuthError {
     AuthError::Upstream {

@@ -358,7 +358,7 @@ impl PhoneNumberPlugin {
             // The direct send endpoint propagates asynchronous failures without a handler.
             task.await?;
         }
-        Ok(AuthResponse::json(None, &json!({"message":"code sent"}))?)
+        AuthResponse::json(None, &json!({"message":"code sent"}))
     }
     async fn verify(
         &self,
@@ -485,10 +485,10 @@ impl PhoneNumberPlugin {
             ));
         }
         if body.get("disableSession") == Some(&Value::Bool(true)) {
-            return Ok(AuthResponse::json(
+            return AuthResponse::json(
                 None,
                 &json!({"status":true,"token":null,"user":ctx.user_view(&user).await?}),
-            )?);
+            );
         }
         self.session_response(ctx, req, &user, false, true).await
     }
@@ -646,7 +646,7 @@ impl PhoneNumberPlugin {
             )
             .await;
         }
-        Ok(AuthResponse::json(None, &json!({"status":true}))?)
+        AuthResponse::json(None, &json!({"status":true}))
     }
     async fn reset(
         &self,
@@ -713,7 +713,7 @@ impl PhoneNumberPlugin {
                 .delete_user_sessions(user.id().typed()?)
                 .await?;
         }
-        Ok(AuthResponse::json(None, &json!({"status":true}))?)
+        AuthResponse::json(None, &json!({"status":true}))
     }
 }
 

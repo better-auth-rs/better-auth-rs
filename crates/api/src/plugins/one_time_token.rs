@@ -212,10 +212,7 @@ impl OneTimeTokenPlugin {
         }
         endpoint.body = req.input_field_value()?;
         let token = self.generate_in_endpoint(data, &endpoint).await?;
-        Ok(AuthResponse::json(
-            None,
-            &serde_json::json!({ "token": token }),
-        )?)
+        AuthResponse::json(None, &serde_json::json!({ "token": token }))
     }
 
     async fn handle_verify<S: AuthSchema>(

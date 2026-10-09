@@ -237,7 +237,7 @@ async fn member_queries_use_typed_storage_before_output_transforms() -> AuthResu
     for operator in ["gt", "gte", "lt", "lte"] {
         params.filter_operator = Some(operator.into());
         let error = store.query_organization_members(&params).await.unwrap_err();
-        assert!(matches!(error, AuthError::Internal(message)
+        assert!(matches!(error, AuthError::TypeError(message)
             if message == "No default value"));
     }
     params.filter_field = None;

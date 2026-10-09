@@ -103,13 +103,13 @@ async fn async_body_transform_finishes_before_query_headers_and_endpoint() {
                             assert_eq!(scope.query, request.query);
                             assert_eq!(scope.request.body.as_deref(), Some(RAW_BODY));
                             assert_eq!(scope.request.query, original.query);
-                            Ok(AuthResponse::json(
+                            AuthResponse::json(
                                 200,
                                 &json!({
                                     "displayName": request.validated_body::<String>().unwrap(),
                                     "page": request.query.as_ref().unwrap()["page"],
                                 }),
-                            )?)
+                            )
                         });
                     let mut dispatch = Box::pin(dispatch);
                     assert!(futures_util::poll!(dispatch.as_mut()).is_pending());

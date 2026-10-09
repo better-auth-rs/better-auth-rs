@@ -195,7 +195,7 @@ run_stage() {
           plugins::two_factor:: plugins::user_management:: plugins::oauth:: || create_status=1
         cargo test --locked --no-fail-fast --features axum,seaorm2,redis-cache \
           --test database_hooks_tests --test database_lifecycle_tests --test database_hook_updates_tests \
-          --test session_create_payload_tests --test session_initial_defaults_tests --test session_id_policy_tests \
+          --test session_create_payload_tests --test session_initial_defaults_tests --test session_id_policy_tests --test session_field_queries_tests \
           --test custom_session_fields_tests --test secondary_storage_hooks_tests \
           --test transaction_effect_order_tests --test transaction_hook_context_tests \
           --test organization_native_team_tests --test organization_query_limits_tests \
@@ -264,6 +264,7 @@ run_stage() {
         ./compat-tests/reference-server/contracts/siwe-native-errors.test.ts \
         ./compat-tests/reference-server/contracts/organization-physical-fields.test.ts \
         ./compat-tests/reference-server/contracts/session-management-native.test.ts \
+        ./compat-tests/reference-server/contracts/session-field-queries.test.ts \
         ./compat-tests/reference-server/contracts/account-duplicates.test.ts \
         ./compat-tests/reference-server/contracts/account-user-selected-relations.test.ts \
         ./compat-tests/reference-server/contracts/native-core-joins.test.ts \

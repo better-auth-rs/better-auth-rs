@@ -164,6 +164,6 @@ impl AccountManagementPlugin {
 
         let response =
             unlink_account_core(data.user_field("id"), &unlink_req.account_id, ctx).await?;
-        Ok(AuthResponse::json(None, &response)?)
+        AuthResponse::json(None, &response)
     }
 }

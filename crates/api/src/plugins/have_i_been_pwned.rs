@@ -17,7 +17,7 @@ const CHECK_FAILED: &str = "Failed to check password. Please try again later.";
 fn check_error(message: impl AsRef<str>) -> AuthError {
     match AuthResponse::json(500, &serde_json::json!({ "message": message.as_ref() })) {
         Ok(response) => response.into(),
-        Err(error) => error.into(),
+        Err(error) => error,
     }
 }
 const DEFAULT_PATHS: &[&str] = &[

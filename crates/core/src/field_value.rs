@@ -572,7 +572,7 @@ impl FieldValue {
             Self::Object(fields) => {
                 // Custom callable coercion requires the JavaScript receiver and invocation contract.
                 if fields.contains_key("toString") {
-                    return Err(AuthError::internal("No default value"));
+                    return Err(AuthError::type_error("No default value"));
                 }
                 "[object Object]".into()
             }

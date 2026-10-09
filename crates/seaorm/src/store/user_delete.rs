@@ -103,10 +103,17 @@ where
         delete_database_sessions: bool,
     ) -> AuthResult<Option<better_auth_core::wire::UserView>> {
         if delete_database_sessions {
-            let condition = Condition::all().add(self.session_user_filter(id)?);
             // A child batch cancellation does not cancel the later user deletion.
             let _ = self
-                .delete_sessions_with_connection(db, tx, condition, false)
+                .delete_sessions_with_connection(
+                    db,
+                    tx,
+                    || {
+                        Ok(Condition::all()
+                            .add(self.session_user_filter(id, db.get_database_backend())?))
+                    },
+                    false,
+                )
                 .await?;
         }
         let _ = self

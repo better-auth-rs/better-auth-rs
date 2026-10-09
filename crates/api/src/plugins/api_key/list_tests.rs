@@ -414,7 +414,7 @@ async fn check_cached_object_conversion_errors(
                 )
                 .await
                 .unwrap_err();
-                assert!(matches!(error, AuthError::Internal(message)
+                assert!(matches!(error, AuthError::TypeError(message)
                     if message == "No default value"));
                 for (key, expected) in &stored {
                     assert_eq!(

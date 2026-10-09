@@ -122,17 +122,18 @@ impl EphemeralStore {
         name: &str,
         value: Value,
     ) -> AuthResult<(String, Value)> {
+        self.model_fields.begin_id_query(EntityRole::Session)?;
         let schema = crate::store::session_create_schema(&self.session_config, &FieldMap::new());
-        let value = self.memory_field_query(&schema, name, value)?;
-        let value = match schema.fields().get(name) {
-            Some(field) => crate::user_query::bind_filter(field, &value)?,
-            None => value,
+        let field = schema
+            .fields()
+            .get(name)
+            .ok_or_else(|| AuthError::config(format!("Unknown session field: {name}")))?;
+        let value = if name == "id" {
+            self.memory_primary_id_query(&value)?
+        } else {
+            self.memory_field_query(&schema, name, value)?
         };
+        let value = crate::user_query::bind_filter(field, &value)?;
         Ok((schema.record_storage_key(name).to_owned(), value))
-    }
-
-    pub(super) fn memory_session_user_id_query(&self, value: Value) -> AuthResult<Value> {
-        self.memory_session_field_query("userId", value)
-            .map(|(_, value)| value)
     }
 }

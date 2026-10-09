@@ -31,13 +31,18 @@ async fn access(
     store.create_session(session(user_id)).await
 }
 
-fn raw_owners(store: &EphemeralStore) -> AuthResult<(Vec<Value>, Vec<Value>)> {
+fn raw_owners(store: &EphemeralStore, session_owner: &str) -> AuthResult<(Vec<Value>, Vec<Value>)> {
     let state = store.lock()?;
     let sessions = state
         .sessions
         .snapshot()?
         .into_iter()
-        .map(|session| session.get("userId").cloned().unwrap_or_default())
+        .map(|session| {
+            if session_owner != "userId" {
+                assert!(!session.contains_key("userId"));
+            }
+            session.get(session_owner).cloned().unwrap_or_default()
+        })
         .collect();
     let accounts = state
         .accounts
@@ -63,7 +68,7 @@ async fn serial_user_deletion_cleans_owned_access_for_canonical_and_aliased_ids(
         assert_eq!(second.user_id, "1");
         assert_eq!(other.user_id, "2");
         assert_eq!(
-            raw_owners(&store)?,
+            raw_owners(&store, "userId")?,
             (
                 vec![Value::Number(1.0), Value::Number(1.0), Value::Number(2.0)],
                 vec![Value::Number(1.0), Value::Number(1.0), Value::Number(2.0)]
@@ -98,7 +103,7 @@ async fn serial_user_deletion_cleans_owned_access_for_canonical_and_aliased_ids(
             [crate::SchemaValue::from("other")]
         );
         assert_eq!(
-            raw_owners(&store)?,
+            raw_owners(&store, "userId")?,
             (vec![Value::Number(2.0)], vec![Value::Number(2.0)])
         );
     }
@@ -128,7 +133,7 @@ async fn serial_session_owner_update_rebinds_aliases_for_list_and_delete() -> Au
     )?;
     assert_eq!(updated.user_id, "2");
     assert_eq!(
-        raw_owners(&store)?,
+        raw_owners(&store, "userId")?,
         (vec![Value::Number(2.0), Value::Number(1.0)], Vec::new())
     );
     for (id, token, owner) in [
@@ -155,7 +160,10 @@ async fn serial_session_owner_update_rebinds_aliases_for_list_and_delete() -> Au
         required(store.get_session(retained.token.typed().unwrap()).await?)?.user_id,
         "1"
     );
-    assert_eq!(raw_owners(&store)?, (vec![Value::Number(1.0)], Vec::new()));
+    assert_eq!(
+        raw_owners(&store, "userId")?,
+        (vec![Value::Number(1.0)], Vec::new())
+    );
     Ok(())
 }
 
@@ -187,7 +195,7 @@ async fn serial_unproven_user_verification_cleans_access_once_through_aliases() 
         "2"
     );
     assert_eq!(
-        raw_owners(&store)?,
+        raw_owners(&store, "userId")?,
         (vec![Value::Number(2.0)], vec![Value::Number(2.0)])
     );
     let proven = access(&store, "1", "proven").await?;
@@ -202,7 +210,7 @@ async fn serial_unproven_user_verification_cleans_access_once_through_aliases() 
     );
     assert!(store.lock()?.verifications.snapshot()?.is_empty());
     assert_eq!(
-        raw_owners(&store)?,
+        raw_owners(&store, "userId")?,
         (
             vec![Value::Number(2.0), Value::Number(1.0)],
             vec![Value::Number(2.0), Value::Number(1.0)]
@@ -260,7 +268,10 @@ async fn configured_serial_session_owner_has_one_storage_and_output_value() -> A
         ),
         (1, 1)
     );
-    assert_eq!(raw_owners(&store)?, (vec![Value::Number(2.0)], Vec::new()));
+    assert_eq!(
+        raw_owners(&store, "stored_owner")?,
+        (vec![Value::Number(2.0)], Vec::new())
+    );
     let read = required(store.get_session(created.token.typed().unwrap()).await?)?;
     assert_eq!(
         (
@@ -289,7 +300,10 @@ async fn configured_serial_session_owner_has_one_storage_and_output_value() -> A
         ),
         (2, 3)
     );
-    assert_eq!(raw_owners(&store)?, (vec![Value::Number(2.0)], Vec::new()));
+    assert_eq!(
+        raw_owners(&store, "stored_owner")?,
+        (vec![Value::Number(2.0)], Vec::new())
+    );
     for projected in [created, read, updated] {
         assert_eq!(projected.user_id, "1");
         assert_eq!(
@@ -338,7 +352,7 @@ async fn preserved_serial_sessions_apply_owner_on_update_once_per_batch() -> Aut
     let second = store.create_session(session("01")).await?;
     assert_eq!(calls.load(Ordering::Relaxed), 0);
     assert_eq!(
-        raw_owners(&store)?,
+        raw_owners(&store, "stored_owner")?,
         (vec![Value::Number(1.0), Value::Number(1.0)], Vec::new())
     );
     assert_eq!(
@@ -347,7 +361,7 @@ async fn preserved_serial_sessions_apply_owner_on_update_once_per_batch() -> Aut
     );
     assert_eq!(calls.load(Ordering::Relaxed), 1);
     assert_eq!(
-        raw_owners(&store)?,
+        raw_owners(&store, "stored_owner")?,
         (vec![Value::Number(2.0), Value::Number(2.0)], Vec::new())
     );
     assert!(store.get_user_sessions("1").await?.is_empty());
@@ -398,7 +412,10 @@ async fn serial_session_creation_defaults_override_core_before_explicit_fields()
     let store = EphemeralStore::new(Arc::new(config));
     let defaulted = store.create_session(session("1")).await?;
     assert_eq!(defaulted.user_id, "2");
-    assert_eq!(raw_owners(&store)?, (vec![Value::Number(2.0)], Vec::new()));
+    assert_eq!(
+        raw_owners(&store, "userId")?,
+        (vec![Value::Number(2.0)], Vec::new())
+    );
     assert_eq!(calls.load(Ordering::Relaxed), 1);
 
     let mut explicit = session("1");
@@ -408,7 +425,7 @@ async fn serial_session_creation_defaults_override_core_before_explicit_fields()
     let supplied = store.create_session(explicit).await?;
     assert_eq!(supplied.user_id, "3");
     assert_eq!(
-        raw_owners(&store)?,
+        raw_owners(&store, "userId")?,
         (vec![Value::Number(2.0), Value::Number(3.0)], Vec::new())
     );
     assert_eq!(calls.load(Ordering::Relaxed), 2);

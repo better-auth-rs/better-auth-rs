@@ -75,7 +75,7 @@ async fn name_sort_preserves_conversion_errors_when_both_names_are_non_nullish()
                 store
                     .find_api_keys_by_reference("owner", Some(("name", direction)))
                     .await,
-                Err(AuthError::Internal(message))
+                Err(AuthError::TypeError(message))
                     if message == "No default value"
             ));
             assert_eq!(

@@ -466,7 +466,7 @@ async fn sign_in_with_id_token_core(
     ctx.session_manager()
         .set_native_session_cookie(req, outcome.issued, None)
         .await?;
-    Ok(AuthResponse::json(None, &response)?)
+    AuthResponse::json(None, &response)
 }
 
 async fn link_with_id_token_core(

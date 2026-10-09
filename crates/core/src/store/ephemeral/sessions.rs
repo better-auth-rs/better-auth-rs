@@ -257,10 +257,15 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
     }
 
     async fn end_session_by_token_value(&self, token: &crate::FieldValue) -> AuthResult<()> {
-        let (column, token) = self.memory_session_token_query(token.clone())?;
-        self.delete_sessions_with_hooks(|row| Ok(session_token_matches(row, &column, &token)), true)
-            .await
-            .map(|_| ())
+        self.delete_sessions_with_hooks(
+            || {
+                let (column, token) = self.memory_session_token_query(token.clone())?;
+                Ok(move |row: &FieldMap| Ok(session_token_matches(row, &column, &token)))
+            },
+            true,
+        )
+        .await
+        .map(|_| ())
     }
 
     async fn accept_invitation_with_teams(
@@ -399,7 +404,6 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
         &self,
         token: &crate::FieldValue,
     ) -> AuthResult<Option<SessionView>> {
-        self.model_fields.begin_id_query(EntityRole::Session)?;
         let (column, token) = self.memory_session_token_query(token.clone())?;
         let session = self
             .raw("session", "findOne", |state| {
@@ -437,13 +441,8 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
             Option<crate::session::SessionData<crate::store::JoinValue<UserView>>>,
         )>,
     > {
-        let relation = crate::session::SessionData::resolve_schema(
-            &self.config,
-            &self.model_fields,
-            |_, _| false,
-        )?;
         Ok(self
-            .session_user_relations(token.clone(), false, true, &relation)
+            .session_user_relations(token.clone(), false, true)
             .await?
             .into_iter()
             .next())
@@ -459,16 +458,11 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
             Option<crate::session::SessionData<crate::store::JoinValue<UserView>>>,
         )>,
     > {
-        let relation = crate::session::SessionData::resolve_schema(
-            &self.config,
-            &self.model_fields,
-            |_, _| false,
-        )?;
         let tokens = tokens
             .iter()
             .map(|token| token.as_str().into())
             .collect::<Vec<_>>();
-        self.session_user_relations(tokens.into(), only_active, false, &relation)
+        self.session_user_relations(tokens.into(), only_active, false)
             .await
     }
 
@@ -505,18 +499,10 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
         user_id: &Value,
         only_active: bool,
     ) -> AuthResult<Vec<(SessionView, Option<SessionView>)>> {
-        self.model_fields.begin_id_query(EntityRole::Session)?;
-        let user_id = self.memory_session_user_id_query(user_id.clone())?;
-        let schema = crate::store::session_create_schema(&self.session_config, &FieldMap::new());
-        let now = if only_active {
-            let now = self.memory_field_query(&schema, "expiresAt", Utc::now().into())?;
-            Some(crate::user_query::bind_filter(
-                &schema.fields()["expiresAt"],
-                &now,
-            )?)
-        } else {
-            None
-        };
+        let (user_column, user_id) = self.memory_session_field_query("userId", user_id.clone())?;
+        let expiry = only_active
+            .then(|| self.memory_session_field_query("expiresAt", Utc::now().into()))
+            .transpose()?;
         let sessions: Vec<_> = self
             .raw("session", "findMany", |state| {
                 Ok(crate::query::paginate_memory(
@@ -525,16 +511,12 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
                         .try_select_refs(|session| {
                             let fields = session;
                             Ok(crate::query::field_matches_equality(
-                                fields
-                                    .get(schema.record_storage_key("userId"))
-                                    .unwrap_or(&Value::Undefined),
+                                fields.get(&user_column).unwrap_or(&Value::Undefined),
                                 &user_id,
-                            ) && match &now {
-                                Some(now) => {
+                            ) && match &expiry {
+                                Some((column, now)) => {
                                     crate::query::field_compare(
-                                        fields
-                                            .get(schema.record_storage_key("expiresAt"))
-                                            .unwrap_or(&Value::Undefined),
+                                        fields.get(column).unwrap_or(&Value::Undefined),
                                         now,
                                     )? == Some(std::cmp::Ordering::Greater)
                                 }
@@ -579,10 +561,9 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
 
     async fn delete_session_by_token_value(&self, token: &crate::FieldValue) -> AuthResult<()> {
         let snapshot = async {
-            self.model_fields.begin_id_query(EntityRole::Session)?;
             let (column, converted) = self.memory_session_token_query(token.clone())?;
             let session = self
-                .raw("session", "findOne", |state| {
+                .raw("session", "findMany", |state| {
                     Ok(state
                         .sessions
                         .first_ref(|row| session_token_matches(row, &column, &converted))?
@@ -617,7 +598,6 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
             }
         }
         crate::store::database_hooks::await_adapter_lookup().await;
-        self.model_fields.begin_id_query(EntityRole::Session)?;
         let (column, converted) = self.memory_session_token_query(token.clone())?;
         self.raw("session", "delete", |state| {
             state
@@ -631,25 +611,37 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
     }
 
     async fn delete_sessions(&self, tokens: &[String]) -> AuthResult<()> {
-        let tokens = tokens
+        let tokens: Value = tokens
             .iter()
             .map(|token| token.as_str().into())
-            .collect::<Vec<_>>();
-        let (column, tokens) = self.memory_session_token_query(tokens.into())?;
-        self.delete_sessions_with_hooks(|row| session_tokens_match(row, &column, &tokens), false)
-            .await
-            .map(|_| ())
+            .collect::<Vec<_>>()
+            .into();
+        self.delete_sessions_with_hooks(
+            || {
+                let (column, tokens) = self.memory_session_token_query(tokens.clone())?;
+                Ok(move |row: &FieldMap| session_tokens_match(row, &column, &tokens))
+            },
+            false,
+        )
+        .await
+        .map(|_| ())
     }
 
     async fn end_sessions(&self, tokens: &[String]) -> AuthResult<()> {
-        let tokens = tokens
+        let tokens: Value = tokens
             .iter()
             .map(|token| token.as_str().into())
-            .collect::<Vec<_>>();
-        let (column, tokens) = self.memory_session_token_query(tokens.into())?;
-        self.delete_sessions_with_hooks(|row| session_tokens_match(row, &column, &tokens), true)
-            .await
-            .map(|_| ())
+            .collect::<Vec<_>>()
+            .into();
+        self.delete_sessions_with_hooks(
+            || {
+                let (column, tokens) = self.memory_session_token_query(tokens.clone())?;
+                Ok(move |row: &FieldMap| session_tokens_match(row, &column, &tokens))
+            },
+            true,
+        )
+        .await
+        .map(|_| ())
     }
 
     async fn delete_user_sessions(&self, user_id: &str) -> AuthResult<()> {
@@ -677,13 +669,16 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
         user_id: &Value,
         preserve: bool,
     ) -> AuthResult<Option<usize>> {
-        let (column, user_id) = self.memory_session_field_query("userId", user_id.clone())?;
         self.delete_sessions_with_hooks(
-            |row| {
-                Ok(crate::query::field_matches_equality(
-                    row.get(&column).unwrap_or(&Value::Undefined),
-                    &user_id,
-                ))
+            || {
+                let (column, user_id) =
+                    self.memory_session_field_query("userId", user_id.clone())?;
+                Ok(move |row: &FieldMap| {
+                    Ok(crate::query::field_matches_equality(
+                        row.get(&column).unwrap_or(&Value::Undefined),
+                        &user_id,
+                    ))
+                })
             },
             preserve,
         )
@@ -691,16 +686,19 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
     }
 
     async fn delete_expired_sessions(&self) -> AuthResult<usize> {
-        let (column, now) = self.memory_session_field_query("expiresAt", Utc::now().into())?;
+        let now = Value::from(Utc::now());
         self.delete_sessions_with_hooks(
-            |row| {
-                Ok(matches!(
-                    crate::query::field_compare(
-                        row.get(&column).unwrap_or(&Value::Undefined),
-                        &now
-                    )?,
-                    Some(std::cmp::Ordering::Less | std::cmp::Ordering::Equal)
-                ))
+            || {
+                let (column, now) = self.memory_session_field_query("expiresAt", now.clone())?;
+                Ok(move |row: &FieldMap| {
+                    Ok(matches!(
+                        crate::query::field_compare(
+                            row.get(&column).unwrap_or(&Value::Undefined),
+                            &now
+                        )?,
+                        Some(std::cmp::Ordering::Less | std::cmp::Ordering::Equal)
+                    ))
+                })
             },
             false,
         )

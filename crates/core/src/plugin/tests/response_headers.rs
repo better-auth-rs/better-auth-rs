@@ -528,7 +528,7 @@ async fn explicit_responses_keep_owned_headers_separate_until_http_materializati
                 let handler = |request: AuthRequest| async move {
                     queue_explicit_headers(&request, "endpoint", override_type)?;
                     if mode == "replace" {
-                        Ok(AuthResponse::json(None, &json!({"phase":"endpoint"}))?)
+                        AuthResponse::json(None, &json!({"phase":"endpoint"}))
                     } else {
                         Ok(explicit_response())
                     }

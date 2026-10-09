@@ -119,6 +119,7 @@ impl<
             self.connection().get_database_backend(),
         )
         .await?;
+        let public_id = team.id.field_value();
         let _ = Entity::<O::TeamMember>::delete_many()
             .filter(super::value_filter::equals_id(
                 O::TeamMember::column("team_id")?,
@@ -164,7 +165,7 @@ impl<
             if let Some(ids) = row.team_id.typed()? {
                 let retained: Vec<_> = ids
                     .split(',')
-                    .filter(|team_id| Some(*team_id) != id.as_str())
+                    .filter(|team_id| Some(*team_id) != public_id.as_str())
                     .collect();
                 if retained.len() != ids.split(',').count() {
                     let _ = models::update_value::<O::Invitation, _>(

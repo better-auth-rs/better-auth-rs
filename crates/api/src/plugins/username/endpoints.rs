@@ -27,10 +27,7 @@ impl UsernamePlugin {
             .database
             .get_user_by_field_value("username", &self.config.normalize(&username)?)
             .await?;
-        Ok(AuthResponse::json(
-            None,
-            &json!({"available": found.is_none()}),
-        )?)
+        AuthResponse::json(None, &json!({"available": found.is_none()}))
     }
 
     pub(super) async fn sign_in<S: AuthSchema>(
