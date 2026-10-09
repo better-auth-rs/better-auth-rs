@@ -183,7 +183,7 @@ run_stage() {
       if cargo check --workspace --locked --tests --features axum,seaorm2,redis-cache --keep-going; then
         cargo test --locked --no-fail-fast -p better-auth-core -p better-auth-api -p better-auth-seaorm --lib -- \
           session verification database_hooks lifecycle transaction create_readback user_fields user_query wire:: \
-          user_column_defaults user_runtime_input_tests \
+          user_column_defaults user_runtime_input_tests field_value:: record_bindings::function_tests types_plugin::device::tests \
           user_view_preserves_adapter_order_through_cache_and_visibility \
           plugins::jwt:: plugins::api_key:: plugins::passkey:: plugins::organization:: plugins::test_utils:: \
           plugins::user_admission:: \
@@ -198,7 +198,7 @@ run_stage() {
           --test test_utils_tests --test legacy_schema_integration_tests \
           --test user_runtime_output_tests --test user_runtime_cache_tests \
           --test user_runtime_input_tests --test user_account_raw_column_tests \
-          --test user_input_policy_tests \
+          --test user_input_policy_tests --test protected_function_tests \
           --test user_verification_fields_tests --test user_record_values_tests \
           --test account_owner_batch_tests --test account_identity_tests \
           --test account_user_selected_relations_reference_tests \

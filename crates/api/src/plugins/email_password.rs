@@ -118,7 +118,7 @@ pub(crate) struct SignInRequest {
 pub(crate) struct SignUpResponse {
     #[serde(
         with = "better_auth_core::field_value::serde::value",
-        skip_serializing_if = "better_auth_core::FieldValue::is_undefined"
+        skip_serializing_if = "better_auth_core::FieldValue::is_json_omitted"
     )]
     token: better_auth_core::FieldValue,
     #[serde(with = "better_auth_core::field_value::serde::map")]
@@ -128,7 +128,7 @@ pub(crate) struct SignUpResponse {
 #[derive(Debug, Serialize)]
 pub(crate) struct SignInResponse<U: Serialize> {
     redirect: bool,
-    #[serde(skip_serializing_if = "better_auth_core::SchemaValue::is_undefined")]
+    #[serde(skip_serializing_if = "better_auth_core::SchemaValue::is_json_omitted")]
     token: better_auth_core::SchemaValue<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     url: Option<String>,

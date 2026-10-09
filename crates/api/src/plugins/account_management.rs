@@ -63,7 +63,8 @@ pub(crate) async fn list_accounts_core(
     accounts
         .into_iter()
         .map(|account| {
-            let mut fields = account.internal_fields()?;
+            let mut fields = better_auth_core::StructuredCloneContext::new()
+                .clone_map(&account.internal_fields()?)?;
             ctx.config
                 .account
                 .field_schema()

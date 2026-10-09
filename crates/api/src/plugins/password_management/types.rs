@@ -57,7 +57,7 @@ pub(crate) struct RequestPasswordResetResponse {
 pub(crate) struct ChangePasswordResponse<U: Serialize> {
     #[serde(
         with = "better_auth_core::field_value::serde::value",
-        skip_serializing_if = "better_auth_core::FieldValue::is_undefined"
+        skip_serializing_if = "better_auth_core::FieldValue::is_json_omitted"
     )]
     pub(crate) token: better_auth_core::FieldValue,
     pub(crate) user: U,

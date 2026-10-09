@@ -70,7 +70,7 @@ pub(in crate::plugins::organization) struct CreateBody {
     additional_fields: better_auth_core::FieldMap,
     #[serde(
         default,
-        skip_serializing_if = "better_auth_core::SchemaValue::is_undefined"
+        skip_serializing_if = "better_auth_core::SchemaValue::is_json_omitted"
     )]
     name: better_auth_core::SchemaValue<String>,
     #[serde(
@@ -107,7 +107,7 @@ pub(in crate::plugins::organization) struct UpdateData {
     additional_fields: better_auth_core::FieldMap,
     #[serde(
         default,
-        skip_serializing_if = "better_auth_core::SchemaValue::is_undefined"
+        skip_serializing_if = "better_auth_core::SchemaValue::is_json_omitted"
     )]
     name: better_auth_core::SchemaValue<String>,
     #[serde(

@@ -82,7 +82,7 @@ struct ProfileUser {
     name: String,
     #[serde(
         default,
-        skip_serializing_if = "better_auth_core::SchemaValue::is_undefined"
+        skip_serializing_if = "better_auth_core::SchemaValue::is_json_omitted"
     )]
     email_verified: better_auth_core::SchemaValue<Option<bool>>,
     #[serde(

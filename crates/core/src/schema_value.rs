@@ -38,7 +38,7 @@ impl<T> SchemaValue<T> {
             Self::Undefined => SchemaValue::Undefined,
         }
     }
-    /// Return whether the field must be omitted from an object.
+    /// Return whether the adapter omitted this field.
     pub fn is_undefined(&self) -> bool {
         matches!(self, Self::Undefined)
     }
@@ -90,6 +90,11 @@ impl PartialEq<&str> for SchemaValue<String> {
 }
 
 impl<T: SchemaField> SchemaValue<T> {
+    /// Return whether JSON serialization omits this value at an object boundary.
+    pub fn is_json_omitted(&self) -> bool {
+        self.field_value().is_json_omitted()
+    }
+
     /// Preserve replacement types and object handles when decoding an adapter field.
     pub fn from_field(value: FieldValue) -> Self {
         if value.is_undefined() {

@@ -172,7 +172,7 @@ pub fn number(value: &Value) -> AuthResult<f64> {
 /// Apply ECMAScript `Number` conversion without erasing Date or non-finite values.
 pub fn field_number(value: &FieldValue) -> AuthResult<f64> {
     match value {
-        FieldValue::Undefined => Ok(f64::NAN),
+        FieldValue::Undefined | FieldValue::Function(_) => Ok(f64::NAN),
         FieldValue::Null => Ok(0.0),
         FieldValue::Bool(value) => Ok(if *value { 1.0 } else { 0.0 }),
         FieldValue::Number(value) => Ok(*value),
@@ -222,9 +222,10 @@ pub fn field_date(value: &FieldValue) -> AuthResult<crate::FieldDate> {
 pub fn field_add(left: &FieldValue, right: &FieldValue) -> AuthResult<FieldValue> {
     let primitive = |value: &FieldValue| -> AuthResult<FieldValue> {
         match value {
-            FieldValue::Date(_) | FieldValue::Array(_) | FieldValue::Object(_) => {
-                Ok(value.display_utf16()?.into())
-            }
+            FieldValue::Date(_)
+            | FieldValue::Array(_)
+            | FieldValue::Object(_)
+            | FieldValue::Function(_) => Ok(value.display_utf16()?.into()),
             value => Ok(value.clone()),
         }
     };
@@ -256,7 +257,7 @@ pub fn field_compare(
     let primitive = |value: &FieldValue| -> AuthResult<FieldValue> {
         Ok(match value {
             FieldValue::Date(value) => FieldValue::Number(value.milliseconds()),
-            FieldValue::Array(_) | FieldValue::Object(_) => {
+            FieldValue::Array(_) | FieldValue::Object(_) | FieldValue::Function(_) => {
                 FieldValue::from(value.display_utf16()?)
             }
             value => value.clone(),

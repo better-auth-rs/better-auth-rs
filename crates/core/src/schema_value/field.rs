@@ -41,6 +41,7 @@ field!(String, String);
 field!(bool, Bool);
 field!(f64, Number);
 field!(FieldDate, Date);
+field!(crate::FieldFunction, Function);
 
 impl SchemaField for chrono::DateTime<chrono::Utc> {
     fn from_field(value: FieldValue) -> Result<Self, FieldValue> {

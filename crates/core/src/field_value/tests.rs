@@ -83,13 +83,13 @@ fn structured_clone_preserves_aliases_across_records_without_reusing_source_iden
         ("object".into(), object.clone()),
     ]);
     let mut context = StructuredCloneContext::new();
-    let first = context.clone_map(&fields);
-    let second = context.clone_map(&fields);
+    let first = context.clone_map(&fields).expect("cloneable graph");
+    let second = context.clone_map(&fields).expect("cloneable graph");
     for (name, original) in &fields {
         let copied = first.get(name).expect("first record field");
         assert!(!copied.strict_equals(original));
         assert!(copied.strict_equals(second.get(name).expect("second record field")));
-        assert!(copied.strict_equals(&context.clone_value(original)));
+        assert!(copied.strict_equals(&context.clone_value(original).expect("cloneable value")));
     }
     let copied_date = first.get("date").expect("cloned date");
     let nested_date = first
@@ -104,7 +104,9 @@ fn structured_clone_preserves_aliases_across_records_without_reusing_source_iden
         .and_then(|object| object.get("date"))
         .expect("date inside cloned object");
     assert!(copied_date.strict_equals(object_date));
-    let independent = StructuredCloneContext::new().clone_value(&date);
+    let independent = StructuredCloneContext::new()
+        .clone_value(&date)
+        .expect("cloneable date");
     assert!(!copied_date.strict_equals(&independent));
 }
 

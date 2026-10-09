@@ -27,7 +27,7 @@ impl NativeSessionData {
     /// Clone enumerable User fields and remove fields with `returned: false`.
     /// Arrays become numeric-key objects only at this output boundary.
     pub fn public_user(&self, config: &UserConfig) -> AuthResult<FieldValue> {
-        let value = StructuredCloneContext::new().clone_value(&self.user);
+        let value = StructuredCloneContext::new().clone_value(&self.user)?;
         let mut fields = match value {
             FieldValue::Object(fields) => (*fields).clone(),
             FieldValue::Array(values) => values
@@ -113,6 +113,9 @@ impl serde::Serialize for NativeSessionData {
         crate::field_value::serde::map::serialize(&FieldMap::from(self.clone()), serializer)
     }
 }
+
+#[cfg(test)]
+mod function_tests;
 
 #[cfg(test)]
 mod tests {

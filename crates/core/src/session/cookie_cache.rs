@@ -64,7 +64,7 @@ pub(super) async fn payload(
 ) -> AuthResult<(serde_json::Map<String, Value>, f64)> {
     let now = Utc::now();
     let mut session = data.session.clone();
-    session.filter_returned_fields(&config.session);
+    session.filter_returned_fields(&config.session)?;
     let user = data.public_user(&config.user)?;
     let version = cache.version.resolve(data).await?;
     let mut payload = serde_json::Map::new();

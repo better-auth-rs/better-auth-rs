@@ -65,7 +65,8 @@ pub(super) fn synthetic_response<S: AuthSchema>(
         let _ = core.insert("id".into(), id.into());
         core
     };
-    let mut user = UserView::synthetic_output(data, ctx.adapter_user_fields(), &ctx.config.user)?;
+    let user = UserView::synthetic_output(data, ctx.adapter_user_fields(), &ctx.config.user)?;
+    let mut user = better_auth_core::StructuredCloneContext::new().clone_map(&user)?;
     ctx.config.user.filter_returned_fields(&mut user);
     Ok(SignUpResponse {
         token: better_auth_core::FieldValue::Null,

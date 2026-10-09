@@ -266,7 +266,7 @@ pub(crate) async fn find_session<S: AuthSchema>(
         let Some(mut data) = data.into_typed()? else {
             return Ok(None);
         };
-        data.session.filter_returned_fields(&ctx.config.session);
+        data.session.filter_returned_fields(&ctx.config.session)?;
         return Ok(Some((data.session, ctx.user_view(&data.user).await?)));
     }
     let Some(user) = ctx

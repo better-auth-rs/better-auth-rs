@@ -113,8 +113,10 @@ impl<E: EntityTrait> RecordWrite<E> {
         mut query: sea_orm::UpdateMany<E>,
         backend: sea_orm::DbBackend,
     ) -> AuthResult<sea_orm::UpdateMany<E>> {
-        for (column, value) in self.fields {
-            query = query.col_expr(column, column.save_as(value.bind(backend)?));
+        let (columns, bindings): (Vec<_>, Vec<_>) = self.fields.into_iter().unzip();
+        let values = super::record_bindings::bind(backend, bindings)?;
+        for (column, value) in columns.into_iter().zip(values) {
+            query = query.col_expr(column, column.save_as(value));
         }
         Ok(query)
     }

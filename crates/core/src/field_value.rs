@@ -1,4 +1,4 @@
-//! Adapter values retain JavaScript numbers and object identity until an explicit JSON boundary.
+//! Adapter values retain JavaScript numbers and object or function identity until an explicit boundary.
 
 use crate::{AuthError, AuthResult};
 use chrono::{DateTime, Datelike, Utc};
@@ -10,6 +10,8 @@ use std::{
     sync::Arc,
 };
 
+mod function;
+pub use function::FieldFunction;
 pub mod serde;
 
 /// An immutable Date object. Clones retain identity, including for an invalid Date.
@@ -205,6 +207,7 @@ pub enum FieldValue {
     Date(FieldDate),
     Array(Arc<[FieldValue]>),
     Object(Arc<FieldMap>),
+    Function(FieldFunction),
 }
 
 impl FieldValue {
@@ -237,6 +240,11 @@ impl FieldValue {
 
     pub fn is_undefined(&self) -> bool {
         matches!(self, Self::Undefined)
+    }
+
+    /// Return whether JSON serialization omits this value at an object boundary.
+    pub fn is_json_omitted(&self) -> bool {
+        matches!(self, Self::Undefined | Self::Function(_))
     }
 
     pub fn is_null(&self) -> bool {
@@ -293,7 +301,7 @@ impl FieldValue {
             Self::Number(value) => *value != 0.0 && !value.is_nan(),
             Self::String(value) => !value.is_empty(),
             Self::Utf16String(value) => !value.as_utf16().is_empty(),
-            Self::Date(_) | Self::Array(_) | Self::Object(_) => true,
+            Self::Date(_) | Self::Array(_) | Self::Object(_) | Self::Function(_) => true,
         }
     }
 
@@ -312,6 +320,7 @@ impl FieldValue {
             (Self::Date(left), Self::Date(right)) => left.same_object(right),
             (Self::Array(left), Self::Array(right)) => Arc::ptr_eq(left, right),
             (Self::Object(left), Self::Object(right)) => Arc::ptr_eq(left, right),
+            (Self::Function(left), Self::Function(right)) => left == right,
             _ => false,
         }
     }
@@ -327,11 +336,11 @@ impl FieldValue {
         Ok(value.into())
     }
 
-    /// Project at a JSON boundary. Top-level undefined has no JSON value.
-    /// Object properties omit undefined; array elements encode undefined as null.
+    /// Project at a JSON boundary. Top-level undefined and functions have no JSON value.
+    /// Object properties omit these values; array elements encode these values as null.
     pub fn json(&self) -> AuthResult<Option<JsonValue>> {
         Ok(Some(match self {
-            Self::Undefined => return Ok(None),
+            Self::Undefined | Self::Function(_) => return Ok(None),
             Self::Null => JsonValue::Null,
             Self::Bool(value) => JsonValue::Bool(*value),
             Self::Number(_) => serde_json::to_value(serde::Json(self))?,
@@ -369,7 +378,7 @@ impl FieldValue {
 
     /// Serialize with JavaScript property ordering, numeric formatting, and JSON value conversion.
     pub fn stringify(&self) -> AuthResult<Option<String>> {
-        if self.is_undefined() {
+        if self.is_json_omitted() {
             Ok(None)
         } else {
             ::serde_json::to_string(&serde::Json(self))
@@ -458,37 +467,38 @@ impl StructuredCloneContext {
     }
 
     /// Copy a value while preserving aliases already copied by this context.
-    pub fn clone_value(&mut self, value: &FieldValue) -> FieldValue {
+    pub fn clone_value(&mut self, value: &FieldValue) -> AuthResult<FieldValue> {
         let identity = match value {
+            FieldValue::Function(_) => return Err(AuthError::DataClone),
             FieldValue::Date(value) => Identity::Date(Arc::as_ptr(&value.0) as usize),
             FieldValue::Array(value) => Identity::Array(Arc::as_ptr(value) as *const () as usize),
             FieldValue::Object(value) => Identity::Object(Arc::as_ptr(value) as usize),
-            value => return value.clone(),
+            value => return Ok(value.clone()),
         };
         if let Some((_, copied)) = self.copies.get(&identity) {
-            return copied.clone();
+            return Ok(copied.clone());
         }
         let copied = match value {
             FieldValue::Date(value) => FieldDate(Arc::new(*value.0)).into(),
             FieldValue::Array(values) => values
                 .iter()
                 .map(|value| self.clone_value(value))
-                .collect::<Vec<_>>()
+                .collect::<AuthResult<Vec<_>>>()?
                 .into(),
-            FieldValue::Object(values) => self.clone_map(values).into(),
+            FieldValue::Object(values) => self.clone_map(values)?.into(),
             value => value.clone(),
         };
         let _ = self
             .copies
             .insert(identity, (value.clone(), copied.clone()));
-        copied
+        Ok(copied)
     }
 
     /// Copy record fields using the same alias map as other records in this context.
-    pub fn clone_map(&mut self, fields: &FieldMap) -> FieldMap {
+    pub fn clone_map(&mut self, fields: &FieldMap) -> AuthResult<FieldMap> {
         fields
             .iter()
-            .map(|(name, value)| (name.clone(), self.clone_value(value)))
+            .map(|(name, value)| Ok((name.clone(), self.clone_value(value)?)))
             .collect()
     }
 }
@@ -506,8 +516,14 @@ impl FieldValue {
             Self::Utf16String(value) => value.clone(),
             Self::Bool(value) => value.to_string().into(),
             Self::Number(value) => crate::schema_value::number_string(*value).into(),
+            Self::Function(_) => {
+                // ponytail: Rust callbacks have no JavaScript source text; explicit reflection is required for function coercion.
+                return Err(AuthError::internal(
+                    "JavaScript function source is unavailable for this Rust field callback",
+                ));
+            }
             Self::Object(fields) => {
-                // Own fields cannot be callable; shadowing toString removes the ordinary primitive conversion.
+                // Custom callable coercion requires the JavaScript receiver and invocation contract.
                 if fields.contains_key("toString") {
                     return Err(AuthError::internal("No default value"));
                 }
@@ -540,7 +556,7 @@ impl FieldValue {
 impl StructuredCloneContext {
     /// Clone one native schema field using the same object graph as its containing record.
     pub fn clone_field<T: crate::SchemaField>(&mut self, value: &T) -> AuthResult<T> {
-        self.clone_value(&value.clone().into_field()).decode()
+        self.clone_value(&value.clone().into_field())?.decode()
     }
 }
 

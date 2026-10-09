@@ -220,6 +220,7 @@ pub(super) fn native_invalid_type(
         Some(FieldValue::Date(_)) => "Date",
         Some(FieldValue::Array(_)) => "array",
         Some(FieldValue::Object(_)) => "object",
+        Some(FieldValue::Function(_)) => "function",
     };
     format!("[{location}] Invalid input: expected {expected}, received {actual}")
 }

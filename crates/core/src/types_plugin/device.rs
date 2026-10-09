@@ -7,53 +7,53 @@ use serde::{Deserialize, Serialize};
 /// Device authorization fields after adapter output projection.
 #[derive(Clone, Default, Serialize, Deserialize)]
 pub struct DeviceCode {
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub id: SchemaValue<String>,
     #[serde(
         default,
         rename = "deviceCode",
-        skip_serializing_if = "SchemaValue::is_undefined"
+        skip_serializing_if = "SchemaValue::is_json_omitted"
     )]
     pub device_code: SchemaValue<String>,
     #[serde(
         default,
         rename = "userCode",
-        skip_serializing_if = "SchemaValue::is_undefined"
+        skip_serializing_if = "SchemaValue::is_json_omitted"
     )]
     pub user_code: SchemaValue<String>,
     #[serde(
         default,
         rename = "userId",
-        skip_serializing_if = "SchemaValue::is_undefined"
+        skip_serializing_if = "SchemaValue::is_json_omitted"
     )]
     pub user_id: SchemaValue<Option<String>>,
     #[serde(
         default,
         rename = "expiresAt",
-        skip_serializing_if = "SchemaValue::is_undefined"
+        skip_serializing_if = "SchemaValue::is_json_omitted"
     )]
     pub expires_at: SchemaValue<FieldDate>,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub status: SchemaValue<String>,
     #[serde(
         default,
         rename = "lastPolledAt",
-        skip_serializing_if = "SchemaValue::is_undefined"
+        skip_serializing_if = "SchemaValue::is_json_omitted"
     )]
     pub last_polled_at: SchemaValue<Option<FieldDate>>,
     #[serde(
         default,
         rename = "pollingInterval",
-        skip_serializing_if = "SchemaValue::is_undefined"
+        skip_serializing_if = "SchemaValue::is_json_omitted"
     )]
     pub polling_interval: SchemaValue<Option<f64>>,
     #[serde(
         default,
         rename = "clientId",
-        skip_serializing_if = "SchemaValue::is_undefined"
+        skip_serializing_if = "SchemaValue::is_json_omitted"
     )]
     pub client_id: SchemaValue<Option<String>>,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub scope: SchemaValue<Option<String>>,
     /// Declared application fields after adapter output projection.
     #[serde(with = "crate::field_value::serde::map", flatten, default)]
@@ -174,11 +174,17 @@ impl AuthRecordFields for DeviceCode {
         result.polling_interval = context.clone_field(&self.polling_interval)?;
         result.client_id = context.clone_field(&self.client_id)?;
         result.scope = context.clone_field(&self.scope)?;
-        result.additional_fields = context.clone_map(&self.additional_fields);
-        result.consumption = self.consumption.as_ref().map(|saved| ConsumptionBindings {
-            physical: context.clone_map(&saved.physical),
-            projected: context.clone_map(&saved.projected),
-        });
+        result.additional_fields = context.clone_map(&self.additional_fields)?;
+        result.consumption = self
+            .consumption
+            .as_ref()
+            .map(|saved| {
+                Ok::<_, crate::AuthError>(ConsumptionBindings {
+                    physical: context.clone_map(&saved.physical)?,
+                    projected: context.clone_map(&saved.projected)?,
+                })
+            })
+            .transpose()?;
         Ok(result)
     }
 }
@@ -205,5 +211,91 @@ impl PartialEq for DeviceCode {
             && self.client_id == other.client_id
             && self.scope == other.scope
             && self.additional_fields == other.additional_fields
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::FieldValue;
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+
+    fn function(calls: &Arc<AtomicUsize>) -> FieldValue {
+        let observed = calls.clone();
+        let factory: crate::user_fields::UserFieldFactory = Arc::new(move || {
+            let _ = observed.fetch_add(1, Ordering::SeqCst);
+            Ok(FieldValue::Undefined)
+        });
+        FieldValue::Function(crate::FieldFunction::from(factory))
+    }
+
+    #[test]
+    fn snapshot_preserves_binding_aliases_and_rejects_saved_functions() -> AuthResult<()> {
+        let shared = FieldValue::from(FieldMap::from([("owner".into(), true.into())]));
+        let device = DeviceCode::from(FieldMap::from([("id".into(), shared.clone())]))
+            .with_storage_bindings(FieldMap::from([("id".into(), shared.clone())]));
+        let snapshot = device.structured_clone(&mut StructuredCloneContext::new())?;
+        let (physical, unchanged) = snapshot.consumption_bindings()?;
+        assert!(unchanged);
+        assert!(physical["id"].strict_equals(&snapshot.id.field_value()));
+        assert!(!physical["id"].strict_equals(&shared));
+
+        let calls = Arc::new(AtomicUsize::new(0));
+        let nested: FieldValue = vec![function(&calls)].into();
+        for physical in [true, false] {
+            let mut device = device.clone();
+            let saved = device.consumption.as_mut().unwrap();
+            let fields = if physical {
+                &mut saved.physical
+            } else {
+                &mut saved.projected
+            };
+            let _ = fields.insert("hidden".into(), nested.clone());
+            assert!(matches!(
+                device.structured_clone(&mut StructuredCloneContext::new()),
+                Err(AuthError::DataClone)
+            ));
+        }
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+        Ok(())
+    }
+
+    #[test]
+    fn json_omits_function_properties_and_preserves_containers() -> AuthResult<()> {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let function = function(&calls);
+        let device = DeviceCode::from(FieldMap::from([
+            ("id".into(), function.clone()),
+            ("extra".into(), function.clone()),
+            ("array".into(), vec![function.clone()].into()),
+            (
+                "object".into(),
+                FieldMap::from([("nested".into(), function.clone())]).into(),
+            ),
+        ]));
+        assert_eq!(
+            serde_json::to_value(device)?,
+            serde_json::json!({"array": [null], "object": {}})
+        );
+        for (metadata, expected) in [
+            (None, Some(serde_json::Value::Null)),
+            (Some(FieldValue::Null), Some(serde_json::Value::Null)),
+            (Some(FieldValue::Undefined), None),
+            (Some(function), None),
+        ] {
+            let user = crate::CreateUser {
+                metadata,
+                ..Default::default()
+            };
+            assert_eq!(
+                serde_json::to_value(user)?.get("metadata"),
+                expected.as_ref()
+            );
+        }
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+        Ok(())
     }
 }

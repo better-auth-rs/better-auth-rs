@@ -120,6 +120,10 @@ pub enum AuthError {
     #[error("Plugin error: {plugin} - {message}")]
     Plugin { plugin: String, message: String },
 
+    /// A structured clone encountered a function value.
+    #[error("The object can not be cloned.")]
+    DataClone,
+
     #[error("Internal server error: {0}")]
     Internal(String),
 
@@ -216,6 +220,7 @@ impl AuthError {
             | Self::Serialization(_)
             | Self::Plugin { .. }
             | Self::Internal(_)
+            | Self::DataClone
             | Self::PasswordHash(_)
             | Self::Jwt(_) => false,
             #[cfg(feature = "redis-cache")]
@@ -274,6 +279,7 @@ impl AuthError {
             | Self::Serialization(_)
             | Self::Plugin { .. }
             | Self::Internal(_)
+            | Self::DataClone
             | Self::PasswordHash(_)
             | Self::Jwt(_) => 500,
         }

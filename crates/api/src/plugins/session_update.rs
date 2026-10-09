@@ -64,7 +64,7 @@ pub(super) async fn handle(
         user,
     };
     manager.set_session_cookie(req, data.clone(), None).await?;
-    data.session.filter_returned_fields(&ctx.config.session);
+    data.session.filter_returned_fields(&ctx.config.session)?;
     Ok(AuthResponse::json(
         200,
         &serde_json::json!({ "session": data.session }),

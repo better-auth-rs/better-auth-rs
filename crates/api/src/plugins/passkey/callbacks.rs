@@ -111,13 +111,13 @@ impl<'a> PasskeyEndpoint<'a> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PasskeyRegistrationUser {
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub id: SchemaValue<String>,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub name: better_auth_core::SchemaValue<String>,
     #[serde(
         default,
-        skip_serializing_if = "better_auth_core::SchemaValue::is_undefined"
+        skip_serializing_if = "better_auth_core::SchemaValue::is_json_omitted"
     )]
     pub display_name: better_auth_core::SchemaValue<Option<String>>,
 }
@@ -162,7 +162,7 @@ pub struct PasskeyAuthenticationInfo {
     /// The selected credential ID after adapter output projection.
     #[serde(
         rename = "credentialID",
-        skip_serializing_if = "SchemaValue::is_undefined"
+        skip_serializing_if = "SchemaValue::is_json_omitted"
     )]
     pub credential_id: SchemaValue<String>,
     pub new_counter: u64,

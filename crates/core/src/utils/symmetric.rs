@@ -110,6 +110,7 @@ pub fn decrypt_field<'a>(
                         FieldValue::Undefined => "undefined",
                         FieldValue::Bool(_) => "boolean",
                         FieldValue::Number(_) => "number",
+                        FieldValue::Function(_) => "function",
                         _ => "object",
                     }
                 ),

@@ -9,17 +9,17 @@ pub struct Team {
     /// Application fields projected by the configured team schema.
     #[serde(with = "crate::field_value::serde::map", flatten)]
     pub additional_fields: crate::FieldMap,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub id: SchemaValue<String>,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub name: SchemaValue<String>,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub organization_id: SchemaValue<String>,
     #[serde(with = "crate::field_value::serde::schema_date")]
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub created_at: SchemaValue<crate::FieldDate>,
     #[serde(with = "crate::field_value::serde::optional_schema_date")]
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub updated_at: SchemaValue<Option<crate::FieldDate>>,
 }
 
@@ -50,11 +50,11 @@ pub struct UpdateTeam {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct TeamMember {
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub id: SchemaValue<String>,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub team_id: SchemaValue<String>,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub user_id: SchemaValue<String>,
     #[serde(with = "crate::field_value::serde::date")]
     pub created_at: crate::FieldDate,
@@ -67,19 +67,19 @@ pub struct OrganizationRole {
     /// Application fields projected by the configured role schema.
     #[serde(with = "crate::field_value::serde::map", flatten)]
     pub additional_fields: crate::FieldMap,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub id: SchemaValue<String>,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub organization_id: SchemaValue<String>,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub role: SchemaValue<String>,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub permission: SchemaValue<crate::FieldValue>,
     #[serde(with = "crate::field_value::serde::schema_date")]
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub created_at: SchemaValue<crate::FieldDate>,
     #[serde(with = "crate::field_value::serde::optional_schema_date")]
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub updated_at: SchemaValue<Option<crate::FieldDate>>,
 }
 

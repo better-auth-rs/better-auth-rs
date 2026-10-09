@@ -252,9 +252,9 @@ pub struct CreateUser {
     pub additional_fields: crate::FieldMap,
     pub id: Option<String>,
     pub email: Option<String>,
-    #[serde(default, skip_serializing_if = "crate::SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "crate::SchemaValue::is_json_omitted")]
     pub name: crate::SchemaValue<Option<String>>,
-    #[serde(default, skip_serializing_if = "crate::SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "crate::SchemaValue::is_json_omitted")]
     pub image: crate::SchemaValue<Option<String>>,
     pub email_verified: Option<bool>,
     #[serde(
@@ -277,7 +277,11 @@ pub struct CreateUser {
     pub ban_reason: Option<String>,
     #[serde(with = "crate::field_value::serde::optional_date", default)]
     pub ban_expires: Option<crate::FieldDate>,
-    #[serde(with = "crate::field_value::serde::optional_value", default)]
+    #[serde(
+        with = "crate::field_value::serde::optional_value",
+        default,
+        skip_serializing_if = "crate::field_value::serde::optional_value::is_json_omitted"
+    )]
     pub metadata: Option<crate::FieldValue>,
 }
 
@@ -288,9 +292,9 @@ pub struct UpdateUser {
     #[serde(with = "crate::field_value::serde::map", default)]
     pub additional_fields: crate::FieldMap,
     pub email: Option<String>,
-    #[serde(default, skip_serializing_if = "crate::SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "crate::SchemaValue::is_json_omitted")]
     pub name: crate::SchemaValue<Option<String>>,
-    #[serde(default, skip_serializing_if = "crate::SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "crate::SchemaValue::is_json_omitted")]
     pub image: crate::SchemaValue<Option<String>>,
     pub email_verified: Option<bool>,
     #[serde(
@@ -330,7 +334,11 @@ pub struct UpdateUser {
     )]
     pub ban_expires: Option<Option<crate::FieldDate>>,
     pub two_factor_enabled: Option<bool>,
-    #[serde(with = "crate::field_value::serde::optional_value", default)]
+    #[serde(
+        with = "crate::field_value::serde::optional_value",
+        default,
+        skip_serializing_if = "crate::field_value::serde::optional_value::is_json_omitted"
+    )]
     pub metadata: Option<crate::FieldValue>,
 }
 
@@ -843,14 +851,18 @@ impl AuthResponse {
 
 #[derive(Debug, Deserialize, Validate)]
 pub struct UpdateUserRequest {
-    #[serde(default, skip_serializing_if = "crate::SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "crate::SchemaValue::is_json_omitted")]
     pub name: crate::SchemaValue<Option<String>>,
     #[validate(email(message = "Invalid email address"))]
     pub email: Option<String>,
-    #[serde(default, skip_serializing_if = "crate::SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "crate::SchemaValue::is_json_omitted")]
     pub image: crate::SchemaValue<Option<String>>,
     pub role: Option<String>,
-    #[serde(with = "crate::field_value::serde::optional_value", default)]
+    #[serde(
+        with = "crate::field_value::serde::optional_value",
+        default,
+        skip_serializing_if = "crate::field_value::serde::optional_value::is_json_omitted"
+    )]
     pub metadata: Option<crate::FieldValue>,
 }
 

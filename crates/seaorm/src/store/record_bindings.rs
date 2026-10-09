@@ -35,31 +35,70 @@ impl Binding {
     }
 
     pub(super) fn bind(self, backend: DbBackend) -> AuthResult<SimpleExpr> {
+        self.parse_expression()?.encode(backend)
+    }
+
+    fn parse_expression(self) -> AuthResult<Self> {
+        if let Self::Raw(value) | Self::Json(value) = &self {
+            parse_expression(value)?;
+        }
+        Ok(self)
+    }
+
+    fn encode(self, backend: DbBackend) -> AuthResult<SimpleExpr> {
         match self {
             Self::Native(value) => Ok(SimpleExpr::Value(value)),
-            Self::Json(value) if backend == DbBackend::Postgres => parameter(value, backend),
+            Self::Json(value) if backend == DbBackend::Postgres => driver_parameter(value, backend),
             Self::Json(value) => Ok(SimpleExpr::Value(Value::Json(value.json()?.map(Box::new)))),
-            Self::Raw(value) => parameter(value, backend),
+            Self::Raw(value) => driver_parameter(value, backend),
             Self::Date(date) => {
                 let value = if backend == DbBackend::Sqlite {
                     sqlite_date(date)?
                 } else {
                     FieldValue::Date(date)
                 };
-                parameter(value, backend)
+                driver_parameter(value, backend)
             }
         }
     }
 }
 
 pub(super) fn bind(backend: DbBackend, values: Vec<Binding>) -> AuthResult<Vec<SimpleExpr>> {
+    // Kysely parses every expression before the driver encodes any parameter.
     values
         .into_iter()
-        .map(|value| value.bind(backend))
+        .map(Binding::parse_expression)
+        .collect::<AuthResult<Vec<_>>>()?
+        .into_iter()
+        .map(|value| value.encode(backend))
         .collect()
 }
 
 pub(super) fn parameter(value: FieldValue, backend: DbBackend) -> AuthResult<SimpleExpr> {
+    parse_expression(&value)?;
+    driver_parameter(value, backend)
+}
+
+fn parse_expression(value: &FieldValue) -> AuthResult<()> {
+    let FieldValue::Function(function) = value else {
+        return Ok(());
+    };
+    // Ordinary factory results are values, not Kysely operation-node sources.
+    let message = match function.call()? {
+        FieldValue::Undefined => {
+            "undefined is not an object (evaluating 'exp(expressionBuilder()).toOperationNode')"
+        }
+        FieldValue::Null => {
+            "null is not an object (evaluating 'exp(expressionBuilder()).toOperationNode')"
+        }
+        _ => {
+            "exp(expressionBuilder()).toOperationNode is not a function. (In 'exp(expressionBuilder()).toOperationNode()', 'exp(expressionBuilder()).toOperationNode' is undefined)"
+        }
+    };
+    Err(AuthError::internal(message))
+}
+
+fn driver_parameter(value: FieldValue, backend: DbBackend) -> AuthResult<SimpleExpr> {
     if backend == DbBackend::Postgres {
         // pg sends OID-unspecified text parameters. A quoted unknown literal preserves column inference.
         return Ok(SimpleExpr::Constant(Value::String(postgres_parameter(
@@ -83,11 +122,11 @@ pub(super) fn parameter(value: FieldValue, backend: DbBackend) -> AuthResult<Sim
                         nested
                             .iter()
                             .cloned()
-                            .map(|value| parameter(value, backend))
+                            .map(|value| driver_parameter(value, backend))
                             .collect::<AuthResult<Vec<_>>>()
                             .map(SimpleExpr::Tuple)
                     } else {
-                        parameter(value, backend)
+                        driver_parameter(value, backend)
                     }
                 })
                 .collect::<AuthResult<Vec<_>>>()?;
@@ -190,6 +229,10 @@ pub(crate) fn sqlite_date(date: FieldDate) -> AuthResult<FieldValue> {
         value.to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
     ))
 }
+
+#[cfg(test)]
+#[path = "record_function_tests.rs"]
+mod function_tests;
 
 #[cfg(test)]
 mod tests {

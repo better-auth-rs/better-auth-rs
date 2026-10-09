@@ -203,7 +203,7 @@ fn json_input(value: &Value) -> bool {
         Value::Number(value) => value.is_finite(),
         Value::Array(values) => values.iter().all(json_input),
         Value::Object(values) => values.values().all(json_input),
-        Value::Undefined | Value::Date(_) => false,
+        Value::Undefined | Value::Date(_) | Value::Function(_) => false,
     }
 }
 
@@ -220,6 +220,7 @@ fn type_name(value: Option<&Value>) -> &'static str {
         Some(Value::Date(_)) => "Date",
         Some(Value::Array(_)) => "array",
         Some(Value::Object(_)) => "object",
+        Some(Value::Function(_)) => "function",
     }
 }
 

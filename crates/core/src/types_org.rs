@@ -11,19 +11,19 @@ pub struct Organization {
     /// Application fields projected by the configured organization schema.
     #[serde(with = "crate::field_value::serde::map", flatten)]
     pub additional_fields: crate::FieldMap,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub id: SchemaValue<String>,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub name: SchemaValue<String>,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub slug: SchemaValue<String>,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub logo: SchemaValue<Option<String>>,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub metadata: SchemaValue<Option<crate::FieldValue>>,
     #[serde(rename = "createdAt")]
     #[serde(with = "crate::field_value::serde::schema_date")]
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub created_at: SchemaValue<crate::FieldDate>,
 }
 
@@ -33,19 +33,19 @@ pub struct Member {
     /// Application fields projected by the configured member schema.
     #[serde(with = "crate::field_value::serde::map", flatten)]
     pub additional_fields: crate::FieldMap,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub id: SchemaValue<String>,
     #[serde(rename = "organizationId")]
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub organization_id: SchemaValue<String>,
     #[serde(rename = "userId")]
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub user_id: SchemaValue<String>,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub role: SchemaValue<String>,
     #[serde(rename = "createdAt")]
     #[serde(with = "crate::field_value::serde::schema_date")]
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub created_at: SchemaValue<crate::FieldDate>,
 }
 
@@ -89,29 +89,29 @@ pub struct Invitation {
     #[serde(with = "crate::field_value::serde::map", flatten)]
     pub additional_fields: crate::FieldMap,
     #[serde(rename = "teamId")]
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub team_id: SchemaValue<Option<String>>,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub id: SchemaValue<String>,
     #[serde(rename = "organizationId")]
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub organization_id: SchemaValue<String>,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub email: SchemaValue<String>,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub role: SchemaValue<String>,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub status: SchemaValue<InvitationStatus>,
     #[serde(rename = "inviterId")]
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub inviter_id: SchemaValue<String>,
     #[serde(rename = "expiresAt")]
     #[serde(with = "crate::field_value::serde::schema_date")]
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub expires_at: SchemaValue<crate::FieldDate>,
     #[serde(rename = "createdAt")]
     #[serde(with = "crate::field_value::serde::schema_date")]
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub created_at: SchemaValue<crate::FieldDate>,
 }
 

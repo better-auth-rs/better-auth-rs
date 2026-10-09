@@ -334,7 +334,7 @@ impl<S: AuthSchema> SecondaryStore<S> {
         // Upstream retains the cached creation date, even when a before hook patches it.
         let _ = fields.insert("createdAt".into(), created_at.into_field_value());
         let mut updated = cache::session(fields, &["expiresAt", "createdAt", "updatedAt"])?;
-        updated.filter_returned_fields(&self.config.session);
+        updated.filter_returned_fields(&self.config.session)?;
         let _ = cached.insert("session".into(), FieldMap::from(updated.clone()).into());
         let seconds = updated.expires_at().converted_cache_ttl(self.now())?;
         if seconds > 0.0 {

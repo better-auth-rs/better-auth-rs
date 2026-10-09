@@ -185,10 +185,17 @@ impl UserFieldConfig {
     }
 
     pub(crate) fn default_value(&self) -> AuthResult<Option<Value>> {
-        match &self.default_value_fn {
-            Some(factory) => factory().map(Some),
-            None => Ok(self.default_value.clone()),
+        match self.default_declaration() {
+            Some(Value::Function(function)) => function.call().map(Some),
+            value => Ok(value),
         }
+    }
+
+    fn default_declaration(&self) -> Option<Value> {
+        self.default_value_fn.as_ref().map_or_else(
+            || self.default_value.clone(),
+            |factory| Some(Value::Function(factory.clone().into())),
+        )
     }
 }
 
@@ -223,7 +230,7 @@ impl UserConfig {
                 if !field.input() {
                     if create
                         && field.has_storage_default()
-                        && let Some(default) = field.default_value()?
+                        && let Some(default) = field.default_declaration()
                     {
                         let _ = parsed.insert(name.clone(), default);
                         continue;

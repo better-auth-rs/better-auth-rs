@@ -22,22 +22,22 @@ pub struct AddMemberInput {
     pub additional_fields: better_auth_core::FieldMap,
     #[serde(
         default,
-        skip_serializing_if = "better_auth_core::SchemaValue::is_undefined"
+        skip_serializing_if = "better_auth_core::SchemaValue::is_json_omitted"
     )]
     pub user_id: better_auth_core::SchemaValue<String>,
     #[serde(
         default,
-        skip_serializing_if = "better_auth_core::SchemaValue::is_undefined"
+        skip_serializing_if = "better_auth_core::SchemaValue::is_json_omitted"
     )]
     pub organization_id: better_auth_core::SchemaValue<String>,
     #[serde(
         default,
-        skip_serializing_if = "better_auth_core::SchemaValue::is_undefined"
+        skip_serializing_if = "better_auth_core::SchemaValue::is_json_omitted"
     )]
     pub role: better_auth_core::SchemaValue<RoleInput>,
     #[serde(
         default,
-        skip_serializing_if = "better_auth_core::SchemaValue::is_undefined"
+        skip_serializing_if = "better_auth_core::SchemaValue::is_json_omitted"
     )]
     pub team_id: better_auth_core::SchemaValue<String>,
 }

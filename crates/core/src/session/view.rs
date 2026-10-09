@@ -55,7 +55,7 @@ impl AuthRecordFields for SessionView {
         output.expires_at = context.clone_field(&self.expires_at)?;
         output.created_at = context.clone_field(&self.created_at)?;
         output.updated_at = context.clone_field(&self.updated_at)?;
-        output.additional_fields = context.clone_map(&self.additional_fields);
+        output.additional_fields = context.clone_map(&self.additional_fields)?;
         Ok(output)
     }
 }
@@ -64,6 +64,51 @@ impl AuthRecordFields for SessionView {
 mod tests {
     use super::*;
     use crate::FieldDate;
+
+    #[test]
+    fn public_clone_retains_enumerable_aliases_and_private_active_state() -> AuthResult<()> {
+        let date = FieldDate::from_milliseconds(123.0);
+        let mut session = SessionView::from_field_values(FieldMap::from([
+            ("id".into(), "private-id".into()),
+            ("token".into(), "public-token".into()),
+            ("createdAt".into(), date.clone().into()),
+            ("alias".into(), date.clone().into()),
+            ("ownUndefined".into(), FieldValue::Undefined),
+        ]))?;
+        let factory: crate::user_fields::UserFieldFactory = std::sync::Arc::new(|| {
+            Err(crate::AuthError::internal(
+                "Public cloning must not invoke functions",
+            ))
+        });
+        session.token =
+            SchemaValue::from_field(FieldValue::Function(crate::FieldFunction::from(factory)));
+        session.active = true;
+        let _ = session
+            .additional_fields
+            .insert("token".into(), "public-token".into());
+        let _ = session
+            .additional_fields
+            .insert("active".into(), "extension".into());
+        let mut config = crate::config::SessionConfig::default();
+        let _ = config.fields_mut().insert(
+            "id".into(),
+            crate::user_fields::UserFieldConfig {
+                returned: Some(false),
+                ..Default::default()
+            },
+        );
+        session.filter_returned_fields(&config)?;
+        assert!(session.active);
+        let fields = FieldMap::from(session);
+        assert!(!fields.contains_key("id"));
+        assert!(!fields.contains_key("expiresAt"));
+        assert_eq!(fields.get("ownUndefined"), Some(&FieldValue::Undefined));
+        assert_eq!(fields.get("token"), Some(&"public-token".into()));
+        assert_eq!(fields.get("active"), Some(&"extension".into()));
+        assert!(fields["createdAt"].strict_equals(&fields["alias"]));
+        assert!(!fields["createdAt"].strict_equals(&date.into()));
+        Ok(())
+    }
 
     #[test]
     fn snapshots_preserve_private_fields_and_cross_field_date_aliases() -> AuthResult<()> {

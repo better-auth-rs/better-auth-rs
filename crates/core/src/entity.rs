@@ -26,7 +26,7 @@ pub trait AuthRecordFields {
     where
         Self: FromFieldMap,
     {
-        Self::from_field_values(context.clone_map(&self.field_values()?))
+        Self::from_field_values(context.clone_map(&self.field_values()?)?)
     }
 }
 
@@ -44,7 +44,7 @@ impl AuthRecordFields for crate::FieldMap {
         &self,
         context: &mut crate::StructuredCloneContext,
     ) -> crate::AuthResult<Self> {
-        Ok(context.clone_map(self))
+        context.clone_map(self)
     }
 }
 

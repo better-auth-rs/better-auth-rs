@@ -46,11 +46,8 @@ impl UserView {
             }
             let value = match data.get(name).filter(|value| !value.is_undefined()) {
                 Some(value) => Some(value.clone()),
-                None if field.default_value_fn.is_some() => field.default_value()?,
-                None => field
-                    .default_value
-                    .clone()
-                    .filter(|value| !value.is_undefined()),
+                None if field.has_storage_default() => field.default_value()?,
+                None => None,
             }
             .or_else(|| (field.required != Some(true)).then_some(Value::Null));
             if let Some(value) = value {
@@ -65,7 +62,10 @@ impl UserView {
 
     /// Apply current `returned` restrictions to cached fields without repeating adapter transforms.
     /// Upstream keeps fields from disabled plugins until the cache expires or its version changes.
-    pub(crate) fn filter_cached_fields(&mut self, config: &super::UserConfig) {
+    pub(crate) fn filter_cached_fields(&mut self, config: &super::UserConfig) -> AuthResult<()> {
+        *self = crate::StructuredCloneContext::new()
+            .clone_map(&FieldMap::from(self.clone()))?
+            .try_into()?;
         for (name, field) in config.fields() {
             if field.returned() {
                 continue;
@@ -80,6 +80,7 @@ impl UserView {
                 .get(name)
                 .is_none_or(|field| field.returned())
         });
+        Ok(())
     }
 
     /// Construct the public user shape from the active application and plugin schemas.
@@ -110,7 +111,7 @@ impl UserView {
         supports_native_json: bool,
     ) -> AuthResult<Self> {
         let mut view = Self::project(user, adapter, metadata, false, supports_native_json).await?;
-        view.filter_cached_fields(endpoint);
+        view.filter_cached_fields(endpoint)?;
         Ok(view)
     }
 
@@ -293,23 +294,20 @@ impl UserView {
                                     .await?
                             }
                         };
-                        if Self::NATIVE_FIELDS.contains(&name) {
-                            view.set_field(name, value);
-                            if public
-                                && !field.returned()
-                                && let Some(fields) = &mut view.visible_fields
-                            {
-                                let _ = fields.remove(name);
-                            }
-                        } else if !public || field.returned() {
-                            view.set_field(name, value);
-                        }
+                        view.set_field(name, value);
                         Ok(())
                     })
                 },
             )
             .await?;
-            Ok(rows.into_iter().map(|(_, view, _)| view).collect())
+            rows.into_iter()
+                .map(|(_, mut view, _)| {
+                    if public {
+                        view.filter_cached_fields(config)?;
+                    }
+                    Ok(view)
+                })
+                .collect()
         })
     }
 }
@@ -378,8 +376,8 @@ macro_rules! user_fields {
             fn structured_clone(&self, context: &mut crate::StructuredCloneContext) -> AuthResult<Self> {
                 let mut user = self.clone();
                 $(user.$field = context.clone_field(&self.$field)?;)*
-                user.metadata = context.clone_value(&self.metadata);
-                user.additional_fields = context.clone_map(&self.additional_fields);
+                user.metadata = context.clone_value(&self.metadata)?;
+                user.additional_fields = context.clone_map(&self.additional_fields)?;
                 Ok(user)
             }
         }

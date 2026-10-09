@@ -97,13 +97,13 @@ pub struct CreateOrganizationRequest {
     #[serde(with = "better_auth_core::field_value::serde::map")]
     pub additional_fields: better_auth_core::FieldMap,
 
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub name: SchemaValue<String>,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub slug: SchemaValue<String>,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub logo: SchemaValue<Option<String>>,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub metadata: SchemaValue<Option<better_auth_core::FieldValue>>,
     #[serde(rename = "userId")]
     pub user_id: Option<String>,
@@ -182,23 +182,23 @@ pub struct InviteMemberRequest {
     #[serde(flatten)]
     #[serde(with = "better_auth_core::field_value::serde::map")]
     pub additional_fields: better_auth_core::FieldMap,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub email: SchemaValue<String>,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub role: SchemaValue<RoleInput>,
     #[serde(
         default,
         rename = "organizationId",
-        skip_serializing_if = "SchemaValue::is_undefined"
+        skip_serializing_if = "SchemaValue::is_json_omitted"
     )]
     pub organization_id: SchemaValue<String>,
     #[serde(
         default,
         rename = "teamId",
-        skip_serializing_if = "SchemaValue::is_undefined"
+        skip_serializing_if = "SchemaValue::is_json_omitted"
     )]
     pub team_id: SchemaValue<RoleInput>,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub resend: SchemaValue<bool>,
 }
 
@@ -351,19 +351,19 @@ pub struct BasicMemberResponse {
     #[serde(with = "better_auth_core::field_value::serde::map")]
     pub additional_fields: better_auth_core::FieldMap,
 
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub id: SchemaValue<String>,
     #[serde(rename = "userId")]
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub user_id: SchemaValue<String>,
     #[serde(rename = "organizationId")]
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub organization_id: SchemaValue<String>,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub role: SchemaValue<String>,
     #[serde(rename = "createdAt")]
     #[serde(serialize_with = "better_auth_core::schema_value::serialize_date")]
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub created_at: SchemaValue<better_auth_core::FieldDate>,
 }
 
@@ -394,7 +394,7 @@ pub struct GetInvitationResponse<I: Serialize> {
     pub organization_slug: SchemaValue<String>,
     #[serde(
         rename = "inviterEmail",
-        skip_serializing_if = "SchemaValue::is_undefined"
+        skip_serializing_if = "SchemaValue::is_json_omitted"
     )]
     pub inviter_email: SchemaValue<Option<String>>,
 }
@@ -405,7 +405,7 @@ pub struct UserInvitationResponse<I: Serialize> {
     pub invitation: I,
     #[serde(
         rename = "organizationName",
-        skip_serializing_if = "SchemaValue::is_undefined"
+        skip_serializing_if = "SchemaValue::is_json_omitted"
     )]
     pub organization_name: SchemaValue<String>,
 }
@@ -416,20 +416,20 @@ pub struct CreatedOrganizationResponse {
     #[serde(with = "better_auth_core::field_value::serde::map")]
     pub additional_fields: better_auth_core::FieldMap,
 
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub id: SchemaValue<String>,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub name: SchemaValue<String>,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub slug: SchemaValue<String>,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub logo: SchemaValue<Option<String>>,
     #[serde(rename = "createdAt")]
     #[serde(serialize_with = "better_auth_core::schema_value::serialize_date")]
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub created_at: SchemaValue<better_auth_core::FieldDate>,
 
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub metadata: SchemaValue<Option<better_auth_core::FieldValue>>,
 }
 
@@ -439,20 +439,20 @@ pub struct OrganizationResponse {
     #[serde(with = "better_auth_core::field_value::serde::map")]
     pub additional_fields: better_auth_core::FieldMap,
 
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub id: SchemaValue<String>,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub name: SchemaValue<String>,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub slug: SchemaValue<String>,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub logo: SchemaValue<Option<String>>,
     #[serde(rename = "createdAt")]
     #[serde(serialize_with = "better_auth_core::schema_value::serialize_date")]
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub created_at: SchemaValue<better_auth_core::FieldDate>,
 
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub metadata: SchemaValue<Option<better_auth_core::FieldValue>>,
 }
 
@@ -500,19 +500,19 @@ pub struct MemberResponse {
     #[serde(with = "better_auth_core::field_value::serde::map")]
     pub additional_fields: better_auth_core::FieldMap,
 
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub id: SchemaValue<String>,
     #[serde(rename = "organizationId")]
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub organization_id: SchemaValue<String>,
     #[serde(rename = "userId")]
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub user_id: SchemaValue<String>,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub role: SchemaValue<String>,
     #[serde(rename = "createdAt")]
     #[serde(serialize_with = "better_auth_core::schema_value::serialize_date")]
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub created_at: SchemaValue<better_auth_core::FieldDate>,
     pub user: MemberUserView,
 }

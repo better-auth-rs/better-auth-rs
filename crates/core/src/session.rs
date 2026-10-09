@@ -120,7 +120,7 @@ impl<S: AuthSchema> SessionManager<S> {
 
     pub async fn session_view(&self, session: &impl AuthSession) -> AuthResult<SessionView> {
         let mut view = self.internal_session_view(session).await?;
-        view.filter_returned_fields(&self.config.session);
+        view.filter_returned_fields(&self.config.session)?;
         Ok(view)
     }
 
@@ -231,12 +231,12 @@ impl<S: AuthSchema> SessionManager<S> {
     fn public_data(
         &self,
         mut data: SessionData<JoinValue<UserView>>,
-    ) -> SessionData<JoinValue<UserView>> {
+    ) -> AuthResult<SessionData<JoinValue<UserView>>> {
+        data.session.filter_returned_fields(&self.config.session)?;
         if let JoinValue::One(Some(user)) = &mut data.user {
-            user.filter_cached_fields(&self.config.user);
+            user.filter_cached_fields(&self.config.user)?;
         }
-        data.session.filter_returned_fields(&self.config.session);
-        data
+        Ok(data)
     }
 
     /// Install a plugin-provided signer without coupling core to the plugin implementation.
@@ -527,11 +527,11 @@ impl<S: AuthSchema> SessionManager<S> {
                 if raw_snapshot {
                     req.set_session_snapshot(Some(payload.data.clone().into()))?;
                 }
-                payload.data.user.filter_cached_fields(&self.config.user);
                 payload
                     .data
                     .session
-                    .filter_returned_fields(&self.config.session);
+                    .filter_returned_fields(&self.config.session)?;
+                payload.data.user.filter_cached_fields(&self.config.user)?;
                 if !raw_snapshot {
                     req.set_session_snapshot(Some(payload.data.clone().into()))?;
                 }
@@ -551,7 +551,7 @@ impl<S: AuthSchema> SessionManager<S> {
         };
         let mut data = if let Some(mut data) = cached_data {
             match &mut data.user {
-                JoinValue::One(Some(user)) => *user = self.user_view(user).await?,
+                JoinValue::One(Some(user)) => *user = self.internal_user_view(user).await?,
                 JoinValue::One(None) => {
                     req.set_session_snapshot(None)?;
                     self.clear_cookies(req)?;
@@ -560,7 +560,6 @@ impl<S: AuthSchema> SessionManager<S> {
                 JoinValue::Many(_) if typed_user => return Err(relationship_array_error()),
                 JoinValue::Many(_) => {}
             }
-            data.session.filter_returned_fields(&self.config.session);
             data
         } else {
             let Some(user_id) = session.user_id.as_str() else {
@@ -572,8 +571,8 @@ impl<S: AuthSchema> SessionManager<S> {
                 return Ok(none());
             };
             SessionData {
-                session: self.session_view(&session).await?,
-                user: JoinValue::One(Some(self.user_view(&user).await?)),
+                session: self.internal_session_view(&session).await?,
+                user: JoinValue::One(Some(self.internal_user_view(&user).await?)),
             }
         };
         req.set_session_snapshot(Some(data.clone()))?;
@@ -587,7 +586,7 @@ impl<S: AuthSchema> SessionManager<S> {
         let dont_remember = self.dont_remember(req);
         if dont_remember || query_flag(req, "disableRefresh")? {
             return Ok(SessionResolution {
-                data: Some(self.public_data(data)),
+                data: Some(self.public_data(data)?),
                 needs_refresh: None,
             });
         }
@@ -596,7 +595,7 @@ impl<S: AuthSchema> SessionManager<S> {
             self.write_cache_with_response(req, &data.clone().into(), false, None, None)
                 .await?;
             return Ok(SessionResolution {
-                data: Some(self.public_data(data)),
+                data: Some(self.public_data(data)?),
                 needs_refresh: Some(needs_refresh),
             });
         }
@@ -620,7 +619,7 @@ impl<S: AuthSchema> SessionManager<S> {
                 .await?;
         }
         Ok(SessionResolution {
-            data: Some(self.public_data(data)),
+            data: Some(self.public_data(data)?),
             needs_refresh: None,
         })
     }
@@ -738,7 +737,7 @@ impl<S: AuthSchema> SessionManager<S> {
                 continue;
             }
             let view = if let Some(mut view) = cached {
-                view.filter_returned_fields(&self.config.session);
+                view.filter_returned_fields(&self.config.session)?;
                 view
             } else {
                 SessionView::with_fields_for_adapter(

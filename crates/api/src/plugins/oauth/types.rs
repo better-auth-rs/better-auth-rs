@@ -67,7 +67,7 @@ pub(crate) struct SocialSignInResponse {
     pub status: Option<bool>,
     #[serde(
         with = "better_auth_core::field_value::serde::value",
-        skip_serializing_if = "better_auth_core::FieldValue::is_undefined"
+        skip_serializing_if = "better_auth_core::FieldValue::is_json_omitted"
     )]
     pub token: better_auth_core::FieldValue,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -77,15 +77,15 @@ pub(crate) struct SocialSignInResponse {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct AccessTokenResponse {
-    #[serde(skip_serializing_if = "better_auth_core::SchemaValue::is_undefined")]
+    #[serde(skip_serializing_if = "better_auth_core::SchemaValue::is_json_omitted")]
     pub access_token: better_auth_core::SchemaValue<Option<String>>,
     #[serde(
-        skip_serializing_if = "better_auth_core::SchemaValue::is_undefined",
+        skip_serializing_if = "better_auth_core::SchemaValue::is_json_omitted",
         serialize_with = "better_auth_core::schema_value::serialize_optional_date"
     )]
     pub access_token_expires_at: better_auth_core::SchemaValue<Option<better_auth_core::FieldDate>>,
     pub scopes: Vec<String>,
-    #[serde(skip_serializing_if = "better_auth_core::SchemaValue::is_undefined")]
+    #[serde(skip_serializing_if = "better_auth_core::SchemaValue::is_json_omitted")]
     pub id_token: better_auth_core::SchemaValue<Option<String>>,
 }
 
@@ -101,18 +101,18 @@ pub(crate) struct RefreshTokenResponse {
     pub access_token_expires_at: Option<better_auth_core::FieldDate>,
     pub refresh_token: String,
     #[serde(
-        skip_serializing_if = "better_auth_core::SchemaValue::is_undefined",
+        skip_serializing_if = "better_auth_core::SchemaValue::is_json_omitted",
         serialize_with = "better_auth_core::schema_value::serialize_optional_date"
     )]
     pub refresh_token_expires_at:
         better_auth_core::SchemaValue<Option<better_auth_core::FieldDate>>,
-    #[serde(skip_serializing_if = "better_auth_core::SchemaValue::is_undefined")]
+    #[serde(skip_serializing_if = "better_auth_core::SchemaValue::is_json_omitted")]
     pub scope: better_auth_core::SchemaValue<Option<String>>,
-    #[serde(skip_serializing_if = "better_auth_core::SchemaValue::is_undefined")]
+    #[serde(skip_serializing_if = "better_auth_core::SchemaValue::is_json_omitted")]
     pub id_token: better_auth_core::SchemaValue<Option<String>>,
-    #[serde(skip_serializing_if = "better_auth_core::SchemaValue::is_undefined")]
+    #[serde(skip_serializing_if = "better_auth_core::SchemaValue::is_json_omitted")]
     pub provider_id: better_auth_core::SchemaValue<String>,
-    #[serde(skip_serializing_if = "better_auth_core::SchemaValue::is_undefined")]
+    #[serde(skip_serializing_if = "better_auth_core::SchemaValue::is_json_omitted")]
     pub account_id: better_auth_core::SchemaValue<String>,
 }
 
@@ -120,15 +120,15 @@ pub(crate) struct RefreshTokenResponse {
 pub(crate) struct AccountInfoUser {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
-    #[serde(skip_serializing_if = "better_auth_core::SchemaValue::is_undefined")]
+    #[serde(skip_serializing_if = "better_auth_core::SchemaValue::is_json_omitted")]
     pub name: better_auth_core::SchemaValue<Option<String>>,
-    #[serde(skip_serializing_if = "better_auth_core::SchemaValue::is_undefined")]
+    #[serde(skip_serializing_if = "better_auth_core::SchemaValue::is_json_omitted")]
     pub email: better_auth_core::SchemaValue<Option<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub image: Option<Option<String>>,
     #[serde(
         rename = "emailVerified",
-        skip_serializing_if = "better_auth_core::SchemaValue::is_undefined"
+        skip_serializing_if = "better_auth_core::SchemaValue::is_json_omitted"
     )]
     pub email_verified: better_auth_core::SchemaValue<Option<bool>>,
     #[serde(flatten)]
@@ -139,11 +139,11 @@ pub(crate) struct AccountInfoUser {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct AccountInfoAccount {
-    #[serde(skip_serializing_if = "better_auth_core::SchemaValue::is_undefined")]
+    #[serde(skip_serializing_if = "better_auth_core::SchemaValue::is_json_omitted")]
     pub id: better_auth_core::SchemaValue<String>,
-    #[serde(skip_serializing_if = "better_auth_core::SchemaValue::is_undefined")]
+    #[serde(skip_serializing_if = "better_auth_core::SchemaValue::is_json_omitted")]
     pub provider_id: better_auth_core::SchemaValue<String>,
-    #[serde(skip_serializing_if = "better_auth_core::SchemaValue::is_undefined")]
+    #[serde(skip_serializing_if = "better_auth_core::SchemaValue::is_json_omitted")]
     pub account_id: better_auth_core::SchemaValue<String>,
 }
 

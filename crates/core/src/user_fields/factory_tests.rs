@@ -201,7 +201,7 @@ fn public_input_preserves_undefined_results_and_skips_callbacks_for_undefined_in
 }
 
 #[test]
-fn factory_errors_stop_public_input_and_synthetic_output() -> AuthResult<()> {
+fn factory_errors_follow_input_presence_and_stop_synthetic_output() -> AuthResult<()> {
     for protected in [false, true] {
         let (events, receiver) = mpsc::channel();
         let mut fields = fields(&events);
@@ -215,8 +215,24 @@ fn factory_errors_stop_public_input_and_synthetic_output() -> AuthResult<()> {
         } else {
             FieldMap::new()
         };
-        assert_factory_error(fields.parse_input(&input, true));
-        assert_eq!(receiver.try_iter().collect::<Vec<_>>(), ["factory"]);
+        if protected {
+            let parsed = fields.parse_input(&input, true)?;
+            let factory = fields
+                .fields()
+                .get("label")
+                .and_then(|field| field.default_value_fn.clone())
+                .ok_or_else(|| AuthError::internal("Test factory is missing"))?;
+            assert!(
+                parsed
+                    .get("label")
+                    .is_some_and(|value| { value.strict_equals(&Value::Function(factory.into())) })
+            );
+            assert_eq!(parsed.get("later"), Some(&Value::from("later")));
+            assert_eq!(receiver.try_iter().collect::<Vec<_>>(), ["later"]);
+        } else {
+            assert_factory_error(fields.parse_input(&input, true));
+            assert_eq!(receiver.try_iter().collect::<Vec<_>>(), ["factory"]);
+        }
         assert_factory_error(UserView::synthetic_output(
             FieldMap::new(),
             &fields,

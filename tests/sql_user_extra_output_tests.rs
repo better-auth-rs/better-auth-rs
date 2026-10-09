@@ -33,6 +33,7 @@ fn event(field: &str, value: &FieldValue) -> AuthResult<Value> {
         FieldValue::Date(_) => "date",
         FieldValue::Array(_) => "array",
         FieldValue::Object(_) => "object",
+        FieldValue::Function(_) => "function",
     };
     Ok(
         json!({"field":field,"present":!value.is_undefined(),"kind":kind,"value":value.json()?.unwrap_or(Value::Null)}),

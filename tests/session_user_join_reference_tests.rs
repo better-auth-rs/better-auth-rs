@@ -167,7 +167,7 @@ fn snapshot_fields(
         if data.user.is_null() {
             return Ok(FieldValue::Null);
         }
-        data.session.filter_returned_fields(&config.session);
+        data.session.filter_returned_fields(&config.session)?;
         if !batch {
             data.user = data.public_user(&config.user)?;
         }

@@ -122,6 +122,7 @@ impl Hash for CacheKey {
             FieldValue::Date(value) => (5_u8, value.milliseconds().to_bits()).hash(state),
             FieldValue::Array(value) => (6_u8, Arc::as_ptr(value)).hash(state),
             FieldValue::Object(value) => (7_u8, Arc::as_ptr(value)).hash(state),
+            FieldValue::Function(value) => (8_u8, value.identity()).hash(state),
         }
     }
 }

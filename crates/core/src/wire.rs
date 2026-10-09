@@ -208,28 +208,30 @@ impl SessionView {
         .map(|(_, field)| field)
     }
 
-    /// Apply current public visibility without materializing absent cached fields.
-    pub fn filter_returned_fields(&mut self, config: &crate::config::SessionConfig) {
-        macro_rules! hide {
-            ($($field:ident => $name:literal),* $(,)?) => {$(
-                if config.fields().get($name).is_some_and(|field| !field.returned()) {
-                    self.$field = SchemaValue::Undefined;
-                    self.field_order.retain(|name| name != $name);
-                }
-            )*};
-        }
-        hide!(
-            token => "token", user_id => "userId", expires_at => "expiresAt",
-            created_at => "createdAt", updated_at => "updatedAt", ip_address => "ipAddress",
-            user_agent => "userAgent", impersonated_by => "impersonatedBy",
-            active_organization_id => "activeOrganizationId", active_team_id => "activeTeamId",
-        );
-        self.additional_fields.retain(|name, _| {
+    /// Clone enumerable fields before applying public visibility, preserving cached field presence.
+    pub fn filter_returned_fields(
+        &mut self,
+        config: &crate::config::SessionConfig,
+    ) -> crate::AuthResult<()> {
+        let mut fields =
+            crate::StructuredCloneContext::new().clone_map(&crate::FieldMap::from(self.clone()))?;
+        fields.retain(|name, _| {
             config
                 .fields()
                 .get(name)
                 .is_none_or(|field| field.returned())
         });
+        let field_order = fields.keys().cloned().collect();
+        // The enumerable active extension must not replace Rust's private active state.
+        let active_field = fields.shift_remove("active");
+        let mut view = <Self as crate::FromFieldMap>::from_field_values(fields)?;
+        view.active = self.active;
+        view.field_order = field_order;
+        if let Some(value) = active_field {
+            let _ = view.additional_fields.insert("active".into(), value);
+        }
+        *self = view;
+        Ok(())
     }
 
     /// Apply configured field visibility to a serialized application session model.
@@ -247,7 +249,7 @@ impl SessionView {
     ) -> crate::AuthResult<Self> {
         let mut view =
             Self::with_internal_fields_for_adapter(session, config, supports_native_json).await?;
-        view.filter_returned_fields(config);
+        view.filter_returned_fields(config)?;
         Ok(view)
     }
 
@@ -488,19 +490,19 @@ pub struct OrganizationView {
     #[serde(with = "crate::field_value::serde::map", flatten)]
     pub additional_fields: crate::FieldMap,
 
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub id: SchemaValue<String>,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub name: SchemaValue<String>,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub slug: SchemaValue<String>,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub logo: SchemaValue<Option<String>>,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub metadata: SchemaValue<Option<crate::FieldValue>>,
     #[serde(rename = "createdAt")]
     #[serde(with = "crate::field_value::serde::schema_date")]
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub created_at: SchemaValue<crate::FieldDate>,
 }
 
@@ -525,29 +527,29 @@ pub struct InvitationView {
     pub additional_fields: crate::FieldMap,
 
     #[serde(rename = "teamId")]
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub team_id: SchemaValue<Option<String>>,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub id: SchemaValue<String>,
     #[serde(rename = "organizationId")]
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub organization_id: SchemaValue<String>,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub email: SchemaValue<String>,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub role: SchemaValue<String>,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub status: SchemaValue<InvitationStatus>,
     #[serde(rename = "inviterId")]
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub inviter_id: SchemaValue<String>,
     #[serde(rename = "expiresAt")]
     #[serde(with = "crate::field_value::serde::schema_date")]
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub expires_at: SchemaValue<crate::FieldDate>,
     #[serde(rename = "createdAt")]
     #[serde(with = "crate::field_value::serde::schema_date")]
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub created_at: SchemaValue<crate::FieldDate>,
 }
 
@@ -574,34 +576,34 @@ pub struct PasskeyView {
     /// Declared application fields after adapter output projection.
     #[serde(with = "crate::field_value::serde::map", flatten, default)]
     pub additional_fields: crate::FieldMap,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub id: SchemaValue<String>,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub name: SchemaValue<Option<String>>,
     #[serde(rename = "credentialID")]
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub credential_id: SchemaValue<String>,
     #[serde(rename = "userId")]
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub user_id: SchemaValue<String>,
     #[serde(rename = "publicKey")]
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub public_key: SchemaValue<String>,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub counter: SchemaValue<u64>,
     #[serde(rename = "deviceType")]
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub device_type: SchemaValue<String>,
     #[serde(rename = "backedUp")]
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub backed_up: SchemaValue<bool>,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub transports: SchemaValue<Option<String>>,
     #[serde(rename = "createdAt")]
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     #[serde(with = "crate::field_value::serde::optional_schema_date")]
     pub created_at: SchemaValue<Option<crate::FieldDate>>,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub aaguid: SchemaValue<Option<String>>,
 }
 

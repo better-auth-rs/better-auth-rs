@@ -8,46 +8,46 @@ use serde::Deserialize;
 pub struct AccountView {
     #[serde(skip)]
     pub field_order: Vec<String>,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub id: SchemaValue<String>,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub account_id: SchemaValue<String>,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub provider_id: SchemaValue<String>,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub user_id: SchemaValue<String>,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub access_token: SchemaValue<Option<String>>,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub refresh_token: SchemaValue<Option<String>>,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub id_token: SchemaValue<Option<String>>,
     #[serde(
         default,
-        skip_serializing_if = "SchemaValue::is_undefined",
+        skip_serializing_if = "SchemaValue::is_json_omitted",
         with = "crate::field_value::serde::optional_schema_date"
     )]
     pub access_token_expires_at: SchemaValue<Option<crate::FieldDate>>,
     #[serde(
         default,
-        skip_serializing_if = "SchemaValue::is_undefined",
+        skip_serializing_if = "SchemaValue::is_json_omitted",
         with = "crate::field_value::serde::optional_schema_date"
     )]
     pub refresh_token_expires_at: SchemaValue<Option<crate::FieldDate>>,
-    #[serde(default, skip_serializing_if = "SchemaValue::is_undefined")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub scope: SchemaValue<Option<String>>,
     // Account cookies serialize this view. Keep the password out of every implicit serialization.
     #[serde(default, skip_serializing)]
     pub password: SchemaValue<Option<String>>,
     #[serde(
         default,
-        skip_serializing_if = "SchemaValue::is_undefined",
+        skip_serializing_if = "SchemaValue::is_json_omitted",
         with = "crate::field_value::serde::schema_date"
     )]
     pub created_at: SchemaValue<crate::FieldDate>,
     #[serde(
         default,
-        skip_serializing_if = "SchemaValue::is_undefined",
+        skip_serializing_if = "SchemaValue::is_json_omitted",
         with = "crate::field_value::serde::schema_date"
     )]
     pub updated_at: SchemaValue<crate::FieldDate>,

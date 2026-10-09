@@ -33,7 +33,7 @@ macro_rules! record {
             fn structured_clone(&self, context: &mut crate::StructuredCloneContext) -> AuthResult<Self> {
                 let mut record = self.clone();
                 $(record.$field = context.clone_field(&self.$field)?;)*
-                $(record.$extra = context.clone_map(&self.$extra);)?
+                $(record.$extra = context.clone_map(&self.$extra)?;)?
                 Ok(record)
             }
         }

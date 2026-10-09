@@ -8,7 +8,9 @@ pub(crate) struct Json<'a>(pub(crate) &'a FieldValue);
 impl Serialize for Json<'_> {
     fn serialize<S: ::serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         match self.0 {
-            FieldValue::Undefined | FieldValue::Null => serializer.serialize_unit(),
+            FieldValue::Undefined | FieldValue::Null | FieldValue::Function(_) => {
+                serializer.serialize_unit()
+            }
             FieldValue::Bool(value) => value.serialize(serializer),
             FieldValue::String(value) => value.serialize(serializer),
             FieldValue::Utf16String(value) => value.serialize(serializer),
@@ -46,7 +48,7 @@ pub mod map {
         use ::serde::ser::SerializeMap;
         let mut fields: Vec<_> = fields
             .iter()
-            .filter(|(_, value)| !value.is_undefined())
+            .filter(|(_, value)| !value.is_json_omitted())
             .collect();
         fields.sort_by_key(|(name, _)| {
             crate::utils::json::array_index(name).map_or((true, 0), |index| (false, index))
@@ -86,6 +88,11 @@ pub mod value {
 
 pub mod optional_value {
     use super::*;
+
+    /// Preserve an absent Rust option as null while omitting an explicit undefined or function.
+    pub fn is_json_omitted(value: &Option<FieldValue>) -> bool {
+        value.as_ref().is_some_and(FieldValue::is_json_omitted)
+    }
 
     pub fn serialize<S: ::serde::Serializer>(
         value: &Option<FieldValue>,
