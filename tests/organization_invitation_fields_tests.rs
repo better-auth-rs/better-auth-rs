@@ -13,7 +13,7 @@ use better_auth::__private_core::{
     store::{InvitationStore, MemberStore, OrganizationStore, SessionStore, TeamStore, UserStore},
     types::{CreateInvitation, CreateOrganization, CreateSession, CreateTeam, CreateUser},
 };
-use better_auth::config::UserFieldTransform;
+use better_auth::config::{UserFieldConfig, UserFieldTransform};
 use better_auth::seaorm::{Database, SeaOrmStore};
 use better_auth::{AuthConfig, AuthError, plugins::organization::OrganizationConfig};
 use better_auth_seaorm::store::__private_test_support::{
@@ -30,11 +30,19 @@ async fn store(config: OrganizationConfig) -> Store {
     let db = Database::connect("sqlite::memory:").await.unwrap();
     run_migrations(&db).await.unwrap();
     fixture::create_tables(&db).await.unwrap();
-    let store = SeaOrmStore::<BundledSchema>::new(
-        AuthConfig::new("organization-invitation-secret-at-least-32-chars"),
-        db,
-    )
-    .with_organization_schema::<fixture::models::Models>();
+    let mut auth = AuthConfig::new("organization-invitation-secret-at-least-32-chars");
+    for name in ["activeOrganizationId", "activeTeamId"] {
+        let _ = auth.session.fields_mut().insert(
+            name.into(),
+            UserFieldConfig {
+                required: Some(false),
+                input: Some(false),
+                ..Default::default()
+            },
+        );
+    }
+    let store = SeaOrmStore::<BundledSchema>::new(auth, db)
+        .with_organization_schema::<fixture::models::Models>();
     store.configure_organization_fields(config.schema).unwrap();
     for id in ["org-a", "org-b"] {
         let mut input = CreateOrganization::new(id, id);

@@ -181,7 +181,8 @@ impl ModelFields {
             | EntityRole::Account
             | EntityRole::Verification
             | EntityRole::Organization
-            | EntityRole::Team => {}
+            | EntityRole::Team
+            | EntityRole::TeamMember => {}
             _ => {
                 return Err(AuthError::config(format!(
                     "Plugin field registration does not support {role:?}"

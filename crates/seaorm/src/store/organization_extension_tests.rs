@@ -4,7 +4,7 @@
 )]
 use super::{SeaOrmStore, bundled_schema::BundledSchema, migrator::run_migrations};
 use better_auth_core::FieldValue;
-use better_auth_core::user_fields::{FieldTransforms, UserFieldTransform};
+use better_auth_core::user_fields::{FieldTransforms, UserFieldConfig, UserFieldTransform};
 use better_auth_core::{
     AuthConfig, CreateInvitation, CreateMember, CreateOrganization, CreateOrganizationRole,
     CreateTeam, CreateUser, UpdateOrganizationRole,
@@ -18,10 +18,18 @@ use std::sync::Arc;
 async fn store() -> SeaOrmStore<BundledSchema> {
     let db = sea_orm::Database::connect("sqlite::memory:").await.unwrap();
     run_migrations(&db).await.unwrap();
-    let store = SeaOrmStore::new(
-        Arc::new(AuthConfig::new("test-secret-key-at-least-32-chars-long")),
-        db,
-    );
+    let mut config = AuthConfig::new("test-secret-key-at-least-32-chars-long");
+    for name in ["activeOrganizationId", "activeTeamId"] {
+        let _ = config.session.fields_mut().insert(
+            name.into(),
+            UserFieldConfig {
+                required: Some(false),
+                input: Some(false),
+                ..Default::default()
+            },
+        );
+    }
+    let store = SeaOrmStore::new(Arc::new(config), db);
     for id in ["org-a", "org-b"] {
         store
             .create_organization(CreateOrganization {

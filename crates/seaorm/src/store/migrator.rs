@@ -24,6 +24,7 @@ impl MigratorTrait for AuthMigrator {
             Box::new(super::organization_extensions::OrganizationExtensions),
             Box::new(super::rate_limits::RateLimitCounters),
             Box::new(super::user_column_defaults::UserColumnDefaults),
+            Box::new(super::team_member_schema::TeamMemberSchema),
         ]
     }
 

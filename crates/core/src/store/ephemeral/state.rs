@@ -7,7 +7,7 @@ pub(super) struct State {
     pub(super) members: Rows<FieldMap>,
     pub(super) invitations: Rows<FieldMap>,
     pub(super) teams: Rows<FieldMap>,
-    pub(super) team_members: Rows<crate::TeamMember>,
+    pub(super) team_members: Rows<FieldMap>,
     pub(super) organization_roles: Rows<FieldMap>,
     pub(super) jwks: Rows<FieldMap>,
     pub(super) users: Rows<UserView>,

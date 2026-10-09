@@ -85,16 +85,6 @@ pub(super) fn generate(
                 output_values.push(quote!(let _ = projected.remove(#public_name);));
                 continue;
             }
-            if role == EntityRole::TeamMember {
-                output.push(if matches!(name.as_str(), "id" | "team_id" | "user_id") {
-                    quote!(#ident: #core_root::SchemaValue::Typed(self.#ident.to_string()))
-                } else if name == "created_at" {
-                    quote!(#ident: self.#ident.into())
-                } else {
-                    quote!(#ident: self.#ident.to_owned())
-                });
-                continue;
-            }
             if matches!(name.as_str(), "created_at" | "updated_at" | "expires_at") {
                 output_values.push(quote! {
                     let value = projected.remove(#public_name);
@@ -124,17 +114,11 @@ pub(super) fn generate(
         }
     }
     let ident = &input.ident;
-    let extras = if role == EntityRole::TeamMember {
-        quote!()
-    } else {
-        quote!(additional_fields: projected,)
-    };
-    let record_fields = if role == EntityRole::TeamMember {
-        quote! {
-            Ok(#core_root::user_fields::AdapterRecord::new(Default::default(), Default::default()))
-        }
-    } else {
-        quote! {
+    let field_order = matches!(role, EntityRole::Team | EntityRole::TeamMember)
+        .then(|| quote!(let field_order = projected.keys().cloned().collect();));
+    let order_output =
+        matches!(role, EntityRole::Team | EntityRole::TeamMember).then(|| quote!(field_order,));
+    let record_fields = quote! {
             let model = #core_root::entity::AuthRecordFields::field_values(self)?;
             let core = #core_root::FieldMap::from_iter([#(#core_values),*]);
             let mut storage = #core_root::FieldMap::new();
@@ -155,7 +139,6 @@ pub(super) fn generate(
                 }
             }
             Ok(#core_root::user_fields::AdapterRecord::new(core, storage))
-        }
     };
     Ok(quote! {
         impl #seaorm_root::SeaOrmOrganizationModel for #ident {
@@ -176,8 +159,9 @@ pub(super) fn generate(
                 #record_fields
             }
             fn record_from_fields(&self, fields: &#core_root::user_fields::UserConfig, mut projected: #core_root::FieldMap) -> #core_root::AuthResult<Self::Record> {
+                #field_order
                 #(#output_values)*
-                Ok(#core_root::#record { #(#output,)* #extras })
+                Ok(#core_root::#record { #(#output,)* #order_output additional_fields: projected })
             }
             fn is_id_reference(column: &Column) -> bool {
                 match column { #(#references)* }

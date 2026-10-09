@@ -264,6 +264,7 @@ impl EphemeralStore {
             EntityRole::Member => state.members.snapshot(),
             EntityRole::Invitation => state.invitations.snapshot(),
             EntityRole::Team => state.teams.snapshot(),
+            EntityRole::TeamMember => state.team_members.snapshot(),
             EntityRole::OrganizationRole => state.organization_roles.snapshot(),
             _ => state.plugin_rows(role)?.snapshot(),
         }

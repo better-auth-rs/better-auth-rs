@@ -9,6 +9,7 @@ use better_auth_schema_registry::EntityRole;
 impl TeamStore for EphemeralStore {
     async fn create_team(&self, mut input: CreateTeam) -> AuthResult<Team> {
         let team = Team {
+            field_order: Default::default(),
             additional_fields: [("memberCount".into(), Value::Number(0.0))]
                 .into_iter()
                 .collect(),
@@ -96,7 +97,9 @@ impl TeamStore for EphemeralStore {
     }
     async fn delete_team_value(&self, id: &Value) -> AuthResult<()> {
         let team_schema = self.field_config(EntityRole::Team)?;
+        let membership_schema = self.field_config(EntityRole::TeamMember)?;
         let invitation_schema = self.field_config(EntityRole::Invitation)?;
+        let member_team = self.organization_query(EntityRole::TeamMember, "teamId", id.clone())?;
         let id = self.organization_query(EntityRole::Team, "id", id.clone())?;
         let (organization_id, public_id, selectors, rows, snapshot) = {
             let state = self.lock()?;
@@ -196,7 +199,10 @@ impl TeamStore for EphemeralStore {
             })
             .collect::<AuthResult<Vec<_>>>()?;
         let _ = state.teams.remove(&id)?;
-        state.team_members.retain(|member| member.team_id != id)?;
+        state.team_members.retain(|member| {
+            !organization_value(member, &membership_schema, "teamId")
+                .strict_equals(&member_team.field_value())
+        })?;
         for (id, invitation) in updates {
             let _ = state.invitations.replace(&id, invitation)?;
         }
@@ -256,30 +262,82 @@ impl TeamStore for EphemeralStore {
         if self.config.advanced.database.joins == Some(true) {
             return self.joined_user_teams(user_id).await;
         }
-        let user_id = self.memory_primary_id_query(user_id)?;
-        let rows = self
-            .lock()?
-            .team_members
-            .snapshot()?
-            .into_iter()
-            .filter(|row| row.user_id.field_value().strict_equals(&user_id))
-            .collect();
+        let schema = self.field_config(EntityRole::TeamMember)?;
+        let team_schema = self.field_config(EntityRole::Team)?;
+        let user_id = self.organization_query(EntityRole::TeamMember, "userId", user_id.clone())?;
+        let runtime = self.model_fields.organization_join_schema(&self.config);
+        let join = crate::store::ResolvedJoin::resolve(
+            (EntityRole::TeamMember, "teamMember", &schema),
+            (EntityRole::Team, "team", &team_schema),
+            &runtime,
+            |_, _| false,
+        )?;
+        let rows = self.lock()?.team_members.select_refs(|row| {
+            organization_value(row, &schema, "userId").strict_equals(&user_id.field_value())
+        })?;
         let rows = crate::query::paginate_memory(
             rows,
             Some(self.config.advanced.database.find_many_limit()),
             None,
         );
-        let mut teams = Vec::new();
-        for member in rows {
-            if let Some(team) = self
-                .lock()?
-                .teams
-                .first_ref(|row| organization_id(row) == member.team_id)?
-            {
-                teams.push(team);
-            }
-        }
-        self.output_record_refs(EntityRole::Team, teams).await
+        let projected = self
+            .output_record_refs_batches_then(
+                EntityRole::TeamMember,
+                rows,
+                |ready: Vec<(usize, FieldMap)>| {
+                    let join = &join;
+                    let schema = &schema;
+                    let team_schema = &team_schema;
+                    async move {
+                        let mut groups = Vec::new();
+                        let mut teams = Vec::new();
+                        for (index, member) in ready {
+                            let from = join.fallback_from(
+                                (EntityRole::TeamMember, "teamMember", schema),
+                                &self.model_fields,
+                            )?;
+                            let owner = member.get(&from).cloned().unwrap_or_default();
+                            let rows = if owner.is_null() || owner.is_undefined() {
+                                Vec::new()
+                            } else {
+                                let (logical, physical) = join.fallback_target(
+                                    (EntityRole::Team, "team", team_schema),
+                                    &self.model_fields,
+                                )?;
+                                let value = if logical == "id" {
+                                    self.memory_primary_id_query(&owner)?
+                                } else {
+                                    self.memory_field_query(team_schema, &logical, owner)?
+                                };
+                                let rows = self.lock()?.teams.select_refs(|row| {
+                                    row.get(&physical)
+                                        .unwrap_or(&Value::Undefined)
+                                        .strict_equals(&value)
+                                })?;
+                                crate::query::paginate_memory(
+                                    rows,
+                                    Some(if join.many {
+                                        self.config.advanced.database.find_many_limit()
+                                    } else {
+                                        1.0
+                                    }),
+                                    None,
+                                )
+                            };
+                            groups.push(index);
+                            teams.push(rows);
+                        }
+                        let pages = teams.iter().map(Vec::as_slice).collect();
+                        let output = self.output_record_pages(EntityRole::Team, pages).await?;
+                        Ok(groups.into_iter().zip(output).collect())
+                    }
+                },
+            )
+            .await?;
+        projected
+            .into_iter()
+            .map(|rows| Team::from_membership_join(rows, join.many))
+            .collect()
     }
     async fn get_team_member(
         &self,
@@ -294,51 +352,44 @@ impl TeamStore for EphemeralStore {
         team_id: &Value,
         user_id: &Value,
     ) -> AuthResult<Option<TeamMember>> {
-        let user_id = self.memory_primary_id_query(user_id)?;
-        let team_id = self.organization_query(EntityRole::Team, "id", team_id.clone())?;
-        self.lock()?
+        let selectors = self.team_member_selectors(team_id, Some(user_id))?;
+        let row = self
+            .lock()?
             .team_members
-            .snapshot()?
-            .iter()
-            .find(|member| {
-                member.team_id == team_id && member.user_id.field_value().strict_equals(&user_id)
-            })
-            .cloned()
-            .map(Self::output_team_member)
-            .transpose()
+            .first_ref(|row| Self::matches_team_member(row, &selectors))?;
+        Ok(self
+            .output_record_refs(EntityRole::TeamMember, row.into_iter().collect())
+            .await?
+            .into_iter()
+            .next())
     }
     async fn list_team_members(&self, team_id: &str) -> AuthResult<Vec<TeamMember>> {
         self.list_team_members_value(&Value::from(team_id)).await
     }
     async fn list_team_members_value(&self, team_id: &Value) -> AuthResult<Vec<TeamMember>> {
-        let team_id = self.organization_query(EntityRole::Team, "id", team_id.clone())?;
+        let selectors = self.team_member_selectors(team_id, None)?;
         let rows = self
             .lock()?
             .team_members
-            .snapshot()?
-            .into_iter()
-            .filter(|row| row.team_id == team_id)
-            .collect();
-        crate::query::paginate_memory(
+            .select_refs(|row| Self::matches_team_member(row, &selectors))?;
+        let rows = crate::query::paginate_memory(
             rows,
             Some(self.config.advanced.database.find_many_limit()),
             None,
-        )
-        .into_iter()
-        .map(Self::output_team_member)
-        .collect()
+        );
+        self.output_record_refs(EntityRole::TeamMember, rows).await
     }
     async fn count_team_members(&self, team_id: &str) -> AuthResult<u64> {
         self.count_team_members_value(&team_id.into()).await
     }
     async fn count_team_members_value(&self, team_id: &Value) -> AuthResult<u64> {
-        let team_id = self.organization_query(EntityRole::Team, "id", team_id.clone())?;
+        let selectors = self.team_member_selectors(team_id, None)?;
         Ok(self
             .lock()?
             .team_members
             .snapshot()?
             .iter()
-            .filter(|row| row.team_id == team_id)
+            .filter(|row| Self::matches_team_member(row, &selectors))
             .count() as u64)
     }
     async fn add_team_member(
@@ -356,156 +407,114 @@ impl TeamStore for EphemeralStore {
         user_id: &Value,
         maximum: Option<usize>,
     ) -> AuthResult<Option<TeamMember>> {
-        let user_id = self.memory_reference_id_input(user_id.clone())?;
-        let team_id = self.organization_query(EntityRole::Team, "id", team_id.clone())?;
-        let team_id = &team_id;
-        let (team, actual, row_count) = {
+        let key = crate::organization_fields::team_membership_key_values(team_id, user_id)?;
+        if let Some(member) = self
+            .find_team_member_by_key_or_pair(team_id, user_id, &key)
+            .await?
+        {
+            return Ok(Some(member));
+        }
+        let id = self.organization_query(EntityRole::Team, "id", team_id.clone())?;
+        let selectors = self.team_member_selectors(team_id, None)?;
+        let (team, actual) = {
             let state = self.lock()?;
             let team = state
                 .teams
-                .first_ref(|row| organization_id(row) == *team_id)?
+                .first_ref(|row| organization_id(row) == id)?
                 .ok_or_else(|| AuthError::not_found("Team not found"))?;
             let members = state.team_members.snapshot()?;
-            if let Some(member) = members.iter().find(|member| {
-                member
-                    .team_id
-                    .field_value()
-                    .strict_equals(&team_id.field_value())
-                    && member
-                        .user_id
-                        .field_value()
-                        .strict_equals(&user_id.field_value())
-            }) {
-                return Self::output_team_member(member.clone()).map(Some);
-            }
             (
                 team,
                 members
                     .iter()
-                    .filter(|member| member.team_id == *team_id)
+                    .filter(|member| Self::matches_team_member(member, &selectors))
                     .count(),
-                members.len(),
             )
         };
-        let prepared = self.prepare_team_reservation(team, actual, maximum).await?;
-        let reserved = prepared.reserved;
-        let id = if reserved {
-            self.generated_id("teamMember", None, row_count)?
-                .map(crate::SchemaValue::Typed)
-                .unwrap_or_default()
+        let mut prepared = self.prepare_team_reservation(team, actual, maximum).await?;
+        let staged = if prepared.reserved {
+            let staged = match self.stage_team_member(team_id, user_id, &key).await {
+                Ok(staged) => staged,
+                Err(error) => {
+                    if maximum.is_some() {
+                        self.release_prepared_team_seat(&mut prepared).await?;
+                    }
+                    return Err(error);
+                }
+            };
+            if maximum.is_some() && !staged.created {
+                self.release_prepared_team_seat(&mut prepared).await?;
+            } else if maximum.is_none() && staged.created {
+                self.increment_prepared_team_seat(&mut prepared).await?;
+            }
+            Some(staged)
         } else {
-            Default::default()
+            None
         };
-        let mut state = self.lock()?;
-        let members = state.team_members.snapshot()?;
-        if let Some(member) = members.iter().find(|member| {
-            member
-                .team_id
-                .field_value()
-                .strict_equals(&team_id.field_value())
-                && member
-                    .user_id
-                    .field_value()
-                    .strict_equals(&user_id.field_value())
-        }) {
-            return Self::output_team_member(member.clone()).map(Some);
-        }
-        let actual = members
-            .iter()
-            .filter(|member| member.team_id == *team_id)
-            .count();
-        if maximum.is_some_and(|maximum| actual >= maximum)
-            && !prepared.is_current(&state.teams, actual)?
-        {
-            return Ok(None);
-        }
-        let (source, fields) = prepared.apply(&state.teams, actual)?;
-        source.write(|row| {
-            *row = fields;
-            Ok(())
-        })?;
-        if !reserved {
-            return Ok(None);
-        }
-        let mut member = TeamMember {
-            id,
-            team_id: team_id.to_owned(),
-            user_id,
-            created_at: Utc::now().into(),
+        let existing = {
+            let mut state = self.lock()?;
+            if let Some(row) = self.team_member_by_key_or_pair(&state, team_id, user_id, &key)? {
+                Some(row)
+            } else {
+                let actual = state
+                    .team_members
+                    .snapshot()?
+                    .iter()
+                    .filter(|row| Self::matches_team_member(row, &selectors))
+                    .count();
+                if maximum.is_some_and(|maximum| actual >= maximum)
+                    && !prepared.is_current(&state.teams, actual)?
+                {
+                    return Ok(None);
+                }
+                if let Some(staged) = &staged {
+                    if matches!(
+                        self.config.advanced.database.generate_id(),
+                        crate::id::IdGeneration::Serial
+                    ) && state.team_members.len() != staged.base.len()
+                    {
+                        return Err(AuthError::conflict(
+                            "Team membership allocation changed while field transforms were pending",
+                        ));
+                    }
+                }
+                let (source, fields) = prepared.apply(&state.teams, actual)?;
+                if let Some(staged) = &staged {
+                    state
+                        .team_members
+                        .merge(&staged.base, staged.working.clone())?;
+                }
+                source.write(|row| {
+                    *row = fields;
+                    Ok(())
+                })?;
+                None
+            }
         };
-        if let Some(id) = self.next_serial_id(state.team_members.len()) {
-            member.id = crate::SchemaValue::from_field(id);
+        if let Some(existing) = existing {
+            return Ok(self
+                .output_record_refs(EntityRole::TeamMember, vec![existing])
+                .await?
+                .into_iter()
+                .next());
         }
-        state.team_members.push(member.clone());
-        Self::output_team_member(member).map(Some)
+        Ok(staged.map(|staged| staged.member))
     }
     async fn remove_team_member(&self, team_id: &str, user_id: &str) -> AuthResult<()> {
         self.remove_team_member_value(&team_id.into(), &user_id.into())
             .await
     }
     async fn remove_team_member_value(&self, team_id: &Value, user_id: &Value) -> AuthResult<()> {
-        let user_id = self.memory_primary_id_query(user_id)?;
-        let team_id = self.organization_query(EntityRole::Team, "id", team_id.clone())?;
-        let team_id = &team_id;
-        let (team, members) = {
-            let state = self.lock()?;
-            (
-                state
-                    .teams
-                    .first_ref(|row| organization_id(row) == *team_id)?,
-                state.team_members.snapshot()?,
-            )
+        let selected_by_pair = self.team_member_selectors(team_id, Some(user_id))?;
+        let deleted = {
+            let mut state = self.lock()?;
+            let before = state.team_members.len();
+            state
+                .team_members
+                .retain(|member| !Self::matches_team_member(member, &selected_by_pair))?;
+            before - state.team_members.len()
         };
-        let selected: Vec<_> = members
-            .into_iter()
-            .filter(|row| row.team_id == *team_id)
-            .collect();
-        let deleted = selected
-            .iter()
-            .filter(|row| row.user_id.field_value().strict_equals(&user_id))
-            .count();
-        let prepared = if let Some(team) = team {
-            Some(
-                self.prepare_team_release(team, selected.len(), deleted)
-                    .await?,
-            )
-        } else {
-            None
-        };
-        let mut state = self.lock()?;
-        let current: Vec<_> = state
-            .team_members
-            .snapshot()?
-            .into_iter()
-            .filter(|row| row.team_id == *team_id)
-            .collect();
-        // Serial conversion can store NaN; an unchanged owner must not invalidate the prepared snapshot.
-        let unchanged = current.len() == selected.len()
-            && current.iter().zip(&selected).all(|(current, selected)| {
-                current.id == selected.id
-                    && current.team_id == selected.team_id
-                    && current.created_at == selected.created_at
-                    && current
-                        .user_id
-                        .field_value()
-                        .same_value_zero(&selected.user_id.field_value())
-            });
-        if !unchanged {
-            return Err(AuthError::conflict(
-                "Team membership changed while field transforms were pending",
-            ));
-        }
-        if let Some(prepared) = prepared {
-            let (source, fields) = prepared.apply(&state.teams, current.len())?;
-            source.write(|row| {
-                *row = fields;
-                Ok(())
-            })?;
-        }
-        state.team_members.retain(|member| {
-            member.team_id != *team_id || !member.user_id.field_value().strict_equals(&user_id)
-        })?;
-        Ok(())
+        self.release_team_seats(team_id, deleted).await
     }
 }
 impl EphemeralStore {

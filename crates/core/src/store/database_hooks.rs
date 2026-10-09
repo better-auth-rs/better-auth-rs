@@ -9,17 +9,7 @@ use async_trait::async_trait;
 /// Preserve the awaited adapter lookup between hooks and adapter field conversion.
 #[doc(hidden)]
 pub async fn await_adapter_lookup() {
-    let mut queued = false;
-    std::future::poll_fn(|context| {
-        if queued {
-            return std::task::Poll::Ready(());
-        }
-        queued = true;
-        // Wake the callback queue directly; Tokio's deferred yields reverse ready peers.
-        context.waker().wake_by_ref();
-        std::task::Poll::Pending
-    })
-    .await;
+    crate::user_fields::await_adapter_boundary().await;
 }
 
 /// Typed Session update input converted to native fields before database hooks.

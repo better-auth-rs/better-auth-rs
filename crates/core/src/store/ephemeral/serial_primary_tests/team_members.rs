@@ -234,8 +234,8 @@ async fn serial_team_membership_binds_owner_queries_and_isolates_removal() -> Au
                 .team_members
                 .snapshot()?
                 .into_iter()
-                .map(|member| member.user_id.field_value())
-                .collect::<Vec<_>>(),
+                .map(|member| required(member.get("userId")).cloned())
+                .collect::<AuthResult<Vec<_>>>()?,
             vec![Value::Number(1.0), Value::Number(2.0), Value::Number(1.0)]
         );
         store.remove_team_member("001", "0001").await?;
@@ -260,11 +260,9 @@ async fn serial_team_membership_binds_owner_queries_and_isolates_removal() -> Au
         assert_eq!(store.list_team_members("001").await?, vec![invalid]);
         let state = store.lock()?;
         assert!(matches!(
-            required(state.team_members.snapshot()?.iter().find(|row| {
-                row.team_id.field_value().strict_equals(&Value::Number(1.0))
-            }))?
-            .user_id
-            .field_value(),
+            required(required(state.team_members.snapshot()?.iter().find(|row| {
+                row.get("teamId").is_some_and(|id| id.strict_equals(&Value::Number(1.0)))
+            }))?.get("userId"))?,
             Value::Number(value) if value.is_nan()
         ));
         for team in state.teams.snapshot()? {
@@ -320,9 +318,7 @@ async fn serial_invitation_reuses_existing_numeric_team_owner_at_capacity() -> A
     assert_eq!(store.list_team_members("001").await?, vec![existing]);
     assert_eq!(calls.load(Ordering::SeqCst), 0);
     assert_eq!(
-        required(store.lock()?.team_members.snapshot()?.first())?
-            .user_id
-            .field_value(),
+        required(required(store.lock()?.team_members.snapshot()?.first())?.get("userId"))?.clone(),
         Value::Number(1.0)
     );
     Ok(())
@@ -401,9 +397,7 @@ async fn serial_invitation_rejects_same_owner_added_during_output_callback() -> 
     assert_eq!(state.team_members.len(), 1);
     assert_eq!(state.sessions.len(), 0);
     assert_eq!(
-        required(state.team_members.snapshot()?.first())?
-            .user_id
-            .field_value(),
+        required(required(state.team_members.snapshot()?.first())?.get("userId"))?.clone(),
         Value::Number(1.0)
     );
     assert_eq!(

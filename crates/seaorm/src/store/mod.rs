@@ -45,6 +45,9 @@ mod session_write;
 mod sessions;
 mod team_capacity;
 mod team_invitation;
+mod team_member_fields;
+mod team_member_joins;
+mod team_member_schema;
 mod teams;
 mod transaction_hooks;
 mod two_factor;
@@ -199,17 +202,6 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
 
     pub fn config(&self) -> &Arc<AuthConfig> {
         &self.config
-    }
-
-    fn parse_id<T>(&self, value: &str, parse: impl FnOnce(&str) -> AuthResult<T>) -> AuthResult<T> {
-        parse(
-            &self
-                .config
-                .advanced
-                .database
-                .generate_id()
-                .coerce_id(value)?,
-        )
     }
 
     fn generated_id(&self, model: &str, supplied: Option<String>) -> AuthResult<Option<String>> {

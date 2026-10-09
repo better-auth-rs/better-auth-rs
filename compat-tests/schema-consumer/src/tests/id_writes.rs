@@ -2,8 +2,11 @@ use super::*;
 use better_auth::config::{FieldTransforms, UserFieldTransform};
 use better_auth::{
     __private_core::{
+        AuthContext, AuthInitContext, AuthPlugin, AuthRequest, AuthResponse, AuthResult, AuthRoute,
         CreateApiKey, CreateDeviceCode, Member, UpdateDeviceCode, UpdateTeam,
-        organization_fields::OrganizationFields, store::OrganizationStore,
+        organization_fields::OrganizationFields,
+        store::{OrganizationStore, schema::EntityRole},
+        user_fields::UserConfig,
     },
     prelude::{CreateMember, CreateOrganization, CreateTeam, CreateTwoFactor},
 };
@@ -11,6 +14,51 @@ use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},
 };
+
+struct DeviceOwnerReference;
+
+#[better_auth::__private_core::__private_async_trait::async_trait]
+impl<S: AuthSchema> AuthPlugin<S> for DeviceOwnerReference {
+    fn name(&self) -> &'static str {
+        "device-owner-reference"
+    }
+
+    fn routes(&self) -> Vec<AuthRoute> {
+        Vec::new()
+    }
+
+    async fn on_init(&self, context: &mut AuthInitContext<S>) -> AuthResult<()> {
+        context.register_model_fields(
+            EntityRole::DeviceCode,
+            UserConfig {
+                additional_fields: Some(
+                    [(
+                        "userId".into(),
+                        UserFieldConfig {
+                            required: Some(false),
+                            field_name: Some("user_id".into()),
+                            references: Some(UserFieldReference {
+                                model: "user".into(),
+                                field: "id".into(),
+                                ..Default::default()
+                            }),
+                            ..Default::default()
+                        },
+                    )]
+                    .into(),
+                ),
+            },
+        )
+    }
+
+    async fn on_request(
+        &self,
+        _: &AuthRequest,
+        _: &AuthContext<S>,
+    ) -> AuthResult<Option<AuthResponse>> {
+        Ok(None)
+    }
+}
 
 pub(super) async fn reference_writes<
     S: AuthSchema,
@@ -35,6 +83,7 @@ pub(super) async fn reference_writes<
                 .with_organization_schema::<O>()
                 .with_plugin_schema::<P>(),
         )
+        .plugin(DeviceOwnerReference)
         .build()
         .await
         .unwrap();

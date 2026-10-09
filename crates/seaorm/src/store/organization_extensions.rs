@@ -40,21 +40,9 @@ impl MigrationTrait for OrganizationExtensions {
             }
             manager.create_table(table.to_owned()).await?;
         }
-        for (table, columns) in [("team_member", ["team_id", "user_id"])] {
-            manager
-                .create_index(
-                    Index::create()
-                        .name(format!("idx_{table}_identity"))
-                        .table(Alias::new(table))
-                        .col(Alias::new(columns[0]))
-                        .col(Alias::new(columns[1]))
-                        .unique()
-                        .to_owned(),
-                )
-                .await?;
-        }
         for (table, column) in [
             ("team", "organization_id"),
+            ("team_member", "team_id"),
             ("team_member", "user_id"),
             ("organization_role", "organization_id"),
             ("organization_role", "role"),

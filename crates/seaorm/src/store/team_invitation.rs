@@ -124,7 +124,9 @@ where
             let team_ids: Vec<_> = if teams_enabled && team_id.is_truthy() {
                 team_id
                     .as_str()
-                    .ok_or_else(|| AuthError::type_error("acceptedI.teamId.split is not a function"))?
+                    .ok_or_else(|| {
+                        AuthError::type_error("acceptedI.teamId.split is not a function")
+                    })?
                     .split(',')
                     .collect()
             } else {
@@ -132,13 +134,19 @@ where
             };
             for team_id in &team_ids {
                 let team_value = FieldValue::from(*team_id);
-                self.model_fields.begin_id_query(better_auth_core::store::schema::EntityRole::Team)?;
+                self.model_fields
+                    .begin_id_query(better_auth_core::store::schema::EntityRole::Team)?;
                 let locked = Entity::<O::Team>::update_many()
                     .col_expr(
                         O::Team::column("member_count")?,
                         Expr::col(O::Team::column("member_count")?),
                     )
-                    .filter(super::value_filter::equals_id(O::Team::column("id")?, &team_value, self.config().advanced.database.generate_id(), self.connection().get_database_backend())?)
+                    .filter(super::value_filter::equals_id(
+                        O::Team::column("id")?,
+                        &team_value,
+                        self.config().advanced.database.generate_id(),
+                        self.connection().get_database_backend(),
+                    )?)
                     .filter(self.organization_field_equals::<O::Team>(
                         EntityRole::Team,
                         "organizationId",
@@ -150,68 +158,83 @@ where
                 if locked.rows_affected == 0 {
                     return Err(AuthError::bad_request("Team not found"));
                 }
-                let maximum = maximum.maximum(team_id, &invitation.organization_id.field_value()).await?;
-                let existing = Entity::<O::TeamMember>::find()
-                    .filter(self.organization_fields_equal::<O::TeamMember>(better_auth_core::store::schema::EntityRole::TeamMember, [("teamId", &team_value), ("userId", user_id)])?)
-                    .one(&tx)
-                    .await
-                    .map_err(map_db_err)?;
+                let maximum = maximum
+                    .maximum(team_id, &invitation.organization_id.field_value())
+                    .await?;
+                let membership_key =
+                    better_auth_core::organization_fields::team_membership_key_values(
+                        &team_value,
+                        user_id,
+                    )?
+                    .into();
+                let existing = self
+                    .find_team_member_by_key_or_pair(&tx, &team_value, user_id, &membership_key)
+                    .await?;
                 if existing.is_none() {
                     let count = Entity::<O::TeamMember>::find()
-                        .filter(self.organization_field_equals::<O::TeamMember>(better_auth_core::store::schema::EntityRole::TeamMember, "teamId", &team_value)?)
+                        .filter(self.organization_field_equals::<O::TeamMember>(
+                            better_auth_core::store::schema::EntityRole::TeamMember,
+                            "teamId",
+                            &team_value,
+                        )?)
                         .count(&tx)
                         .await
                         .map_err(map_db_err)?;
-                    if !super::team_capacity::reserve::<O::Team, _>(
+                    super::team_capacity::sync::<O::Team, _>(
                         &tx,
                         &team_value,
                         count,
-                        maximum,
                         &config.team,
                         self.config().advanced.database.generate_id(),
-(&self.model_fields, better_auth_core::store::schema::EntityRole::Team),
-)
-                    .await?
-                    {
-                        return Err(AuthError::forbidden("Team member limit reached"));
-                    }
-                    let _ = models::insert::<O::TeamMember, _>(
-&tx,
-super::create_readback::ReadbackScope::Transaction,
-values([
-                                ("team_id", team_value.clone()),
-                                ("user_id", user_id.clone()),
-                                (
-                                    "membership_key",
-                                    (better_auth_core::organization_fields::team_membership_key_values(
-                                        &team_value, user_id,
-                                    )?)
-                                    .into_field(),
-                                ),
-                                ("created_at", FieldValue::Date((Utc::now()).into())),
-                            ]),
-Default::default(),
-&Default::default(),
-self.config().advanced.database.generate_id(),
-(&self.model_fields, better_auth_core::store::schema::EntityRole::TeamMember, "teamMember"),
-)
+                        (&self.model_fields, EntityRole::Team),
+                    )
                     .await?;
+                    if let Some(maximum) = maximum {
+                        if !super::team_capacity::reserve::<O::Team, _>(
+                            &tx,
+                            &team_value,
+                            maximum,
+                            &config.team,
+                            self.config().advanced.database.generate_id(),
+                            (&self.model_fields, EntityRole::Team),
+                        )
+                        .await?
+                        {
+                            return Err(AuthError::forbidden("Team member limit reached"));
+                        }
+                        let _ = self
+                            .create_reserved_team_member(&tx, &team_value, user_id, &membership_key)
+                            .await?;
+                    } else {
+                        let _ = self
+                            .create_unlimited_team_member(
+                                &tx,
+                                &team_value,
+                                user_id,
+                                &membership_key,
+                            )
+                            .await?;
+                    }
                 }
             }
             let member = models::insert::<O::Member, _>(
-&tx,
-super::create_readback::ReadbackScope::Transaction,
-values([
-                        ("organization_id", invitation.organization_id.field_value()),
-                        ("user_id", user_id.clone()),
-                        ("role", invitation.role.field_value()),
-                        ("created_at", FieldValue::Date((Utc::now()).into())),
-                    ]),
-Default::default(),
-&config.member,
-self.config().advanced.database.generate_id(),
-(&self.model_fields, better_auth_core::store::schema::EntityRole::Member, "member"),
-)
+                &tx,
+                super::create_readback::ReadbackScope::Transaction,
+                values([
+                    ("organization_id", invitation.organization_id.field_value()),
+                    ("user_id", user_id.clone()),
+                    ("role", invitation.role.field_value()),
+                    ("created_at", FieldValue::Date((Utc::now()).into())),
+                ]),
+                Default::default(),
+                &config.member,
+                self.config().advanced.database.generate_id(),
+                (
+                    &self.model_fields,
+                    better_auth_core::store::schema::EntityRole::Member,
+                    "member",
+                ),
+            )
             .await?;
             let Some(session_token) = session_token else {
                 return Ok((member, None));
@@ -236,7 +259,8 @@ self.config().advanced.database.generate_id(),
                     [(
                         "activeOrganizationId".into(),
                         invitation.organization_id.field_value(),
-                    )].into(),
+                    )]
+                    .into(),
                 )
                 .await?
                 .ok_or(AuthError::SessionNotFound)?;

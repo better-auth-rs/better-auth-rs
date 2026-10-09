@@ -928,6 +928,7 @@ impl<
                 .map_err(map_db_err)?;
             super::team_capacity::release::<O::Team, _>(
                 db,
+                super::create_readback::ReadbackScope::Transaction,
                 &team.id.field_value(),
                 deleted.rows_affected,
                 &self.organization_fields()?.team,

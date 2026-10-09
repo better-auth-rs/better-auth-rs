@@ -95,6 +95,7 @@ async fn refresh_logs_to_instance_and_keeps_pending_peer_after_return()
             .await?;
         let id = user.id.typed()?.clone();
         let expires = chrono::Utc::now() + chrono::Duration::hours(1);
+        let expires_at = expires.to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
         let references = ["rejected-session", "pending-session"]
             .map(|token| json!({"token": token, "expiresAt": expires.timestamp_millis()}));
         cache
@@ -110,7 +111,7 @@ async fn refresh_logs_to_instance_and_keeps_pending_peer_after_return()
                 .values
                 .set(
                     token,
-                    &json!({"session": {"token": token, "expiresAt": expires}, "user": user})
+                    &json!({"session": {"token": token, "expiresAt": expires_at}, "user": user})
                         .to_string(),
                     None,
                 )

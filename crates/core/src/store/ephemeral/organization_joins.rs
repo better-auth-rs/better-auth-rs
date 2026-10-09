@@ -334,31 +334,81 @@ impl EphemeralStore {
     }
 
     pub(super) async fn joined_user_teams(&self, user_id: &Value) -> AuthResult<Vec<crate::Team>> {
-        let user_id = self.memory_primary_id_query(user_id)?;
-        let teams = {
+        let member_schema = self.field_config(EntityRole::TeamMember)?;
+        let team_schema = self.field_config(EntityRole::Team)?;
+        let user_id = self.organization_query(EntityRole::TeamMember, "userId", user_id.clone())?;
+        let runtime = self.model_fields.organization_join_schema(&self.config);
+        let join = crate::store::ResolvedJoin::resolve(
+            (EntityRole::TeamMember, "teamMember", &member_schema),
+            (EntityRole::Team, "team", &team_schema),
+            &runtime,
+            |_, _| false,
+        )?;
+        let limit = self.config.advanced.database.find_many_limit();
+        let (members, teams) = {
             let state = self.lock()?;
             let rows = crate::query::paginate_memory(
                 state
                     .team_members
                     .snapshot()?
                     .into_iter()
-                    .filter(|row| row.user_id.field_value().strict_equals(&user_id))
+                    .filter(|row| {
+                        organization_value(row, &member_schema, "userId")
+                            .strict_equals(&user_id.field_value())
+                    })
                     .collect(),
-                Some(self.config.advanced.database.find_many_limit()),
+                Some(limit),
                 None,
             );
-            rows.iter()
-                .map(|row| {
-                    state
-                        .teams
-                        .first_ref(|team| super::organization_rows::id(team) == row.team_id)
+            let teams = rows
+                .iter()
+                .map(|member| {
+                    let from = member.get(&join.from).unwrap_or(&Value::Undefined);
+                    let matched = state.teams.select_refs(|team| {
+                        team.get(&join.to)
+                            .unwrap_or(&Value::Undefined)
+                            .strict_equals(from)
+                    })?;
+                    if join.many {
+                        child_page(matched, limit)
+                    } else {
+                        Ok(matched.into_iter().take(1).collect())
+                    }
                 })
-                .collect::<AuthResult<Vec<_>>>()?
-                .into_iter()
-                .flatten()
-                .collect()
+                .collect::<AuthResult<Vec<_>>>()?;
+            (rows, teams)
         };
-        self.output_record_refs(EntityRole::Team, teams).await
+        let projected = self
+            .output_records_batches_then(
+                EntityRole::TeamMember,
+                members,
+                |ready: Vec<(usize, FieldMap)>| {
+                    let teams = &teams;
+                    async move {
+                        let pages = ready
+                            .iter()
+                            .map(|(index, _)| {
+                                teams.get(*index).map(Vec::as_slice).ok_or_else(|| {
+                                    AuthError::internal(
+                                        "Team membership projection lost its stored join index",
+                                    )
+                                })
+                            })
+                            .collect::<AuthResult<Vec<_>>>()?;
+                        let output = self.output_record_pages(EntityRole::Team, pages).await?;
+                        Ok(ready
+                            .into_iter()
+                            .zip(output)
+                            .map(|((index, _), rows)| (index, rows))
+                            .collect())
+                    }
+                },
+            )
+            .await?;
+        projected
+            .into_iter()
+            .map(|rows| crate::Team::from_membership_join(rows, join.many))
+            .collect()
     }
 
     pub(super) async fn joined_user_invitations(

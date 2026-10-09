@@ -17,7 +17,7 @@ mod lifecycle;
 mod input_tests;
 
 use crate::plugins::organization::request::{from_fields, object, take};
-use better_auth_core::{FieldMap, FieldValue, FromFieldMap};
+use better_auth_core::{AuthRecordFields, FieldMap, FieldValue, FromFieldMap};
 
 from_fields!(CreateBody { name: "name", organization_id: "organizationId" }; additional_fields);
 from_fields!(UpdateData { name: "name", organization_id: "organizationId" }; additional_fields);
@@ -445,7 +445,12 @@ pub(crate) async fn handle_team_request(
             {
                 return Err(AuthError::bad_request("User is not a member of the team"));
             }
-            AuthResponse::json(None, &ctx.database.list_team_members_value(&team_id).await?)?
+            let members = ctx.database.list_team_members_value(&team_id).await?;
+            let members = members
+                .iter()
+                .map(|member| member.field_values().map(FieldValue::from))
+                .collect::<AuthResult<Vec<_>>>()?;
+            AuthResponse::native(None, members.into())
         }
         (
             HttpMethod::Post,
@@ -523,7 +528,7 @@ pub(crate) async fn handle_team_request(
                 if let Some(hooks) = &config.hooks {
                     hooks.after_add_team_member(&member, target).await?;
                 }
-                AuthResponse::json(None, &member)?
+                AuthResponse::native(None, member.field_values()?.into())
             } else {
                 let member = ctx
                     .database

@@ -561,9 +561,6 @@ fn gen_server_native_column(
             || entity.device_code_native_schema
             || entity.passkey_native_schema
             || entity.two_factor_native_schema
-            || (database == Database::Mysql
-                && entity.role == Some(EntityRole::TeamMember)
-                && field.registry_column == Some("created_at"))
             || matches!(
                 entity.role,
                 Some(
@@ -575,6 +572,7 @@ fn gen_server_native_column(
                         | EntityRole::Member
                         | EntityRole::OrganizationRole
                         | EntityRole::Team
+                        | EntityRole::TeamMember
                         | EntityRole::Invitation
                         | EntityRole::WalletAddress
                 )
@@ -602,6 +600,7 @@ fn gen_server_native_column(
                         | (Some(EntityRole::Verification), "identifier")
                         | (Some(EntityRole::RateLimit), "key")
                         | (Some(EntityRole::Member), "role")
+                        | (Some(EntityRole::TeamMember), "membership_key")
                         | (Some(EntityRole::OrganizationRole), "role")
                         | (
                             Some(EntityRole::Invitation),
@@ -736,6 +735,7 @@ fn gen_column_type(field: &AdditionalField) -> TokenStream {
 fn inline_native_unique(entity: &Entity, field: &Field, database: Database) -> bool {
     (sqlite_native_catalog(database, entity.role)
         || entity.role == Some(EntityRole::User)
+        || entity.role == Some(EntityRole::TeamMember)
         || entity.session_row_presence)
         && field.attributes.is_none()
         && field.registry_column.is_some_and(|column| {
@@ -828,6 +828,8 @@ fn gen_indexes(entity: &Entity, database: Database) -> Vec<TokenStream> {
                 && matches!(field.registry_column, Some("config_id" | "reference_id" | "key")))
                 || (entity.role == Some(EntityRole::WalletAddress)
                 && field.registry_column == Some("user_id"))
+                || (entity.role == Some(EntityRole::TeamMember)
+                && matches!(field.registry_column, Some("team_id" | "user_id")))
                 || (matches!(database, Database::Sqlite)
                 && (matches!(
                     (entity.role, field.registry_column),

@@ -86,14 +86,14 @@ record!(crate::types::Team, [
     organization_id => "organizationId",
     created_at => "createdAt",
     updated_at => "updatedAt",
-], additional_fields);
+], additional_fields; order: field_order);
 
 record!(crate::types::TeamMember, [
     id => "id",
     team_id => "teamId",
     user_id => "userId",
     created_at => "createdAt",
-], );
+], additional_fields; order: field_order; omit: ["membershipKey"]);
 
 record!(crate::types::OrganizationRole, [
     id => "id",

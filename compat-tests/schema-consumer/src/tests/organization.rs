@@ -309,7 +309,7 @@ async fn generated_organization_models_persist_mapped_fields_and_enforce_constra
             "FOREIGN KEY constraint failed",
         ),
         (
-            "INSERT INTO app_team_members (id, group_id, subject_id, created_at, link_key) SELECT 'duplicate', group_id, subject_id, created_at, link_key FROM app_team_members LIMIT 1",
+            "INSERT INTO app_team_members (id, group_id, subject_id, createdAt, link_key) SELECT 'duplicate', group_id, subject_id, createdAt, link_key FROM app_team_members LIMIT 1",
             "UNIQUE constraint failed",
         ),
     ] {

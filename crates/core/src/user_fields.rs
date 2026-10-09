@@ -11,6 +11,7 @@ mod factory_tests;
 #[cfg(test)]
 mod input_binding_tests;
 pub use adapter::FieldOutputCapabilities;
+pub(crate) use batch::await_boundary as await_adapter_boundary;
 mod batch;
 pub(crate) use batch::{
     project_fields_batches_then, project_fields_then, project_source_fields_batches_then,
@@ -299,17 +300,22 @@ impl UserConfig {
         create: bool,
         bind: impl Fn(&str, &UserFieldConfig, Value) -> AuthResult<Value>,
     ) -> AuthResult<FieldMap> {
-        let mut output = FieldMap::new();
-        for (name, field) in self.fields() {
-            if let Some(value) = field.storage_input(input.get(name), create).await? {
-                let storage = resolve_field_name(field.field_name.as_deref(), name);
-                let value = bind(storage, field, value)?;
-                if !value.is_undefined() {
-                    let _ = output.insert(storage.to_owned(), value);
+        let result = async {
+            let mut output = FieldMap::new();
+            for (name, field) in self.fields() {
+                if let Some(value) = field.storage_input(input.get(name), create).await? {
+                    let storage = resolve_field_name(field.field_name.as_deref(), name);
+                    let value = bind(storage, field, value)?;
+                    if !value.is_undefined() {
+                        let _ = output.insert(storage.to_owned(), value);
+                    }
                 }
             }
+            Ok(output)
         }
-        Ok(output)
+        .await;
+        batch::await_boundary().await;
+        result
     }
 }
 
@@ -323,7 +329,7 @@ impl UserFieldConfig {
             return Ok(None);
         };
         let value = match self.input_transform() {
-            Some(transform) => transform.call(value).await,
+            Some(transform) => transform.call_adapter(value).await,
             None => Ok(value),
         }?;
         // Serial references convert callback Undefined to NaN before final omission.

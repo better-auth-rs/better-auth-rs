@@ -285,7 +285,7 @@ macro_rules! row_id {
         fn id(&self) -> &SchemaValue<String> { &self.id }
     })* };
 }
-row_id!(crate::wire::UserView, crate::TeamMember);
+row_id!(crate::wire::UserView);
 
 #[cfg(test)]
 mod tests {

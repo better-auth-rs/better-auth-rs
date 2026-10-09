@@ -51,6 +51,7 @@ pub(crate) fn sqlite_native_catalog(database: Database, role: Option<EntityRole>
                     | EntityRole::Member
                     | EntityRole::OrganizationRole
                     | EntityRole::Team
+                    | EntityRole::TeamMember
                     | EntityRole::Invitation
                     | EntityRole::WalletAddress
             )
@@ -369,6 +370,7 @@ impl Entity {
                         | EntityRole::Member
                         | EntityRole::OrganizationRole
                         | EntityRole::Team
+                        | EntityRole::TeamMember
                         | EntityRole::Invitation
                         | EntityRole::WalletAddress
                 )

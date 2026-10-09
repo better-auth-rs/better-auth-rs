@@ -106,27 +106,33 @@ impl UserConfig {
         mut resolve_id: impl FnMut() -> AuthResult<Option<Value>>,
         bind: impl Fn(&str, &UserFieldConfig, Value) -> AuthResult<Value>,
     ) -> AuthResult<FieldMap> {
-        let schema = self.adapter_fields(&[]);
-        let mut output = FieldMap::new();
-        for (name, field) in schema.fields() {
-            let value = if name == "id" {
-                resolve_id()?
-            } else {
-                field.storage_input(input.get(name), create).await?
-            };
-            if let Some(value) = value {
-                let storage_name = resolve_field_name(field.field_name.as_deref(), name);
+        let result = async {
+            let schema = self.adapter_fields(&[]);
+            let mut output = FieldMap::new();
+            for (name, field) in schema.fields() {
                 let value = if name == "id" {
-                    value
+                    resolve_id()?
                 } else {
-                    bind(storage_name, field, value)?
+                    field.storage_input(input.get(name), create).await?
                 };
-                if !value.is_undefined() {
-                    let _ = output.insert(storage_name.to_owned(), value);
+                if let Some(value) = value {
+                    let storage_name = resolve_field_name(field.field_name.as_deref(), name);
+                    let value = if name == "id" {
+                        value
+                    } else {
+                        bind(storage_name, field, value)?
+                    };
+                    if !value.is_undefined() {
+                        let _ = output.insert(storage_name.to_owned(), value);
+                    }
                 }
             }
+            Ok(output)
         }
-        Ok(output)
+        .await;
+        // The factory awaits transformInput before the backend can observe the prepared write.
+        super::batch::await_boundary().await;
+        result
     }
 
     pub(crate) fn ordered_fields(&self, native: &[&str]) -> Vec<(&str, &UserFieldConfig)> {
@@ -245,7 +251,7 @@ impl UserFieldConfig {
         capabilities: FieldOutputCapabilities,
     ) -> AuthResult<Value> {
         if let Some(transform) = self.output_transform() {
-            value = transform.call_output(value).await?;
+            value = transform.call_adapter(value).await?;
         }
         self.finish_output(value, capabilities)
     }

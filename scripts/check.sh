@@ -81,6 +81,7 @@ run_stage() {
       cargo fmt --all -- --check
       local organization_status=0
       bun --no-install test \
+        ./tests/fixtures/organization-join-continuation-upstream.test.ts \
         ./compat-tests/reference-server/contracts/organization-id-input.test.ts \
         ./compat-tests/reference-server/contracts/organization-query-limits.test.ts \
         ./compat-tests/reference-server/contracts/organization-physical-fields.test.ts \
@@ -103,7 +104,7 @@ run_stage() {
       cargo clippy --workspace --locked --features axum,seaorm2,redis-cache -- -D warnings || organization_status=1
       cargo clippy --locked --features axum,seaorm2,redis-cache \
         --test organization_id_input_tests --test account_id_input_tests \
-        --test verification_field_queries_tests -- -D warnings || organization_status=1
+        --test verification_field_queries_tests --test plugin_model_fields_tests -- -D warnings || organization_status=1
       cargo test --locked --no-fail-fast -p better-auth-core -p better-auth-seaorm --lib || organization_status=1
       cargo test --locked -p better-auth-api --lib -- \
         plugins::organization::handlers::native_mutation_tests:: \
@@ -127,6 +128,8 @@ run_stage() {
         --test memory_user_live_reads_tests \
         --test account_user_auth_boundary_reference_tests \
         --test legacy_schema_integration_tests || organization_status=1
+      cargo test --locked --features axum,seaorm2,redis-cache \
+        --test plugin_model_fields_tests -- organization:: organization_order:: || organization_status=1
       cargo test --locked -p better-auth-seaorm-macros || organization_status=1
       cargo test --locked -p better-auth-cli --test generate || organization_status=1
       ./scripts/consumer-check.sh --lib --test session_native_values --test user_session_fields || organization_status=1

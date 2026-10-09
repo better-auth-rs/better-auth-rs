@@ -301,28 +301,10 @@ async fn builtin_policies_update_typed_fields_once_and_preserve_storage_mappings
 }
 
 #[tokio::test]
-async fn builtin_dynamic_outputs_preserve_storage_and_core_column_remaps_fail_explicitly() {
+async fn builtin_dynamic_outputs_preserve_storage() {
     let mut config = OrganizationConfig::default();
     fixture::configure(&mut config);
     let store = store(config.clone()).await;
-    for (name, target) in [("name", "slug"), ("name", "storedLabel"), ("extra", "name")] {
-        let mut invalid = config.clone();
-        let _ = invalid.schema.organization.fields_mut().insert(
-            name.into(),
-            UserFieldConfig {
-                required: Some(true),
-                field_name: Some(target.into()),
-                ..Default::default()
-            },
-        );
-        let error = store
-            .configure_organization_fields(invalid.schema)
-            .unwrap_err();
-        assert!(
-            error.to_string().contains("different typed field"),
-            "{error}"
-        );
-    }
     let _ = config.schema.organization.fields_mut().insert(
         "name".into(),
         UserFieldConfig {
@@ -416,6 +398,91 @@ async fn builtin_dynamic_outputs_preserve_storage_and_core_column_remaps_fail_ex
         "pending"
     );
     fixture::reset(store.connection()).await.unwrap();
+}
+
+#[tokio::test]
+async fn core_column_remaps_preserve_complete_returned_and_stored_records() {
+    for (name, target) in [("name", "slug"), ("name", "storedLabel"), ("extra", "name")] {
+        let mut config = OrganizationConfig::default();
+        fixture::configure(&mut config);
+        let store = store(config.clone()).await;
+        let mut expected = store
+            .create_organization(CreateOrganization::new("Original", "original"))
+            .await
+            .unwrap();
+        let mut expected_storage =
+            fixture::models::organization::Entity::find_by_id(expected.id.typed().unwrap())
+                .one(store.connection())
+                .await
+                .unwrap()
+                .unwrap();
+        let _ = config.schema.organization.fields_mut().insert(
+            name.into(),
+            UserFieldConfig {
+                required: Some(true),
+                field_name: Some(target.into()),
+                ..Default::default()
+            },
+        );
+        store.configure_organization_fields(config.schema).unwrap();
+        let update = if name == "name" {
+            UpdateOrganization {
+                name: Some("Mapped".into()),
+                ..Default::default()
+            }
+        } else {
+            UpdateOrganization {
+                additional_fields: [("extra".into(), "Mapped".into())].into(),
+                ..Default::default()
+            }
+        };
+        let actual = store
+            .update_organization(expected.id.typed().unwrap(), update)
+            .await
+            .unwrap();
+        expected.name = "Mapped".into();
+        let _ = expected
+            .additional_fields
+            .insert("marker".into(), "updated".into());
+        expected_storage.marker = Some("updated".into());
+        match target {
+            "slug" => {
+                expected.slug = "Mapped".into();
+                expected_storage.slug = "Mapped".into();
+            }
+            "storedLabel" => {
+                let _ = expected
+                    .additional_fields
+                    .insert("label".into(), "Mapped:out".into());
+                expected_storage.stored_label = Some("Mapped".into());
+            }
+            _ => {
+                let _ = expected
+                    .additional_fields
+                    .insert("extra".into(), "Mapped".into());
+                expected_storage.name = "Mapped".into();
+            }
+        }
+        assert_eq!(actual, expected, "{name}->{target}");
+        assert_eq!(
+            store
+                .get_organization_by_id(expected.id.typed().unwrap())
+                .await
+                .unwrap(),
+            Some(expected.clone())
+        );
+        let stored =
+            fixture::models::organization::Entity::find_by_id(expected.id.typed().unwrap())
+                .one(store.connection())
+                .await
+                .unwrap()
+                .unwrap();
+        assert!(stored.auth_updated_at >= expected_storage.auth_updated_at);
+        assert!(stored.auth_updated_at <= chrono::Utc::now());
+        expected_storage.auth_updated_at = stored.auth_updated_at;
+        assert_eq!(stored, expected_storage, "{name}->{target}");
+        fixture::reset(store.connection()).await.unwrap();
+    }
 }
 
 #[tokio::test]

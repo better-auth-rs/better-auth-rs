@@ -180,7 +180,9 @@ where
                 organization::<O::Invitation>(role, &organization_fields.invitation)
             }
             EntityRole::Team => organization::<O::Team>(role, &organization_fields.team),
-            EntityRole::TeamMember => organization::<O::TeamMember>(role, &UserConfig::default()),
+            EntityRole::TeamMember => {
+                organization::<O::TeamMember>(role, &model_fields.plugin_fields(role))
+            }
             EntityRole::OrganizationRole => {
                 organization::<O::OrganizationRole>(role, &organization_fields.organization_role)
             }

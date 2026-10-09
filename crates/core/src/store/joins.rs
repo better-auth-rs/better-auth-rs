@@ -304,6 +304,17 @@ impl MemberUser {
 }
 
 impl ResolvedJoin {
+    /// Resolve an adapter relationship from the complete registered declarations.
+    #[doc(hidden)]
+    pub fn resolve(
+        base: (EntityRole, &str, &UserConfig),
+        model: (EntityRole, &str, &UserConfig),
+        schema: &ModelFields,
+        table_matches: impl Fn(EntityRole, &str) -> bool,
+    ) -> AuthResult<Self> {
+        resolve_references(base, model, schema, table_matches)
+    }
+
     /// Resolve the native source column again against the projected parent field names.
     pub fn fallback_from(
         &self,

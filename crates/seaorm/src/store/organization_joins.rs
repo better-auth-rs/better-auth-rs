@@ -472,43 +472,6 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPluginSchema> SeaOrmSt
         .await
     }
 
-    pub(super) async fn joined_user_teams(
-        &self,
-        user_id: &better_auth_core::FieldValue,
-    ) -> AuthResult<Vec<better_auth_core::Team>> {
-        let parent = Entity::<O::TeamMember>::find()
-            .filter(self.organization_field_equals::<O::TeamMember>(
-                better_auth_core::store::schema::EntityRole::TeamMember,
-                "userId",
-                user_id,
-            )?)
-            .limit(super::pagination::default_limit(
-                self.config(),
-                self.connection().get_database_backend(),
-            )?);
-        let query = super::joins::joined_query::<Entity<O::TeamMember>, Entity<O::Team>>(
-            parent,
-            (O::TeamMember::column("team_id")?, O::Team::column("id")?),
-            O::Team::column("id")?,
-        );
-        let rows = super::joins::joined_rows::<Entity<O::TeamMember>, Entity<O::Team>>(
-            self.connection(),
-            &query,
-        )
-        .await?;
-        let teams = rows.into_iter().filter_map(|(_, team)| team).collect();
-        models::project::<O::Team>(
-            teams,
-            &self.organization_fields()?.team,
-            self.connection().get_database_backend(),
-            (
-                &self.model_fields,
-                better_auth_core::store::schema::EntityRole::Team,
-            ),
-        )
-        .await
-    }
-
     pub(super) async fn joined_user_invitations(
         &self,
         email: &str,

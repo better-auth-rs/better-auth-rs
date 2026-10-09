@@ -4,6 +4,9 @@ use better_auth_core::{
     CreateOrganization, CreateTeam, Organization, UpdateOrganization, UpdateTeam,
 };
 
+#[path = "organization/team_member.rs"]
+mod team_member;
+
 fn policy(field: &'static str, events: &Arc<Mutex<Vec<Value>>>) -> UserFieldConfig {
     let input_events = events.clone();
     let output_events = events.clone();

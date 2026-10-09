@@ -21,6 +21,7 @@ impl From<Model> for better_auth_core::Team {
     fn from(model: Model) -> Self {
         Self {
             additional_fields: Default::default(),
+            field_order: Default::default(),
             id: model.id.into(),
             name: model.name.into(),
             organization_id: model.organization_id.into(),

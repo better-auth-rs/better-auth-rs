@@ -221,6 +221,7 @@ impl OrganizationStore for EphemeralStore {
         let invitation_schema = self.field_config(EntityRole::Invitation)?;
         let role_schema = self.field_config(EntityRole::OrganizationRole)?;
         let team_schema = self.field_config(EntityRole::Team)?;
+        let team_member_schema = self.field_config(EntityRole::TeamMember)?;
         let member_org =
             self.organization_query(EntityRole::Member, "organizationId", Value::from(id))?;
         let invitation_org =
@@ -257,9 +258,12 @@ impl OrganizationStore for EphemeralStore {
             })
             .map(organization_id)
             .collect();
-        state
-            .team_members
-            .retain(|member| !team_ids.contains(&member.team_id))?;
+        state.team_members.retain(|member| {
+            let team_id = organization_value(member, &team_member_schema, "teamId");
+            !team_ids
+                .iter()
+                .any(|id| id.field_value().strict_equals(&team_id))
+        })?;
         state.teams.retain(|team| {
             !organization_value(team, &team_schema, "organizationId")
                 .strict_equals(&team_org.field_value())

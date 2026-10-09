@@ -10,7 +10,7 @@ pub struct Model {
     pub user_id: String,
     #[sea_orm(unique)]
     pub membership_key: Option<String>,
-    pub created_at: DateTimeUtc,
+    pub created_at: Option<DateTimeUtc>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -22,7 +22,13 @@ impl From<Model> for better_auth_core::TeamMember {
             id: model.id.into(),
             team_id: model.team_id.into(),
             user_id: model.user_id.into(),
-            created_at: model.created_at.into(),
+            created_at: better_auth_core::SchemaValue::from_field(
+                model
+                    .created_at
+                    .map_or(better_auth_core::FieldValue::Null, Into::into),
+            ),
+            additional_fields: Default::default(),
+            field_order: Default::default(),
         }
     }
 }

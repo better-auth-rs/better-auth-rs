@@ -68,22 +68,16 @@ async fn serial_organization_lifecycle_binds_numbers_and_projects_public_ids() -
             organization_id(required(state.members.snapshot()?.first())?).field_value(),
             organization_id(required(state.invitations.snapshot()?.first())?).field_value(),
             organization_id(required(state.teams.snapshot()?.first())?).field_value(),
-            required(state.team_members.snapshot()?.first())?
-                .id
-                .field_value(),
+            organization_id(required(state.team_members.snapshot()?.first())?).field_value(),
             organization_id(required(state.organization_roles.snapshot()?.first())?).field_value(),
         ];
         assert_eq!(ids.to_vec(), vec![Value::Number(1.0); 6]);
         assert_eq!(
-            required(state.team_members.snapshot()?.first())?
-                .team_id
-                .field_value(),
+            required(required(state.team_members.snapshot()?.first())?.get("teamId"))?.clone(),
             Value::Number(1.0)
         );
         assert_eq!(
-            required(state.team_members.snapshot()?.first())?
-                .user_id
-                .field_value(),
+            required(required(state.team_members.snapshot()?.first())?.get("userId"))?.clone(),
             Value::Number(1.0)
         );
     }
@@ -435,9 +429,9 @@ async fn serial_invitation_cookie_projects_ids_without_changing_session_update_o
         );
         let memberships = state.team_members.snapshot()?;
         let membership = required(memberships.first())?;
-        assert_eq!(membership.id.field_value(), Value::Number(1.0));
-        assert_eq!(membership.team_id.field_value(), Value::Number(1.0));
-        assert_eq!(membership.user_id.field_value(), Value::Number(1.0));
+        assert_eq!(membership.get("id"), Some(&Value::Number(1.0)));
+        assert_eq!(membership.get("teamId"), Some(&Value::Number(1.0)));
+        assert_eq!(membership.get("userId"), Some(&Value::Number(1.0)));
     }
     Ok(())
 }

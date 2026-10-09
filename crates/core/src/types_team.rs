@@ -3,9 +3,12 @@ use crate::SchemaValue;
 use serde::{Deserialize, Serialize};
 
 /// A team belonging to one organization.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Team {
+    /// Source property order, independent of the current typed values.
+    #[serde(skip)]
+    pub field_order: Vec<String>,
     /// Application fields projected by the configured team schema.
     #[serde(with = "crate::field_value::serde::map", flatten)]
     pub additional_fields: crate::FieldMap,
@@ -47,17 +50,68 @@ pub struct UpdateTeam {
 }
 
 /// A user's membership in a team.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TeamMember {
+    /// Source property order, independent of the current typed values.
+    #[serde(skip)]
+    pub field_order: Vec<String>,
+    /// Application fields projected by the registered membership schema.
+    #[serde(with = "crate::field_value::serde::map", flatten)]
+    pub additional_fields: crate::FieldMap,
     #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub id: SchemaValue<String>,
     #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub team_id: SchemaValue<String>,
     #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
     pub user_id: SchemaValue<String>,
-    #[serde(with = "crate::field_value::serde::date")]
-    pub created_at: crate::FieldDate,
+    #[serde(with = "crate::field_value::serde::schema_date")]
+    #[serde(default, skip_serializing_if = "SchemaValue::is_json_omitted")]
+    pub created_at: SchemaValue<crate::FieldDate>,
+}
+
+impl PartialEq for Team {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+            && self.name == other.name
+            && self.organization_id == other.organization_id
+            && self.created_at == other.created_at
+            && self.updated_at == other.updated_at
+            && self.additional_fields == other.additional_fields
+    }
+}
+
+impl PartialEq for TeamMember {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+            && self.team_id == other.team_id
+            && self.user_id == other.user_id
+            && self.created_at == other.created_at
+            && self.additional_fields == other.additional_fields
+    }
+}
+
+impl Team {
+    /// Apply the Organization adapter's object rest operation to a projected relationship.
+    #[doc(hidden)]
+    pub fn from_membership_join(
+        records: Vec<crate::FieldMap>,
+        many: bool,
+    ) -> crate::AuthResult<Self> {
+        let mut fields = if many {
+            records
+                .into_iter()
+                .enumerate()
+                .map(|(index, fields)| (index.to_string(), fields.into()))
+                .collect()
+        } else {
+            records.into_iter().next().ok_or_else(|| {
+                crate::AuthError::type_error("Cannot destructure a null Team relationship")
+            })?
+        };
+        let _ = fields.shift_remove("memberCount");
+        crate::FromFieldMap::from_field_values(fields)
+    }
 }
 
 /// A dynamic role scoped to one organization.

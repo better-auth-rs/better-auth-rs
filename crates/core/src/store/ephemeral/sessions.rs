@@ -90,7 +90,7 @@ impl EphemeralStore {
                     }
                     let value = if resolve_field_name(field.field_name.as_deref(), name) == "id" {
                         let value = match field.output_transform() {
-                            Some(transform) => transform.call_output(value).await?,
+                            Some(transform) => transform.call_adapter(value).await?,
                             None => value,
                         };
                         Self::project_id(&crate::SchemaValue::from_field(value))?.into_field_value()

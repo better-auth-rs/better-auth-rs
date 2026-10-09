@@ -23,10 +23,12 @@ fn object(value: &impl AuthRecordFields) -> AuthResult<FieldMap> {
 
 pub(super) trait MemoryOrganizationRecord: AuthRecordFields + FromFieldMap + Send {}
 
+impl MemoryOrganizationRecord for FieldMap {}
 impl MemoryOrganizationRecord for Organization {}
 impl MemoryOrganizationRecord for Member {}
 impl MemoryOrganizationRecord for Invitation {}
 impl MemoryOrganizationRecord for crate::Team {}
+impl MemoryOrganizationRecord for crate::TeamMember {}
 impl MemoryOrganizationRecord for crate::OrganizationRole {}
 
 fn decode_record<T: MemoryOrganizationRecord>(fields: FieldMap) -> AuthResult<T> {
@@ -303,6 +305,9 @@ impl EphemeralStore {
         &self,
         role: EntityRole,
     ) -> AuthResult<crate::user_fields::UserConfig> {
+        if role == EntityRole::TeamMember {
+            return Ok(self.model_fields.plugin_fields(role));
+        }
         self.organization_fields()?.fields_for(role).cloned()
     }
 
@@ -328,7 +333,7 @@ impl EphemeralStore {
             .await
     }
 
-    async fn organization_storage_fields(
+    pub(super) async fn organization_storage_fields(
         &self,
         role: EntityRole,
         core: FieldMap,
@@ -341,6 +346,7 @@ impl EphemeralStore {
             EntityRole::Member => "member",
             EntityRole::Invitation => "invitation",
             EntityRole::Team => "team",
+            EntityRole::TeamMember => "teamMember",
             EntityRole::OrganizationRole => "organizationRole",
             _ => return Err(AuthError::config("Expected an organization entity role")),
         };
@@ -384,6 +390,57 @@ impl EphemeralStore {
     ) -> AuthResult<Vec<T>> {
         self.output_record_refs_batches_then(role, values, |rows| std::future::ready(Ok(rows)))
             .await
+    }
+
+    pub(super) fn output_record_pages<'a>(
+        &'a self,
+        role: EntityRole,
+        pages: Vec<&'a [super::rows::RowRef<FieldMap>]>,
+    ) -> futures_util::future::BoxFuture<'a, AuthResult<Vec<Vec<FieldMap>>>> {
+        Box::pin(async move {
+            let mut output = vec![Vec::new(); pages.len()];
+            let mut active = Vec::new();
+            let mut sources = Vec::new();
+            for (index, page) in pages.into_iter().enumerate() {
+                if let Some((first, rest)) = page.split_first() {
+                    active.push((index, rest));
+                    sources.push(first.clone());
+                }
+            }
+            if sources.is_empty() {
+                return Ok(output);
+            }
+            let projected = self
+                .output_record_refs_batches_then(role, sources, |ready: Vec<(usize, FieldMap)>| {
+                    let active = &active;
+                    async move {
+                        let tails = ready
+                            .iter()
+                            .map(|(index, _)| {
+                                active.get(*index).map(|(_, tail)| *tail).ok_or_else(|| {
+                                    AuthError::internal("Child projection lost its parent page")
+                                })
+                            })
+                            .collect::<AuthResult<Vec<_>>>()?;
+                        let remaining = self.output_record_pages(role, tails).await?;
+                        Ok(ready
+                            .into_iter()
+                            .zip(remaining)
+                            .map(|((index, first), mut rest)| {
+                                rest.insert(0, first);
+                                (index, rest)
+                            })
+                            .collect())
+                    }
+                })
+                .await?;
+            for ((index, _), page) in active.into_iter().zip(projected) {
+                *output.get_mut(index).ok_or_else(|| {
+                    AuthError::internal("Child projection lost its result page")
+                })? = page;
+            }
+            Ok(output)
+        })
     }
 
     pub(super) async fn output_record_refs_batches_then<T: MemoryOrganizationRecord, R: Send, F>(
@@ -492,13 +549,6 @@ impl EphemeralStore {
         value: FieldMap,
     ) -> AuthResult<T> {
         Ok(self.output_records(role, vec![value]).await?.remove(0))
-    }
-
-    pub(super) fn output_team_member(mut row: crate::TeamMember) -> AuthResult<crate::TeamMember> {
-        row.id = Self::project_id(&row.id)?;
-        row.team_id = Self::project_id(&row.team_id)?;
-        row.user_id = Self::project_id(&row.user_id)?;
-        Ok(row)
     }
 }
 

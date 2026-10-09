@@ -10,6 +10,16 @@ use sea_orm::{
 
 pub(super) type Entity<M> = <M as SeaOrmOrganizationModel>::Entity;
 
+pub(super) fn raw_record<M: SeaOrmOrganizationModel>(
+    row: &super::plugin_rows::SqlRow,
+    fields: &UserConfig,
+    backend: DbBackend,
+    (runtime, role): (&ModelFields, EntityRole),
+) -> AuthResult<better_auth_core::user_fields::AdapterRecord> {
+    row.record::<Entity<M>>(fields, backend, M::column("id")?, M::column)
+        .map(|record| record.with_id_output(runtime, role))
+}
+
 impl<S: crate::schema::AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema>
     super::SeaOrmStore<S, O, P>
 {

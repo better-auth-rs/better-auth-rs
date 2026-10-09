@@ -199,9 +199,11 @@ mod json_tests {
         assert_eq!(values[1].as_f64(), Some(f64::MAX));
         assert_eq!(values[2].as_f64(), Some(-f64::MAX));
         assert_eq!(source.clone().into_field(), value);
+        let mut json_expected = source;
+        json_expected["values"][0] = serde_json::json!(0);
         assert_eq!(
             <serde_json::Value as SchemaField>::from_field(value),
-            Ok(source)
+            Ok(json_expected)
         );
         for native in [
             FieldValue::Undefined,

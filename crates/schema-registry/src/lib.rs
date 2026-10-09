@@ -421,7 +421,7 @@ static PLUGINS: &[PluginSchema] = &[
                     f!("team_id", "String"),
                     f!("user_id", "String"),
                     f!("membership_key", "Option<String>"),
-                    f!("created_at", "DateTimeUtc"),
+                    f!("created_at", "Option<DateTimeUtc>"),
                 ],
             },
             ExtraEntitySchema {
@@ -560,7 +560,7 @@ pub fn entity_indexes(table: &str) -> &'static [IndexDef] {
         "organization" => &[unique!("slug")],
         "team" => &[index!("organization_id")],
         "team_member" => &[
-            unique!("team_id", "user_id"),
+            index!("team_id"),
             unique!("membership_key"),
             index!("user_id"),
         ],

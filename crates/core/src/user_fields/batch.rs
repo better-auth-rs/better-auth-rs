@@ -13,6 +13,20 @@ use std::{
 
 type ReadyRow<'a, T> = (usize, &'a mut T, usize);
 
+pub(crate) async fn await_boundary() {
+    let mut queued = false;
+    poll_fn(|context| {
+        if queued {
+            return Poll::Ready(());
+        }
+        queued = true;
+        // Wake the callback queue directly; Tokio's deferred yields reverse ready peers.
+        context.waker().wake_by_ref();
+        Poll::Pending
+    })
+    .await;
+}
+
 async fn start_callback<T>(callback: &mut BoxFuture<'_, T>) -> Poll<T> {
     // JavaScript runs each callback's synchronous prefix before starting the next row.
     poll_fn(|cx| Poll::Ready(callback.as_mut().poll(cx))).await
