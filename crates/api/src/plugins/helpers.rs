@@ -6,9 +6,6 @@ use better_auth_core::entity::AuthUser;
 use better_auth_core::{AuthContext, AuthError, AuthRequest, AuthResult, FieldMap, UpdateUser};
 use chrono::Utc;
 
-mod user_input;
-pub(crate) use user_input::apply_user_create_fields;
-
 pub(crate) fn user_email(user: &impl AuthUser) -> AuthResult<String> {
     let email = user.email().field_value();
     match email {

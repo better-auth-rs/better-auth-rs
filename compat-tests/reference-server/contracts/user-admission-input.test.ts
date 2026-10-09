@@ -4,6 +4,72 @@ import { betterAuth } from "better-auth";
 import { APIError, createAuthEndpoint } from "better-auth/api";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { getMigrations } from "better-auth/db/migration";
+import { anonymous, emailOTP, phoneNumber } from "better-auth/plugins";
+
+test("Memory: signup preserves native phone fields from enabled plugin declarations", async () => {
+  const memory = { user: [], session: [], account: [], verification: [] };
+  const events: [string, any][] = [];
+  const auth = betterAuth({
+    database: memoryAdapter(memory),
+    baseURL: "https://admission.test",
+    secret: "user-admission-contract-secret-at-least-thirty-two-characters",
+    logger: { disabled: true }, telemetry: { enabled: false },
+    emailAndPassword: {
+      enabled: true, autoSignIn: false,
+      password: {
+        hash: async (password: string) => `fixture:${password}`,
+        verify: async ({ hash, password }: any) => hash === `fixture:${password}`,
+      },
+    },
+    user: { validateUserInfo({ user, source }: any) {
+      expect(source).toStrictEqual({ method: "email-password", action: "create-user" });
+      events.push(["admission", structuredClone(user)]);
+    } },
+    databaseHooks: {
+      user: { create: {
+        before(user: any) { events.push(["before", structuredClone(user)]); },
+        after(user: any) { events.push(["after", structuredClone(user)]); },
+      } },
+      account: { create: { before() { events.push(["account", null]); } } },
+    },
+    plugins: [phoneNumber({ sendOTP: async () => {} }), anonymous()],
+  });
+  const response = await auth.handler(new Request("https://admission.test/api/auth/sign-up/email", {
+    method: "POST",
+    headers: { "content-type": "application/json", origin: "https://admission.test" },
+    body: JSON.stringify({
+      name: "Phone Owner", email: "phone@admission.test", password: "Password123!", phoneNumber: 7,
+    }),
+  }));
+  expect(response.status).toBe(200);
+  expect(events.map(([phase]) => phase)).toStrictEqual(["admission", "before", "account", "after"]);
+  const admitted = events[0][1];
+  expect(admitted).toStrictEqual({
+    createdAt: expect.any(Date), updatedAt: expect.any(Date),
+    email: "phone@admission.test", name: "Phone Owner", image: undefined,
+    phoneNumber: 7, isAnonymous: false, emailVerified: false,
+  });
+  expect(Object.keys(admitted)).toStrictEqual([
+    "createdAt", "updatedAt", "email", "name", "image", "phoneNumber", "isAnonymous", "emailVerified",
+  ]);
+  expect(events[1][1]).toStrictEqual(admitted);
+  expect(Object.keys(events[1][1])).toStrictEqual(Object.keys(admitted));
+  const context = await auth.$context;
+  const stored = await context.adapter.findOne<any>({
+    model: "user", where: [{ field: "email", value: "phone@admission.test" }],
+  });
+  expect(stored).toStrictEqual({
+    id: expect.any(String), name: "Phone Owner", email: "phone@admission.test",
+    emailVerified: false, image: undefined,
+    createdAt: admitted.createdAt, updatedAt: admitted.updatedAt,
+    phoneNumber: 7, phoneNumberVerified: undefined, isAnonymous: false,
+  });
+  expect(events[3][1]).toStrictEqual(stored);
+  expect(await response.json()).toStrictEqual(JSON.parse(JSON.stringify({ token: null, user: stored })));
+  expect(await context.adapter.count({ model: "user" })).toBe(1);
+  expect(await context.adapter.count({ model: "account" })).toBe(1);
+  expect(await context.adapter.count({ model: "session" })).toBe(0);
+});
 
 for (const sqlite of [false, true]) {
   test(`${sqlite ? "SQLite" : "Memory"}: admission and hooks share prepared User values and normalization failures`, async () => {
@@ -74,6 +140,99 @@ for (const sqlite of [false, true]) {
       database?.close();
     }
   });
+}
+
+for (const sqlite of [false, true]) {
+  for (const imageProvided of [false, true]) {
+    test(`${sqlite ? "SQLite" : "Memory"}: email OTP owns verified and reserved User fields with image=${imageProvided}`, async () => {
+      const database = sqlite ? new Database(":memory:") : null;
+      const memory = { user: [], session: [], account: [], verification: [] };
+      const validators: string[] = [];
+      const events: [string, any][] = [];
+      const sources: any[] = [];
+      const deliveries: any[] = [];
+      const email = "otp@admission.test";
+      const image = "https://admission.test/avatar.png";
+      const options: any = {
+        database: database ?? memoryAdapter(memory),
+        baseURL: "https://admission.test",
+        secret: "user-admission-contract-secret-at-least-thirty-two-characters",
+        logger: { disabled: true }, telemetry: { enabled: false },
+        user: {
+          additionalFields: {
+            ...Object.fromEntries(["email", "name", "image", "otp"].map(name => [name, {
+              type: "string", required: false,
+              ...(name === "otp" ? { fieldName: "username" } : {}),
+              validator: { input: { "~standard": { validate() {
+                validators.push(name);
+                return { value: `parsed-${name}` };
+              } } } },
+            }])),
+            emailVerified: { type: "boolean", required: false, defaultValue: false },
+          },
+          validateUserInfo({ user, source }: any) {
+            events.push(["admission", structuredClone(user)]);
+            sources.push(structuredClone(source));
+          },
+        },
+        databaseHooks: { user: { create: {
+          before(user: any) { events.push(["before", structuredClone(user)]); },
+          after(user: any) { events.push(["after", structuredClone(user)]); },
+        } } },
+        plugins: [emailOTP({
+          generateOTP: () => "123456",
+          async sendVerificationOTP(message) { deliveries.push(message); },
+        })],
+      };
+      try {
+        if (database) await (await getMigrations(options)).runMigrations();
+        const auth = betterAuth(options);
+        const post = (path: string, body: unknown) => auth.handler(new Request(`https://admission.test/api/auth${path}`, {
+          method: "POST",
+          headers: { "content-type": "application/json", origin: "https://admission.test" },
+          body: JSON.stringify(body),
+        }));
+        const sent = await post("/email-otp/send-verification-otp", { email: email.toUpperCase(), type: "sign-in" });
+        expect(sent.status).toBe(200);
+        expect(await sent.json()).toStrictEqual({ success: true });
+        expect(deliveries).toStrictEqual([{ email, otp: "123456", type: "sign-in" }]);
+        const response = await post("/sign-in/email-otp", {
+          email: email.toUpperCase(), otp: "123456", name: "OTP Owner",
+          ...(imageProvided ? { image } : {}),
+        });
+        expect(response.status).toBe(200);
+        const result = await response.json();
+        expect(validators).toStrictEqual([]);
+        expect(sources).toStrictEqual([{ method: "email-otp", action: "create-user" }]);
+        expect(events.map(([phase]) => phase)).toStrictEqual(["admission", "before", "after"]);
+        const admitted = events[0][1];
+        expect(admitted).toStrictEqual({
+          createdAt: expect.any(Date), updatedAt: expect.any(Date),
+          emailVerified: true, email, name: "OTP Owner", image: imageProvided ? image : undefined,
+        });
+        expect(Object.keys(admitted)).toStrictEqual(["createdAt", "updatedAt", "emailVerified", "email", "name", "image"]);
+        expect(events[1][1]).toStrictEqual(admitted);
+        expect(Object.hasOwn(admitted, "image")).toBe(true);
+        const context = await auth.$context;
+        const stored = await context.adapter.findOne({ model: "user", where: [{ field: "email", value: email }] });
+        expect(stored).toStrictEqual({
+          id: expect.any(String), name: "OTP Owner", email, emailVerified: true,
+          image: imageProvided ? image : sqlite ? null : undefined,
+          createdAt: admitted.createdAt, updatedAt: admitted.updatedAt,
+          otp: sqlite ? null : undefined,
+        });
+        expect(events[2][1]).toStrictEqual(stored);
+        const session = await context.adapter.findOne<any>({ model: "session", where: [{ field: "userId", value: result.user.id }] });
+        expect(session?.token).toBeString();
+        expect(result).toStrictEqual(JSON.parse(JSON.stringify({ token: session.token, user: stored })));
+        expect(await context.adapter.count({ model: "user" })).toBe(1);
+        expect(await context.adapter.count({ model: "session" })).toBe(1);
+        expect(await context.adapter.count({ model: "verification" })).toBe(0);
+      } finally {
+        database?.close();
+      }
+    });
+  }
 }
 
 for (const sqlite of [false, true]) {

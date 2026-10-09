@@ -1,7 +1,4 @@
-use crate::plugins::{
-    email_verification::EmailVerificationPlugin,
-    helpers::{apply_default_role, apply_user_create_fields},
-};
+use crate::plugins::{email_verification::EmailVerificationPlugin, helpers::apply_default_role};
 use async_trait::async_trait;
 use better_auth_core::utils::password as password_utils;
 use better_auth_core::{
@@ -100,7 +97,7 @@ pub(super) async fn sign_up_core<S: AuthSchema>(
     let mut create_user = CreateUser::new()
         .with_email(body.email.to_lowercase())
         .with_name(&body.name);
-    apply_user_create_fields(ctx, &body.additional_fields, &mut create_user)?;
+    create_user.assign_user_fields(ctx.parse_user_input(&body.additional_fields, true)?)?;
     create_user.image = body
         .image
         .clone()
@@ -180,12 +177,18 @@ pub(super) async fn sign_up_core<S: AuthSchema>(
             );
             endpoint.transaction = Some(tx);
             let creation = async {
-                let mut create_user = create_user.into_user_fields()?;
-                // Signup supplies an image property even when the HTTP body omits the value.
-                let _ = create_user
-                    .entry("image".into())
-                    .or_insert(better_auth_core::FieldValue::Undefined);
-                let _ = create_user.insert("emailVerified".into(), false.into());
+                let mut fields = FieldMap::from([
+                    ("email".into(), create_user.email.into_field()),
+                    ("name".into(), create_user.name.into_field_value()),
+                    ("image".into(), create_user.image.into_field_value()),
+                ]);
+                fields.extend(create_user.additional_fields);
+                let _ = fields.insert("emailVerified".into(), false.into());
+                let mut create_user = CreateUser {
+                    additional_fields: fields,
+                    ..Default::default()
+                }
+                .into_user_fields()?;
                 crate::plugins::user_admission::validate_create(
                     &create_user,
                     crate::plugins::user_admission::UserValidationSource::new(

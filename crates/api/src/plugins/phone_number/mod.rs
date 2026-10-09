@@ -18,6 +18,8 @@ use super::helpers::{
 mod callbacks;
 mod native;
 mod request;
+#[cfg(test)]
+mod signup_input_tests;
 use crate::plugins::endpoint_context::EndpointContext;
 use callbacks::Delivery;
 pub use callbacks::{PhoneCallbackFuture, PhoneNumberCallbacks};
@@ -426,11 +428,6 @@ impl PhoneNumberPlugin {
                 .await?
                 .ok_or_else(|| error(500, "FAILED_TO_UPDATE_USER", "Failed to update user"))?
         } else if let Some(email) = &self.temp_email {
-            let mut create = CreateUser::new().with_email(email(phone)).with_name(
-                self.temp_name
-                    .as_ref()
-                    .map_or_else(|| phone.to_owned(), |name| name(phone)),
-            );
             let rest = body
                 .as_object()
                 .into_iter()
@@ -441,9 +438,23 @@ impl PhoneNumberPlugin {
                 })
                 .map(|(key, value)| (key.clone(), value.clone()))
                 .collect();
-            super::helpers::apply_user_create_fields(ctx, &rest, &mut create)?;
-            create.phone_number = Some(phone.to_owned());
-            create.phone_number_verified = Some(true);
+            let mut fields = ctx.parse_user_input(&rest, true)?;
+            fields.extend([
+                ("email".into(), email(phone).into()),
+                (
+                    "name".into(),
+                    self.temp_name
+                        .as_ref()
+                        .map_or_else(|| phone.to_owned(), |name| name(phone))
+                        .into(),
+                ),
+                ("phoneNumber".into(), phone.into()),
+                ("phoneNumberVerified".into(), true.into()),
+            ]);
+            let create = CreateUser {
+                additional_fields: fields,
+                ..Default::default()
+            };
 
             super::user_admission::create_user_optional(create, "phone-number", &endpoint)
                 .await?
@@ -771,6 +782,7 @@ better_auth_core::impl_auth_plugin!(PhoneNumberPlugin, "phone-number";
                 "phone-number",
                 &["phone_number", "phone_number_verified"],
             )?;
+            ctx.register_native_user_fields("phone-number.enabled");
             ctx.set_metadata("phone-number.enabled", json!(true));
             ctx.extensions.insert(self.clone());
             Ok(())

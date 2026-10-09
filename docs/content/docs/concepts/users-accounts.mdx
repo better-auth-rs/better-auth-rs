@@ -59,6 +59,8 @@ SeaORM User and Account reads retain the raw SQL query result until `AdapterReco
 
 Plugin fields are projected from the active plugin schema. Disabling Anonymous, Phone Number, Username, Admin, or Two Factor hides stored plugin fields on database reads. An existing signed session cache preserves its previous plugin fields until expiry or a cache version change, matching upstream. Current `returned: Some(false)` restrictions apply even to existing caches. Change `session.cookie_cache.version` when a configuration change must invalidate cached user shapes immediately.
 
+Public input parsing starts with application declarations, then replaces complete declarations in plugin registration order. Admin, Phone Number, Anonymous, and Two Factor register their native User declarations through this same mechanism. The final declaration controls protection, defaults, validators, and transforms. Email OTP and Phone Number signup parse additional fields before assigning their verified identity fields; those routes exclude reserved request fields from additional-field validation.
+
 Custom stores must apply `UserConfig::storage_fields` before persistence. Custom endpoints must return `AuthContext::user_view` rather than serialize storage models. `UserView::from` is an unconfigured internal conversion. Generic OAuth and OIDC pass `OAuthProfile.additional_fields` through `UserConfig::parse_provider_input` before persistence. Custom provider integrations must use the same boundary. Raw OAuth provider response data is not mapped user input.
 
 ### Runtime values and serialization

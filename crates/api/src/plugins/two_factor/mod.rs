@@ -564,6 +564,7 @@ impl<S: better_auth_core::AuthSchema> better_auth_core::AuthPlugin<S> for TwoFac
         )?;
         ctx.extensions.insert(self.config.clone());
         S::User::require_plugin_fields("two-factor", &["two_factor_enabled"])?;
+        ctx.register_native_user_fields(METADATA_ENABLED);
         ctx.set_metadata(METADATA_ENABLED, serde_json::Value::Bool(true));
         ctx.set_metadata(
             METADATA_TOTP_DISABLED,

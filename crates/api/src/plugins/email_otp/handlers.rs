@@ -5,14 +5,13 @@ use super::{
 };
 use crate::plugins::endpoint_context::EndpointContext;
 use crate::plugins::helpers::{
-    SessionIssueError, apply_user_create_fields, get_credential_account,
-    issue_selected_user_session_optional,
+    SessionIssueError, get_credential_account, issue_selected_user_session_optional,
 };
 use better_auth_core::utils::password;
 use better_auth_core::wire::UserView;
 use better_auth_core::{
     AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, AuthSchema, AuthSession,
-    AuthUser, CreateAccount, CreateUser, RequestMeta, UpdateAccount, UpdateUser,
+    AuthUser, CreateAccount, CreateUser, FieldValue, RequestMeta, UpdateAccount, UpdateUser,
 };
 use serde_json::json;
 
@@ -160,15 +159,27 @@ impl EmailOtpPlugin {
                 if self.config.disable_sign_up {
                     return Err(invalid_otp());
                 }
-                let mut input = CreateUser::new()
-                    .with_email(email)
-                    .with_name(body.get("name"))
-                    .with_email_verified(true);
-                input.image = body
-                    .optional("image")
-                    .map(|image| Some(image.to_owned()).into())
-                    .unwrap_or_default();
-                apply_user_create_fields(ctx, body.fields(), &mut input)?;
+                let rest = body
+                    .fields()
+                    .iter()
+                    .filter(|(name, _)| !["email", "otp", "name", "image"].contains(&name.as_str()))
+                    .map(|(name, value)| (name.clone(), value.clone()))
+                    .collect();
+                let mut fields = ctx.parse_user_input(&rest, true)?;
+                fields.extend([
+                    ("email".into(), email.into()),
+                    ("emailVerified".into(), true.into()),
+                    ("name".into(), body.get("name").into()),
+                    (
+                        "image".into(),
+                        body.optional("image")
+                            .map_or(FieldValue::Undefined, Into::into),
+                    ),
+                ]);
+                let input = CreateUser {
+                    additional_fields: fields,
+                    ..Default::default()
+                };
 
                 let endpoint = EndpointContext::new(
                     Some(req),

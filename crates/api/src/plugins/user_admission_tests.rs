@@ -240,6 +240,7 @@ async fn invalid_runtime_email_fails_before_admission_and_database_hooks() -> Au
 struct SignupTrace {
     mode: &'static str,
     events: Mutex<Vec<&'static str>>,
+    users: Mutex<Vec<FieldMap>>,
 }
 
 #[async_trait]
@@ -250,6 +251,7 @@ impl<S: AuthSchema> ValidateUserInfo<S> for SignupTrace {
         _: &EndpointContext<'_, S>,
     ) -> AuthResult<Option<UserValidationRejection>> {
         self.events.lock().unwrap().push("admission");
+        self.users.lock().unwrap().push(data.user.clone());
         assert_eq!(data.user["emailVerified"], FieldValue::Bool(false));
         assert_eq!(data.user.get("image"), Some(&FieldValue::Undefined));
         Ok(None)
@@ -275,6 +277,7 @@ impl<S: AuthSchema> DatabaseHooks<S> for SignupTrace {
         _: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<DatabaseHookUpdate<FieldMap>> {
         self.events.lock().unwrap().push("before");
+        self.users.lock().unwrap().push(input.clone());
         assert_eq!(input.get("image"), Some(&FieldValue::Undefined));
         match self.mode {
             "native" => Err(AuthError::internal("private user failure")),
@@ -296,10 +299,14 @@ impl<S: AuthSchema> DatabaseHooks<S> for SignupTrace {
 
     async fn after_create_user(
         &self,
-        _: Option<&UserView>,
+        user: Option<&UserView>,
         _: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
         self.events.lock().unwrap().push("after");
+        self.users
+            .lock()
+            .unwrap()
+            .push(user.unwrap().clone().into());
         if self.mode == "after" {
             return Err(AuthError::internal("private committed failure"));
         }
@@ -349,6 +356,7 @@ async fn check_signup_failure<S: AuthSchema>(
     let trace = Arc::new(SignupTrace {
         mode,
         events: Mutex::default(),
+        users: Mutex::default(),
     });
     let store = store.with_runtime(config.clone(), vec![trace.clone()], Default::default())?;
     let mut context = AuthContext::new(config, store);
@@ -461,5 +469,364 @@ async fn signup_keeps_the_creation_error_boundary_and_transaction_lifecycle() ->
         check_signup_failure(memory, mode, protected).await?;
         check_signup_failure(test_helpers::create_test_database().await, mode, protected).await?;
     }
+    Ok(())
+}
+
+#[derive(Default)]
+struct EmailOtpTrace {
+    events: Mutex<Vec<(&'static str, FieldMap)>>,
+    validators: Mutex<Vec<&'static str>>,
+    deliveries: Mutex<Vec<serde_json::Value>>,
+}
+
+#[async_trait]
+impl<S: AuthSchema> ValidateUserInfo<S> for EmailOtpTrace {
+    async fn validate(
+        &self,
+        data: &UserValidationData,
+        _: &EndpointContext<'_, S>,
+    ) -> AuthResult<Option<UserValidationRejection>> {
+        assert_eq!(
+            serde_json::to_value(&data.source)?,
+            serde_json::json!({"method":"email-otp", "action":"create-user"}),
+        );
+        self.events
+            .lock()
+            .unwrap()
+            .push(("admission", data.user.clone()));
+        Ok(None)
+    }
+}
+
+#[async_trait]
+impl crate::plugins::email_otp::SendEmailOtp for EmailOtpTrace {
+    async fn send(&self, message: &crate::plugins::email_otp::EmailOtpMessage) -> AuthResult<()> {
+        self.deliveries
+            .lock()
+            .unwrap()
+            .push(serde_json::to_value(message)?);
+        Ok(())
+    }
+}
+
+#[better_auth_core::database_hooks()]
+impl<S: AuthSchema> DatabaseHooks<S> for EmailOtpTrace {
+    async fn before_create_user(
+        &self,
+        input: &mut FieldMap,
+        _: &DatabaseHookContext<'_, S>,
+    ) -> AuthResult<DatabaseHookUpdate<FieldMap>> {
+        self.events.lock().unwrap().push(("before", input.clone()));
+        Ok(DatabaseHookUpdate::Continue)
+    }
+
+    async fn after_create_user(
+        &self,
+        user: Option<&UserView>,
+        _: &DatabaseHookContext<'_, S>,
+    ) -> AuthResult<()> {
+        self.events
+            .lock()
+            .unwrap()
+            .push(("after", user.unwrap().clone().into()));
+        Ok(())
+    }
+}
+
+async fn check_email_otp_fields<S: AuthSchema>(
+    store: Arc<dyn AuthStore<S>>,
+    sqlite: bool,
+    image_provided: bool,
+) -> AuthResult<()> {
+    use better_auth_core::{AuthPlugin, HttpMethod, user_fields::FieldValidators};
+
+    let trace = Arc::new(EmailOtpTrace::default());
+    let mut config = test_helpers::create_test_config();
+    for name in ["email", "name", "image", "otp"] {
+        let observer = trace.clone();
+        let _ = config.user.fields_mut().insert(
+            name.into(),
+            UserFieldConfig {
+                field_type: UserFieldType::String,
+                required: Some(false),
+                field_name: (name == "otp").then(|| "username".into()),
+                validator: Some(FieldValidators {
+                    input: Some(Arc::new(move |_| {
+                        observer.validators.lock().unwrap().push(name);
+                        Ok(format!("parsed-{name}").into())
+                    })),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+        );
+    }
+    let _ = config.user.fields_mut().insert(
+        "emailVerified".into(),
+        UserFieldConfig {
+            field_type: UserFieldType::Boolean,
+            required: Some(false),
+            default_value: Some(false.into()),
+            ..Default::default()
+        },
+    );
+    let config = Arc::new(config);
+    let store = store.with_runtime(config.clone(), vec![trace.clone()], Default::default())?;
+    let mut context = AuthContext::new(config, store);
+    context
+        .extensions
+        .insert(trace.clone() as Arc<dyn ValidateUserInfo<S>>);
+    let plugin = crate::plugins::email_otp::EmailOtpPlugin::with_config(
+        crate::plugins::email_otp::EmailOtpConfig {
+            sender: Some(trace.clone()),
+            generate_otp: Some(Arc::new(|_, _| Some("123456".into()))),
+            ..Default::default()
+        },
+    );
+    let request = |path, body: serde_json::Value| {
+        test_helpers::create_auth_request_no_query(
+            HttpMethod::Post,
+            path,
+            None,
+            Some(body.to_string().into_bytes()),
+        )
+    };
+    let email = "otp@admission.test";
+    let image = "https://admission.test/avatar.png";
+    let sent = plugin
+        .on_request(
+            &request(
+                "/email-otp/send-verification-otp",
+                serde_json::json!({"email":email.to_uppercase(), "type":"sign-in"}),
+            ),
+            &context,
+        )
+        .await?
+        .unwrap();
+    assert_eq!(sent.status, 200);
+    assert_eq!(sent.body.json()?, Some(serde_json::json!({"success":true})));
+    assert_eq!(
+        *trace.deliveries.lock().unwrap(),
+        [serde_json::json!({"email":email, "otp":"123456", "type":"sign-in"})],
+    );
+    let mut body = serde_json::json!({
+        "email":email.to_uppercase(), "otp":"123456", "name":"OTP Owner",
+    });
+    if image_provided {
+        body["image"] = image.into();
+    }
+    let response = plugin
+        .on_request(&request("/sign-in/email-otp", body), &context)
+        .await?
+        .unwrap();
+    assert_eq!(response.status, 200);
+    assert!(trace.validators.lock().unwrap().is_empty());
+    let events = trace.events.lock().unwrap().clone();
+    assert_eq!(
+        events.iter().map(|event| event.0).collect::<Vec<_>>(),
+        ["admission", "before", "after"],
+    );
+    let admitted = &events[0].1;
+    assert!(matches!(admitted["createdAt"], FieldValue::Date(_)));
+    assert!(matches!(admitted["updatedAt"], FieldValue::Date(_)));
+    let expected_input = FieldMap::from([
+        ("createdAt".into(), admitted["createdAt"].clone()),
+        ("updatedAt".into(), admitted["updatedAt"].clone()),
+        ("emailVerified".into(), true.into()),
+        ("email".into(), email.into()),
+        ("name".into(), "OTP Owner".into()),
+        (
+            "image".into(),
+            if image_provided {
+                image.into()
+            } else {
+                FieldValue::Undefined
+            },
+        ),
+    ]);
+    assert_eq!(admitted, &expected_input);
+    assert_eq!(
+        admitted.keys().collect::<Vec<_>>(),
+        expected_input.keys().collect::<Vec<_>>(),
+    );
+    assert_eq!(events[1].1, expected_input);
+    let user = context.database.get_user_by_email(email).await?.unwrap();
+    assert!(!user.id.typed()?.is_empty());
+    let absent = if sqlite {
+        FieldValue::Null
+    } else {
+        FieldValue::Undefined
+    };
+    let expected_stored = FieldMap::from([
+        ("id".into(), user.id.field_value()),
+        ("name".into(), "OTP Owner".into()),
+        ("email".into(), email.into()),
+        ("emailVerified".into(), true.into()),
+        (
+            "image".into(),
+            if image_provided {
+                image.into()
+            } else {
+                absent.clone()
+            },
+        ),
+        ("createdAt".into(), admitted["createdAt"].clone()),
+        ("updatedAt".into(), admitted["updatedAt"].clone()),
+        ("otp".into(), absent),
+    ]);
+    assert_eq!(FieldMap::from(user.clone()), expected_stored);
+    assert_eq!(events[2].1, expected_stored);
+    let sessions = context.database.get_user_sessions(user.id.typed()?).await?;
+    assert_eq!(sessions.len(), 1);
+    assert!(!sessions[0].token.typed()?.is_empty());
+    assert_eq!(
+        response.body.json()?,
+        Some(serde_json::json!({
+            "token":sessions[0].token.typed()?, "user":expected_stored.json()?,
+        })),
+    );
+    assert_eq!(context.database.list_users(Default::default()).await?.1, 1);
+    assert!(
+        context
+            .database
+            .get_verification_by_identifier(&format!("sign-in-otp-{email}"))
+            .await?
+            .is_none()
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn email_otp_owns_verified_and_reserved_user_fields() -> AuthResult<()> {
+    for image_provided in [false, true] {
+        let memory: Arc<dyn AuthStore<StatelessSchema>> = Arc::new(EphemeralStore::new(config()));
+        check_email_otp_fields(memory, false, image_provided).await?;
+        check_email_otp_fields(
+            test_helpers::create_test_database().await,
+            true,
+            image_provided,
+        )
+        .await?;
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn signup_preserves_native_phone_fields_from_enabled_plugin_declarations() -> AuthResult<()> {
+    use better_auth_core::{
+        AuthInitContext, AuthPlugin, HttpMethod, plugin_runtime::AdapterUserFields,
+        store::schema::SchemaConfiguration,
+    };
+
+    let config = Arc::new(test_helpers::create_test_config());
+    let store: Arc<dyn AuthStore<StatelessSchema>> = Arc::new(EphemeralStore::new(config.clone()));
+    let mut init = AuthInitContext::new(config.clone(), store.clone());
+    crate::plugins::phone_number::PhoneNumberPlugin::new()
+        .on_init(&mut init)
+        .await?;
+    crate::plugins::anonymous::AnonymousPlugin::new()
+        .on_init(&mut init)
+        .await?;
+    let parts = init.into_parts();
+    let (adapter, endpoint, mut fields) = parts.plugin_fields.clone().resolve(&config);
+    let adapter_fields = adapter.user.clone();
+    let adapter = Arc::new(adapter);
+    fields.set_schema_configuration(&SchemaConfiguration {
+        config: adapter.clone(),
+        plugins: vec!["phone-number", "anonymous"],
+        metadata: parts.metadata.clone(),
+        secondary_storage: false,
+        database_rate_limit: false,
+    });
+    let trace = Arc::new(SignupTrace {
+        mode: "native-phone",
+        events: Mutex::default(),
+        users: Mutex::default(),
+    });
+    let store = store.with_runtime(adapter, vec![trace.clone()], fields)?;
+    let mut context = AuthContext::new(Arc::new(endpoint), store);
+    context.metadata = parts.metadata;
+    context.extensions = parts.extensions;
+    context.extensions.insert(AdapterUserFields(adapter_fields));
+    context
+        .extensions
+        .insert(trace.clone() as Arc<dyn ValidateUserInfo<StatelessSchema>>);
+    context.password_policy.hasher = Some(trace.clone());
+    let plugin = crate::plugins::email_password::EmailPasswordPlugin::new().auto_sign_in(false);
+    let request = test_helpers::create_auth_request_no_query(
+        HttpMethod::Post,
+        "/sign-up/email",
+        None,
+        Some(
+            serde_json::json!({
+                "name":"Phone Owner", "email":"phone@admission.test",
+                "password":"Password123!", "phoneNumber":7,
+            })
+            .to_string()
+            .into_bytes(),
+        ),
+    );
+    let response = plugin.on_request(&request, &context).await?.unwrap();
+    assert_eq!(response.status, 200);
+    assert_eq!(
+        *trace.events.lock().unwrap(),
+        ["admission", "before", "account", "after"],
+    );
+    let users = trace.users.lock().unwrap().clone();
+    assert_eq!(users.len(), 3);
+    let admitted = &users[0];
+    assert!(matches!(admitted["createdAt"], FieldValue::Date(_)));
+    assert!(matches!(admitted["updatedAt"], FieldValue::Date(_)));
+    let expected_input = FieldMap::from([
+        ("createdAt".into(), admitted["createdAt"].clone()),
+        ("updatedAt".into(), admitted["updatedAt"].clone()),
+        ("email".into(), "phone@admission.test".into()),
+        ("name".into(), "Phone Owner".into()),
+        ("image".into(), FieldValue::Undefined),
+        ("phoneNumber".into(), 7.into()),
+        ("isAnonymous".into(), false.into()),
+        ("emailVerified".into(), false.into()),
+    ]);
+    assert_eq!(admitted, &expected_input);
+    assert_eq!(
+        admitted.keys().collect::<Vec<_>>(),
+        expected_input.keys().collect::<Vec<_>>(),
+    );
+    assert_eq!(users[1], expected_input);
+    assert_eq!(
+        users[1].keys().collect::<Vec<_>>(),
+        expected_input.keys().collect::<Vec<_>>(),
+    );
+    let user = context
+        .database
+        .get_user_by_email("phone@admission.test")
+        .await?
+        .unwrap();
+    assert!(!user.id.typed()?.is_empty());
+    let mut expected_stored = expected_input;
+    let _ = expected_stored.insert("id".into(), user.id.field_value());
+    let _ = expected_stored.insert("phoneNumberVerified".into(), FieldValue::Undefined);
+    assert_eq!(FieldMap::from(user.clone()), expected_stored);
+    assert_eq!(users[2], expected_stored);
+    assert_eq!(
+        response.body.json()?,
+        Some(serde_json::json!({"token":null, "user":expected_stored.json()?})),
+    );
+    assert_eq!(context.database.list_users(Default::default()).await?.1, 1);
+    assert_eq!(
+        context
+            .database
+            .get_user_accounts(user.id.typed()?)
+            .await?
+            .len(),
+        1,
+    );
+    assert!(
+        context
+            .database
+            .get_user_sessions(user.id.typed()?)
+            .await?
+            .is_empty()
+    );
     Ok(())
 }

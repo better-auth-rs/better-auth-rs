@@ -187,7 +187,7 @@ run_stage() {
           user_view_preserves_adapter_order_through_cache_and_visibility \
           plugins::jwt:: plugins::api_key:: plugins::passkey:: plugins::organization:: plugins::test_utils:: \
           plugins::user_admission:: \
-          plugins::admin:: plugins::email_verification:: plugins::email_password:: \
+          plugins::admin:: plugins::email_verification:: plugins::email_password:: plugins::phone_number:: \
           plugins::two_factor:: plugins::user_management:: plugins::oauth:: || create_status=1
         cargo test --locked --no-fail-fast --features axum,seaorm2,redis-cache \
           --test database_hooks_tests --test database_lifecycle_tests --test database_hook_updates_tests \
@@ -198,6 +198,7 @@ run_stage() {
           --test test_utils_tests --test legacy_schema_integration_tests \
           --test user_runtime_output_tests --test user_runtime_cache_tests \
           --test user_runtime_input_tests --test user_account_raw_column_tests \
+          --test user_input_policy_tests \
           --test user_verification_fields_tests --test user_record_values_tests \
           --test account_owner_batch_tests --test account_identity_tests \
           --test account_user_selected_relations_reference_tests \
@@ -221,6 +222,8 @@ run_stage() {
         ./compat-tests/reference-server/contracts/user-runtime-cache.test.ts \
         ./compat-tests/reference-server/contracts/user-runtime-input.test.ts \
         ./compat-tests/reference-server/contracts/user-admission-input.test.ts \
+        ./compat-tests/reference-server/contracts/user-input-policy.test.ts \
+        ./compat-tests/reference-server/contracts/phone-signup-input.test.ts \
         ./compat-tests/reference-server/contracts/user-synthetic-output.test.ts \
         ./compat-tests/reference-server/contracts/api-key-actor-reference.test.ts \
         ./compat-tests/reference-server/contracts/api-key-create-gate.test.ts \

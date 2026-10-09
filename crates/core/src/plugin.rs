@@ -458,6 +458,19 @@ impl<S: AuthSchema> AuthInitContext<S> {
         }
     }
 
+    /// Register one plugin's native User declarations at its initialization position.
+    #[doc(hidden)]
+    pub fn register_native_user_fields(&mut self, enabled_metadata: &str) {
+        let metadata = [(enabled_metadata.to_owned(), serde_json::Value::Bool(true))].into();
+        let names: Vec<_> = crate::wire::UserView::active_plugin_fields(&metadata).collect();
+        let mut fields =
+            crate::user_fields::UserConfig::default().user_field_schema_with_plugins(&names);
+        fields
+            .fields_mut()
+            .retain(|name, _| names.contains(&name.as_str()));
+        self.register_user_fields(fields);
+    }
+
     /// Merge complete adapter field declarations for a supported model in registration order.
     /// Model-specific restrictions apply until the model uses the shared native field policies.
     pub fn register_model_fields(
@@ -679,41 +692,13 @@ impl<S: AuthSchema> AuthContext<S> {
         self.session_manager().session_view(session).await
     }
 
-    /// Validate public user fields, including proof and privilege fields owned by active plugins.
+    /// Parse public user fields with the final application and plugin declarations.
     pub fn parse_user_input(
         &self,
         input: &serde_json::Map<String, serde_json::Value>,
         create: bool,
     ) -> AuthResult<crate::FieldMap> {
         let input = crate::FieldMap::from_json(input.clone())?;
-        for (plugin, fields, has_default) in [
-            (
-                "admin.enabled",
-                &["role", "banReason", "banExpires"][..],
-                false,
-            ),
-            ("admin.enabled", &["banned"][..], true),
-            ("phone-number.enabled", &["phoneNumberVerified"][..], false),
-            ("anonymous.enabled", &["isAnonymous"][..], true),
-            ("two_factor.enabled", &["twoFactorEnabled"][..], true),
-        ] {
-            if self
-                .get_metadata(plugin)
-                .and_then(serde_json::Value::as_bool)
-                != Some(true)
-                || (create && has_default)
-            {
-                continue;
-            }
-            for name in fields {
-                if input.get(*name).is_some_and(crate::FieldValue::is_truthy) {
-                    return Err(AuthError::FieldInput {
-                        code: "FIELD_NOT_ALLOWED",
-                        message: format!("{name} is not allowed to be set"),
-                    });
-                }
-            }
-        }
         self.config.user.parse_input(&input, create)
     }
 
