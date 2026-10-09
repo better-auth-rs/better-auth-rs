@@ -65,6 +65,18 @@ impl AuthPlugin<S> for Hooks {
         "response-values"
     }
 
+    fn routes(&self) -> Vec<AuthRoute> {
+        Vec::new()
+    }
+
+    async fn on_request(
+        &self,
+        _: &AuthRequest,
+        _: &AuthContext<S>,
+    ) -> AuthResult<Option<AuthResponse>> {
+        Ok(None)
+    }
+
     async fn after_request(
         &self,
         _: &AuthRequest,
@@ -335,7 +347,8 @@ async fn native_values_and_http_bodies_match_the_pinned_response_contract() -> A
 }
 
 #[test]
-fn materialization_preserves_null_body_and_rejects_forbidden_response_bodies() -> AuthResult<()> {
+fn materialization_preserves_fetch_status_constraints_and_binary_boundaries() -> AuthResult<()> {
+    // shortcut: Bun permits these bodies; replace Fetch constraints when the response host boundary is aligned.
     for status in [204, 205, 304] {
         let native = AuthResponse::native(status, FieldValue::Undefined)
             .into_http_response()?

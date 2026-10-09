@@ -442,19 +442,35 @@ test("native returned values retain identity and materialize by their actual typ
   }
 });
 
-test("HTTP materialization distinguishes an absent body from an empty string", async () => {
-  for (const status of [204, 205, 304]) {
-    for (const value of [undefined, null, "", false, 0]) {
+// Bun 1.4.2 permits these Response bodies; standard Fetch rejects every non-null body.
+// Source: oven-sh/bun@744846f844374847c902b5e7fd59b4342a51ef99, src/runtime/webcore/Response.rs constructor.
+for (const status of [204, 205, 304]) {
+  for (const [name, value, text, nullBody] of [
+    ["undefined", undefined, "", true],
+    ["null", null, "null", false],
+    ["empty-string", "", "", false],
+    ["false", false, "false", false],
+    ["zero", 0, "0", false],
+  ] as const) {
+    test(`Bun HTTP materialization preserves ${name} at status ${status}`, async () => {
       const auth = betterAuth({
         baseURL: "http://value-contract.test", secret: "value-contract-secret-at-least-32-characters",
         logger: { disabled: true }, telemetry: { enabled: false },
         plugins: [{ id: "empty-contract", endpoints: { emptyContract: createAuthEndpoint("/empty-contract", { method: "GET" }, async ctx => { ctx.setStatus(status); return value; }) } }],
       });
-      if (value === undefined) { const response = await auth.api.emptyContract({ asResponse: true }); expect(response.status).toBe(status); expect(response.body).toBeNull(); }
-      else await expect(auth.api.emptyContract({ asResponse: true })).rejects.toBeInstanceOf(TypeError);
-    }
+      const native = await auth.api.emptyContract({ returnHeaders: true, returnStatus: true });
+      expect(Object.is(native.response, value)).toBe(true);
+      expect(native.status).toBe(status);
+      expect(fields(native.headers)).toStrictEqual({});
+      const response = await auth.api.emptyContract({ asResponse: true });
+      expect(response.status).toBe(status);
+      expect(fields(response.headers)).toStrictEqual({ "content-type": "application/json" });
+      expect(response.body === null).toBe(nullBody);
+      expect(response.bodyUsed).toBe(false);
+      expect([...new Uint8Array(await response.arrayBuffer())]).toStrictEqual([...new TextEncoder().encode(text)]);
+    });
   }
-});
+}
 
 test("update-session rejects invalid updates as native API errors and HTTP 400", async () => {
   const now = new Date();

@@ -158,13 +158,14 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
 
     async fn update_two_factor_row(
         &self,
-        filter: SimpleExpr,
+        selector: super::value_filter::BoundQueryField,
         mut input: FieldMap,
     ) -> AuthResult<Option<QueryResult>> {
         self.two_factor_timestamps(&mut input, false);
         let active = self
             .prepare_two_factor_fields(input, WriteOperation::Update)
             .await?;
+        let filter = self.resolve_plugin_equals::<P::TwoFactor>(EntityRole::TwoFactor, selector)?;
         database_operation::<Entity<P::TwoFactor>, _>(self.config(), "update", async {
             super::updates::execute_update_returning_raw::<Entity<P::TwoFactor>, _>(
                 self.connection(),
@@ -207,7 +208,7 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         id: &SchemaValue<String>,
         input: FieldMap,
     ) -> AuthResult<Option<FieldMap>> {
-        let filter = self.plugin_id_filter::<P::TwoFactor>(EntityRole::TwoFactor, id)?;
+        let filter = self.bind_plugin_query_field(EntityRole::TwoFactor, "id", id.field_value())?;
         let row = self.update_two_factor_row(filter, input).await?;
         Ok(self
             .project_plugin_rows::<P::TwoFactor, FieldMap>(
@@ -253,7 +254,7 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         backup_codes: &str,
     ) -> AuthResult<TwoFactor> {
         let filter =
-            self.plugin_equals::<P::TwoFactor>(EntityRole::TwoFactor, "userId", user_id.into())?;
+            self.bind_plugin_query_field(EntityRole::TwoFactor, "userId", user_id.into())?;
         let row = self
             .update_two_factor_row(
                 filter,
@@ -272,7 +273,7 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         id: &SchemaValue<String>,
         update: UpdateTwoFactor,
     ) -> AuthResult<TwoFactor> {
-        let filter = self.plugin_id_filter::<P::TwoFactor>(EntityRole::TwoFactor, id)?;
+        let filter = self.bind_plugin_query_field(EntityRole::TwoFactor, "id", id.field_value())?;
         let row = self
             .update_two_factor_row(filter, update.into_adapter_fields()?)
             .await?
@@ -314,17 +315,18 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         previous: &FieldValue,
         replacement: FieldValue,
     ) -> AuthResult<bool> {
-        let by_id = self.plugin_id_filter::<P::TwoFactor>(EntityRole::TwoFactor, id)?;
-        let guard = by_id.clone().and(self.plugin_equals::<P::TwoFactor>(
-            EntityRole::TwoFactor,
-            "backupCodes",
-            previous.clone(),
-        )?);
+        let by_id = self.bind_plugin_query_field(EntityRole::TwoFactor, "id", id.field_value())?;
+        let previous =
+            self.bind_plugin_query_field(EntityRole::TwoFactor, "backupCodes", previous.clone())?;
         let mut input = FieldMap::from([("backupCodes".into(), replacement)]);
         self.two_factor_timestamps(&mut input, false);
         let active = self
             .prepare_two_factor_fields(input, WriteOperation::Increment)
             .await?;
+        let by_id = self.resolve_plugin_equals::<P::TwoFactor>(EntityRole::TwoFactor, by_id)?;
+        let guard = by_id
+            .clone()
+            .and(self.resolve_plugin_equals::<P::TwoFactor>(EntityRole::TwoFactor, previous)?);
         let row =
             database_operation::<Entity<P::TwoFactor>, _>(self.config(), "incrementOne", async {
                 super::updates::increment_returning_raw::<Entity<P::TwoFactor>>(
@@ -381,20 +383,27 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         };
         if failures >= max_attempts as f64 {
             let until = locked_until()?;
-            let by_id = self.plugin_id_filter::<P::TwoFactor>(EntityRole::TwoFactor, id)?;
-            let guard = by_id.clone().and(counter.into_expr().gte(counter.save_as(
-                self.plugin_parameter(
-                    EntityRole::TwoFactor,
-                    "failedVerificationCount",
-                    (max_attempts as f64).into(),
-                )?,
-            )));
+            let by_id =
+                self.bind_plugin_query_field(EntityRole::TwoFactor, "id", id.field_value())?;
+            let maximum = self.bind_plugin_query_field(
+                EntityRole::TwoFactor,
+                "failedVerificationCount",
+                (max_attempts as f64).into(),
+            )?;
             let active = self
                 .prepare_two_factor_fields(
                     FieldMap::from([("lockedUntil".into(), until.into())]),
                     WriteOperation::Increment,
                 )
                 .await?;
+            let by_id = self.resolve_plugin_equals::<P::TwoFactor>(EntityRole::TwoFactor, by_id)?;
+            let (selected_counter, maximum) = self
+                .resolve_plugin_query_parameter::<P::TwoFactor>(EntityRole::TwoFactor, maximum)?;
+            let guard = by_id.clone().and(
+                selected_counter
+                    .into_expr()
+                    .gte(selected_counter.save_as(maximum)),
+            );
             let row = database_operation::<Entity<P::TwoFactor>, _>(
                 self.config(),
                 "incrementOne",
@@ -423,18 +432,13 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         id: &SchemaValue<String>,
         locked_before: Option<FieldDate>,
     ) -> AuthResult<()> {
-        let by_id = self.plugin_id_filter::<P::TwoFactor>(EntityRole::TwoFactor, id)?;
+        let by_id = self.bind_plugin_query_field(EntityRole::TwoFactor, "id", id.field_value())?;
         let guarded = locked_before.is_some();
-        let mut guard = by_id.clone();
-        if let Some(expired) = locked_before {
-            let column =
-                self.plugin_column::<P::TwoFactor>(EntityRole::TwoFactor, "lockedUntil")?;
-            guard = guard.and(column.into_expr().lte(column.save_as(self.plugin_parameter(
-                EntityRole::TwoFactor,
-                "lockedUntil",
-                expired.into(),
-            )?)));
-        }
+        let expired = locked_before
+            .map(|expired| {
+                self.bind_plugin_query_field(EntityRole::TwoFactor, "lockedUntil", expired.into())
+            })
+            .transpose()?;
         let active = self
             .prepare_two_factor_fields(
                 FieldMap::from([
@@ -448,6 +452,13 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
                 },
             )
             .await?;
+        let by_id = self.resolve_plugin_equals::<P::TwoFactor>(EntityRole::TwoFactor, by_id)?;
+        let mut guard = by_id.clone();
+        if let Some(expired) = expired {
+            let (column, expired) = self
+                .resolve_plugin_query_parameter::<P::TwoFactor>(EntityRole::TwoFactor, expired)?;
+            guard = guard.and(column.into_expr().lte(column.save_as(expired)));
+        }
         let row = database_operation::<Entity<P::TwoFactor>, _>(
             self.config(),
             if guarded { "incrementOne" } else { "update" },

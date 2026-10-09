@@ -45,13 +45,14 @@ where
             }
         }
         better_auth_core::store::database_hooks::await_adapter_lookup().await;
-        self.model_fields.begin_id_query(EntityRole::Account)?;
-        let selectors = selectors
-            .iter()
-            .map(|(name, value)| self.account_selector(name, value))
-            .collect::<AuthResult<Vec<_>>>()?;
         let backend = db.get_database_backend();
         let fields = self.config().account.field_schema();
+        let selectors = selectors
+            .iter()
+            .map(|(name, value)| {
+                self.bind_query_field(EntityRole::Account, &fields, name, value, backend)
+            })
+            .collect::<AuthResult<Vec<_>>>()?;
         let input = fields
             .record_storage_fields_with_binding(
                 prepared.into_fields(),
@@ -72,7 +73,12 @@ where
         let write = super::record_write::RecordWrite::<<S::Account as SeaOrmAccountModel>::Entity>::from_fields(input, S::Account::field_column)?;
         let mut query = write.update(backend)?;
         for selector in selectors {
-            query = query.filter(selector);
+            let (column, value) = selector.resolve(EntityRole::Account, &fields)?;
+            query = query.filter(super::value_filter::equals(
+                S::Account::field_column(&column)?,
+                &value,
+                backend,
+            )?);
         }
         let count = database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(
             self.config(),
@@ -100,9 +106,10 @@ where
         provider: &str,
         provider_account_id: &str,
     ) -> AuthResult<Vec<SqlRow>> {
-        self.model_fields.begin_id_query(EntityRole::Account)?;
-        let provider = self.account_selector("providerId", &provider.into())?;
-        let account_id = self.account_selector("accountId", &provider_account_id.into())?;
+        let condition = self.account_selectors([
+            ("providerId", &provider.into()),
+            ("accountId", &provider_account_id.into()),
+        ])?;
         database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(
             self.config(),
             "findMany",
@@ -110,8 +117,7 @@ where
                 super::plugin_rows::all(
                     self.connection(),
                     <S::Account as SeaOrmAccountModel>::Entity::find()
-                        .filter(provider)
-                        .filter(account_id)
+                        .filter(condition)
                         .limit(2),
                 )
                 .await
@@ -125,31 +131,42 @@ where
         name: &str,
         original: &FieldValue,
     ) -> AuthResult<sea_orm::sea_query::SimpleExpr> {
-        let fields = self.config().account.field_schema();
-        let field = if name == "id" {
-            Default::default()
-        } else {
-            fields.fields().get(name).cloned().unwrap_or_default()
-        };
         let backend = self.connection().get_database_backend();
-        let value = if name == "id" || field.references_id() {
-            self.config()
-                .advanced
-                .database
-                .generate_id()
-                .adapter_id_query(original.clone())?
-        } else {
-            original.clone()
-        };
-        let value = better_auth_core::user_query::bind_filter(&field, &value)?;
-        let value = super::value_filter::adapter_query_value(value, original, &field, backend)?;
-        let name =
-            better_auth_core::store::schema::resolve_field_name(field.field_name.as_deref(), name);
-        super::value_filter::equals(S::Account::field_column(name)?, &value, backend)
+        let (column, value) = self.query_field_binding(
+            EntityRole::Account,
+            &self.config().account.field_schema(),
+            name,
+            original,
+            backend,
+        )?;
+        super::value_filter::equals(S::Account::field_column(&column)?, &value, backend)
+    }
+
+    fn account_selectors<const N: usize>(
+        &self,
+        selectors: [(&str, &FieldValue); N],
+    ) -> AuthResult<sea_orm::Condition> {
+        let backend = self.connection().get_database_backend();
+        let fields = self.config().account.field_schema();
+        let bound = selectors
+            .into_iter()
+            .map(|(name, value)| {
+                self.bind_query_field(EntityRole::Account, &fields, name, value, backend)
+            })
+            .collect::<AuthResult<Vec<_>>>()?;
+        bound
+            .into_iter()
+            .try_fold(sea_orm::Condition::all(), |condition, bound| {
+                let (column, value) = bound.resolve(EntityRole::Account, &fields)?;
+                Ok(condition.add(super::value_filter::equals(
+                    S::Account::field_column(&column)?,
+                    &value,
+                    backend,
+                )?))
+            })
     }
 
     async fn user_account_records(&self, user_id: &FieldValue) -> AuthResult<Vec<SqlRow>> {
-        self.model_fields.begin_id_query(EntityRole::Account)?;
         database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(
             self.config(),
             "findMany",
@@ -248,28 +265,9 @@ where
             return Ok(Vec::new());
         }
         let fields = self.config().account.field_schema();
-        let (logical_to, physical_to) = relation.fallback_target(
-            (EntityRole::Account, "account", &fields),
-            &self.model_fields,
-        )?;
-        let field = fields
-            .fields()
-            .get(&logical_to)
-            .cloned()
-            .unwrap_or_default();
         let backend = self.connection().get_database_backend();
-        let original = value.clone();
-        let value = if logical_to == "id" || field.references_id() {
-            self.config()
-                .advanced
-                .database
-                .generate_id()
-                .adapter_id_query(value)?
-        } else {
-            value
-        };
-        let value = better_auth_core::user_query::bind_filter(&field, &value)?;
-        let value = super::value_filter::adapter_query_value(value, &original, &field, backend)?;
+        let (physical_to, value) =
+            self.query_field_binding(EntityRole::Account, &fields, &relation.to, &value, backend)?;
         let column = S::Account::field_column(&physical_to)?;
         let query = <S::Account as SeaOrmAccountModel>::Entity::find()
             .filter(super::value_filter::equals(column, &value, backend)?);
@@ -512,8 +510,10 @@ where
                 <S::User as SeaOrmUserModel>::Entity,
             >(
                 <S::Account as SeaOrmAccountModel>::Entity::find()
-                    .filter(self.account_selector("providerId", &provider.into())?)
-                    .filter(self.account_selector("accountId", &account_id.into())?)
+                    .filter(self.account_selectors([
+                        ("providerId", &provider.into()),
+                        ("accountId", &account_id.into()),
+                    ])?)
                     .limit(2),
                 (
                     S::Account::field_column(&relation.from)?,
@@ -617,20 +617,18 @@ where
         &self,
         user_id: &FieldValue,
     ) -> AuthResult<Option<AccountView>> {
-        self.model_fields.begin_id_query(EntityRole::Account)?;
-        let owner = self.account_selector("userId", user_id)?;
-        let provider = self.account_selector("providerId", &"credential".into())?;
-        let account_id = self.account_selector("accountId", user_id)?;
+        let condition = self.account_selectors([
+            ("userId", user_id),
+            ("providerId", &"credential".into()),
+            ("accountId", user_id),
+        ])?;
         let account = database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(
             self.config(),
             "findOne",
             async {
                 super::plugin_rows::one(
                     self.connection(),
-                    <S::Account as SeaOrmAccountModel>::Entity::find()
-                        .filter(owner)
-                        .filter(provider)
-                        .filter(account_id),
+                    <S::Account as SeaOrmAccountModel>::Entity::find().filter(condition),
                 )
                 .await
             },
@@ -691,8 +689,7 @@ where
         better_auth_core::store::database_hooks::await_adapter_lookup().await;
         let fields = self.config().account.field_schema();
         let backend = self.connection().get_database_backend();
-        self.model_fields.canonicalize_id(EntityRole::Account)?;
-        let account_id = self.account_selector("id", id)?;
+        let account_id = self.bind_query_field(EntityRole::Account, &fields, "id", id, backend)?;
         let input = fields
             .record_storage_fields_with_binding(
                 prepared.into_fields(),
@@ -711,6 +708,9 @@ where
             )
             .await?;
         let active = super::record_write::RecordWrite::<<S::Account as SeaOrmAccountModel>::Entity>::from_fields(input, S::Account::field_column)?;
+        let (column, value) = account_id.resolve(EntityRole::Account, &fields)?;
+        let account_id =
+            super::value_filter::equals(S::Account::field_column(&column)?, &value, backend)?;
         let account = match database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(
             self.config(),
             "update",
@@ -773,7 +773,6 @@ where
     async fn delete_account_value(&self, id: &FieldValue) -> AuthResult<()> {
         // The upstream single-delete snapshot catch also covers adapter output failures.
         let snapshot: AuthResult<Option<AccountView>> = async {
-            self.model_fields.begin_id_query(EntityRole::Account)?;
             match database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(
                 self.config(),
                 "findMany",
@@ -815,7 +814,6 @@ where
                 return Ok(());
             }
         }
-        self.model_fields.begin_id_query(EntityRole::Account)?;
         let _ = database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(
             self.config(),
             "delete",

@@ -346,6 +346,9 @@ async fn preserve<S: AuthSchema>(
     let active = fixture.store.create_session(input("active", "1")).await?;
     let mut expired_input = input("expired", "1");
     expired_input.expires_at = date(-1_000_000_000);
+    let _ = expired_input
+        .additional_fields
+        .insert("createdAt".into(), date(-1_000_000_000).into());
     let expired = fixture.store.create_session(expired_input).await?;
     let retained = fixture.store.create_session(input("other", "2")).await?;
     assert_eq!(
@@ -389,12 +392,20 @@ async fn preserve<S: AuthSchema>(
             .collect::<Vec<_>>(),
         [ended.clone(), FieldMap::from(expired.clone())]
     );
-    assert!(
+    // Kysely resolves WHERE aliases twice, so SQLite still filters the unchanged public createdAt.
+    assert_eq!(
         fixture
             .store
             .get_user_session_snapshots_value(&"1".into(), true)
             .await?
-            .is_empty()
+            .into_iter()
+            .map(|(session, snapshot)| (FieldMap::from(session), snapshot))
+            .collect::<Vec<_>>(),
+        if fixture.database.is_some() {
+            vec![(ended.clone(), None)]
+        } else {
+            vec![]
+        }
     );
     assert_eq!(fixture.store.get_user_sessions("2").await?, [retained]);
     let mut physical_ended = ended;
@@ -402,7 +413,7 @@ async fn preserve<S: AuthSchema>(
     let _ = physical_ended.insert("expiresAt".into(), date(0).into());
     let mut physical_expired = FieldMap::from(expired);
     let _ = physical_expired.insert("createdAt".into(), date(-1_000_000_000).into());
-    let _ = physical_expired.insert("expiresAt".into(), date(0).into());
+    let _ = physical_expired.insert("expiresAt".into(), date(-1_000_000_000).into());
     assert_eq!(
         fixture
             .raw

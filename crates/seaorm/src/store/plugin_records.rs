@@ -71,10 +71,11 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPluginSchema> SeaOrmSt
         id: &SchemaValue<String>,
         input: FieldMap,
     ) -> AuthResult<Option<FieldMap>> {
-        let filter = self.plugin_id_filter::<M>(role, id)?;
+        let selector = self.bind_plugin_query_field(role, "id", id.field_value())?;
         let active = self
             .prepare_plugin_fields::<M>(role, model, input, false)
             .await?;
+        let filter = self.resolve_plugin_equals::<M>(role, selector)?;
         let row = database_operation::<Entity<M>, _>(self.config(), "update", async {
             super::updates::execute_update_returning_raw::<Entity<M>, _>(
                 connection,

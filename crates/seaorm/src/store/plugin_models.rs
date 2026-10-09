@@ -1,6 +1,6 @@
 use crate::{SeaOrmPluginModel, schema::AuthSchema};
 use better_auth_core::store::schema::{EntityRole, resolve_field_name};
-use better_auth_core::{AuthError, AuthResult, id::IdGeneration};
+use better_auth_core::{AuthResult, id::IdGeneration};
 use better_auth_core::{FieldMap, FromFieldMap};
 use sea_orm::{ColumnTrait, DbBackend, ExprTrait, QueryResult};
 
@@ -37,43 +37,45 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         Ok(())
     }
 
-    fn plugin_query_value(
+    pub(super) fn bind_plugin_query_field(
         &self,
         role: EntityRole,
         name: &str,
         value: better_auth_core::FieldValue,
-    ) -> AuthResult<better_auth_core::FieldValue> {
-        self.model_fields.begin_id_query(role)?;
+    ) -> AuthResult<super::value_filter::BoundQueryField> {
         let fields = self.model_fields.plugin_fields(role);
         let backend = self.connection().get_database_backend();
-        let field = fields
-            .fields()
-            .get(name)
-            .ok_or_else(|| AuthError::config(format!("Unknown plugin field {role:?}.{name}")))?;
-        let original = value.clone();
-        let value = if name == "id" || field.references_id() {
-            self.config()
-                .advanced
-                .database
-                .generate_id()
-                .adapter_id_query(value)?
-        } else {
-            value
-        };
-        let value = better_auth_core::user_query::bind_filter(field, &value)?;
-        super::value_filter::adapter_query_value(value, &original, field, backend)
+        self.bind_query_field(role, &fields, name, &value, backend)
     }
 
-    pub(super) fn plugin_parameter(
+    fn resolve_plugin_query_field<M: SeaOrmPluginModel>(
+        &self,
+        role: EntityRole,
+        bound: super::value_filter::BoundQueryField,
+    ) -> AuthResult<(M::Column, better_auth_core::FieldValue)> {
+        let (column, value) = bound.resolve(role, &self.model_fields.plugin_fields(role))?;
+        Ok((M::column(&column)?, value))
+    }
+
+    pub(super) fn plugin_query_parameter<M: SeaOrmPluginModel>(
         &self,
         role: EntityRole,
         name: &str,
         value: better_auth_core::FieldValue,
-    ) -> AuthResult<sea_orm::sea_query::SimpleExpr> {
-        super::record_bindings::parameter(
-            self.plugin_query_value(role, name, value)?,
-            self.connection().get_database_backend(),
-        )
+    ) -> AuthResult<(M::Column, sea_orm::sea_query::SimpleExpr)> {
+        let bound = self.bind_plugin_query_field(role, name, value)?;
+        self.resolve_plugin_query_parameter::<M>(role, bound)
+    }
+
+    pub(super) fn resolve_plugin_query_parameter<M: SeaOrmPluginModel>(
+        &self,
+        role: EntityRole,
+        bound: super::value_filter::BoundQueryField,
+    ) -> AuthResult<(M::Column, sea_orm::sea_query::SimpleExpr)> {
+        let (column, value) = self.resolve_plugin_query_field::<M>(role, bound)?;
+        let parameter =
+            super::record_bindings::parameter(value, self.connection().get_database_backend())?;
+        Ok((column, parameter))
     }
 
     pub(super) fn plugin_equals<M: SeaOrmPluginModel>(
@@ -82,8 +84,16 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         name: &str,
         value: better_auth_core::FieldValue,
     ) -> AuthResult<sea_orm::sea_query::SimpleExpr> {
-        let column = self.plugin_column::<M>(role, name)?;
-        let value = self.plugin_query_value(role, name, value)?;
+        let bound = self.bind_plugin_query_field(role, name, value)?;
+        self.resolve_plugin_equals::<M>(role, bound)
+    }
+
+    pub(super) fn resolve_plugin_equals<M: SeaOrmPluginModel>(
+        &self,
+        role: EntityRole,
+        bound: super::value_filter::BoundQueryField,
+    ) -> AuthResult<sea_orm::sea_query::SimpleExpr> {
+        let (column, value) = self.resolve_plugin_query_field::<M>(role, bound)?;
         if value.is_null() {
             return Ok(column.is_null());
         }
@@ -97,14 +107,7 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         role: EntityRole,
         id: &better_auth_core::SchemaValue<String>,
     ) -> AuthResult<sea_orm::sea_query::SimpleExpr> {
-        self.model_fields.begin_id_query(role)?;
-        let policy = self.config().advanced.database.generate_id();
-        super::value_filter::equals_id(
-            M::column("id")?,
-            &policy.adapter_id_query(id.field_value())?,
-            policy,
-            self.connection().get_database_backend(),
-        )
+        self.plugin_equals::<M>(role, "id", id.field_value())
     }
 
     pub(super) async fn prepare_plugin_fields<M: SeaOrmPluginModel>(

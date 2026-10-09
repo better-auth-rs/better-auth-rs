@@ -45,23 +45,43 @@ fn apply_member_filter<M: SeaOrmOrganizationModel>(
     config: &better_auth_core::user_fields::UserConfig,
     backend: DatabaseBackend,
     policy: &better_auth_core::id::IdGeneration,
+    runtime: &better_auth_core::plugin_runtime::ModelFields,
 ) -> AuthResult<Select<Entity<M>>> {
     use better_auth_core::FieldValue as Value;
-    use better_auth_core::user_fields::UserFieldType;
     let (Some(field), Some(value)) = (params.filter_field.as_deref(), params.filter_value.as_ref())
     else {
         return Ok(query);
     };
-    let Some(column) = member_column::<M>(field, config) else {
-        return Ok(query);
-    };
-    let id_field = matches!(
-        M::core_field_name(&column),
-        Some("id" | "organizationId" | "userId")
-    ) || config
-        .fields()
-        .get(field)
-        .is_some_and(|field| field.references_id());
+    let operator = params.filter_operator.as_deref().unwrap_or("eq");
+    if operator == "in" && value.as_array().is_none() {
+        return Err(better_auth_core::AuthError::internal(
+            "Value must be an array",
+        ));
+    }
+    let schema = better_auth_core::store::MemberUser::field_schema(config);
+    let before =
+        runtime.runtime_fields(better_auth_core::store::schema::EntityRole::Member, &schema)?;
+    let (logical, _) = super::value_filter::query_field_name(
+        better_auth_core::store::schema::EntityRole::Member,
+        &before,
+        field,
+    )?;
+    let id_field = logical == "id"
+        || before
+            .fields()
+            .get(logical)
+            .is_some_and(|field| field.references_id());
+    let (column, bound) = super::value_filter::bind_query_field(
+        runtime,
+        better_auth_core::store::schema::EntityRole::Member,
+        &schema,
+        field,
+        value,
+        policy,
+        backend,
+    )?;
+    let column = M::column(&column)?;
+    let value = &bound;
     let id_column = (id_field
         && !matches!(
             column.def().get_column_type(),
@@ -71,64 +91,18 @@ fn apply_member_filter<M: SeaOrmOrganizationModel>(
         ))
     .then_some(column);
     let column = Expr::col(column);
-    let field_type = config.fields().get(field).map(|field| &field.field_type);
-    let normalize_number = |value: &Value| match value {
-        Value::String(value) if matches!(field_type, Some(UserFieldType::Number)) => {
-            better_auth_core::organization_fields::numeric_filter(value)
-                .map_or_else(|| Value::String(value.clone()), Value::Number)
+    let convert = |value: &Value| -> AuthResult<sea_orm::sea_query::SimpleExpr> {
+        if let (Value::String(value), Some(column)) = (value, id_column) {
+            return column.id_parameter(value, policy, backend);
         }
-        value => value.clone(),
+        super::record_bindings::parameter(value.clone(), backend)
     };
-    let convert =
-        |value: &Value, convert_strings: bool| -> AuthResult<sea_orm::sea_query::SimpleExpr> {
-            if let (Value::String(value), Some(column)) = (value, id_column) {
-                return column.id_parameter(value, policy, backend);
-            }
-            let value = match value {
-                Value::String(value)
-                    if convert_strings && matches!(field_type, Some(UserFieldType::Boolean)) =>
-                {
-                    Value::Bool(value == "true")
-                }
-                value if convert_strings => normalize_number(value),
-                value => value.clone(),
-            };
-            super::record_bindings::parameter(value, backend)
-        };
-    let operator = params.filter_operator.as_deref().unwrap_or("eq");
-    if operator == "in" && value.as_array().is_none() {
-        return Err(better_auth_core::AuthError::internal(
-            "Value must be an array",
-        ));
-    }
-    let json_value = config
-        .fields()
-        .get(field)
-        .filter(|field| {
-            !id_field
-                && field.references.is_none()
-                && matches!(field.field_type, UserFieldType::Json)
-        })
-        .map(|field| super::value_filter::adapter_query_value(value.clone(), value, field, backend))
-        .transpose()?;
-    let value = json_value.as_ref().unwrap_or(value);
     if matches!(operator, "in" | "not_in") {
         // The adapter serializes the complete JSON value before Kysely constructs membership lists.
         let values = value
             .as_array()
             .unwrap_or_else(|| std::slice::from_ref(value));
-        let convert_strings = value.as_array().is_none()
-            || (matches!(field_type, Some(UserFieldType::Number))
-                && values.iter().all(|value| {
-                    value
-                        .as_str()
-                        .and_then(better_auth_core::organization_fields::numeric_filter)
-                        .is_some()
-                }));
-        let values = values
-            .iter()
-            .map(|value| convert(value, convert_strings))
-            .collect::<AuthResult<Vec<_>>>()?;
+        let values = values.iter().map(convert).collect::<AuthResult<Vec<_>>>()?;
         return Ok(query.filter(if operator == "in" {
             column.is_in(values)
         } else {
@@ -136,24 +110,7 @@ fn apply_member_filter<M: SeaOrmOrganizationModel>(
         }));
     }
     let raw_value = value;
-    let value = if field == "createdAt" {
-        let Some(parsed) = value
-            .as_str()
-            .and_then(|value| chrono::DateTime::parse_from_rfc3339(value).ok())
-        else {
-            return Ok(query.filter(Expr::value(false)));
-        };
-        super::record_bindings::parameter(
-            if backend == DatabaseBackend::Sqlite {
-                super::record_bindings::sqlite_date(parsed.with_timezone(&Utc).into())?
-            } else {
-                Value::Date(parsed.with_timezone(&Utc).into())
-            },
-            backend,
-        )?
-    } else {
-        convert(value, true)?
-    };
+    let value = convert(value)?;
     query = match operator {
         "eq" => query.filter(column.eq(value)),
         "ne" => query.filter(column.ne(value)),
@@ -167,12 +124,7 @@ fn apply_member_filter<M: SeaOrmOrganizationModel>(
                 "ends_with" => ("%", ""),
                 _ => ("%", "%"),
             };
-            let pattern = super::value_filter::like_pattern(
-                &normalize_number(raw_value),
-                prefix,
-                suffix,
-                backend,
-            )?;
+            let pattern = super::value_filter::like_pattern(raw_value, prefix, suffix, backend)?;
             query.filter(column.binary(BinOper::Like, pattern))
         }
         _ => query,
@@ -456,18 +408,19 @@ where
         &self,
         params: &ListOrganizationMembersParams,
     ) -> AuthResult<(Vec<Member>, usize)> {
-        let base_query = Entity::<O::Member>::find().filter(super::value_filter::equals_id(
-            O::Member::column("organization_id")?,
-            &params.organization_id.field_value(),
-            self.config().advanced.database.generate_id(),
-            self.connection().get_database_backend(),
-        )?);
+        let base_query =
+            Entity::<O::Member>::find().filter(self.organization_field_equals::<O::Member>(
+                better_auth_core::store::schema::EntityRole::Member,
+                "organizationId",
+                &params.organization_id.field_value(),
+            )?);
         let filtered_query = apply_member_filter::<O::Member>(
             base_query,
             params,
             &self.organization_fields()?.member,
             self.connection().get_database_backend(),
             self.config().advanced.database.generate_id(),
+            &self.model_fields,
         )?;
         let total = filtered_query
             .clone()
@@ -639,6 +592,7 @@ mod tests {
                     &UserConfig::default(),
                     sea_orm::DbBackend::Sqlite,
                     &IdGeneration::Random,
+                    &better_auth_core::plugin_runtime::ModelFields::default(),
                 )?;
                 let rows = database
                     .query_all_raw(query.build(sea_orm::DbBackend::Sqlite))

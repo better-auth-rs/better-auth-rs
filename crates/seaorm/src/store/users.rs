@@ -1,7 +1,7 @@
 use super::instrumentation::database_operation;
 use async_trait::async_trait;
 use better_auth_core::id::AdapterIdInput;
-use better_auth_core::store::schema::{EntityRole, resolve_field_name};
+use better_auth_core::store::schema::EntityRole;
 use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QuerySelect};
 
 use better_auth_core::store::{ResolvedJoin, UserStore};
@@ -39,30 +39,8 @@ where
         id: &FieldValue,
         trace_query: bool,
     ) -> AuthResult<Option<better_auth_core::wire::UserView>> {
-        self.model_fields.begin_id_query(EntityRole::User)?;
-        let parsed_id = id
-            .as_str()
-            .map(|id| self.parse_id(id, S::User::parse_id))
-            .transpose()?;
-        let query = async {
-            let filter = match parsed_id {
-                Some(id) => super::value_filter::equals_native(
-                    S::User::id_column(),
-                    id,
-                    db.get_database_backend(),
-                )?,
-                None => super::value_filter::equals(
-                    S::User::id_column(),
-                    id,
-                    db.get_database_backend(),
-                )?,
-            };
-            super::plugin_rows::one(
-                db,
-                <S::User as SeaOrmUserModel>::Entity::find().filter(filter),
-            )
-            .await
-        };
+        let selected = self.user_field_query(db, "id", id)?;
+        let query = super::plugin_rows::one(db, selected);
         let row = if trace_query {
             database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
                 self.config(),
@@ -88,21 +66,14 @@ where
         if value.is_null() || value.is_undefined() {
             return Ok(Vec::new());
         }
-        let (logical_to, physical_to) = relation.fallback_target(
-            (EntityRole::User, "user", &self.config().user),
-            &self.model_fields,
-        )?;
-        let field = ResolvedJoin::user_field(self.config(), &logical_to);
-        let policy = self.config().advanced.database.generate_id();
         let backend = self.connection().get_database_backend();
-        let original = value.clone();
-        let value = if logical_to == "id" || field.references_id() {
-            policy.adapter_id_query(value)?
-        } else {
-            value
-        };
-        let value = better_auth_core::user_query::bind_filter(&field, &value)?;
-        let value = super::value_filter::adapter_query_value(value, &original, &field, backend)?;
+        let (physical_to, value) = self.query_field_binding(
+            EntityRole::User,
+            &self.user_field_schema(),
+            &relation.to,
+            &value,
+            backend,
+        )?;
         let column = S::User::field_column(&physical_to)?;
         let query = <S::User as SeaOrmUserModel>::Entity::find()
             .filter(super::value_filter::equals(column, &value, backend)?);
@@ -162,31 +133,13 @@ where
         name: &str,
         value: &FieldValue,
     ) -> AuthResult<(String, FieldValue)> {
-        let schema = self.user_field_schema().adapter_fields(&[]);
-        let (logical, field) = schema
-            .fields()
-            .get_key_value(name)
-            .or_else(|| {
-                schema.fields().iter().find(|(logical, field)| {
-                    resolve_field_name(field.field_name.as_deref(), logical) == name
-                })
-            })
-            .ok_or_else(|| AuthError::internal(format!("Field {name} not found in model user")))?;
-        self.model_fields.begin_id_query(EntityRole::User)?;
-        let physical = resolve_field_name(field.field_name.as_deref(), logical);
-        let backend = db.get_database_backend();
-        let bound = if logical == "id" || field.references_id() {
-            self.config()
-                .advanced
-                .database
-                .generate_id()
-                .adapter_id_query(value.clone())?
-        } else {
-            value.clone()
-        };
-        let bound = better_auth_core::user_query::bind_filter(field, &bound)?;
-        let bound = super::value_filter::adapter_query_value(bound, value, field, backend)?;
-        Ok((physical.to_owned(), bound))
+        self.query_field_binding(
+            EntityRole::User,
+            &self.user_field_schema(),
+            name,
+            value,
+            db.get_database_backend(),
+        )
     }
 
     pub(super) async fn find_user_by_field_value(
@@ -389,14 +342,15 @@ where
         value: &FieldValue,
         input: FieldMap,
     ) -> AuthResult<Option<SqlRow>> {
-        self.model_fields.canonicalize_id(EntityRole::User)?;
         let policy = self.config().advanced.database.generate_id();
         let backend = db.get_database_backend();
-        let (physical, value) = if field == "id" {
-            ("id".to_owned(), policy.adapter_id_query(value.clone())?)
-        } else {
-            self.user_field_selector(db, field, value)?
-        };
+        let selector = self.bind_query_field(
+            EntityRole::User,
+            &self.user_field_schema(),
+            field,
+            value,
+            backend,
+        )?;
         self.model_fields.begin_id_input(
             EntityRole::User,
             AdapterIdInput {
@@ -436,11 +390,9 @@ where
                 fields,
                 S::User::field_column,
             )?;
-        let filter = if field == "id" {
-            super::value_filter::equals_id(S::User::id_column(), &value, policy, backend)?
-        } else {
-            super::value_filter::equals(S::User::field_column(&physical)?, &value, backend)?
-        };
+        let (physical, value) = selector.resolve(EntityRole::User, &self.user_field_schema())?;
+        let filter =
+            super::value_filter::equals(S::User::field_column(&physical)?, &value, backend)?;
         database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
             self.config(),
             "update",

@@ -209,22 +209,13 @@ where
             "findOne",
             async {
                 let backend = self.connection().get_database_backend();
-                let (expires_at, now) = self.verification_query_field(
-                    "expiresAt",
-                    &FieldValue::Date(Utc::now().into()),
+                let condition = self.verification_live_selector(
+                    [("identifier", &identifier.into()), ("value", &value.into())],
                     backend,
                 )?;
-                let now = super::record_bindings::parameter(now, backend)?;
                 plugin_rows::one(
                     self.connection(),
-                    <S::Verification as SeaOrmVerificationModel>::Entity::find()
-                        .filter(self.verification_selector(
-                            "identifier",
-                            &identifier.into(),
-                            backend,
-                        )?)
-                        .filter(self.verification_selector("value", &value.into(), backend)?)
-                        .filter(expires_at.into_expr().gt(expires_at.save_as(now))),
+                    <S::Verification as SeaOrmVerificationModel>::Entity::find().filter(condition),
                 )
                 .await
             },
@@ -246,17 +237,11 @@ where
             "findOne",
             async {
                 let backend = self.connection().get_database_backend();
-                let (expires_at, now) = self.verification_query_field(
-                    "expiresAt",
-                    &FieldValue::Date(Utc::now().into()),
-                    backend,
-                )?;
-                let now = super::record_bindings::parameter(now, backend)?;
+                let condition =
+                    self.verification_live_selector([("value", &value.into())], backend)?;
                 plugin_rows::one(
                     self.connection(),
-                    <S::Verification as SeaOrmVerificationModel>::Entity::find()
-                        .filter(self.verification_selector("value", &value.into(), backend)?)
-                        .filter(expires_at.into_expr().gt(expires_at.save_as(now))),
+                    <S::Verification as SeaOrmVerificationModel>::Entity::find().filter(condition),
                 )
                 .await
             },
@@ -281,21 +266,11 @@ where
             "findOne",
             async {
                 let backend = self.connection().get_database_backend();
-                let (expires_at, now) = self.verification_query_field(
-                    "expiresAt",
-                    &FieldValue::Date(Utc::now().into()),
-                    backend,
-                )?;
-                let now = super::record_bindings::parameter(now, backend)?;
+                let condition =
+                    self.verification_live_selector([("identifier", &identifier.into())], backend)?;
                 plugin_rows::one(
                     self.connection(),
-                    <S::Verification as SeaOrmVerificationModel>::Entity::find()
-                        .filter(self.verification_selector(
-                            "identifier",
-                            &identifier.into(),
-                            backend,
-                        )?)
-                        .filter(expires_at.into_expr().gt(expires_at.save_as(now))),
+                    <S::Verification as SeaOrmVerificationModel>::Entity::find().filter(condition),
                 )
                 .await
             },
@@ -470,7 +445,13 @@ where
         better_auth_core::store::database_hooks::await_adapter_lookup().await;
         let fields = self.config().verification.field_schema();
         let backend = db.get_database_backend();
-        let filter = self.verification_selector("identifier", &identifier.into(), backend)?;
+        let selector = self.bind_query_field(
+            EntityRole::Verification,
+            &fields,
+            "identifier",
+            &identifier.into(),
+            backend,
+        )?;
         self.model_fields.begin_id_input(
             EntityRole::Verification,
             AdapterIdInput {
@@ -517,6 +498,9 @@ where
         let active = super::record_write::RecordWrite::<
             <S::Verification as SeaOrmVerificationModel>::Entity,
         >::from_fields(input, S::Verification::field_column)?;
+        let (column, value) = selector.resolve(EntityRole::Verification, &fields)?;
+        let filter =
+            super::value_filter::equals(S::Verification::field_column(&column)?, &value, backend)?;
         let row =
             match database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(
                 self.config(),

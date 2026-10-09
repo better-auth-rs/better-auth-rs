@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
 import { betterAuth, type BetterAuthOptions } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
+import { getMigrations } from "better-auth/db/migration";
 
 type Fields = Record<string, unknown>;
 type Declaration = NonNullable<NonNullable<BetterAuthOptions["verification"]>["additionalFields"]>;
@@ -13,8 +14,6 @@ const values = (id: string, identifier: unknown, value: string, created = 0, exp
 async function setup(backend: "memory" | "sqlite", fields: Declaration, generateId?: NonNullable<NonNullable<BetterAuthOptions["advanced"]>["database"]>["generateId"], integerId = false) {
   const memory: Record<string, Fields[]> = { user: [], account: [], session: [], verification: [] };
   const database = backend === "sqlite" ? new Database(":memory:") : undefined;
-  // Keep the physical schema fixed while declarations replace native types and field mappings.
-  database?.exec(`CREATE TABLE verification (id ${integerId ? "INTEGER" : "TEXT"} PRIMARY KEY NOT NULL, identifier TEXT NOT NULL, value TEXT NOT NULL, expiresAt TEXT NOT NULL, createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL)`);
   const options: BetterAuthOptions = {
     database: database ?? memoryAdapter(memory), baseURL: "http://verification-fields.test",
     secret: "verification-field-query-contract-at-least-32-characters",
@@ -22,6 +21,12 @@ async function setup(backend: "memory" | "sqlite", fields: Declaration, generate
     verification: { additionalFields: fields },
     advanced: { database: { generateId } },
   };
+  if (database) {
+    await (await getMigrations({ ...options, verification: undefined })).runMigrations();
+    // Preserve the fixed Verification columns while supplying every table required by transaction schema validation.
+    database.exec(`DROP TABLE verification;
+      CREATE TABLE verification (id ${integerId ? "INTEGER" : "TEXT"} PRIMARY KEY NOT NULL, identifier TEXT NOT NULL, value TEXT NOT NULL, expiresAt TEXT NOT NULL, createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL)`);
+  }
   const context = await betterAuth(options).$context;
   return {
     ...context,
@@ -40,27 +45,69 @@ for (const backend of ["memory", "sqlite"] as const) {
     });
     const where = (field: string, value: string) => [{ field, value }];
     const create = (data: Fields) => context.adapter.create<Fields>({ model: "verification", data, forceAllowId: true });
+    const storedDate = (offset: number) => backend === "sqlite" ? date(offset).toISOString() : date(offset);
     try {
       const first = await create(values("first", "subject", "proof", 1));
       expect(first).toStrictEqual(values("first", "subject", "proof", 1));
+      const firstStorage = { id: "first", identifier: "proof", value: "subject", createdAt: storedDate(100), expiresAt: storedDate(1), updatedAt: storedDate(0) };
+      expect(context.raw()).toStrictEqual([firstStorage]);
       for (const [field, value] of [["identifier", "subject"], ["value", "proof"], ["id", "first"]]) {
+        expect(await context.adapter.findOne({ model: "verification", where: where(field, value) }))
+          .toStrictEqual(backend === "sqlite" && field !== "id" ? null : first);
+      }
+      // Kysely resolves WHERE aliases twice; storage writes and sortBy resolve aliases once.
+      const identifierQuery = backend === "sqlite" ? "proof" : "subject";
+      const valueQuery = backend === "sqlite" ? "subject" : "proof";
+      for (const [field, value] of [["identifier", identifierQuery], ["value", valueQuery]]) {
         expect(await context.adapter.findOne({ model: "verification", where: where(field, value) })).toStrictEqual(first);
       }
       const changed = { ...first, value: "new-proof", updatedAt: date(3) };
-      expect(await context.adapter.update({ model: "verification", where: where("identifier", "subject"), update: { value: "new-proof", updatedAt: date(3) } })).toStrictEqual(changed);
-      const storage = { id: "first", identifier: "new-proof", value: "subject", createdAt: date(100), expiresAt: date(1), updatedAt: date(3) };
-      expect(context.raw()).toStrictEqual([backend === "memory" ? storage : { ...storage, createdAt: date(100).toISOString(), expiresAt: date(1).toISOString(), updatedAt: date(3).toISOString() }]);
-      await context.adapter.delete({ model: "verification", where: where("identifier", "subject") });
+      const update = { value: "new-proof", updatedAt: date(3) };
+      if (backend === "sqlite") {
+        expect(await context.adapter.update({ model: "verification", where: where("identifier", "subject"), update })).toBeNull();
+        expect(context.raw()).toStrictEqual([firstStorage]);
+      }
+      expect(await context.adapter.update({ model: "verification", where: where("identifier", identifierQuery), update })).toStrictEqual(changed);
+      const changedStorage = { ...firstStorage, identifier: "new-proof", updatedAt: storedDate(3) };
+      expect(context.raw()).toStrictEqual([changedStorage]);
+      const updatedIdentifier = backend === "sqlite" ? "new-proof" : "subject";
+      const updatedValue = backend === "sqlite" ? "subject" : "new-proof";
+      expect(await context.adapter.findOne({ model: "verification", where: [...where("identifier", updatedIdentifier), ...where("value", updatedValue)] })).toStrictEqual(changed);
+      if (backend === "sqlite") {
+        await context.adapter.delete({ model: "verification", where: where("identifier", "subject") });
+        expect(context.raw()).toStrictEqual([changedStorage]);
+      }
+      await context.adapter.delete({ model: "verification", where: where("identifier", updatedIdentifier) });
       expect(context.raw()).toStrictEqual([]);
-      await create(values("old", "shared", "old-proof", 1, date(500)));
-      const latest = await create(values("new", "shared", "latest-proof", 2));
-      expect(await context.adapter.findMany({ model: "verification", where: where("identifier", "shared"), sortBy: { field: "createdAt", direction: "desc" }, limit: 1 })).toStrictEqual([latest]);
-      const consumed = await Promise.all(Array.from({ length: 8 }, () => context.internalAdapter.consumeVerificationValue("shared")));
-      expect(consumed.filter(value => value !== null)).toStrictEqual([latest]);
-      expect(context.raw()).toStrictEqual([]);
-      await create(values("expired", "expired", "proof", 1, date(-1_000_000_000)));
+
+      await create(values("expired", "expired", "expired-proof", -1_000_000_000, date(-1_000_000_000)));
+      const retained = await create(values("retained", "other", "retained-proof", 1));
+      const retainedStorage = { id: "retained", identifier: "retained-proof", value: "other", createdAt: storedDate(100), expiresAt: storedDate(1), updatedAt: storedDate(0) };
       expect(await context.adapter.deleteMany({ model: "verification", where: [{ field: "expiresAt", operator: "lt", value: new Date() }] })).toBe(1);
-      expect(context.raw()).toStrictEqual([]);
+      expect(context.raw()).toStrictEqual([retainedStorage]);
+
+      const old = await create(values("old", "shared", "old-proof", 1, date(500)));
+      const latest = await create(values("new", "shared", "latest-proof", 2));
+      const oldStorage = { id: "old", identifier: "old-proof", value: "shared", createdAt: storedDate(500), expiresAt: storedDate(1), updatedAt: storedDate(0) };
+      const latestStorage = { id: "new", identifier: "latest-proof", value: "shared", createdAt: storedDate(100), expiresAt: storedDate(2), updatedAt: storedDate(0) };
+      expect(await context.adapter.findMany({ model: "verification", where: where("identifier", "shared"), sortBy: { field: "createdAt", direction: "desc" }, limit: 1 }))
+        .toStrictEqual(backend === "sqlite" ? [] : [latest]);
+      expect(await context.adapter.findMany({ model: "verification", where: where(backend === "sqlite" ? "value" : "identifier", "shared"), sortBy: { field: "createdAt", direction: "desc" }, limit: 1 })).toStrictEqual([latest]);
+      const consumed = await Promise.all(Array.from({ length: 8 }, () => context.internalAdapter.consumeVerificationValue("shared")));
+      if (backend === "sqlite") {
+        expect(consumed).toStrictEqual(Array.from({ length: 8 }, () => null));
+        expect(context.raw()).toStrictEqual([latestStorage, oldStorage, retainedStorage]);
+        const claimed = await Promise.all(Array.from({ length: 8 }, () => context.internalAdapter.consumeVerificationValue("latest-proof")));
+        expect(claimed.filter(value => value !== null)).toStrictEqual([latest]);
+        expect(await context.adapter.findOne({ model: "verification", where: where("identifier", "old-proof") })).toStrictEqual(old);
+        expect(await context.adapter.findOne({ model: "verification", where: where("identifier", "latest-proof") })).toBeNull();
+        expect(context.raw()).toStrictEqual([oldStorage, retainedStorage]);
+      } else {
+        expect(consumed.filter(value => value !== null)).toStrictEqual([latest]);
+        expect(context.raw()).toStrictEqual([retainedStorage]);
+      }
+      expect(await context.adapter.findOne({ model: "verification", where: where("identifier", "shared") })).toBeNull();
+      expect(await context.adapter.findOne({ model: "verification", where: where("id", "retained") })).toStrictEqual(retained);
     } finally { context.close(); }
   });
 

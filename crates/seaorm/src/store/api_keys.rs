@@ -199,39 +199,43 @@ where
         let has_set = !matches!(&write, ApiKeyUsageWrite::Decrement);
         let operation = write.operation();
         let backend = self.connection().get_database_backend();
-        let reselect = self.plugin_id_filter::<P::ApiKey>(EntityRole::ApiKey, id)?;
-        let mut guard = reselect.clone();
+        let by_id = self.bind_plugin_query_field(EntityRole::ApiKey, "id", id.field_value())?;
+        let mut comparisons = Vec::new();
         let mut increment = None;
         match write {
             ApiKeyUsageWrite::Refill { previous, .. } => {
-                guard = guard.and(self.plugin_equals::<P::ApiKey>(
-                    EntityRole::ApiKey,
-                    "lastRefillAt",
-                    previous,
-                )?);
+                comparisons.push((
+                    self.bind_plugin_query_field(EntityRole::ApiKey, "lastRefillAt", previous)?,
+                    None,
+                ));
             }
             ApiKeyUsageWrite::Decrement => {
-                let remaining = self.plugin_column::<P::ApiKey>(EntityRole::ApiKey, "remaining")?;
-                guard = guard.and(remaining.into_expr().gt(remaining.save_as(
-                    self.plugin_parameter(EntityRole::ApiKey, "remaining", 0.0.into())?,
-                )));
-                increment = Some((remaining, Expr::col(remaining).sub(1.0)));
+                comparisons.push((
+                    self.bind_plugin_query_field(EntityRole::ApiKey, "remaining", 0.0.into())?,
+                    Some(sea_orm::sea_query::BinOper::GreaterThan),
+                ));
+                increment = Some(("remaining", -1.0));
             }
             ApiKeyUsageWrite::StartWindow {
                 previous_before, ..
             } => {
-                let last = self.plugin_column::<P::ApiKey>(EntityRole::ApiKey, "lastRequest")?;
-                guard = guard.and(match previous_before {
-                    Some(previous) => last.into_expr().lte(last.save_as(self.plugin_parameter(
-                        EntityRole::ApiKey,
-                        "lastRequest",
-                        previous.into(),
-                    )?)),
-                    None => self.plugin_equals::<P::ApiKey>(
-                        EntityRole::ApiKey,
-                        "lastRequest",
-                        FieldValue::Null,
-                    )?,
+                comparisons.push(match previous_before {
+                    Some(previous) => (
+                        self.bind_plugin_query_field(
+                            EntityRole::ApiKey,
+                            "lastRequest",
+                            previous.into(),
+                        )?,
+                        Some(sea_orm::sea_query::BinOper::SmallerThanOrEqual),
+                    ),
+                    None => (
+                        self.bind_plugin_query_field(
+                            EntityRole::ApiKey,
+                            "lastRequest",
+                            FieldValue::Null,
+                        )?,
+                        None,
+                    ),
                 });
             }
             ApiKeyUsageWrite::IncrementWindow {
@@ -239,23 +243,33 @@ where
                 maximum,
                 ..
             } => {
-                let last = self.plugin_column::<P::ApiKey>(EntityRole::ApiKey, "lastRequest")?;
-                let count = self.plugin_column::<P::ApiKey>(EntityRole::ApiKey, "requestCount")?;
-                guard = guard
-                    .and(last.into_expr().gt(last.save_as(self.plugin_parameter(
+                comparisons.push((
+                    self.bind_plugin_query_field(
                         EntityRole::ApiKey,
                         "lastRequest",
                         previous_after.into(),
-                    )?)))
-                    .and(count.into_expr().lt(count.save_as(self.plugin_parameter(
-                        EntityRole::ApiKey,
-                        "requestCount",
-                        maximum,
-                    )?)));
-                increment = Some((count, Expr::col(count).add(1.0)));
+                    )?,
+                    Some(sea_orm::sea_query::BinOper::GreaterThan),
+                ));
+                comparisons.push((
+                    self.bind_plugin_query_field(EntityRole::ApiKey, "requestCount", maximum)?,
+                    Some(sea_orm::sea_query::BinOper::SmallerThan),
+                ));
+                increment = Some(("requestCount", 1.0));
             }
             ApiKeyUsageWrite::LastRequest(_) | ApiKeyUsageWrite::UpdatedAt(_) => {}
         }
+        let increment = increment
+            .map(|(name, amount)| {
+                let column = self.plugin_column::<P::ApiKey>(EntityRole::ApiKey, name)?;
+                let expression = if amount < 0.0 {
+                    Expr::col(column).sub(-amount)
+                } else {
+                    Expr::col(column).add(amount)
+                };
+                Ok::<_, AuthError>((column, expression))
+            })
+            .transpose()?;
         let mut fields = if has_set {
             self.prepare_plugin_fields::<P::ApiKey>(EntityRole::ApiKey, "apikey", set, false)
                 .await?
@@ -264,6 +278,18 @@ where
         };
         if operation == "incrementOne" {
             validate_increment_one_update(increment.is_some(), !fields.is_empty())?;
+        }
+        let reselect = self.resolve_plugin_equals::<P::ApiKey>(EntityRole::ApiKey, by_id)?;
+        let mut guard = reselect.clone();
+        for (bound, operator) in comparisons {
+            let condition = if let Some(operator) = operator {
+                let (column, value) =
+                    self.resolve_plugin_query_parameter::<P::ApiKey>(EntityRole::ApiKey, bound)?;
+                column.into_expr().binary(operator, column.save_as(value))
+            } else {
+                self.resolve_plugin_equals::<P::ApiKey>(EntityRole::ApiKey, bound)?
+            };
+            guard = guard.and(condition);
         }
         if let Some((column, _)) = &increment {
             // Kysely evaluates set policies, then replaces colliding assignments with increments.
@@ -306,8 +332,11 @@ where
 
     async fn delete_expired_api_keys(&self) -> AuthResult<usize> {
         database_operation::<Entity<P::ApiKey>, _>(self.config(), "deleteMany", async {
-            let now = self.plugin_parameter(EntityRole::ApiKey, "expiresAt", Utc::now().into())?;
-            let expires_at = self.plugin_column::<P::ApiKey>(EntityRole::ApiKey, "expiresAt")?;
+            let (expires_at, now) = self.plugin_query_parameter::<P::ApiKey>(
+                EntityRole::ApiKey,
+                "expiresAt",
+                Utc::now().into(),
+            )?;
             Entity::<P::ApiKey>::delete_many()
                 .filter(expires_at.is_not_null())
                 .filter(expires_at.into_expr().lt(expires_at.save_as(now)))

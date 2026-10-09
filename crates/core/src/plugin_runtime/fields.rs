@@ -99,7 +99,9 @@ impl ModelFields {
             .copied())
     }
 
-    pub(crate) fn runtime_fields(
+    /// Read declarations with the primary-key policy installed by preceding adapter operations.
+    #[doc(hidden)]
+    pub fn runtime_fields(
         &self,
         role: EntityRole,
         configured: &UserConfig,

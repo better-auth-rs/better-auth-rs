@@ -148,6 +148,14 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         let backend = connection.get_database_backend();
         query.value =
             super::value_filter::adapter_query_value(query.value, &original, field, backend)?;
+        let fields = self
+            .model_fields
+            .plugin_fields(EntityRole::DeviceCode)
+            .adapter_fields(&[]);
+        query.field =
+            super::value_filter::query_field_name(EntityRole::DeviceCode, &fields, &query.field)?
+                .1
+                .to_owned();
         let ownership = ownership_predicate(P::DeviceCode::column(&query.field)?, query, backend)?;
         let (bindings, unchanged) = expected.consumption_bindings()?;
         let mut filter = Condition::all();

@@ -1,6 +1,7 @@
 use better_auth_core::{
-    AuthResult, FieldValue,
-    user_fields::{UserFieldConfig, UserFieldType},
+    AuthError, AuthResult, FieldValue,
+    store::schema::{EntityRole, resolve_field_name},
+    user_fields::{UserConfig, UserFieldConfig, UserFieldType},
 };
 use sea_orm::{
     ColumnTrait, DbBackend,
@@ -8,6 +9,165 @@ use sea_orm::{
 };
 
 use super::id_filter::IdColumn;
+
+pub(super) fn query_field_name<'a>(
+    role: EntityRole,
+    fields: &'a UserConfig,
+    name: &str,
+) -> AuthResult<(&'a str, &'a str)> {
+    if matches!(name, "id" | "_id") {
+        return Ok((
+            "id",
+            resolve_field_name(
+                fields
+                    .fields()
+                    .get("id")
+                    .and_then(|field| field.field_name.as_deref()),
+                "id",
+            ),
+        ));
+    }
+    let (logical, field) = fields
+        .fields()
+        .get_key_value(name)
+        .or_else(|| {
+            fields
+                .fields()
+                .iter()
+                .find(|(_, field)| field.field_name.as_deref() == Some(name))
+        })
+        .ok_or_else(|| unknown_query_field(role, name))?;
+    Ok((
+        logical,
+        resolve_field_name(field.field_name.as_deref(), logical),
+    ))
+}
+
+fn unknown_query_field(role: EntityRole, name: &str) -> AuthError {
+    let model = match role {
+        EntityRole::User => "user",
+        EntityRole::Session => "session",
+        EntityRole::Account => "account",
+        EntityRole::Verification => "verification",
+        EntityRole::Organization => "organization",
+        EntityRole::Member => "member",
+        EntityRole::Invitation => "invitation",
+        EntityRole::Team => "team",
+        EntityRole::TeamMember => "teamMember",
+        EntityRole::OrganizationRole => "organizationRole",
+        EntityRole::ApiKey => "apikey",
+        EntityRole::DeviceCode => "deviceCode",
+        EntityRole::Passkey => "passkey",
+        EntityRole::TwoFactor => "twoFactor",
+        EntityRole::Jwk => "jwks",
+        EntityRole::WalletAddress => "walletAddress",
+        EntityRole::RateLimit => "rateLimit",
+    };
+    AuthError::config(format!("Field {name} not found in model {model}"))
+}
+
+pub(super) struct BoundQueryField {
+    mapped_name: String,
+    value: FieldValue,
+}
+
+impl BoundQueryField {
+    pub(super) fn resolve(
+        self,
+        role: EntityRole,
+        configured: &UserConfig,
+    ) -> AuthResult<(String, FieldValue)> {
+        // Kysely resolves names after the factory binds every operand and runs input callbacks.
+        let fields = configured.adapter_fields(&[]);
+        let (_, column) = query_field_name(role, &fields, &self.mapped_name)?;
+        Ok((column.to_owned(), self.value))
+    }
+}
+
+fn bind_factory_query_field(
+    runtime: &better_auth_core::plugin_runtime::ModelFields,
+    role: EntityRole,
+    configured: &UserConfig,
+    name: &str,
+    original: &FieldValue,
+    policy: &better_auth_core::id::IdGeneration,
+    backend: DbBackend,
+) -> AuthResult<BoundQueryField> {
+    let before = runtime.runtime_fields(role, configured)?;
+    let (logical, mapped) = query_field_name(role, &before, name)?;
+    runtime.begin_id_query(role)?;
+    let fields = before.adapter_fields(&[]);
+    let field = fields
+        .fields()
+        .get(logical)
+        .ok_or_else(|| unknown_query_field(role, logical))?;
+    let value = if logical == "id" || field.references_id() {
+        policy.adapter_id_query(original.clone())?
+    } else {
+        original.clone()
+    };
+    let value = better_auth_core::user_query::bind_filter(field, &value)?;
+    let value = adapter_query_value(value, original, field, backend)?;
+    Ok(BoundQueryField {
+        mapped_name: mapped.to_owned(),
+        value,
+    })
+}
+
+pub(super) fn bind_query_field(
+    runtime: &better_auth_core::plugin_runtime::ModelFields,
+    role: EntityRole,
+    configured: &UserConfig,
+    name: &str,
+    original: &FieldValue,
+    policy: &better_auth_core::id::IdGeneration,
+    backend: DbBackend,
+) -> AuthResult<(String, FieldValue)> {
+    bind_factory_query_field(runtime, role, configured, name, original, policy, backend)?
+        .resolve(role, configured)
+}
+
+impl<S: crate::schema::AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema>
+    super::SeaOrmStore<S, O, P>
+{
+    pub(super) fn bind_query_field(
+        &self,
+        role: EntityRole,
+        configured: &UserConfig,
+        name: &str,
+        original: &FieldValue,
+        backend: DbBackend,
+    ) -> AuthResult<BoundQueryField> {
+        bind_factory_query_field(
+            &self.model_fields,
+            role,
+            configured,
+            name,
+            original,
+            self.config().advanced.database.generate_id(),
+            backend,
+        )
+    }
+
+    pub(super) fn query_field_binding(
+        &self,
+        role: EntityRole,
+        configured: &UserConfig,
+        name: &str,
+        original: &FieldValue,
+        backend: DbBackend,
+    ) -> AuthResult<(String, FieldValue)> {
+        bind_query_field(
+            &self.model_fields,
+            role,
+            configured,
+            name,
+            original,
+            self.config().advanced.database.generate_id(),
+            backend,
+        )
+    }
+}
 
 pub(super) fn adapter_query_value(
     mut value: FieldValue,
@@ -158,6 +318,75 @@ mod tests {
     use super::*;
     use crate::store::entities::api_key;
     use sea_orm::{QueryFilter, QueryTrait};
+
+    #[test]
+    fn query_aliases_keep_original_types_and_primary_key_history() -> AuthResult<()> {
+        use better_auth_core::{id::IdGeneration, plugin_runtime::ModelFields};
+
+        let fields = UserConfig {
+            additional_fields: Some(
+                [
+                    (
+                        "id".into(),
+                        UserFieldConfig {
+                            field_name: Some("old_id".into()),
+                            ..Default::default()
+                        },
+                    ),
+                    (
+                        "source".into(),
+                        UserFieldConfig {
+                            field_name: Some("target".into()),
+                            field_type: UserFieldType::Number,
+                            ..Default::default()
+                        },
+                    ),
+                    (
+                        "target".into(),
+                        UserFieldConfig {
+                            field_name: Some("stored".into()),
+                            ..Default::default()
+                        },
+                    ),
+                ]
+                .into(),
+            ),
+        };
+        let runtime = ModelFields::default();
+        let role = EntityRole::Verification;
+        let bind = |name: &str, value: FieldValue| {
+            bind_query_field(
+                &runtime,
+                role,
+                &fields,
+                name,
+                &value,
+                &IdGeneration::Serial,
+                DbBackend::Sqlite,
+            )
+        };
+        assert!(
+            matches!(bind("missing", "1".into()), Err(AuthError::Config(message)) if message == "Field missing not found in model verification")
+        );
+        assert!(runtime.id_input_policy(role)?.is_none());
+        assert!(
+            matches!(bind("_id", "1".into()), Err(AuthError::Config(message)) if message == "Field old_id not found in model verification")
+        );
+        assert!(runtime.id_input_policy(role)?.is_some());
+        assert_eq!(
+            bind("_id", "01".into())?,
+            ("id".into(), FieldValue::Number(1.0))
+        );
+        assert_eq!(
+            bind("source", "0x10".into())?,
+            ("stored".into(), FieldValue::Number(16.0))
+        );
+        assert_eq!(
+            bind("stored", "0x10".into())?,
+            ("stored".into(), "0x10".into())
+        );
+        Ok(())
+    }
 
     #[test]
     fn undefined_equality_keeps_the_driver_binding_instead_of_testing_for_null() -> AuthResult<()> {

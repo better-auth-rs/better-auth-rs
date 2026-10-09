@@ -60,10 +60,11 @@ where
         id: &better_auth_core::SchemaValue<String>,
         input: FieldMap,
     ) -> AuthResult<Option<FieldMap>> {
-        let filter = self.plugin_id_filter::<P::Passkey>(EntityRole::Passkey, id)?;
+        let selector = self.bind_plugin_query_field(EntityRole::Passkey, "id", id.field_value())?;
         let patch = self
             .prepare_plugin_fields::<P::Passkey>(EntityRole::Passkey, "passkey", input, false)
             .await?;
+        let filter = self.resolve_plugin_equals::<P::Passkey>(EntityRole::Passkey, selector)?;
         let row = self.update_passkey_patch(filter, patch).await?;
         Ok(self
             .project_plugin_rows::<P::Passkey, FieldMap>(
@@ -178,10 +179,11 @@ where
             }
         };
         let _ = fields.insert("counter".into(), counter.into_field());
-        let filter = self.plugin_id_filter::<P::Passkey>(EntityRole::Passkey, id)?;
+        let selector = self.bind_plugin_query_field(EntityRole::Passkey, "id", id.field_value())?;
         let patch = self
             .prepare_passkey_fields(fields, FieldMap::new(), false)
             .await?;
+        let filter = self.resolve_plugin_equals::<P::Passkey>(EntityRole::Passkey, selector)?;
         let model = database_operation::<Entity<P::Passkey>, _>(self.config(), "update", async {
             let Some(_model) = self
                 .connection()
@@ -213,7 +215,7 @@ where
         id: &better_auth_core::SchemaValue<String>,
         mut update: UpdatePasskey,
     ) -> AuthResult<Passkey> {
-        let filter = self.plugin_id_filter::<P::Passkey>(EntityRole::Passkey, id)?;
+        let selector = self.bind_plugin_query_field(EntityRole::Passkey, "id", id.field_value())?;
         let extras = std::mem::take(&mut update.additional_fields);
         let mut fields = update.into_adapter_fields()?;
         if P::Passkey::passkey_storage() == PasskeyStorage::Legacy {
@@ -223,6 +225,7 @@ where
             );
         }
         let patch = self.prepare_passkey_fields(fields, extras, false).await?;
+        let filter = self.resolve_plugin_equals::<P::Passkey>(EntityRole::Passkey, selector)?;
         let row = self
             .update_passkey_patch(filter, patch)
             .await?

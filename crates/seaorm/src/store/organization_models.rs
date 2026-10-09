@@ -17,33 +17,10 @@ impl<S: crate::schema::AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate:
         name: &str,
         value: &FieldValue,
     ) -> AuthResult<sea_orm::sea_query::SimpleExpr> {
-        self.model_fields.begin_id_query(role)?;
-        if name == "id" {
-            return super::value_filter::equals_id(
-                M::column("id")?,
-                value,
-                self.config().advanced.database.generate_id(),
-                self.connection().get_database_backend(),
-            );
-        }
         let fields = self.organization_fields()?.query_schema_for(role)?;
-        let field = fields.fields().get(name).ok_or_else(|| {
-            AuthError::config(format!("Unknown organization field {role:?}.{name}"))
-        })?;
-        let column = M::column(resolve_field_name(field.field_name.as_deref(), name))?;
-        let bound = if field.references_id() {
-            self.config()
-                .advanced
-                .database
-                .generate_id()
-                .adapter_id_query(value.clone())?
-        } else {
-            value.clone()
-        };
-        let bound = better_auth_core::user_query::bind_filter(field, &bound)?;
         let backend = self.connection().get_database_backend();
-        let bound = super::value_filter::adapter_query_value(bound, value, field, backend)?;
-        super::value_filter::equals(column, &bound, backend)
+        let (column, bound) = self.query_field_binding(role, &fields, name, value, backend)?;
+        super::value_filter::equals(M::column(&column)?, &bound, backend)
     }
 }
 

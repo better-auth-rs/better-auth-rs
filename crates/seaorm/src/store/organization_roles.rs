@@ -18,16 +18,42 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema>
     SeaOrmStore<S, O, P>
 {
     fn organization_role_filter(&self, selectors: &FieldMap) -> AuthResult<Condition> {
+        self.resolve_organization_role_filter(self.bind_organization_role_filter(selectors)?)
+    }
+
+    fn bind_organization_role_filter(
+        &self,
+        selectors: &FieldMap,
+    ) -> AuthResult<Vec<super::value_filter::BoundQueryField>> {
+        let fields = self
+            .organization_fields()?
+            .query_schema_for(EntityRole::OrganizationRole)?;
+        let backend = self.connection().get_database_backend();
         selectors
             .iter()
-            .try_fold(Condition::all(), |condition, (name, value)| {
-                Ok(
-                    condition.add(self.organization_field_equals::<O::OrganizationRole>(
-                        EntityRole::OrganizationRole,
-                        name,
-                        value,
-                    )?),
-                )
+            .map(|(name, value)| {
+                self.bind_query_field(EntityRole::OrganizationRole, &fields, name, value, backend)
+            })
+            .collect()
+    }
+
+    fn resolve_organization_role_filter(
+        &self,
+        selectors: Vec<super::value_filter::BoundQueryField>,
+    ) -> AuthResult<Condition> {
+        let fields = self
+            .organization_fields()?
+            .query_schema_for(EntityRole::OrganizationRole)?;
+        let backend = self.connection().get_database_backend();
+        selectors
+            .into_iter()
+            .try_fold(Condition::all(), |condition, selector| {
+                let (column, value) = selector.resolve(EntityRole::OrganizationRole, &fields)?;
+                Ok(condition.add(super::value_filter::equals(
+                    O::OrganizationRole::column(&column)?,
+                    &value,
+                    backend,
+                )?))
             })
     }
 
@@ -275,12 +301,15 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
     ) -> AuthResult<OrganizationRole> {
         let config = self.organization_fields()?.organization_role;
         let backend = self.connection().get_database_backend();
-        let selector = self.organization_field_equals::<O::OrganizationRole>(
-            EntityRole::OrganizationRole,
-            "id",
-            id,
-        )?;
+        let schema = self
+            .organization_fields()?
+            .query_schema_for(EntityRole::OrganizationRole)?;
+        let selector =
+            self.bind_query_field(EntityRole::OrganizationRole, &schema, "id", id, backend)?;
         let active = self.organization_role_write(input).await?;
+        let (column, value) = selector.resolve(EntityRole::OrganizationRole, &schema)?;
+        let selector =
+            super::value_filter::equals(O::OrganizationRole::column(&column)?, &value, backend)?;
         let row = super::updates::execute_update_returning_raw::<Entity<O::OrganizationRole>, _>(
             self.connection(),
             active.update_returning(backend)?.filter(selector.clone()),
@@ -298,8 +327,9 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
         selectors: &FieldMap,
         input: UpdateOrganizationRole,
     ) -> AuthResult<u64> {
-        let selectors = self.organization_role_filter(selectors)?;
+        let selectors = self.bind_organization_role_filter(selectors)?;
         let active = self.organization_role_write(input).await?;
+        let selectors = self.resolve_organization_role_filter(selectors)?;
         active
             .update(self.connection().get_database_backend())?
             .filter(selectors)

@@ -16,7 +16,7 @@ for (const mode of consumeModes) {
   });
 }
 
-test("Verification single delete catches selector failures while consume and batch delete propagate failures", async () => {
+test("Verification distinguishes selector failures from transaction schema rejection", async () => {
   const database = new Database(":memory:");
   const options = base(database);
   const events: string[] = [];
@@ -33,9 +33,19 @@ test("Verification single delete catches selector failures while consume and bat
     const withHooks = getWithHooks(context.adapter, { options: context.options, hooks: [{ source: "user", hooks }] });
     const where = [{ field: "identifier", value: "subject" }];
     expect(await withHooks.deleteWithHooks(where, "verification")).toBeNull();
-    expect(await runWithTransaction(context.adapter, () => withHooks.deleteWithHooks(where, "verification"))).toBeNull();
-    await expect(context.internalAdapter.consumeVerificationValue("subject")).rejects.toThrow();
-    await expect(withHooks.deleteManyWithHooks([{ field: "expiresAt", operator: "lt", value: new Date() }], "verification")).rejects.toThrow();
+    expect(await context.adapter.transaction(async adapter => {
+      const transactionalHooks = getWithHooks(adapter, { options: context.options, hooks: [{ source: "user", hooks }] });
+      return transactionalHooks.deleteWithHooks(where, "verification");
+    })).toBeNull();
+    await expect(withHooks.consumeOneWithHooks("verification", where, () => context.adapter.consumeOne({ model: "verification", where }))).rejects.toThrow("missing_identifier");
+    await expect(withHooks.deleteManyWithHooks([{ field: "expiresAt", operator: "lt", value: new Date() }], "verification")).rejects.toThrow("missing_expiresAt");
+    let enteredTransaction = false;
+    await expect(runWithTransaction(context.adapter, () => {
+      enteredTransaction = true;
+      return withHooks.deleteWithHooks(where, "verification");
+    })).rejects.toMatchObject({ code: "SCHEMA_MISMATCH", source: "database" });
+    expect(enteredTransaction).toBe(false);
+    await expect(context.internalAdapter.consumeVerificationValue("subject")).rejects.toMatchObject({ code: "SCHEMA_MISMATCH", source: "database" });
     expect(events).toStrictEqual([]);
     expect(database.query("SELECT * FROM verification").all()).toStrictEqual([stored("sqlite", original)]);
   } finally { database.close(); }

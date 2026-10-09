@@ -103,9 +103,14 @@ where
         self.delete_sessions_with_connection(
             db,
             None,
-            || {
-                Ok(Condition::all()
-                    .add(self.session_token_filter(token, db.get_database_backend())?))
+            || self.bind_session_query_field("token", token, db.get_database_backend()),
+            |bound| {
+                let (column, value) = self.resolve_session_query_field(bound)?;
+                Ok(Condition::all().add(super::value_filter::equals(
+                    column,
+                    &value,
+                    db.get_database_backend(),
+                )?))
             },
             true,
         )
@@ -491,9 +496,14 @@ where
         self.delete_sessions_with_connection(
             db,
             None,
-            || {
-                Ok(Condition::all()
-                    .add(self.session_tokens_filter(tokens, db.get_database_backend())?))
+            || self.bind_session_tokens(tokens, db.get_database_backend()),
+            |bound| {
+                let (column, value) = self.resolve_session_query_field(bound)?;
+                Ok(Condition::all().add(super::value_filter::is_in(
+                    column,
+                    &value,
+                    db.get_database_backend(),
+                )?))
             },
             false,
         )
@@ -506,9 +516,14 @@ where
         self.delete_sessions_with_connection(
             db,
             None,
-            || {
-                Ok(Condition::all()
-                    .add(self.session_tokens_filter(tokens, db.get_database_backend())?))
+            || self.bind_session_tokens(tokens, db.get_database_backend()),
+            |bound| {
+                let (column, value) = self.resolve_session_query_field(bound)?;
+                Ok(Condition::all().add(super::value_filter::is_in(
+                    column,
+                    &value,
+                    db.get_database_backend(),
+                )?))
             },
             true,
         )
@@ -548,9 +563,14 @@ where
         self.delete_sessions_with_connection(
             db,
             None,
-            || {
-                Ok(Condition::all()
-                    .add(self.session_user_filter(user_id, db.get_database_backend())?))
+            || self.bind_session_query_field("userId", user_id, db.get_database_backend()),
+            |bound| {
+                let (column, value) = self.resolve_session_query_field(bound)?;
+                Ok(Condition::all().add(super::value_filter::equals(
+                    column,
+                    &value,
+                    db.get_database_backend(),
+                )?))
             },
             preserve,
         )
@@ -564,8 +584,9 @@ where
         self.delete_sessions_with_connection(
             db,
             None,
-            || {
-                let (column, value) = self.session_query_field("expiresAt", &now, backend)?;
+            || self.bind_session_query_field("expiresAt", &now, backend),
+            |bound| {
+                let (column, value) = self.resolve_session_query_field(bound)?;
                 let value = super::record_bindings::parameter(value, backend)?;
                 Ok(Condition::any()
                     .add(column.into_expr().lt(column.save_as(value)))

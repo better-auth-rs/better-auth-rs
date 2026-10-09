@@ -114,6 +114,8 @@ Session record updates merge native and application values before defaults, upda
 
 Session queries bind the complete declaration before update callbacks or join resolution. Lists, joins, and deletion snapshots retain raw SQL values until output callbacks finish. Memory updates change every matching row and project the first result; SQL keeps its statement and snapshot boundaries. Preserved revocation uses the declared `expiresAt` mapping and `updatedAt` update factory. Deletion binds its selector separately for the snapshot and the write, so callback-driven queries retain their runtime ID effects.
 
+SQL `WHERE` names pass through the factory and Kysely field resolution. Updates bind query operands before input callbacks and resolve the SQL column names after those callbacks. Aliases that collide with declared names can select different physical columns from Memory. Sorting, join conditions, and comparisons against stored values retain their separate resolution rules.
+
 ## Secondary Storage
 
 `BetterAuth::secondary_storage` installs a backend for server-side session and user snapshots. Sessions use that backend by default. Set `session.store_session_in_database = Some(true)` to retain database rows and permit fallback on a missing cache entry. Set `session.preserve_session_in_database = Some(true)` to keep expired audit rows after revocation and disable that fallback. Malformed cached JSON never restores a session through database fallback.

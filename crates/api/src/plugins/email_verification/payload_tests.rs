@@ -229,7 +229,7 @@ async fn business_payload_errors_remain_server_errors_with_callback_urls() -> Au
             if business_error {
                 assert!(matches!(&result, Err(AuthError::Serialization(_))));
             }
-            let response = result.unwrap_or_else(AuthError::to_http_response);
+            let response = result.or_else(AuthError::to_http_response)?;
             assert!(response.headers.get_all("set-cookie").next().is_none());
             if business_error {
                 assert_eq!(response.status, 500);

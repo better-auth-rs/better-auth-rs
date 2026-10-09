@@ -20,8 +20,6 @@ where
         tx: Option<HookTransaction<'_, S>>,
         user_id: &better_auth_core::FieldValue,
     ) -> AuthResult<Option<usize>> {
-        self.model_fields
-            .canonicalize_id(better_auth_core::store::schema::EntityRole::Account)?;
         let snapshot: AuthResult<Vec<better_auth_core::wire::AccountView>> = async {
             match database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(
                 self.config(),
@@ -108,9 +106,14 @@ where
                 .delete_sessions_with_connection(
                     db,
                     tx,
-                    || {
-                        Ok(Condition::all()
-                            .add(self.session_user_filter(id, db.get_database_backend())?))
+                    || self.bind_session_query_field("userId", id, db.get_database_backend()),
+                    |bound| {
+                        let (column, value) = self.resolve_session_query_field(bound)?;
+                        Ok(Condition::all().add(super::value_filter::equals(
+                            column,
+                            &value,
+                            db.get_database_backend(),
+                        )?))
                     },
                     false,
                 )
@@ -120,25 +123,11 @@ where
             .delete_user_accounts_with_connection(db, tx, id)
             .await?;
         let snapshot: AuthResult<Option<better_auth_core::wire::UserView>> = async {
-            self.model_fields
-                .begin_id_query(better_auth_core::store::schema::EntityRole::User)?;
-            let policy = self.config().advanced.database.generate_id();
-            let user_id = policy.adapter_id_query(id.clone())?;
-            let filter = super::value_filter::equals_id(
-                S::User::id_column(),
-                &user_id,
-                policy,
-                db.get_database_backend(),
-            )?;
+            let query = self.user_field_query(db, "id", id)?;
             let row = database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(
                 self.config(),
                 "findMany",
-                super::plugin_rows::one(
-                    db,
-                    <S::User as SeaOrmUserModel>::Entity::find()
-                        .filter(filter)
-                        .limit(1),
-                ),
+                super::plugin_rows::one(db, query.limit(1)),
             )
             .await?;
             match row {
@@ -183,14 +172,16 @@ where
             },
         )
         .await?;
-        self.model_fields
-            .begin_id_query(better_auth_core::store::schema::EntityRole::User)?;
-        let policy = self.config().advanced.database.generate_id();
-        let user_id = policy.adapter_id_query(id.clone())?;
-        let filter = super::value_filter::equals_id(
-            S::User::id_column(),
-            &user_id,
-            policy,
+        let (column, value) = self.query_field_binding(
+            better_auth_core::store::schema::EntityRole::User,
+            &self.user_field_schema(),
+            "id",
+            id,
+            db.get_database_backend(),
+        )?;
+        let filter = super::value_filter::equals(
+            S::User::field_column(&column)?,
+            &value,
             db.get_database_backend(),
         )?;
         let _ = database_operation::<<S::User as SeaOrmUserModel>::Entity, _>(

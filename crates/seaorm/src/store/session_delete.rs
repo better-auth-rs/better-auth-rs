@@ -7,7 +7,7 @@ use sea_orm::{
 };
 
 use crate::SeaOrmStore;
-use crate::error::{AuthError, AuthResult};
+use crate::error::AuthResult;
 use crate::schema::{AuthSchema, SeaOrmSessionModel};
 
 use super::{HookTransaction, map_db_err};
@@ -37,14 +37,23 @@ where
         tokens: &[String],
         backend: DbBackend,
     ) -> AuthResult<sea_orm::sea_query::SimpleExpr> {
+        let bound = self.bind_session_tokens(tokens, backend)?;
+        let (column, value) = self.resolve_session_query_field(bound)?;
+        super::value_filter::is_in(column, &value, backend)
+    }
+
+    pub(super) fn bind_session_tokens(
+        &self,
+        tokens: &[String],
+        backend: DbBackend,
+    ) -> AuthResult<super::value_filter::BoundQueryField> {
         let tokens = tokens
             .iter()
             .cloned()
             .map(FieldValue::from)
             .collect::<Vec<_>>()
             .into();
-        let (column, value) = self.session_query_field("token", &tokens, backend)?;
-        super::value_filter::is_in(column, &value, backend)
+        self.bind_session_query_field("token", &tokens, backend)
     }
 
     pub(super) fn session_user_filter(
@@ -72,51 +81,69 @@ where
         original: &FieldValue,
         backend: DbBackend,
     ) -> AuthResult<(<S::Session as SeaOrmSessionModel>::Column, FieldValue)> {
-        self.model_fields.begin_id_query(EntityRole::Session)?;
-        let schema = better_auth_core::store::session_create_schema(
+        let bound = self.bind_session_query_field(name, original, backend)?;
+        self.resolve_session_query_field(bound)
+    }
+
+    pub(super) fn resolve_session_query_field(
+        &self,
+        bound: super::value_filter::BoundQueryField,
+    ) -> AuthResult<(<S::Session as SeaOrmSessionModel>::Column, FieldValue)> {
+        let schema = better_auth_core::store::session_field_schema(
             &self.config().session,
             &Default::default(),
         );
-        let field = schema
-            .fields()
-            .get(name)
-            .ok_or_else(|| AuthError::config(format!("Unknown session field: {name}")))?;
-        let value = if name == "id" || field.references_id() {
-            self.config()
-                .advanced
-                .database
-                .generate_id()
-                .adapter_id_query(original.clone())?
-        } else {
-            original.clone()
-        };
-        let value = better_auth_core::user_query::bind_filter(field, &value)?;
-        let value = super::value_filter::adapter_query_value(value, original, field, backend)?;
-        Ok((
-            S::Session::field_column(schema.record_storage_key(name))?,
-            value,
-        ))
+        let (column, value) = bound.resolve(EntityRole::Session, &schema)?;
+        Ok((S::Session::field_column(&column)?, value))
+    }
+
+    pub(super) fn bind_session_query_field(
+        &self,
+        name: &str,
+        original: &FieldValue,
+        backend: DbBackend,
+    ) -> AuthResult<super::value_filter::BoundQueryField> {
+        let schema = better_auth_core::store::session_field_schema(
+            &self.config().session,
+            &Default::default(),
+        );
+        self.bind_query_field(EntityRole::Session, &schema, name, original, backend)
     }
 
     pub(super) async fn delete_sessions_with_connection(
         &self,
         db: &impl ConnectionTrait,
         transaction: Option<HookTransaction<'_, S>>,
-        bind: impl Fn() -> AuthResult<Condition> + Send + Sync,
+        bind: impl Fn() -> AuthResult<super::value_filter::BoundQueryField> + Send + Sync,
+        resolve: impl Fn(super::value_filter::BoundQueryField) -> AuthResult<Condition> + Send + Sync,
         preserve: bool,
     ) -> AuthResult<Option<usize>> {
         let backend = db.get_database_backend();
         let live_since = preserve.then(|| FieldValue::from(Utc::now()));
-        let bind_condition = || -> AuthResult<Condition> {
-            let mut condition = bind()?;
-            if let Some(now) = &live_since {
-                condition = condition.add(self.session_live_filter(now, backend)?);
+        let bind_condition = || -> AuthResult<_> {
+            let bound = bind()?;
+            let live = live_since
+                .as_ref()
+                .map(|now| self.bind_session_query_field("expiresAt", now, backend))
+                .transpose()?;
+            Ok((bound, live))
+        };
+        let resolve_condition = |(bound, live): (
+            _,
+            Option<super::value_filter::BoundQueryField>,
+        )|
+         -> AuthResult<Condition> {
+            let mut condition = resolve(bound)?;
+            if let Some(live) = live {
+                let (column, value) = self.resolve_session_query_field(live)?;
+                let value = super::record_bindings::parameter(value, backend)?;
+                condition = condition.add(column.into_expr().gt(column.save_as(value)));
             }
             Ok(condition)
         };
         // Upstream catches snapshot conversion, query and projection failures before the batch write.
         let sessions = async {
-            let condition = bind_condition()?;
+            let condition = resolve_condition(bind_condition()?)?;
             let sessions = database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
                 self.config(),
                 "findMany",
@@ -157,6 +184,7 @@ where
         let condition = bind_condition()?;
         let count = if let Some(update) = update {
             let (active, _) = self.prepare_session_update(db, update).await?;
+            let condition = resolve_condition(condition)?;
             database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
                 self.config(),
                 "updateMany",
@@ -172,6 +200,7 @@ where
             .await?
             .rows_affected
         } else {
+            let condition = resolve_condition(condition)?;
             database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
                 self.config(),
                 "deleteMany",

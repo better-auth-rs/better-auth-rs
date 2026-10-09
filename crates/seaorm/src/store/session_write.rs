@@ -378,8 +378,11 @@ where
         update: better_auth_core::FieldMap,
     ) -> AuthResult<Option<better_auth_core::wire::SessionView>> {
         let backend = db.get_database_backend();
-        let filter = self.session_token_filter(token, backend)?;
+        let selector = self.bind_session_query_field("token", token, backend)?;
         let (active, schema) = self.prepare_session_update(db, update).await?;
+        let (column, value) = selector.resolve(EntityRole::Session, &schema)?;
+        let filter =
+            super::value_filter::equals(S::Session::field_column(&column)?, &value, backend)?;
         let session = database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
             self.config(),
             "update",

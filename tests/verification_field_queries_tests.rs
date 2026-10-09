@@ -87,30 +87,86 @@ fn mapped() -> AuthConfig {
     config
 }
 
-async fn mapped_lifecycle<S: AuthSchema>(store: Arc<dyn AuthStore<S>>) -> AuthResult<()> {
+async fn mapped_lifecycle<S: AuthSchema>(
+    store: Arc<dyn AuthStore<S>>,
+    double_where_mapping: bool,
+) -> AuthResult<()> {
     let created = store
         .create_verification(input("first", "subject", "proof", 1, 100))
         .await?;
+    let original_query = (!double_where_mapping).then_some(created.clone());
     assert_eq!(
-        required(store.get_verification("subject", "proof").await?)?,
+        store.get_verification("subject", "proof").await?,
+        original_query
+    );
+    assert_eq!(
+        store.get_verification_by_identifier("subject").await?,
+        original_query
+    );
+    assert_eq!(
+        store.get_verification_by_value("proof").await?,
+        original_query
+    );
+    assert_eq!(
+        store.get_verification_including_expired("subject").await?,
+        original_query
+    );
+    let (identifier_query, value_query) = if double_where_mapping {
+        ("proof", "subject")
+    } else {
+        ("subject", "proof")
+    };
+    assert_eq!(
+        required(
+            store
+                .get_verification(identifier_query, value_query)
+                .await?
+        )?,
         created
     );
     assert_eq!(
-        required(store.get_verification_by_identifier("subject").await?)?,
+        required(
+            store
+                .get_verification_by_identifier(identifier_query)
+                .await?
+        )?,
         created
     );
     assert_eq!(
-        required(store.get_verification_by_value("proof").await?)?,
+        required(store.get_verification_by_value(value_query).await?)?,
         created
     );
     assert_eq!(
-        required(store.get_verification_including_expired("subject").await?)?,
+        required(
+            store
+                .get_verification_including_expired(identifier_query)
+                .await?
+        )?,
         created
     );
+    if double_where_mapping {
+        assert!(
+            store
+                .update_verification(
+                    "subject",
+                    VerificationUpdate {
+                        value: "new-proof".into(),
+                        updated_at: date(3).into(),
+                        ..Default::default()
+                    }
+                )
+                .await?
+                .is_none()
+        );
+        assert_eq!(
+            required(store.get_verification_including_expired("proof").await?)?,
+            created
+        );
+    }
     let updated = required(
         store
             .update_verification(
-                "subject",
+                identifier_query,
                 VerificationUpdate {
                     value: "new-proof".into(),
                     updated_at: date(3).into(),
@@ -123,51 +179,109 @@ async fn mapped_lifecycle<S: AuthSchema>(store: Arc<dyn AuthStore<S>>) -> AuthRe
     let _ = expected.insert("value".into(), "new-proof".into());
     let _ = expected.insert("updatedAt".into(), date(3).into());
     assert_eq!(updated.fields()?, expected);
+    let (updated_identifier, updated_value) = if double_where_mapping {
+        ("new-proof", "subject")
+    } else {
+        ("subject", "new-proof")
+    };
     assert_eq!(
-        required(store.get_verification("subject", "new-proof").await?)?.fields()?,
+        required(
+            store
+                .get_verification(updated_identifier, updated_value)
+                .await?
+        )?
+        .fields()?,
         expected
     );
+    if double_where_mapping {
+        transaction(store.as_ref(), |tx| {
+            Box::pin(async move { tx.delete_verification_by_identifier("subject").await })
+        })
+        .await?;
+        assert_eq!(
+            required(
+                store
+                    .get_verification_including_expired("new-proof")
+                    .await?
+            )?
+            .fields()?,
+            expected
+        );
+    }
     transaction(store.as_ref(), |tx| {
-        Box::pin(async move { tx.delete_verification_by_identifier("subject").await })
+        Box::pin(async move {
+            tx.delete_verification_by_identifier(updated_identifier)
+                .await
+        })
     })
     .await?;
     assert!(
         store
-            .get_verification_including_expired("subject")
+            .get_verification_including_expired(updated_identifier)
             .await?
             .is_none()
     );
 
-    let expired = input("expired", "expired", "expired-proof", 5, -1_000_000_000);
-    let _ = store.create_verification(expired).await?;
+    let _ = store
+        .create_verification(input(
+            "expired",
+            "expired",
+            "expired-proof",
+            -1_000_000_000,
+            -1_000_000_000,
+        ))
+        .await?;
     let retained = store
         .create_verification(input("retained", "other", "retained-proof", 1, 100))
         .await?;
     assert_eq!(store.delete_expired_verifications().await?, 1);
+    let expired_query = if double_where_mapping {
+        "expired-proof"
+    } else {
+        "expired"
+    };
     assert!(
         store
-            .get_verification_including_expired("expired")
+            .get_verification_including_expired(expired_query)
             .await?
             .is_none()
     );
+    let retained_query = if double_where_mapping {
+        "retained-proof"
+    } else {
+        "other"
+    };
     assert_eq!(
-        required(store.get_verification_by_identifier("other").await?)?,
+        required(store.get_verification_by_identifier(retained_query).await?)?,
         retained
     );
 
-    let _ = store
+    let old = store
         .create_verification(input("old", "shared", "old-proof", 1, 500))
         .await?;
     let latest = store
         .create_verification(input("new", "shared", "latest-proof", 2, 100))
         .await?;
     assert_eq!(
-        required(store.get_verification_including_expired("shared").await?)?,
+        store.get_verification_including_expired("shared").await?,
+        (!double_where_mapping).then_some(latest.clone())
+    );
+    let latest_query = if double_where_mapping {
+        "latest-proof"
+    } else {
+        "shared"
+    };
+    assert_eq!(
+        required(
+            store
+                .get_verification_including_expired(latest_query)
+                .await?
+        )?,
         latest
     );
     assert!(
         store
-            .consume_verification("shared", "wrong-proof")
+            .consume_verification(latest_query, "wrong-proof")
             .await?
             .is_none()
     );
@@ -183,7 +297,61 @@ async fn mapped_lifecycle<S: AuthSchema>(store: Arc<dyn AuthStore<S>>) -> AuthRe
             consumed.push(row);
         }
     }
-    assert_eq!(consumed, vec![latest]);
+    assert_eq!(
+        consumed,
+        if double_where_mapping {
+            vec![]
+        } else {
+            vec![latest.clone()]
+        }
+    );
+    if double_where_mapping {
+        assert_eq!(
+            required(
+                store
+                    .get_verification_including_expired("old-proof")
+                    .await?
+            )?,
+            old
+        );
+        assert_eq!(
+            required(
+                store
+                    .get_verification_including_expired("latest-proof")
+                    .await?
+            )?,
+            latest
+        );
+        for _ in 0..8 {
+            let store = store.clone();
+            let _ = tasks.spawn(async move {
+                store
+                    .consume_verification_by_identifier("latest-proof")
+                    .await
+            });
+        }
+        let mut consumed = Vec::new();
+        while let Some(result) = tasks.join_next().await {
+            if let Some(row) = result.map_err(|error| AuthError::internal(error.to_string()))?? {
+                consumed.push(row);
+            }
+        }
+        assert_eq!(consumed, vec![latest]);
+        assert!(
+            store
+                .get_verification_including_expired("latest-proof")
+                .await?
+                .is_none()
+        );
+        assert_eq!(
+            required(
+                store
+                    .get_verification_including_expired("old-proof")
+                    .await?
+            )?,
+            old
+        );
+    }
     assert!(
         store
             .get_verification_including_expired("shared")
@@ -191,7 +359,7 @@ async fn mapped_lifecycle<S: AuthSchema>(store: Arc<dyn AuthStore<S>>) -> AuthRe
             .is_none()
     );
     assert_eq!(
-        required(store.get_verification_by_identifier("other").await?)?,
+        required(store.get_verification_by_identifier(retained_query).await?)?,
         retained
     );
 
@@ -206,19 +374,52 @@ async fn mapped_lifecycle<S: AuthSchema>(store: Arc<dyn AuthStore<S>>) -> AuthRe
             .reserve_verification("reservation", claim.clone())
             .await?
     );
-    let reserved = required(store.get_verification("claim", "claimed-proof").await?)?;
+    let (claim_identifier, claim_value) = if double_where_mapping {
+        ("claimed-proof", "claim")
+    } else {
+        ("claim", "claimed-proof")
+    };
+    let reserved = required(
+        store
+            .get_verification(claim_identifier, claim_value)
+            .await?,
+    )?;
     assert_eq!(reserved.id, "reservation");
     store.delete_verification("reservation").await?;
     assert!(store.reserve_verification("reservation", claim).await?);
+    if double_where_mapping {
+        assert!(
+            store
+                .consume_verification_by_identifier("claim")
+                .await?
+                .is_none()
+        );
+        assert_eq!(
+            required(
+                store
+                    .get_verification_including_expired(claim_identifier)
+                    .await?
+            )?,
+            reserved
+        );
+    }
     assert_eq!(
-        required(store.consume_verification_by_identifier("claim").await?)?.id,
-        "reservation"
+        required(
+            store
+                .consume_verification_by_identifier(claim_identifier)
+                .await?
+        )?,
+        reserved
     );
     assert!(
         store
-            .get_verification_including_expired("claim")
+            .get_verification_including_expired(claim_identifier)
             .await?
             .is_none()
+    );
+    assert_eq!(
+        required(store.get_verification_by_identifier(retained_query).await?)?,
+        retained
     );
     Ok(())
 }
@@ -226,32 +427,54 @@ async fn mapped_lifecycle<S: AuthSchema>(store: Arc<dyn AuthStore<S>>) -> AuthRe
 #[tokio::test]
 async fn verification_mapping_drives_crud_sorting_cleanup_and_atomic_consumption() -> AuthResult<()>
 {
-    mapped_lifecycle(Arc::new(EphemeralStore::new(Arc::new(mapped())))).await?;
+    mapped_lifecycle(Arc::new(EphemeralStore::new(Arc::new(mapped()))), false).await?;
     let (store, database) = sqlite(mapped()).await?;
-    mapped_lifecycle(store).await?;
-    let row = database.query_one_raw(better_auth_seaorm::sea_orm::Statement::from_string(
-        better_auth_seaorm::sea_orm::DbBackend::Sqlite,
-        "SELECT identifier, value, created_at, expires_at FROM verifications WHERE id = 'retained'",
-    )).await.map_err(|error| AuthError::internal(error.to_string()))?.ok_or_else(|| AuthError::internal("Physical verification row is missing"))?;
+    mapped_lifecycle(store, true).await?;
+    let rows = database
+        .query_all_raw(better_auth_seaorm::sea_orm::Statement::from_string(
+            better_auth_seaorm::sea_orm::DbBackend::Sqlite,
+            "SELECT * FROM verifications ORDER BY id",
+        ))
+        .await
+        .map_err(|error| AuthError::internal(error.to_string()))?;
+    let mut physical = Vec::new();
+    for row in rows {
+        let mut fields = FieldMap::new();
+        for name in [
+            "id",
+            "identifier",
+            "value",
+            "created_at",
+            "expires_at",
+            "updated_at",
+        ] {
+            let value = row
+                .try_get::<String>("", name)
+                .map_err(|error| AuthError::internal(error.to_string()))?;
+            let _ = fields.insert(name.into(), value.into());
+        }
+        physical.push(fields);
+    }
     assert_eq!(
-        row.try_get::<String>("", "identifier")
-            .map_err(|error| AuthError::internal(error.to_string()))?,
-        "retained-proof"
-    );
-    assert_eq!(
-        row.try_get::<String>("", "value")
-            .map_err(|error| AuthError::internal(error.to_string()))?,
-        "other"
-    );
-    assert_eq!(
-        row.try_get::<String>("", "created_at")
-            .map_err(|error| AuthError::internal(error.to_string()))?,
-        "2030-01-01T00:01:40.000Z"
-    );
-    assert_eq!(
-        row.try_get::<String>("", "expires_at")
-            .map_err(|error| AuthError::internal(error.to_string()))?,
-        "2030-01-01T00:00:01.000Z"
+        physical,
+        [
+            FieldMap::from([
+                ("id".into(), "old".into()),
+                ("identifier".into(), "old-proof".into()),
+                ("value".into(), "shared".into()),
+                ("created_at".into(), "2030-01-01T00:08:20.000Z".into()),
+                ("expires_at".into(), "2030-01-01T00:00:01.000Z".into()),
+                ("updated_at".into(), "2030-01-01T00:00:00.000Z".into()),
+            ]),
+            FieldMap::from([
+                ("id".into(), "retained".into()),
+                ("identifier".into(), "retained-proof".into()),
+                ("value".into(), "other".into()),
+                ("created_at".into(), "2030-01-01T00:01:40.000Z".into()),
+                ("expires_at".into(), "2030-01-01T00:00:01.000Z".into()),
+                ("updated_at".into(), "2030-01-01T00:00:00.000Z".into()),
+            ]),
+        ]
     );
     Ok(())
 }
@@ -326,7 +549,7 @@ async fn verification_replacement_types_and_id_references_keep_query_and_output_
                 }),
                 transform: Some(FieldTransforms {
                     input: Some(UserFieldTransform::new(move |value| {
-                        captured.fetch_add(1, Ordering::SeqCst);
+                        let _ = captured.fetch_add(1, Ordering::SeqCst);
                         Ok(value)
                     })),
                     output: None,

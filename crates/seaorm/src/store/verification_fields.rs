@@ -10,7 +10,10 @@ use better_auth_core::{
     user_fields::{AdapterRecord, UserConfig},
     wire::VerificationView,
 };
-use sea_orm::{ConnectionTrait, DbBackend, sea_query::SimpleExpr};
+use sea_orm::{
+    ColumnTrait, Condition, ConnectionTrait, DbBackend,
+    sea_query::{ExprTrait, SimpleExpr},
+};
 
 impl<S, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> SeaOrmStore<S, O, P>
 where
@@ -42,30 +45,14 @@ where
         <S::Verification as SeaOrmVerificationModel>::Column,
         FieldValue,
     )> {
-        self.model_fields.begin_id_query(EntityRole::Verification)?;
-        let fields = self
-            .config()
-            .verification
-            .field_schema()
-            .adapter_fields(&[]);
-        let field = fields
-            .fields()
-            .get(name)
-            .ok_or_else(|| AuthError::config(format!("Unknown verification field: {name}")))?;
-        let value = if name == "id" || field.references_id() {
-            self.config()
-                .advanced
-                .database
-                .generate_id()
-                .adapter_id_query(original.clone())?
-        } else {
-            original.clone()
-        };
-        let value = better_auth_core::user_query::bind_filter(field, &value)?;
-        let value = super::value_filter::adapter_query_value(value, original, field, backend)?;
-        let column =
-            S::Verification::field_column(resolve_field_name(field.field_name.as_deref(), name))?;
-        Ok((column, value))
+        let (column, value) = self.query_field_binding(
+            EntityRole::Verification,
+            &self.config().verification.field_schema(),
+            name,
+            original,
+            backend,
+        )?;
+        Ok((S::Verification::field_column(&column)?, value))
     }
 
     pub(super) fn verification_selector(
@@ -76,6 +63,40 @@ where
     ) -> AuthResult<SimpleExpr> {
         let (column, value) = self.verification_query_field(name, value, backend)?;
         super::value_filter::equals(column, &value, backend)
+    }
+
+    pub(super) fn verification_live_selector<const N: usize>(
+        &self,
+        selectors: [(&str, &FieldValue); N],
+        backend: DbBackend,
+    ) -> AuthResult<Condition> {
+        let fields = self.config().verification.field_schema();
+        let expires = self.bind_query_field(
+            EntityRole::Verification,
+            &fields,
+            "expiresAt",
+            &chrono::Utc::now().into(),
+            backend,
+        )?;
+        let selectors = selectors
+            .into_iter()
+            .map(|(name, value)| {
+                self.bind_query_field(EntityRole::Verification, &fields, name, value, backend)
+            })
+            .collect::<AuthResult<Vec<_>>>()?;
+        let (column, now) = expires.resolve(EntityRole::Verification, &fields)?;
+        let column = S::Verification::field_column(&column)?;
+        let now = super::record_bindings::parameter(now, backend)?;
+        let mut condition = Condition::all();
+        for selector in selectors {
+            let (column, value) = selector.resolve(EntityRole::Verification, &fields)?;
+            condition = condition.add(super::value_filter::equals(
+                S::Verification::field_column(&column)?,
+                &value,
+                backend,
+            )?);
+        }
+        Ok(condition.add(column.into_expr().gt(column.save_as(now))))
     }
 
     async fn project_verification_records(

@@ -1,9 +1,9 @@
 use super::instrumentation::database_operation;
 use super::plugin_models::Entity;
 use async_trait::async_trait;
-use better_auth_core::{FieldMap, SchemaValue};
+use better_auth_core::{FieldMap, FieldValue, SchemaValue};
 use sea_orm::{
-    ColumnTrait, ConnectionTrait, EntityTrait, ExprTrait, QueryFilter, QueryResult, QueryTrait,
+    ConnectionTrait, EntityTrait, ExprTrait, QueryFilter, QueryResult, QueryTrait,
     TransactionTrait, sea_query::SimpleExpr,
 };
 
@@ -296,7 +296,8 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         id: &SchemaValue<String>,
         input: FieldMap,
     ) -> AuthResult<Option<QueryResult>> {
-        let filter = self.plugin_id_filter::<P::DeviceCode>(EntityRole::DeviceCode, id)?;
+        let selector =
+            self.bind_plugin_query_field(EntityRole::DeviceCode, "id", id.field_value())?;
         let active = self
             .prepare_plugin_fields::<P::DeviceCode>(
                 EntityRole::DeviceCode,
@@ -305,6 +306,8 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
                 false,
             )
             .await?;
+        let filter =
+            self.resolve_plugin_equals::<P::DeviceCode>(EntityRole::DeviceCode, selector)?;
         database_operation::<Entity<P::DeviceCode>, _>(self.config(), "update", async {
             super::updates::execute_update_returning_raw(
                 connection,
@@ -325,16 +328,17 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         current_status: &str,
         update: UpdateDeviceCode,
     ) -> AuthResult<bool> {
+        let selector =
+            self.bind_plugin_query_field(EntityRole::DeviceCode, "id", id.field_value())?;
+        let status =
+            self.bind_plugin_query_field(EntityRole::DeviceCode, "status", current_status.into())?;
         let active = self.prepare_device_code_update(update).await?;
-        let reselect = self.plugin_id_filter::<P::DeviceCode>(EntityRole::DeviceCode, id)?;
+        let reselect =
+            self.resolve_plugin_equals::<P::DeviceCode>(EntityRole::DeviceCode, selector)?;
         let query = active
             .update_returning(connection.get_database_backend())?
             .filter(reselect.clone())
-            .filter(self.plugin_equals::<P::DeviceCode>(
-                EntityRole::DeviceCode,
-                "status",
-                current_status.into(),
-            )?);
+            .filter(self.resolve_plugin_equals::<P::DeviceCode>(EntityRole::DeviceCode, status)?);
         let row = database_operation::<Entity<P::DeviceCode>, _>(self.config(), "update", async {
             super::updates::execute_update_returning_raw::<Entity<P::DeviceCode>, _>(
                 connection, query, reselect,
@@ -372,9 +376,13 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         id: &better_auth_core::SchemaValue<String>,
         status: &str,
     ) -> AuthResult<bool> {
-        let filter = self.plugin_id_filter::<P::DeviceCode>(EntityRole::DeviceCode, id)?;
+        let selector =
+            self.bind_plugin_query_field(EntityRole::DeviceCode, "id", id.field_value())?;
         let status =
-            self.plugin_equals::<P::DeviceCode>(EntityRole::DeviceCode, "status", status.into())?;
+            self.bind_plugin_query_field(EntityRole::DeviceCode, "status", status.into())?;
+        let filter =
+            self.resolve_plugin_equals::<P::DeviceCode>(EntityRole::DeviceCode, selector)?;
+        let status = self.resolve_plugin_equals::<P::DeviceCode>(EntityRole::DeviceCode, status)?;
         database_operation::<Entity<P::DeviceCode>, _>(self.config(), "delete", async {
             Entity::<P::DeviceCode>::delete_many()
                 .filter(filter)
@@ -396,6 +404,12 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         sea_orm::sea_query::SimpleExpr,
         sea_orm::sea_query::SimpleExpr,
     )> {
+        let selector =
+            self.bind_plugin_query_field(EntityRole::DeviceCode, "id", id.field_value())?;
+        let status =
+            self.bind_plugin_query_field(EntityRole::DeviceCode, "status", "pending".into())?;
+        let owner =
+            self.bind_plugin_query_field(EntityRole::DeviceCode, "userId", FieldValue::Null)?;
         let active = self
             .prepare_device_code_update(UpdateDeviceCode {
                 user_id: Some(user_id.clone().map(Some)),
@@ -403,16 +417,12 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
             })
             .await?;
         validate_increment_one_update(false, !active.is_empty())?;
-        let column = self.plugin_column::<P::DeviceCode>(EntityRole::DeviceCode, "userId")?;
-        let reselect = self.plugin_id_filter::<P::DeviceCode>(EntityRole::DeviceCode, id)?;
+        let reselect =
+            self.resolve_plugin_equals::<P::DeviceCode>(EntityRole::DeviceCode, selector)?;
         let guard = reselect
             .clone()
-            .and(self.plugin_equals::<P::DeviceCode>(
-                EntityRole::DeviceCode,
-                "status",
-                "pending".into(),
-            )?)
-            .and(column.is_null());
+            .and(self.resolve_plugin_equals::<P::DeviceCode>(EntityRole::DeviceCode, status)?)
+            .and(self.resolve_plugin_equals::<P::DeviceCode>(EntityRole::DeviceCode, owner)?);
         let query = active.update(self.connection().get_database_backend())?;
         Ok((query, guard, reselect))
     }
