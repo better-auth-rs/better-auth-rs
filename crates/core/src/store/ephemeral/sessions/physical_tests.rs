@@ -176,7 +176,7 @@ async fn reconfigured_columns_read_physical_values_without_logical_fallbacks() -
         )
         .await?
         .ok_or(AuthError::SessionNotFound)?;
-    assert_eq!(changed.ip_address, "changed");
+    assert_eq!(changed.ip_address.field_value(), "changed".into());
     let physical = stored(&writer)?;
     assert_eq!(physical["ipAddress"], Value::from("original-address"));
     assert_eq!(physical["userAgent"], Value::from("changed"));

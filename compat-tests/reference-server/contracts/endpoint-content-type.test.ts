@@ -359,7 +359,7 @@ test("update-session rejects invalid updates as native API errors and HTTP 400",
     baseURL: "http://status-contract.test", secret: "status-contract-secret-at-least-32-characters",
     logger: { disabled: true }, telemetry: { enabled: false },
     plugins: [organization({ teams: { enabled: true } }), admin()],
-    hooks: { before: createAuthMiddleware(async () => ({ context: { session } })) },
+    hooks: { before: createAuthMiddleware(async ctx => { ctx.context.session = session; }) },
   });
   for (const field of [undefined, "unknown", "activeOrganizationId", "activeTeamId", "impersonatedBy"]) {
     const body = field ? { [field]: "forbidden" } : {};

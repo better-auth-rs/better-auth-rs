@@ -116,7 +116,7 @@ async fn check<S: AuthSchema>(
         let _ = store
             .create_user(CreateUser {
                 id: Some(owner.into()),
-                name: Some(owner.into()),
+                name: Some(owner.into()).into(),
                 email: Some(format!("{owner}@native-delete.test")),
                 ..Default::default()
             })
