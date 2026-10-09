@@ -26,8 +26,7 @@ use better_auth_core::{
     observability::{AfterEndpointHook, EndpointHooks},
     session::NativeSessionData,
     store::{
-        AuthStore, EphemeralStore, SecondaryStorage, StatelessSchema,
-        schema::SchemaConfiguration,
+        AuthStore, EphemeralStore, SecondaryStorage, StatelessSchema, schema::SchemaConfiguration,
         secondary::SecondaryStore,
     },
     user_fields::{UserFieldConfig, UserFieldReference},
