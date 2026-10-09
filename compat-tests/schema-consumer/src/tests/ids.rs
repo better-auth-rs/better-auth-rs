@@ -369,6 +369,13 @@ async fn plugin_writes<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPlug
             .await
             .unwrap()
     );
+    // Legacy DeviceCode owner columns have no runtime reference declaration for string output.
+    let expected_device_owner =
+        if matches!(generation, IdGeneration::Serial | IdGeneration::Database) {
+            FieldValue::Number(owner.parse().unwrap())
+        } else {
+            FieldValue::String(owner.clone())
+        };
     assert_eq!(
         store
             .get_device_code_by_device_code("generated-device")
@@ -376,10 +383,8 @@ async fn plugin_writes<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPlug
             .unwrap()
             .unwrap()
             .user_id
-            .typed()
-            .unwrap()
-            .as_ref(),
-        Some(owner)
+            .field_value(),
+        expected_device_owner
     );
     assert!(
         store

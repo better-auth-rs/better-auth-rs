@@ -36,7 +36,7 @@ mod update;
 type Events = Arc<Mutex<Vec<FieldValue>>>;
 
 enum Storage {
-    Memory(EphemeralStore),
+    Memory(Box<EphemeralStore>),
     Sqlite(DatabaseConnection),
 }
 
@@ -350,7 +350,7 @@ async fn memory_account_id_inputs_preserve_schema_slots_native_values_and_reentr
     for case in cases() {
         let store = EphemeralStore::new(Arc::new(AuthConfig::default()));
         let base: Arc<dyn AuthStore<StatelessSchema>> = Arc::new(store.clone());
-        check(base, Storage::Memory(store), case).await?;
+        check(base, Storage::Memory(Box::new(store)), case).await?;
     }
     Ok(())
 }

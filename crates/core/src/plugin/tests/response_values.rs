@@ -456,7 +456,7 @@ fn materialization_preserves_binary_and_utf16_boundaries() -> AuthResult<()> {
         ("date".into(), "2030-01-01T00:00:00.000Z".into()),
     ])
     .into();
-    let response = AuthResponse::json(None, &object)?.into_http_response()?;
+    let response = AuthResponse::native(None, object.clone()).into_http_response()?;
     assert_eq!(response.body.field_value()?, object);
     Ok(())
 }

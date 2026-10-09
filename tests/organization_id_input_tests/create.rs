@@ -236,7 +236,7 @@ pub(super) async fn serial<S: AuthSchema>(
         [("aliasId".into(), "alias-source".into())].into(),
     )
     .await;
-    let raw_id = if storage.is_memory() {
+    let raw_id: FieldValue = if storage.is_memory() {
         2.into()
     } else if slot == Slot::BeforeAlias {
         "alias".into()
