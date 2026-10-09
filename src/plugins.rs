@@ -32,8 +32,9 @@ pub use better_auth_api::plugins::{
 pub use better_auth_api::plugins::{
     EmailOtpApi, EmailOtpCodec, EmailOtpConfig, EmailOtpGenerator, EmailOtpMessage, EmailOtpPlugin,
     EmailOtpStorage, EmailOtpType, MagicLinkConfig, MagicLinkMessage, MagicLinkPlugin,
-    MultiSessionConfig, MultiSessionPlugin, OneTimeTokenConfig, OneTimeTokenPlugin, SendEmailOtp,
-    SendMagicLink, TokenStorage, email_otp, magic_link, multi_session, one_time_token,
+    MultiSessionConfig, MultiSessionPlugin, OneTimeTokenCallbacks, OneTimeTokenConfig,
+    OneTimeTokenGeneratorFuture, OneTimeTokenPlugin, SendEmailOtp, SendMagicLink, TokenStorage,
+    email_otp, magic_link, multi_session, one_time_token,
 };
 pub use better_auth_api::plugins::{
     JwtAdapterFuture, JwtAlgorithm, JwtApi, JwtAudience, JwtCallOverrides, JwtCallbackFuture,

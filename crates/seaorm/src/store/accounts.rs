@@ -10,7 +10,7 @@ use better_auth_core::wire::AccountView;
 use better_auth_core::{FieldValue, UserView};
 
 use crate::error::{AuthError, AuthResult};
-use crate::hooks::DatabaseHookUpdate;
+use crate::hooks::{DatabaseHookUpdate, DatabaseUpdateResult};
 use crate::schema::{AuthSchema, SeaOrmAccountModel, SeaOrmUserModel};
 use crate::types::{CreateAccount, UpdateAccount};
 
@@ -21,6 +21,76 @@ where
     S: AuthSchema,
     S::Account: SeaOrmAccountModel,
 {
+    pub(super) async fn update_accounts_with_connection(
+        &self,
+        db: &impl ConnectionTrait,
+        transaction: Option<super::HookTransaction<'_, S>>,
+        selectors: &better_auth_core::FieldMap,
+        mut update: UpdateAccount,
+    ) -> AuthResult<Option<u64>> {
+        let hook_context = self.hook_context(transaction);
+        let original = update.clone();
+        for hook in self.hooks() {
+            match better_auth_core::observability::database::with_database_update_many_hook(
+                hook_context.config,
+                hook.hook_metadata(),
+                better_auth_core::observability::database::DatabaseHook::BeforeUpdateAccount,
+                hook.before_update_account(&original, &hook_context),
+            )
+            .await?
+            {
+                DatabaseHookUpdate::Continue => {}
+                DatabaseHookUpdate::Cancel => return Ok(None),
+                DatabaseHookUpdate::Patch(patch) => update.merge(patch),
+            }
+        }
+        better_auth_core::store::database_hooks::await_adapter_lookup().await;
+        self.model_fields.begin_id_query(EntityRole::Account)?;
+        let selectors = selectors
+            .iter()
+            .map(|(name, value)| self.account_selector(name, value))
+            .collect::<AuthResult<Vec<_>>>()?;
+        let backend = db.get_database_backend();
+        let fields = self.config().account.field_schema();
+        let input = fields
+            .record_storage_fields_with_binding(update.fields()?, false, |name, field, value| {
+                crate::reference_id::input_binding(
+                    name,
+                    field,
+                    value,
+                    self.config().advanced.database.generate_id(),
+                    S::Account::field_column,
+                    S::Account::native_json_field,
+                    backend,
+                )
+            })
+            .await?;
+        let write = super::record_write::RecordWrite::<<S::Account as SeaOrmAccountModel>::Entity>::from_fields(input, S::Account::field_column)?;
+        let mut query = write.update(backend)?;
+        for selector in selectors {
+            query = query.filter(selector);
+        }
+        let count = database_operation::<<S::Account as SeaOrmAccountModel>::Entity, _>(
+            self.config(),
+            "updateMany",
+            async {
+                query
+                    .exec(db)
+                    .await
+                    .map(|result| result.rows_affected.min(9_007_199_254_740_991))
+                    .map_err(map_db_err)
+            },
+        )
+        .await?;
+        self.after_creation(
+            transaction,
+            super::transaction_hooks::Effect::AccountUpdated(DatabaseUpdateResult::Many(count)),
+            hook_context.request,
+        )
+        .await?;
+        Ok(Some(count))
+    }
+
     async fn account_records(
         &self,
         provider: &str,
@@ -606,7 +676,7 @@ where
                 hook_context.config,
                 hook.hook_metadata(),
                 better_auth_core::observability::database::DatabaseHook::BeforeUpdateAccount,
-                hook.before_update_account(id, &original, &hook_context),
+                hook.before_update_account(&original, &hook_context),
             )
             .await?
             {
@@ -663,11 +733,23 @@ where
                 hook_context.config,
                 hook.hook_metadata(),
                 better_auth_core::observability::database::DatabaseHook::AfterUpdateAccount,
-                hook.after_update_account(account.as_ref(), &hook_context),
+                hook.after_update_account(
+                    DatabaseUpdateResult::One(account.as_ref()),
+                    &hook_context,
+                ),
             )
             .await?;
         }
         Ok(account)
+    }
+
+    async fn update_accounts(
+        &self,
+        selectors: &better_auth_core::FieldMap,
+        update: UpdateAccount,
+    ) -> AuthResult<Option<u64>> {
+        self.update_accounts_with_connection(self.connection(), None, selectors, update)
+            .await
     }
 
     async fn delete_account(&self, id: &str) -> AuthResult<()> {

@@ -144,18 +144,11 @@ pub(crate) async fn reset_password_core(
         password_utils::hash_password(ctx.password_policy.hasher.as_ref(), &body.new_password)
             .await?;
 
-    if let Some(account) = get_credential_account(ctx, user_id.as_str()).await? {
-        let _ = ctx
-            .database
-            .update_account(
-                account.id.typed()?,
-                UpdateAccount {
-                    password: (Some(password_hash))
-                        .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
-                        .unwrap_or_default(),
-                    ..Default::default()
-                },
-            )
+    if get_credential_account(ctx, user_id.as_str())
+        .await?
+        .is_some()
+    {
+        crate::plugins::helpers::update_password(ctx, &user_id.as_str().into(), password_hash)
             .await?;
     } else {
         let _ = ctx

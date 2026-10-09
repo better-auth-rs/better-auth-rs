@@ -26,7 +26,7 @@ impl<S: crate::schema::AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate:
                 self.connection().get_database_backend(),
             );
         }
-        let fields = self.organization_fields()?.schema_for(role)?;
+        let fields = self.organization_fields()?.query_schema_for(role)?;
         let field = fields.fields().get(name).ok_or_else(|| {
             AuthError::config(format!("Unknown organization field {role:?}.{name}"))
         })?;
@@ -201,17 +201,6 @@ pub(super) async fn find_value<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
         .map_err(super::map_db_err)
 }
 
-pub(super) async fn update<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
-    conn: &C,
-    id: &str,
-    core: FieldMap,
-    input: FieldMap,
-    config: &UserConfig,
-    policy: &better_auth_core::id::IdGeneration,
-) -> AuthResult<M::Record> {
-    update_value::<M, _>(conn, &id.into(), core, input, config, policy).await
-}
-
 pub(super) async fn update_value<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
     conn: &C,
     id: &FieldValue,
@@ -340,4 +329,130 @@ pub(super) fn join_value<M: SeaOrmOrganizationModel>(
         .get(M::column(name)?)
         .into_value()
         .ok_or_else(|| AuthError::internal("Stored organization join key is unavailable"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use better_auth_core::{
+        AuthConfig, CreateOrganization, CreateOrganizationRole, UpdateOrganizationRole,
+        organization_fields::OrganizationFields,
+        store::{OrganizationRoleStore, OrganizationStore},
+        user_fields::UserFieldConfig,
+    };
+
+    #[tokio::test]
+    async fn native_role_queries_and_replacement_mappings_use_complete_declarations() {
+        let db = sea_orm::Database::connect("sqlite::memory:").await.unwrap();
+        super::super::migrator::run_migrations(&db).await.unwrap();
+        let store = super::super::SeaOrmStore::<super::super::bundled_schema::BundledSchema>::new(
+            AuthConfig::new("organization-query-schema-secret-at-least-32-characters"),
+            db,
+        );
+        let mut ids = Vec::new();
+        for id in ["first-org", "second-org"] {
+            let _ = store
+                .create_organization(CreateOrganization {
+                    id: Some(id.into()),
+                    ..CreateOrganization::new(id, id)
+                })
+                .await
+                .unwrap();
+            ids.push(
+                store
+                    .create_organization_role(CreateOrganizationRole {
+                        organization_id: id.into(),
+                        role: "reader".into(),
+                        permission: FieldMap::new().into(),
+                        additional_fields: FieldMap::new(),
+                    })
+                    .await
+                    .unwrap()
+                    .id,
+            );
+        }
+        let selectors = [
+            ("organizationId".into(), "first-org".into()),
+            ("role".into(), "reader".into()),
+        ]
+        .into();
+        assert_eq!(
+            store
+                .find_organization_role_by_fields(&selectors)
+                .await
+                .unwrap()
+                .unwrap()
+                .id,
+            *ids.first().unwrap()
+        );
+        assert_eq!(
+            store
+                .update_organization_roles(
+                    &selectors,
+                    UpdateOrganizationRole {
+                        role: Some("writer".into()),
+                        ..Default::default()
+                    }
+                )
+                .await
+                .unwrap(),
+            1
+        );
+        assert!(
+            store
+                .find_organization_role_by_fields(&selectors)
+                .await
+                .unwrap()
+                .is_none()
+        );
+
+        store
+            .configure_organization_fields(OrganizationFields {
+                organization_role: UserConfig {
+                    additional_fields: Some(
+                        [(
+                            "role".into(),
+                            UserFieldConfig {
+                                field_name: Some("organizationId".into()),
+                                ..Default::default()
+                            },
+                        )]
+                        .into(),
+                    ),
+                },
+                ..Default::default()
+            })
+            .unwrap();
+        let mapped = [("role".into(), "second-org".into())].into();
+        let second = store
+            .find_organization_role_by_fields(&mapped)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(second.id, *ids.last().unwrap());
+        assert_eq!(second.role, "second-org");
+        store
+            .delete_organization_role_by_fields(&mapped)
+            .await
+            .unwrap();
+        store
+            .configure_organization_fields(OrganizationFields::default())
+            .unwrap();
+        assert!(
+            store
+                .get_organization_role(ids.last().unwrap().typed().unwrap())
+                .await
+                .unwrap()
+                .is_none()
+        );
+        assert_eq!(
+            store
+                .get_organization_role(ids.first().unwrap().typed().unwrap())
+                .await
+                .unwrap()
+                .unwrap()
+                .role,
+            "writer"
+        );
+    }
 }

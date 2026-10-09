@@ -17,6 +17,43 @@ impl ModelFields {
     pub fn plugin_native_fields(role: EntityRole) -> UserConfig {
         use UserFieldType::{Boolean, Date, Number, String};
         let declarations = match role {
+            EntityRole::Organization => vec![
+                ("name", String, true),
+                ("slug", String, true),
+                ("logo", String, false),
+                ("createdAt", Date, true),
+                ("metadata", String, false),
+            ],
+            EntityRole::Team => vec![
+                ("name", String, true),
+                ("memberCount", Number, true),
+                ("organizationId", String, true),
+                ("createdAt", Date, true),
+                ("updatedAt", Date, false),
+            ],
+            EntityRole::Member => vec![
+                ("organizationId", String, true),
+                ("userId", String, true),
+                ("role", String, true),
+                ("createdAt", Date, true),
+            ],
+            EntityRole::Invitation => vec![
+                ("organizationId", String, true),
+                ("email", String, true),
+                ("role", String, false),
+                ("teamId", String, false),
+                ("status", String, true),
+                ("expiresAt", Date, true),
+                ("createdAt", Date, true),
+                ("inviterId", String, true),
+            ],
+            EntityRole::OrganizationRole => vec![
+                ("organizationId", String, true),
+                ("role", String, true),
+                ("permission", String, true),
+                ("createdAt", Date, true),
+                ("updatedAt", Date, false),
+            ],
             EntityRole::RateLimit => vec![
                 ("key", String, true),
                 ("count", Number, true),
@@ -114,7 +151,81 @@ impl ModelFields {
                     .collect(),
             ),
         };
-        if role == EntityRole::RateLimit {
+        if matches!(
+            role,
+            EntityRole::Organization
+                | EntityRole::Team
+                | EntityRole::Member
+                | EntityRole::Invitation
+                | EntityRole::OrganizationRole
+        ) {
+            for (name, declaration) in fields.fields_mut() {
+                match (role, name.as_str()) {
+                    (
+                        EntityRole::Team
+                        | EntityRole::Member
+                        | EntityRole::Invitation
+                        | EntityRole::OrganizationRole,
+                        "organizationId",
+                    ) => {
+                        declaration.references = Some(UserFieldReference {
+                            model: "organization".into(),
+                            field: "id".into(),
+                            ..Default::default()
+                        });
+                        declaration.index = Some(true);
+                    }
+                    (EntityRole::Member, "userId") | (EntityRole::Invitation, "inviterId") => {
+                        declaration.references = Some(UserFieldReference {
+                            model: "user".into(),
+                            field: "id".into(),
+                            ..Default::default()
+                        });
+                        if role == EntityRole::Member {
+                            declaration.index = Some(true);
+                        }
+                    }
+                    (EntityRole::Team, "memberCount") => {
+                        declaration.default_value = Some(0.into());
+                        declaration.input = Some(false);
+                        declaration.returned = Some(false);
+                    }
+                    (EntityRole::Organization, "slug") => {
+                        declaration.unique = Some(true);
+                        declaration.index = Some(true);
+                    }
+                    (EntityRole::Invitation, "email") | (EntityRole::OrganizationRole, "role") => {
+                        declaration.index = Some(true);
+                    }
+                    (EntityRole::Member, "role") => {
+                        declaration.default_value = Some("member".into())
+                    }
+                    (EntityRole::Invitation, "status") => {
+                        declaration.default_value = Some("pending".into())
+                    }
+                    (EntityRole::Invitation | EntityRole::OrganizationRole, "createdAt") => {
+                        declaration.default_value_fn =
+                            Some(Arc::new(|| Ok(Value::Date(chrono::Utc::now().into()))));
+                    }
+                    (EntityRole::Team | EntityRole::OrganizationRole, "updatedAt") => {
+                        declaration.on_update =
+                            Some(Arc::new(|| Ok(Value::Date(chrono::Utc::now().into()))));
+                    }
+                    _ => {}
+                }
+                if matches!(
+                    (role, name.as_str()),
+                    (EntityRole::Organization, "name" | "slug")
+                        | (EntityRole::Member, "role")
+                        | (
+                            EntityRole::Invitation,
+                            "email" | "role" | "teamId" | "status"
+                        )
+                ) {
+                    declaration.sortable = Some(true);
+                }
+            }
+        } else if role == EntityRole::RateLimit {
             if let Some(field) = fields.fields_mut().get_mut("key") {
                 field.unique = Some(true);
             }

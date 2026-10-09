@@ -289,6 +289,8 @@ Dynamic roles belong to one organization. Creating or updating permissions requi
 
 Created and renamed role names are converted to lowercase. Role lookup uses the supplied name or ID. A role assigned to a member cannot be deleted. Renaming a role does not rewrite existing member role strings, matching upstream. For composite member roles, one assigned role must authorize the complete permission request.
 
+Role updates and deletes retain the original organization and role query values after lookup. An output transform that changes the returned role ID does not retarget the write. Updates apply one batch mutation without output callbacks and build the response from the previously projected record plus the original update. Custom stores must implement `find_organization_role_by_fields`, `update_organization_roles`, and `delete_organization_role_by_fields` to preserve this behavior.
+
 Generate the organization schema with `better-auth-rs generate --plugins organization`. The schema includes the team, team membership, and organization role tables, plus `active_team_id` on sessions and `team_id` on invitations. Apply application-owned migrations to existing databases before enabling these features.
 
 ## API Endpoints

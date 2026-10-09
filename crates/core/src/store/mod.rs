@@ -209,6 +209,17 @@ pub trait AuthTransaction<S: AuthSchema>:
             "The store must support nullable transactional account creation",
         ))
     }
+    /// Update the Account batch selected by ordered native field equality inside this transaction.
+    /// Return `None` when a before-update hook cancels the batch.
+    async fn update_accounts(
+        &self,
+        _selectors: &crate::FieldMap,
+        _update: UpdateAccount,
+    ) -> AuthResult<Option<u64>> {
+        Err(AuthError::config(
+            "The store must support transactional Account batch updates",
+        ))
+    }
     /// Create a session while preserving cancellation and the active transaction.
     async fn create_session_optional(
         &self,
@@ -1111,6 +1122,17 @@ pub trait AccountStore<S: AuthSchema>: Send + Sync {
             .as_str()
             .ok_or_else(|| AuthError::config("The store must support native Account ID updates"))?;
         self.update_account_optional(id, update).await
+    }
+    /// Update all Accounts that match the ordered native field equalities.
+    /// Run one hook lifecycle and return `None` when a before-update hook cancels the batch.
+    async fn update_accounts(
+        &self,
+        _selectors: &crate::FieldMap,
+        _update: UpdateAccount,
+    ) -> AuthResult<Option<u64>> {
+        Err(AuthError::config(
+            "The store must support native Account batch updates",
+        ))
     }
     async fn delete_account(&self, id: &str) -> AuthResult<()>;
     /// Delete the Account batch selected by its native owner through one hook lifecycle.
@@ -2126,6 +2148,15 @@ pub trait OrganizationRoleStore: Send + Sync {
         input: crate::CreateOrganizationRole,
     ) -> AuthResult<crate::OrganizationRole>;
     async fn get_organization_role(&self, id: &str) -> AuthResult<Option<crate::OrganizationRole>>;
+    /// Match every native selector before projecting the first stored role.
+    async fn find_organization_role_by_fields(
+        &self,
+        _selectors: &crate::FieldMap,
+    ) -> AuthResult<Option<crate::OrganizationRole>> {
+        Err(AuthError::config(
+            "The store must support native OrganizationRole selectors",
+        ))
+    }
     /// Find one role in its organization without applying the list-page limit.
     async fn find_organization_role(
         &self,
@@ -2184,7 +2215,34 @@ pub trait OrganizationRoleStore: Send + Sync {
         id: &str,
         update: crate::UpdateOrganizationRole,
     ) -> AuthResult<crate::OrganizationRole>;
+    async fn update_organization_role_value(
+        &self,
+        id: &crate::FieldValue,
+        update: crate::UpdateOrganizationRole,
+    ) -> AuthResult<crate::OrganizationRole> {
+        let id = crate::SchemaValue::<String>::from_field(id.clone());
+        self.update_organization_role(id.typed()?, update).await
+    }
+    /// Update every matching row without projecting the written records.
+    async fn update_organization_roles(
+        &self,
+        _selectors: &crate::FieldMap,
+        _update: crate::UpdateOrganizationRole,
+    ) -> AuthResult<u64> {
+        Err(AuthError::config(
+            "The store must support native OrganizationRole batch updates",
+        ))
+    }
     async fn delete_organization_role(&self, id: &str) -> AuthResult<()>;
+    /// Delete a role using the original native equality selectors.
+    async fn delete_organization_role_by_fields(
+        &self,
+        _selectors: &crate::FieldMap,
+    ) -> AuthResult<()> {
+        Err(AuthError::config(
+            "The store must support native OrganizationRole deletion",
+        ))
+    }
 }
 
 /// A persistent database rate-limit record. Timestamps use Unix milliseconds.

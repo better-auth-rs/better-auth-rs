@@ -5,7 +5,7 @@ use std::{
 
 use axum::{Json, Router, routing::post};
 use better_auth::plugins::two_factor::{TwoFactorCallbacks, TwoFactorPlugin};
-use better_auth_core::{AuthError, AuthPlugin, AuthSchema, AuthUser, FieldValue};
+use better_auth_core::{AuthError, AuthPlugin, AuthSchema, AuthUser};
 use serde_json::{Value, json};
 
 #[derive(Clone, Default)]
@@ -31,9 +31,9 @@ impl TwoFactorContextFixture {
                 let endpoint = endpoint.to_owned();
                 Ok(Some(Box::pin(async move {
                     let endpoint = endpoint.as_endpoint();
-                    let stored = endpoint.auth.database.get_user_by_id(user.id.typed().unwrap()).await?.expect("callback user exists");
+                    let stored = endpoint.auth.database.get_user_by_id_value(user.model_property("id")?).await?.expect("callback user exists");
                     fixture.events.lock().unwrap().push(json!({
-                        "user": { "id":user.id, "email":user.email, "secretNote":user.additional_fields.get("secretNote").map(FieldValue::json).transpose()?.flatten() },
+                        "user": { "id":user.model_property("id")?.json()?, "email":user.model_property("email")?.json()?, "secretNote":user.model_property("secretNote")?.json()? },
                         "databaseUser": { "id":stored.id(), "email":stored.email() },
                         "path": endpoint.path,
                         "requestPath": endpoint.request.map(|request| request.path()),
@@ -43,7 +43,7 @@ impl TwoFactorContextFixture {
                         "hasResponse": endpoint.response.is_some(),
                         "otpLength": otp.len(),
                     }));
-                    _ = outbox.lock().await.insert(user.email.typed()?.clone().expect("fixture email"), otp.to_owned());
+                    _ = outbox.lock().await.insert(user.model_property("email")?.as_str().expect("fixture email").to_owned(), otp.to_owned());
                     if endpoint.request.and_then(|request| request.header("x-callback-fail")).map(String::as_str) == Some("send") {
                         return Err(AuthError::Upstream { status: 503, code: "DELIVERY_UNAVAILABLE", message: "Fixture delivery unavailable" });
                     }

@@ -7,8 +7,8 @@ use better_auth_core::types::{
     CreateOrganizationRole, HttpMethod, OrganizationRole, UpdateOrganizationRole,
 };
 use better_auth_core::{
-    AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, AuthSchema, FieldMap,
-    FieldValue, FromFieldMap, SchemaField,
+    AuthContext, AuthError, AuthRecordFields, AuthRequest, AuthResponse, AuthResult, AuthSchema,
+    FieldMap, FieldValue, FromFieldMap, SchemaField,
 };
 use serde::Deserialize;
 use serde_json::json;
@@ -320,27 +320,37 @@ async fn select_role(
     organization_id: &FieldValue,
     ctx: &AuthContext<impl AuthSchema>,
 ) -> AuthResult<OrganizationRole> {
-    use better_auth_core::store::OrganizationRoleKey;
-    let missing = || AuthError::Upstream {
+    ctx.database
+        .find_organization_role_by_fields(&role_selectors(selector, organization_id)?)
+        .await?
+        .ok_or_else(role_not_found)
+}
+
+fn role_not_found() -> AuthError {
+    AuthError::Upstream {
         status: 400,
         code: "ROLE_NOT_FOUND",
         message: "Role not found",
-    };
-    let key = if let Some(name) = selector
+    }
+}
+
+fn role_selectors(selector: &RoleSelector, organization_id: &FieldValue) -> AuthResult<FieldMap> {
+    let (field, value) = if let Some(name) = selector
         .role_name
         .as_deref()
         .filter(|name| !name.is_empty())
     {
-        OrganizationRoleKey::Name(name)
-    } else if let Some(id) = selector.role_id.as_deref() {
-        OrganizationRoleKey::Id(id)
+        ("role", name)
+    } else if let Some(id) = selector.role_id.as_deref().filter(|id| !id.is_empty()) {
+        ("id", id)
     } else {
-        return Err(missing());
+        return Err(role_not_found());
     };
-    ctx.database
-        .find_organization_role_value(organization_id, key)
-        .await?
-        .ok_or_else(missing)
+    Ok([
+        ("organizationId".into(), organization_id.clone()),
+        (field.into(), value.into()),
+    ]
+    .into())
 }
 
 async fn validate_permissions(
@@ -497,10 +507,15 @@ pub async fn handle_role_request(
                 })
                 .await?;
             role.permission = permission.clone().into();
-            AuthResponse::json(
+            AuthResponse::native(
                 200,
-                &json!({"success":true,"roleData":role,"statements":better_auth_core::SchemaValue::Typed(permission)}),
-            )?
+                FieldMap::from_iter([
+                    ("success".into(), true.into()),
+                    ("roleData".into(), role.field_values()?.into()),
+                    ("statements".into(), permission),
+                ])
+                .into(),
+            )
         }
         (HttpMethod::Get, "/organization/list-roles" | "/organization/get-role") => {
             let selector: RoleSelector =
@@ -527,17 +542,17 @@ pub async fn handle_role_request(
                     .map(|mut role| {
                         role.permission =
                             super::super::native_json::permission(&role.permission)?.into();
-                        Ok(role)
+                        Ok(role.field_values()?.into())
                     })
-                    .collect::<AuthResult<Vec<_>>>()?;
-                AuthResponse::json(200, &roles)?
+                    .collect::<AuthResult<Vec<FieldValue>>>()?;
+                AuthResponse::native(200, roles.into())
             } else {
                 if req.query.is_none() {
                     return Err(AuthError::internal("Role lookup requires a query object"));
                 }
                 let mut role = select_role(&selector, &organization_id, ctx).await?;
                 role.permission = super::super::native_json::permission(&role.permission)?.into();
-                AuthResponse::json(200, &role)?
+                AuthResponse::native(200, role.field_values()?.into())
             }
         }
         (HttpMethod::Post, "/organization/delete-role") => {
@@ -580,7 +595,7 @@ pub async fn handle_role_request(
                 });
             }
             ctx.database
-                .delete_organization_role(role.id.typed()?)
+                .delete_organization_role_by_fields(&role_selectors(&selector, &organization_id)?)
                 .await?;
             AuthResponse::json(200, &json!({"success":true}))?
         }
@@ -642,8 +657,8 @@ pub async fn handle_role_request(
             }
             let _ = ctx
                 .database
-                .update_organization_role(
-                    role.id.typed()?,
+                .update_organization_roles(
+                    &role_selectors(&body.selector, &organization_id)?,
                     UpdateOrganizationRole {
                         additional_fields: fields.clone(),
                         role: name.clone(),
@@ -652,35 +667,28 @@ pub async fn handle_role_request(
                 )
                 .await?;
             // The endpoint merges raw input into the old snapshot; adapter transforms remain in storage.
-            let mut updated = role;
-            if let Some(value) = fields
-                .remove("id")
-                .and_then(|value| value.as_str().map(str::to_owned))
-            {
-                updated.id = value.into();
-            }
-            if let Some(value) = fields.remove("organizationId") {
-                updated.organization_id = better_auth_core::SchemaValue::Dynamic(value);
-            }
-            if let Some(value) = fields.remove("role") {
-                updated.role = better_auth_core::SchemaValue::Dynamic(value);
-            }
-            if let Some(value) = fields.remove("createdAt") {
-                updated.created_at = better_auth_core::SchemaValue::Dynamic(value);
-            }
-            if let Some(value) = fields.remove("updatedAt") {
-                updated.updated_at = better_auth_core::SchemaValue::Dynamic(value);
-            }
-            updated.additional_fields.extend(fields);
+            let mut updated = role.field_values()?;
+            updated.extend(fields);
             if let Some(name) = name {
-                updated.role = name.into();
+                let _ = updated.insert("role".into(), name.into());
             }
-            if let Some(permission) = permission {
-                updated.permission = permission.into();
-            } else if !updated.permission.is_truthy()? {
-                updated.permission = FieldValue::Null.into();
-            }
-            AuthResponse::json(200, &json!({"success":true,"roleData":updated}))?
+            let permission = permission.unwrap_or_else(|| {
+                let permission = role.permission.field_value();
+                if permission.is_truthy() {
+                    permission
+                } else {
+                    FieldValue::Null
+                }
+            });
+            let _ = updated.insert("permission".into(), permission);
+            AuthResponse::native(
+                200,
+                FieldMap::from_iter([
+                    ("success".into(), true.into()),
+                    ("roleData".into(), updated.into()),
+                ])
+                .into(),
+            )
         }
         _ => return Ok(None),
     };
@@ -695,6 +703,143 @@ mod tests {
     };
     use better_auth_core::{CreateMember, CreateOrganization, CreateUser};
     use chrono::Duration;
+
+    #[tokio::test]
+    async fn update_role_returns_native_raw_fields_without_projecting_the_write() {
+        use better_auth_core::user_fields::{
+            FieldTransforms, UserConfig, UserFieldConfig, UserFieldTransform, UserFieldType,
+        };
+        use std::sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        };
+        let outputs = Arc::new(AtomicUsize::new(0));
+        let counter = outputs.clone();
+        let config = OrganizationConfig {
+            dynamic_access_control: true,
+            ac: Some(HashMap::from([(
+                "organization".into(),
+                vec!["update".into()],
+            )])),
+            schema: better_auth_core::organization_fields::OrganizationFields {
+                organization_role: UserConfig {
+                    additional_fields: Some(
+                        [
+                            (
+                                "id".into(),
+                                UserFieldConfig {
+                                    field_type: UserFieldType::Number,
+                                    ..Default::default()
+                                },
+                            ),
+                            (
+                                "permission".into(),
+                                UserFieldConfig {
+                                    transform: Some(FieldTransforms {
+                                        input: None,
+                                        output: Some(UserFieldTransform::new(move |value| {
+                                            counter.fetch_add(1, Ordering::SeqCst);
+                                            Ok(value)
+                                        })),
+                                    }),
+                                    ..Default::default()
+                                },
+                            ),
+                        ]
+                        .into(),
+                    ),
+                },
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let ctx = super::super::native_tests::context(
+            crate::plugins::test_helpers::create_test_config(),
+            &config,
+        )
+        .await;
+        let user = ctx
+            .database
+            .create_user(CreateUser::new().with_email("role-native@example.test"))
+            .await
+            .unwrap();
+        let session = super::super::native_tests::session(&ctx, &user).await;
+        let org = ctx
+            .database
+            .create_organization(CreateOrganization::new("Roles", "native-roles"))
+            .await
+            .unwrap();
+        let _ = ctx
+            .database
+            .create_member(CreateMember {
+                additional_fields: FieldMap::new(),
+                organization_id: org.id.clone(),
+                user_id: user.id.clone(),
+                role: "owner".into(),
+            })
+            .await
+            .unwrap();
+        let role = ctx
+            .database
+            .create_organization_role(CreateOrganizationRole {
+                additional_fields: FieldMap::new(),
+                organization_id: org.id.clone(),
+                role: "editor".into(),
+                permission: FieldMap::new().into(),
+            })
+            .await
+            .unwrap();
+        outputs.store(0, Ordering::SeqCst);
+        let request = create_auth_json_request_no_query(
+            HttpMethod::Post,
+            "/organization/update-role",
+            Some(session.session.token.typed().unwrap()),
+            Some(json!({
+                "organizationId": org.id, "roleId": role.id, "data": { "id": 7 }
+            })),
+        );
+        let response = handle_role_request(&request, &ctx, &config)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(response.status, 200);
+        assert_eq!(outputs.load(Ordering::SeqCst), 1);
+        let FieldValue::Object(body) = response.body.field_value().unwrap() else {
+            panic!("Expected native role response");
+        };
+        let Some(FieldValue::Object(returned)) = body.get("roleData") else {
+            panic!("Expected native role data");
+        };
+        assert_eq!(returned.get("id"), Some(&FieldValue::Number(7.0)));
+        assert!(matches!(
+            returned.get("createdAt"),
+            Some(FieldValue::Date(_))
+        ));
+        assert!(matches!(
+            returned.get("permission"),
+            Some(FieldValue::Object(_))
+        ));
+        assert!(
+            ctx.database
+                .find_organization_role_by_fields(
+                    &[
+                        ("organizationId".into(), org.id.field_value()),
+                        ("id".into(), FieldValue::Number(7.0))
+                    ]
+                    .into()
+                )
+                .await
+                .unwrap()
+                .is_some()
+        );
+        assert!(
+            ctx.database
+                .get_organization_role(role.id.typed().unwrap())
+                .await
+                .unwrap()
+                .is_none()
+        );
+    }
 
     #[tokio::test]
     async fn persisted_roles_authorize_only_their_tenant_and_cannot_escalate() {

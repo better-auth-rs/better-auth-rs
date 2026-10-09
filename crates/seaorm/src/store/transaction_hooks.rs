@@ -3,12 +3,14 @@ use better_auth_core::{AuthResult, AuthSchema};
 use super::{AuthError, HookTransaction, SeaOrmStore, SeaOrmTransaction};
 use crate::schema::SeaOrmVerificationModel;
 use better_auth_core::store::TypedTransactionFuture;
+use better_auth_core::store::database_hooks::DatabaseUpdateResult;
 
 pub(super) enum Effect {
     UserCreated(Option<better_auth_core::wire::UserView>),
     UserUpdated(Option<better_auth_core::wire::UserView>),
     UserDeleted(better_auth_core::wire::UserView),
     AccountCreated(Option<Box<better_auth_core::wire::AccountView>>),
+    AccountUpdated(DatabaseUpdateResult<Box<better_auth_core::wire::AccountView>>),
     SessionCreated(Option<Box<better_auth_core::wire::SessionView>>),
     Created(Option<Box<better_auth_core::wire::VerificationView>>),
     Deleted(Box<better_auth_core::wire::VerificationView>),
@@ -123,6 +125,26 @@ where
                     Effect::UserDeleted(record) => better_auth_core::observability::database::with_database_hook(context.config, hook.hook_metadata(), better_auth_core::observability::database::DatabaseHook::AfterDeleteUser, hook.after_delete_user(record, &context)).await?,
                     Effect::AccountCreated(record) => {
                         better_auth_core::observability::database::with_database_hook(context.config, hook.hook_metadata(), better_auth_core::observability::database::DatabaseHook::AfterCreateAccount, hook.after_create_account(record.as_deref(), &context)).await?
+                    }
+                    Effect::AccountUpdated(result) => {
+                        let result = match result {
+                            DatabaseUpdateResult::One(record) => DatabaseUpdateResult::One(record.as_deref()),
+                            DatabaseUpdateResult::Many(count) => DatabaseUpdateResult::Many(*count),
+                        };
+                        let callback = hook.after_update_account(result, &context);
+                        if matches!(result, DatabaseUpdateResult::Many(_)) {
+                            better_auth_core::observability::database::with_database_update_many_hook(
+                                context.config, hook.hook_metadata(),
+                                better_auth_core::observability::database::DatabaseHook::AfterUpdateAccount,
+                                callback,
+                            ).await?;
+                        } else {
+                            better_auth_core::observability::database::with_database_hook(
+                                context.config, hook.hook_metadata(),
+                                better_auth_core::observability::database::DatabaseHook::AfterUpdateAccount,
+                                callback,
+                            ).await?;
+                        }
                     }
                     Effect::SessionCreated(record) => {
                         better_auth_core::observability::database::with_database_hook(context.config, hook.hook_metadata(), better_auth_core::observability::database::DatabaseHook::AfterCreateSession, hook.after_create_session(record.as_deref(), &context)).await?

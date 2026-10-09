@@ -257,7 +257,6 @@ impl SeaOrmHooks<TestSchema> for OAuthLinkIdTokenFixture {
     }
     async fn before_update_account(
         &self,
-        _: &str,
         _: &UpdateAccount,
         ctx: &SeaOrmHookContext<'_, TestSchema>,
     ) -> AuthResult<better_auth::seaorm::DatabaseHookUpdate<UpdateAccount>> {
@@ -270,13 +269,16 @@ impl SeaOrmHooks<TestSchema> for OAuthLinkIdTokenFixture {
     }
     async fn after_update_account(
         &self,
-        _: Option<&better_auth_core::wire::AccountView>,
+        _: better_auth_core::store::database_hooks::DatabaseUpdateResult<
+            &better_auth_core::wire::AccountView,
+        >,
         ctx: &SeaOrmHookContext<'_, TestSchema>,
     ) -> AuthResult<()> {
         self.hook("account.update.after", ctx)
     }
     async fn before_update_user(
         &self,
+        _: &str,
         _: &better_auth_core::FieldValue,
         update: &mut better_auth_core::FieldMap,
         ctx: &SeaOrmHookContext<'_, TestSchema>,

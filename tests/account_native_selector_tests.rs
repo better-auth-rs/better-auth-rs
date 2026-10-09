@@ -65,7 +65,11 @@ async fn check<S: AuthSchema>(
     secondary: bool,
 ) -> AuthResult<()> {
     let owner = inner
-        .create_user(CreateUser::new().with_email("native-account@example.test"))
+        .create_user(
+            CreateUser::new()
+                .with_email("native-account@example.test")
+                .with_name("Native account"),
+        )
         .await?;
     for (id, subject) in [("1", "deleted"), ("2", "cancelled"), ("3", "failed")] {
         let created = inner

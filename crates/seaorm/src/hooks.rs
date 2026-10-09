@@ -8,7 +8,7 @@ use better_auth_core::hooks::RequestHookContext;
 pub use better_auth_core::hooks::current_request_hook_context;
 use better_auth_core::schema::AuthSchema;
 pub use better_auth_core::store::database_hooks::{
-    DatabaseHookUpdate, SessionUpdate, VerificationUpdate,
+    DatabaseHookUpdate, DatabaseUpdateResult, SessionUpdate, VerificationUpdate,
 };
 use better_auth_core::types::{CreateAccount, CreateVerification, UpdateAccount};
 
@@ -174,17 +174,16 @@ pub trait SeaOrmHooks<S: AuthSchema>: Send + Sync {
 
     async fn before_update_account(
         &self,
-        id: &better_auth_core::FieldValue,
         update: &UpdateAccount,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<DatabaseHookUpdate<UpdateAccount>> {
-        let _ = (id, update, ctx);
+        let _ = (update, ctx);
         Ok(DatabaseHookUpdate::Continue)
     }
 
     async fn after_update_account(
         &self,
-        account: Option<&better_auth_core::wire::AccountView>,
+        account: DatabaseUpdateResult<&better_auth_core::wire::AccountView>,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()> {
         let _ = (account, ctx);

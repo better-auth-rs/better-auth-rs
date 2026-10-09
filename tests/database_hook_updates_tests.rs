@@ -62,7 +62,6 @@ impl SeaOrmHooks<BundledSchema> for PatchHook {
     }
     async fn before_update_account(
         &self,
-        _: &better_auth_core::FieldValue,
         update: &UpdateAccount,
         _: &SeaOrmHookContext<'_, BundledSchema>,
     ) -> AuthResult<DatabaseHookUpdate<UpdateAccount>> {
@@ -149,9 +148,17 @@ impl SeaOrmHooks<BundledSchema> for PatchHook {
     }
     async fn after_update_account(
         &self,
-        value: Option<&better_auth_core::wire::AccountView>,
+        value: better_auth_core::store::database_hooks::DatabaseUpdateResult<
+            &better_auth_core::wire::AccountView,
+        >,
         _: &SeaOrmHookContext<'_, BundledSchema>,
     ) -> AuthResult<()> {
+        let better_auth_core::store::database_hooks::DatabaseUpdateResult::One(value) = value
+        else {
+            return Err(AuthError::internal(
+                "This single Account update must return a projected record or null",
+            ));
+        };
         if value.is_none() {
             self.missing.lock().unwrap().push("account");
         }

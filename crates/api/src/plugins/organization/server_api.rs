@@ -1,6 +1,6 @@
 use super::{OrganizationPlugin, hooks::*, types::RoleInput};
 use crate::plugins::endpoint_context::EndpointContext;
-use better_auth_core::entity::AuthUser;
+use better_auth_core::entity::{AuthRecordFields, AuthUser};
 use better_auth_core::{
     AuthContext, AuthError, AuthRequest, AuthResult, AuthSchema, FieldMap, FieldValue,
     FromFieldMap, Member,
@@ -187,7 +187,7 @@ impl OrganizationPlugin {
         let org_id = organization.id.field_value();
         let organization_view =
             crate::plugins::organization::fields::organization(&organization, ctx);
-        let user_value = FieldValue::from(FieldMap::from(&user));
+        let user_value = FieldValue::from(user.field_values()?);
         let event = OrganizationUser {
             user: &user_value,
             organization: &organization_view,

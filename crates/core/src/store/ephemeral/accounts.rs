@@ -1,6 +1,6 @@
 use super::hooks::CommittedWrite;
 use super::*;
-use crate::store::database_hooks::{DatabaseHookControl, DatabaseHookUpdate};
+use crate::store::database_hooks::{DatabaseHookControl, DatabaseHookUpdate, DatabaseUpdateResult};
 use crate::store::schema::EntityRole;
 
 impl EphemeralStore {
@@ -10,6 +10,9 @@ impl EphemeralStore {
         name: &str,
         value: Value,
     ) -> AuthResult<(String, Value)> {
+        if name == "id" {
+            return Ok(("id".into(), self.memory_primary_id_query(&value)?));
+        }
         let value = self.memory_field_query(fields, name, value)?;
         let value = match fields.fields().get(name) {
             Some(field) => crate::user_query::bind_filter(field, &value)?,
@@ -304,9 +307,67 @@ impl AccountStore<StatelessSchema> for EphemeralStore {
         )
         .await
         .transpose()?;
-        self.after(CommittedWrite::AccountUpdated(account.clone()))
-            .await?;
+        self.after(CommittedWrite::AccountUpdated(DatabaseUpdateResult::One(
+            account.clone(),
+        )))
+        .await?;
         Ok(account)
+    }
+
+    async fn update_accounts(
+        &self,
+        selectors: &FieldMap,
+        mut update: UpdateAccount,
+    ) -> AuthResult<Option<u64>> {
+        let original = update.clone();
+        let transaction = EphemeralTransaction {
+            store: self.clone(),
+        };
+        let context = self.hook_context(&transaction);
+        for hook in &self.hooks {
+            match crate::observability::database::with_database_update_many_hook(
+                context.config,
+                hook.hook_metadata(),
+                crate::observability::database::DatabaseHook::BeforeUpdateAccount,
+                hook.before_update_account(&original, &context),
+            )
+            .await?
+            {
+                DatabaseHookUpdate::Continue => {}
+                DatabaseHookUpdate::Cancel => return Ok(None),
+                DatabaseHookUpdate::Patch(patch) => update.merge(patch),
+            }
+        }
+        crate::store::database_hooks::await_adapter_lookup().await;
+        self.model_fields.begin_id_query(EntityRole::Account)?;
+        let fields = self.config.account.field_schema();
+        let selectors = selectors
+            .iter()
+            .map(|(name, value)| self.account_field_selector(&fields, name, value.clone()))
+            .collect::<AuthResult<Vec<_>>>()?;
+        let patch = fields
+            .record_storage_fields_with_binding(update.fields()?, false, |_, field, value| {
+                self.memory_plugin_field_input(field, value)
+            })
+            .await?;
+        let count = self
+            .raw("account", "updateMany", |state| {
+                let mut count = 0;
+                state.accounts.update_each(|row| {
+                    if Self::account_matches_selectors(row, &selectors) {
+                        row.extend(patch.clone());
+                        count += 1;
+                    }
+                    Ok(())
+                })?;
+                Ok(count)
+            })
+            .await?;
+        self.after(CommittedWrite::AccountUpdated(DatabaseUpdateResult::Many(
+            count,
+        )))
+        .await?;
+        Ok(Some(count))
     }
 
     async fn delete_account(&self, id: &str) -> AuthResult<()> {

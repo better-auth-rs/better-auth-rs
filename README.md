@@ -27,6 +27,8 @@ Account and Verification Memory fields store JSON as text and retain native arra
 
 Verification-email hooks and delivery callbacks, user-management callbacks, and Two Factor OTP senders receive native `FieldValue` users. `VerificationEmail::user_view()` provides object field access when an application requires it. See [email verification](docs/content/docs/authentication/email-verification.mdx) for null update results and callback ordering.
 
+Account after-update hooks use `DatabaseUpdateResult` to distinguish a projected single-row result from a batch count. Password-reset flows select all credential Accounts by the original user, provider, and account fields. One Time Token generators can borrow the active endpoint and transaction through `OneTimeTokenCallbacks`; see [database hooks](docs/content/docs/concepts/hooks.mdx) and [One Time Token](docs/content/docs/plugins/one-time-token.mdx).
+
 Session runtime tokens, dates, and optional native strings also use `SchemaValue`; see [Session fields](docs/content/docs/authentication/sessions.mdx#native-runtime-fields) for getters, setters, and custom model migration. User and Session views retain field order through projection and serialization. Creation-after hooks receive nullable results; see [database hooks](docs/content/docs/concepts/hooks.mdx) for committed null readbacks and cancellation.
 
 Public User projection preserves already transformed fields, including missing and own-undefined properties, without repeating adapter callbacks. Declared `returned: false` fields are removed after the output clone. Session expiry, revocation, and refresh consume the projected Session fields, so hiding a native field also changes the value visible to those operations.

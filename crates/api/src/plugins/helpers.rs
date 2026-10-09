@@ -202,6 +202,30 @@ pub async fn get_credential_account<S: better_auth_core::AuthSchema>(
         .await
 }
 
+/// Reset every credential Account selected by the upstream internal-adapter identity.
+pub(crate) async fn update_password(
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+    user_id: &better_auth_core::FieldValue,
+    password: String,
+) -> AuthResult<()> {
+    let selectors = FieldMap::from([
+        ("userId".into(), user_id.clone()),
+        ("providerId".into(), "credential".into()),
+        ("accountId".into(), user_id.clone()),
+    ]);
+    let _ = ctx
+        .database
+        .update_accounts(
+            &selectors,
+            better_auth_core::UpdateAccount {
+                password: Some(password).into(),
+                ..Default::default()
+            },
+        )
+        .await?;
+    Ok(())
+}
+
 /// Resolve the user's stored password hash from the credential account.
 pub async fn get_credential_password_hash(
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,

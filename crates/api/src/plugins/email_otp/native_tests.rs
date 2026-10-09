@@ -302,7 +302,7 @@ async fn numeric_user_id_updates_and_refreshes_the_selected_native_session_cache
     assert_eq!(
         response.body.json()?,
         Some(
-            json!({"status":true, "token":null, "user":FieldMap::from(fixture.ctx.user_view(&stored).await?)})
+            json!({"status":true, "token":null, "user":FieldMap::from(fixture.ctx.user_view(&stored).await?).json()?})
         )
     );
     assert_eq!(
@@ -340,7 +340,7 @@ async fn numeric_user_id_updates_and_refreshes_the_selected_native_session_cache
     let _ = expected_cache_user.insert("emailVerified".into(), true.into());
     assert_eq!(
         payload.get("session").unwrap().get("user"),
-        Some(&serde_json::to_value(expected_cache_user)?)
+        Some(&serde_json::Value::Object(expected_cache_user.json()?))
     );
     assert!(request.new_session()?.is_none());
     Ok(())

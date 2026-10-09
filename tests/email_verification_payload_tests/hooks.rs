@@ -101,7 +101,7 @@ impl<S: AuthSchema> DatabaseHooks<S> for DatabaseObserver {
 
     async fn after_update_account(
         &self,
-        _: Option<&AccountView>,
+        _: better_auth_core::store::database_hooks::DatabaseUpdateResult<&AccountView>,
         _: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
         self.record("account", "update", "after")

@@ -202,7 +202,6 @@ impl SeaOrmHooks<Schema> for Hooks {
     }
     async fn before_update_account(
         &self,
-        _: &str,
         data: &UpdateAccount,
         _: &SeaOrmHookContext<'_, Schema>,
     ) -> AuthResult<better_auth_seaorm::DatabaseHookUpdate<UpdateAccount>> {
@@ -211,7 +210,7 @@ impl SeaOrmHooks<Schema> for Hooks {
     }
     async fn after_update_account(
         &self,
-        data: Option<&AccountView>,
+        data: better_auth_core::store::database_hooks::DatabaseUpdateResult<&AccountView>,
         ctx: &SeaOrmHookContext<'_, Schema>,
     ) -> AuthResult<()> {
         self.after("account", "update", serde_json::to_value(data)?, ctx)

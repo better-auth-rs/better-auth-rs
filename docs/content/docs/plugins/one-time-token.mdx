@@ -9,6 +9,10 @@ Tokens expire after three minutes. `.expires_in(chrono::Duration::minutes(1))` c
 
 The lifetime starts after token generation and before the storage hasher runs. A slow asynchronous hasher does not extend the deadline. A token that expires during hashing cannot transfer the session.
 
+Use `OneTimeTokenCallbacks::<AppAuthSchema>::generate` and attach the result with `.callbacks(...)` when generation needs the active endpoint. The callback returns `OneTimeTokenGeneratorFuture` and may borrow `NativeSessionData` and `EndpointContext` until its future completes. Read request, body, current Session, response, and transaction from the endpoint. This callback takes precedence over `.generate_token`; errors propagate without calling the legacy generator. The callback and token persistence share the endpoint transaction. Trusted callers with an existing context can use `generate_in_endpoint`.
+
+For the new-session hook, `data` is the newly created Session. `endpoint.session` retains the current Session, and `endpoint.new_session()` exposes the new Session. The hook snapshots exposed headers before generation and writes the token headers after persistence. Callback header effects remain visible if generation or persistence fails.
+
 `.disable_client_request(true)` disables HTTP generation. Trusted server code may call `generate` with a session and user, or `generate_native` with retained native data. `.disable_set_session_cookie(true)` returns the verified session without setting its cookie. `.set_ott_header_on_new_session(true)` generates a `set-ott` response header from the endpoint's retained `newSession`, and adds that header to `Access-Control-Expose-Headers`. The hook does not reread the session from storage.
 
 Verification does not create a new session. Revoking the original session invalidates its outstanding exchange tokens. Failed verification also consumes the token, so retrying the same token cannot authenticate.

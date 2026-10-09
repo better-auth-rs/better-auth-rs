@@ -184,7 +184,7 @@ run_stage() {
         cargo test --locked --no-fail-fast -p better-auth-core -p better-auth-api -p better-auth-seaorm --lib -- \
           session verification database_hooks lifecycle transaction create_readback user_fields user_query wire:: \
           user_column_defaults user_runtime_input_tests user_serial_tests api_key_start::tests protected_function_tests field_value:: record_bindings:: types_plugin::device::tests \
-          member_delete:: serial_primary_tests::team_members:: native_team_mutations native_invitation_acceptance cookie_utils::native_cookie_tests:: \
+          member_delete:: serial_primary_tests::team_members:: native_team_mutations native_invitation_acceptance organization_role organization_fields:: organization_models:: cookie_utils::native_cookie_tests:: \
           user_view_preserves_adapter_order_through_cache_and_visibility \
           plugins::jwt:: plugins::api_key:: plugins::passkey:: plugins::organization:: plugins::test_utils:: \
           plugins::custom_session:: plugins::one_time_token:: plugins::multi_session:: plugins::anonymous:: \
@@ -202,7 +202,7 @@ run_stage() {
           --test user_runtime_input_tests --test user_account_raw_column_tests \
           --test user_input_policy_tests --test protected_function_tests \
           --test user_verification_fields_tests --test user_record_values_tests \
-          --test account_owner_batch_tests --test account_identity_tests --test account_native_selector_tests \
+          --test account_owner_batch_tests --test account_identity_tests --test account_native_selector_tests --test account_batch_update_tests \
           --test account_user_selected_relations_reference_tests \
           --test native_core_join_tests --test native_memory_join_tests --test session_user_join_reference_tests \
           --test memory_user_live_reads_tests --test api_key_number_name_tests \

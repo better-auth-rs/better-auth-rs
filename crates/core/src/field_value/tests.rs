@@ -6,7 +6,12 @@ fn model_properties_preserve_native_identity_and_nullish_access_errors() -> Auth
     let record = FieldValue::from(FieldMap::from([("id".into(), id.clone())]));
     assert!(record.model_property("id")?.strict_equals(&id));
     assert!(record.model_property("missing")?.is_undefined());
-    for receiver in [false.into(), 0.0.into(), "".into(), vec![id].into()] {
+    for receiver in [
+        FieldValue::from(false),
+        0.0.into(),
+        "".into(),
+        vec![id].into(),
+    ] {
         assert!(receiver.model_property("id")?.is_undefined());
     }
     for (receiver, kind) in [

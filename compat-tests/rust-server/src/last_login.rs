@@ -154,7 +154,7 @@ impl<S: AuthSchema> AuthPlugin<S> for Events {
 }
 
 macro_rules! hooks {
-    ($hook:ident, $context:ident $(, $id:ident)?) => {
+    ($hook:ident, $context:ident $(, $field:ident, $id:ident)?) => {
         #[better_auth::database_hooks]
         impl<S: AuthSchema> $hook<S> for Events {
             async fn before_create_user(&self, user: &mut FieldMap, context: &$context<'_,S>) -> AuthResult<DatabaseHookUpdate<FieldMap>> {
@@ -162,7 +162,7 @@ macro_rules! hooks {
                 Ok(DatabaseHookUpdate::Continue)
             }
             async fn after_create_user(&self, _: Option<&better_auth_core::wire::UserView>, context: &$context<'_,S>) -> AuthResult<()> { self.record("user.after", context.request.as_ref(), None); Ok(()) }
-            async fn before_update_user(&self, $($id: &FieldValue,)? user: &mut FieldMap, context: &$context<'_,S>) -> AuthResult<DatabaseHookUpdate<FieldMap>> {
+            async fn before_update_user(&self, $($field: &str, $id: &FieldValue,)? user: &mut FieldMap, context: &$context<'_,S>) -> AuthResult<DatabaseHookUpdate<FieldMap>> {
                 self.record("user.update", context.request.as_ref(), Some(user.get("lastLoginMethod").map(FieldValue::json).transpose()?.flatten().unwrap_or(Value::Null)));
                 if self.fails("update") { return Err(rejected()); }
                 Ok(DatabaseHookUpdate::Continue)
@@ -178,7 +178,7 @@ macro_rules! hooks {
     };
 }
 hooks!(DatabaseHooks, DatabaseHookContext);
-hooks!(SeaOrmHooks, SeaOrmHookContext, _id);
+hooks!(SeaOrmHooks, SeaOrmHookContext, _field, _id);
 
 struct FixtureHasher;
 #[async_trait::async_trait]

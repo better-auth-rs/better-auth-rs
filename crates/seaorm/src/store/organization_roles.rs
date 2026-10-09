@@ -1,4 +1,3 @@
-use super::id_filter::IdColumn;
 use super::{
     SeaOrmStore, map_db_err,
     organization_models::{self as models, Entity, values},
@@ -10,9 +9,67 @@ use better_auth_core::{
     AuthResult, CreateOrganizationRole, OrganizationRole, UpdateOrganizationRole,
     store::OrganizationRoleStore,
 };
-use better_auth_core::{FieldValue, SchemaField};
+use better_auth_core::{FieldMap, FieldValue, SchemaField, store::schema::EntityRole};
 use chrono::Utc;
-use sea_orm::{ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QuerySelect};
+use sea_orm::{Condition, EntityTrait, FromQueryResult, PaginatorTrait, QueryFilter, QuerySelect};
+
+impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema>
+    SeaOrmStore<S, O, P>
+{
+    fn organization_role_filter(&self, selectors: &FieldMap) -> AuthResult<Condition> {
+        selectors
+            .iter()
+            .try_fold(Condition::all(), |condition, (name, value)| {
+                Ok(
+                    condition.add(self.organization_field_equals::<O::OrganizationRole>(
+                        EntityRole::OrganizationRole,
+                        name,
+                        value,
+                    )?),
+                )
+            })
+    }
+
+    async fn organization_role_write(
+        &self,
+        mut input: UpdateOrganizationRole,
+    ) -> AuthResult<super::record_write::RecordWrite<Entity<O::OrganizationRole>>> {
+        let config = self.organization_fields()?.organization_role;
+        let mut core = FieldMap::new();
+        if !config.fields().contains_key("updatedAt") {
+            let _ = core.insert("updatedAt".into(), FieldValue::Date(Utc::now().into()));
+        }
+        if let Some(role) = input.role {
+            let _ = core.insert("role".into(), role.into());
+        }
+        if let Some(permission) = input.permission {
+            let _ = core.insert(
+                "permission".into(),
+                permission
+                    .stringify()?
+                    .map(FieldValue::String)
+                    .unwrap_or_default(),
+            );
+        }
+        for field in better_auth_core::store::schema::core_fields(EntityRole::OrganizationRole) {
+            let column = O::OrganizationRole::column(field.name)?;
+            if let Some(name) = O::OrganizationRole::core_field_name(&column)
+                && let Some(value) = input.additional_fields.remove(name)
+            {
+                let _ = core.entry(name.to_owned()).or_insert(value);
+            }
+        }
+        models::active::<O::OrganizationRole>(
+            core,
+            input.additional_fields,
+            &config,
+            false,
+            self.connection().get_database_backend(),
+            self.config().advanced.database.generate_id(),
+        )
+        .await
+    }
+}
 
 #[async_trait]
 impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> OrganizationRoleStore
@@ -60,13 +117,19 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
         .await
     }
     async fn get_organization_role(&self, id: &str) -> AuthResult<Option<OrganizationRole>> {
+        self.find_organization_role_by_fields(&[("id".into(), id.into())].into())
+            .await
+    }
+    async fn find_organization_role_by_fields(
+        &self,
+        selectors: &FieldMap,
+    ) -> AuthResult<Option<OrganizationRole>> {
         let config = self.organization_fields()?.organization_role;
-        let row = models::find::<O::OrganizationRole, _>(
-            self.connection(),
-            id,
-            self.config().advanced.database.generate_id(),
-        )
-        .await?;
+        let row = Entity::<O::OrganizationRole>::find()
+            .filter(self.organization_role_filter(selectors)?)
+            .one(self.connection())
+            .await
+            .map_err(map_db_err)?;
         match row {
             Some(row) => row
                 .record(&config, self.connection().get_database_backend())
@@ -87,11 +150,10 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
         organization_id: &better_auth_core::FieldValue,
     ) -> AuthResult<Vec<OrganizationRole>> {
         let rows = Entity::<O::OrganizationRole>::find()
-            .filter(super::value_filter::equals_id(
-                O::OrganizationRole::column("organization_id")?,
+            .filter(self.organization_field_equals::<O::OrganizationRole>(
+                EntityRole::OrganizationRole,
+                "organizationId",
                 organization_id,
-                self.config().advanced.database.generate_id(),
-                self.connection().get_database_backend(),
             )?)
             .limit(super::pagination::default_limit(
                 self.config(),
@@ -121,14 +183,25 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
         organization_id: &better_auth_core::FieldValue,
         names: &[String],
     ) -> AuthResult<Vec<OrganizationRole>> {
+        let names = names.iter().try_fold(
+            Condition::any().add(sea_orm::sea_query::Expr::val(false).eq(true)),
+            |condition, name| {
+                Ok::<_, better_auth_core::AuthError>(condition.add(
+                    self.organization_field_equals::<O::OrganizationRole>(
+                        EntityRole::OrganizationRole,
+                        "role",
+                        &name.as_str().into(),
+                    )?,
+                ))
+            },
+        )?;
         let rows = Entity::<O::OrganizationRole>::find()
-            .filter(super::value_filter::equals_id(
-                O::OrganizationRole::column("organization_id")?,
+            .filter(self.organization_field_equals::<O::OrganizationRole>(
+                EntityRole::OrganizationRole,
+                "organizationId",
                 organization_id,
-                self.config().advanced.database.generate_id(),
-                self.connection().get_database_backend(),
             )?)
-            .filter(O::OrganizationRole::column("role")?.is_in(names.iter().cloned()))
+            .filter(names)
             .limit(super::pagination::default_limit(
                 self.config(),
                 self.connection().get_database_backend(),
@@ -158,32 +231,18 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
         key: better_auth_core::store::OrganizationRoleKey<'_>,
     ) -> AuthResult<Option<OrganizationRole>> {
         use better_auth_core::store::OrganizationRoleKey;
-        let condition = match key {
-            OrganizationRoleKey::Id(id) => O::OrganizationRole::column("id")?
-                .eq_id(id, self.config().advanced.database.generate_id())?,
-            OrganizationRoleKey::Name(name) => O::OrganizationRole::column("role")?.eq(name),
+        let (name, value) = match key {
+            OrganizationRoleKey::Id(id) => ("id", id),
+            OrganizationRoleKey::Name(name) => ("role", name),
         };
-        let row = Entity::<O::OrganizationRole>::find()
-            .filter(super::value_filter::equals_id(
-                O::OrganizationRole::column("organization_id")?,
-                organization_id,
-                self.config().advanced.database.generate_id(),
-                self.connection().get_database_backend(),
-            )?)
-            .filter(condition)
-            .one(self.connection())
-            .await
-            .map_err(map_db_err)?;
-        match row {
-            Some(row) => row
-                .record(
-                    &self.organization_fields()?.organization_role,
-                    self.connection().get_database_backend(),
-                )
-                .await
-                .map(Some),
-            None => Ok(None),
-        }
+        self.find_organization_role_by_fields(
+            &[
+                ("organizationId".into(), organization_id.clone()),
+                (name.into(), value.into()),
+            ]
+            .into(),
+        )
+        .await
     }
     async fn count_organization_roles(&self, organization_id: &str) -> AuthResult<u64> {
         self.count_organization_roles_value(&organization_id.into())
@@ -195,11 +254,10 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
         organization_id: &better_auth_core::FieldValue,
     ) -> AuthResult<u64> {
         Entity::<O::OrganizationRole>::find()
-            .filter(super::value_filter::equals_id(
-                O::OrganizationRole::column("organization_id")?,
+            .filter(self.organization_field_equals::<O::OrganizationRole>(
+                EntityRole::OrganizationRole,
+                "organizationId",
                 organization_id,
-                self.config().advanced.database.generate_id(),
-                self.connection().get_database_backend(),
             )?)
             .count(self.connection())
             .await
@@ -208,70 +266,211 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
     async fn update_organization_role(
         &self,
         id: &str,
-        mut input: UpdateOrganizationRole,
+        input: UpdateOrganizationRole,
+    ) -> AuthResult<OrganizationRole> {
+        self.update_organization_role_value(&id.into(), input).await
+    }
+    async fn update_organization_role_value(
+        &self,
+        id: &FieldValue,
+        input: UpdateOrganizationRole,
     ) -> AuthResult<OrganizationRole> {
         let config = self.organization_fields()?.organization_role;
-        let mut core = Default::default();
-        if !config.fields().contains_key("updatedAt") {
-            core = values([("updatedAt", FieldValue::Date((Utc::now()).into()))]);
-        }
-        if let Some(role) = input.role {
-            let _ = core.insert("role".into(), (role).to_owned().into_field());
-        }
-        if let Some(permission) = input.permission {
-            let value = permission
-                .stringify()?
-                .map(FieldValue::String)
-                .unwrap_or_default();
-            let _ = core.insert("permission".into(), value);
-        }
-        for name in ["id", "organizationId", "role", "createdAt", "updatedAt"] {
-            if let Some(value) = input.additional_fields.remove(name) {
-                let _ = core.entry(name.to_owned()).or_insert(value);
-            }
-        }
-        let updated_id = core
-            .get("id")
-            .and_then(FieldValue::as_str)
-            .unwrap_or(id)
-            .to_owned();
-        let active = models::active::<O::OrganizationRole>(
-            core,
-            input.additional_fields,
-            &config,
-            false,
-            self.connection().get_database_backend(),
-            self.config().advanced.database.generate_id(),
-        )
-        .await?;
-        let _ = active
-            .update(self.connection().get_database_backend())?
-            .filter(
-                O::OrganizationRole::column("id")?
-                    .eq_id(id, self.config().advanced.database.generate_id())?,
-            )
-            .exec(self.connection())
-            .await
-            .map_err(map_db_err)?;
-        models::find::<O::OrganizationRole, _>(
+        let backend = self.connection().get_database_backend();
+        let selector = self.organization_field_equals::<O::OrganizationRole>(
+            EntityRole::OrganizationRole,
+            "id",
+            id,
+        )?;
+        let active = self.organization_role_write(input).await?;
+        let row = super::updates::execute_update_returning_raw::<Entity<O::OrganizationRole>, _>(
             self.connection(),
-            &updated_id,
-            self.config().advanced.database.generate_id(),
+            active.update_returning(backend)?.filter(selector.clone()),
+            selector,
         )
         .await?
-        .ok_or_else(|| better_auth_core::AuthError::not_found("Role not found"))?
-        .record(&config, self.connection().get_database_backend())
-        .await
+        .ok_or_else(|| better_auth_core::AuthError::not_found("Role not found"))?;
+        O::OrganizationRole::from_query_result(&row, "")
+            .map_err(map_db_err)?
+            .record(&config, backend)
+            .await
+    }
+    async fn update_organization_roles(
+        &self,
+        selectors: &FieldMap,
+        input: UpdateOrganizationRole,
+    ) -> AuthResult<u64> {
+        let selectors = self.organization_role_filter(selectors)?;
+        let active = self.organization_role_write(input).await?;
+        active
+            .update(self.connection().get_database_backend())?
+            .filter(selectors)
+            .exec(self.connection())
+            .await
+            .map(|result| result.rows_affected.min(9_007_199_254_740_991))
+            .map_err(map_db_err)
     }
     async fn delete_organization_role(&self, id: &str) -> AuthResult<()> {
+        self.delete_organization_role_by_fields(&[("id".into(), id.into())].into())
+            .await
+    }
+    async fn delete_organization_role_by_fields(&self, selectors: &FieldMap) -> AuthResult<()> {
         let _ = Entity::<O::OrganizationRole>::delete_many()
-            .filter(
-                O::OrganizationRole::column("id")?
-                    .eq_id(id, self.config().advanced.database.generate_id())?,
-            )
+            .filter(self.organization_role_filter(selectors)?)
             .exec(self.connection())
             .await
             .map_err(map_db_err)?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use better_auth_core::{
+        AuthConfig, CreateOrganization,
+        organization_fields::OrganizationFields,
+        store::OrganizationStore,
+        user_fields::{FieldTransforms, UserConfig, UserFieldConfig, UserFieldTransform},
+    };
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+
+    #[tokio::test]
+    async fn role_mutations_preserve_scope_skip_batch_projection_and_read_changed_native_id() {
+        let db = sea_orm::Database::connect("sqlite::memory:").await.unwrap();
+        super::super::migrator::run_migrations(&db).await.unwrap();
+        let store = SeaOrmStore::<super::super::bundled_schema::BundledSchema>::new(
+            Arc::new(AuthConfig::new(
+                "organization-role-native-secret-at-least-32-characters",
+            )),
+            db,
+        );
+        for id in ["first-org", "second-org"] {
+            let _ = store
+                .create_organization(CreateOrganization {
+                    id: Some(id.into()),
+                    ..CreateOrganization::new(id, id)
+                })
+                .await
+                .unwrap();
+        }
+        let outputs = Arc::new(AtomicUsize::new(0));
+        let counter = outputs.clone();
+        store
+            .configure_organization_fields(OrganizationFields {
+                organization_role: UserConfig {
+                    additional_fields: Some(
+                        [(
+                            "permission".into(),
+                            UserFieldConfig {
+                                transform: Some(FieldTransforms {
+                                    input: None,
+                                    output: Some(UserFieldTransform::new(move |value| {
+                                        counter.fetch_add(1, Ordering::SeqCst);
+                                        Ok(value)
+                                    })),
+                                }),
+                                ..Default::default()
+                            },
+                        )]
+                        .into(),
+                    ),
+                },
+                ..Default::default()
+            })
+            .unwrap();
+        let mut ids = Vec::new();
+        for organization_id in ["first-org", "second-org"] {
+            ids.push(
+                store
+                    .create_organization_role(CreateOrganizationRole {
+                        organization_id: organization_id.into(),
+                        role: "editor".into(),
+                        permission: FieldMap::new().into(),
+                        additional_fields: FieldMap::new(),
+                    })
+                    .await
+                    .unwrap()
+                    .id,
+            );
+        }
+        outputs.store(0, Ordering::SeqCst);
+        let first: FieldMap = [
+            ("organizationId".into(), "first-org".into()),
+            ("role".into(), "editor".into()),
+        ]
+        .into();
+        assert_eq!(
+            store
+                .update_organization_roles(
+                    &first,
+                    UpdateOrganizationRole {
+                        role: Some("writer".into()),
+                        ..Default::default()
+                    }
+                )
+                .await
+                .unwrap(),
+            1
+        );
+        assert_eq!(outputs.load(Ordering::SeqCst), 0);
+        let updated = store
+            .update_organization_role_value(
+                &ids.first().unwrap().field_value(),
+                UpdateOrganizationRole {
+                    additional_fields: [("id".into(), FieldValue::Number(23.0))].into(),
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+        assert_ne!(updated.id, *ids.first().unwrap());
+        assert_eq!(updated.role, "writer");
+        assert_eq!(outputs.load(Ordering::SeqCst), 1);
+        let updated_id: FieldMap = [("id".into(), FieldValue::Number(23.0))].into();
+        let mismatched: FieldMap = [
+            ("organizationId".into(), "second-org".into()),
+            ("id".into(), FieldValue::Number(23.0)),
+        ]
+        .into();
+        store
+            .delete_organization_role_by_fields(&mismatched)
+            .await
+            .unwrap();
+        assert!(
+            store
+                .find_organization_role_by_fields(&updated_id)
+                .await
+                .unwrap()
+                .is_some()
+        );
+        let first: FieldMap = [
+            ("organizationId".into(), "first-org".into()),
+            ("id".into(), FieldValue::Number(23.0)),
+        ]
+        .into();
+        store
+            .delete_organization_role_by_fields(&first)
+            .await
+            .unwrap();
+        assert!(
+            store
+                .find_organization_role_by_fields(&updated_id)
+                .await
+                .unwrap()
+                .is_none()
+        );
+        assert_eq!(
+            store
+                .get_organization_role(ids.last().unwrap().typed().unwrap())
+                .await
+                .unwrap()
+                .unwrap()
+                .role,
+            "editor"
+        );
     }
 }

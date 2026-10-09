@@ -94,25 +94,42 @@ pub struct OrganizationFields {
 }
 
 impl OrganizationFields {
-    /// Resolve declared fields and native references without replacing explicit declarations.
+    fn fields_for(
+        &self,
+        role: better_auth_schema_registry::EntityRole,
+    ) -> crate::AuthResult<&UserConfig> {
+        use better_auth_schema_registry::EntityRole;
+        match role {
+            EntityRole::Organization => Ok(&self.organization),
+            EntityRole::Member => Ok(&self.member),
+            EntityRole::Invitation => Ok(&self.invitation),
+            EntityRole::Team => Ok(&self.team),
+            EntityRole::OrganizationRole => Ok(&self.organization_role),
+            _ => Err(crate::AuthError::config(
+                "Expected an organization entity role",
+            )),
+        }
+    }
+
+    /// Resolve complete query declarations with whole-field replacements in native schema order.
+    #[doc(hidden)]
+    pub fn query_schema_for(
+        &self,
+        role: better_auth_schema_registry::EntityRole,
+    ) -> crate::AuthResult<UserConfig> {
+        let configured = self.fields_for(role)?;
+        let mut fields = crate::plugin_runtime::ModelFields::plugin_native_fields(role);
+        fields.fields_mut().extend(configured.fields().clone());
+        Ok(fields)
+    }
+
+    /// Resolve configured read/write policies and native references while adapters own native defaults.
     #[doc(hidden)]
     pub fn schema_for(
         &self,
         role: better_auth_schema_registry::EntityRole,
     ) -> crate::AuthResult<UserConfig> {
-        use better_auth_schema_registry::EntityRole;
-        let mut fields = match role {
-            EntityRole::Organization => self.organization.clone(),
-            EntityRole::Member => self.member.clone(),
-            EntityRole::Invitation => self.invitation.clone(),
-            EntityRole::Team => self.team.clone(),
-            EntityRole::OrganizationRole => self.organization_role.clone(),
-            _ => {
-                return Err(crate::AuthError::config(
-                    "Expected an organization entity role",
-                ));
-            }
-        };
+        let mut fields = self.fields_for(role)?.clone();
         let entity = better_auth_schema_registry::plugin_schemas()
             .iter()
             .flat_map(|plugin| plugin.extra_entities)
@@ -154,5 +171,116 @@ impl OrganizationFields {
         ]
         .iter()
         .all(|schema| schema.fields().is_empty())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        plugin_runtime::ModelFields,
+        user_fields::{UserFieldConfig, UserFieldType},
+    };
+    use better_auth_schema_registry::EntityRole;
+
+    #[test]
+    fn query_declarations_replace_native_attributes_without_enabling_native_write_defaults() {
+        let fields = OrganizationFields {
+            organization_role: UserConfig {
+                additional_fields: Some(
+                    [
+                        (
+                            "organizationId".into(),
+                            UserFieldConfig {
+                                field_type: UserFieldType::Boolean,
+                                field_name: Some("role".into()),
+                                ..Default::default()
+                            },
+                        ),
+                        ("createdAt".into(), UserFieldConfig::default()),
+                        ("updatedAt".into(), UserFieldConfig::default()),
+                    ]
+                    .into(),
+                ),
+            },
+            ..Default::default()
+        };
+        let query = fields
+            .query_schema_for(EntityRole::OrganizationRole)
+            .unwrap();
+        assert_eq!(
+            query
+                .fields()
+                .keys()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+            [
+                "organizationId",
+                "role",
+                "permission",
+                "createdAt",
+                "updatedAt"
+            ]
+        );
+        let organization_id = query.fields().get("organizationId").unwrap();
+        assert!(matches!(organization_id.field_type, UserFieldType::Boolean));
+        assert_eq!(organization_id.field_name.as_deref(), Some("role"));
+        assert!(organization_id.references.is_none());
+        assert!(organization_id.index.is_none());
+        assert!(organization_id.required.is_none());
+        assert!(
+            query
+                .fields()
+                .get("createdAt")
+                .unwrap()
+                .default_value_fn
+                .is_none()
+        );
+        assert!(query.fields().get("updatedAt").unwrap().on_update.is_none());
+        assert_eq!(query.fields().get("role").unwrap().index, Some(true));
+        let native = OrganizationFields::default()
+            .query_schema_for(EntityRole::OrganizationRole)
+            .unwrap();
+        assert!(
+            native
+                .fields()
+                .get("createdAt")
+                .unwrap()
+                .default_value_fn
+                .is_some()
+        );
+        assert!(
+            native
+                .fields()
+                .get("updatedAt")
+                .unwrap()
+                .on_update
+                .is_some()
+        );
+
+        let mut registered = ModelFields::default();
+        registered.register_organization_schema(&fields, true);
+        assert_eq!(
+            registered
+                .fields(EntityRole::OrganizationRole)
+                .fields()
+                .keys()
+                .collect::<Vec<_>>(),
+            query.fields().keys().collect::<Vec<_>>()
+        );
+        let storage = registered
+            .organization_fields(Default::default())
+            .schema_for(EntityRole::OrganizationRole)
+            .unwrap();
+        assert_eq!(storage.fields().len(), 3);
+        assert!(!storage.fields().contains_key("role"));
+        assert!(
+            storage
+                .fields()
+                .get("organizationId")
+                .unwrap()
+                .references
+                .is_none()
+        );
     }
 }

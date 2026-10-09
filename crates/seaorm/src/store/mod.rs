@@ -729,6 +729,16 @@ where
         Ok(record)
     }
 
+    async fn update_accounts(
+        &self,
+        selectors: &better_auth_core::FieldMap,
+        update: better_auth_core::UpdateAccount,
+    ) -> AuthResult<Option<u64>> {
+        self.store
+            .update_accounts_with_connection(&self.tx, Some((&self.tx, self)), selectors, update)
+            .await
+    }
+
     async fn create_session(
         &self,
         create_session: better_auth_core::CreateSession,

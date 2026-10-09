@@ -3,8 +3,8 @@
 #[cfg(feature = "redis-cache")]
 pub use better_auth_core::store::RedisAdapter;
 pub use better_auth_core::store::database_hooks::{
-    DatabaseHookContext, DatabaseHookControl, DatabaseHookUpdate, DatabaseHooks, SessionUpdate,
-    VerificationUpdate,
+    DatabaseHookContext, DatabaseHookControl, DatabaseHookUpdate, DatabaseHooks,
+    DatabaseUpdateResult, SessionUpdate, VerificationUpdate,
 };
 pub use better_auth_core::store::{
     AccountOwner, AuthStore, AuthTransaction, CacheAdapter, EphemeralStore, InvitationOrganization,

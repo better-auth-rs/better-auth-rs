@@ -42,9 +42,14 @@ impl DatabaseHooks<StatelessSchema> for UpdateHooks {
     }
     async fn after_update_account(
         &self,
-        row: Option<&AccountView>,
+        row: crate::store::database_hooks::DatabaseUpdateResult<&AccountView>,
         _: &DatabaseHookContext<'_, StatelessSchema>,
     ) -> AuthResult<()> {
+        let crate::store::database_hooks::DatabaseUpdateResult::One(row) = row else {
+            return Err(AuthError::internal(
+                "This single Account update must return a projected record or null",
+            ));
+        };
         self.observed.lock().unwrap().push(
             if row.is_some() {
                 "after-row"

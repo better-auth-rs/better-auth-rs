@@ -53,6 +53,26 @@ pub struct SessionUpdate {
 
 pub use crate::types_account::VerificationUpdate;
 
+/// Adapter result supplied to a database update hook.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(untagged)]
+pub enum DatabaseUpdateResult<T> {
+    /// A single update returns its projected record or no matching record.
+    One(Option<T>),
+    /// A batch update returns the affected row count without projecting records.
+    Many(u64),
+}
+
+impl<T> DatabaseUpdateResult<T> {
+    /// Borrow the projected record while preserving the batch count.
+    pub fn as_ref(&self) -> DatabaseUpdateResult<&T> {
+        match self {
+            Self::One(value) => DatabaseUpdateResult::One(value.as_ref()),
+            Self::Many(count) => DatabaseUpdateResult::Many(*count),
+        }
+    }
+}
+
 /// Ordered hook fields preserve shallow patches and the original object after detachment.
 #[doc(hidden)]
 pub struct PreparedRecordWrite {
@@ -243,10 +263,10 @@ pub trait DatabaseHooks<S: AuthSchema>: Send + Sync {
     ) -> AuthResult<DatabaseHookUpdate<UpdateAccount>> {
         Ok(DatabaseHookUpdate::Continue)
     }
-    /// Observe a committed account update.
+    /// Observe a committed single Account update or a batch affected row count.
     async fn after_update_account(
         &self,
-        _data: Option<&crate::wire::AccountView>,
+        _data: DatabaseUpdateResult<&crate::wire::AccountView>,
         _ctx: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
         Ok(())

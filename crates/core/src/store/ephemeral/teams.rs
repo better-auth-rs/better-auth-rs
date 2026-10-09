@@ -528,6 +528,96 @@ impl TeamStore for EphemeralStore {
         Ok(())
     }
 }
+impl EphemeralStore {
+    fn organization_role_selectors(
+        &self,
+        selectors: &FieldMap,
+    ) -> AuthResult<Vec<(String, Value)>> {
+        let schema = self.field_config(EntityRole::OrganizationRole)?;
+        let core = better_auth_schema_registry::core_fields(EntityRole::OrganizationRole)
+            .iter()
+            .map(|field| {
+                better_auth_schema_registry::canonical_field_name(
+                    EntityRole::OrganizationRole,
+                    field.name,
+                )
+            })
+            .collect::<Vec<_>>();
+        selectors
+            .iter()
+            .map(|(name, value)| {
+                let key = if name == "id" || core.contains(name) {
+                    name.clone()
+                } else if schema.fields().contains_key(name) {
+                    schema.record_storage_key(name).to_owned()
+                } else {
+                    return Err(AuthError::config(format!(
+                        "Unknown organization role field {name}"
+                    )));
+                };
+                Ok((
+                    key,
+                    self.organization_query(EntityRole::OrganizationRole, name, value.clone())?
+                        .field_value(),
+                ))
+            })
+            .collect()
+    }
+
+    fn organization_role_matches(
+        role: &OrganizationRole,
+        selectors: &[(String, Value)],
+    ) -> AuthResult<bool> {
+        let fields = role.field_values()?;
+        Ok(selectors.iter().all(|(name, expected)| {
+            fields
+                .get(name)
+                .unwrap_or(&Value::Undefined)
+                .strict_equals(expected)
+        }))
+    }
+
+    async fn organization_role_patch(
+        &self,
+        mut update: UpdateOrganizationRole,
+    ) -> AuthResult<super::fields::PreparedOrganizationFields> {
+        let mut patch = FieldMap::new();
+        if let Some(name) = update.role {
+            let _ = patch.insert("role".into(), Value::from(name));
+        }
+        if let Some(permission) = update.permission {
+            let value = permission
+                .stringify()?
+                .map(Value::String)
+                .unwrap_or_default();
+            let _ = patch.insert("permission".into(), value);
+        }
+        if !self
+            .organization_fields()?
+            .organization_role
+            .fields()
+            .contains_key("updatedAt")
+        {
+            let _ = patch.insert("updatedAt".into(), Value::from(Utc::now()));
+        }
+        for field in better_auth_schema_registry::core_fields(EntityRole::OrganizationRole) {
+            let name = better_auth_schema_registry::canonical_field_name(
+                EntityRole::OrganizationRole,
+                field.name,
+            );
+            if let Some(value) = update.additional_fields.remove(&name) {
+                let _ = patch.entry(name).or_insert(value);
+            }
+        }
+        self.prepare_record_patch(
+            EntityRole::OrganizationRole,
+            patch,
+            update.additional_fields,
+        )
+        .await
+    }
+}
+
 #[async_trait]
 impl OrganizationRoleStore for EphemeralStore {
     async fn create_organization_role(
@@ -622,10 +712,25 @@ impl OrganizationRoleStore for EphemeralStore {
         self.output_organization_role(role).await
     }
     async fn get_organization_role(&self, id: &str) -> AuthResult<Option<OrganizationRole>> {
-        let id = self.organization_query(EntityRole::OrganizationRole, "id", Value::from(id))?;
-        let row = self.lock()?.organization_roles.get(&id)?;
+        self.find_organization_role_by_fields(&[("id".into(), Value::from(id))].into())
+            .await
+    }
+    async fn find_organization_role_by_fields(
+        &self,
+        selectors: &FieldMap,
+    ) -> AuthResult<Option<OrganizationRole>> {
+        let selectors = self.organization_role_selectors(selectors)?;
+        let row = self
+            .lock()?
+            .organization_roles
+            .try_select_refs(|row| Self::organization_role_matches(row, &selectors))?
+            .into_iter()
+            .next();
         match row {
-            Some(row) => self.output_organization_role(row).await.map(Some),
+            Some(row) => Ok(self
+                .output_record_refs(EntityRole::OrganizationRole, vec![row])
+                .await?
+                .pop()),
             None => Ok(None),
         }
     }
@@ -731,30 +836,14 @@ impl OrganizationRoleStore for EphemeralStore {
             crate::store::OrganizationRoleKey::Id(id) => ("id", Value::from(id)),
             crate::store::OrganizationRoleKey::Name(name) => ("role", Value::from(name)),
         };
-        let key_value =
-            self.organization_query(EntityRole::OrganizationRole, key_field, key_value)?;
-        let organization_id = self.organization_query(
-            EntityRole::OrganizationRole,
-            "organizationId",
-            organization_id.clone(),
-        )?;
-        let rows = self.lock()?.organization_roles.snapshot()?;
-        let row = rows.into_iter().find(|row| {
-            row.organization_id
-                .field_value()
-                .strict_equals(&organization_id.field_value())
-                && match key {
-                    crate::store::OrganizationRoleKey::Id(_) => row.id == key_value,
-                    crate::store::OrganizationRoleKey::Name(_) => row
-                        .role
-                        .field_value()
-                        .strict_equals(&key_value.field_value()),
-                }
-        });
-        match row {
-            Some(row) => self.output_organization_role(row).await.map(Some),
-            None => Ok(None),
-        }
+        self.find_organization_role_by_fields(
+            &[
+                ("organizationId".into(), organization_id.clone()),
+                (key_field.into(), key_value),
+            ]
+            .into(),
+        )
+        .await
     }
     async fn count_organization_roles(&self, organization_id: &str) -> AuthResult<u64> {
         self.count_organization_roles_value(&Value::from(organization_id))
@@ -781,57 +870,190 @@ impl OrganizationRoleStore for EphemeralStore {
     async fn update_organization_role(
         &self,
         id: &str,
-        mut update: UpdateOrganizationRole,
+        update: UpdateOrganizationRole,
     ) -> AuthResult<OrganizationRole> {
-        let id = self.organization_query(EntityRole::OrganizationRole, "id", Value::from(id))?;
-        let mut patch = FieldMap::new();
-        if let Some(name) = update.role {
-            let _ = patch.insert("role".into(), Value::from(name));
-        }
-        if let Some(permission) = update.permission {
-            let value = permission
-                .stringify()?
-                .map(Value::String)
-                .unwrap_or_default();
-            let _ = patch.insert("permission".into(), value);
-        }
-        if !self
-            .organization_fields()?
-            .organization_role
-            .fields()
-            .contains_key("updatedAt")
-        {
-            let _ = patch.insert("updatedAt".into(), Value::from(Utc::now()));
-        }
-        for name in ["id", "organizationId", "role", "createdAt", "updatedAt"] {
-            if let Some(value) = update.additional_fields.remove(name) {
-                let _ = patch.entry(name.to_owned()).or_insert(value);
+        self.update_organization_role_value(&id.into(), update)
+            .await
+    }
+    async fn update_organization_role_value(
+        &self,
+        id: &Value,
+        update: UpdateOrganizationRole,
+    ) -> AuthResult<OrganizationRole> {
+        let selectors = self.organization_role_selectors(&[("id".into(), id.clone())].into())?;
+        let patch = self.organization_role_patch(update).await?;
+        let role = self
+            .lock()?
+            .organization_roles
+            .try_select_refs(|row| Self::organization_role_matches(row, &selectors))?
+            .into_iter()
+            .next()
+            .ok_or_else(|| AuthError::not_found("Role not found"))?;
+        role.write(|row| {
+            *row = patch.apply(row.clone())?;
+            Ok(())
+        })?;
+        self.output_record_refs(EntityRole::OrganizationRole, vec![role])
+            .await?
+            .pop()
+            .ok_or_else(|| AuthError::not_found("Role not found"))
+    }
+    async fn update_organization_roles(
+        &self,
+        selectors: &FieldMap,
+        update: UpdateOrganizationRole,
+    ) -> AuthResult<u64> {
+        let selectors = self.organization_role_selectors(selectors)?;
+        let patch = self.organization_role_patch(update).await?;
+        let mut count = 0;
+        self.lock()?.organization_roles.update_each(|row| {
+            if Self::organization_role_matches(row, &selectors)? {
+                *row = patch.clone().apply(row.clone())?;
+                count += 1;
             }
-        }
-        let patch = self
-            .prepare_record_patch(
-                EntityRole::OrganizationRole,
-                patch,
-                update.additional_fields,
-            )
-            .await?;
-        let role = {
-            let mut state = self.lock()?;
-            let role = state
-                .organization_roles
-                .get(&id)?
-                .ok_or_else(|| AuthError::not_found("Role not found"))?;
-            let role: OrganizationRole = patch.apply(role)?;
-            let _ = state.organization_roles.replace(&id, role.clone())?;
-            role
-        };
-        self.output_organization_role(role).await
+            Ok(())
+        })?;
+        Ok(count)
     }
     async fn delete_organization_role(&self, id: &str) -> AuthResult<()> {
-        let id = self.organization_query(EntityRole::OrganizationRole, "id", Value::from(id))?;
-        let _ = self.lock()?.organization_roles.remove(&id)?;
+        self.delete_organization_role_by_fields(&[("id".into(), Value::from(id))].into())
+            .await
+    }
+    async fn delete_organization_role_by_fields(&self, selectors: &FieldMap) -> AuthResult<()> {
+        let selectors = self.organization_role_selectors(selectors)?;
+        let mut state = self.lock()?;
+        let selected = state
+            .organization_roles
+            .try_select_refs(|row| Self::organization_role_matches(row, &selectors))?
+            .into_iter()
+            .next();
+        if let Some(selected) = selected {
+            let _ = state.organization_roles.remove_ref(&selected)?;
+        }
         Ok(())
     }
+}
+
+#[tokio::test]
+async fn organization_role_batch_matches_native_scope_and_does_not_project_writes() {
+    use crate::user_fields::{FieldTransforms, UserConfig, UserFieldConfig, UserFieldType};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    let outputs = Arc::new(AtomicUsize::new(0));
+    let counter = outputs.clone();
+    let store = EphemeralStore::new(test_config());
+    store
+        .configure_organization_fields(crate::organization_fields::OrganizationFields {
+            organization_role: UserConfig {
+                additional_fields: Some(
+                    [
+                        (
+                            "organizationId".into(),
+                            UserFieldConfig {
+                                field_type: UserFieldType::Number,
+                                ..Default::default()
+                            },
+                        ),
+                        (
+                            "permission".into(),
+                            UserFieldConfig {
+                                transform: Some(FieldTransforms {
+                                    input: None,
+                                    output: Some(UserFieldTransform::new(move |value| {
+                                        counter.fetch_add(1, Ordering::SeqCst);
+                                        Ok(value)
+                                    })),
+                                }),
+                                ..Default::default()
+                            },
+                        ),
+                    ]
+                    .into(),
+                ),
+            },
+            ..Default::default()
+        })
+        .unwrap();
+    let _ = store
+        .create_organization_role(CreateOrganizationRole {
+            organization_id: crate::SchemaValue::from_field(Value::Number(7.0)),
+            role: "editor".into(),
+            permission: FieldMap::new().into(),
+            additional_fields: FieldMap::new(),
+        })
+        .await
+        .unwrap();
+    {
+        let mut state = store.lock().unwrap();
+        let mut duplicate = state.organization_roles.snapshot().unwrap().pop().unwrap();
+        duplicate.id = "second".into();
+        state.organization_roles.push(duplicate.clone());
+        duplicate.id = "other-tenant".into();
+        duplicate.organization_id = crate::SchemaValue::from_field(Value::Number(8.0));
+        state.organization_roles.push(duplicate);
+    }
+    outputs.store(0, Ordering::SeqCst);
+    let selectors: FieldMap = [
+        ("organizationId".into(), Value::Number(7.0)),
+        ("role".into(), "editor".into()),
+    ]
+    .into();
+    assert_eq!(
+        store
+            .update_organization_roles(
+                &selectors,
+                UpdateOrganizationRole {
+                    role: Some("writer".into()),
+                    ..Default::default()
+                }
+            )
+            .await
+            .unwrap(),
+        2
+    );
+    assert_eq!(outputs.load(Ordering::SeqCst), 0);
+    let rows = store.lock().unwrap().organization_roles.snapshot().unwrap();
+    assert_eq!(
+        rows.iter()
+            .map(|row| (row.organization_id.field_value(), row.role.field_value()))
+            .collect::<Vec<_>>(),
+        vec![
+            (Value::Number(7.0), "writer".into()),
+            (Value::Number(7.0), "writer".into()),
+            (Value::Number(8.0), "editor".into()),
+        ]
+    );
+    assert!(
+        store
+            .find_organization_role_by_fields(&selectors)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    let selectors: FieldMap = [
+        ("organizationId".into(), Value::Number(7.0)),
+        ("role".into(), "writer".into()),
+    ]
+    .into();
+    store
+        .delete_organization_role_by_fields(&selectors)
+        .await
+        .unwrap();
+    assert_eq!(
+        store
+            .count_organization_roles_value(&Value::Number(7.0))
+            .await
+            .unwrap(),
+        1
+    );
+    assert_eq!(
+        store
+            .count_organization_roles_value(&Value::Number(8.0))
+            .await
+            .unwrap(),
+        1
+    );
+    assert_eq!(outputs.load(Ordering::SeqCst), 0);
 }
 
 #[tokio::test]

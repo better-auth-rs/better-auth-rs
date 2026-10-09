@@ -209,63 +209,24 @@ impl ModelFields {
         teams_enabled: bool,
     ) {
         self.organization = Some(fields.clone());
-        self.declare_native_fields(
-            EntityRole::Organization,
-            &["name", "slug", "logo", "createdAt", "metadata"],
-            fields.organization.clone(),
-        );
+        self.declare_native_fields(EntityRole::Organization, fields.organization.clone());
         if teams_enabled {
-            self.declare_native_fields(
-                EntityRole::Team,
-                &[
-                    "name",
-                    "memberCount",
-                    "organizationId",
-                    "createdAt",
-                    "updatedAt",
-                ],
-                fields.team.clone(),
-            );
+            self.declare_native_fields(EntityRole::Team, fields.team.clone());
         }
-        self.declare_native_fields(
-            EntityRole::Member,
-            &["organizationId", "userId", "role", "createdAt"],
-            fields.member.clone(),
-        );
-        self.declare_native_fields(
-            EntityRole::Invitation,
-            &[
-                "organizationId",
-                "email",
-                "role",
-                "teamId",
-                "status",
-                "expiresAt",
-                "createdAt",
-                "inviterId",
-            ],
-            fields.invitation.clone(),
-        );
+        self.declare_native_fields(EntityRole::Member, fields.member.clone());
+        self.declare_native_fields(EntityRole::Invitation, fields.invitation.clone());
         self.declare_native_fields(
             EntityRole::OrganizationRole,
-            &[
-                "organizationId",
-                "role",
-                "permission",
-                "createdAt",
-                "updatedAt",
-            ],
             fields.organization_role.clone(),
         );
     }
 
-    fn declare_native_fields(&mut self, role: EntityRole, names: &[&str], fields: UserConfig) {
+    fn declare_native_fields(&mut self, role: EntityRole, fields: UserConfig) {
         let registered = self.models.entry(role).or_default().fields_mut();
         let native = self.native_fields.entry(role).or_default();
-        for name in names {
-            // Reserve the schema position; the adapter already implements native field defaults.
-            let _ = registered.insert((*name).into(), Default::default());
-            let _ = native.insert((*name).into());
+        for (name, declaration) in Self::plugin_native_fields(role).fields() {
+            let _ = registered.insert(name.clone(), declaration.clone());
+            let _ = native.insert(name.clone());
         }
         self.extend(role, fields);
     }

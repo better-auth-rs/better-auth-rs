@@ -287,7 +287,10 @@ pub use magic_link::{MagicLinkConfig, MagicLinkMessage, MagicLinkPlugin, SendMag
 pub use multi_session::{MultiSessionConfig, MultiSessionPlugin};
 pub use oauth::{OAuthPopupPlugin, OAuthProxyConfig, OAuthProxyPlugin};
 pub use one_tap::{OneTapConfig, OneTapPlugin};
-pub use one_time_token::{OneTimeTokenConfig, OneTimeTokenPlugin, TokenStorage};
+pub use one_time_token::{
+    OneTimeTokenCallbacks, OneTimeTokenConfig, OneTimeTokenGeneratorFuture, OneTimeTokenPlugin,
+    TokenStorage,
+};
 pub use open_api::{OpenApiConfig, OpenApiPlugin};
 pub use organization::{OrganizationConfig, OrganizationPlugin};
 pub use passkey::{PasskeyConfig, PasskeyPlugin};

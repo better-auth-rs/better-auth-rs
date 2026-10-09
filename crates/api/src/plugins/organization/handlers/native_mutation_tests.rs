@@ -66,7 +66,9 @@ async fn creation_policy_observes_native_user_and_falsy_session_user_uses_body_s
         } else {
             assert_eq!(
                 observed.json().unwrap(),
-                FieldValue::from(FieldMap::from(&user)).json().unwrap()
+                FieldValue::from(FieldMap::from(user.clone()))
+                    .json()
+                    .unwrap()
             );
         }
         assert!(
@@ -164,7 +166,7 @@ async fn mutation_hooks_keep_session_user_identity_and_committed_failure_effects
         .unwrap();
     let mut data = session(&ctx, &user).await;
     let marker: FieldValue = vec![FieldValue::from("same-object")].into();
-    let mut fields = FieldMap::from(&user);
+    let mut fields = FieldMap::from(user.clone());
     let _ = fields.insert("marker".into(), marker);
     data.user = fields.into();
     *hooks.expected.lock().unwrap() = Some(data.user.clone());

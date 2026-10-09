@@ -120,16 +120,22 @@ impl<S: AuthSchema> DatabaseHooks<S> for Hooks {
     }
     async fn after_update_account(
         &self,
-        data: Option<&AccountView>,
+        data: better_auth_core::store::database_hooks::DatabaseUpdateResult<&AccountView>,
         _: &DatabaseHookContext<'_, S>,
     ) -> AuthResult<()> {
         self.record(
             "account",
             "update",
             "after",
-            data.map(AccountView::internal_fields)
-                .transpose()?
-                .map_or(FieldValue::Null, Into::into),
+            match data {
+                better_auth_core::store::database_hooks::DatabaseUpdateResult::One(data) => data
+                    .map(AccountView::internal_fields)
+                    .transpose()?
+                    .map_or(FieldValue::Null, Into::into),
+                better_auth_core::store::database_hooks::DatabaseUpdateResult::Many(count) => {
+                    FieldValue::Number(count as f64)
+                }
+            },
         )?;
         Ok(())
     }

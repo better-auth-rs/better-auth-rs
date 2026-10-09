@@ -11,8 +11,7 @@ use better_auth_core::utils::password;
 use better_auth_core::wire::UserView;
 use better_auth_core::{
     AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, AuthSchema, AuthSession,
-    AuthUser, CreateAccount, CreateUser, FieldMap, FieldValue, RequestMeta, UpdateAccount,
-    UpdateUser,
+    AuthUser, CreateAccount, CreateUser, FieldMap, FieldValue, RequestMeta, UpdateUser,
 };
 use serde_json::json;
 
@@ -272,19 +271,11 @@ impl EmailOtpPlugin {
         let hash =
             password::hash_password(ctx.password_policy.hasher.as_ref(), body.get("password"))
                 .await?;
-        if let Some(account) = get_credential_account(ctx, user.id().into_owned()).await? {
-            let _ = ctx
-                .database
-                .update_account_by_id_value(
-                    &account.id.field_value(),
-                    UpdateAccount {
-                        password: (Some(hash))
-                            .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
-                            .unwrap_or_default(),
-                        ..Default::default()
-                    },
-                )
-                .await?;
+        if get_credential_account(ctx, user.id().into_owned())
+            .await?
+            .is_some()
+        {
+            crate::plugins::helpers::update_password(ctx, &user.id().field_value(), hash).await?;
         } else {
             let _ = ctx
                 .database

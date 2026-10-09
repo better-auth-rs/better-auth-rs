@@ -198,7 +198,6 @@ impl<S: AuthSchema> SeaOrmHooks<S> for PluginHook<S> {
 
     async fn before_update_account(
         &self,
-        _id: &better_auth_core::FieldValue,
         _data: &UpdateAccount,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<DatabaseHookUpdate<UpdateAccount>> {
@@ -212,7 +211,9 @@ impl<S: AuthSchema> SeaOrmHooks<S> for PluginHook<S> {
 
     async fn after_update_account(
         &self,
-        _data: Option<&better_auth_core::wire::AccountView>,
+        _data: better_auth_core::store::database_hooks::DatabaseUpdateResult<
+            &better_auth_core::wire::AccountView,
+        >,
         ctx: &SeaOrmHookContext<'_, S>,
     ) -> AuthResult<()> {
         let context = DatabaseHookContext {

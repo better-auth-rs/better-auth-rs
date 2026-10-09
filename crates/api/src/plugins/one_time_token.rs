@@ -2,6 +2,7 @@
 
 use std::{future::Future, pin::Pin, sync::Arc};
 
+use super::endpoint_context::EndpointContext;
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use better_auth_core::{
     AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, AuthSchema, AuthSession,
@@ -12,6 +13,9 @@ use better_auth_core::{
 use chrono::{Duration, Utc};
 use rand::RngCore;
 use sha2::{Digest, Sha256};
+
+mod callbacks;
+pub use callbacks::{OneTimeTokenCallbacks, OneTimeTokenGeneratorFuture};
 
 /// Asynchronous transformation for a token stored in the verification table.
 pub type TokenHasher =
@@ -96,14 +100,24 @@ better_auth_core::observability::instrumentation::with_endpoint_hook(
             let Some(data) = _req.new_session()? else {
                 return Ok(());
             };
-            let token = self.generate_native(ctx, data).await?;
-            let _ = response.headers.insert("set-ott", token);
-            let mut exposed: Vec<_> = response.headers.get("access-control-expose-headers")
-                .map(|value| value.split(',').map(str::trim).filter(|value| !value.is_empty()).map(str::to_owned).collect())
-                .unwrap_or_default();
+            let mut exposed = Vec::new();
+            if let Some(value) = response.headers.get("access-control-expose-headers") {
+                for header in value.split(',').map(str::trim).filter(|header| !header.is_empty()) {
+                    if !exposed.iter().any(|existing| existing == header) {
+                        exposed.push(header.to_owned());
+                    }
+                }
+            }
             if !exposed.iter().any(|header| header == "set-ott") {
                 exposed.push("set-ott".into());
             }
+            let mut endpoint = EndpointContext::new(Some(_req), _req.input_field_value()?, ctx);
+            endpoint.session = _req.native_session_snapshot()?;
+            endpoint.response = Some(response);
+            let token = self.generate_in_endpoint(data, &endpoint).await?;
+            _req.set_response_header("set-ott", token.clone())?;
+            _req.set_response_header("Access-Control-Expose-Headers", exposed.join(", "))?;
+            let _ = response.headers.insert("set-ott", token);
             let _ = response.headers.insert("Access-Control-Expose-Headers", exposed.join(", "));
             Ok(())
          }
@@ -129,26 +143,56 @@ impl OneTimeTokenPlugin {
         ctx: &AuthContext<S>,
         data: NativeSessionData,
     ) -> AuthResult<String> {
+        let mut endpoint = EndpointContext::native(None, None, FieldValue::Undefined, ctx);
+        endpoint.session = Some(data.clone());
+        self.generate_in_endpoint(data, &endpoint).await
+    }
+
+    /// Generate and persist a token within the supplied endpoint's active transaction.
+    pub async fn generate_in_endpoint<S: AuthSchema>(
+        &self,
+        data: NativeSessionData,
+        endpoint: &EndpointContext<'_, S>,
+    ) -> AuthResult<String> {
         let session_token = data.session.token.clone();
-        let token = match &self.config.generate_token {
-            Some(generate) => generate(data).await?,
-            None => {
-                let mut bytes = [0_u8; 24];
-                rand::thread_rng().fill_bytes(&mut bytes);
-                URL_SAFE_NO_PAD.encode(bytes)
+        let token = if let Some(callbacks) = endpoint
+            .auth
+            .extensions
+            .get::<Arc<OneTimeTokenCallbacks<S>>>()
+        {
+            (callbacks.generator)(&data, endpoint).await?
+        } else {
+            match &self.config.generate_token {
+                Some(generate) => generate(data).await?,
+                None => {
+                    let mut bytes = [0_u8; 24];
+                    rand::thread_rng().fill_bytes(&mut bytes);
+                    URL_SAFE_NO_PAD.encode(bytes)
+                }
             }
         };
         let expires_at = Utc::now() + self.config.expires_in;
         let stored = self.config.store_token.encode(&token).await?;
-        let _ = ctx
-            .database
-            .create_verification_optional(CreateVerification {
-                identifier: (format!("one-time-token:{stored}")).into(),
-                value: session_token,
-                expires_at: expires_at.into(),
-                ..Default::default()
-            })
-            .await?;
+        let verification = CreateVerification {
+            identifier: (format!("one-time-token:{stored}")).into(),
+            value: session_token,
+            expires_at: expires_at.into(),
+            ..Default::default()
+        };
+        let _ = match endpoint.transaction {
+            Some(transaction) => {
+                transaction
+                    .create_verification_optional(verification)
+                    .await?
+            }
+            None => {
+                endpoint
+                    .auth
+                    .database
+                    .create_verification_optional(verification)
+                    .await?
+            }
+        };
         Ok(token)
     }
 
@@ -161,14 +205,13 @@ impl OneTimeTokenPlugin {
             .require_native_session(req)
             .await
             .map_err(session_required)?;
-        if self.config.disable_client_request
-            && super::endpoint_context::EndpointContext::new(Some(req), FieldValue::Undefined, ctx)
-                .request
-                .is_some()
-        {
+        let mut endpoint = EndpointContext::new(Some(req), FieldValue::Undefined, ctx);
+        endpoint.session = Some(data.clone());
+        if self.config.disable_client_request && endpoint.request.is_some() {
             return message_error("Client requests are disabled");
         }
-        let token = self.generate_native(ctx, data).await?;
+        endpoint.body = req.input_field_value()?;
+        let token = self.generate_in_endpoint(data, &endpoint).await?;
         Ok(AuthResponse::json(
             200,
             &serde_json::json!({ "token": token }),
@@ -289,4 +332,8 @@ pub(crate) async fn find_session<S: AuthSchema>(
 }
 
 #[cfg(test)]
+mod callback_tests;
+#[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod transaction_tests;

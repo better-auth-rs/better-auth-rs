@@ -274,6 +274,13 @@ impl AuthTransaction<StatelessSchema> for EphemeralTransaction {
     async fn create_account(&self, input: CreateAccount) -> AuthResult<AccountView> {
         self.store.create_account(input).await
     }
+    async fn update_accounts(
+        &self,
+        selectors: &FieldMap,
+        update: UpdateAccount,
+    ) -> AuthResult<Option<u64>> {
+        self.store.update_accounts(selectors, update).await
+    }
     async fn create_session(&self, input: CreateSession) -> AuthResult<SessionView> {
         self.store.create_session(input).await
     }

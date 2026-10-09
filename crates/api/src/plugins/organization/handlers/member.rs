@@ -1,5 +1,5 @@
 use better_auth_core::FieldValue;
-use better_auth_core::entity::{AuthMember, AuthOrganization, AuthUser};
+use better_auth_core::entity::{AuthMember, AuthOrganization, AuthRecordFields, AuthUser};
 use better_auth_core::error::{AuthError, AuthResult};
 use better_auth_core::plugin::AuthContext;
 use better_auth_core::session::NativeSessionData;
@@ -284,8 +284,7 @@ pub(crate) async fn remove_member_core(
         .get_user_by_id_value(&target_member.user_id.field_value())
         .await?
         .ok_or_else(|| AuthError::bad_request("User not found"))?;
-    let user_value =
-        better_auth_core::FieldValue::from(better_auth_core::FieldMap::from(&target_user));
+    let user_value = FieldValue::from(target_user.field_values()?);
     let event = OrganizationMemberEvent {
         member: &target_member,
         user: &user_value,

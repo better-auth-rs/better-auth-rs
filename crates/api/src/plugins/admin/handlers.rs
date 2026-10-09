@@ -741,20 +741,13 @@ pub(crate) async fn set_user_password_core(
         better_auth_core::hash_password(ctx.password_policy.hasher.as_ref(), &body.new_password)
             .await?;
 
-    let accounts = ctx.database.get_user_accounts(&body.user_id).await?;
-    if let Some(account) = accounts
-        .iter()
-        .find(|account| account.provider_id == "credential")
+    if ctx
+        .database
+        .get_credential_account(&body.user_id)
+        .await?
+        .is_some()
     {
-        let account_update = better_auth_core::UpdateAccount {
-            password: (Some(password_hash))
-                .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
-                .unwrap_or_default(),
-            ..Default::default()
-        };
-        let _ = ctx
-            .database
-            .update_account(account.id.typed()?, account_update)
+        crate::plugins::helpers::update_password(ctx, &body.user_id.as_str().into(), password_hash)
             .await?;
     } else {
         let _ = ctx

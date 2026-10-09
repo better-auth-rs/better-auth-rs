@@ -2,14 +2,14 @@ use super::*;
 
 pub(super) type PendingHookQueue = Mutex<Vec<PendingHook>>;
 use crate::hooks::{RequestHookContext, current_request_hook_context};
-use crate::store::database_hooks::DatabaseHookContext;
+use crate::store::database_hooks::{DatabaseHookContext, DatabaseUpdateResult};
 
 pub(super) enum CommittedWrite {
     UserCreated(Option<UserView>),
     UserUpdated(Option<UserView>),
     UserDeleted(UserView),
     AccountCreated(Option<AccountView>),
-    AccountUpdated(Option<AccountView>),
+    AccountUpdated(DatabaseUpdateResult<AccountView>),
     AccountDeleted(AccountView),
     SessionCreated(Option<SessionView>),
     SessionUpdated(Option<SessionView>),
@@ -124,13 +124,24 @@ impl EphemeralStore {
                     .await?
                 }
                 CommittedWrite::AccountUpdated(row) => {
-                    crate::observability::database::with_database_hook(
-                        context.config,
-                        hook.hook_metadata(),
-                        crate::observability::database::DatabaseHook::AfterUpdateAccount,
-                        hook.after_update_account(row.as_ref(), &context),
-                    )
-                    .await?
+                    let callback = hook.after_update_account(row.as_ref(), &context);
+                    if matches!(row, DatabaseUpdateResult::Many(_)) {
+                        crate::observability::database::with_database_update_many_hook(
+                            context.config,
+                            hook.hook_metadata(),
+                            crate::observability::database::DatabaseHook::AfterUpdateAccount,
+                            callback,
+                        )
+                        .await?;
+                    } else {
+                        crate::observability::database::with_database_hook(
+                            context.config,
+                            hook.hook_metadata(),
+                            crate::observability::database::DatabaseHook::AfterUpdateAccount,
+                            callback,
+                        )
+                        .await?;
+                    }
                 }
                 CommittedWrite::AccountDeleted(row) => {
                     crate::observability::database::with_database_hook(

@@ -111,3 +111,29 @@ pub async fn with_database_operation<T>(
     )
     .await
 }
+
+/// Trace a batch update through the same declared callback as a single update.
+pub async fn with_database_update_many_hook<T>(
+    config: &AuthConfig,
+    metadata: DatabaseHookMetadata,
+    method: DatabaseHook,
+    operation: impl Future<Output = AuthResult<T>>,
+) -> AuthResult<T> {
+    if !metadata.methods.contains(&method) {
+        return operation.await;
+    }
+    let (model, hook_type) = method.labels();
+    let hook_type = hook_type.replacen("update.", "updateMany.", 1);
+    with_span(
+        &config.experimental.instrumentation,
+        &format!("db {hook_type} {model}"),
+        SpanAttributes {
+            collection: Some(model),
+            hook_type: Some(&hook_type),
+            context: Some(metadata.source),
+            ..Default::default()
+        },
+        operation,
+    )
+    .await
+}

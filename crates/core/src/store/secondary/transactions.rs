@@ -330,6 +330,13 @@ impl<S: AuthSchema> AuthTransaction<S> for Transaction<S> {
     async fn create_account(&self, input: CreateAccount) -> AuthResult<crate::wire::AccountView> {
         self.inner.create_account(input).await
     }
+    async fn update_accounts(
+        &self,
+        selectors: &crate::FieldMap,
+        update: crate::UpdateAccount,
+    ) -> AuthResult<Option<u64>> {
+        self.inner.update_accounts(selectors, update).await
+    }
     async fn create_session(&self, input: CreateSession) -> AuthResult<crate::wire::SessionView> {
         self.create_session_with_storage(input, false)
             .await?

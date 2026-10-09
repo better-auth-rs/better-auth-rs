@@ -88,6 +88,13 @@ impl<S: AuthSchema> AccountStore<S> for SecondaryStore<S> {
     ) -> AuthResult<Option<crate::wire::AccountView>> {
         self.inner.update_account_by_id_value(id, update).await
     }
+    async fn update_accounts(
+        &self,
+        selectors: &crate::FieldMap,
+        update: UpdateAccount,
+    ) -> AuthResult<Option<u64>> {
+        self.inner.update_accounts(selectors, update).await
+    }
     async fn delete_account(&self, id: &str) -> AuthResult<()> {
         self.inner.delete_account(id).await
     }
@@ -857,6 +864,12 @@ impl<S: AuthSchema> OrganizationRoleStore for SecondaryStore<S> {
     async fn get_organization_role(&self, id: &str) -> AuthResult<Option<crate::OrganizationRole>> {
         self.inner.get_organization_role(id).await
     }
+    async fn find_organization_role_by_fields(
+        &self,
+        selectors: &crate::FieldMap,
+    ) -> AuthResult<Option<crate::OrganizationRole>> {
+        self.inner.find_organization_role_by_fields(selectors).await
+    }
     async fn find_organization_role(
         &self,
         organization_id: &str,
@@ -927,6 +940,30 @@ impl<S: AuthSchema> OrganizationRoleStore for SecondaryStore<S> {
     }
     async fn delete_organization_role(&self, id: &str) -> AuthResult<()> {
         self.inner.delete_organization_role(id).await
+    }
+    async fn update_organization_role_value(
+        &self,
+        id: &crate::FieldValue,
+        update: crate::UpdateOrganizationRole,
+    ) -> AuthResult<crate::OrganizationRole> {
+        self.inner.update_organization_role_value(id, update).await
+    }
+    async fn update_organization_roles(
+        &self,
+        selectors: &crate::FieldMap,
+        update: crate::UpdateOrganizationRole,
+    ) -> AuthResult<u64> {
+        self.inner
+            .update_organization_roles(selectors, update)
+            .await
+    }
+    async fn delete_organization_role_by_fields(
+        &self,
+        selectors: &crate::FieldMap,
+    ) -> AuthResult<()> {
+        self.inner
+            .delete_organization_role_by_fields(selectors)
+            .await
     }
 }
 

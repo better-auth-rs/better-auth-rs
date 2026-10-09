@@ -33,8 +33,8 @@ mod utils;
 
 pub use better_auth_seaorm_macros::AuthEntity;
 pub use hooks::{
-    DatabaseHookUpdate, HookControl, SeaOrmHookContext, SeaOrmHooks, SessionUpdate,
-    VerificationUpdate, current_request_hook_context,
+    DatabaseHookUpdate, DatabaseUpdateResult, HookControl, SeaOrmHookContext, SeaOrmHooks,
+    SessionUpdate, VerificationUpdate, current_request_hook_context,
 };
 pub use schema::{
     SeaOrmAccountModel, SeaOrmSessionModel, SeaOrmUserModel, SeaOrmVerificationModel,
