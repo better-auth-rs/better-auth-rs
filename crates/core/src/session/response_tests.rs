@@ -72,6 +72,7 @@ async fn rotation_preserves_order_and_the_browser_uses_the_last_token_and_cache(
         .unwrap();
     let mut response = AuthResponse::new(200);
     manager.finish_response(&req, &mut response).unwrap();
+    let response = response.into_http_response();
 
     let mut browser = AuthRequest::new(HttpMethod::Get, "/get-session");
     let cookies = response
@@ -139,6 +140,7 @@ async fn challenge_expiration_supersedes_earlier_refresh_credentials() {
             create_clear_cookie("better-auth.session_data", &manager.config).unwrap(),
         );
     manager.finish_response(&req, &mut response).unwrap();
+    let response = response.into_http_response();
     assert!(!response.headers.contains_key("set-auth-token"));
     let cookies: Vec<_> = response.headers.get_all("set-cookie").collect();
     assert_eq!(cookies.len(), 2);
@@ -163,6 +165,7 @@ async fn explicit_remember_marker_expiration_survives_browser_session_cookie() {
             create_clear_cookie("better-auth.dont_remember", &manager.config).unwrap(),
         );
     manager.finish_response(&req, &mut response).unwrap();
+    let response = response.into_http_response();
     let marker = response
         .headers
         .get_all("set-cookie")
@@ -179,6 +182,7 @@ async fn raw_session_cookie_does_not_create_a_remember_preference() {
     let cookie = "better-auth.session_token=raw%2Btoken.signature%3D; Path=/; HttpOnly";
     let mut response = AuthResponse::new(302).with_appended_header("Set-Cookie", cookie);
     manager.finish_response(&req, &mut response).unwrap();
+    let response = response.into_http_response();
     assert_eq!(
         response.headers.get_all("set-cookie").collect::<Vec<_>>(),
         [cookie]
@@ -199,6 +203,7 @@ async fn explicit_browser_session_keeps_the_signed_remember_preference() {
         response.headers.append("Set-Cookie", cookie);
     }
     manager.finish_response(&req, &mut response).unwrap();
+    let response = response.into_http_response();
     let cookies: Vec<_> = response.headers.get_all("set-cookie").collect();
     assert_eq!(cookies.len(), 2);
     assert!(cookies.iter().all(|cookie| !cookie.contains("Max-Age=")));
@@ -243,6 +248,7 @@ async fn explicit_expiration_scrubs_both_scopes_without_deduplicating_ordinary_c
         .headers
         .append("Set-Cookie", "credential=; Max-Age=0; Path=/");
     manager.finish_response(&req, &mut response).unwrap();
+    let response = response.into_http_response();
     assert_eq!(
         response
             .headers
@@ -250,11 +256,11 @@ async fn explicit_expiration_scrubs_both_scopes_without_deduplicating_ordinary_c
             .map(|line| line.split(';').next().unwrap())
             .collect::<Vec<_>>(),
         [
+            "credential=",
             "ordinary=first",
             "ordinary=second",
             "ordinary=",
-            "credential-other=retained",
-            "credential="
+            "credential-other=retained"
         ]
     );
 }

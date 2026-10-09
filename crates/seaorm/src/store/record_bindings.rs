@@ -56,9 +56,11 @@ impl Binding {
 
     fn encode(self, backend: DbBackend) -> AuthResult<SimpleExpr> {
         match self {
-            Self::Native(value) => Ok(SimpleExpr::Value(value)),
+            Self::Native(value) => native_parameter(value, backend),
             Self::Json(value) if backend == DbBackend::Postgres => driver_parameter(value, backend),
-            Self::Json(value) => Ok(SimpleExpr::Value(Value::Json(value.json()?.map(Box::new)))),
+            Self::Json(value) => {
+                native_parameter(Value::Json(value.json()?.map(Box::new)), backend)
+            }
             Self::Raw(value) => driver_parameter(value, backend),
             Self::Date(date) => {
                 let value = if backend == DbBackend::Sqlite {
@@ -107,6 +109,19 @@ fn parse_expression(value: &FieldValue) -> AuthResult<()> {
     Err(AuthError::internal(message))
 }
 
+fn native_parameter(value: Value, backend: DbBackend) -> AuthResult<SimpleExpr> {
+    if backend != DbBackend::Sqlite {
+        return Ok(SimpleExpr::Value(value));
+    }
+    let text = match value {
+        Value::String(Some(value)) => value,
+        Value::Char(Some(value)) => value.to_string(),
+        Value::Json(Some(value)) => value.to_string(),
+        value => return Ok(SimpleExpr::Value(value)),
+    };
+    driver_parameter(text.into(), backend)
+}
+
 fn driver_parameter(value: FieldValue, backend: DbBackend) -> AuthResult<SimpleExpr> {
     if backend == DbBackend::Postgres {
         // pg sends OID-unspecified text parameters. A quoted unknown literal preserves column inference.
@@ -122,11 +137,17 @@ fn driver_parameter(value: FieldValue, backend: DbBackend) -> AuthResult<SimpleE
         FieldValue::Bool(value) => Value::Bool(Some(value)),
         FieldValue::String(value)
             if backend == DbBackend::Sqlite
-                && matches!(value.chars().next(), Some('\u{feff}' | '\u{fffe}')) =>
+                && (value.starts_with('\u{feff}')
+                    || value
+                        .chars()
+                        .any(|unit| matches!(unit, '\u{fffe}' | '\u{ffff}'))) =>
         {
-            Value::String(Some(utf16_string(&value.into(), backend)))
+            return Ok(sqlite_text_parameter(&value.into()));
         }
         FieldValue::String(value) => Value::String(Some(value)),
+        FieldValue::Utf16String(value) if backend == DbBackend::Sqlite => {
+            return Ok(sqlite_text_parameter(&value));
+        }
         FieldValue::Utf16String(value) => Value::String(Some(utf16_string(&value, backend))),
         FieldValue::Array(values) if backend == DbBackend::MySql => {
             let parameters = values
@@ -229,31 +250,55 @@ fn postgres_date(date: &FieldDate) -> AuthResult<String> {
     ))
 }
 
+fn sqlite_utf16_units(value: &better_auth_core::Utf16String) -> Vec<u16> {
+    let (units, swap) = match value.as_utf16() {
+        [0xfeff, rest @ ..] => (rest, false),
+        [0xfffe, rest @ ..] => (rest, true),
+        units => (units, false),
+    };
+    // sqlite3_bind_text16 consumes one BOM and uses its byte order for the remaining units.
+    units
+        .iter()
+        .map(|unit| if swap { unit.swap_bytes() } else { *unit })
+        .collect()
+}
+
+fn sqlite_utf8_bytes(units: &[u16]) -> Vec<u8> {
+    let mut input = units.iter().copied();
+    let mut paired = Vec::with_capacity(units.len());
+    while let Some(unit) = input.next() {
+        // SQLite combines any surrogate with the next unit only when converting UTF-16 to UTF-8.
+        if (0xd800..0xe000).contains(&unit)
+            && let Some(next) = input.next()
+        {
+            paired.extend([0xd800 | (unit & 0x3ff), 0xdc00 | (next & 0x3ff)]);
+        } else {
+            paired.push(unit);
+        }
+    }
+    better_auth_core::Utf16String::from_units(paired).to_wtf8()
+}
+
+fn sqlite_text_parameter(value: &better_auth_core::Utf16String) -> SimpleExpr {
+    let units = sqlite_utf16_units(value);
+    let bytes = [
+        sqlite_utf8_bytes(&units),
+        units.iter().flat_map(|unit| unit.to_le_bytes()).collect(),
+        units.iter().flat_map(|unit| unit.to_be_bytes()).collect(),
+    ];
+    // Concatenation tags BLOB bytes with the database encoding without adding CAST's TEXT affinity.
+    // SQLite 3.46 interprets bound BLOBs as UTF-8 during CAST, even in a UTF-16 database.
+    SimpleExpr::cust_with_exprs(
+        "(CASE (SELECT encoding FROM pragma_encoding) \
+         WHEN 'UTF-8' THEN ? WHEN 'UTF-16le' THEN ? WHEN 'UTF-16be' THEN ? END || X'')",
+        bytes.map(|bytes| SimpleExpr::Value(Value::Bytes(Some(bytes)))),
+    )
+}
+
 pub(super) fn utf16_string(value: &better_auth_core::Utf16String, backend: DbBackend) -> String {
     match backend {
         DbBackend::Sqlite => {
-            let (input, swap) = match value.as_utf16() {
-                [0xfeff, rest @ ..] => (rest, false),
-                [0xfffe, rest @ ..] => (rest, true),
-                units => (units, false),
-            };
-            // sqlite3_bind_text16 consumes one BOM and uses its byte order for the remaining units.
-            let mut input = input
-                .iter()
-                .map(|unit| if swap { unit.swap_bytes() } else { *unit });
-            let mut units = Vec::with_capacity(value.as_utf16().len());
-            while let Some(unit) = input.next() {
-                // Bun binds UTF-16; SQLite combines any surrogate with the next unit, even an ASCII unit.
-                if (0xd800..0xe000).contains(&unit)
-                    && let Some(next) = input.next()
-                {
-                    units.extend([0xd800 | (unit & 0x3ff), 0xdc00 | (next & 0x3ff)]);
-                } else {
-                    units.push(unit);
-                }
-            }
-            String::from_utf8_lossy(&better_auth_core::Utf16String::from_units(units).to_wtf8())
-                .into_owned()
+            String::from_utf8_lossy(&sqlite_utf8_bytes(&sqlite_utf16_units(value))).into_owned()
         }
         _ => String::from_utf16_lossy(value.as_utf16()),
     }
@@ -404,6 +449,329 @@ mod tests {
                 hex
             );
         }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn sqlite_text_parameters_preserve_storage_and_comparisons_in_each_encoding()
+    -> AuthResult<()> {
+        use sea_orm::{ConnectOptions, ConnectionTrait, Database, sea_query::Alias};
+
+        let cases: &[(&[u16], &str, [&str; 3])] = &[
+            (&[], "", ["", "", ""]),
+            (
+                &[0xd800, 0x40],
+                "\u{10040}",
+                ["F0908180", "00D84000", "D8000040"],
+            ),
+            (
+                &[0xdc00, 0x41],
+                "\u{10041}",
+                ["F0908181", "00DC4100", "DC000041"],
+            ),
+            (
+                &[0xd83d, 0xde00],
+                "\u{1f600}",
+                ["F09F9880", "3DD800DE", "D83DDE00"],
+            ),
+            (
+                &[0xdfff, 0xffff],
+                "\u{10ffff}",
+                ["F48FBFBF", "FFDFFFFF", "DFFFFFFF"],
+            ),
+            (
+                &[0xd800, 0xd800, 0x40],
+                "\u{10000}@",
+                ["F090808040", "00D800D84000", "D800D8000040"],
+            ),
+            (
+                &[0xd800],
+                "\u{fffd}\u{fffd}\u{fffd}",
+                ["EDA080", "00D8", "D800"],
+            ),
+            (
+                &[0xdc00],
+                "\u{fffd}\u{fffd}\u{fffd}",
+                ["EDB080", "00DC", "DC00"],
+            ),
+            (
+                &[0x61, 0, 0x62],
+                "a\0b",
+                ["610062", "610000006200", "006100000062"],
+            ),
+            (&[0xfeff], "", ["", "", ""]),
+            (&[0xfffe], "", ["", "", ""]),
+            (&[0xfeff, 0x41], "A", ["41", "4100", "0041"]),
+            (&[0xfffe, 0x4100], "A", ["41", "4100", "0041"]),
+            (&[0xfffe, 0x41], "\u{4100}", ["E48480", "0041", "4100"]),
+            (
+                &[0xfeff, 0xd800, 0x40],
+                "\u{10040}",
+                ["F0908180", "00D84000", "D8000040"],
+            ),
+            (
+                &[0x41, 0xfeff],
+                "A\u{feff}",
+                ["41EFBBBF", "4100FFFE", "0041FEFF"],
+            ),
+            (&[0xfeff, 0xfffe], "\u{fffe}", ["EFBFBE", "FEFF", "FFFE"]),
+            (
+                &[0x41, 0xfffe],
+                "A\u{fffe}",
+                ["41EFBFBE", "4100FEFF", "0041FFFE"],
+            ),
+            (
+                &[0x41, 0xfffe, 0x42],
+                "A\u{fffe}B",
+                ["41EFBFBE42", "4100FEFF4200", "0041FFFE0042"],
+            ),
+            (&[0xffff], "\u{ffff}", ["EFBFBF", "FFFF", "FFFF"]),
+            (
+                &[0x41, 0xffff],
+                "A\u{ffff}",
+                ["41EFBFBF", "4100FFFF", "0041FFFF"],
+            ),
+            (
+                &[0x41, 0xffff, 0x42],
+                "A\u{ffff}B",
+                ["41EFBFBF42", "4100FFFF4200", "0041FFFF0042"],
+            ),
+            (
+                &[0x22, 0x41, 0xffff, 0x42, 0x22],
+                "\"A\u{ffff}B\"",
+                [
+                    "2241EFBFBF4222",
+                    "22004100FFFF42002200",
+                    "00220041FFFF00420022",
+                ],
+            ),
+            (
+                &[0xfffe, 0x00d8],
+                "\u{fffd}\u{fffd}\u{fffd}",
+                ["EDA080", "00D8", "D800"],
+            ),
+        ];
+        for (encoding_index, encoding) in ["UTF-8", "UTF-16le", "UTF-16be"].into_iter().enumerate()
+        {
+            let mut options = ConnectOptions::new("sqlite::memory:");
+            let _ = options.max_connections(1);
+            let database = Database::connect(options)
+                .await
+                .map_err(crate::store::map_db_err)?;
+            let _ = database
+                .execute_unprepared(&format!("PRAGMA encoding = '{encoding}'"))
+                .await
+                .map_err(crate::store::map_db_err)?;
+            let _ = database
+                .execute_unprepared("CREATE TABLE observations (value TEXT)")
+                .await
+                .map_err(crate::store::map_db_err)?;
+            for (units, expected, bytes) in cases {
+                let bytes = bytes
+                    .get(encoding_index)
+                    .ok_or_else(|| AuthError::internal("SQLite fixture encoding is missing"))?;
+                let input = better_auth_core::Utf16String::from_units(units.to_vec());
+                let mut representations = vec![FieldValue::Utf16String(input.clone())];
+                if let Ok(text) = input.to_utf8() {
+                    representations.push(FieldValue::String(text));
+                }
+                for input in representations {
+                    sqlite_write_and_read(
+                        &database,
+                        Binding::Raw(input.clone()),
+                        &input,
+                        expected,
+                        bytes,
+                    )
+                    .await?;
+                    if let FieldValue::String(text) = &input {
+                        sqlite_write_and_read(
+                            &database,
+                            Binding::Native(Value::String(Some(text.clone()))),
+                            &input,
+                            expected,
+                            bytes,
+                        )
+                        .await?;
+                    }
+                }
+            }
+            for binding in [
+                Binding::Json(FieldValue::from("A\u{ffff}B")),
+                Binding::Native(Value::Json(Some(Box::new(serde_json::json!("A\u{ffff}B"))))),
+            ] {
+                sqlite_write_and_read(
+                    &database,
+                    binding,
+                    &FieldValue::from("\"A\u{ffff}B\""),
+                    "\"A\u{ffff}B\"",
+                    [
+                        "2241EFBFBF4222",
+                        "22004100FFFF42002200",
+                        "00220041FFFF00420022",
+                    ]
+                    .get(encoding_index)
+                    .ok_or_else(|| {
+                        AuthError::internal("SQLite JSON fixture encoding is missing")
+                    })?,
+                )
+                .await?;
+            }
+            sqlite_write_and_read(
+                &database,
+                Binding::Native(Value::Char(Some('\u{ffff}'))),
+                &FieldValue::from("\u{ffff}"),
+                "\u{ffff}",
+                ["EFBFBF", "FFFF", "FFFF"]
+                    .get(encoding_index)
+                    .ok_or_else(|| {
+                        AuthError::internal("SQLite character fixture encoding is missing")
+                    })?,
+            )
+            .await?;
+            let _ = database
+                .execute_unprepared(
+                    "CREATE TABLE affinities (untyped, numeric_value NUMERIC, text_value TEXT)",
+                )
+                .await
+                .map_err(crate::store::map_db_err)?;
+            let _ = database
+                .execute_unprepared("INSERT INTO affinities VALUES (7, 7, '7')")
+                .await
+                .map_err(crate::store::map_db_err)?;
+            for input in [
+                FieldValue::from("\u{feff}7"),
+                FieldValue::Utf16String("\u{feff}7".into()),
+            ] {
+                let expression = parameter(input, DbBackend::Sqlite)?;
+                let mut query = Query::select();
+                let _ = query.from(Alias::new("affinities"));
+                for (name, sql) in [
+                    ("untyped", "untyped = ?"),
+                    ("numeric_value", "numeric_value = ?"),
+                    ("text_value", "text_value = ?"),
+                    ("literal_number", "7 = ?"),
+                    ("literal_text", "'7' = ?"),
+                ] {
+                    let _ = query.expr_as(
+                        SimpleExpr::cust_with_exprs(sql, [expression.clone()]),
+                        Alias::new(name),
+                    );
+                }
+                let row = database
+                    .query_one_raw(DbBackend::Sqlite.build(&query))
+                    .await
+                    .map_err(crate::store::map_db_err)?
+                    .ok_or_else(|| AuthError::internal("SQLite affinity observation is missing"))?;
+                for (name, expected) in [
+                    ("untyped", 0),
+                    ("numeric_value", 1),
+                    ("text_value", 1),
+                    ("literal_number", 0),
+                    ("literal_text", 1),
+                ] {
+                    assert_eq!(
+                        row.try_get::<i64>("", name)
+                            .map_err(crate::store::map_db_err)?,
+                        expected,
+                        "{encoding}: {name}"
+                    );
+                }
+            }
+        }
+        Ok(())
+    }
+
+    async fn sqlite_write_and_read(
+        database: &sea_orm::DatabaseConnection,
+        binding: Binding,
+        input: &FieldValue,
+        expected: &str,
+        bytes: &str,
+    ) -> AuthResult<()> {
+        use sea_orm::{ConnectionTrait, sea_query::Alias};
+
+        let _ = database
+            .execute_unprepared("DELETE FROM observations")
+            .await
+            .map_err(crate::store::map_db_err)?;
+        let query = Query::insert()
+            .into_table(Alias::new("observations"))
+            .columns([Alias::new("value")])
+            .values_panic([binding.clone().bind(DbBackend::Sqlite)?])
+            .to_owned();
+        let inserted = database
+            .execute_raw(DbBackend::Sqlite.build(&query))
+            .await
+            .map_err(crate::store::map_db_err)?;
+        assert_eq!(inserted.rows_affected(), 1);
+        sqlite_stored_text(database, input, expected, bytes).await?;
+        for (previous, next) in [
+            (input.clone(), Binding::Raw(FieldValue::from("sentinel"))),
+            (FieldValue::from("sentinel"), binding),
+        ] {
+            let query = Query::update()
+                .table(Alias::new("observations"))
+                .value(Alias::new("value"), next.bind(DbBackend::Sqlite)?)
+                .and_where(SimpleExpr::cust_with_exprs(
+                    "value = ?",
+                    [parameter(previous, DbBackend::Sqlite)?],
+                ))
+                .to_owned();
+            let updated = database
+                .execute_raw(DbBackend::Sqlite.build(&query))
+                .await
+                .map_err(crate::store::map_db_err)?;
+            assert_eq!(updated.rows_affected(), 1);
+        }
+        sqlite_stored_text(database, input, expected, bytes).await
+    }
+
+    async fn sqlite_stored_text(
+        database: &sea_orm::DatabaseConnection,
+        input: &FieldValue,
+        expected: &str,
+        bytes: &str,
+    ) -> AuthResult<()> {
+        use sea_orm::{ConnectionTrait, sea_query::Alias};
+
+        let query = Query::select()
+            .column(Alias::new("value"))
+            .expr_as(
+                SimpleExpr::Custom("typeof(value)".into()),
+                Alias::new("storage_type"),
+            )
+            .expr_as(
+                SimpleExpr::Custom("hex(CAST(value AS BLOB))".into()),
+                Alias::new("bytes"),
+            )
+            .from(Alias::new("observations"))
+            .and_where(SimpleExpr::cust_with_exprs(
+                "value = ?",
+                [parameter(input.clone(), DbBackend::Sqlite)?],
+            ))
+            .to_owned();
+        let row = database
+            .query_one_raw(DbBackend::Sqlite.build(&query))
+            .await
+            .map_err(crate::store::map_db_err)?
+            .ok_or_else(|| {
+                AuthError::internal("SQLite stored parameter did not match its source")
+            })?;
+        assert_eq!(
+            super::super::plugin_rows::value(&row, "value")?,
+            expected.into()
+        );
+        assert_eq!(
+            row.try_get::<String>("", "storage_type")
+                .map_err(crate::store::map_db_err)?,
+            "text"
+        );
+        assert_eq!(
+            row.try_get::<String>("", "bytes")
+                .map_err(crate::store::map_db_err)?,
+            bytes
+        );
         Ok(())
     }
 

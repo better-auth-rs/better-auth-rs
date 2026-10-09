@@ -628,6 +628,7 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
                 return Ok(());
             }
         }
+        crate::store::database_hooks::await_adapter_lookup().await;
         self.model_fields.begin_id_query(EntityRole::Session)?;
         let (column, converted) = self.memory_session_token_query(token.clone())?;
         self.raw("session", "delete", |state| {

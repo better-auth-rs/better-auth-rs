@@ -180,7 +180,7 @@ async fn run(
         .plugin(EmailPasswordPlugin::new().auto_sign_in(endpoint!="signup").password_hasher(Arc::new(Hasher(state.clone())))
             .custom_synthetic_user(Arc::new(move|input|{synthetic.event("synthetic");let mut result=input.core_fields;result.extend(input.additional_fields);let _=result.insert("id".into(),input.id.into());Ok(result)}))
             .callbacks(EmailPasswordCallbacks::<BundledSchema>::existing_user_sign_up(move|user,ctx|duplicate.sender(sender,json!({"email":user.email}),ctx))))
-        .plugin(OrganizationPlugin::new().hooks(Arc::new(Hooks(state.clone()))).callbacks(OrganizationCallbacks::<BundledSchema>::invitation_email(move|message,ctx|invitation.sender(sender,json!({"email":message.invitation.email,"role":message.invitation.role,"inviter":message.inviter.email}),ctx))))
+        .plugin(OrganizationPlugin::new().hooks(Arc::new(Hooks(state.clone()))).callbacks(OrganizationCallbacks::<BundledSchema>::invitation_email(move|message,ctx|invitation.sender(sender,json!({"email":message.invitation.email,"role":message.invitation.role,"inviter":message.inviter.model_property("email")?.json()?}),ctx))))
         .build().await.unwrap());
     let response=auth.call_endpoint(HttpMethod::Post,"/sign-up/email",EndpointInput{body:Some(json!({"name":"Owner","email":"owner@example.com","password":"fixture-password"})),..Default::default()}).await.unwrap();
     assert_eq!(response.status, 200);

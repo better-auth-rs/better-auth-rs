@@ -61,7 +61,7 @@ impl State {
         self.record(json!({"phase":phase,"path":request.path(),"body":body}))
     }
     fn team(&self, phase: &str, event: OrganizationTeamEvent<'_>) -> AuthResult<()> {
-        self.record(json!({"phase":phase,"user":event.user.map(|user| user.model_property("id")).transpose()?,"team":team_value(event.team)?}))
+        self.record(json!({"phase":phase,"user":event.user.map(|user| user.model_property("id")?.json()).transpose()?,"team":team_value(event.team)?}))
     }
 }
 
@@ -116,7 +116,7 @@ impl OrganizationPolicy for State {
         data: OrganizationTeamLimit<'_>,
         _: OrganizationEndpoint<'_>,
     ) -> AuthResult<Option<usize>> {
-        self.record(json!({"phase":"limit","organizationId":data.organization_id.json()?,"user":data.session.map(|session| session.user.model_property("id")).transpose()?}))?;
+        self.record(json!({"phase":"limit","organizationId":data.organization_id.json()?,"user":data.session.map(|session| session.user.model_property("id")?.json()).transpose()?}))?;
         Ok(Some(100))
     }
 }
@@ -128,7 +128,7 @@ impl OrganizationHooks for State {
         _: &OrganizationResponse,
         user: Option<&FieldValue>,
     ) -> AuthResult<()> {
-        self.record(json!({"phase":"create-before","user":user.map(|user| user.model_property("id")).transpose()?,"team":{"name":data.name,"organizationId":data.organization_id,"label":data.additional_fields.get("label").map(FieldValue::json).transpose()?}}))?;
+        self.record(json!({"phase":"create-before","user":user.map(|user| user.model_property("id")?.json()).transpose()?,"team":{"name":data.name,"organizationId":data.organization_id,"label":data.additional_fields.get("label").map(FieldValue::json).transpose()?}}))?;
         data.name = format!("{}:hook", data.name.typed()?).into();
         let label = data
             .additional_fields

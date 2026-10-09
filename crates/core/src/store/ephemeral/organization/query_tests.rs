@@ -51,7 +51,8 @@ async fn native_json_policies_transform_raw_text_without_reencoding_reads() -> A
             .organizations
             .get(&organization.id)?
             .unwrap()
-            .metadata
+            .get("metadata")
+            .unwrap()
             .json()?,
         Some(json!(r#"{"stored":1}"#))
     );
@@ -94,7 +95,8 @@ async fn native_json_policies_transform_raw_text_without_reencoding_reads() -> A
             .organization_roles
             .get(&role.id)?
             .unwrap()
-            .permission
+            .get("permission")
+            .unwrap()
             .json()?,
         Some(json!(r#"{"stored":["read"]}"#))
     );
@@ -278,7 +280,14 @@ async fn member_sort_preserves_equal_dates_and_page_positions() -> AuthResult<()
         created.push(store.insert_member(member).await?);
     }
     assert_eq!(created, fixture.created);
-    assert_eq!(store.lock()?.members.snapshot()?, fixture.stored);
+    assert_eq!(
+        store.lock()?.members.snapshot()?,
+        fixture
+            .stored
+            .iter()
+            .map(crate::AuthRecordFields::field_values)
+            .collect::<AuthResult<Vec<_>>>()?
+    );
     for operation in fixture.operations {
         let (members, total) = store
             .query_organization_members(&ListOrganizationMembersParams {
@@ -294,7 +303,11 @@ async fn member_sort_preserves_equal_dates_and_page_positions() -> AuthResult<()
         assert_eq!(total, operation.total, "{} total", operation.name);
         assert_eq!(
             store.lock()?.members.snapshot()?,
-            operation.stored,
+            operation
+                .stored
+                .iter()
+                .map(crate::AuthRecordFields::field_values)
+                .collect::<AuthResult<Vec<_>>>()?,
             "{} stored insertion order",
             operation.name
         );

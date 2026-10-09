@@ -8,9 +8,7 @@ impl<S: AuthSchema> SessionManager<S> {
         req: &AuthRequest,
         response: &mut AuthResponse,
     ) -> AuthResult<()> {
-        let endpoint_headers = std::mem::take(&mut response.headers);
-        response.headers = req.take_response_headers()?;
-        response.headers.merge(endpoint_headers);
+        response.initialize_endpoint_headers(req.take_response_headers()?);
         let session_cookie = response
             .headers
             .get_all("set-cookie")

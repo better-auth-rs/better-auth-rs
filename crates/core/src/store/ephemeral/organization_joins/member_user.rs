@@ -29,7 +29,9 @@ impl EphemeralStore {
             self.raw("member", "findOne", move |state| {
                 let mut selected = None;
                 for row in state.members.select_refs(|_| true)? {
-                    if row.read(&predicate)? {
+                    if row.read(|stored| {
+                        predicate(&super::super::organization_rows::view(stored, fields)?)
+                    })? {
                         selected = Some(row);
                         break;
                     }
@@ -41,8 +43,7 @@ impl EphemeralStore {
                     .then(|| member.read(|row| Ok(row.clone())))
                     .transpose()?;
                 let users = if let Some(snapshot) = &native_member {
-                    let (_, storage) =
-                        super::super::fields::record_fields(EntityRole::Member, snapshot, fields)?;
+                    let storage = snapshot;
                     let selected = selected_users(
                         state,
                         (&join.logical_to, &join.to),
@@ -74,7 +75,7 @@ impl EphemeralStore {
         let Some((member, native_member, native_users)) = selected else {
             return Ok(None);
         };
-        let member = match native_member {
+        let member: Member = match native_member {
             Some(member) => self.output_member(member).await?,
             None => self
                 .output_record_refs(EntityRole::Member, vec![member])

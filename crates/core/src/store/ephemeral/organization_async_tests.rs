@@ -142,12 +142,7 @@ async fn async_competing_reservations_keep_the_last_seat_atomic() -> AuthResult<
         assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 2);
         assert_eq!(store.count_team_members(team.id.typed()?).await?, 1);
         assert_eq!(
-            store
-                .lock()?
-                .teams
-                .get(&team.id)?
-                .unwrap()
-                .additional_fields["memberCount"],
+            store.lock()?.teams.get(&team.id)?.unwrap()["memberCount"],
             Value::from(1.0)
         );
     }
@@ -197,12 +192,7 @@ async fn canceled_reservation_has_no_seat_or_member_write() -> AuthResult<()> {
     assert!(task.await.unwrap_err().is_cancelled());
     assert_eq!(store.count_team_members(team.id.typed()?).await?, 0);
     assert_eq!(
-        store
-            .lock()?
-            .teams
-            .get(&team.id)?
-            .unwrap()
-            .additional_fields["memberCount"],
+        store.lock()?.teams.get(&team.id)?.unwrap()["memberCount"],
         Value::from(0.0)
     );
     Ok(())
@@ -258,8 +248,11 @@ async fn reservation_callback_can_update_an_unrelated_team_field() -> AuthResult
             .is_some()
     );
     let row = store.lock()?.teams.get(&team.id)?.unwrap();
-    assert_eq!(row.created_at.typed()?, &crate::FieldDate::from(date));
-    assert_eq!(row.additional_fields["memberCount"], Value::from(1.0));
+    assert_eq!(
+        row["createdAt"].as_date(),
+        Some(&crate::FieldDate::from(date))
+    );
+    assert_eq!(row["memberCount"], Value::from(1.0));
     store.configure_organization_fields(Default::default())?;
     Ok(())
 }
@@ -302,12 +295,7 @@ async fn full_team_keeps_the_prepared_counter_repair() -> AuthResult<()> {
         )
         .await?;
     assert_eq!(
-        store
-            .lock()?
-            .teams
-            .get(&team.id)?
-            .unwrap()
-            .additional_fields["memberCount"],
+        store.lock()?.teams.get(&team.id)?.unwrap()["memberCount"],
         Value::from(0.0)
     );
     assert!(
@@ -318,12 +306,7 @@ async fn full_team_keeps_the_prepared_counter_repair() -> AuthResult<()> {
     );
     assert_eq!(store.count_team_members(team.id.typed()?).await?, 1);
     assert_eq!(
-        store
-            .lock()?
-            .teams
-            .get(&team.id)?
-            .unwrap()
-            .additional_fields["memberCount"],
+        store.lock()?.teams.get(&team.id)?.unwrap()["memberCount"],
         Value::from(1.0)
     );
     Ok(())
@@ -414,11 +397,14 @@ async fn invitation_member_output_failure_compensates_without_member_seat_or_ses
         vec![Value::from("accepted"), Value::from("pending")]
     );
     let state = store.lock()?;
-    assert!(state.invitations.get(&invitation.id)?.unwrap().is_pending());
+    assert_eq!(
+        state.invitations.get(&invitation.id)?.unwrap()["status"],
+        Value::from("pending")
+    );
     assert_eq!(state.members.len(), 0);
     assert_eq!(state.team_members.len(), 0);
     assert_eq!(
-        state.teams.get(&team.id)?.unwrap().additional_fields["memberCount"],
+        state.teams.get(&team.id)?.unwrap()["memberCount"],
         Value::from(0.0)
     );
     assert_eq!(
@@ -520,7 +506,10 @@ async fn async_team_input_failure_has_no_write_and_output_failure_keeps_write() 
         error.to_string(),
         AuthError::bad_request("input rejected").to_string()
     );
-    assert_eq!(store.lock()?.teams.get(&team.id)?.unwrap().name, "before");
+    assert_eq!(
+        store.lock()?.teams.get(&team.id)?.unwrap()["name"],
+        Value::from("before")
+    );
     let error = store
         .update_team(
             team.id.typed()?,
@@ -536,8 +525,8 @@ async fn async_team_input_failure_has_no_write_and_output_failure_keeps_write() 
         AuthError::bad_request("output rejected").to_string()
     );
     assert_eq!(
-        store.lock()?.teams.get(&team.id)?.unwrap().name,
-        "output-error"
+        store.lock()?.teams.get(&team.id)?.unwrap()["name"],
+        Value::from("output-error")
     );
     Ok(())
 }

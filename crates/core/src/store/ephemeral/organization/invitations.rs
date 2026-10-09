@@ -30,7 +30,7 @@ impl InvitationStore for EphemeralStore {
         if let Some(value) = input.additional_fields.remove("inviterId") {
             invitation.inviter_id = crate::SchemaValue::Dynamic(value);
         }
-        let mut invitation: Invitation = self
+        let mut invitation = self
             .store_record(
                 EntityRole::Invitation,
                 invitation,
@@ -41,7 +41,7 @@ impl InvitationStore for EphemeralStore {
         {
             let mut state = self.lock()?;
             if let Some(id) = self.next_serial_id(state.invitations.len()) {
-                invitation.id = crate::SchemaValue::from_field(id);
+                let _ = invitation.insert("id".into(), id);
             }
             state.invitations.push(invitation.clone());
         }
@@ -72,13 +72,18 @@ impl InvitationStore for EphemeralStore {
     ) -> AuthResult<Option<Invitation>> {
         let email = self.organization_query(EntityRole::Invitation, "email", Value::from(email))?;
         let org = self.organization_query(EntityRole::Invitation, "organizationId", org.clone())?;
+        let schema = self.field_config(EntityRole::Invitation)?;
         let rows = self.lock()?.invitations.snapshot()?;
-        for invitation in rows.into_iter().filter(|row| {
-            row.organization_id
+        for row in rows {
+            let invitation: Invitation = super::super::organization_rows::view(&row, &schema)?;
+            if !invitation
+                .organization_id
                 .field_value()
                 .strict_equals(&org.field_value())
-                && row.is_pending()
-        }) {
+                || !invitation.is_pending()
+            {
+                continue;
+            }
             if match (invitation.email.as_str(), email.as_str()) {
                 (Some(actual), Some(expected)) => actual.eq_ignore_ascii_case(expected),
                 _ => invitation
@@ -87,7 +92,7 @@ impl InvitationStore for EphemeralStore {
                     .strict_equals(&email.field_value()),
             } && !invitation.is_expired()?
             {
-                return self.output_invitation(invitation).await.map(Some);
+                return self.output_invitation(row).await.map(Some);
             }
         }
         Ok(None)
@@ -121,7 +126,7 @@ impl InvitationStore for EphemeralStore {
                 .invitations
                 .get_mut(&id)?
                 .ok_or_else(|| AuthError::not_found("Invitation not found"))?;
-            *value = patch.apply(value.clone())?;
+            *value = patch.apply(value.clone());
             value.clone()
         };
         self.output_invitation(result).await
@@ -155,7 +160,7 @@ impl InvitationStore for EphemeralStore {
                 .invitations
                 .get_mut(&id)?
                 .ok_or_else(|| AuthError::not_found("Invitation not found"))?;
-            *value = patch.apply(value.clone())?;
+            *value = patch.apply(value.clone());
             value.clone()
         };
         self.output_invitation(result).await
@@ -169,15 +174,14 @@ impl InvitationStore for EphemeralStore {
         org: &Value,
     ) -> AuthResult<Vec<Invitation>> {
         let org = self.organization_query(EntityRole::Invitation, "organizationId", org.clone())?;
+        let schema = self.field_config(EntityRole::Invitation)?;
         let rows = self
             .lock()?
             .invitations
             .snapshot()?
             .into_iter()
             .filter(|row| {
-                row.organization_id
-                    .field_value()
-                    .strict_equals(&org.field_value())
+                organization_value(row, &schema, "organizationId").strict_equals(&org.field_value())
             })
             .collect();
         let rows = crate::query::paginate_memory(
@@ -193,19 +197,22 @@ impl InvitationStore for EphemeralStore {
     }
     async fn count_pending_organization_invitations_value(&self, org: &Value) -> AuthResult<i64> {
         let org = self.organization_query(EntityRole::Invitation, "organizationId", org.clone())?;
+        let schema = self.field_config(EntityRole::Invitation)?;
         self.lock()?
             .invitations
             .snapshot()?
             .iter()
-            .filter(|invitation| {
-                invitation
-                    .organization_id
-                    .field_value()
-                    .strict_equals(&org.field_value())
-                    && invitation.is_pending()
-            })
-            .try_fold(0, |count, invitation| {
-                Ok(count + i64::from(!invitation.is_expired()?))
+            .try_fold(0, |count, row| {
+                let invitation: Invitation = super::super::organization_rows::view(row, &schema)?;
+                Ok(count
+                    + i64::from(
+                        invitation
+                            .organization_id
+                            .field_value()
+                            .strict_equals(&org.field_value())
+                            && invitation.is_pending()
+                            && !invitation.is_expired()?,
+                    ))
             })
     }
     async fn list_user_invitations(
@@ -220,53 +227,60 @@ impl InvitationStore for EphemeralStore {
             "email",
             Value::from(email.to_lowercase()),
         )?;
+        let schema = self.field_config(EntityRole::Invitation)?;
         let selected = {
             let state = self.lock()?;
-            state
-                .invitations
-                .select_refs(|row| row.email.field_value().strict_equals(&email.field_value()))?
+            state.invitations.select_refs(|row| {
+                organization_value(row, &schema, "email").strict_equals(&email.field_value())
+            })?
         };
         let rows = crate::query::paginate_memory(
             selected,
             Some(self.config.advanced.database.find_many_limit()),
             None,
         );
-        self.output_record_refs_batches_then(EntityRole::Invitation, rows, |ready| async move {
-            let mut pending = Vec::new();
-            let mut organizations = Vec::new();
-            for (index, invitation) in ready {
-                let owner = invitation.organization_id.field_value();
-                let organization = if owner.is_null() || owner.is_undefined() {
-                    None
-                } else {
-                    let id = self.organization_primary_id(&invitation.organization_id)?;
-                    self.lock()?.organizations.first_ref(|row| row.id == id)?
-                };
-                let has_organization = organization.is_some();
-                organizations.extend(organization);
-                pending.push((index, invitation, has_organization));
-            }
-            let mut organizations = self
-                .output_record_refs(EntityRole::Organization, organizations)
-                .await?
-                .into_iter();
-            Ok(pending
-                .into_iter()
-                .map(|(index, invitation, has_organization)| {
-                    (
-                        index,
-                        crate::store::InvitationOrganization {
-                            invitation,
-                            organization: if has_organization {
-                                organizations.next()
-                            } else {
-                                None
+        self.output_record_refs_batches_then(
+            EntityRole::Invitation,
+            rows,
+            |ready: Vec<(usize, Invitation)>| async move {
+                let mut pending = Vec::new();
+                let mut organizations = Vec::new();
+                for (index, invitation) in ready {
+                    let owner = invitation.organization_id.field_value();
+                    let organization = if owner.is_null() || owner.is_undefined() {
+                        None
+                    } else {
+                        let id = self.organization_primary_id(&invitation.organization_id)?;
+                        self.lock()?
+                            .organizations
+                            .first_ref(|row| organization_id(row) == id)?
+                    };
+                    let has_organization = organization.is_some();
+                    organizations.extend(organization);
+                    pending.push((index, invitation, has_organization));
+                }
+                let mut organizations = self
+                    .output_record_refs(EntityRole::Organization, organizations)
+                    .await?
+                    .into_iter();
+                Ok(pending
+                    .into_iter()
+                    .map(|(index, invitation, has_organization)| {
+                        (
+                            index,
+                            crate::store::InvitationOrganization {
+                                invitation,
+                                organization: if has_organization {
+                                    organizations.next()
+                                } else {
+                                    None
+                                },
                             },
-                        },
-                    )
-                })
-                .collect())
-        })
+                        )
+                    })
+                    .collect())
+            },
+        )
         .await
     }
 }

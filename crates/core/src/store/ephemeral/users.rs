@@ -510,6 +510,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
                 return Ok(None);
             }
         }
+        crate::store::database_hooks::await_adapter_lookup().await;
         self.model_fields.begin_id_query(EntityRole::User)?;
         let stored_id = self.memory_primary_id_query(id)?;
         self.raw("user", "delete", |state| {

@@ -171,7 +171,7 @@ impl OrganizationHooks for State {
         let mut value = json!({"userId":member.user_id,"organizationId":member.organization_id,"role":member.role});
         let object = value.as_object_mut().unwrap();
         object.extend(member.additional_fields.json()?);
-        if let Some(team) = &member.team_id {
+        if let Some(team) = member.team_id.json()? {
             let _ = object.insert("teamId".into(), json!(team));
         }
         self.record(json!({"phase":"member-before","member":value,"ambient":ambient()}));

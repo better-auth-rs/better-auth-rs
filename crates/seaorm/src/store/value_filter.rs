@@ -42,6 +42,24 @@ pub(super) fn adapter_query_value(
     Ok(value)
 }
 
+pub(super) fn like_pattern(
+    value: &FieldValue,
+    prefix: &str,
+    suffix: &str,
+    backend: DbBackend,
+) -> AuthResult<SimpleExpr> {
+    let text = value.display_utf16()?;
+    let units = prefix
+        .encode_utf16()
+        .chain(text.as_utf16().iter().copied())
+        .chain(suffix.encode_utf16())
+        .collect();
+    super::record_bindings::parameter(
+        better_auth_core::Utf16String::from_units(units).into(),
+        backend,
+    )
+}
+
 pub(super) fn equals_id(
     column: impl ColumnTrait,
     value: &FieldValue,
@@ -50,7 +68,7 @@ pub(super) fn equals_id(
 ) -> AuthResult<SimpleExpr> {
     let value = policy.adapter_id_query(value.clone())?;
     match &value {
-        FieldValue::String(value) => column.eq_id(value, policy),
+        FieldValue::String(value) => column.eq_id(value, policy, backend),
         value => equals(column, value, backend),
     }
 }

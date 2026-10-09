@@ -1,4 +1,4 @@
-use super::rows::{MemoryRow, RowRef};
+use super::rows::RowRef;
 use super::*;
 use crate::store::{MemberUser, OrganizationDetails, OrganizationDetailsQuery, OrganizationKey};
 use better_auth_schema_registry::EntityRole;
@@ -6,22 +6,19 @@ use better_auth_schema_registry::EntityRole;
 mod member_user;
 
 struct OrganizationChildren {
-    invitations: Vec<RowRef<Invitation>>,
-    members: Vec<RowRef<Member>>,
-    teams: Option<Vec<RowRef<crate::Team>>>,
+    invitations: Vec<RowRef<FieldMap>>,
+    members: Vec<RowRef<FieldMap>>,
+    teams: Option<Vec<RowRef<FieldMap>>>,
 }
 
-fn child_page<T: Clone + MemoryRow>(
-    rows: Vec<RowRef<T>>,
-    limit: f64,
-) -> AuthResult<Vec<RowRef<T>>> {
+fn child_page(rows: Vec<RowRef<FieldMap>>, limit: f64) -> AuthResult<Vec<RowRef<FieldMap>>> {
     let mut result = Vec::new();
     let mut ids = Vec::new();
     for row in rows {
         if result.len() as f64 >= limit {
             break;
         }
-        let id = row.read(|row| Ok(row.id().clone()))?;
+        let id = row.read(|row| Ok(super::organization_rows::id(row)))?;
         if !ids.contains(&id) {
             ids.push(id);
             result.push(row);
@@ -35,6 +32,10 @@ impl EphemeralStore {
         &self,
         query: OrganizationDetailsQuery<'_>,
     ) -> AuthResult<Option<OrganizationDetails>> {
+        let organization_schema = self.field_config(EntityRole::Organization)?;
+        let member_schema = self.field_config(EntityRole::Member)?;
+        let invitation_schema = self.field_config(EntityRole::Invitation)?;
+        let team_schema = self.field_config(EntityRole::Team)?;
         let (field, value) = match query.organization {
             OrganizationKey::Id(id) => ("id", Value::from(id)),
             OrganizationKey::IdValue(id) => ("id", id.clone()),
@@ -49,15 +50,18 @@ impl EphemeralStore {
             let organization = state
                 .organizations
                 .first_ref(|row| match query.organization {
-                    OrganizationKey::Id(_) | OrganizationKey::IdValue(_) => row.id == value,
+                    OrganizationKey::Id(_) | OrganizationKey::IdValue(_) => {
+                        super::organization_rows::id(row) == value
+                    }
                     OrganizationKey::Slug(_) => {
-                        row.slug.field_value().strict_equals(&value.field_value())
+                        organization_value(row, &organization_schema, "slug")
+                            .strict_equals(&value.field_value())
                     }
                 })?;
             let Some(organization) = organization else {
                 return Ok(None);
             };
-            let organization_id = organization.read(|row| Ok(row.id.clone()))?;
+            let organization_id = organization.read(|row| Ok(super::organization_rows::id(row)))?;
             let member_org = self.organization_reference_query(
                 EntityRole::Member,
                 "organizationId",
@@ -79,16 +83,14 @@ impl EphemeralStore {
             let children = if native {
                 let invitations = child_page(
                     state.invitations.select_refs(|row| {
-                        row.organization_id
-                            .field_value()
+                        organization_value(row, &invitation_schema, "organizationId")
                             .strict_equals(&invitation_org.field_value())
                     })?,
                     default_limit,
                 )?;
                 let members = child_page(
                     state.members.select_refs(|row| {
-                        row.organization_id
-                            .field_value()
+                        organization_value(row, &member_schema, "organizationId")
                             .strict_equals(&member_org.field_value())
                     })?,
                     members_limit,
@@ -96,8 +98,7 @@ impl EphemeralStore {
                 let teams = if query.include_teams {
                     Some(child_page(
                         state.teams.select_refs(|row| {
-                            row.organization_id
-                                .field_value()
+                            organization_value(row, &team_schema, "organizationId")
                                 .strict_equals(&team_org.field_value())
                         })?,
                         default_limit,
@@ -120,7 +121,7 @@ impl EphemeralStore {
                 children,
             )
         };
-        let organization = match native_organization {
+        let organization: Organization = match native_organization {
             Some(organization) => self.output_organization(organization).await?,
             None => self
                 .output_record_refs(EntityRole::Organization, vec![organization])
@@ -131,7 +132,11 @@ impl EphemeralStore {
                     AuthError::internal("Organization projection lost its selected row")
                 })?,
         };
-        let (invitations, members, teams) = if let Some(children) = children {
+        let (invitations, members, teams): (
+            Vec<Invitation>,
+            Vec<Member>,
+            Option<Vec<crate::Team>>,
+        ) = if let Some(children) = children {
             let mut invitations = Vec::with_capacity(children.invitations.len());
             for row in children.invitations {
                 invitations.extend(
@@ -159,8 +164,7 @@ impl EphemeralStore {
         } else {
             let rows = crate::query::paginate_memory(
                 self.lock()?.invitations.select_refs(|row| {
-                    row.organization_id
-                        .field_value()
+                    organization_value(row, &invitation_schema, "organizationId")
                         .strict_equals(&invitation_org.field_value())
                 })?,
                 Some(default_limit),
@@ -175,8 +179,7 @@ impl EphemeralStore {
             }
             let rows = crate::query::paginate_memory(
                 self.lock()?.members.select_refs(|row| {
-                    row.organization_id
-                        .field_value()
+                    organization_value(row, &member_schema, "organizationId")
                         .strict_equals(&member_org.field_value())
                 })?,
                 Some(members_limit),
@@ -192,8 +195,7 @@ impl EphemeralStore {
             let teams = if query.include_teams {
                 let rows = crate::query::paginate_memory(
                     self.lock()?.teams.select_refs(|row| {
-                        row.organization_id
-                            .field_value()
+                        organization_value(row, &team_schema, "organizationId")
                             .strict_equals(&team_org.field_value())
                     })?,
                     Some(default_limit),
@@ -273,6 +275,7 @@ impl EphemeralStore {
         &self,
         user_id: &Value,
     ) -> AuthResult<Vec<Organization>> {
+        let schema = self.field_config(EntityRole::Member)?;
         let user_id = self.organization_query(EntityRole::Member, "userId", user_id.clone())?;
         let (members, organizations) = {
             let state = self.lock()?;
@@ -282,8 +285,7 @@ impl EphemeralStore {
                     .snapshot()?
                     .into_iter()
                     .filter(|row| {
-                        row.user_id
-                            .field_value()
+                        organization_value(row, &schema, "userId")
                             .strict_equals(&user_id.field_value())
                     })
                     .collect(),
@@ -294,36 +296,40 @@ impl EphemeralStore {
                 .iter()
                 .map(|row| {
                     state.organizations.first_ref(|org| {
-                        org.id
+                        super::organization_rows::id(org)
                             .field_value()
-                            .strict_equals(&row.organization_id.field_value())
+                            .strict_equals(&organization_value(row, &schema, "organizationId"))
                     })
                 })
                 .collect::<AuthResult<Vec<_>>>()?;
             (rows, organizations)
         };
-        self.output_records_batches_then(EntityRole::Member, members, |ready| {
-            let organizations = &organizations;
-            async move {
-                let mut indices = Vec::new();
-                let mut sources = Vec::new();
-                for (index, _) in ready {
-                    if let Some(row) = organizations.get(index).ok_or_else(|| {
-                        AuthError::internal("Member projection lost its stored join index")
-                    })? {
-                        indices.push(index);
-                        sources.push(row.clone());
+        self.output_records_batches_then(
+            EntityRole::Member,
+            members,
+            |ready: Vec<(usize, Member)>| {
+                let organizations = &organizations;
+                async move {
+                    let mut indices = Vec::new();
+                    let mut sources = Vec::new();
+                    for (index, _) in ready {
+                        if let Some(row) = organizations.get(index).ok_or_else(|| {
+                            AuthError::internal("Member projection lost its stored join index")
+                        })? {
+                            indices.push(index);
+                            sources.push(row.clone());
+                        }
                     }
+                    Ok(indices
+                        .into_iter()
+                        .zip(
+                            self.output_record_refs(EntityRole::Organization, sources)
+                                .await?,
+                        )
+                        .collect())
                 }
-                Ok(indices
-                    .into_iter()
-                    .zip(
-                        self.output_record_refs(EntityRole::Organization, sources)
-                            .await?,
-                    )
-                    .collect())
-            }
-        })
+            },
+        )
         .await
     }
 
@@ -342,7 +348,11 @@ impl EphemeralStore {
                 None,
             );
             rows.iter()
-                .map(|row| state.teams.first_ref(|team| team.id == row.team_id))
+                .map(|row| {
+                    state
+                        .teams
+                        .first_ref(|team| super::organization_rows::id(team) == row.team_id)
+                })
                 .collect::<AuthResult<Vec<_>>>()?
                 .into_iter()
                 .flatten()
@@ -355,6 +365,7 @@ impl EphemeralStore {
         &self,
         email: &str,
     ) -> AuthResult<Vec<crate::store::InvitationOrganization>> {
+        let schema = self.field_config(EntityRole::Invitation)?;
         let email = self.organization_query(
             EntityRole::Invitation,
             "email",
@@ -367,7 +378,10 @@ impl EphemeralStore {
                     .invitations
                     .snapshot()?
                     .into_iter()
-                    .filter(|row| row.email.field_value().strict_equals(&email.field_value()))
+                    .filter(|row| {
+                        organization_value(row, &schema, "email")
+                            .strict_equals(&email.field_value())
+                    })
                     .collect(),
                 Some(self.config.advanced.database.find_many_limit()),
                 None,
@@ -376,44 +390,48 @@ impl EphemeralStore {
                 .iter()
                 .map(|row| {
                     state.organizations.first_ref(|org| {
-                        org.id
+                        super::organization_rows::id(org)
                             .field_value()
-                            .strict_equals(&row.organization_id.field_value())
+                            .strict_equals(&organization_value(row, &schema, "organizationId"))
                     })
                 })
                 .collect::<AuthResult<Vec<_>>>()?;
             (rows, organizations)
         };
-        self.output_records_batches_then(EntityRole::Invitation, invitations, |ready| {
-            let organizations = &organizations;
-            async move {
-                let mut pending = Vec::new();
-                let mut sources = Vec::new();
-                for (index, invitation) in ready {
-                    let row = organizations.get(index).ok_or_else(|| {
-                        AuthError::internal("Invitation projection lost its stored join index")
-                    })?;
-                    sources.extend(row.clone());
-                    pending.push((index, invitation, row.is_some()));
+        self.output_records_batches_then(
+            EntityRole::Invitation,
+            invitations,
+            |ready: Vec<(usize, Invitation)>| {
+                let organizations = &organizations;
+                async move {
+                    let mut pending = Vec::new();
+                    let mut sources = Vec::new();
+                    for (index, invitation) in ready {
+                        let row = organizations.get(index).ok_or_else(|| {
+                            AuthError::internal("Invitation projection lost its stored join index")
+                        })?;
+                        sources.extend(row.clone());
+                        pending.push((index, invitation, row.is_some()));
+                    }
+                    let mut projected = self
+                        .output_record_refs(EntityRole::Organization, sources)
+                        .await?
+                        .into_iter();
+                    Ok(pending
+                        .into_iter()
+                        .map(|(index, invitation, present)| {
+                            (
+                                index,
+                                crate::store::InvitationOrganization {
+                                    invitation,
+                                    organization: if present { projected.next() } else { None },
+                                },
+                            )
+                        })
+                        .collect())
                 }
-                let mut projected = self
-                    .output_record_refs(EntityRole::Organization, sources)
-                    .await?
-                    .into_iter();
-                Ok(pending
-                    .into_iter()
-                    .map(|(index, invitation, present)| {
-                        (
-                            index,
-                            crate::store::InvitationOrganization {
-                                invitation,
-                                organization: if present { projected.next() } else { None },
-                            },
-                        )
-                    })
-                    .collect())
-            }
-        })
+            },
+        )
         .await
     }
 }

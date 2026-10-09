@@ -117,6 +117,8 @@ Return `HookControl::Cancel` from Account and Verification creation hooks and de
 
 Bulk deletion snapshots the matching records, runs every before hook, performs one batch write, then runs after hooks in snapshot order. A before-hook cancellation preserves the complete batch. An after-hook error occurs after the complete write and stops later hooks and queued effects. User deletion applies this sequence to session children, then account children, before the user's own hooks. SQLite foreign-key cascades can remove children whose hooks cancelled their explicit deletion.
 
+Memory single-record deletion retains the asynchronous adapter lookup after before hooks. Concurrent deletions can finish their before hooks before either deletion runs its after hook. Verification batch deletion uses the same lookup boundary. Cancellation returns before this lookup.
+
 Better Auth 1.7.6 catches deletion snapshot-read errors before running hooks. Bulk deletion still attempts its write; single-record deletion treats an unreadable snapshot as a missing record. This catch is limited to the snapshot read. Hook errors and write errors continue to propagate.
 
 Session deletion snapshots apply configured output transforms once and retain fields with `returned: false`. A transform error follows the same snapshot-read boundary. Output transforms, dates, JSON, and reference fields require runtime hydration for typed session snapshots; `AuthEntity` supplies that implementation. Runtime initialization rejects models without that capability. Ordinary scalar fields without an output policy retain their existing typed values.

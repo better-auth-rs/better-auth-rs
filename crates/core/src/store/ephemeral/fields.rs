@@ -270,45 +270,13 @@ async fn memory_team_preserves_replaced_date_values_and_durable_capacity() {
 
 #[derive(Clone)]
 pub(super) struct PreparedOrganizationFields {
-    schema: crate::user_fields::UserConfig,
-    role: EntityRole,
     fields: FieldMap,
-    create: bool,
 }
 
 impl PreparedOrganizationFields {
-    pub(super) fn apply<T: MemoryOrganizationRecord>(self, value: T) -> AuthResult<T> {
-        let mut record = object(&value)?;
-        let core_names: Vec<_> = core_fields(self.role)
-            .iter()
-            .map(|field| public_name(field.name))
-            .collect();
-        if self.create {
-            record.retain(|name, _| core_names.contains(name));
-            for name in self.schema.fields().keys().filter(|name| *name != "id") {
-                let _ = record.remove(name);
-            }
-        }
-        let mut fields = self.fields;
-        if let Some(id) = fields.get("id") {
-            let _ = record.insert("id".into(), id.clone());
-        }
-        let mut native_storage = Vec::new();
-        for (name, field) in self.schema.fields() {
-            if name == "id" {
-                continue;
-            }
-            let storage_name = resolve_field_name(field.field_name.as_deref(), name);
-            if core_names.contains(name) {
-                if let Some(value) = fields.get(storage_name) {
-                    let _ = record.insert(name.clone(), value.clone());
-                }
-                native_storage.push(storage_name.to_owned());
-            }
-        }
-        fields.retain(|name, _| !native_storage.contains(name));
-        record.extend(fields);
-        decode_record(record)
+    pub(super) fn apply(self, mut fields: FieldMap) -> FieldMap {
+        fields.extend(self.fields);
+        fields
     }
 }
 
@@ -328,39 +296,14 @@ fn record_input<T: MemoryOrganizationRecord>(role: EntityRole, value: &T) -> Aut
     Ok(core)
 }
 
-pub(super) fn record_fields<T: MemoryOrganizationRecord>(
-    role: EntityRole,
-    value: &T,
-    schema: &crate::user_fields::UserConfig,
-) -> AuthResult<(FieldMap, FieldMap)> {
-    let raw = object(value)?;
-    let mut core: FieldMap = core_fields(role)
-        .iter()
-        .map(|field| public_name(field.name))
-        .filter_map(|name| raw.get(&name).cloned().map(|value| (name, value)))
+fn record_output(storage: FieldMap) -> crate::user_fields::AdapterRecord {
+    let core = storage
+        .get("id")
+        .cloned()
+        .map(|id| ("id".into(), id))
+        .into_iter()
         .collect();
-    if role == EntityRole::Invitation {
-        let _ = core.entry("teamId".to_owned()).or_insert(Value::Null);
-    }
-    let mut storage = raw;
-    for (name, field) in schema.fields() {
-        if let Some(value) = core.get(name) {
-            let _ = storage.insert(
-                resolve_field_name(field.field_name.as_deref(), name).to_owned(),
-                value.clone(),
-            );
-        }
-    }
-    Ok((core, storage))
-}
-
-fn record_output<T: MemoryOrganizationRecord>(
-    role: EntityRole,
-    value: &T,
-    schema: &crate::user_fields::UserConfig,
-) -> AuthResult<crate::user_fields::AdapterRecord> {
-    let (core, storage) = record_fields(role, value, schema)?;
-    Ok(crate::user_fields::AdapterRecord::new(core, storage))
+    crate::user_fields::AdapterRecord::new(core, storage)
 }
 
 impl EphemeralStore {
@@ -398,12 +341,7 @@ impl EphemeralStore {
                 self.memory_plugin_field_input(field, value)
             })
             .await?;
-        Ok(PreparedOrganizationFields {
-            schema,
-            role,
-            fields,
-            create: false,
-        })
+        Ok(PreparedOrganizationFields { fields })
     }
 
     pub(super) async fn store_record<T: MemoryOrganizationRecord>(
@@ -412,7 +350,7 @@ impl EphemeralStore {
         value: T,
         patch: Option<FieldMap>,
         extras: FieldMap,
-    ) -> AuthResult<T> {
+    ) -> AuthResult<FieldMap> {
         let schema = self.field_config(role)?;
         let create = patch.is_none();
         let mut core = match patch {
@@ -425,32 +363,22 @@ impl EphemeralStore {
                 self.memory_plugin_field_input(field, value)
             })
             .await?;
-        PreparedOrganizationFields {
-            schema,
-            role,
-            fields,
-            create,
-        }
-        .apply(value)
+        Ok(fields)
     }
 
-    pub(super) async fn output_record_refs<T: MemoryOrganizationRecord + Clone>(
+    pub(super) async fn output_record_refs<T: MemoryOrganizationRecord>(
         &self,
         role: EntityRole,
-        values: Vec<super::rows::RowRef<T>>,
+        values: Vec<super::rows::RowRef<FieldMap>>,
     ) -> AuthResult<Vec<T>> {
         self.output_record_refs_batches_then(role, values, |rows| std::future::ready(Ok(rows)))
             .await
     }
 
-    pub(super) async fn output_record_refs_batches_then<
-        T: MemoryOrganizationRecord + Clone,
-        R: Send,
-        F,
-    >(
+    pub(super) async fn output_record_refs_batches_then<T: MemoryOrganizationRecord, R: Send, F>(
         &self,
         role: EntityRole,
-        values: Vec<super::rows::RowRef<T>>,
+        values: Vec<super::rows::RowRef<FieldMap>>,
         complete: impl Fn(Vec<(usize, T)>) -> F + Sync,
     ) -> AuthResult<Vec<R>>
     where
@@ -474,8 +402,7 @@ impl EphemeralStore {
             &mut rows,
             &fields,
             |(source, _), name, field| {
-                source.read(|row| {
-                    let (_, storage) = record_fields(role, row, &schema)?;
+                source.read(|storage| {
                     let key = if name != "id" {
                         resolve_field_name(field.field_name.as_deref(), name)
                     } else {
@@ -514,13 +441,10 @@ impl EphemeralStore {
     pub(super) async fn output_records<T: MemoryOrganizationRecord + Send>(
         &self,
         role: EntityRole,
-        values: Vec<T>,
+        values: Vec<FieldMap>,
     ) -> AuthResult<Vec<T>> {
         let schema = self.field_config(role)?;
-        let records = values
-            .iter()
-            .map(|value| record_output(role, value, &schema))
-            .collect::<AuthResult<Vec<_>>>()?;
+        let records = values.into_iter().map(record_output).collect();
         schema
             .organization_output_memory_records(records)
             .await?
@@ -532,17 +456,14 @@ impl EphemeralStore {
     pub(super) async fn output_records_batches_then<T: MemoryOrganizationRecord, R: Send, F>(
         &self,
         role: EntityRole,
-        values: Vec<T>,
+        values: Vec<FieldMap>,
         complete: impl Fn(Vec<(usize, T)>) -> F + Sync,
     ) -> AuthResult<Vec<R>>
     where
         F: std::future::Future<Output = AuthResult<Vec<(usize, R)>>> + Send,
     {
         let schema = self.field_config(role)?;
-        let records = values
-            .iter()
-            .map(|value| record_output(role, value, &schema))
-            .collect::<AuthResult<Vec<_>>>()?;
+        let records = values.into_iter().map(record_output).collect();
         schema
             .organization_output_memory_records_batches_then(
                 records,
@@ -555,7 +476,7 @@ impl EphemeralStore {
     pub(super) async fn output_record<T: MemoryOrganizationRecord + Send>(
         &self,
         role: EntityRole,
-        value: T,
+        value: FieldMap,
     ) -> AuthResult<T> {
         Ok(self.output_records(role, vec![value]).await?.remove(0))
     }
@@ -726,9 +647,8 @@ async fn builtin_policies_transform_typed_records_once_and_preserve_adapter_id()
             .organizations
             .get(&organization.id)
             .unwrap()
-            .unwrap()
-            .name,
-        "original:in"
+            .unwrap()["name"],
+        Value::from("original:in")
     );
     let updated = store
         .update_organization(
@@ -892,22 +812,12 @@ async fn invalid_builtin_transform_cannot_partially_update_a_memory_record() {
     );
     let state = store.lock().unwrap();
     assert_eq!(
-        state
-            .organizations
-            .get(&organization.id)
-            .unwrap()
-            .unwrap()
-            .name,
-        "original"
+        state.organizations.get(&organization.id).unwrap().unwrap()["name"],
+        Value::from("original")
     );
     assert_eq!(
-        state
-            .organizations
-            .get(&organization.id)
-            .unwrap()
-            .unwrap()
-            .slug,
-        "original"
+        state.organizations.get(&organization.id).unwrap().unwrap()["slug"],
+        Value::from("original")
     );
 }
 
@@ -973,8 +883,7 @@ async fn memory_core_fields_keep_dynamic_values_and_output_omission() {
             .organizations
             .get(&organization.id)
             .unwrap()
-            .unwrap()
-            .name
+            .unwrap()["name"]
             .json()
             .unwrap(),
         Some(json!(12))

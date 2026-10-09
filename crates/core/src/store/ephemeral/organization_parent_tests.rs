@@ -44,15 +44,11 @@ impl Control {
         let state = store.lock()?;
         let (model, detail) = if self.path == "invitations" {
             let mut row = state.invitations.get_mut("invitation-a")?.unwrap();
-            let _ = row
-                .additional_fields
-                .insert("detail".into(), Value::from("I-A-detail-after"));
+            let _ = row.insert("detail".into(), Value::from("I-A-detail-after"));
             ("invitation", "I-A-detail-after")
         } else {
             let mut row = state.members.get_mut("member-a")?.unwrap();
-            let _ = row
-                .additional_fields
-                .insert("detail".into(), Value::from("M-A-detail-after"));
+            let _ = row.insert("detail".into(), Value::from("M-A-detail-after"));
             ("member", "M-A-detail-after")
         };
         drop(state);
@@ -359,9 +355,9 @@ async fn check_case(fixture: &JsonValue) -> AuthResult<()> {
     let state = store.lock()?;
     assert_eq!(
         json!({
-            "memberDetail":state.members.get("member-a")?.unwrap().additional_fields["detail"].json()?,
-            "invitationDetail":state.invitations.get("invitation-a")?.unwrap().additional_fields["detail"].json()?,
-            "logo":state.organizations.get("organization-a")?.unwrap().logo,
+            "memberDetail":state.members.get("member-a")?.unwrap()["detail"].json()?,
+            "invitationDetail":state.invitations.get("invitation-a")?.unwrap()["detail"].json()?,
+            "logo":state.organizations.get("organization-a")?.unwrap().get("logo").unwrap().json()?,
         }),
         fixture["stored"]
     );

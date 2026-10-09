@@ -90,26 +90,29 @@ where
     }
     async fn delete_organization_records(&self, id: &str) -> AuthResult<()> {
         let _ = Entity::<O::Member>::delete_many()
-            .filter(
-                O::Member::column("organization_id")?
-                    .eq_id(id, self.config().advanced.database.generate_id())?,
-            )
+            .filter(O::Member::column("organization_id")?.eq_id(
+                id,
+                self.config().advanced.database.generate_id(),
+                self.connection().get_database_backend(),
+            )?)
             .exec(self.connection())
             .await
             .map_err(map_db_err)?;
         let _ = Entity::<O::Invitation>::delete_many()
-            .filter(
-                O::Invitation::column("organization_id")?
-                    .eq_id(id, self.config().advanced.database.generate_id())?,
-            )
+            .filter(O::Invitation::column("organization_id")?.eq_id(
+                id,
+                self.config().advanced.database.generate_id(),
+                self.connection().get_database_backend(),
+            )?)
             .exec(self.connection())
             .await
             .map_err(map_db_err)?;
         let _ = Entity::<O::Organization>::delete_many()
-            .filter(
-                O::Organization::column("id")?
-                    .eq_id(id, self.config().advanced.database.generate_id())?,
-            )
+            .filter(O::Organization::column("id")?.eq_id(
+                id,
+                self.config().advanced.database.generate_id(),
+                self.connection().get_database_backend(),
+            )?)
             .exec(self.connection())
             .await
             .map_err(map_db_err)?;
@@ -239,6 +242,7 @@ where
                 .filter(O::Organization::column("id")?.is_in_ids(
                     ids.iter().cloned(),
                     self.config().advanced.database.generate_id(),
+                    self.connection().get_database_backend(),
                 )?)
                 .all(self.connection())
                 .await
@@ -315,26 +319,29 @@ where
     async fn delete_organization(&self, id: &str) -> AuthResult<()> {
         let tx = self.connection().begin().await.map_err(map_db_err)?;
         let _ = Entity::<O::Member>::delete_many()
-            .filter(
-                O::Member::column("organization_id")?
-                    .eq_id(id, self.config().advanced.database.generate_id())?,
-            )
+            .filter(O::Member::column("organization_id")?.eq_id(
+                id,
+                self.config().advanced.database.generate_id(),
+                self.connection().get_database_backend(),
+            )?)
             .exec(&tx)
             .await
             .map_err(map_db_err)?;
         let _ = Entity::<O::Invitation>::delete_many()
-            .filter(
-                O::Invitation::column("organization_id")?
-                    .eq_id(id, self.config().advanced.database.generate_id())?,
-            )
+            .filter(O::Invitation::column("organization_id")?.eq_id(
+                id,
+                self.config().advanced.database.generate_id(),
+                self.connection().get_database_backend(),
+            )?)
             .exec(&tx)
             .await
             .map_err(map_db_err)?;
         let _ = Entity::<O::Organization>::delete_many()
-            .filter(
-                O::Organization::column("id")?
-                    .eq_id(id, self.config().advanced.database.generate_id())?,
-            )
+            .filter(O::Organization::column("id")?.eq_id(
+                id,
+                self.config().advanced.database.generate_id(),
+                self.connection().get_database_backend(),
+            )?)
             .exec(&tx)
             .await
             .map_err(map_db_err)?;

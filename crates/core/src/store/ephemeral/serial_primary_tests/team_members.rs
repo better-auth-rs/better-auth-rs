@@ -150,10 +150,16 @@ async fn acceptance_consumes_projected_fields_and_keeps_the_original_claim_for_c
         let claimed = required(state.invitations.get(
             &crate::SchemaValue::<String>::from_field(Value::Number(1.0)),
         )?)?;
-        assert_eq!(claimed.organization_id.field_value(), Value::Number(1.0));
-        assert_eq!(claimed.role, "member");
-        assert_eq!(claimed.team_id.field_value(), Value::from("1"));
-        assert_eq!(claimed.is_pending(), maximum == 0);
+        assert_eq!(
+            required(claimed.get("organizationId"))?.clone(),
+            Value::Number(1.0)
+        );
+        assert_eq!(required(claimed.get("role"))?, &Value::from("member"));
+        assert_eq!(required(claimed.get("teamId"))?.clone(), Value::from("1"));
+        assert_eq!(
+            required(claimed.get("status"))? == &Value::from("pending"),
+            maximum == 0
+        );
         assert_eq!(state.members.len(), maximum);
         assert_eq!(state.team_members.len(), maximum);
         let persisted = required(state.sessions.find(|row| row.token == session.token)?)?;
@@ -262,10 +268,7 @@ async fn serial_team_membership_binds_owner_queries_and_isolates_removal() -> Au
             Value::Number(value) if value.is_nan()
         ));
         for team in state.teams.snapshot()? {
-            assert_eq!(
-                team.additional_fields.get("memberCount"),
-                Some(&Value::Number(1.0))
-            );
+            assert_eq!(team.get("memberCount"), Some(&Value::Number(1.0)));
         }
     }
     Ok(())
@@ -404,9 +407,7 @@ async fn serial_invitation_rejects_same_owner_added_during_output_callback() -> 
         Value::Number(1.0)
     );
     assert_eq!(
-        required(state.teams.snapshot()?.first())?
-            .additional_fields
-            .get("memberCount"),
+        required(state.teams.snapshot()?.first())?.get("memberCount"),
         Some(&Value::Number(1.0))
     );
     Ok(())

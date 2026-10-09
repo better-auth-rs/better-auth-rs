@@ -325,7 +325,8 @@ mod tests {
         let mut req = make_get("https://app.example.com");
         req.method = HttpMethod::Post;
         req.path = "/sign-in/email".into();
-        let mut response = AuthResponse::new(200)
+        let mut response = AuthResponse::json(200, &serde_json::json!({}))
+            .unwrap()
             .with_header("Access-Control-Expose-Headers", "X-Existing")
             .with_header(
                 "Set-Cookie",
@@ -333,6 +334,7 @@ mod tests {
             );
         let manager = SessionManager::new(Arc::new(config), test_database().await);
         manager.finish_response(&req, &mut response).unwrap();
+        let response = response.into_http_response();
         let response = CorsMiddleware::new(cors)
             .after_request(&req, response)
             .await

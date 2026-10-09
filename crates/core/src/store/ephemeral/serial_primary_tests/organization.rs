@@ -64,22 +64,14 @@ async fn serial_organization_lifecycle_binds_numbers_and_projects_public_ids() -
     {
         let state = store.lock()?;
         let ids = [
-            required(state.organizations.snapshot()?.first())?
-                .id
-                .field_value(),
-            required(state.members.snapshot()?.first())?
-                .id
-                .field_value(),
-            required(state.invitations.snapshot()?.first())?
-                .id
-                .field_value(),
-            required(state.teams.snapshot()?.first())?.id.field_value(),
+            organization_id(required(state.organizations.snapshot()?.first())?).field_value(),
+            organization_id(required(state.members.snapshot()?.first())?).field_value(),
+            organization_id(required(state.invitations.snapshot()?.first())?).field_value(),
+            organization_id(required(state.teams.snapshot()?.first())?).field_value(),
             required(state.team_members.snapshot()?.first())?
                 .id
                 .field_value(),
-            required(state.organization_roles.snapshot()?.first())?
-                .id
-                .field_value(),
+            organization_id(required(state.organization_roles.snapshot()?.first())?).field_value(),
         ];
         assert_eq!(ids.to_vec(), vec![Value::Number(1.0); 6]);
         assert_eq!(
@@ -251,15 +243,11 @@ async fn serial_organization_id_updates_keep_numeric_storage() -> AuthResult<()>
     }
     let state = store.lock()?;
     assert_eq!(
-        required(state.organizations.snapshot()?.first())?
-            .id
-            .field_value(),
+        organization_id(required(state.organizations.snapshot()?.first())?).field_value(),
         Value::Number(2.0)
     );
     assert_eq!(
-        required(state.organization_roles.snapshot()?.first())?
-            .id
-            .field_value(),
+        organization_id(required(state.organization_roles.snapshot()?.first())?).field_value(),
         Value::Number(3.0)
     );
     Ok(())
@@ -283,9 +271,11 @@ async fn serial_organization_joins_distinguish_native_owners_from_projected_owne
         {
             let state = store.lock()?;
             let id = SchemaValue::from_field(Value::Number(1.0));
-            let owner = SchemaValue::from_field(Value::Array(vec![Value::Number(1.0)].into()));
-            required(state.members.get_mut(&id)?)?.organization_id = owner.clone();
-            required(state.invitations.get_mut(&id)?)?.organization_id = owner;
+            let owner = Value::Array(vec![Value::Number(1.0)].into());
+            let _ = required(state.members.get_mut(&id)?)?
+                .insert("organizationId".into(), owner.clone());
+            let _ =
+                required(state.invitations.get_mut(&id)?)?.insert("organizationId".into(), owner);
         }
         let organizations = store.list_user_organizations("001").await?;
         assert_eq!(organizations.len(), usize::from(!native));
@@ -332,12 +322,12 @@ async fn live_organization_id_projection_observes_prior_output_callbacks() -> Au
                     assert_eq!(counted.fetch_add(1, Ordering::SeqCst), 0);
                     let store = required(target.upgrade())?;
                     let state = store.lock()?;
-                    required(
+                    let _ = required(
                         state
                             .organizations
                             .get_mut(&SchemaValue::from_field(Value::Number(1.0)))?,
                     )?
-                    .id = SchemaValue::from_field(Value::Number(2.0));
+                    .insert("id".into(), Value::Number(2.0));
                     Ok(value)
                 })),
                 ..Default::default()
@@ -350,9 +340,7 @@ async fn live_organization_id_projection_observes_prior_output_callbacks() -> Au
     assert_eq!(required(rows.first())?.id.field_value(), Value::from("2"));
     assert_eq!(calls.load(Ordering::SeqCst), 1);
     assert_eq!(
-        required(store.lock()?.organizations.snapshot()?.first())?
-            .id
-            .field_value(),
+        organization_id(required(store.lock()?.organizations.snapshot()?.first())?).field_value(),
         Value::Number(2.0)
     );
     Ok(())
@@ -438,9 +426,7 @@ async fn serial_invitation_cookie_projects_ids_without_changing_session_update_o
         );
         assert_eq!(raw.active_team_id.typed().unwrap().as_deref(), Some("1"));
         assert_eq!(
-            required(state.members.snapshot()?.first())?
-                .id
-                .field_value(),
+            organization_id(required(state.members.snapshot()?.first())?).field_value(),
             Value::Number(1.0)
         );
         let memberships = state.team_members.snapshot()?;

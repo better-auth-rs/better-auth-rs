@@ -367,7 +367,7 @@ mod tests {
                                 transform: Some(FieldTransforms {
                                     input: None,
                                     output: Some(UserFieldTransform::new(move |value| {
-                                        counter.fetch_add(1, Ordering::SeqCst);
+                                        let _ = counter.fetch_add(1, Ordering::SeqCst);
                                         Ok(value)
                                     })),
                                 }),

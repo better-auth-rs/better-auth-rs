@@ -121,6 +121,7 @@ impl EphemeralStore {
                 }
             }
         }
+        crate::store::database_hooks::await_adapter_lookup().await;
         let count = self
             .raw(
                 "verification",

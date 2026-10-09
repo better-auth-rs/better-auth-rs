@@ -1,5 +1,4 @@
 use super::*;
-use crate::store::schema::resolve_field_name;
 
 #[async_trait]
 impl MemberStore for EphemeralStore {
@@ -78,13 +77,13 @@ impl MemberStore for EphemeralStore {
             .map(crate::SchemaValue::Typed)
             .unwrap_or_default();
         let fields = std::mem::take(&mut record.additional_fields);
-        let mut record: Member = self
+        let mut record = self
             .store_record(EntityRole::Member, record, None, fields)
             .await?;
         {
             let mut state = self.lock()?;
             if let Some(id) = self.next_serial_id(state.members.len()) {
-                record.id = crate::SchemaValue::from_field(id);
+                let _ = record.insert("id".into(), id);
             }
             state.members.push(record.clone());
         }
@@ -104,13 +103,13 @@ impl MemberStore for EphemeralStore {
             role: input.role,
             created_at: (Utc::now()).into(),
         };
-        let mut member: Member = self
+        let mut member = self
             .store_record(EntityRole::Member, member, None, input.additional_fields)
             .await?;
         {
             let mut state = self.lock()?;
             if let Some(id) = self.next_serial_id(state.members.len()) {
-                member.id = crate::SchemaValue::from_field(id);
+                let _ = member.insert("id".into(), id);
             }
             state.members.push(member.clone());
         }
@@ -124,15 +123,12 @@ impl MemberStore for EphemeralStore {
         )?;
         let user_id =
             self.organization_query(EntityRole::Member, "userId", Value::from(user_id))?;
+        let schema = self.field_config(EntityRole::Member)?;
         let rows = self.lock()?.members.snapshot()?;
         match rows.into_iter().find(|row| {
-            row.organization_id
-                .field_value()
+            organization_value(&row, &schema, "organizationId")
                 .strict_equals(&organization_id.field_value())
-                && row
-                    .user_id
-                    .field_value()
-                    .strict_equals(&user_id.field_value())
+                && organization_value(&row, &schema, "userId").strict_equals(&user_id.field_value())
         }) {
             Some(value) => self.output_member(value).await.map(Some),
             None => Ok(None),
@@ -149,16 +145,12 @@ impl MemberStore for EphemeralStore {
             organization_id.clone(),
         )?;
         let user_id = self.organization_query(EntityRole::Member, "userId", user_id.clone())?;
+        let schema = self.field_config(EntityRole::Member)?;
         let rows = self.lock()?.members.snapshot()?;
         for row in rows {
-            if row
-                .organization_id
-                .field_value()
+            if organization_value(&row, &schema, "organizationId")
                 .strict_equals(&organization_id.field_value())
-                && row
-                    .user_id
-                    .field_value()
-                    .strict_equals(&user_id.field_value())
+                && organization_value(&row, &schema, "userId").strict_equals(&user_id.field_value())
             {
                 return self.output_member(row).await.map(Some);
             }
@@ -191,7 +183,7 @@ impl MemberStore for EphemeralStore {
                 .members
                 .get_mut(&id)?
                 .ok_or_else(|| AuthError::not_found("Member not found"))?;
-            *value = patch.apply(value.clone())?;
+            *value = patch.apply(value.clone());
             value.clone()
         };
         self.output_member(result).await
@@ -236,15 +228,14 @@ impl MemberStore for EphemeralStore {
     }
     async fn list_organization_members_value(&self, org: &Value) -> AuthResult<Vec<Member>> {
         let org = self.organization_query(EntityRole::Member, "organizationId", org.clone())?;
+        let schema = self.field_config(EntityRole::Member)?;
         let rows = self
             .lock()?
             .members
             .snapshot()?
             .into_iter()
             .filter(|row| {
-                row.organization_id
-                    .field_value()
-                    .strict_equals(&org.field_value())
+                organization_value(row, &schema, "organizationId").strict_equals(&org.field_value())
             })
             .collect();
         self.output_records(EntityRole::Member, rows).await
@@ -266,28 +257,14 @@ impl MemberStore for EphemeralStore {
             .snapshot()?
             .iter()
             .filter(|member| {
-                member
-                    .organization_id
-                    .field_value()
+                organization_value(member, &schema, "organizationId")
                     .strict_equals(&organization_id.field_value())
             })
             .cloned()
             .collect();
-        let value = |member: &Member, field: &str| -> Option<Value> {
-            match field {
-                "id" => Some(member.id.field_value()),
-                "organizationId" => Some(member.organization_id.field_value()),
-                "userId" => Some(member.user_id.field_value()),
-                "role" => Some(member.role.field_value()),
-                "createdAt" => Some(member.created_at.field_value()),
-                _ => schema.fields().get(field).map(|config| {
-                    member
-                        .additional_fields
-                        .get(resolve_field_name(config.field_name.as_deref(), field))
-                        .cloned()
-                        .unwrap_or(Value::Null)
-                }),
-            }
+        let value = |member: &FieldMap, field: &str| -> Option<Value> {
+            (field == "id" || schema.fields().contains_key(field))
+                .then(|| organization_value(member, &schema, field))
         };
         if let (Some(field), Some(expected)) = (&params.filter_field, &params.filter_value) {
             let operator = params.filter_operator.as_deref().unwrap_or("eq");
@@ -329,7 +306,7 @@ impl MemberStore for EphemeralStore {
             } else {
                 convert(&expected)
             };
-            let matches_member = |member: &Member| -> AuthResult<bool> {
+            let matches_member = |member: &FieldMap| -> AuthResult<bool> {
                 let Some(actual) = value(member, field) else {
                     return Ok(true);
                 };
@@ -419,6 +396,7 @@ impl MemberStore for EphemeralStore {
         ))
     }
     async fn count_organization_members(&self, org: &str) -> AuthResult<i64> {
+        let schema = self.field_config(EntityRole::Member)?;
         let org =
             self.organization_query(EntityRole::Member, "organizationId", Value::from(org))?;
         Ok(self
@@ -427,14 +405,13 @@ impl MemberStore for EphemeralStore {
             .snapshot()?
             .iter()
             .filter(|member| {
-                member
-                    .organization_id
-                    .field_value()
+                organization_value(member, &schema, "organizationId")
                     .strict_equals(&org.field_value())
             })
             .count() as i64)
     }
     async fn count_organization_members_value(&self, org: &Value) -> AuthResult<i64> {
+        let schema = self.field_config(EntityRole::Member)?;
         let org = self.organization_query(EntityRole::Member, "organizationId", org.clone())?;
         self.lock()?
             .members
@@ -443,14 +420,13 @@ impl MemberStore for EphemeralStore {
             .try_fold(0, |count, member| {
                 Ok(count
                     + i64::from(
-                        member
-                            .organization_id
-                            .field_value()
+                        organization_value(member, &schema, "organizationId")
                             .strict_equals(&org.field_value()),
                     ))
             })
     }
     async fn count_organization_owners(&self, org: &str) -> AuthResult<i64> {
+        let schema = self.field_config(EntityRole::Member)?;
         let org =
             self.organization_query(EntityRole::Member, "organizationId", Value::from(org))?;
         self.lock()?
@@ -458,13 +434,14 @@ impl MemberStore for EphemeralStore {
             .snapshot()?
             .iter()
             .filter(|member| {
-                member
-                    .organization_id
-                    .field_value()
+                organization_value(member, &schema, "organizationId")
                     .strict_equals(&org.field_value())
             })
             .try_fold(0, |count, member| {
-                Ok(count + i64::from(member.role.typed()?.split(',').any(|role| role == "owner")))
+                let role = crate::SchemaValue::<String>::from_field(organization_value(
+                    member, &schema, "role",
+                ));
+                Ok(count + i64::from(role.typed()?.split(',').any(|role| role == "owner")))
             })
     }
 }

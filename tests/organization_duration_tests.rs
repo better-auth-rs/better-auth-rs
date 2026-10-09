@@ -230,7 +230,7 @@ async fn invitation_creation_and_resend_preserve_pinned_fractional_lifetimes() {
                 "invitation": record(&invitation, issued_at),
                 "matchesResponse": invitation["id"] == body["id"],
                 "organizationName": message.organization.name,
-                "inviterName": message.inviter.model_property("name").unwrap(),
+                "inviterName": message.inviter.model_property("name").unwrap().json().unwrap(),
                 "method": message.request.as_ref().map(|request| format!("{:?}", request.method).to_uppercase()),
                 "path": message.request.as_ref().and_then(AuthRequest::url).map(|url| url.path()),
             })

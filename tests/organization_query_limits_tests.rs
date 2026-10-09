@@ -211,7 +211,7 @@ async fn check_native_organization_lists<S: AuthSchema>(
             .create_user(CreateUser {
                 id: Some(id.into()),
                 email: Some(format!("{id}@native-organization.test")),
-                name: Some(format!("User {id}")),
+                name: Some(format!("User {id}")).into(),
                 ..Default::default()
             })
             .await?;

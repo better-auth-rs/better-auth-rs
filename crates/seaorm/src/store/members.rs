@@ -17,7 +17,7 @@ use super::organization_models::{self as models, Entity, values};
 use super::{SeaOrmStore, map_db_err};
 use crate::SeaOrmOrganizationModel;
 use better_auth_core::{FieldValue, SchemaField};
-use sea_orm::sea_query::{Expr, ExprTrait};
+use sea_orm::sea_query::{BinOper, Expr, ExprTrait};
 
 fn member_column<M: SeaOrmOrganizationModel>(
     field: &str,
@@ -82,7 +82,7 @@ fn apply_member_filter<M: SeaOrmOrganizationModel>(
     let convert =
         |value: &Value, convert_strings: bool| -> AuthResult<sea_orm::sea_query::SimpleExpr> {
             if let (Value::String(value), Some(column)) = (value, id_column) {
-                return Ok(column.id_value(value, policy)?.into());
+                return column.id_parameter(value, policy, backend);
             }
             let value = match value {
                 Value::String(value)
@@ -162,16 +162,18 @@ fn apply_member_filter<M: SeaOrmOrganizationModel>(
         "lt" => query.filter(column.lt(value)),
         "lte" => query.filter(column.lte(value)),
         "contains" | "starts_with" | "ends_with" => {
-            let pattern = super::record_bindings::utf16_string(
-                &normalize_number(raw_value).display_utf16()?,
-                backend,
-            );
-            let pattern = match operator {
-                "starts_with" => format!("{pattern}%"),
-                "ends_with" => format!("%{pattern}"),
-                _ => format!("%{pattern}%"),
+            let (prefix, suffix) = match operator {
+                "starts_with" => ("", "%"),
+                "ends_with" => ("%", ""),
+                _ => ("%", "%"),
             };
-            query.filter(column.like(pattern))
+            let pattern = super::value_filter::like_pattern(
+                &normalize_number(raw_value),
+                prefix,
+                suffix,
+                backend,
+            )?;
+            query.filter(column.binary(BinOper::Like, pattern))
         }
         _ => query,
     };
@@ -264,11 +266,13 @@ where
             .filter(O::Member::column("organization_id")?.eq_id(
                 organization_id,
                 self.config().advanced.database.generate_id(),
+                self.connection().get_database_backend(),
             )?)
-            .filter(
-                O::Member::column("user_id")?
-                    .eq_id(user_id, self.config().advanced.database.generate_id())?,
-            );
+            .filter(O::Member::column("user_id")?.eq_id(
+                user_id,
+                self.config().advanced.database.generate_id(),
+                self.connection().get_database_backend(),
+            )?);
         self.read_member_user(query, false).await
     }
     async fn get_member_with_user_value(
@@ -295,9 +299,11 @@ where
         &self,
         id: &str,
     ) -> AuthResult<Option<better_auth_core::store::MemberUser>> {
-        let query = Entity::<O::Member>::find().filter(
-            O::Member::column("id")?.eq_id(id, self.config().advanced.database.generate_id())?,
-        );
+        let query = Entity::<O::Member>::find().filter(O::Member::column("id")?.eq_id(
+            id,
+            self.config().advanced.database.generate_id(),
+            self.connection().get_database_backend(),
+        )?);
         self.read_member_user(query, true).await
     }
 
@@ -306,11 +312,13 @@ where
             .filter(O::Member::column("organization_id")?.eq_id(
                 organization_id,
                 self.config().advanced.database.generate_id(),
+                self.connection().get_database_backend(),
             )?)
-            .filter(
-                O::Member::column("user_id")?
-                    .eq_id(user_id, self.config().advanced.database.generate_id())?,
-            )
+            .filter(O::Member::column("user_id")?.eq_id(
+                user_id,
+                self.config().advanced.database.generate_id(),
+                self.connection().get_database_backend(),
+            )?)
             .one(self.connection())
             .await
             .map_err(map_db_err)?;
@@ -337,10 +345,11 @@ where
 
     async fn get_member_by_id(&self, id: &str) -> AuthResult<Option<Member>> {
         let row = Entity::<O::Member>::find()
-            .filter(
-                O::Member::column("id")?
-                    .eq_id(id, self.config().advanced.database.generate_id())?,
-            )
+            .filter(O::Member::column("id")?.eq_id(
+                id,
+                self.config().advanced.database.generate_id(),
+                self.connection().get_database_backend(),
+            )?)
             .one(self.connection())
             .await
             .map_err(map_db_err)?;
@@ -522,6 +531,7 @@ where
             .filter(O::Member::column("organization_id")?.eq_id(
                 organization_id,
                 self.config().advanced.database.generate_id(),
+                self.connection().get_database_backend(),
             )?)
             .filter(O::Member::column("role")?.eq("owner"))
             .count(self.connection())
@@ -558,6 +568,98 @@ mod tests {
             Arc::new(AuthConfig::new("test-secret-key-at-least-32-chars-long")),
             database,
         )
+    }
+
+    #[tokio::test]
+    async fn member_patterns_keep_utf16_until_the_driver_binds_the_complete_pattern()
+    -> better_auth_core::AuthResult<()> {
+        use crate::store::{entities::member, map_db_err, record_bindings::parameter};
+        use better_auth_core::{
+            FieldValue, Utf16String, id::IdGeneration, user_fields::UserConfig,
+        };
+        use sea_orm::{
+            ConnectOptions, ConnectionTrait, EntityTrait, QuerySelect, QueryTrait, sea_query::Query,
+        };
+
+        for encoding in ["UTF-8", "UTF-16le", "UTF-16be"] {
+            let mut options = ConnectOptions::new("sqlite::memory:");
+            let _ = options.max_connections(1);
+            let database = Database::connect(options).await.map_err(map_db_err)?;
+            let _ = database
+                .execute_unprepared(&format!("PRAGMA encoding = '{encoding}'"))
+                .await
+                .map_err(map_db_err)?;
+            let _ = database
+                .execute_unprepared("CREATE TABLE member (id TEXT, role TEXT)")
+                .await
+                .map_err(map_db_err)?;
+            for (operator, units, actual, matches) in [
+                ("contains", vec![0xd800], "x\u{10025}", true),
+                ("contains", vec![0xd800], "x\u{10025}y", false),
+                ("starts_with", vec![0xd800], "\u{10025}", true),
+                ("starts_with", vec![0xd800], "\u{10025}x", false),
+                ("ends_with", vec![0xd800], "x\u{fffd}", true),
+                ("ends_with", vec![0xd800], "x\u{fffd}y", false),
+                ("contains", vec![0xfeff, 0x41], "x\u{feff}A", true),
+                ("contains", vec![0xfeff, 0x41], "xA", false),
+                ("starts_with", vec![0xfffe], "\u{2500}", true),
+                ("starts_with", vec![0xfffe], "plain", false),
+                ("starts_with", vec![0x5f], "x", true),
+                ("starts_with", vec![0x5f], "", false),
+                ("contains", vec![0x5c, 0x5f], "\\x", true),
+                ("contains", vec![0x5c, 0x5f], "x", false),
+            ] {
+                let _ = database
+                    .execute_unprepared("DELETE FROM member")
+                    .await
+                    .map_err(map_db_err)?;
+                let insert = Query::insert()
+                    .into_table(member::Entity)
+                    .columns([member::Column::Id, member::Column::Role])
+                    .values_panic([
+                        parameter("member".into(), sea_orm::DbBackend::Sqlite)?,
+                        parameter(actual.into(), sea_orm::DbBackend::Sqlite)?,
+                    ])
+                    .to_owned();
+                let _ = database
+                    .execute_raw(sea_orm::DbBackend::Sqlite.build(&insert))
+                    .await
+                    .map_err(map_db_err)?;
+                let params = ListOrganizationMembersParams {
+                    filter_field: Some("role".into()),
+                    filter_value: Some(FieldValue::Utf16String(Utf16String::from_units(units))),
+                    filter_operator: Some(operator.into()),
+                    ..Default::default()
+                };
+                let query = super::apply_member_filter::<member::Model>(
+                    member::Entity::find()
+                        .select_only()
+                        .column(member::Column::Id),
+                    &params,
+                    &UserConfig::default(),
+                    sea_orm::DbBackend::Sqlite,
+                    &IdGeneration::Random,
+                )?;
+                let rows = database
+                    .query_all_raw(query.build(sea_orm::DbBackend::Sqlite))
+                    .await
+                    .map_err(map_db_err)?;
+                let ids = rows
+                    .iter()
+                    .map(|row| row.try_get::<String>("", "id").map_err(map_db_err))
+                    .collect::<better_auth_core::AuthResult<Vec<_>>>()?;
+                assert_eq!(
+                    ids,
+                    if matches {
+                        vec!["member"]
+                    } else {
+                        Vec::<&str>::new()
+                    },
+                    "{encoding}: {operator}, {actual:?}"
+                );
+            }
+        }
+        Ok(())
     }
 
     #[tokio::test]

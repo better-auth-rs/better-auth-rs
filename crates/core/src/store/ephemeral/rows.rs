@@ -303,11 +303,6 @@ macro_rules! row_id {
 }
 row_id!(
     crate::wire::UserView,
-    crate::Organization,
-    crate::Member,
-    crate::Invitation,
-    crate::Team,
-    crate::OrganizationRole,
     crate::TeamMember,
     crate::wire::SessionView
 );

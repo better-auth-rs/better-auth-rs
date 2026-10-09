@@ -164,17 +164,11 @@ impl Fixture {
         let fields = match model {
             "user" => state.users.get(id)?.map(|row| row.additional_fields),
             "session" => state.sessions.get(id)?.map(|row| row.additional_fields),
-            "organization" => state
-                .organizations
-                .get(id)?
-                .map(|row| row.additional_fields),
-            "member" => state.members.get(id)?.map(|row| row.additional_fields),
-            "invitation" => state.invitations.get(id)?.map(|row| row.additional_fields),
-            "team" => state.teams.get(id)?.map(|row| row.additional_fields),
-            "organizationRole" => state
-                .organization_roles
-                .get(id)?
-                .map(|row| row.additional_fields),
+            "organization" => state.organizations.get(id)?,
+            "member" => state.members.get(id)?,
+            "invitation" => state.invitations.get(id)?,
+            "team" => state.teams.get(id)?,
+            "organizationRole" => state.organization_roles.get(id)?,
             _ => return Err(AuthError::internal("Unknown display fixture model")),
         }
         .ok_or_else(|| AuthError::internal("Expected the stored display row"))?;

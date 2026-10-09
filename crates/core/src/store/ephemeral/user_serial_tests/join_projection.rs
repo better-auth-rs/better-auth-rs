@@ -125,9 +125,7 @@ async fn member_joins_and_full_details_resolve_users_at_their_projection_stage()
             .await?;
         assert_eq!(member.user_id, "2");
         assert_eq!(
-            required(store.lock()?.members.snapshot()?.first())?
-                .user_id
-                .field_value(),
+            required(required(store.lock()?.members.snapshot()?.first())?.get("userId"))?.clone(),
             Value::Number(1.0)
         );
         let joined = required(

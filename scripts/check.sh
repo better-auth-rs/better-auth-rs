@@ -184,7 +184,8 @@ run_stage() {
         cargo test --locked --no-fail-fast -p better-auth-core -p better-auth-api -p better-auth-seaorm --lib -- \
           session verification database_hooks lifecycle transaction create_readback user_fields user_query wire:: \
           plugin::tests::response_headers:: types::tests::auth_response_json \
-          user_column_defaults user_runtime_input_tests user_serial_tests api_key_start::tests protected_function_tests field_value:: record_bindings:: types_plugin::device::tests \
+          store::ephemeral::organization store::ephemeral::memory_json_tests:: serial_primary_tests::organization:: \
+          user_column_defaults user_runtime_input_tests user_serial_tests api_key_start::tests protected_function_tests field_value:: record_bindings:: id_filter::tests:: members::tests:: device_code_consume::tests:: types_plugin::device::tests \
           member_delete:: serial_primary_tests::team_members:: native_team_mutations native_invitation_acceptance organization_role organization_fields:: organization_models:: cookie_utils::native_cookie_tests:: \
           user_view_preserves_adapter_order_through_cache_and_visibility \
           plugins::jwt:: plugins::api_key:: plugins::passkey:: plugins::organization:: plugins::test_utils:: \
@@ -198,6 +199,10 @@ run_stage() {
           --test custom_session_fields_tests --test secondary_storage_hooks_tests \
           --test transaction_effect_order_tests --test transaction_hook_context_tests \
           --test organization_native_team_tests --test organization_query_limits_tests \
+          --test organization_native_fields_tests --test organization_additional_fields_tests \
+          --test organization_native_join_tests --test organization_serial_reference_tests \
+          --test organization_duration_tests --test organization_native_tests --test remaining_notification_tests \
+          --test http_routing_tests --test native_endpoint_tests --test cookie_http_errors_tests \
           --test test_utils_tests --test legacy_schema_integration_tests \
           --test user_runtime_output_tests --test user_runtime_cache_tests \
           --test user_runtime_input_tests --test user_account_raw_column_tests \
@@ -249,6 +254,7 @@ run_stage() {
         ./compat-tests/reference-server/contracts/account-owner-batch.test.ts \
         ./compat-tests/reference-server/contracts/account-verification-update-fields.test.ts \
         ./compat-tests/reference-server/contracts/endpoint-content-type.test.ts \
+        ./compat-tests/reference-server/contracts/organization-physical-fields.test.ts \
         ./compat-tests/reference-server/contracts/session-management-native.test.ts \
         ./compat-tests/reference-server/contracts/account-duplicates.test.ts \
         ./compat-tests/reference-server/contracts/account-user-selected-relations.test.ts \

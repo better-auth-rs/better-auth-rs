@@ -161,8 +161,11 @@ where
         let fields = self.organization_fields()?;
         let backend = self.connection().get_database_backend();
         let predicate = match input.organization {
-            OrganizationKey::Id(id) => O::Organization::column("id")?
-                .eq_id(id, self.config().advanced.database.generate_id())?,
+            OrganizationKey::Id(id) => O::Organization::column("id")?.eq_id(
+                id,
+                self.config().advanced.database.generate_id(),
+                backend,
+            )?,
             OrganizationKey::IdValue(id) => super::value_filter::equals_id(
                 O::Organization::column("id")?,
                 id,

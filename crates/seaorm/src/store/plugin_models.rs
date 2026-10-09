@@ -217,31 +217,3 @@ fn additional_field_input<M: SeaOrmPluginModel>(
         backend,
     )
 }
-
-/// Resolve configured policies before accepting writes to typed columns.
-pub(super) fn validate_field_columns<C: sea_orm::ColumnTrait>(
-    entity: &str,
-    fields: &better_auth_core::user_fields::UserConfig,
-    column: impl Fn(&str) -> AuthResult<C>,
-    core_field_name: impl Fn(&C) -> Option<&'static str>,
-) -> AuthResult<()> {
-    for (name, field) in fields.fields() {
-        if name == "id" {
-            continue;
-        }
-        let storage_name = resolve_field_name(field.field_name.as_deref(), name);
-        let stored_column = column(storage_name)?;
-        let logical = column(name)
-            .ok()
-            .and_then(|column| core_field_name(&column));
-        let stored = core_field_name(&stored_column);
-        if logical.is_some_and(|public| public != name)
-            || ((logical.is_some() || stored.is_some()) && logical != stored)
-        {
-            return Err(better_auth_core::AuthError::config(format!(
-                "{entity}.{name} maps to a different typed field {storage_name}; built-in policies must use the same column"
-            )));
-        }
-    }
-    Ok(())
-}

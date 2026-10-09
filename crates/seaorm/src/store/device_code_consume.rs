@@ -43,9 +43,7 @@ fn ownership_predicate(
     let column = column.into_expr();
     let lower = |value: Value| match value {
         Value::String(value) if insensitive => Value::String(value.to_lowercase()),
-        Value::Utf16String(value) if insensitive => {
-            Value::String(super::record_bindings::utf16_string(&value, backend).to_lowercase())
-        }
+        Value::Utf16String(value) if insensitive => value.to_lowercase().into(),
         value => value,
     };
     Ok(match query.operator {
@@ -104,13 +102,12 @@ fn ownership_predicate(
         WhereOperator::Gt => column.gt(candidate(query.value, backend)?),
         WhereOperator::Gte => column.gte(candidate(query.value, backend)?),
         WhereOperator::Contains | WhereOperator::StartsWith | WhereOperator::EndsWith => {
-            let text = super::record_bindings::utf16_string(&query.value.display_utf16()?, backend);
-            let pattern = match query.operator {
-                WhereOperator::Contains => format!("%{text}%"),
-                WhereOperator::StartsWith => format!("{text}%"),
-                _ => format!("%{text}"),
+            let (prefix, suffix) = match query.operator {
+                WhereOperator::Contains => ("%", "%"),
+                WhereOperator::StartsWith => ("", "%"),
+                _ => ("%", ""),
             };
-            let pattern = candidate(Value::String(pattern), backend)?;
+            let pattern = super::value_filter::like_pattern(&query.value, prefix, suffix, backend)?;
             if insensitive && backend == DbBackend::Postgres {
                 column.binary(PgBinOper::ILike, pattern)
             } else if insensitive {
@@ -226,5 +223,136 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
             .project_device_code_models(row.into_iter().collect())
             .await?
             .pop())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::store::{entities::device_code, record_bindings::parameter};
+    use better_auth_core::Utf16String;
+    use sea_orm::{ConnectOptions, Database, sea_query::Alias};
+
+    #[tokio::test]
+    async fn ownership_queries_lowercase_before_binding_and_keep_complete_like_patterns()
+    -> AuthResult<()> {
+        for encoding in ["UTF-8", "UTF-16le", "UTF-16be"] {
+            let mut options = ConnectOptions::new("sqlite::memory:");
+            let _ = options.max_connections(1);
+            let database = Database::connect(options).await.map_err(map_db_err)?;
+            let _ = database
+                .execute_unprepared(&format!("PRAGMA encoding = '{encoding}'"))
+                .await
+                .map_err(map_db_err)?;
+            let _ = database
+                .execute_unprepared("CREATE TABLE device_code (scope TEXT)")
+                .await
+                .map_err(map_db_err)?;
+            for (operator, mode, units, actual, expected) in [
+                (
+                    WhereOperator::Eq,
+                    WhereMode::Insensitive,
+                    vec![0xd800, 0x41],
+                    "\u{10061}",
+                    1,
+                ),
+                (
+                    WhereOperator::Eq,
+                    WhereMode::Insensitive,
+                    vec![0xd800, 0x41],
+                    "\u{10041}",
+                    0,
+                ),
+                (
+                    WhereOperator::In,
+                    WhereMode::Insensitive,
+                    vec![0xd800, 0x41],
+                    "\u{10061}",
+                    1,
+                ),
+                (
+                    WhereOperator::NotIn,
+                    WhereMode::Insensitive,
+                    vec![0xd800, 0x41],
+                    "\u{10061}",
+                    0,
+                ),
+                (
+                    WhereOperator::Contains,
+                    WhereMode::Insensitive,
+                    vec![0xd800],
+                    "x\u{10025}",
+                    1,
+                ),
+                (
+                    WhereOperator::Contains,
+                    WhereMode::Insensitive,
+                    vec![0xd800],
+                    "x\u{10025}y",
+                    0,
+                ),
+                (
+                    WhereOperator::Contains,
+                    WhereMode::Sensitive,
+                    vec![0xfeff, 0x41],
+                    "xA",
+                    0,
+                ),
+                (
+                    WhereOperator::Contains,
+                    WhereMode::Sensitive,
+                    vec![0xfeff, 0x41],
+                    "x\u{feff}A",
+                    1,
+                ),
+            ] {
+                let _ = database
+                    .execute_unprepared("DELETE FROM device_code")
+                    .await
+                    .map_err(map_db_err)?;
+                let insert = Query::insert()
+                    .into_table(device_code::Entity)
+                    .columns([device_code::Column::Scope])
+                    .values_panic([parameter(actual.into(), DbBackend::Sqlite)?])
+                    .to_owned();
+                let _ = database
+                    .execute_raw(DbBackend::Sqlite.build(&insert))
+                    .await
+                    .map_err(map_db_err)?;
+                let value = FieldValue::Utf16String(Utf16String::from_units(units));
+                let value = if matches!(operator, WhereOperator::In | WhereOperator::NotIn) {
+                    vec![value].into()
+                } else {
+                    value
+                };
+                let predicate = ownership_predicate(
+                    device_code::Column::Scope,
+                    DeviceCodeWhere {
+                        field: "scope".into(),
+                        operator,
+                        mode,
+                        value,
+                    },
+                    DbBackend::Sqlite,
+                )?;
+                let query = Query::select()
+                    .expr_as(predicate, Alias::new("matched"))
+                    .from(device_code::Entity)
+                    .to_owned();
+                let row = database
+                    .query_one_raw(DbBackend::Sqlite.build(&query))
+                    .await
+                    .map_err(map_db_err)?
+                    .ok_or_else(|| {
+                        AuthError::internal("Device ownership observation is missing")
+                    })?;
+                assert_eq!(
+                    row.try_get::<i64>("", "matched").map_err(map_db_err)?,
+                    expected,
+                    "{encoding}: {operator:?}, {actual:?}"
+                );
+            }
+        }
+        Ok(())
     }
 }

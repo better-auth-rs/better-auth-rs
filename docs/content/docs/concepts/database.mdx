@@ -486,6 +486,8 @@ The runtime view is independent of the physical model. `AuthEntity` reads each f
 
 Manual `AuthUser` implementations no longer define string-only `name()` or `image()` getters. Implement `serialized_field_name` when the model uses a different Serde name. For example, return `"displayName"` for `"name"` and return the input unchanged for other fields. Leave `name` and `image` unset in `SeaOrmUserModel::new_active` and `apply_update`; the shared record binder writes these fields after applying storage policies.
 
+SQLite text writes and queries use one driver boundary for native strings, UTF-16 values, characters, and serialized JSON. The binder preserves raw text bytes for UTF-8, UTF-16le, and UTF-16be databases, including terminal surrogates and initial byte-order marks. ID/reference comparisons and Member/Device LIKE patterns use the same conversion after constructing the complete pattern. Output decoding occurs after the database read. Special strings require three bound byte parameters; extreme parameter counts and string lengths remain outside the paired contracts.
+
 SQLite rejects a nonempty array that Bun would treat as a replacement for the whole SQL parameter list. The upstream overload can replace the authenticated WHERE identity and update another user. Rust rejects that overload before executing SQL; it does not reproduce the authorization defect.
 
 If your application already has a `users` table with extra fields or non-string primary keys, keep the same public integration story:

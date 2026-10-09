@@ -38,6 +38,7 @@ impl EphemeralStore {
             "organizationId",
             &organization_id,
         )?;
+        let schema = self.field_config(EntityRole::Team)?;
         let user_id = user_id.field_value();
         let teams = {
             let mut state = self.lock()?;
@@ -46,7 +47,10 @@ impl EphemeralStore {
                 .teams
                 .snapshot()?
                 .into_iter()
-                .filter(|team| team.organization_id == organization_id)
+                .filter(|team| {
+                    organization_value(team, &schema, "organizationId")
+                        .strict_equals(&organization_id.field_value())
+                })
                 .collect()
         };
         let teams = crate::query::paginate_memory(
@@ -54,7 +58,9 @@ impl EphemeralStore {
             Some(self.config.advanced.database.find_many_limit()),
             None,
         );
-        let teams = self.output_records(EntityRole::Team, teams).await?;
+        let teams = self
+            .output_records::<crate::Team>(EntityRole::Team, teams)
+            .await?;
         for team in teams {
             crate::store::TeamStore::remove_team_member_value(
                 self,
@@ -146,12 +152,7 @@ mod tests {
             );
             assert_eq!(store.count_team_members(selected.id.typed()?).await?, 1);
             assert_eq!(
-                store
-                    .lock()?
-                    .teams
-                    .get(&selected.id)?
-                    .unwrap()
-                    .additional_fields["memberCount"],
+                store.lock()?.teams.get(&selected.id)?.unwrap()["memberCount"],
                 Value::Number(1.0)
             );
         }

@@ -311,7 +311,7 @@ fn apply_before_action(
 ) -> AuthResult<Option<AuthResponse>> {
     match action {
         Some(BeforeRequestAction::Respond(mut response)) => {
-            response.headers.merge(internal.take_response_headers()?);
+            response.merge_endpoint_headers(internal.take_response_headers()?);
             return Ok(Some(response));
         }
         Some(BeforeRequestAction::MergeContext(patch)) => input_patch.merge(patch),

@@ -3,12 +3,12 @@ use super::*;
 
 #[derive(Clone, Default)]
 pub(super) struct State {
-    pub(super) organizations: Rows<Organization>,
-    pub(super) members: Rows<Member>,
-    pub(super) invitations: Rows<Invitation>,
-    pub(super) teams: Rows<crate::Team>,
+    pub(super) organizations: Rows<FieldMap>,
+    pub(super) members: Rows<FieldMap>,
+    pub(super) invitations: Rows<FieldMap>,
+    pub(super) teams: Rows<FieldMap>,
     pub(super) team_members: Rows<crate::TeamMember>,
-    pub(super) organization_roles: Rows<crate::OrganizationRole>,
+    pub(super) organization_roles: Rows<FieldMap>,
     pub(super) jwks: Rows<FieldMap>,
     pub(super) users: Rows<UserView>,
     pub(super) wallets: Rows<FieldMap>,
