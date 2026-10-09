@@ -146,6 +146,18 @@ jobs:
       - name: Install locked compatibility dependencies
         id: dependencies
         run: devenv shell -- ./scripts/check.sh dependencies
+      - name: Capture upstream telemetry environment
+        if: ${{ !cancelled() && contains(fromJSON('["all", "telemetry"]'), env.CHECK_STAGE) && steps.dependencies.outcome == 'success' }}
+        env:
+          TELEMETRY_ENVIRONMENT_OUTPUT: ${{ runner.temp }}/telemetry-host-observations/upstream.json
+        run: |
+          mkdir -p "$RUNNER_TEMP/telemetry-host-observations/rust"
+          printf '%s\n' "$GITHUB_SHA" > "$RUNNER_TEMP/telemetry-host-observations/source-sha.txt"
+          devenv shell -- bun --no-install compat-tests/reference-server/contracts/telemetry-environment.mjs
+          printf '%s\n' \
+            "BETTER_AUTH_TELEMETRY_OBSERVATION_DIR=$RUNNER_TEMP/telemetry-host-observations/rust" \
+            "BETTER_AUTH_TELEMETRY_UPSTREAM_OBSERVATION=$RUNNER_TEMP/telemetry-host-observations/upstream.json.system-observation.json" \
+            "TELEMETRY_CPU_ERROR_OUTPUT=$RUNNER_TEMP/telemetry-host-observations/cpu-errors.json" >> "$GITHUB_ENV"
       - name: Check formatting
         if: ${{ !cancelled() && env.CHECK_STAGE == 'all' && steps.dependencies.outcome == 'success' }}
         run: devenv shell -- ./scripts/check.sh format
@@ -176,14 +188,6 @@ jobs:
       - name: Check upstream alignment
         if: ${{ !cancelled() && env.CHECK_STAGE == 'all' && steps.dependencies.outcome == 'success' }}
         run: devenv shell -- ./scripts/check.sh alignment
-      - name: Capture upstream telemetry environment
-        if: env.CHECK_STAGE == 'telemetry'
-        env:
-          TELEMETRY_ENVIRONMENT_OUTPUT: ${{ runner.temp }}/telemetry-host-observations/upstream.json
-        run: |
-          mkdir -p "$RUNNER_TEMP/telemetry-host-observations"
-          printf '%s\n' "$GITHUB_SHA" > "$RUNNER_TEMP/telemetry-host-observations/source-sha.txt"
-          devenv shell -- bun --no-install compat-tests/reference-server/contracts/telemetry-environment.mjs
       - name: Run focused check
         if: env.CHECK_STAGE != 'all'
         env:
@@ -191,12 +195,6 @@ jobs:
         run: |
           if [[ "$CHECK_STAGE" == "client-configuration" && -n "$CHECK_COMPAT_PROFILE" ]]; then
             export COMPAT_TEST_PROFILE="$CHECK_COMPAT_PROFILE"
-          fi
-          if [[ "$CHECK_STAGE" == "telemetry" ]]; then
-            export BETTER_AUTH_TELEMETRY_OBSERVATION_DIR="$RUNNER_TEMP/telemetry-host-observations/rust"
-            export BETTER_AUTH_TELEMETRY_UPSTREAM_OBSERVATION="$RUNNER_TEMP/telemetry-host-observations/upstream.json.system-observation.json"
-            export TELEMETRY_CPU_ERROR_OUTPUT="$RUNNER_TEMP/telemetry-host-observations/cpu-errors.json"
-            mkdir -p "$BETTER_AUTH_TELEMETRY_OBSERVATION_DIR"
           fi
           if [[ "$CHECK_STAGE" == "consumer" || "$CHECK_STAGE" == "consumer-schema" ]]; then
             # Record runner resources before shutdown can skip post-job diagnostics.
@@ -220,7 +218,7 @@ jobs:
           fi
           devenv shell -- ./scripts/check.sh "$CHECK_STAGE"
       - name: Preserve telemetry host observations
-        if: always() && env.CHECK_STAGE == 'telemetry'
+        if: always() && contains(fromJSON('["all", "telemetry"]'), env.CHECK_STAGE)
         uses: actions/upload-artifact@v4
         with:
           name: telemetry-host-observations-${{ github.sha }}-${{ github.run_attempt }}
