@@ -86,8 +86,8 @@ pub(crate) trait Adapter: Send + Sync {
 fn record(value: &Value) -> AuthResult<FieldMap> {
     values::revive(value)?
         .as_object()
-        .cloned()
-        .ok_or_else(|| AuthError::internal("Expected an observed record"))
+        .ok_or_else(|| AuthError::internal("Expected an observed record"))?
+        .snapshot_fields()
 }
 
 async fn operate(

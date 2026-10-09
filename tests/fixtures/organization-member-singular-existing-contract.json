@@ -1,0 +1,52 @@
+{
+  "version": "1.7.6",
+  "kind": "handwritten-expectations",
+  "userFields": {
+    "memberRef": {
+      "references": { "model": "member", "field": "id" },
+      "unique": true
+    }
+  },
+  "member": {
+    "id": "member-a",
+    "organizationId": "organization-a",
+    "userId": "user-a",
+    "role": "member",
+    "createdAt": { "type": "date", "value": "2030-01-02T03:04:05.000Z" },
+    "label": "Member label",
+    "detail": "Member detail",
+    "ownerRef": "user-b"
+  },
+  "users": {
+    "user-b": {
+      "id": "user-b",
+      "name": "User b",
+      "email": "b@member-join-reference.test",
+      "emailVerified": true,
+      "image": "image-b",
+      "createdAt": { "type": "date", "value": "2030-01-02T03:04:05.000Z" },
+      "updatedAt": { "type": "date", "value": "2030-01-02T03:04:05.000Z" },
+      "memberRef": "member-a"
+    },
+    "user-c": {
+      "id": "user-c",
+      "name": "User c",
+      "email": "c@member-join-reference.test",
+      "emailVerified": true,
+      "image": "image-c",
+      "createdAt": { "type": "date", "value": "2030-01-02T03:04:05.000Z" },
+      "updatedAt": { "type": "date", "value": "2030-01-02T03:04:05.000Z" },
+      "memberRef": "member-a"
+    }
+  },
+  "cases": [
+    { "name": "ordinary", "first": "user-b", "nativeSql": "user-b" },
+    {
+      "name": "existing-duplicates",
+      "userSeeds": { "c": { "memberRef": "member-a" } },
+      "first": "user-b",
+      "nativeSql": "user-c"
+    },
+    { "name": "missing", "missingChild": true, "first": null, "nativeSql": null }
+  ]
+}

@@ -9,7 +9,7 @@ pub(super) fn uses_database(config: &ApiKeyConfig) -> bool {
     config.storage == ApiKeyStorage::Database || config.fallback_to_database
 }
 
-fn decode(key: &mut ApiKeyView) -> Option<(SchemaValue<String>, FieldValue)> {
+fn decode(key: &mut ApiKeyView) -> AuthResult<Option<(SchemaValue<String>, FieldValue)>> {
     let migrate = matches!(
         key.metadata,
         FieldValue::String(_) | FieldValue::Utf16String(_)
@@ -17,9 +17,9 @@ fn decode(key: &mut ApiKeyView) -> Option<(SchemaValue<String>, FieldValue)> {
     key.metadata = match &key.metadata {
         FieldValue::Null | FieldValue::Undefined => FieldValue::Null,
         FieldValue::Object(_) | FieldValue::Array(_) | FieldValue::Date(_) => key.metadata.clone(),
-        value => better_auth_core::utils::json::safe_parse_field(value),
+        value => better_auth_core::utils::json::safe_parse_field(value)?,
     };
-    migrate.then(|| (key.id.clone(), key.metadata.clone()))
+    Ok(migrate.then(|| (key.id.clone(), key.metadata.clone())))
 }
 
 async fn write(
@@ -55,7 +55,7 @@ pub(super) async fn single(
     config: &ApiKeyConfig,
     ctx: &AuthContext<impl AuthSchema>,
 ) -> AuthResult<ApiKeyView> {
-    if let Some(migration) = decode(&mut key)
+    if let Some(migration) = decode(&mut key)?
         && uses_database(config)
     {
         write(ctx, migration).await?;
@@ -67,17 +67,17 @@ pub(super) async fn batch(
     keys: &mut [ApiKeyView],
     configurations: &[ApiKeyConfig],
     ctx: &AuthContext<impl AuthSchema>,
-) {
+) -> AuthResult<()> {
     let migrations: Vec<_> = keys
         .iter()
         .filter(|key| key.metadata.is_string())
         .map(|key| (key.id.clone(), key.metadata.clone()))
         .collect();
     for key in keys {
-        let _ = decode(key);
+        let _ = decode(key)?;
     }
     if !configurations.iter().any(uses_database) {
-        return;
+        return Ok(());
     }
     let context = ctx.clone();
     // Even an empty page supplies a promise to the upstream application handler.
@@ -89,7 +89,7 @@ pub(super) async fn batch(
                     async move {
                         write(
                             context,
-                            (id, better_auth_core::utils::json::safe_parse_field(&text)),
+                            (id, better_auth_core::utils::json::safe_parse_field(&text)?),
                         )
                         .await
                     }
@@ -104,4 +104,5 @@ pub(super) async fn batch(
         &ctx.config.logger,
     )
     .await;
+    Ok(())
 }

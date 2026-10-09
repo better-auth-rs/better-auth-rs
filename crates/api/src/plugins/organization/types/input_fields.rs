@@ -88,6 +88,7 @@ impl FromFieldMap for HasPermissionRequest {
                     better_auth_core::AuthError::internal("Validated permissions is not an object")
                 })?;
                 values
+                    .snapshot_fields()?
                     .iter()
                     .map(|(name, value)| Ok((name.clone(), value.decode()?)))
                     .collect::<AuthResult<HashMap<String, Vec<String>>>>()
@@ -124,7 +125,7 @@ mod tests {
         assert!(input.metadata.field_value().strict_equals(&shared));
         assert!(input.additional_fields["custom"].strict_equals(&shared));
         let metadata = input.metadata.field_value();
-        let fields = metadata.as_object().unwrap();
+        let fields = metadata.as_object().unwrap().snapshot_fields()?;
         assert!(fields["date"].as_date().unwrap().milliseconds().is_nan());
         assert_eq!(fields["number"].as_f64(), Some(f64::INFINITY));
         assert!(fields.contains_key("missing"));

@@ -43,6 +43,8 @@ mod lifecycle_tests;
 mod member_delete;
 #[cfg(test)]
 mod memory_json_tests;
+#[cfg(test)]
+mod native_relation_property_tests;
 mod organization;
 #[cfg(test)]
 mod organization_async_tests;

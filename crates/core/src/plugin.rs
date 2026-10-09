@@ -499,9 +499,8 @@ impl<S: AuthSchema> AuthInitContext<S> {
         self.register_model_fields(crate::store::schema::EntityRole::Session, fields)
     }
 
-    /// Merge complete adapter field declarations for a supported model in registration order.
+    /// Merge complete adapter field declarations for a native model in registration order.
     /// Reset any preceding name override to the adapter's native table-name mapping.
-    /// Model-specific restrictions apply until the model uses the shared native field policies.
     pub fn register_model_fields(
         &mut self,
         role: crate::store::schema::EntityRole,
@@ -511,7 +510,7 @@ impl<S: AuthSchema> AuthInitContext<S> {
             .additional_fields
             .as_ref()
             .map(|fields| fields.keys().cloned().collect());
-        self.plugin_fields.register(role, fields)?;
+        self.plugin_fields.register(role, fields);
         if let Some(names) = names {
             self.registered_model_field_names.push((role, names));
         }
@@ -834,9 +833,9 @@ impl<S: AuthSchema> AuthContext<S> {
             .native_session(req, read)
             .await?
             .ok_or(AuthError::Unauthenticated)?;
-        let id = data.user_field("id");
+        let id = data.user_field("id")?;
         if !id.is_undefined() {
-            req.set_server_context("auth.current-user-id", id.clone())?;
+            req.set_server_context("auth.current-user-id", id)?;
         }
         Ok(data)
     }

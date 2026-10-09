@@ -239,7 +239,8 @@ async fn authoritative_server_reads_discard_injected_users_and_cannot_restore_re
     ] {
         let (mut context, persisted) = fixture().await?;
         context.extensions.insert(capabilities);
-        let user_id = persisted.user_property("id")?.as_str().unwrap();
+        let user_id = persisted.user_property("id")?;
+        let user_id = user_id.as_str().unwrap();
         let stored_user = context.database.get_user_by_id(user_id).await?;
         let mut injected = persisted.clone();
         injected.user = FieldMap::from([

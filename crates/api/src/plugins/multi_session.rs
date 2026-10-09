@@ -67,11 +67,11 @@ impl MultiSessionPlugin {
         let mut users: Vec<FieldValue> = Vec::new();
         let mut output = Vec::new();
         for mut data in sessions {
-            let id = data.user_field("id");
-            if users.iter().any(|seen| seen.strict_equals(id)) {
+            let id = data.user_field("id")?;
+            if users.iter().any(|seen| seen.strict_equals(&id)) {
                 continue;
             }
-            users.push(id.clone());
+            users.push(id);
             data.session.filter_returned_fields(&ctx.config.session)?;
             data.user = data.public_user(&ctx.config.user)?;
             output.push(FieldValue::from(FieldMap::from(data)));
@@ -184,9 +184,10 @@ impl MultiSessionPlugin {
             }
             let previous_id = find_session(ctx, &previous_token.as_str().into())
                 .await?
-                .map(|previous| previous.user_field("id").clone())
+                .map(|previous| previous.user_field("id"))
+                .transpose()?
                 .unwrap_or_default();
-            if previous_id.strict_equals(data.user_field("id")) {
+            if previous_id.strict_equals(&data.user_field("id")?) {
                 response
                     .headers
                     .append("Set-Cookie", create_clear_cookie(&name, &ctx.config)?);

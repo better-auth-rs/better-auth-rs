@@ -280,10 +280,10 @@ async fn serial_user_id_updates_and_refreshes_the_selected_native_session_cache(
         .native_session(&request, better_auth_core::session::SessionRead::Cached)
         .await?
         .unwrap();
-    assert_eq!(selected.user_property("id")?, &FieldValue::from("1"));
+    assert_eq!(selected.user_property("id")?, FieldValue::from("1"));
     assert_eq!(
         selected.user_property("emailVerified")?,
-        &FieldValue::from(false)
+        FieldValue::from(false)
     );
     let _ = request.take_response_headers()?;
     let response = EmailOtpPlugin::new()
@@ -336,7 +336,7 @@ async fn serial_user_id_updates_and_refreshes_the_selected_native_session_cache(
     )?;
     let mut expected_cache_user = selected
         .public_user(&fixture.ctx.config.user)?
-        .enumerable_fields();
+        .enumerable_fields()?;
     let _ = expected_cache_user.insert("emailVerified".into(), true.into());
     assert_eq!(
         payload.get("session").unwrap().get("user"),

@@ -51,16 +51,16 @@ pub(super) async fn resolve_user<S: AuthSchema>(
     config: &PasskeyConfig,
 ) -> AuthResult<PasskeyRegistrationUser> {
     if let Some(data) = registration_session(ctx, req, config).await?
-        && data.user_field("id").is_truthy()
+        && data.user_field("id")?.is_truthy()
     {
-        let name = data.user_field("email").clone();
+        let name = data.user_field("email")?;
         let name = if name.is_truthy() {
             name
         } else {
-            data.user_field("id").clone()
+            data.user_field("id")?
         };
         return Ok(PasskeyRegistrationUser {
-            id: better_auth_core::SchemaValue::from_field(data.user_field("id").clone()),
+            id: better_auth_core::SchemaValue::from_field(data.user_field("id")?),
             display_name: better_auth_core::SchemaValue::from_field(name.clone()),
             name: better_auth_core::SchemaValue::from_field(name),
         });
@@ -189,10 +189,13 @@ pub(super) async fn verify_registration_core<S: AuthSchema>(
     } else {
         optional_session(ctx, req).await?
     };
-    if session_user.as_ref().is_some_and(|user| {
-        let id = user.user_field("id");
-        id.is_truthy() && !id.strict_equals(&state.user.id.field_value())
-    }) {
+    if let Some(id) = session_user
+        .as_ref()
+        .map(|user| user.user_field("id"))
+        .transpose()?
+        && id.is_truthy()
+        && !id.strict_equals(&state.user.id.field_value())
+    {
         return Err(forbidden_user());
     }
     let result = async {
@@ -342,10 +345,14 @@ impl<S: AuthSchema> Registration<S> {
                 )
                 .await?;
             if let Some(user_id) = result.user_id.filter(|id| !id.is_empty()) {
-                if self.session_user.as_ref().is_some_and(|user| {
-                    let id = user.user_field("id");
-                    id.is_truthy() && !id.strict_equals(&FieldValue::from(user_id.as_str()))
-                }) {
+                if let Some(id) = self
+                    .session_user
+                    .as_ref()
+                    .map(|user| user.user_field("id"))
+                    .transpose()?
+                    && id.is_truthy()
+                    && !id.strict_equals(&FieldValue::from(user_id.as_str()))
+                {
                     return Err(forbidden_user());
                 }
                 self.input.user_id = user_id.into();

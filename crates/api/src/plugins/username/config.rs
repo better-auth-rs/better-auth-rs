@@ -124,10 +124,12 @@ impl UsernameConfig {
             FieldValue::Utf16String(value) => value.as_utf16().len() as f64,
             FieldValue::Array(value) => value.len() as f64,
             value => better_auth_core::query::field_number(
-                value
+                &value
                     .as_object()
-                    .and_then(|value| value.get("length"))
-                    .unwrap_or(&FieldValue::Undefined),
+                    .map(|value| value.get("length"))
+                    .transpose()?
+                    .flatten()
+                    .unwrap_or_default(),
             )?,
         };
         let minimum = if self.min_username_length == 0.0 || self.min_username_length.is_nan() {

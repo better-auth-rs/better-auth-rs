@@ -363,8 +363,9 @@ pub(crate) async fn issue_selected_user_session_optional<S: better_auth_core::Au
 ) -> Result<Option<better_auth_core::session::NativeSessionData>, SessionIssueError> {
     let user_id = better_auth_core::SchemaValue::<String>::from_field(
         user.as_object()
-            .and_then(|fields| fields.get("id"))
-            .cloned()
+            .map(|fields| fields.get("id"))
+            .transpose()?
+            .flatten()
             .unwrap_or_default(),
     );
     let session = issue_session_for_id_optional(ctx, user_id, meta, expires_in).await?;

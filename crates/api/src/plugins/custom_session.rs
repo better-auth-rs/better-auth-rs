@@ -28,12 +28,8 @@ impl CustomSessionInput {
             better_auth_core::AuthError::internal("Custom session input must be an object")
         })?;
         Ok(Self {
-            data: NativeSessionData::from_field_values(fields.clone())?,
-            needs_refresh: fields
-                .get("needsRefresh")
-                .cloned()
-                .unwrap_or_default()
-                .decode()?,
+            data: NativeSessionData::from_field_values(fields.snapshot_fields()?)?,
+            needs_refresh: fields.get("needsRefresh")?.unwrap_or_default().decode()?,
         })
     }
 

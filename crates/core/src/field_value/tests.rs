@@ -27,6 +27,105 @@ fn model_properties_preserve_native_identity_and_nullish_access_errors() -> Auth
 }
 
 #[test]
+fn live_object_read_errors_propagate_without_implicit_snapshots() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    struct FailedSource(AtomicUsize);
+
+    impl FieldObjectSource for FailedSource {
+        fn get(&self, _: &str) -> AuthResult<Option<FieldValue>> {
+            let _ = self.0.fetch_add(1, Ordering::SeqCst);
+            Err(AuthError::internal("object source read failed"))
+        }
+
+        fn snapshot_fields(&self) -> AuthResult<FieldMap> {
+            let _ = self.0.fetch_add(1, Ordering::SeqCst);
+            Err(AuthError::internal("object source read failed"))
+        }
+
+        fn identity(&self) -> usize {
+            std::ptr::from_ref(self) as usize
+        }
+    }
+
+    let source = Arc::new(FailedSource(AtomicUsize::new(0)));
+    let object = FieldObject::from_source(source.clone());
+    let value = FieldValue::Object(object.clone());
+    let same_source = FieldValue::Object(FieldObject::from_source(source.clone()));
+    assert_eq!(value, same_source);
+    assert!(value.strict_equals(&same_source));
+    assert_ne!(value, FieldValue::from(FieldMap::new()));
+    assert!(format!("{value:?}").contains("LiveObject"));
+    assert!(matches!(
+        crate::SchemaValue::<serde_json::Value>::from_field(value.clone()),
+        crate::SchemaValue::Dynamic(_)
+    ));
+    assert_eq!(source.0.load(Ordering::SeqCst), 0);
+
+    for result in [
+        object.get("id").map(drop),
+        value.model_property("id").map(drop),
+        value.enumerable_fields().map(drop),
+        value.json().map(drop),
+        value.stringify().map(drop),
+        StructuredCloneContext::new().clone_value(&value).map(drop),
+        crate::utils::json::safe_parse_field(&value).map(drop),
+    ] {
+        assert!(
+            matches!(result, Err(error) if error.to_string().contains("object source read failed"))
+        );
+    }
+    assert_eq!(source.0.load(Ordering::SeqCst), 7);
+}
+
+#[test]
+fn cyclic_live_objects_fail_at_explicit_conversion_boundaries() -> AuthResult<()> {
+    use std::sync::{Mutex, MutexGuard};
+
+    struct CyclicSource(Mutex<FieldMap>);
+
+    impl CyclicSource {
+        fn fields(&self) -> AuthResult<MutexGuard<'_, FieldMap>> {
+            self.0
+                .lock()
+                .map_err(|_| AuthError::internal("cycle source lock poisoned"))
+        }
+    }
+
+    impl FieldObjectSource for CyclicSource {
+        fn get(&self, name: &str) -> AuthResult<Option<FieldValue>> {
+            Ok(self.fields()?.get(name).cloned())
+        }
+
+        fn snapshot_fields(&self) -> AuthResult<FieldMap> {
+            Ok(self.fields()?.clone())
+        }
+
+        fn identity(&self) -> usize {
+            std::ptr::from_ref(self) as usize
+        }
+    }
+
+    let source = Arc::new(CyclicSource(Mutex::new(FieldMap::new())));
+    let value = FieldValue::Object(FieldObject::from_source(source.clone()));
+    let _ = source.fields()?.insert("self".into(), value.clone());
+    let json = value.json();
+    let text = value.stringify();
+    let copied = StructuredCloneContext::new().clone_value(&value);
+    source.fields()?.clear();
+    assert!(
+        matches!(json, Err(AuthError::TypeError(message)) if message == "Converting circular structure to JSON")
+    );
+    assert!(
+        matches!(text, Err(error) if error.to_string().contains("Converting circular structure to JSON"))
+    );
+    assert!(
+        matches!(copied, Err(AuthError::Internal(message)) if message == "Structured clone of cyclic field objects is not supported")
+    );
+    Ok(())
+}
+
+#[test]
 fn ordinary_object_primitive_conversion_checks_only_the_selected_method() -> AuthResult<()> {
     let display = crate::Utf16String::from("[object Object]");
     for value in [
@@ -126,10 +225,10 @@ fn structured_clone_preserves_aliases_across_records_without_reusing_source_iden
     assert!(copied_date.strict_equals(nested_date));
     let object_date = first
         .get("object")
-        .and_then(FieldValue::as_object)
-        .and_then(|object| object.get("date"))
+        .expect("cloned object")
+        .model_property("date")
         .expect("date inside cloned object");
-    assert!(copied_date.strict_equals(object_date));
+    assert!(copied_date.strict_equals(&object_date));
     let independent = StructuredCloneContext::new()
         .clone_value(&date)
         .expect("cloneable date");

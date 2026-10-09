@@ -166,37 +166,11 @@ fn deserialize_fields(value: Option<FieldValue>) -> Option<FieldMap> {
     };
     // Upstream treats malformed serialized cache entries as a cache miss.
     let parsed = better_auth_core::utils::json::parse_native_json(&value).ok()?;
-    let mut fields = match parsed {
-        FieldValue::Null => return None,
-        FieldValue::Object(fields) => fields.as_ref().clone(),
-        FieldValue::Array(values) => values
-            .iter()
-            .enumerate()
-            .map(|(index, value)| (index.to_string(), value.clone()))
-            .collect(),
-        FieldValue::String(text) => text
-            .encode_utf16()
-            .enumerate()
-            .map(|(index, unit)| {
-                (
-                    index.to_string(),
-                    better_auth_core::Utf16String::from_units(vec![unit]).into(),
-                )
-            })
-            .collect(),
-        FieldValue::Utf16String(text) => text
-            .as_utf16()
-            .iter()
-            .enumerate()
-            .map(|(index, unit)| {
-                (
-                    index.to_string(),
-                    better_auth_core::Utf16String::from_units(vec![*unit]).into(),
-                )
-            })
-            .collect(),
-        _ => FieldMap::new(),
-    };
+    if parsed.is_null() {
+        return None;
+    }
+    // JSON parsing creates owned objects, so this cache boundary cannot read a live source lock.
+    let mut fields = parsed.enumerable_fields().ok()?;
     for (name, optional) in [
         ("createdAt", false),
         ("updatedAt", false),

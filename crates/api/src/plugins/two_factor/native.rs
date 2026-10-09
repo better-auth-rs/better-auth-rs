@@ -88,8 +88,9 @@ impl<'a, S: AuthSchema> TwoFactorApi<'a, S> {
             .body
             .field_value()?
             .as_object()
-            .and_then(|fields| fields.get("backupCodes"))
-            .cloned()
+            .map(|fields| fields.get("backupCodes"))
+            .transpose()?
+            .flatten()
             .unwrap_or_default())
     }
 }

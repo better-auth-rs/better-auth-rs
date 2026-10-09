@@ -165,14 +165,15 @@ fn parse_payload(payload: Value) -> Option<CachedSession> {
 
     // All signed cache strategies validate the upstream schemas after reviving ISO dates.
     // Adapter views remain permissive; cookie validity is a separate trust boundary.
-    let payload = crate::utils::json::safe_parse_field(&FieldValue::from_json(payload).ok()?);
-    let fields = payload.as_object()?;
+    let payload =
+        crate::utils::json::safe_parse_field(&FieldValue::from_json(payload).ok()?).ok()?;
+    let fields = payload.as_object()?.owned_fields()?;
     let _ = fields.get("updatedAt")?.as_f64()?;
     let version = match fields.get("version") {
         None | Some(FieldValue::Undefined) => "1".to_owned(),
         Some(value) => value.as_str()?.to_owned(),
     };
-    let mut user = fields.get("user")?.as_object()?.clone();
+    let mut user = fields.get("user")?.as_object()?.owned_fields()?.clone();
     core_fields(&mut user)?;
     let email = user.get("email")?.as_str()?.to_lowercase();
     let _ = user.get("name")?.as_str()?;
@@ -196,7 +197,7 @@ fn parse_payload(payload: Value) -> Option<CachedSession> {
         "name".into(),
         "image".into(),
     ]);
-    let mut session = fields.get("session")?.as_object()?.clone();
+    let mut session = fields.get("session")?.as_object()?.owned_fields()?.clone();
     core_fields(&mut session)?;
     let user_id = session
         .get("userId")
@@ -371,7 +372,7 @@ fn renew_account_cookie(
         return Ok(());
     };
     if bind_account_user
-        && account.get("userId").and_then(Value::as_str) != data.user_field("id").as_str()
+        && account.get("userId").and_then(Value::as_str) != data.user_field("id")?.as_str()
     {
         let cookie = config.auth_cookie("account_data", Default::default());
         expire_cookie(req, &cookie, None)?;

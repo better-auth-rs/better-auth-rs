@@ -39,7 +39,10 @@ pub(crate) async fn handle_sign_out(
         return Ok(response);
     };
     // Upstream completes local logout even if provider logout cannot be prepared.
-    let url = match provider_logout_url(current_session.user_field("id"), &body, config, ctx).await
+    let url = match async {
+        provider_logout_url(&current_session.user_field("id")?, &body, config, ctx).await
+    }
+    .await
     {
         Ok(url) => url,
         Err(error) => {

@@ -706,11 +706,12 @@ async fn consumers_read_real_many_relationships_without_a_typed_user_gate() -> A
         let req = request("/update-session", json!({"label":"related"}));
         assert_eq!(super::handle(&req, &ctx).await?.status, 200);
         let published = req.new_session()?.unwrap();
-        assert!(published.user_field("id").is_undefined());
+        assert!(published.user_field("id")?.is_undefined());
         assert_eq!(
-            published.user.as_object().unwrap()["0"]
+            published.user.as_object().unwrap().snapshot_fields()?["0"]
                 .as_object()
-                .unwrap()["id"],
+                .unwrap()
+                .snapshot_fields()?["id"],
             selected.id.field_value()
         );
         assert_eq!(

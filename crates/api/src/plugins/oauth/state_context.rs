@@ -14,11 +14,13 @@ pub fn get_oauth_state(req: &AuthRequest) -> AuthResult<Option<FieldValue>> {
     };
     let snapshot = snapshot
         .as_object()
-        .ok_or_else(|| AuthError::internal("Invalid request OAuth state snapshot"))?;
+        .ok_or_else(|| AuthError::internal("Invalid request OAuth state snapshot"))?
+        .snapshot_fields()?;
     let fields = snapshot
         .get("fields")
         .and_then(FieldValue::as_object)
-        .ok_or_else(|| AuthError::internal("Invalid request OAuth state fields"))?;
+        .ok_or_else(|| AuthError::internal("Invalid request OAuth state fields"))?
+        .snapshot_fields()?;
     let extras = snapshot
         .get("extras")
         .and_then(FieldValue::as_str)
@@ -26,7 +28,8 @@ pub fn get_oauth_state(req: &AuthRequest) -> AuthResult<Option<FieldValue>> {
     let extras = FieldValue::parse_json(extras)?;
     let extras = extras
         .as_object()
-        .ok_or_else(|| AuthError::internal("OAuth state extras must be an object"))?;
+        .ok_or_else(|| AuthError::internal("OAuth state extras must be an object"))?
+        .snapshot_fields()?;
     let mut state = if snapshot.get("extrasFirst") == Some(&FieldValue::Bool(true)) {
         let mut state = extras.clone();
         state.extend(fields.clone());
@@ -186,7 +189,8 @@ mod tests {
             .ok_or_else(|| AuthError::internal("missing generated state"))?;
         let fields = generated
             .as_object()
-            .ok_or_else(|| AuthError::internal("expected generated object"))?;
+            .ok_or_else(|| AuthError::internal("expected generated object"))?
+            .snapshot_fields()?;
         assert_eq!(fields.get("errorURL"), Some(&FieldValue::Undefined));
         assert_eq!(fields.keys().next().map(String::as_str), Some("2"));
         assert!(!fields.contains_key("oauthState"));
@@ -194,8 +198,10 @@ mod tests {
             fields
                 .get("link")
                 .and_then(FieldValue::as_object)
-                .and_then(|link| link.get("userId")),
-            Some(&FieldValue::Undefined)
+                .map(|link| link.get("userId"))
+                .transpose()?
+                .flatten(),
+            Some(FieldValue::Undefined)
         );
 
         assert!(matches!(
@@ -212,7 +218,8 @@ mod tests {
             .ok_or_else(|| AuthError::internal("missing parsed state"))?;
         let fields = parsed
             .as_object()
-            .ok_or_else(|| AuthError::internal("expected parsed object"))?;
+            .ok_or_else(|| AuthError::internal("expected parsed object"))?
+            .snapshot_fields()?;
         assert_eq!(fields.get("errorURL"), Some(&"/error".into()));
         assert_eq!(fields.keys().next().map(String::as_str), Some("2"));
         assert_eq!(fields.keys().last().map(String::as_str), Some("errorURL"));
@@ -222,8 +229,10 @@ mod tests {
             fields
                 .get("link")
                 .and_then(FieldValue::as_object)
-                .and_then(|link| link.get("userId")),
-            Some(&"7".into())
+                .map(|link| link.get("userId"))
+                .transpose()?
+                .flatten(),
+            Some("7".into())
         );
         Ok(())
     }

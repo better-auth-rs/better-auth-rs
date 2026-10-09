@@ -40,7 +40,7 @@ pub(super) fn take<T: SchemaField>(fields: &mut FieldMap, name: &str) -> AuthRes
 
 pub(super) fn object(fields: &mut FieldMap, name: &str) -> AuthResult<FieldMap> {
     match fields.remove(name) {
-        Some(FieldValue::Object(value)) => Ok((*value).clone()),
+        Some(FieldValue::Object(value)) => value.snapshot_fields(),
         _ => Err(AuthError::internal(format!(
             "Validated Organization field {name} is not an object"
         ))),

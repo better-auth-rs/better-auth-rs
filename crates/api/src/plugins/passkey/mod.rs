@@ -114,7 +114,11 @@ impl PasskeyPlugin {
     ) -> AuthResult<AuthResponse> {
         let maybe_user = registration::optional_session(ctx, req).await?;
         let (result, cookie_header) = generate_authenticate_options_core(
-            maybe_user.as_ref().map(|data| data.user_field("id")),
+            maybe_user
+                .as_ref()
+                .map(|data| data.user_field("id"))
+                .transpose()?
+                .as_ref(),
             req,
             &self.config,
             ctx,
@@ -150,7 +154,7 @@ impl PasskeyPlugin {
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let data = ctx.require_native_session(req).await?;
-        let result = list_user_passkeys_core(data.user_field("id"), ctx).await?;
+        let result = list_user_passkeys_core(&data.user_field("id")?, ctx).await?;
         AuthResponse::json(None, &result)
     }
 
@@ -162,7 +166,7 @@ impl PasskeyPlugin {
     ) -> AuthResult<AuthResponse> {
         let data = ctx.require_native_session(req).await?;
         let body: DeletePasskeyRequest = types::read(req, types::deletion_body)?;
-        let result = delete_passkey_core(&body, data.user_field("id"), ctx).await?;
+        let result = delete_passkey_core(&body, &data.user_field("id")?, ctx).await?;
         AuthResponse::json(None, &result)
     }
 
@@ -174,7 +178,7 @@ impl PasskeyPlugin {
     ) -> AuthResult<AuthResponse> {
         let data = ctx.require_native_session(req).await?;
         let body: UpdatePasskeyRequest = types::read(req, types::update_body)?;
-        let result = update_passkey_core(&body, data.user_field("id"), ctx).await?;
+        let result = update_passkey_core(&body, &data.user_field("id")?, ctx).await?;
         AuthResponse::json(None, &result)
     }
 }

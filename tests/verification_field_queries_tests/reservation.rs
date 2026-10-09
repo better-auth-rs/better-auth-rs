@@ -668,7 +668,7 @@ async fn sqlite_reservations_preserve_adapter_id_inputs_and_failure_rereads() ->
         let (base, database) = sqlite(AuthConfig::default()).await?;
         let integer_id = matches!(case, Case::Duplicate(true));
         if integer_id {
-            database.execute_unprepared("DROP TABLE verifications; CREATE TABLE verifications (id INTEGER PRIMARY KEY NOT NULL, identifier TEXT NOT NULL, value TEXT NOT NULL, expires_at TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)")
+            let _ = database.execute_unprepared("DROP TABLE verifications; CREATE TABLE verifications (id INTEGER PRIMARY KEY NOT NULL, identifier TEXT NOT NULL, value TEXT NOT NULL, expires_at TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)")
                 .await.map_err(|error| AuthError::internal(error.to_string()))?;
         }
         check(

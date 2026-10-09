@@ -17,7 +17,7 @@ use better_auth_core::plugin::AuthContext;
 use better_auth_core::session::NativeSessionData;
 use better_auth_core::types::{AuthRequest, AuthResponse, CreateOrganization, UpdateOrganization};
 use better_auth_core::wire::InvitationView;
-use better_auth_core::{FieldMap, FieldValue, SchemaValue};
+use better_auth_core::{AuthRecordFields, FieldMap, FieldValue, SchemaValue};
 
 fn has_role(member: &impl AuthMember, role: &str) -> AuthResult<bool> {
     Ok(member
@@ -172,12 +172,13 @@ pub(crate) async fn create_organization_core(
         {
             Some(team) => team,
             None => {
-                ctx.database
+                let team = ctx
+                    .database
                     .create_team(team_data.into_create(created_at, None))
-                    .await?
+                    .await?;
+                crate::plugins::organization::fields::team(team, config)?
             }
         };
-        let team = crate::plugins::organization::fields::team(team, config)?;
         let team_member = ctx
             .database
             .add_team_member_value(&team.id.field_value(), user.model_property("id")?, None)
@@ -241,7 +242,7 @@ pub(crate) async fn update_organization_core(
 
     let member = ctx
         .database
-        .get_member_with_user_value(&org_id, session.user_property("id")?)
+        .get_member_with_user_value(&org_id, &session.user_property("id")?)
         .await?
         .map(|joined| joined.member)
         .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;
@@ -326,7 +327,7 @@ pub(crate) async fn delete_organization_core(
         .database
         .get_member_with_user_value(
             &body.organization_id.as_str().into(),
-            session.user_property("id")?,
+            &session.user_property("id")?,
         )
         .await?
         .map(|joined| joined.member)
@@ -398,7 +399,7 @@ pub(crate) async fn list_organizations_core(
 ) -> AuthResult<Vec<OrganizationResponse>> {
     let organizations = ctx
         .database
-        .list_user_organizations_value(session.user_property("id")?)
+        .list_user_organizations_value(&session.user_property("id")?)
         .await?;
     Ok(organizations
         .iter()
@@ -446,7 +447,10 @@ pub(crate) async fn get_full_organization_core(
     let organization = details.organization;
     if ctx
         .database
-        .get_member_value(&organization.id.field_value(), session.user_property("id")?)
+        .get_member_value(
+            &organization.id.field_value(),
+            &session.user_property("id")?,
+        )
         .await?
         .is_none()
     {
@@ -562,7 +566,7 @@ pub(crate) async fn set_active_organization_core(
     }
     if ctx
         .database
-        .get_member_value(&org_id, session.user_property("id")?)
+        .get_member_value(&org_id, &session.user_property("id")?)
         .await?
         .is_none()
     {
@@ -619,7 +623,7 @@ pub(crate) async fn leave_organization_core(
         .database
         .get_member_with_user_value(
             &body.organization_id.as_str().into(),
-            session.user_property("id")?,
+            &session.user_property("id")?,
         )
         .await?
         .ok_or_else(|| AuthError::bad_request("Member not found"))?;
@@ -649,7 +653,7 @@ pub(crate) async fn leave_organization_core(
         .delete_member_for_user_value(
             &member.id().field_value(),
             &body.organization_id.as_str().into(),
-            session.user_property("id")?,
+            &session.user_property("id")?,
         )
         .await?;
 
@@ -711,7 +715,7 @@ pub async fn handle_create_organization(
                 .await?;
         }
     }
-    AuthResponse::json(None, &response)
+    Ok(AuthResponse::native(None, response.field_values()?.into()))
 }
 
 /// Handle update organization request
@@ -789,7 +793,7 @@ pub async fn handle_get_organization(
         .database
         .get_member_value(
             &organization.id().field_value(),
-            session.user_property("id")?,
+            &session.user_property("id")?,
         )
         .await?
         .is_none()

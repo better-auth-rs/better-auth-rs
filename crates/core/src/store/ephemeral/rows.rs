@@ -25,10 +25,49 @@ pub(super) enum RecordSource {
 }
 
 impl RecordSource {
+    pub(super) fn joined(mut parent: FieldMap, name: &str, relation: FieldValue) -> Self {
+        // Native adapters attach relations to a shallow parent copy before field output.
+        let _ = parent.insert(name.to_owned(), relation);
+        Self::Snapshot(Box::new(parent))
+    }
+
     pub(super) fn read<T>(&self, read: impl FnOnce(&FieldMap) -> AuthResult<T>) -> AuthResult<T> {
         match self {
             Self::Live(source) => source.read(read),
             Self::Snapshot(record) => read(record),
+        }
+    }
+}
+
+impl<T: AuthRecordFields + Send> crate::field_value::FieldObjectSource for RowRef<T> {
+    fn get(&self, name: &str) -> AuthResult<Option<FieldValue>> {
+        self.read(|row| Ok(row.field_values()?.get(name).cloned()))
+    }
+
+    fn snapshot_fields(&self) -> AuthResult<FieldMap> {
+        self.read(AuthRecordFields::field_values)
+    }
+
+    fn identity(&self) -> usize {
+        Arc::as_ptr(&self.0) as usize
+    }
+}
+
+impl<T: AuthRecordFields + Clone + Send + 'static> RowRef<T> {
+    pub(super) fn field_value(&self) -> FieldValue {
+        FieldValue::Object(crate::FieldObject::from_source(Arc::new(self.clone())))
+    }
+}
+
+impl<T: AuthRecordFields + Clone + Send + 'static> crate::store::JoinValue<RowRef<T>> {
+    pub(super) fn raw_value(&self) -> FieldValue {
+        match self {
+            Self::One(row) => row.as_ref().map_or(FieldValue::Null, RowRef::field_value),
+            Self::Many(rows) => rows
+                .iter()
+                .map(RowRef::field_value)
+                .collect::<Vec<_>>()
+                .into(),
         }
     }
 }
@@ -230,7 +269,7 @@ impl Hash for TransactionId {
             FieldValue::Utf16String(value) => (4_u8, value.as_utf16()).hash(state),
             FieldValue::Date(value) => (5_u8, value.milliseconds().to_bits()).hash(state),
             FieldValue::Array(value) => (6_u8, Arc::as_ptr(value)).hash(state),
-            FieldValue::Object(value) => (7_u8, Arc::as_ptr(value)).hash(state),
+            FieldValue::Object(value) => (7_u8, value.identity()).hash(state),
             FieldValue::Function(value) => (8_u8, value.identity()).hash(state),
         }
     }

@@ -203,8 +203,11 @@ async fn anonymous_delete_reads_the_public_object_from_a_many_user_relationship(
             None,
         );
         let observed = ctx.require_authoritative_native_session(&req).await?;
-        assert!(observed.user_field("id").is_undefined());
-        let selected_fields = observed.user.as_object().unwrap()["0"].as_object().unwrap();
+        assert!(observed.user_field("id")?.is_undefined());
+        let selected_fields = observed.user.as_object().unwrap().snapshot_fields()?["0"]
+            .as_object()
+            .unwrap()
+            .snapshot_fields()?;
         assert_eq!(selected_fields["id"], selected.id.field_value());
         assert!(matches!(
             plugin.delete(&req, &ctx).await,

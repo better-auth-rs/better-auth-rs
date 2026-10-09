@@ -110,8 +110,8 @@ async fn active_session_preserves_the_selected_relationship_through_cookie_and_r
         .await
         .unwrap();
     let issued = request.new_session().unwrap().unwrap();
-    assert!(issued.user.as_object().unwrap().contains_key("0"));
-    assert!(issued.user_field("id").is_undefined());
+    assert!(issued.user.as_object().unwrap().get("0").unwrap().is_some());
+    assert!(issued.user_field("id").unwrap().is_undefined());
     assert_eq!(
         serde_json::from_slice::<serde_json::Value>(&response.body.bytes().unwrap()).unwrap(),
         serde_json::to_value(issued).unwrap(),

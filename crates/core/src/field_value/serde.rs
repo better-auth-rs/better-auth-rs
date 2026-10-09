@@ -2,10 +2,19 @@
 
 use crate::{FieldDate, FieldMap, FieldValue};
 use ::serde::{Deserialize, Serialize, de::Error};
+use std::{cell::RefCell, collections::HashSet};
 
 pub(crate) struct Json<'a>(pub(crate) &'a FieldValue);
 
 impl Serialize for Json<'_> {
+    fn serialize<S: ::serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        JsonNode(self.0, &RefCell::new(HashSet::new())).serialize(serializer)
+    }
+}
+
+struct JsonNode<'a>(&'a FieldValue, &'a RefCell<HashSet<super::ObjectIdentity>>);
+
+impl Serialize for JsonNode<'_> {
     fn serialize<S: ::serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         match self.0 {
             FieldValue::Undefined | FieldValue::Null | FieldValue::Function(_) => {
@@ -29,13 +38,46 @@ impl Serialize for Json<'_> {
                 use ::serde::ser::SerializeSeq;
                 let mut sequence = serializer.serialize_seq(Some(values.len()))?;
                 for value in values.iter() {
-                    sequence.serialize_element(&Json(value))?;
+                    sequence.serialize_element(&JsonNode(value, self.1))?;
                 }
                 sequence.end()
             }
-            FieldValue::Object(fields) => map::serialize(fields, serializer),
+            FieldValue::Object(object) => {
+                let identity = object.identity();
+                if !self.1.borrow_mut().insert(identity) {
+                    return Err(::serde::ser::Error::custom(
+                        "Converting circular structure to JSON",
+                    ));
+                }
+                let fields = object
+                    .snapshot_fields()
+                    .map_err(::serde::ser::Error::custom)?;
+                let result = serialize_fields(&fields, serializer, self.1);
+                let _ = self.1.borrow_mut().remove(&identity);
+                result
+            }
         }
     }
+}
+
+fn serialize_fields<S: ::serde::Serializer>(
+    fields: &FieldMap,
+    serializer: S,
+    active: &RefCell<HashSet<super::ObjectIdentity>>,
+) -> Result<S::Ok, S::Error> {
+    use ::serde::ser::SerializeMap;
+    let mut fields: Vec<_> = fields
+        .iter()
+        .filter(|(_, value)| !value.is_json_omitted())
+        .collect();
+    fields.sort_by_key(|(name, _)| {
+        crate::utils::json::array_index(name).map_or((true, 0), |index| (false, index))
+    });
+    let mut output = serializer.serialize_map(Some(fields.len()))?;
+    for (name, value) in fields {
+        output.serialize_entry(name, &JsonNode(value, active))?;
+    }
+    output.end()
 }
 
 pub mod map {
@@ -45,19 +87,7 @@ pub mod map {
         fields: &FieldMap,
         serializer: S,
     ) -> Result<S::Ok, S::Error> {
-        use ::serde::ser::SerializeMap;
-        let mut fields: Vec<_> = fields
-            .iter()
-            .filter(|(_, value)| !value.is_json_omitted())
-            .collect();
-        fields.sort_by_key(|(name, _)| {
-            crate::utils::json::array_index(name).map_or((true, 0), |index| (false, index))
-        });
-        let mut output = serializer.serialize_map(Some(fields.len()))?;
-        for (name, value) in fields {
-            output.serialize_entry(name, &Json(value))?;
-        }
-        output.end()
+        serialize_fields(fields, serializer, &RefCell::new(HashSet::new()))
     }
 
     pub fn deserialize<'de, D: ::serde::Deserializer<'de>>(

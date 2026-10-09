@@ -88,6 +88,7 @@ pub(super) fn observe(value: &FieldValue) -> AuthResult<Value> {
         }
         FieldValue::Object(values) => Value::Object(
             values
+                .snapshot_fields()?
                 .iter()
                 .map(|(key, value)| Ok((key.clone(), observe(value)?)))
                 .collect::<AuthResult<_>>()?,

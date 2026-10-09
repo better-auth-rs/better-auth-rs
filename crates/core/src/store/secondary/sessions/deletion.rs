@@ -1,7 +1,7 @@
 use super::{AuthError, AuthResult, AuthSchema, FieldValue, SecondaryStore, active_sessions_key};
 use crate::utils::json::safe_parse_field;
 
-fn property<'a>(value: &'a FieldValue, name: &str) -> AuthResult<&'a FieldValue> {
+fn property(value: &FieldValue, name: &str) -> AuthResult<FieldValue> {
     if value.is_null() || value.is_undefined() {
         return Err(AuthError::internal(format!(
             "Cannot read properties of {} (reading '{name}')",
@@ -10,8 +10,10 @@ fn property<'a>(value: &'a FieldValue, name: &str) -> AuthResult<&'a FieldValue>
     }
     Ok(value
         .as_object()
-        .and_then(|fields| fields.get(name))
-        .unwrap_or(&FieldValue::Undefined))
+        .map(|fields| fields.get(name))
+        .transpose()?
+        .flatten()
+        .unwrap_or_default())
 }
 
 impl<S: AuthSchema> SecondaryStore<S> {
@@ -24,23 +26,25 @@ impl<S: AuthSchema> SecondaryStore<S> {
             .await?
             .filter(FieldValue::is_truthy)
         {
-            let cached = safe_parse_field(&cached);
+            let cached = safe_parse_field(&cached)?;
             let session = cached
                 .as_object()
-                .and_then(|fields| fields.get("session"))
-                .unwrap_or(&FieldValue::Undefined);
+                .map(|fields| fields.get("session"))
+                .transpose()?
+                .flatten()
+                .unwrap_or_default();
             if !session.is_truthy() {
                 crate::observability::logger::current()
                     .error("Session not found in secondary storage", &[]);
                 return Ok(());
             }
-            let key = active_sessions_key(property(session, "userId")?)?;
+            let key = active_sessions_key(&property(&session, "userId")?)?;
             if let Some(current) = storage
                 .get_native(&key)
                 .await?
                 .filter(FieldValue::is_truthy)
             {
-                let current = safe_parse_field(&current);
+                let current = safe_parse_field(&current)?;
                 let list = if current.is_truthy() {
                     current
                         .as_array()
@@ -51,7 +55,7 @@ impl<S: AuthSchema> SecondaryStore<S> {
                 let now = self.now();
                 let mut filtered = Vec::new();
                 for session in list {
-                    let expires_at = crate::query::field_number(property(session, "expiresAt")?)?;
+                    let expires_at = crate::query::field_number(&property(session, "expiresAt")?)?;
                     if expires_at > now.timestamp_millis() as f64
                         && !property(session, "token")?.strict_equals(token)
                     {
@@ -64,10 +68,10 @@ impl<S: AuthSchema> SecondaryStore<S> {
                     .last()
                     .map(|(session, _)| property(session, "expiresAt"))
                     .transpose()?
-                    .unwrap_or(&FieldValue::Undefined);
+                    .unwrap_or_default();
                 if !filtered.is_empty()
                     && furthest.is_truthy()
-                    && crate::query::field_number(furthest)? > self.now().timestamp_millis() as f64
+                    && crate::query::field_number(&furthest)? > self.now().timestamp_millis() as f64
                 {
                     let furthest = furthest.clone();
                     let value = FieldValue::from(

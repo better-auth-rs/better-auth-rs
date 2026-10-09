@@ -130,7 +130,13 @@ impl EphemeralStore {
                                 self.config.advanced.database.find_many_limit(),
                                 |user| user.id.field_value(),
                             )?;
-                            Ok((RecordSource::Snapshot(Box::new(session)), Some(users)))
+                            let source = RecordSource::joined(
+                                session,
+                                self.model_fields
+                                    .storage_model_name(EntityRole::User, "user"),
+                                users.raw_value(),
+                            );
+                            Ok((source, Some(users)))
                         })
                         .collect::<AuthResult<Vec<_>>>()
                 },

@@ -486,11 +486,11 @@ impl EphemeralStore {
                         )
                         .await?;
                         let _ = output.insert(name.to_owned(), value);
-                    } else if let Some(mut value) = value {
-                        if name == "id" {
-                            value = Self::project_id(&crate::SchemaValue::from_field(value))?
-                                .into_field_value();
-                        }
+                    } else {
+                        let value = Self::project_id(&crate::SchemaValue::from_field(
+                            value.unwrap_or_default(),
+                        ))?
+                        .into_field_value();
                         let _ = output.insert(name.to_owned(), value);
                     }
                     Ok(())

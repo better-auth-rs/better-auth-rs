@@ -168,8 +168,8 @@ impl AdminPlugin {
     ) -> AuthResult<()> {
         let permissions = HashMap::from([(resource.to_string(), vec![action.to_string()])]);
         if has_permission(
-            session.user_property("id")?,
-            session.user_property("role")?,
+            &session.user_property("id")?,
+            &session.user_property("role")?,
             &self.config,
             &permissions,
         )? {
@@ -282,7 +282,7 @@ impl AdminPlugin {
         self.authorize(&session, "user", "ban", MESSAGE_BAN_USERS)?;
         let body: BanUserRequest = request::read(req)?;
         let response =
-            ban_user_core(&body, session.user_property("id")?, &self.config, ctx).await?;
+            ban_user_core(&body, &session.user_property("id")?, &self.config, ctx).await?;
         AuthResponse::json(None, &response)
     }
 
@@ -420,7 +420,7 @@ impl AdminPlugin {
         let session = self.require_session(req, ctx).await?;
         self.authorize(&session, "user", "delete", MESSAGE_DELETE_USERS)?;
         let body: UserIdRequest = request::read(req)?;
-        let response = remove_user_core(&body, session.user_property("id")?, ctx).await?;
+        let response = remove_user_core(&body, &session.user_property("id")?, ctx).await?;
         AuthResponse::json(None, &response)
     }
 
@@ -452,10 +452,7 @@ impl AdminPlugin {
             return Err(AuthError::bad_request("user id or role is required"));
         }
         let (user_id, role) = if let Some(session) = session.filter(|data| data.user.is_truthy()) {
-            (
-                session.user_property("id")?.clone(),
-                session.user_property("role")?.clone(),
-            )
+            (session.user_property("id")?, session.user_property("role")?)
         } else if let Some(role) = role {
             (user_id.unwrap_or_default().into(), role.into())
         } else {

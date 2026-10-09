@@ -120,7 +120,7 @@ impl BackupCodeStorage {
             Self::Encrypted => crate::plugins::symmetric::decrypt_field(secret, stored)?.into(),
             Self::Custom(cipher) => cipher.decrypt_native(stored).await?,
         };
-        Ok(better_auth_core::utils::json::safe_parse_field(&value))
+        better_auth_core::utils::json::safe_parse_field(&value)
     }
 }
 

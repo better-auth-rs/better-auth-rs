@@ -211,10 +211,12 @@ async fn authentication_preserves_native_owner_and_creates_session_before_user_l
     Ok(())
 }
 
-fn field<'a>(value: &'a FieldValue, name: &str) -> TestResult<&'a FieldValue> {
+fn field(value: &FieldValue, name: &str) -> TestResult<FieldValue> {
     value
         .as_object()
-        .and_then(|fields| fields.get(name))
+        .map(|fields| fields.get(name))
+        .transpose()?
+        .flatten()
         .ok_or_else(|| format!("Missing {name}").into())
 }
 
@@ -225,13 +227,16 @@ fn assert_surrogate_response(response: &AuthResponse, registration: bool) -> Tes
     let surrogate: FieldValue = Utf16String::from_units(vec![0xd800]).into();
     for body in [&native, &encoded] {
         if registration {
-            assert_eq!(field(body, "name")?, &surrogate);
-            let fields = body.as_object().ok_or("Expected registration object")?;
+            assert_eq!(field(body, "name")?, surrogate);
+            let fields = body
+                .as_object()
+                .ok_or("Expected registration object")?
+                .snapshot_fields()?;
             assert!(!fields.contains_key("credential"));
             assert!(!fields.contains_key("updatedAt"));
         }
-        assert_eq!(field(field(body, "user")?, "name")?, &surrogate);
-        assert_eq!(field(field(body, "session")?, "userAgent")?, &surrogate);
+        assert_eq!(field(&field(body, "user")?, "name")?, surrogate);
+        assert_eq!(field(&field(body, "session")?, "userAgent")?, surrogate);
     }
     assert!(response.headers.contains_key("Set-Cookie"));
     Ok(())

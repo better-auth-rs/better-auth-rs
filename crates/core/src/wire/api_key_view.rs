@@ -63,11 +63,11 @@ impl PartialEq for ApiKeyView {
     }
 }
 
-fn permissions(value: FieldValue) -> FieldValue {
+fn permissions(value: FieldValue) -> AuthResult<FieldValue> {
     if value.is_truthy() {
         crate::utils::json::safe_parse_field(&value)
     } else {
-        FieldValue::Null
+        Ok(FieldValue::Null)
     }
 }
 
@@ -75,7 +75,7 @@ impl ApiKeyView {
     /// Project a native API key without reviving dates or changing property order.
     pub fn from_api_key_fields(fields: FieldMap) -> AuthResult<Self> {
         let mut view = Self::from_field_values(fields)?;
-        view.permissions = permissions(view.permissions);
+        view.permissions = permissions(view.permissions)?;
         // Upstream appends these response properties only when the source omits them.
         for name in ["metadata", "permissions"] {
             if !view.field_order.iter().any(|field| field == name) {

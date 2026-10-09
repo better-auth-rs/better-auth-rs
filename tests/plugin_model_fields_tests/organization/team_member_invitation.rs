@@ -48,7 +48,7 @@ impl TeamMemberLimitPolicy for Capacity {
             vec![
                 data.organization_id.clone(),
                 data.team_id.clone(),
-                required(user.get("id"), "Expected the actor ID")?.clone(),
+                required(user.get("id")?, "Expected the actor ID")?,
             ]
             .into(),
         )?;
@@ -155,7 +155,7 @@ fn invitation(created_at: FieldValue, expires_at: FieldValue) -> FieldMap {
     .into()
 }
 
-async fn session_headers<S: AuthSchema>(
+pub(super) async fn session_headers<S: AuthSchema>(
     auth: &BetterAuth<S>,
 ) -> AuthResult<HashMap<String, String>> {
     let session = auth

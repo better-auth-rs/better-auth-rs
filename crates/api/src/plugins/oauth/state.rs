@@ -39,7 +39,8 @@ impl OAuthStateLink {
         let value = FieldValue::parse_json(raw)?;
         let fields = value
             .as_object()
-            .ok_or_else(|| AuthError::bad_request("Invalid OAuth state link"))?;
+            .ok_or_else(|| AuthError::bad_request("Invalid OAuth state link"))?
+            .snapshot_fields()?;
         let email = fields
             .get("email")
             .filter(|value| matches!(value, FieldValue::String(_) | FieldValue::Utf16String(_)))

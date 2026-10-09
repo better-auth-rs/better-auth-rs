@@ -419,9 +419,9 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for OrganizationPlugin {
             return Ok(());
         }
         if let better_auth_core::ResponseBody::Native(value) = &mut response.body {
-            fields::shape_native_session_teams(value, self.config.teams.enabled);
+            fields::shape_native_session_teams(value, self.config.teams.enabled)?;
             if response.status < 400 && req.path().starts_with("/organization/") {
-                fields::filter_native_response(req.path(), value, &self.config.schema);
+                fields::filter_native_response(req.path(), value, &self.config.schema)?;
             }
             return Ok(());
         }

@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use validator::Validate;
 
 mod input_fields;
+mod native_fields;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize)]
 #[serde(untagged)]

@@ -296,10 +296,17 @@ fn json_and_recursive_clone_boundaries_preserve_captured_function_behavior() -> 
         );
     }
     assert!(matches!(
-        StructuredCloneContext::new().clone_map(object.as_object().unwrap()),
+        StructuredCloneContext::new().clone_map(&object.as_object().unwrap().snapshot_fields()?),
         Err(AuthError::DataClone)
     ));
-    assert!(object.as_object().unwrap()["value"].strict_equals(&harness.default));
+    assert!(
+        object
+            .as_object()
+            .unwrap()
+            .get("value")?
+            .unwrap()
+            .strict_equals(&harness.default)
+    );
     assert_eq!(harness.calls.factory.load(Ordering::SeqCst), 0);
     assert_eq!(harness.calls.returned.load(Ordering::SeqCst), 0);
     Ok(())

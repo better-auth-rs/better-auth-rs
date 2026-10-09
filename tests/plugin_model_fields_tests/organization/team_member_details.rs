@@ -188,6 +188,7 @@ async fn scoped<S: AuthSchema>(
     for (id, organization) in [
         ("missing-team", "organization"),
         ("team-a", "wrong-organization"),
+        ("team-a", " organization "),
     ] {
         assert!(
             store
@@ -195,12 +196,9 @@ async fn scoped<S: AuthSchema>(
                 .await?
                 .is_none()
         );
-        assert_eq!(
-            events.take()?,
-            vec![event("team.organizationId", "input", organization.into())]
-        );
+        assert!(events.take()?.is_empty());
     }
-    for organization in [Some(" organization "), None, Some("")] {
+    for organization in [Some("organization"), None, Some("")] {
         let scope = organization.map(FieldValue::from);
         let details = required(
             store
@@ -211,18 +209,10 @@ async fn scoped<S: AuthSchema>(
         let mut expected = expected_team("team-a", "Team A", None);
         let _ = expected.insert("organizationId".into(), "visible-organization".into());
         assert_eq!(output(details)?, expected);
-        let mut expected_events = Vec::new();
-        if organization == Some(" organization ") {
-            expected_events.push(event(
-                "team.organizationId",
-                "input",
-                " organization ".into(),
-            ));
-        }
-        expected_events.extend([
+        let expected_events = vec![
             event("team.name", "output", "Team A".into()),
             event("team.organizationId", "output", "organization".into()),
-        ]);
+        ];
         assert_eq!(events.take()?, expected_events);
     }
     let mut without_relationship = member_fields(&events, "id", false, true);

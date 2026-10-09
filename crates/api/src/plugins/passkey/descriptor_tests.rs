@@ -167,18 +167,22 @@ async fn options_consume_native_descriptors_without_utf16_loss_or_stricter_base6
             assert_eq!(response.status, 200);
             assert!(cookie_header(&response).contains("better-auth-passkey="));
             let body = response.body.field_value().unwrap();
-            let descriptor = body.as_object().unwrap()[property].as_array().unwrap()[0]
+            let body = body.as_object().unwrap().snapshot_fields().unwrap();
+            let descriptor = body[property].as_array().unwrap()[0]
                 .as_object()
+                .unwrap()
+                .snapshot_fields()
                 .unwrap();
             assert_eq!(descriptor["id"], FieldValue::from(expected_id));
             assert_eq!(descriptor["transports"], expected_transports);
             assert_eq!(descriptor["type"], FieldValue::from("public-key"));
             let bytes = response.body.bytes().unwrap();
             let serialized = FieldValue::parse_json(std::str::from_utf8(&bytes).unwrap()).unwrap();
-            let descriptor = serialized.as_object().unwrap()[property]
-                .as_array()
-                .unwrap()[0]
+            let serialized = serialized.as_object().unwrap().snapshot_fields().unwrap();
+            let descriptor = serialized[property].as_array().unwrap()[0]
                 .as_object()
+                .unwrap()
+                .snapshot_fields()
                 .unwrap();
             assert_eq!(
                 descriptor.get("transports"),

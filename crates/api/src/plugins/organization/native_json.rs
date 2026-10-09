@@ -41,6 +41,7 @@ fn parse_metadata(
     fn revive(value: FieldValue) -> AuthResult<FieldValue> {
         Ok(match value {
             FieldValue::Object(fields) => {
+                let fields = fields.snapshot_fields()?;
                 if fields.contains_key("__proto__") || fields.contains_key("constructor") {
                     better_auth_core::observability::logger::current()
                         .error("Organization JSON contains a prototype pollution key", &[]);
@@ -153,7 +154,13 @@ mod tests {
     #[test]
     fn metadata_dates_follow_the_upstream_component_parser() {
         let parsed = parse_metadata(better_auth_core::FieldValue::from_json(json!(r#"{"fraction":"2026-01-02T03:04:05.1234Z","overflow":"2026-02-30T25:00:00+02:00","year":"0099-01-01T00:00:00Z","untouched":"2026-01-02T03:04:05.12345678Z"}"#)).unwrap()).unwrap();
-        let fields = parsed.as_ref().unwrap().as_object().unwrap();
+        let fields = parsed
+            .as_ref()
+            .unwrap()
+            .as_object()
+            .unwrap()
+            .snapshot_fields()
+            .unwrap();
         assert!(fields["fraction"].as_date().is_some());
         assert!(fields["overflow"].as_date().is_some());
         assert!(fields["year"].as_date().is_some());

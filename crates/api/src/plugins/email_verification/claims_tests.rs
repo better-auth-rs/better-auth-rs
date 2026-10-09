@@ -148,7 +148,10 @@ fn captured_number(fields: &VerificationPayload, name: &str) -> AuthResult<Optio
             if let Some(number) = value.as_f64() {
                 return Ok(number);
             }
-            let tag = value.as_object().expect("Captured nonfinite number tag");
+            let tag = value
+                .as_object()
+                .expect("Captured nonfinite number tag")
+                .snapshot_fields()?;
             assert_eq!(tag.get("type").and_then(FieldValue::as_str), Some("number"));
             match tag.get("value").and_then(FieldValue::as_str) {
                 Some("Infinity") => Ok(f64::INFINITY),
@@ -199,7 +202,8 @@ fn assert_reference_error(case: &Case, code: &str) -> AuthResult<()> {
         assert_eq!(
             body.as_object()
                 .expect("Captured API error")
-                .get("code")
+                .get("code")?
+                .as_ref()
                 .and_then(FieldValue::as_str),
             Some(code)
         );

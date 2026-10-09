@@ -42,7 +42,7 @@ impl<S: AuthSchema> SecondaryStore<S> {
                 .await?
                 .map(FieldValue::from_json)
                 .transpose()?;
-            let Some(value) = cache::decode(raw) else {
+            let Some(value) = cache::decode(raw)? else {
                 continue;
             };
             let mut record = cache::verification(&value)?;
@@ -290,7 +290,7 @@ impl<S: AuthSchema> SecondaryStore<S> {
             storage
                 .get_native(&format!("verification:{identifier}").into())
                 .await?,
-        )
+        )?
         .map(|value| cache::verification(&value))
         .transpose()
     }

@@ -198,14 +198,14 @@ async fn verification_uses_email_selector_and_preserves_raw_nullable_hooks() -> 
         assert_eq!(calls.len(), 2);
         assert_eq!(calls[0].0, "before");
         assert_eq!(
-            calls[0].1.as_object().unwrap().get("name"),
-            Some(&"Hidden callback field".into())
+            calls[0].1.as_object().unwrap().get("name")?,
+            Some("Hidden callback field".into())
         );
         assert_eq!(calls[1].0, "after");
         if cancel {
             assert!(calls[1].1.is_null());
         } else {
-            let fields = calls[1].1.as_object().unwrap();
+            let fields = calls[1].1.as_object().unwrap().snapshot_fields()?;
             assert_eq!(fields.get("name"), Some(&"Hidden callback field".into()));
             assert_eq!(fields.get("emailVerified"), Some(&true.into()));
             assert_eq!(fields.get("id"), Some(&"moved-by-verification-hook".into()));
@@ -322,7 +322,7 @@ async fn change_email_normalizes_storage_and_tokens_but_preserves_session_owners
                 assert!(req.new_session()?.is_none());
                 assert!(verified.is_empty());
                 assert_eq!(delivered.len(), 1);
-                let mut expected = original.enumerable_fields();
+                let mut expected = original.enumerable_fields()?;
                 let _ = expected.insert("email".into(), "NEW@NATIVE-EMAIL.TEST".into());
                 assert_eq!(delivered[0].user, FieldValue::from(expected));
                 let claims = token::decode_email_verification_token(
@@ -338,11 +338,11 @@ async fn change_email_normalizes_storage_and_tokens_but_preserves_session_owners
                 continue;
             }
             let is_verified = request_type == "change-email-verification";
-            let fields = stored.as_object().unwrap();
+            let fields = stored.as_object().unwrap().snapshot_fields()?;
             assert_eq!(fields.get("email"), Some(&"new@native-email.test".into()));
             assert_eq!(fields.get("emailVerified"), Some(&is_verified.into()));
             assert!(!original_email_present);
-            let mut expected = original.enumerable_fields();
+            let mut expected = original.enumerable_fields()?;
             let _ = expected.insert("email".into(), "NEW@NATIVE-EMAIL.TEST".into());
             let _ = expected.insert("emailVerified".into(), is_verified.into());
             assert_eq!(req.new_session()?.unwrap().user, FieldValue::from(expected));
@@ -415,8 +415,8 @@ async fn native_change_email_strings_survive_storage_delivery_and_follow_up_toke
             assert!(req.new_session()?.is_none());
             assert_eq!(messages.len(), 1);
             assert_eq!(
-                messages[0].user.as_object().unwrap().get("email"),
-                Some(&update_to)
+                messages[0].user.as_object().unwrap().get("email")?,
+                Some(update_to.clone())
             );
             let claims = token::decode_email_verification_token(
                 ctx.config.signing_secret(),
@@ -436,25 +436,28 @@ async fn native_change_email_strings_survive_storage_delivery_and_follow_up_toke
                 FieldValue::Bool(verified)
             );
             let session = req.new_session()?.unwrap();
-            assert_eq!(session.user_property("email")?, &update_to);
+            assert_eq!(session.user_property("email")?, update_to);
             assert_eq!(
                 session.user_property("emailVerified")?,
-                &FieldValue::Bool(verified)
+                FieldValue::Bool(verified)
             );
             if verified {
                 assert!(messages.is_empty());
             } else {
                 assert_eq!(messages.len(), 1);
                 assert_eq!(
-                    messages[0].user.as_object().unwrap().get("email"),
-                    Some(&lowercase)
+                    messages[0].user.as_object().unwrap().get("email")?,
+                    Some(lowercase.clone())
                 );
                 let bytes = crate::plugins::jwt::verify_hs256_raw(
                     &messages[0].token,
                     ctx.config.signing_secret(),
                 )?;
                 let payload = FieldValue::parse_json(std::str::from_utf8(&bytes).unwrap())?;
-                assert_eq!(payload.as_object().unwrap().get("email"), Some(&lowercase));
+                assert_eq!(
+                    payload.as_object().unwrap().get("email")?,
+                    Some(lowercase.clone())
+                );
                 assert!(matches!(
                     token::decode_email_verification_token(
                         ctx.config.signing_secret(),
@@ -484,8 +487,8 @@ async fn typed_lifecycle_awaits_failures_and_replaces_legacy_hooks() -> AuthResu
                 EmailVerificationCallbacks::<StatelessSchema>::default()
                     .before(move |user, endpoint| {
                         assert_eq!(
-                            user.as_object().unwrap().get("emailVerified"),
-                            Some(&false.into())
+                            user.as_object().unwrap().get("emailVerified")?,
+                            Some(false.into())
                         );
                         assert_eq!(endpoint.request.unwrap().path(), "/verify-email");
                         let calls = before_calls.clone();
@@ -501,8 +504,8 @@ async fn typed_lifecycle_awaits_failures_and_replaces_legacy_hooks() -> AuthResu
                     })
                     .after(move |user, endpoint| {
                         assert_eq!(
-                            user.as_object().unwrap().get("emailVerified"),
-                            Some(&true.into())
+                            user.as_object().unwrap().get("emailVerified")?,
+                            Some(true.into())
                         );
                         assert_eq!(endpoint.request.unwrap().path(), "/verify-email");
                         let calls = after_calls.clone();

@@ -170,7 +170,7 @@ where
             .with_name(id)
             .with_email(format!("{id}@team-member-catalog.test"))
             .with_email_verified(false);
-        user.id = Some(id.clone().into());
+        user.id = Some(id.clone());
         user.created_at = Some(date.into());
         user.updated_at = Some(date.into());
         assert_eq!(store.create_user(user).await?.id.typed()?, id);

@@ -1,3 +1,4 @@
+import "./organization-team-route-projection-contract";
 import { expect, test } from "bun:test";
 import { betterAuth } from "better-auth";
 import { organization } from "better-auth/plugins";

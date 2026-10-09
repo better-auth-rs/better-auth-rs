@@ -517,7 +517,7 @@ async fn link_with_id_token_core(
         .as_ref()
         .map(|account| account.user_id.field_value())
         .unwrap_or(FieldValue::Undefined);
-    if account_user_id.strict_equals(current_user_id) {
+    if account_user_id.strict_equals(&current_user_id) {
         let tokens = encrypt_token_set(
             ctx,
             id_token.access_token.clone(),
@@ -546,7 +546,7 @@ async fn link_with_id_token_core(
                 },
             )
             .await?;
-        apply_link_user_info(current_user_id, &response.user, ctx).await;
+        apply_link_user_info(&current_user_id, &response.user, ctx).await;
         return Ok(SocialSignInResponse {
             url: Some(String::new()),
             redirect: false,
@@ -577,7 +577,7 @@ async fn link_with_id_token_core(
         });
     }
     if Utf16String::from(provider_email).to_lowercase()
-        != lowercase_link_email(current_session.user_property("email")?)?
+        != lowercase_link_email(&current_session.user_property("email")?)?
         && !linking.allow_different_emails
     {
         return Err(AuthError::Upstream {
@@ -624,7 +624,7 @@ async fn link_with_id_token_core(
         code: "LINKING_FAILED",
         message: "Account not linked - unable to create account",
     })?;
-    apply_link_user_info(current_user_id, &response.user, ctx).await;
+    apply_link_user_info(&current_user_id, &response.user, ctx).await;
 
     Ok(SocialSignInResponse {
         url: Some(String::new()),
@@ -790,8 +790,8 @@ async fn link_social_core(
             request_sign_up: body.request_sign_up,
             additional_data: filter_additional_state_data(body.additional_data.clone())?,
             link: Some(OAuthStateLink::new(
-                session.user_property("id")?.clone(),
-                session.user_property("email")?.clone(),
+                session.user_property("id")?,
+                session.user_property("email")?,
             )),
             disable_redirect: body.disable_redirect.unwrap_or(false),
         },

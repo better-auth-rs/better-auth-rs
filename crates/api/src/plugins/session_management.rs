@@ -137,7 +137,7 @@ impl<S: better_auth_core::AuthSchema> AuthPlugin<S> for SessionManagementPlugin 
 // Core functions — framework-agnostic business logic
 // ---------------------------------------------------------------------------
 
-fn session_user_id(data: &NativeSessionData) -> AuthResult<&FieldValue> {
+fn session_user_id(data: &NativeSessionData) -> AuthResult<FieldValue> {
     let nullish = match &data.user {
         FieldValue::Null => "null",
         FieldValue::Undefined => "undefined",
@@ -197,7 +197,7 @@ pub(crate) async fn revoke_session_core(
         }
         None => FieldValue::Undefined,
     };
-    if target_user.strict_equals(session_user_id(data)?) {
+    if target_user.strict_equals(&session_user_id(data)?) {
         ctx.database
             .delete_session(token)
             .await
@@ -212,7 +212,7 @@ pub(crate) async fn revoke_sessions_core(
 ) -> AuthResult<StatusResponse> {
     let result = async {
         ctx.database
-            .delete_user_sessions_by_user_value(session_user_id(data)?)
+            .delete_user_sessions_by_user_value(&session_user_id(data)?)
             .await
     }
     .await;
@@ -230,7 +230,7 @@ pub(crate) async fn revoke_other_sessions_core(
     let mut tokens = Vec::new();
     for (session, cached) in ctx
         .database
-        .get_user_session_snapshots_value(session_user_id(data)?, false)
+        .get_user_session_snapshots_value(&session_user_id(data)?, false)
         .await?
     {
         let session = if let Some(mut cached) = cached {
@@ -317,7 +317,7 @@ impl SessionManagementPlugin {
                 message: "Session is not fresh",
             });
         }
-        let result = async { list_sessions_core(session_user_id(&data)?, ctx).await }.await;
+        let result = async { list_sessions_core(&session_user_id(&data)?, ctx).await }.await;
         let mut sessions = result.map_err(|error| {
             better_auth_core::observability::logger::current().error(
                 "Failed to list Sessions",

@@ -132,7 +132,7 @@ impl AccountManagementPlugin {
         ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let data = ctx.require_native_session(req).await?;
-        let filtered = list_accounts_core(data.user_field("id"), ctx).await?;
+        let filtered = list_accounts_core(&data.user_field("id")?, ctx).await?;
         Ok(AuthResponse::native(
             None,
             filtered
@@ -163,7 +163,7 @@ impl AccountManagementPlugin {
         };
 
         let response =
-            unlink_account_core(data.user_field("id"), &unlink_req.account_id, ctx).await?;
+            unlink_account_core(&data.user_field("id")?, &unlink_req.account_id, ctx).await?;
         AuthResponse::json(None, &response)
     }
 }

@@ -286,7 +286,7 @@ async function runtime(backend, scenario, joins, populated, recorder) {
   } finally { state.enabled = false; recorder.events = null; sqlite?.close(); }
 }
 
-export async function captureOrganizationMemberJoinReferences() {
+export async function captureOrganizationMemberJoinReferences(scenarios = memberJoinScenarios) {
   const recorder = { events: null };
   let warmup = false;
   assert.equal(trace.setGlobalTracerProvider({ getTracer() { return {
@@ -308,18 +308,19 @@ export async function captureOrganizationMemberJoinReferences() {
     assert.equal(warmup, true, "The query recorder must be active before sampling");
     const boundaries = [];
     const cases = [];
-    for (const scenario of memberJoinScenarios) for (const joins of [false, true]) {
+    for (const scenario of scenarios) for (const joins of [false, true]) {
       boundaries.push(await boundary(scenario, joins));
       for (const backend of scenario.backends ?? ["memory", "sqlite"]) for (const populated of [false, true]) {
         cases.push(await runtime(backend, scenario, joins, populated, recorder));
       }
     }
-    return { version, scenarios: observeValue(memberJoinScenarios), boundaries, cases };
+    return { version, scenarios: observeValue(scenarios), boundaries, cases };
   } finally { trace.disable(); }
 }
 
 if (import.meta.main) {
-  const serialized = `${JSON.stringify(await captureOrganizationMemberJoinReferences(), null, 2)}\n`;
-  if (process.argv[2]) writeFileSync(process.argv[2], serialized);
+  const scenarios = process.argv[2] === "--scenarios-stdin" ? JSON.parse(readFileSync(0, "utf8")) : undefined;
+  const serialized = `${JSON.stringify(await captureOrganizationMemberJoinReferences(scenarios), null, 2)}\n`;
+  if (process.argv[2] && !scenarios) writeFileSync(process.argv[2], serialized);
   else process.stdout.write(serialized);
 }

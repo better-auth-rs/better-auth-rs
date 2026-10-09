@@ -24,18 +24,22 @@ fn cases() -> AuthResult<Vec<FieldMap>> {
         .map(|value| {
             value
                 .as_object()
-                .cloned()
-                .ok_or_else(|| AuthError::internal("Passkey owner case must be an object"))
+                .ok_or_else(|| AuthError::internal("Passkey owner case must be an object"))?
+                .snapshot_fields()
         })
         .collect()
 }
 
 fn replacement(sample: &FieldMap) -> FieldValue {
     let value = sample.get("value").unwrap().clone();
-    if value
-        .as_object()
-        .is_some_and(|value| value.get("type").and_then(FieldValue::as_str) == Some("undefined"))
-    {
+    if value.as_object().is_some_and(|value| {
+        value
+            .get("type")
+            .unwrap()
+            .as_ref()
+            .and_then(FieldValue::as_str)
+            == Some("undefined")
+    }) {
         FieldValue::Undefined
     } else {
         value
@@ -344,7 +348,7 @@ async fn signed_registration_retains_native_owners_and_rejects_json_changed_iden
                         .field_value()?
                         .as_object()
                         .unwrap()
-                        .get("userId")
+                        .get("userId")?
                         .unwrap()
                         .strict_equals(&output_id)
                 );
@@ -366,9 +370,14 @@ async fn signed_registration_retains_native_owners_and_rejects_json_changed_iden
                 assert_eq!(stored.counter, 0);
                 if create_session {
                     let result = verified.body.field_value()?;
-                    let result = result.as_object().unwrap();
+                    let result = result.as_object().unwrap().snapshot_fields()?;
                     for name in ["user", "session"] {
-                        let record = result.get(name).unwrap().as_object().unwrap();
+                        let record = result
+                            .get(name)
+                            .unwrap()
+                            .as_object()
+                            .unwrap()
+                            .snapshot_fields()?;
                         assert_eq!(
                             record.get(if name == "user" { "id" } else { "userId" }),
                             Some(&FieldValue::from("7"))

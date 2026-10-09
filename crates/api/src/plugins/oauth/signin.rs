@@ -124,7 +124,9 @@ fn api_error_redirect_parts(error: AuthError) -> AuthResult<(String, Option<Stri
     };
     let Some(code) = body
         .as_object()
-        .and_then(|body| body.get("code"))
+        .map(|body| body.get("code"))
+        .transpose()?
+        .flatten()
         .filter(|code| code.is_truthy())
     else {
         return Err(response.into());
@@ -133,9 +135,11 @@ fn api_error_redirect_parts(error: AuthError) -> AuthResult<(String, Option<Stri
     let code = String::from_utf16_lossy(code.display_utf16()?.as_utf16());
     let description = body
         .as_object()
-        .and_then(|body| body.get("message"))
+        .map(|body| body.get("message"))
+        .transpose()?
+        .flatten()
         .filter(|message| message.is_truthy())
-        .map(better_auth_core::FieldValue::display_utf16)
+        .map(|value| value.display_utf16())
         .transpose()?;
     Ok((
         code,

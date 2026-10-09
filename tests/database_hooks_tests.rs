@@ -400,7 +400,13 @@ async fn dynamic_request_context_keeps_route_params_when_body_is_replaced() {
             .collect()
     );
     assert_eq!(
-        request.body.as_object().expect("parsed body")["name"],
+        request
+            .body
+            .as_object()
+            .expect("parsed body")
+            .get("name")
+            .unwrap()
+            .unwrap(),
         better_auth_core::FieldValue::from("Replaced Name")
     );
 }

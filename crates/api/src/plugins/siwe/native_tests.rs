@@ -181,8 +181,8 @@ async fn wallet_native_owner_lookup_reuses_selected_user_and_ignores_other_walle
     );
     assert_eq!(reads.load(Ordering::SeqCst), 1);
     assert_eq!(
-        request.new_session()?.unwrap().user_field("name"),
-        &FieldValue::from("selected-1")
+        request.new_session()?.unwrap().user_field("name")?,
+        FieldValue::from("selected-1")
     );
     assert_eq!(*verified.lock().unwrap(), [1.0]);
     assert!(

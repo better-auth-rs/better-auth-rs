@@ -1,7 +1,7 @@
 use super::*;
 
 pub(super) enum Storage {
-    Memory(EphemeralStore),
+    Memory(Box<EphemeralStore>),
     Sqlite(DatabaseConnection),
 }
 

@@ -490,6 +490,7 @@ impl DeviceAuthorizationPlugin {
         if let Some(user_id) = session
             .as_ref()
             .map(|data| data.user_field("id"))
+            .transpose()?
             .filter(|id| id.is_truthy())
             && !device_code.user_id.field_value().is_truthy()
             && device_code
@@ -501,7 +502,7 @@ impl DeviceAuthorizationPlugin {
                 .claim_device_code(&device_code.id, &SchemaValue::from_field(user_id.clone()))
                 .await?
         {
-            device_code.user_id = SchemaValue::from_field(user_id.clone());
+            device_code.user_id = SchemaValue::from_field(user_id);
         }
         let user_id = session
             .as_ref()

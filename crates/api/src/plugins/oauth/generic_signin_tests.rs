@@ -51,7 +51,8 @@ impl SendVerificationEmail for Mailbox {
         assert_eq!(
             user.as_object()
                 .unwrap()
-                .get("email")
+                .get("email")?
+                .as_ref()
                 .and_then(better_auth_core::FieldValue::as_str),
             Some("unverified@example.com")
         );

@@ -49,7 +49,7 @@ pub(in crate::plugins::api_key) fn property(
             .and_then(|index| values.get(index))
             .cloned()
             .unwrap_or_default(),
-        FieldValue::Object(fields) => fields.get(name).cloned().unwrap_or_default(),
+        FieldValue::Object(fields) => fields.get(name)?.unwrap_or_default(),
         value => match field_string_units(value) {
             Some(units) if name == "length" => (units.len() as f64).into(),
             Some(units) => name

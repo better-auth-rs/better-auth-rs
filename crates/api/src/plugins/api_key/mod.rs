@@ -737,7 +737,10 @@ impl ApiKeyPlugin {
         let actor = create_key_actor(
             &body,
             config.references,
-            session.as_ref().map(|data| data.user_field("id").clone()),
+            session
+                .as_ref()
+                .map(|data| data.user_field("id"))
+                .transpose()?,
             client,
         )?;
         let response = create_key_for_user(&body, &actor, self, ctx, original).await?;
@@ -754,8 +757,7 @@ impl ApiKeyPlugin {
             .query_string("id")?
             .ok_or_else(|| AuthError::bad_request("Query parameter 'id' is required"))?;
         let config_id = req.query_string("configId")?;
-        let response =
-            get_key_core(id, config_id, session.user_field("id").clone(), self, ctx).await?;
+        let response = get_key_core(id, config_id, session.user_field("id")?, self, ctx).await?;
         AuthResponse::json(None, &response)
     }
 
@@ -766,7 +768,7 @@ impl ApiKeyPlugin {
     ) -> AuthResult<AuthResponse> {
         let session = ctx.require_native_session(req).await?;
         let query = ListKeysQuery::from_request(req)?;
-        let response = list_keys_core(session.user_field("id").clone(), &query, self, ctx).await?;
+        let response = list_keys_core(session.user_field("id")?, &query, self, ctx).await?;
         AuthResponse::json(None, &response)
     }
 
@@ -785,7 +787,8 @@ impl ApiKeyPlugin {
                 .is_some_and(|context| context.is_http);
         let actor = session
             .as_ref()
-            .map(|data| data.user_field("id").clone())
+            .map(|data| data.user_field("id"))
+            .transpose()?
             .or_else(|| {
                 (!client)
                     .then_some(body.user_id.as_deref())
@@ -818,10 +821,10 @@ impl ApiKeyPlugin {
     ) -> AuthResult<AuthResponse> {
         let body: DeleteKeyRequest = request::read(req)?;
         let session = ctx.require_native_session(req).await?;
-        if session.user_field("banned").as_bool() == Some(true) {
+        if session.user_field("banned")?.as_bool() == Some(true) {
             return Err(api_key_error(ApiKeyErrorCode::UserBanned));
         }
-        let response = delete_key_core(&body, session.user_field("id").clone(), self, ctx).await?;
+        let response = delete_key_core(&body, session.user_field("id")?, self, ctx).await?;
         AuthResponse::json(None, &response)
     }
 }

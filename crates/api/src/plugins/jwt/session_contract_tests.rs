@@ -32,6 +32,7 @@ fn native(value: &FieldValue) -> AuthResult<Value> {
             .collect::<AuthResult<Vec<_>>>()?
             .into(),
         FieldValue::Object(fields) => fields
+            .snapshot_fields()?
             .iter()
             .map(|(name, value)| Ok((name.clone(), native(value)?)))
             .collect::<AuthResult<Map<_, _>>>()?

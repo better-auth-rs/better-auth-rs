@@ -28,6 +28,8 @@ mod models;
 mod observe;
 #[path = "organization_member_join_reference_tests/policies.rs"]
 mod policies;
+#[path = "organization_member_join_reference_tests/singular_existing.rs"]
+mod singular_existing;
 #[path = "organization_member_join_reference_tests/storage.rs"]
 mod storage;
 #[path = "support/device_where_values.rs"]

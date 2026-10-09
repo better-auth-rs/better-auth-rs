@@ -364,7 +364,7 @@ async fn deletion_preserves_native_references_and_stops_before_later_mutations_o
                         .await?
                         .ok_or_else(|| AuthError::internal("Missing retained references"))?;
                     assert_eq!(
-                        safe_parse_field(&encoded).json()?,
+                        safe_parse_field(&encoded)?.json()?,
                         Some(json!([
                             {"token": 7, "expiresAt": early},
                             {"token": "last", "expiresAt": "2101-01-01T00:00:00.000Z", "extra": true}

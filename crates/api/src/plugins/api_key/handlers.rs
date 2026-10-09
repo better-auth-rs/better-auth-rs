@@ -382,6 +382,9 @@ pub(crate) async fn list_keys_core(
         .iter()
         // Primitive results can consume a deduplication slot, but cannot name an owner.
         .filter_map(FieldValue::as_object)
+        .map(|fields| fields.snapshot_fields())
+        .collect::<AuthResult<Vec<_>>>()?
+        .into_iter()
         .filter(|fields| {
             let key_config_id = SchemaValue::<String>::from_field(
                 fields.get("configId").cloned().unwrap_or_default(),
@@ -399,7 +402,7 @@ pub(crate) async fn list_keys_core(
                     .strict_equals(&reference_id)
                 && config_id.is_none_or(|id| super::config_id_matches(&key_config_id, id))
         })
-        .map(|fields| ApiKeyView::from_api_key_fields(fields.clone()))
+        .map(ApiKeyView::from_api_key_fields)
         .collect::<AuthResult<_>>()?;
 
     let total = views.len();
@@ -410,7 +413,7 @@ pub(crate) async fn list_keys_core(
         views.truncate(limit.min(views.len() as u64) as usize);
     }
     plugin.maybe_delete_expired(ctx).await;
-    super::metadata::batch(&mut views, &plugin.configurations, ctx).await;
+    super::metadata::batch(&mut views, &plugin.configurations, ctx).await?;
     Ok(ListKeysResponse {
         api_keys: views,
         total,

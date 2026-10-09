@@ -129,7 +129,8 @@ impl AccountSelection {
         }
         session
             .as_ref()
-            .map(|data| data.user_field("id").clone())
+            .map(|data| data.user_field("id"))
+            .transpose()?
             .filter(FieldValue::is_truthy)
             .or_else(|| {
                 self.user_id

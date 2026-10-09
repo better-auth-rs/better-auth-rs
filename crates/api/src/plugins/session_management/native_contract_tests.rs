@@ -103,6 +103,7 @@ fn observe(value: &FieldValue, shift: i64) -> AuthResult<Value> {
         ),
         FieldValue::Object(fields) => Value::Object(
             fields
+                .snapshot_fields()?
                 .iter()
                 .map(|(key, value)| Ok((key.clone(), observe(value, shift)?)))
                 .collect::<AuthResult<_>>()?,
@@ -128,9 +129,10 @@ fn returned(response: &AuthResponse) -> AuthResult<FieldValue> {
     Ok(if response.is_api_error() {
         let message = value
             .as_object()
-            .and_then(|fields| fields.get("message"))
-            .and_then(FieldValue::as_str)
-            .unwrap_or("");
+            .map(|fields| fields.get("message"))
+            .transpose()?
+            .flatten();
+        let message = message.as_ref().and_then(FieldValue::as_str).unwrap_or("");
         object([
             ("kind", "api-error".into()),
             ("name", "APIError".into()),
@@ -274,8 +276,13 @@ impl Clock {
     fn cache(&self, encoded: &str, actual: bool) -> AuthResult<Value> {
         let bytes = URL_SAFE_NO_PAD.decode(encoded).unwrap();
         let value = FieldValue::parse_json(std::str::from_utf8(&bytes).unwrap())?;
-        let fields = value.as_object().unwrap();
-        let payload = fields.get("session").unwrap().as_object().unwrap();
+        let fields = value.as_object().unwrap().snapshot_fields()?;
+        let payload = fields
+            .get("session")
+            .unwrap()
+            .as_object()
+            .unwrap()
+            .snapshot_fields()?;
         let expires = fields.get("expiresAt").unwrap().as_f64().unwrap() as i64;
         let signature = URL_SAFE_NO_PAD
             .decode(fields.get("signature").unwrap().as_str().unwrap())
@@ -510,16 +517,21 @@ async fn check(case: &Value) -> AuthResult<()> {
         AuthPlugin::<StatelessSchema>::routes(&plugin),
     );
     let before = revive(&case["before"], clock.shift)?;
-    let fields = before.as_object().unwrap();
+    let fields = before.as_object().unwrap().snapshot_fields()?;
     for row in fields.get("user").unwrap().as_array().unwrap().iter() {
         let _ = context
             .database
-            .create_user_fields_optional(row.as_object().unwrap().clone())
+            .create_user_fields_optional(row.as_object().unwrap().snapshot_fields()?)
             .await?
             .unwrap();
     }
     for row in fields.get("session").unwrap().as_array().unwrap().iter() {
-        create_session(&context, &hooks, row.as_object().unwrap().clone()).await?;
+        create_session(
+            &context,
+            &hooks,
+            row.as_object().unwrap().snapshot_fields()?,
+        )
+        .await?;
     }
     assert_eq!(case["before"]["account"], json!([]), "{name}");
     assert_eq!(case["before"]["verification"], json!([]), "{name}");
@@ -537,7 +549,12 @@ async fn check(case: &Value) -> AuthResult<()> {
         let revoked = case["revoked"] == true;
         if revoked {
             let row = revive(&case["cacheSetup"]["response"]["session"], clock.shift)?;
-            create_session(&context, &hooks, row.as_object().unwrap().clone()).await?;
+            create_session(
+                &context,
+                &hooks,
+                row.as_object().unwrap().snapshot_fields()?,
+            )
+            .await?;
         }
         let response = dispatch(
             &context,
@@ -587,10 +604,15 @@ async fn check(case: &Value) -> AuthResult<()> {
     );
     let injected = revive(&case["input"]["injected"], clock.shift)?;
     if !injected.is_undefined() {
-        let fields = injected.as_object().unwrap();
+        let fields = injected.as_object().unwrap().snapshot_fields()?;
         *hooks.injected.lock().unwrap() = Some(NativeSessionData {
             session: SessionView::from_field_values(
-                fields.get("session").unwrap().as_object().unwrap().clone(),
+                fields
+                    .get("session")
+                    .unwrap()
+                    .as_object()
+                    .unwrap()
+                    .snapshot_fields()?,
             )?,
             user: fields.get("user").unwrap().clone(),
         });

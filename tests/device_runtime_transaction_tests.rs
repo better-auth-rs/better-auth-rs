@@ -167,13 +167,19 @@ fn assert_native_nan(row: &DeviceCode, field: &str) {
             .and_then(|array| array.first())
             .and_then(FieldValue::as_object)
             .expect("nested native object");
-        assert_eq!(object.get("optional"), Some(&FieldValue::Undefined));
-        assert!(
-            matches!(object.get("date"), Some(FieldValue::Date(date)) if date.milliseconds().is_nan())
+        assert_eq!(
+            object.get("optional").expect("nested property read"),
+            Some(FieldValue::Undefined)
         );
-        object.get("value").expect("nested NaN")
+        assert!(
+            matches!(object.get("date").expect("nested property read"), Some(FieldValue::Date(date)) if date.milliseconds().is_nan())
+        );
+        object
+            .get("value")
+            .expect("nested property read")
+            .expect("nested NaN")
     } else {
-        &value
+        value
     };
     assert!(matches!(number, FieldValue::Number(value) if value.is_nan()));
 }

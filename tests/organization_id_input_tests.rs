@@ -254,7 +254,7 @@ async fn memory_organization_ids_preserve_native_inputs_slots_and_runtime_policy
     for case in cases(true) {
         let store = EphemeralStore::new(Arc::new(AuthConfig::default()));
         let base: Arc<dyn AuthStore<StatelessSchema>> = Arc::new(store.clone());
-        check(base, Storage::Memory(store), case).await?;
+        check(base, Storage::Memory(Box::new(store)), case).await?;
     }
     Ok(())
 }

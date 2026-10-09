@@ -169,7 +169,9 @@ impl UserFieldConfig {
             (UserFieldType::String, Some(Value::String(_) | Value::Utf16String(_)))
             | (UserFieldType::Boolean, Some(Value::Bool(_))) => true,
             (UserFieldType::Number, Some(Value::Number(value))) => value.is_finite(),
-            (UserFieldType::Json, Some(value)) => json_input(value),
+            (UserFieldType::Json, Some(value)) => {
+                json_input(value, &mut std::collections::HashSet::new())?
+            }
             (UserFieldType::Date, Some(Value::Date(value))) => value.milliseconds().is_finite(),
             (
                 UserFieldType::StringArray | UserFieldType::NumberArray,
@@ -213,14 +215,36 @@ impl UserFieldConfig {
     }
 }
 
-fn json_input(value: &Value) -> bool {
-    match value {
+fn json_input(
+    value: &Value,
+    active: &mut std::collections::HashSet<crate::field_value::ObjectIdentity>,
+) -> AuthResult<bool> {
+    Ok(match value {
         Value::Null | Value::Bool(_) | Value::String(_) | Value::Utf16String(_) => true,
         Value::Number(value) => value.is_finite(),
-        Value::Array(values) => values.iter().all(json_input),
-        Value::Object(values) => values.values().all(json_input),
+        Value::Array(values) => {
+            for value in values.iter() {
+                if !json_input(value, active)? {
+                    return Ok(false);
+                }
+            }
+            true
+        }
+        Value::Object(values) => {
+            let identity = values.identity();
+            if !active.insert(identity) {
+                return Ok(false);
+            }
+            for value in values.snapshot_fields()?.values() {
+                if !json_input(value, active)? {
+                    return Ok(false);
+                }
+            }
+            let _ = active.remove(&identity);
+            true
+        }
         Value::Undefined | Value::Date(_) | Value::Function(_) => false,
-    }
+    })
 }
 
 fn type_name(value: Option<&Value>) -> &'static str {
@@ -378,12 +402,18 @@ mod tests {
         let input =
             json!({"implicit":"supplied", "label":"raw", "protected":"client", "unknown":true});
         let parsed = schema
-            .parse_organization_input(input.as_object().unwrap(), "body", false)
+            .parse_organization_input(
+                input.as_object().unwrap().owned_fields().unwrap(),
+                "body",
+                false,
+            )
             .unwrap();
         assert_eq!(
             parsed,
             json!({"implicit":"supplied", "label":"raw"})
                 .as_object()
+                .unwrap()
+                .owned_fields()
                 .unwrap()
                 .clone()
         );
@@ -392,6 +422,8 @@ mod tests {
             stored,
             json!({"implicit":"supplied", "stored_label":"raw:in", "protected":"server"})
                 .as_object()
+                .unwrap()
+                .owned_fields()
                 .unwrap()
                 .clone()
         );
@@ -444,14 +476,22 @@ mod tests {
         let valid = json!({"optional":null,"category":"unlisted"});
         assert_eq!(
             schema
-                .parse_organization_input(valid.as_object().unwrap(), "body.data", true)
+                .parse_organization_input(
+                    valid.as_object().unwrap().owned_fields().unwrap(),
+                    "body.data",
+                    true
+                )
                 .unwrap(),
-            valid.as_object().unwrap().clone()
+            valid.as_object().unwrap().owned_fields().unwrap().clone()
         );
         let invalid = json!({"required":null,"tags":["valid",4]});
         assert!(
             schema
-                .parse_organization_input(invalid.as_object().unwrap(), "body.data", true)
+                .parse_organization_input(
+                    invalid.as_object().unwrap().owned_fields().unwrap(),
+                    "body.data",
+                    true
+                )
                 .unwrap_err()
                 .to_string()
                 .contains("[body.data.tags.1] Invalid input: expected string, received number")

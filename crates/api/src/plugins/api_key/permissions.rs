@@ -6,7 +6,7 @@ pub(super) fn check_permissions(
     key_permissions: &FieldValue,
     required: &serde_json::Value,
 ) -> AuthResult<bool> {
-    let permissions = safe_parse_field(key_permissions);
+    let permissions = safe_parse_field(key_permissions)?;
     if !permissions.is_truthy() {
         return Ok(false);
     }
@@ -97,8 +97,8 @@ fn includes_error() -> AuthError {
 fn property(permissions: &FieldValue, name: &str) -> AuthResult<Option<AllowedActions>> {
     match permissions {
         FieldValue::Object(fields) => {
-            if let Some(value) = fields.get(name) {
-                return Ok(Some(AllowedActions::Value(value.clone())));
+            if let Some(value) = fields.get(name)? {
+                return Ok(Some(AllowedActions::Value(value)));
             }
         }
         FieldValue::Array(values) => {

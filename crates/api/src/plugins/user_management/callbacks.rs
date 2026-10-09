@@ -24,7 +24,7 @@ impl ChangeEmailConfirmation {
         let fields = self.user.as_object().ok_or_else(|| {
             better_auth_core::AuthError::internal("Confirmation User must be an object")
         })?;
-        better_auth_core::wire::UserView::try_from(fields.clone())
+        better_auth_core::wire::UserView::try_from(fields.snapshot_fields()?)
     }
 }
 type Sender<S, M> =

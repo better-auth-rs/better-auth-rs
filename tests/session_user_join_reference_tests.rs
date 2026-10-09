@@ -270,18 +270,15 @@ async fn operation<S: AuthSchema>(
     snapshot_fields(snapshot, &config, false)
 }
 
-fn key_order(value: &FieldValue, path: &[String]) -> Vec<Value> {
+fn key_order(value: &FieldValue, path: &[String]) -> AuthResult<Vec<Value>> {
     let entries: Vec<_> = match value {
-        FieldValue::Object(fields) => fields
-            .iter()
-            .map(|(name, value)| (name.clone(), value))
-            .collect(),
+        FieldValue::Object(fields) => fields.snapshot_fields()?.into_iter().collect(),
         FieldValue::Array(values) => values
             .iter()
             .enumerate()
-            .map(|(index, value)| (index.to_string(), value))
+            .map(|(index, value)| (index.to_string(), value.clone()))
             .collect(),
-        _ => return Vec::new(),
+        _ => return Ok(Vec::new()),
     };
     let mut result = vec![json!({
         "path": path,
@@ -290,9 +287,9 @@ fn key_order(value: &FieldValue, path: &[String]) -> Vec<Value> {
     for (name, value) in entries {
         let mut child = path.to_vec();
         child.push(name);
-        result.extend(key_order(value, &child));
+        result.extend(key_order(&value, &child)?);
     }
-    result
+    Ok(result)
 }
 
 fn assert_outcome(result: AuthResult<FieldValue>, expected: &Value) -> TestResult {
@@ -302,7 +299,7 @@ fn assert_outcome(result: AuthResult<FieldValue>, expected: &Value) -> TestResul
             assert_eq!(value, values::revive(&expected["result"])?, "{expected}");
             assert_eq!(value.json()?, Some(expected["json"].clone()), "{expected}");
             assert_eq!(
-                Value::Array(key_order(&value, &[])),
+                Value::Array(key_order(&value, &[])?),
                 expected["keyOrder"],
                 "{expected}"
             );

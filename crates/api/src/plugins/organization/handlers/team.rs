@@ -145,16 +145,40 @@ pub(crate) async fn find_team(
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     config: &OrganizationConfig,
 ) -> AuthResult<Team> {
-    ctx.database
-        .get_team_value(team_id)
+    let details = ctx
+        .database
+        .get_team_details_value(team_id, Some(organization_id), false)
         .await?
-        .filter(|team| {
-            team.organization_id
-                .field_value()
-                .strict_equals(organization_id)
-        })
-        .ok_or_else(|| AuthError::bad_request("Team not found"))
-        .and_then(|team| crate::plugins::organization::fields::team(team, config))
+        .ok_or_else(|| AuthError::bad_request("Team not found"))?;
+    Ok(details.into_public_parts(&config.schema.team)?.0)
+}
+
+fn public_teams(teams: Vec<Team>, config: &OrganizationConfig) -> AuthResult<Vec<Team>> {
+    teams
+        .into_iter()
+        .map(|team| crate::plugins::organization::fields::team(team, config))
+        .collect()
+}
+
+fn teams_response(teams: Vec<Team>) -> AuthResult<AuthResponse> {
+    let teams = teams
+        .into_iter()
+        .map(|team| team.field_values().map(FieldValue::from))
+        .collect::<AuthResult<Vec<_>>>()?;
+    Ok(AuthResponse::native(None, teams.into()))
+}
+
+async fn list_teams(
+    organization_id: &FieldValue,
+    ctx: &AuthContext<impl better_auth_core::AuthSchema>,
+    config: &OrganizationConfig,
+) -> AuthResult<Vec<Team>> {
+    public_teams(
+        ctx.database
+            .list_organization_teams_value(organization_id)
+            .await?,
+        config,
+    )
 }
 
 async fn authorize(
@@ -216,7 +240,7 @@ pub(crate) async fn handle_team_request(
                 resolve_organization_id(organization_id.as_deref(), None, session, ctx).await?;
             let member = ctx
                 .database
-                .get_member_with_user_value(&org, data.user_property("id")?)
+                .get_member_with_user_value(&org, &data.user_property("id")?)
                 .await?
                 .ok_or_else(|| AuthError::forbidden("You are not allowed to update this team"))?;
             authorize(
@@ -229,6 +253,9 @@ pub(crate) async fn handle_team_request(
             )
             .await?;
             let team = find_team(&body.team_id.as_str().into(), &org, ctx, config).await?;
+            if !team.organization_id.field_value().strict_equals(&org) {
+                return Err(AuthError::bad_request("Team not found"));
+            }
             let organization = ctx
                 .database
                 .get_organization_by_id_value(&org)
@@ -262,7 +289,7 @@ pub(crate) async fn handle_team_request(
                     })
                     .await?;
             }
-            AuthResponse::json(None, &updated)?
+            AuthResponse::native(None, updated.field_values()?.into())
         }
         (HttpMethod::Get, "/organization/list-teams") => {
             let org =
@@ -270,7 +297,7 @@ pub(crate) async fn handle_team_request(
                     .await?;
             if ctx
                 .database
-                .get_member_with_user_value(&org, data.user_property("id")?)
+                .get_member_with_user_value(&org, &data.user_property("id")?)
                 .await?
                 .is_none()
             {
@@ -278,10 +305,7 @@ pub(crate) async fn handle_team_request(
                     "You are not allowed to access this organization as an owner",
                 ));
             }
-            AuthResponse::json(
-                None,
-                &ctx.database.list_organization_teams_value(&org).await?,
-            )?
+            teams_response(list_teams(&org, ctx, config).await?)?
         }
         (HttpMethod::Post, "/organization/set-active-team") => {
             use crate::plugins::organization::types::NullableStringField;
@@ -321,7 +345,7 @@ pub(crate) async fn handle_team_request(
             let team = find_team(&team_id, &org, ctx, config).await?;
             if ctx
                 .database
-                .get_team_member_value(&team_id, data.user_property("id")?)
+                .get_team_member_value(&team_id, &data.user_property("id")?)
                 .await?
                 .is_none()
             {
@@ -345,7 +369,7 @@ pub(crate) async fn handle_team_request(
                     None,
                 )
                 .await?;
-            AuthResponse::json(None, &team)?
+            AuthResponse::native(None, team.field_values()?.into())
         }
         (HttpMethod::Get, "/organization/list-user-teams") => {
             let target = req
@@ -353,8 +377,8 @@ pub(crate) async fn handle_team_request(
                 .filter(|id| !id.is_empty())
                 .map(FieldValue::from)
                 .map(Ok)
-                .unwrap_or_else(|| data.user_property("id").cloned())?;
-            let is_self = target.strict_equals(data.user_property("id")?);
+                .unwrap_or_else(|| data.user_property("id"))?;
+            let is_self = target.strict_equals(&data.user_property("id")?);
             let explicit_org = req
                 .query_string("organizationId")?
                 .filter(|id| !id.is_empty());
@@ -367,7 +391,7 @@ pub(crate) async fn handle_team_request(
                 }
                 let member = ctx
                     .database
-                    .get_member_with_user_value(&org, data.user_property("id")?)
+                    .get_member_with_user_value(&org, &data.user_property("id")?)
                     .await?
                     .ok_or_else(|| {
                         AuthError::forbidden("You are not a member of this organization")
@@ -393,17 +417,17 @@ pub(crate) async fn handle_team_request(
                         ));
                     }
                 }
-                let teams = ctx
-                    .database
-                    .list_user_teams_value(&target)
-                    .await?
-                    .into_iter()
-                    .filter(|team| team.organization_id.field_value().strict_equals(&org))
-                    .collect::<Vec<_>>();
-                AuthResponse::json(None, &teams)?
+                let teams =
+                    public_teams(ctx.database.list_user_teams_value(&target).await?, config)?
+                        .into_iter()
+                        .filter(|team| team.organization_id.field_value().strict_equals(&org))
+                        .collect::<Vec<_>>();
+                teams_response(teams)?
             } else {
                 let mut teams = Vec::new();
-                for team in ctx.database.list_user_teams_value(&target).await? {
+                for team in
+                    public_teams(ctx.database.list_user_teams_value(&target).await?, config)?
+                {
                     if ctx
                         .database
                         .get_member_value(&team.organization_id.field_value(), &target)
@@ -413,7 +437,7 @@ pub(crate) async fn handle_team_request(
                         teams.push(team);
                     }
                 }
-                AuthResponse::json(None, &teams)?
+                teams_response(teams)?
             }
         }
         (HttpMethod::Get, "/organization/list-team-members") => {
@@ -425,22 +449,23 @@ pub(crate) async fn handle_team_request(
             if !team_id.is_truthy() {
                 return Err(AuthError::bad_request("You do not have an active team"));
             }
-            let team = ctx
+            let details = ctx
                 .database
-                .get_team_value(&team_id)
+                .get_team_details_value(&team_id, None, false)
                 .await?
                 .ok_or_else(|| AuthError::bad_request("Team not found"))?;
+            let team = details.into_public_parts(&config.schema.team)?.0;
             if ctx
                 .database
                 .get_member_value(
                     &team.organization_id.field_value(),
-                    data.user_property("id")?,
+                    &data.user_property("id")?,
                 )
                 .await?
                 .is_none()
                 || ctx
                     .database
-                    .get_team_member_value(&team_id, data.user_property("id")?)
+                    .get_team_member_value(&team_id, &data.user_property("id")?)
                     .await?
                     .is_none()
             {
@@ -462,7 +487,7 @@ pub(crate) async fn handle_team_request(
                 .await?;
             let member = ctx
                 .database
-                .get_member_with_user_value(&org, data.user_property("id")?)
+                .get_member_with_user_value(&org, &data.user_property("id")?)
                 .await?
                 .ok_or_else(|| {
                     AuthError::bad_request("User is not a member of the organization")

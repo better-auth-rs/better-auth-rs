@@ -42,11 +42,13 @@ impl StoredRegistrationState {
         let value = FieldValue::parse_json(text)?;
         let fields = value
             .as_object()
-            .ok_or_else(|| AuthError::internal("Registration challenge must be an object"))?;
+            .ok_or_else(|| AuthError::internal("Registration challenge must be an object"))?
+            .snapshot_fields()?;
         let user = fields
             .get("user")
             .and_then(FieldValue::as_object)
-            .ok_or_else(|| AuthError::internal("Registration challenge must contain a user"))?;
+            .ok_or_else(|| AuthError::internal("Registration challenge must contain a user"))?
+            .snapshot_fields()?;
         let field = |name| user.get(name).cloned().unwrap_or_default();
         let json = |name| -> AuthResult<Value> {
             Ok(fields

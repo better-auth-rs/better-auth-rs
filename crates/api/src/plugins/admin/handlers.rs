@@ -53,8 +53,8 @@ fn require_user_permission(
 ) -> AuthResult<()> {
     let permission = std::collections::HashMap::from([("user".into(), vec![action.into()])]);
     if has_permission(
-        session.user_property("id")?,
-        session.user_property("role")?,
+        &session.user_property("id")?,
+        &session.user_property("role")?,
         config,
         &permission,
     )? {
@@ -265,8 +265,8 @@ pub(crate) async fn update_user_core(
         let permissions =
             std::collections::HashMap::from([("user".to_string(), vec!["set-role".to_string()])]);
         if !has_permission(
-            acting_session.user_property("id")?,
-            acting_session.user_property("role")?,
+            &acting_session.user_property("id")?,
+            &acting_session.user_property("role")?,
             config,
             &permissions,
         )? {
@@ -590,11 +590,7 @@ pub(crate) async fn impersonate_user_core(
     .ok_or_else(|| AuthError::internal("Invalid impersonation expiration date"))?;
     let create_session = CreateSession {
         inherited_fields: Default::default(),
-        additional_fields: [(
-            "impersonatedBy".into(),
-            acting_session.user_property("id")?.clone(),
-        )]
-        .into(),
+        additional_fields: [("impersonatedBy".into(), acting_session.user_property("id")?)].into(),
         user_id: target.id().into_owned(),
         expires_at: expires_at.into(),
         ip_address: ip_address.map(|value| value.to_string()),

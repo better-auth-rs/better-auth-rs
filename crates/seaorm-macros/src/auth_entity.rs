@@ -560,7 +560,7 @@ fn plugin_set_fields_user(
         out.push(quote! { ban_expires: #seaorm_root::sea_orm::ActiveValue::Set(create_user.ban_expires.map(|value| #seaorm_root::__private_field_decode(#core_root::FieldValue::Date(value))).transpose()?) });
     }
     if let Some(decode_metadata) = decode_metadata {
-        out.push(quote! { metadata: #seaorm_root::sea_orm::ActiveValue::Set({ let value = create_user.metadata.unwrap_or_else(|| #core_root::FieldValue::Object(::std::sync::Arc::new(Default::default()))); #decode_metadata }) });
+        out.push(quote! { metadata: #seaorm_root::sea_orm::ActiveValue::Set({ let value = create_user.metadata.unwrap_or_else(|| #core_root::FieldMap::new().into()); #decode_metadata }) });
     }
     out
 }

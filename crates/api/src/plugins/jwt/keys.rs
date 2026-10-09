@@ -83,14 +83,16 @@ pub(super) fn date_millis(value: &FieldValue, expression: &str) -> AuthResult<f6
         })
 }
 
-pub(super) fn spread(fields: &mut FieldMap, value: FieldValue) {
-    fields.extend(value.enumerable_fields());
+pub(super) fn spread(fields: &mut FieldMap, value: FieldValue) -> AuthResult<()> {
+    fields.extend(value.enumerable_fields()?);
+    Ok(())
 }
 
 pub(super) fn import(value: FieldValue, alg: &FieldValue) -> AuthResult<(String, Jwk)> {
     let fields = value
         .as_object()
-        .ok_or_else(|| AuthError::internal("JWK must be an object"))?;
+        .ok_or_else(|| AuthError::internal("JWK must be an object"))?
+        .snapshot_fields()?;
     if fields
         .get("ext")
         .is_some_and(|value| !value.is_undefined() && !matches!(value, FieldValue::Bool(_)))

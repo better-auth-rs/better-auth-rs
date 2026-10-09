@@ -38,7 +38,7 @@ pub(crate) async fn get_active_member_core(
 
     let joined = ctx
         .database
-        .get_member_with_user_value(&org_id, session.user_property("id")?)
+        .get_member_with_user_value(&org_id, &session.user_property("id")?)
         .await?
         .ok_or_else(|| AuthError::bad_request("Member not found"))?;
 
@@ -80,7 +80,7 @@ pub(crate) async fn list_members_core(
 
     let _ = ctx
         .database
-        .get_member_with_user_value(&org_id, session.user_property("id")?)
+        .get_member_with_user_value(&org_id, &session.user_property("id")?)
         .await?
         .ok_or_else(|| AuthError::forbidden("You are not a member of this organization"))?;
 
@@ -163,7 +163,7 @@ pub(crate) async fn get_active_member_role_core(
 
     let requester_member = ctx
         .database
-        .get_member_with_user_value(&org_id, session.user_property("id")?)
+        .get_member_with_user_value(&org_id, &session.user_property("id")?)
         .await?
         .map(|joined| joined.member)
         .ok_or_else(|| AuthError::forbidden("You are not a member of this organization"))?;
@@ -197,7 +197,7 @@ pub(crate) async fn remove_member_core(
 
     let requester_member = ctx
         .database
-        .get_member_with_user_value(&org_id, session.user_property("id")?)
+        .get_member_with_user_value(&org_id, &session.user_property("id")?)
         .await?
         .map(|joined| joined.member)
         .ok_or_else(|| AuthError::bad_request("Member not found"))?;
@@ -347,7 +347,7 @@ pub(crate) async fn update_member_role_core(
 
     let requester_member = ctx
         .database
-        .get_member_with_user_value(&org_id, session.user_property("id")?)
+        .get_member_with_user_value(&org_id, &session.user_property("id")?)
         .await?
         .map(|joined| joined.member)
         .ok_or_else(|| AuthError::bad_request("Member not found"))?;

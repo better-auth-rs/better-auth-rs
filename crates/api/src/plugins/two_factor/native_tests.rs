@@ -567,15 +567,15 @@ async fn finalization_preserves_selected_native_owner_token_and_cookie() -> Test
     assert_eq!(*owners.0.lock().unwrap(), [FieldValue::from(17.0)]);
     assert_eq!(response.token, 42.0.into());
     assert_eq!(
-        response.user.as_object().unwrap()["id"],
+        response.user.as_object().unwrap().get("id")?.unwrap(),
         FieldValue::from(17.0)
     );
     assert_eq!(
-        response.user.as_object().unwrap().get("name"),
-        Some(&FieldValue::from("Selected Native Owner"))
+        response.user.as_object().unwrap().get("name")?,
+        Some(FieldValue::from("Selected Native Owner"))
     );
     let published = fixture.request.new_session()?.unwrap();
-    assert_eq!(published.user_field("id"), &FieldValue::from(17.0));
+    assert_eq!(published.user_field("id")?, FieldValue::from(17.0));
     assert_eq!(
         published.session.field_values()?.get("userId"),
         Some(&FieldValue::from("17"))

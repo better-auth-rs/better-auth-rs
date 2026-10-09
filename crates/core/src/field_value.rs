@@ -5,13 +5,16 @@ use chrono::{DateTime, Datelike, Utc};
 use indexmap::IndexMap;
 use serde_json::Value as JsonValue;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     ops::{Deref, DerefMut},
     sync::Arc,
 };
 
 mod function;
 pub use function::FieldFunction;
+mod object;
+pub use object::FieldObject;
+pub(crate) use object::{FieldObjectSource, ObjectIdentity};
 pub mod serde;
 
 /// An immutable Date object. Clones retain identity, including for an invalid Date.
@@ -86,7 +89,7 @@ impl From<DateTime<Utc>> for FieldDate {
 }
 
 /// Ordered record fields. Clones preserve the handles stored in field values.
-/// An object value supplies identity through its `Arc<FieldMap>`.
+/// An object value supplies identity through its `FieldObject` handle.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct FieldMap(IndexMap<String, FieldValue>);
 
@@ -193,7 +196,8 @@ impl<'a> IntoIterator for &'a mut FieldMap {
 }
 
 /// A field value before adapter conversion or JSON serialization.
-/// `PartialEq` is Rust structural comparison. Use `strict_equals` or `same_value_zero` for JavaScript comparisons.
+/// `PartialEq` compares owned objects structurally and live objects by source identity.
+/// Use `strict_equals` or `same_value_zero` for JavaScript comparisons.
 /// Memory row merge detection compares `stringify` results; credential guards preserve native value distinctions.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub enum FieldValue {
@@ -206,7 +210,7 @@ pub enum FieldValue {
     Utf16String(crate::Utf16String),
     Date(FieldDate),
     Array(Arc<[FieldValue]>),
-    Object(Arc<FieldMap>),
+    Object(FieldObject),
     Function(FieldFunction),
 }
 
@@ -286,7 +290,7 @@ impl FieldValue {
         }
     }
 
-    pub fn as_object(&self) -> Option<&FieldMap> {
+    pub fn as_object(&self) -> Option<&FieldObject> {
         match self {
             Self::Object(value) => Some(value),
             _ => None,
@@ -295,7 +299,7 @@ impl FieldValue {
 
     /// Read a named model field without narrowing its value or a non-null receiver.
     /// Null and undefined reject property access; other non-record values have no model fields.
-    pub fn model_property(&self, name: &str) -> AuthResult<&Self> {
+    pub fn model_property(&self, name: &str) -> AuthResult<Self> {
         let nullish = match self {
             Self::Null => Some("null"),
             Self::Undefined => Some("undefined"),
@@ -306,17 +310,17 @@ impl FieldValue {
                 "Cannot read properties of {nullish} (reading '{name}')"
             )));
         }
-        Ok(self
-            .as_object()
-            .and_then(|fields| fields.get(name))
-            .unwrap_or(&Self::Undefined))
+        match self.as_object() {
+            Some(fields) => Ok(fields.get(name)?.unwrap_or_default()),
+            None => Ok(Self::Undefined),
+        }
     }
 
     /// Copy own enumerable properties while retaining native child identities.
     /// String keys enumerate UTF-16 units, as in object spread and `Object.entries`.
-    pub fn enumerable_fields(&self) -> FieldMap {
-        match self {
-            Self::Object(fields) => (**fields).clone(),
+    pub fn enumerable_fields(&self) -> AuthResult<FieldMap> {
+        Ok(match self {
+            Self::Object(fields) => fields.snapshot_fields()?,
             Self::Array(values) => values
                 .iter()
                 .enumerate()
@@ -325,7 +329,7 @@ impl FieldValue {
             Self::String(value) => string_fields(value.encode_utf16()),
             Self::Utf16String(value) => string_fields(value.as_utf16().iter().copied()),
             _ => FieldMap::new(),
-        }
+        })
     }
 
     /// Evaluate JavaScript truthiness without serializing numbers or objects.
@@ -354,7 +358,7 @@ impl FieldValue {
             }
             (Self::Date(left), Self::Date(right)) => left.same_object(right),
             (Self::Array(left), Self::Array(right)) => Arc::ptr_eq(left, right),
-            (Self::Object(left), Self::Object(right)) => Arc::ptr_eq(left, right),
+            (Self::Object(left), Self::Object(right)) => left.same_object(right),
             (Self::Function(left), Self::Function(right)) => left == right,
             _ => false,
         }
@@ -374,6 +378,13 @@ impl FieldValue {
     /// Project at a JSON boundary. Top-level undefined and functions have no JSON value.
     /// Object properties omit these values; array elements encode these values as null.
     pub fn json(&self) -> AuthResult<Option<JsonValue>> {
+        self.json_with_active(&mut HashSet::new())
+    }
+
+    fn json_with_active(
+        &self,
+        active: &mut HashSet<ObjectIdentity>,
+    ) -> AuthResult<Option<JsonValue>> {
         Ok(Some(match self {
             Self::Undefined | Self::Function(_) => return Ok(None),
             Self::Null => JsonValue::Null,
@@ -391,19 +402,41 @@ impl FieldValue {
             Self::Array(values) => JsonValue::Array(
                 values
                     .iter()
-                    .map(|value| value.json().map(|value| value.unwrap_or(JsonValue::Null)))
+                    .map(|value| {
+                        value
+                            .json_with_active(active)
+                            .map(|value| value.unwrap_or(JsonValue::Null))
+                    })
                     .collect::<AuthResult<_>>()?,
             ),
             Self::Object(values) => {
+                let identity = values.identity();
+                if !active.insert(identity) {
+                    return Err(AuthError::type_error(
+                        "Converting circular structure to JSON",
+                    ));
+                }
+                let fields = values.snapshot_fields()?;
                 let mut output = serde_json::Map::new();
-                for (name, value) in values.iter() {
-                    if let Some(value) = value.json()? {
-                        let _ = output.insert(name.clone(), value);
+                for (name, value) in fields {
+                    if let Some(value) = value.json_with_active(active)? {
+                        let _ = output.insert(name, value);
                     }
                 }
+                let _ = active.remove(&identity);
                 JsonValue::Object(output)
             }
         }))
+    }
+
+    pub(crate) fn contains_live_object(&self) -> bool {
+        match self {
+            Self::Object(object) => object
+                .owned_fields()
+                .is_none_or(|fields| fields.values().any(Self::contains_live_object)),
+            Self::Array(values) => values.iter().any(Self::contains_live_object),
+            _ => false,
+        }
     }
 
     /// Parse JSON without discarding lone UTF-16 surrogates or nested field ordering.
@@ -488,7 +521,7 @@ impl From<Vec<FieldValue>> for FieldValue {
 
 impl From<FieldMap> for FieldValue {
     fn from(value: FieldMap) -> Self {
-        Self::Object(Arc::new(value))
+        Self::Object(value.into())
     }
 }
 
@@ -496,7 +529,7 @@ impl From<FieldMap> for FieldValue {
 enum Identity {
     Date(usize),
     Array(usize),
-    Object(usize),
+    Object(ObjectIdentity),
 }
 
 /// Copy one value graph with fresh object identities and preserved aliases.
@@ -506,6 +539,7 @@ enum Identity {
 pub struct StructuredCloneContext {
     // Retaining source handles prevents pointer reuse between calls through the same context.
     copies: HashMap<Identity, (FieldValue, FieldValue)>,
+    active: HashSet<Identity>,
 }
 
 impl StructuredCloneContext {
@@ -519,22 +553,32 @@ impl StructuredCloneContext {
             FieldValue::Function(_) => return Err(AuthError::DataClone),
             FieldValue::Date(value) => Identity::Date(Arc::as_ptr(&value.0) as usize),
             FieldValue::Array(value) => Identity::Array(Arc::as_ptr(value) as *const () as usize),
-            FieldValue::Object(value) => Identity::Object(Arc::as_ptr(value) as usize),
+            FieldValue::Object(value) => Identity::Object(value.identity()),
             value => return Ok(value.clone()),
         };
         if let Some((_, copied)) = self.copies.get(&identity) {
             return Ok(copied.clone());
         }
-        let copied = match value {
-            FieldValue::Date(value) => FieldDate(Arc::new(*value.0)).into(),
-            FieldValue::Array(values) => values
-                .iter()
-                .map(|value| self.clone_value(value))
-                .collect::<AuthResult<Vec<_>>>()?
-                .into(),
-            FieldValue::Object(values) => self.clone_map(values)?.into(),
-            value => value.clone(),
-        };
+        if !self.active.insert(identity) {
+            // shortcut: cyclic graphs require clone placeholders before back-references can be retained.
+            return Err(AuthError::internal(
+                "Structured clone of cyclic field objects is not supported",
+            ));
+        }
+        let copied = (|| -> AuthResult<FieldValue> {
+            Ok(match value {
+                FieldValue::Date(value) => FieldDate(Arc::new(*value.0)).into(),
+                FieldValue::Array(values) => values
+                    .iter()
+                    .map(|value| self.clone_value(value))
+                    .collect::<AuthResult<Vec<_>>>()?
+                    .into(),
+                FieldValue::Object(values) => self.clone_map(&values.snapshot_fields()?)?.into(),
+                value => value.clone(),
+            })
+        })();
+        let _ = self.active.remove(&identity);
+        let copied = copied?;
         let _ = self
             .copies
             .insert(identity, (value.clone(), copied.clone()));
@@ -571,7 +615,7 @@ impl FieldValue {
             }
             Self::Object(fields) => {
                 // Custom callable coercion requires the JavaScript receiver and invocation contract.
-                if fields.contains_key("toString") {
+                if fields.get("toString")?.is_some() {
                     return Err(AuthError::type_error("No default value"));
                 }
                 "[object Object]".into()

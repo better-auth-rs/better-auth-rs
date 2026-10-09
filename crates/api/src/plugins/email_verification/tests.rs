@@ -622,7 +622,8 @@ async fn test_change_email_verification_after_hook_observes_updated_user() {
     let hook_state = captured.clone();
     let after_hook: EmailVerificationHook = Arc::new(move |user: &better_auth_core::FieldValue| {
         let hook_state = hook_state.clone();
-        let user = UserView::try_from(user.as_object().unwrap().clone()).unwrap();
+        let user =
+            UserView::try_from(user.as_object().unwrap().snapshot_fields().unwrap()).unwrap();
         let email = user.email.clone();
         let verified = user.email_verified.clone();
         Box::pin(async move {

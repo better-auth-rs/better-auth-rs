@@ -96,7 +96,7 @@ impl crate::FromFieldMap for crate::session::SessionData {
                         "Session response must contain a `{name}` object"
                     ))
                 })?;
-            T::from_field_values(fields.clone())
+            T::from_field_values(fields.snapshot_fields()?)
         }
         Ok(Self {
             session: record(&fields, "session")?,

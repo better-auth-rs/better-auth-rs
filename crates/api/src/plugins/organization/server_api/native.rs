@@ -119,7 +119,7 @@ pub(super) fn validate(
     };
     let body = input::native_fields(
         schema,
-        object,
+        &object.snapshot_fields()?,
         &[
             ("userId", BaseField::CoercedString, true),
             ("role", BaseField::Roles, true),

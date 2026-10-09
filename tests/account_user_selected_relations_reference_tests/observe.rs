@@ -133,7 +133,9 @@ pub(super) fn assert_result(
                     // Core record key order remains a documented gap; compare the internal result boundary without rearranging records.
                     assert_eq!(
                         key_order.first(),
-                        Some(&json!({"path": [], "keys": fields.keys().collect::<Vec<_>>()})),
+                        Some(
+                            &json!({"path": [], "keys": fields.snapshot_fields()?.keys().collect::<Vec<_>>()})
+                        ),
                         "{case:?}"
                     );
                 }

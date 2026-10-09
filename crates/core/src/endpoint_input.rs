@@ -246,7 +246,7 @@ impl EndpointInputPatch {
                 InputValue::Json(value) => merge_input(value, self.body),
                 InputValue::Native(value) => {
                     if let Some(patch) = self.body {
-                        merge_field_value(value, FieldValue::from_json(patch)?);
+                        merge_field_value(value, FieldValue::from_json(patch)?)?;
                     }
                 }
             }
@@ -257,28 +257,30 @@ impl EndpointInputPatch {
     }
 }
 
-fn merge_field_value(target: &mut FieldValue, patch: FieldValue) {
+fn merge_field_value(target: &mut FieldValue, patch: FieldValue) -> AuthResult<()> {
     if matches!(patch, FieldValue::Undefined | FieldValue::Null) {
-        return;
+        return Ok(());
     }
     if let (FieldValue::Object(target), FieldValue::Object(patch)) = (&mut *target, &patch) {
-        let target = std::sync::Arc::make_mut(target);
-        for (name, value) in patch.iter() {
+        let mut fields = target.snapshot_fields()?;
+        for (name, value) in patch.snapshot_fields()? {
             if matches!(value, FieldValue::Undefined | FieldValue::Null)
                 || matches!(name.as_str(), "__proto__" | "constructor")
             {
                 continue;
             }
-            match target.get_mut(name) {
-                Some(current) => merge_field_value(current, value.clone()),
+            match fields.get_mut(&name) {
+                Some(current) => merge_field_value(current, value)?,
                 None => {
-                    let _ = target.insert(name.clone(), value.clone());
+                    let _ = fields.insert(name, value);
                 }
             }
         }
+        *target = fields.into();
     } else {
         *target = patch;
     }
+    Ok(())
 }
 
 fn merge_input(target: &mut Option<Value>, patch: Option<Value>) {

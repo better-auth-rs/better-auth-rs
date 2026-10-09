@@ -183,7 +183,7 @@ fn field_value(
     if matches!(kind, BaseField::Permissions)
         && let Some(values) = value.and_then(FieldValue::as_object)
     {
-        for (key, value) in values {
+        for (key, value) in &values.snapshot_fields()? {
             let path = format!("{location}.{key}");
             if let Some(values) = value.as_array() {
                 for (index, value) in values.iter().enumerate() {
@@ -254,10 +254,10 @@ fn has_team_length(value: &FieldValue) -> AuthResult<bool> {
         FieldValue::Array(values) => Ok(!values.is_empty()),
         FieldValue::String(value) => Ok(!value.is_empty()),
         FieldValue::Utf16String(value) => Ok(!value.as_utf16().is_empty()),
-        FieldValue::Object(value) => better_auth_core::query::field_number(
-            value.get("length").unwrap_or(&FieldValue::Undefined),
-        )
-        .map(|length| length > 0.0),
+        FieldValue::Object(value) => {
+            better_auth_core::query::field_number(&value.get("length")?.unwrap_or_default())
+                .map(|length| length > 0.0)
+        }
         _ => Ok(false),
     }
 }
@@ -271,7 +271,7 @@ pub(super) fn invitation_team_alias(
     }
     Ok(SchemaValue::from_field(match value {
         FieldValue::Array(values) => values.first().cloned().unwrap_or_default(),
-        FieldValue::Object(values) => values.get("0").cloned().unwrap_or_default(),
+        FieldValue::Object(values) => values.get("0")?.unwrap_or_default(),
         _ => FieldValue::Undefined,
     }))
 }

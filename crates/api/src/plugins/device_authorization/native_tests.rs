@@ -317,7 +317,10 @@ async fn native_session_values_reach_publication_cache_and_response_without_coer
         let ended = Utc::now().timestamp_millis() as f64;
         assert_eq!(response.status, 200);
         let native = response.body.field_value()?;
-        let native = native.as_object().ok_or("Missing native response object")?;
+        let native = native
+            .as_object()
+            .ok_or("Missing native response object")?
+            .snapshot_fields()?;
         assert!(native["access_token"].strict_equals(&token));
         let body = json_body(&response);
         assert_eq!(body.get("access_token").cloned(), token.json()?);
@@ -343,10 +346,10 @@ async fn native_session_values_reach_publication_cache_and_response_without_coer
             .request
             .new_session()?
             .ok_or("Missing published session")?;
-        assert_eq!(published.user_field("id"), &FieldValue::from("user-a"));
+        assert_eq!(published.user_field("id")?, FieldValue::from("user-a"));
         assert_eq!(
-            published.user_field("name"),
-            &FieldValue::from("Selected User")
+            published.user_field("name")?,
+            FieldValue::from("Selected User")
         );
         let session = FieldMap::from(published.session.clone());
         assert!(session["token"].strict_equals(&token));
@@ -405,8 +408,8 @@ async fn cache_failure_keeps_consumption_session_and_published_snapshot() -> Tes
         .new_session()?
         .ok_or("Missing published snapshot after cache failure")?;
     assert_eq!(
-        published.user_field("name"),
-        &FieldValue::from("Selected User")
+        published.user_field("name")?,
+        FieldValue::from("Selected User")
     );
     let writes = fixture.storage.writes.lock().unwrap();
     assert_eq!(writes.len(), 3);

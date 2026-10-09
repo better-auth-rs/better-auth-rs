@@ -292,7 +292,7 @@ impl UserFieldConfig {
                             UserFieldType::StringArray | UserFieldType::NumberArray
                         )) =>
             {
-                Ok(crate::utils::json::safe_parse_field(&value))
+                crate::utils::json::safe_parse_field(&value)
             }
             Value::Number(number)
                 if !capabilities.supports_booleans

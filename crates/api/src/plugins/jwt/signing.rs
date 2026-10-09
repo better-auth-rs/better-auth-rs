@@ -39,7 +39,7 @@ impl JwtPlugin {
                     callback(serde_json::to_value(&session)?).await?,
                 )?);
             }
-            None => keys::spread(&mut payload, user()?.clone()),
+            None => keys::spread(&mut payload, user()?.clone())?,
         }
         let subject = match &self.config.get_subject {
             Some(callback) => callback(serde_json::to_value(&session)?).await?.into(),
@@ -56,8 +56,9 @@ impl JwtPlugin {
                 }
                 value => value
                     .as_object()
-                    .and_then(|fields| fields.get("id"))
-                    .cloned()
+                    .map(|fields| fields.get("id"))
+                    .transpose()?
+                    .flatten()
                     .unwrap_or_default(),
             },
         };

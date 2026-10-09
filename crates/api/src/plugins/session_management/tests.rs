@@ -193,7 +193,7 @@ async fn get_session_preserves_numeric_key_user_relationships() -> AuthResult<()
             FieldValue::from(FieldMap::from(snapshot.clone()))
         );
         assert_eq!(body, serde_json::to_value(&snapshot)?);
-        assert!(snapshot.user_field("id").is_undefined());
+        assert!(snapshot.user_field("id")?.is_undefined());
         assert!(matches!(
             request.session_snapshot(),
             Err(AuthError::Internal(message)) if message == "A User relationship array cannot authenticate a typed User"

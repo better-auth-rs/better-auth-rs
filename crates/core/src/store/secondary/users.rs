@@ -58,7 +58,7 @@ impl<S: AuthSchema> SecondaryStore<S> {
             self.secondary()?
                 .get_native(&active_sessions_key(&user.id.field_value())?)
                 .await?,
-        )
+        )?
         .unwrap_or_default();
         if !references.is_truthy() {
             return Ok(());
@@ -76,14 +76,16 @@ impl<S: AuthSchema> SecondaryStore<S> {
             }
             let fields = reference.as_object();
             let expires = fields
-                .and_then(|fields| fields.get("expiresAt"))
-                .cloned()
+                .map(|fields| fields.get("expiresAt"))
+                .transpose()?
+                .flatten()
                 .unwrap_or_default();
             if cached_expiration(expires).is_after(now)? {
                 tokens.push(
                     fields
-                        .and_then(|fields| fields.get("token"))
-                        .cloned()
+                        .map(|fields| fields.get("token"))
+                        .transpose()?
+                        .flatten()
                         .unwrap_or_default(),
                 );
             }
@@ -146,19 +148,22 @@ impl<S: AuthSchema> SecondaryStore<S> {
         user: &FieldValue,
         now: chrono::DateTime<chrono::Utc>,
     ) -> AuthResult<()> {
-        let Some(cached) = cache::decode(self.secondary()?.get_native(token).await?) else {
+        let Some(cached) = cache::decode(self.secondary()?.get_native(token).await?)? else {
             return Ok(());
         };
         let session = cached
             .as_object()
-            .and_then(|cached| cached.get("session"))
+            .map(|cached| cached.get("session"))
+            .transpose()?
+            .flatten()
             .ok_or_else(|| {
                 AuthError::internal("Cached user session refresh requires a session object")
             })?;
         let expires = session
             .as_object()
-            .and_then(|session| session.get("expiresAt"))
-            .cloned()
+            .map(|session| session.get("expiresAt"))
+            .transpose()?
+            .flatten()
             .unwrap_or_default();
         let seconds = cached_expiration(expires).cache_ttl(now)?;
         let envelope = FieldValue::from(FieldMap::from([

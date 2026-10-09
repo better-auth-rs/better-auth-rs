@@ -61,12 +61,12 @@ fn object<const N: usize>(entries: [(&str, FieldValue); N]) -> FieldValue {
         .into()
 }
 
-fn field<'a>(value: &'a FieldValue, key: &str) -> &'a FieldValue {
-    value.as_object().unwrap().get(key).unwrap()
+fn field(value: &FieldValue, key: &str) -> FieldValue {
+    value.as_object().unwrap().get(key).unwrap().unwrap()
 }
 
-fn text<'a>(value: &'a FieldValue, key: &str) -> &'a str {
-    field(value, key).as_str().unwrap()
+fn text(value: &FieldValue, key: &str) -> String {
+    field(value, key).as_str().unwrap().to_owned()
 }
 
 fn native(value: &FieldValue) -> AuthResult<FieldValue> {
@@ -103,6 +103,7 @@ fn native(value: &FieldValue) -> AuthResult<FieldValue> {
             .collect::<AuthResult<Vec<_>>>()?
             .into(),
         FieldValue::Object(fields) => fields
+            .snapshot_fields()?
             .iter()
             .map(|(key, value)| Ok((key.clone(), native(value)?)))
             .collect::<AuthResult<FieldMap>>()?
@@ -477,7 +478,7 @@ async fn seed<S: AuthSchema>(
             .await?
             .unwrap();
     }
-    if field(case, "existing") == &FieldValue::Bool(true) {
+    if field(case, "existing") == FieldValue::Bool(true) {
         let _ = store
             .create_account(CreateAccount {
                 id: "linked-account".into(),
@@ -492,7 +493,7 @@ async fn seed<S: AuthSchema>(
     }
     if let Some(cache) = cache {
         let mut user = user;
-        let _ = user.insert("id".into(), selector(scenario));
+        let _ = user.insert("id".into(), selector(&scenario));
         if scenario.starts_with("email-") {
             let _ = user.insert(
                 "email".into(),
@@ -618,10 +619,10 @@ impl Normalize {
 
     fn dates(&mut self, value: &FieldValue, expires: bool) -> AuthResult<()> {
         for key in ["createdAt", "updatedAt"] {
-            self.generated_date(field(value, key), DATE, 0)?;
+            self.generated_date(&field(value, key), DATE, 0)?;
         }
         if expires {
-            self.generated_date(field(value, "expiresAt"), EXPIRES, 600_000)?;
+            self.generated_date(&field(value, "expiresAt"), EXPIRES, 600_000)?;
         }
         Ok(())
     }
@@ -633,7 +634,7 @@ impl Normalize {
                 (TIMESTAMP + 600_000.0).into()
             }
             FieldValue::Date(_) => {
-                let mut value = native(value)?.as_object().unwrap().clone();
+                let mut value = native(value)?.as_object().unwrap().snapshot_fields()?;
                 let normalized = self.value(value.get("value").unwrap())?;
                 let _ = value.insert("value".into(), normalized);
                 value.into()
@@ -644,6 +645,7 @@ impl Normalize {
                 .collect::<AuthResult<Vec<_>>>()?
                 .into(),
             FieldValue::Object(fields) => fields
+                .snapshot_fields()?
                 .iter()
                 .map(|(key, value)| Ok((key.clone(), self.value(value)?)))
                 .collect::<AuthResult<FieldMap>>()?
@@ -666,9 +668,13 @@ fn response(response: &AuthResponse, normalize: &mut Normalize) -> AuthResult<Fi
     } else {
         object([("text", std::str::from_utf8(&bytes).unwrap().into())])
     };
-    if let Some(url) = body
+    let url = body
         .as_object()
-        .and_then(|body| body.get("url"))
+        .map(|body| body.get("url"))
+        .transpose()?
+        .flatten();
+    if let Some(url) = url
+        .as_ref()
         .and_then(FieldValue::as_str)
         .filter(|value| !value.is_empty())
     {
@@ -689,7 +695,7 @@ fn response(response: &AuthResponse, normalize: &mut Normalize) -> AuthResult<Fi
             };
             let _ = url.query_pairs_mut().append_pair(&key, &value);
         }
-        let mut fields = body.as_object().unwrap().clone();
+        let mut fields = body.as_object().unwrap().snapshot_fields()?;
         let _ = fields.insert("url".into(), url.to_string().into());
         body = fields.into();
     }
@@ -855,7 +861,7 @@ async fn run<S: AuthSchema>(
             };
             normalize.end = Utc::now().timestamp_millis();
             normalize.dates(&row, true)?;
-            if let Some(id) = row.as_object().unwrap().get("id") {
+            if let Some(id) = row.as_object().unwrap().get("id")? {
                 let _ = normalize
                     .strings
                     .insert(id.as_str().unwrap().into(), "<verification-id>".into());
@@ -879,7 +885,7 @@ async fn run<S: AuthSchema>(
                 super::state::decode_database_state_cookie_value(SECRET, &cookie)?,
                 identifier
             );
-            text(&row, "value").to_owned()
+            text(&row, "value")
         } else {
             let pair = cookies(&start)
                 .split("; ")
@@ -892,7 +898,7 @@ async fn run<S: AuthSchema>(
         pending = FieldValue::parse_json(&value)?;
         assert_eq!(
             field(&pending, "oauthState"),
-            &FieldValue::from(identifier.clone())
+            FieldValue::from(identifier.clone())
         );
         let expiry = field(&pending, "expiresAt").as_f64().unwrap();
         normalize.end = Utc::now().timestamp_millis();
@@ -903,9 +909,7 @@ async fn run<S: AuthSchema>(
         normalize.expiry = Some(expiry);
         let verifier = text(&pending, "codeVerifier");
         assert!(!verifier.is_empty());
-        let _ = normalize
-            .strings
-            .insert(verifier.into(), "<code-verifier>".into());
+        let _ = normalize.strings.insert(verifier, "<code-verifier>".into());
         serialized = Some(value);
         let mut request = request(HttpMethod::Get, "/callback/google");
         request.headers = HashMap::from([
@@ -942,7 +946,7 @@ async fn run<S: AuthSchema>(
         .collect::<Vec<_>>();
     if scenario.starts_with("profile-update") {
         for user in &user_rows {
-            normalize.generated_date(field(user, "updatedAt"), DATE, 0)?;
+            normalize.generated_date(&field(user, "updatedAt"), DATE, 0)?;
         }
     }
     let sessions = adapter
@@ -962,7 +966,7 @@ async fn run<S: AuthSchema>(
         if text(account, "id") != "linked-account" {
             let _ = normalize
                 .strings
-                .insert(text(account, "id").into(), "<account-id>".into());
+                .insert(text(account, "id"), "<account-id>".into());
         }
     }
     let verification = if many {
@@ -1041,7 +1045,7 @@ async fn run<S: AuthSchema>(
     ] {
         assert_eq!(
             normalize.value(&actual)?,
-            *field(case, key),
+            field(case, key),
             "{}/{}/{scenario}/{} {key}",
             text(case, "backend"),
             text(case, "operation"),
@@ -1049,7 +1053,8 @@ async fn run<S: AuthSchema>(
         );
     }
     // Keep adapter observations in the immutable fixture until a real CRUD observation seam exists.
-    let expected = field(case, "events")
+    let expected_events = field(case, "events");
+    let expected = expected_events
         .as_array()
         .unwrap()
         .iter()
@@ -1079,7 +1084,8 @@ async fn native_session_http_cache_state_and_selected_rows_match_172_captured_ca
         "../../../../../tests/fixtures/oauth-native-session-1.7.6.json"
     ))?;
     assert_eq!(text(&fixture, "version"), "1.7.6");
-    let cases = field(&fixture, "cases").as_array().unwrap();
+    let cases = field(&fixture, "cases");
+    let cases = cases.as_array().unwrap();
     assert_eq!(cases.len(), 172);
     for case in cases.iter() {
         let config = config(case);

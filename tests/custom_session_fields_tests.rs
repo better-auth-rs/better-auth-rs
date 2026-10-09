@@ -58,7 +58,9 @@ impl CustomSessionCallback<StatelessSchema> for Capture {
                 "Expected public User object in this fixture",
             ));
         };
-        let _ = Arc::make_mut(user).remove("loneSurrogate");
+        let mut fields = user.snapshot_fields()?;
+        let _ = fields.remove("loneSurrogate");
+        *user = fields.into();
         Ok(serde_json::to_value(input)?)
     }
 }
@@ -93,12 +95,16 @@ impl AfterEndpointHook<StatelessSchema> for AfterHook {
             let Some(FieldValue::Object(session)) = Arc::make_mut(&mut sessions).first_mut() else {
                 return Err(AuthError::internal("Expected a device session to replace"));
             };
-            let Some(FieldValue::Object(user)) = Arc::make_mut(session).get_mut("user") else {
+            let mut fields = session.snapshot_fields()?;
+            let Some(FieldValue::Object(user)) = fields.get_mut("user") else {
                 return Err(AuthError::internal(
                     "Expected a device session user to replace",
                 ));
             };
-            let _ = Arc::make_mut(user).remove("loneSurrogate");
+            let mut user_fields = user.snapshot_fields()?;
+            let _ = user_fields.remove("loneSurrogate");
+            *user = user_fields.into();
+            *session = fields.into();
             let mut value = FieldValue::Array(sessions)
                 .json()?
                 .ok_or_else(|| AuthError::internal("Expected a JSON session list"))?;
@@ -255,7 +261,7 @@ async fn check_native_fields(path: &str) {
         })
         .unwrap();
     assert_eq!(callback_path, path);
-    let fields = user.as_object().unwrap();
+    let fields = user.as_object().unwrap().snapshot_fields().unwrap();
     assert!(matches!(
         fields.get("nativeDate"),
         Some(FieldValue::Date(_))
@@ -289,11 +295,14 @@ async fn check_native_fields(path: &str) {
             .as_array()
             .and_then(|sessions| sessions.first())
             .and_then(FieldValue::as_object)
-            .and_then(|session| session.get("user"))
+            .map(|session| session.get("user"))
+            .transpose()
+            .unwrap()
+            .flatten()
             .unwrap();
         // parseUserOutput clones the source; the later custom callback reuses that public result.
-        assert!(user.strict_equals(after_user));
-        let after_fields = after_user.as_object().unwrap();
+        assert!(user.strict_equals(&after_user));
+        let after_fields = after_user.as_object().unwrap().snapshot_fields().unwrap();
         assert!(date.strict_equals(after_fields.get("nativeDate").unwrap()));
         assert!(left.strict_equals(after_fields.get("left").unwrap()));
         assert!(right.strict_equals(after_fields.get("right").unwrap()));
@@ -355,7 +364,7 @@ async fn list_custom_callback_observes_global_after_hook_replacement() {
         })
         .unwrap();
     assert_eq!(path, LIST_PATH);
-    let fields = user.as_object().unwrap();
+    let fields = user.as_object().unwrap().snapshot_fields().unwrap();
     assert_eq!(
         fields.get("name").and_then(FieldValue::as_str),
         Some("After hook")

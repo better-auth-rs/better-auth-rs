@@ -35,7 +35,7 @@ impl SessionSnapshot {
             FieldValue::Null => Ok(None),
             FieldValue::Object(fields) => Ok(Some(SessionData {
                 session: self.data.session,
-                user: UserView::try_from((*fields).clone())?,
+                user: UserView::try_from(fields.snapshot_fields()?)?,
             })),
             _ => Err(AuthError::internal("Session User must be an object")),
         }
@@ -73,16 +73,19 @@ impl From<SessionData<JoinValue<UserView>>> for SessionSnapshot {
 
 impl NativeSessionData {
     /// Read a User model field. Relationship arrays have no User model fields.
-    pub fn user_field(&self, name: &str) -> &FieldValue {
-        self.user
+    pub fn user_field(&self, name: &str) -> AuthResult<FieldValue> {
+        Ok(self
+            .user
             .as_object()
-            .and_then(|fields| fields.get(name))
-            .unwrap_or(&FieldValue::Undefined)
+            .map(|fields| fields.get(name))
+            .transpose()?
+            .flatten()
+            .unwrap_or_default())
     }
 
     /// Read a User property at a required property-access boundary.
     /// Non-null primitives have no User fields; null and undefined reject property access.
-    pub fn user_property(&self, name: &str) -> AuthResult<&FieldValue> {
+    pub fn user_property(&self, name: &str) -> AuthResult<FieldValue> {
         self.user.model_property(name)
     }
 
@@ -93,7 +96,7 @@ impl NativeSessionData {
             .user
             .as_object()
             .ok_or_else(|| AuthError::internal("Session User must be an object"))?;
-        UserView::try_from(fields.clone())
+        UserView::try_from(fields.snapshot_fields()?)
     }
 
     /// Consume public object fields without rejecting the selected relationship cardinality.
@@ -110,7 +113,7 @@ impl NativeSessionData {
             return Ok(self.user.clone());
         }
         let value = StructuredCloneContext::new().clone_value(&self.user)?;
-        let mut fields = value.enumerable_fields();
+        let mut fields = value.enumerable_fields()?;
         fields.retain(|name, _| {
             config
                 .fields()
@@ -128,7 +131,9 @@ impl crate::FromFieldMap for NativeSessionData {
             AuthError::internal("Session response must contain a `session` object")
         })?;
         Ok(Self {
-            session: <SessionView as crate::FromFieldMap>::from_field_values(session.clone())?,
+            session: <SessionView as crate::FromFieldMap>::from_field_values(
+                session.snapshot_fields()?,
+            )?,
             user: fields.shift_remove("user").unwrap_or_default(),
         })
     }
@@ -383,7 +388,7 @@ mod tests {
             .new_session()?
             .ok_or_else(|| AuthError::internal("Native refresh must publish the issued Session"))?;
         assert!(issued.user.is_object());
-        assert!(issued.user_field("id").is_undefined());
+        assert!(issued.user_field("id")?.is_undefined());
         assert!(matches!(
             request.session_snapshot(),
             Err(AuthError::Internal(message)) if message == "A User relationship array cannot authenticate a typed User"
@@ -403,16 +408,22 @@ mod tests {
             .ok_or_else(|| {
                 AuthError::internal("Native resolution must preserve the selected relationship")
             })?;
-        let selected = native.user.as_object().ok_or_else(|| {
-            AuthError::internal("Native User relationship must become a numeric-key object")
-        })?;
+        let selected = native
+            .user
+            .as_object()
+            .ok_or_else(|| {
+                AuthError::internal("Native User relationship must become a numeric-key object")
+            })?
+            .snapshot_fields()?;
         assert_eq!(selected.len(), 1);
         assert_eq!(
             selected
                 .get("0")
                 .and_then(FieldValue::as_object)
-                .and_then(|fields| fields.get("id")),
-            Some(&user.id.field_value())
+                .map(|fields| fields.get("id"))
+                .transpose()?
+                .flatten(),
+            Some(user.id.field_value())
         );
         assert_eq!(calls.load(Ordering::SeqCst), 1);
         let context = crate::AuthContext::new(config, manager.database.clone());
@@ -472,21 +483,22 @@ mod tests {
         let public = data.public_user(&config)?;
         let public = public
             .as_object()
-            .ok_or_else(|| AuthError::internal("Expected User object"))?;
+            .ok_or_else(|| AuthError::internal("Expected User object"))?
+            .snapshot_fields()?;
         assert!(!public.contains_key("secretNote"));
         assert_eq!(public.get("ownUndefined"), Some(&FieldValue::Undefined));
         data.user = vec![user.clone()].into();
-        assert!(data.user_field("id").is_undefined());
+        assert!(data.user_field("id")?.is_undefined());
         let public = data.public_user(&config)?;
         assert_eq!(
             public,
             FieldValue::from(FieldMap::from([("0".into(), user)]))
         );
-        let child = public
+        let child = public.model_property("0")?;
+        let child = child
             .as_object()
-            .and_then(|fields| fields.get("0"))
-            .and_then(FieldValue::as_object)
-            .ok_or_else(|| AuthError::internal("Expected numeric-key User output"))?;
+            .ok_or_else(|| AuthError::internal("Expected numeric-key User output"))?
+            .snapshot_fields()?;
         let date_field = |name: &str| {
             child
                 .get(name)

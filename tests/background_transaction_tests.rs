@@ -62,7 +62,7 @@ impl<S: AuthSchema> Hooks<S> {
             .unwrap()
             .push(json!({"hook":hook, "baseAdapter":true,
             "transactionActive":ctx.transaction.is_some(),"path":req.path,"request":req.is_http,
-            "bodyName":req.body.as_object().unwrap()["name"].json()?,"read":read}));
+            "bodyName":req.body.as_object().unwrap().get("name")?.unwrap().json()?,"read":read}));
         Ok(())
     }
 }
@@ -206,14 +206,14 @@ async fn run<S: AuthSchema>(
     let verification=EmailVerificationPlugin::new().send_on_sign_up(true).callbacks(
         EmailVerificationCallbacks::<S>::send(move |mail, endpoint| {
             callback_state.event("sender:called");
-            let state=callback_state.clone();let endpoint=endpoint.to_owned();let user_id=mail.user.as_object().unwrap().get("id").unwrap().as_str().unwrap().to_owned();
+            let state=callback_state.clone();let endpoint=endpoint.to_owned();let user_id=mail.user.as_object().unwrap().get("id")?.unwrap().as_str().unwrap().to_owned();
             Ok(Some(Box::pin(async move {
                 state.event("sender:start");
                 for phase in ["start","released"] {
                     if phase=="released" { state.gate.notified().await; }
                     let endpoint=endpoint.as_endpoint();let tx=endpoint.transaction.unwrap();
                     let mut captured=json!({"phase":phase,"transactionActive":true,"path":endpoint.path,
-                        "request":endpoint.request.is_some(),"bodyName":endpoint.body.as_object().unwrap().get("name").unwrap().json()?,
+                        "request":endpoint.request.is_some(),"bodyName":endpoint.body.as_object().unwrap().get("name")?.unwrap().json()?,
                         "responseDone":state.response_done.load(Ordering::SeqCst),
                         "currentRead":attempt(tx.get_user_by_id(&user_id).await),
                         "internalRead":attempt(tx.get_user_by_email(EMAIL).await)});

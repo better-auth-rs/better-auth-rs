@@ -64,7 +64,7 @@ where
                     .chain(rows.map(|(_, user)| user))
                     .flatten(),
                 S::User::id_column(),
-                true,
+                relation.many,
                 limit,
             )?;
             (member.model::<O::Member>()?, Some(users))

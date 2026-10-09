@@ -132,7 +132,7 @@ impl EmailOtpPlugin {
                     .user_property("id")?
                     .strict_equals(&updated.id.field_value())
             {
-                let mut fields = current.user.enumerable_fields();
+                let mut fields = current.user.enumerable_fields()?;
                 let _ = fields.insert("emailVerified".into(), true.into());
                 current.user = fields.into();
                 manager
@@ -397,7 +397,7 @@ impl EmailOtpPlugin {
         let _ = self
             .mark_verified(req, ctx, &user, new_email.clone())
             .await?;
-        let mut user = session.user.enumerable_fields();
+        let mut user = session.user.enumerable_fields()?;
         let _ = user.insert("email".into(), new_email.into());
         let _ = user.insert("emailVerified".into(), true.into());
         session.user = user.into();

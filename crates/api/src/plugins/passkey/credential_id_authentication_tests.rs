@@ -168,7 +168,8 @@ async fn authentication_preserves_projected_credential_ids_without_changing_sign
                 let encoded = FieldValue::parse_json(&serde_json::to_string(verification)?)?;
                 let info = field(&encoded, "authenticationInfo")?
                     .as_object()
-                    .ok_or("Expected serialized authentication information")?;
+                    .ok_or("Expected serialized authentication information")?
+                    .snapshot_fields()?;
                 if projected.is_undefined() {
                     assert!(!info.contains_key("credentialID"));
                 } else {

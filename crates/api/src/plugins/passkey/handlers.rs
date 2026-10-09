@@ -151,8 +151,8 @@ pub(super) async fn generate_register_options_core(
     let mut identity = response
         .get("user")
         .and_then(FieldValue::as_object)
-        .cloned()
-        .ok_or_else(|| AuthError::internal("Registration options omitted the user object"))?;
+        .ok_or_else(|| AuthError::internal("Registration options omitted the user object"))?
+        .snapshot_fields()?;
     let _ = identity.insert("name".into(), user_name);
     let _ = identity.insert("displayName".into(), user_display_name);
     let _ = response.insert("user".into(), identity.into());

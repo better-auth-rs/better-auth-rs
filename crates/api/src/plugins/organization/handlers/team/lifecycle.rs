@@ -1,8 +1,9 @@
 use better_auth_core::{
-    AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, AuthSchema, FieldValue,
+    AuthContext, AuthError, AuthRecordFields, AuthRequest, AuthResponse, AuthResult, AuthSchema,
+    FieldValue,
 };
 
-use super::{CreateBody, TeamBody, authorize, find_team, optional_string};
+use super::{CreateBody, TeamBody, authorize, find_team, list_teams, optional_string};
 use crate::plugins::organization::{
     OrganizationConfig, fields,
     handlers::{optional_session, request_present},
@@ -36,7 +37,7 @@ pub(super) async fn create(
     if let Some(session) = &session {
         let member = ctx
             .database
-            .get_member_with_user_value(&org, session.user_property("id")?)
+            .get_member_with_user_value(&org, &session.user_property("id")?)
             .await?
             .ok_or_else(|| {
                 AuthError::forbidden("You are not allowed to invite users to this organization")
@@ -55,7 +56,7 @@ pub(super) async fn create(
         user: &session.user,
         session: &session.session,
     });
-    let count = ctx.database.count_organization_teams_value(&org).await?;
+    let teams = list_teams(&org, ctx, config).await?;
     if let Some(maximum) = config
         .team_limit(
             OrganizationTeamLimit {
@@ -66,7 +67,7 @@ pub(super) async fn create(
         )
         .await?
         .filter(|limit| *limit > 0)
-        && count >= maximum as u64
+        && teams.len() >= maximum
     {
         return Err(AuthError::bad_request(
             "You have reached the maximum number of teams",
@@ -113,7 +114,7 @@ pub(super) async fn create(
             })
             .await?;
     }
-    AuthResponse::json(None, &team)
+    Ok(AuthResponse::native(None, team.field_values()?.into()))
 }
 
 pub(super) async fn remove(
@@ -141,7 +142,7 @@ pub(super) async fn remove(
     if let Some(session) = &session {
         let member = ctx
             .database
-            .get_member_with_user_value(&org, session.user_property("id")?)
+            .get_member_with_user_value(&org, &session.user_property("id")?)
             .await?
             .ok_or_else(|| AuthError::forbidden("You are not allowed to delete this team"))?;
         if session
@@ -165,9 +166,10 @@ pub(super) async fn remove(
         .await?;
     }
     let team = find_team(&body.team_id.as_str().into(), &org, ctx, config).await?;
-    if !config.teams.allow_removing_all_teams
-        && ctx.database.count_organization_teams_value(&org).await? <= 1
-    {
+    if !team.organization_id.field_value().strict_equals(&org) {
+        return Err(AuthError::bad_request("Team not found"));
+    }
+    if !config.teams.allow_removing_all_teams && list_teams(&org, ctx, config).await?.len() <= 1 {
         return Err(AuthError::bad_request("Unable to remove last team"));
     }
     let organization = ctx

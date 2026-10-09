@@ -80,6 +80,18 @@ record!(crate::types::Invitation, [
     created_at => "createdAt",
 ], additional_fields);
 
+record!(crate::wire::InvitationView, [
+    team_id => "teamId",
+    id => "id",
+    organization_id => "organizationId",
+    email => "email",
+    role => "role",
+    status => "status",
+    inviter_id => "inviterId",
+    expires_at => "expiresAt",
+    created_at => "createdAt",
+], additional_fields);
+
 record!(crate::types::Team, [
     id => "id",
     name => "name",

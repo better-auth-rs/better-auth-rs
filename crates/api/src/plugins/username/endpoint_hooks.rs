@@ -71,8 +71,8 @@ impl UsernamePlugin {
                     if !signup
                         && self.config.immutable_username
                         && let Some(session) = &session
-                        && session.user_field("username").is_truthy()
-                        && !session.user_field("username").strict_equals(&normalized)
+                        && session.user_field("username")?.is_truthy()
+                        && !session.user_field("username")?.strict_equals(&normalized)
                     {
                         return Err(error(
                             400,
@@ -85,12 +85,11 @@ impl UsernamePlugin {
                         .get_user_by_field_value("username", &normalized)
                         .await?
                         && (signup
-                            || session.as_ref().is_none_or(|session| {
-                                !existing
-                                    .id
-                                    .field_value()
-                                    .strict_equals(session.user_field("id"))
-                            }))
+                            || session
+                                .as_ref()
+                                .map(|session| session.user_field("id"))
+                                .transpose()?
+                                .is_none_or(|id| !existing.id.field_value().strict_equals(&id)))
                     {
                         return Err(error(
                             400,

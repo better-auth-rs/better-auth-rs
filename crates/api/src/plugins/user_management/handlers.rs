@@ -59,7 +59,7 @@ pub(crate) async fn change_email_core<S: better_auth_core::AuthSchema>(
     if ctx.database.get_user_by_email(&new_email).await?.is_some() {
         let _ = create_email_verification_token(
             ctx.config.signing_secret(),
-            &crate::plugins::helpers::user_email_field(data.user_property("email")?)?,
+            &crate::plugins::helpers::user_email_field(&data.user_property("email")?)?,
             Some(&new_email),
             expires_in,
             None,
@@ -76,14 +76,14 @@ pub(crate) async fn change_email_core<S: better_auth_core::AuthSchema>(
         let _ = ctx
             .database
             .update_user_by_id_value(
-                data.user_property("id")?,
+                &data.user_property("id")?,
                 UpdateUser {
                     email: Some(new_email.clone()),
                     ..Default::default()
                 },
             )
             .await?;
-        let mut fields = recipient.enumerable_fields();
+        let mut fields = recipient.enumerable_fields()?;
         let _ = fields.insert("email".into(), new_email.clone().into());
         recipient = fields.into();
         ctx.session_manager()
@@ -104,16 +104,16 @@ pub(crate) async fn change_email_core<S: better_auth_core::AuthSchema>(
         (new_email.clone(), None, None)
     } else if confirmation {
         (
-            crate::plugins::helpers::user_email_field(data.user_property("email")?)?,
+            crate::plugins::helpers::user_email_field(&data.user_property("email")?)?,
             Some(new_email.as_str()),
             Some("change-email-confirmation"),
         )
     } else {
-        let mut fields = recipient.enumerable_fields();
+        let mut fields = recipient.enumerable_fields()?;
         let _ = fields.insert("email".into(), new_email.clone().into());
         recipient = fields.into();
         (
-            crate::plugins::helpers::user_email_field(data.user_property("email")?)?,
+            crate::plugins::helpers::user_email_field(&data.user_property("email")?)?,
             Some(new_email.as_str()),
             Some("change-email-verification"),
         )
@@ -203,7 +203,7 @@ pub(crate) async fn delete_user_core<S: better_auth_core::AuthSchema>(
         ctx.password_policy.validate_max_length(password)?;
         let account = super::super::helpers::get_credential_account(
             ctx,
-            SchemaValue::from_field(data.user_property("id")?.clone()),
+            SchemaValue::from_field(data.user_property("id")?),
         )
         .await?
         .filter(|account| account.password.field_value().is_truthy())
@@ -249,7 +249,7 @@ pub(crate) async fn delete_user_core<S: better_auth_core::AuthSchema>(
             .database
             .create_verification_optional(better_auth_core::CreateVerification {
                 identifier: (format!("delete-account-{token}")).into(),
-                value: SchemaValue::from_field(data.user_property("id")?.clone()),
+                value: SchemaValue::from_field(data.user_property("id")?),
                 expires_at: (Utc::now()
                     .checked_add_signed(expires_in)
                     .ok_or_else(|| AuthError::config("Delete token expiry is out of range"))?)
@@ -344,7 +344,7 @@ pub(crate) async fn delete_user_callback_core(
     if !verification
         .value
         .field_value()
-        .strict_equals(data.user_property("id")?)
+        .strict_equals(&data.user_property("id")?)
     {
         return Err(AuthError::not_found("Invalid token"));
     }
@@ -366,10 +366,10 @@ async fn perform_user_deletion(
         hook.before_delete(&data.user, Some(req)).await?;
     }
     let id = data.user_property("id")?;
-    ctx.database.delete_user_value(id).await?;
-    ctx.database.delete_user_sessions_by_user_value(id).await?;
+    ctx.database.delete_user_value(&id).await?;
+    ctx.database.delete_user_sessions_by_user_value(&id).await?;
     if confirmed {
-        ctx.database.delete_user_accounts_value(id).await?;
+        ctx.database.delete_user_accounts_value(&id).await?;
     }
     // Queue revocation before the application hook so error responses also clear credentials.
     ctx.session_manager().clear_cookies(req)?;

@@ -172,32 +172,11 @@ impl ModelFields {
         schema
     }
 
-    pub(crate) fn register(&mut self, role: EntityRole, fields: UserConfig) -> AuthResult<()> {
-        match role {
-            EntityRole::ApiKey
-            | EntityRole::Passkey
-            | EntityRole::DeviceCode
-            | EntityRole::TwoFactor
-            | EntityRole::Jwk
-            | EntityRole::WalletAddress => {}
-            EntityRole::User
-            | EntityRole::Session
-            | EntityRole::Account
-            | EntityRole::Verification
-            | EntityRole::Organization
-            | EntityRole::Team
-            | EntityRole::TeamMember => {}
-            _ => {
-                return Err(AuthError::config(format!(
-                    "Plugin field registration does not support {role:?}"
-                )));
-            }
-        }
+    pub(crate) fn register(&mut self, role: EntityRole, fields: UserConfig) {
         self.extend(role, fields);
         let _ = self
             .declarations
             .insert(ModelDeclaration::Native(role), None);
-        Ok(())
     }
 
     pub(crate) fn extend(&mut self, role: EntityRole, fields: UserConfig) {

@@ -46,11 +46,12 @@ impl<'a, S: AuthSchema> AdminApi<'a, S> {
             )
             .await?;
         let result = response.body.field_value()?;
-        let user = result.model_property("user")?.as_object().ok_or_else(|| {
+        let user = result.model_property("user")?;
+        let user = user.as_object().ok_or_else(|| {
             AuthError::internal("Admin create-user response must contain a user object")
         })?;
         Ok(AdminUserResponse {
-            user: UserView::try_from(user.clone())?,
+            user: UserView::try_from(user.snapshot_fields()?)?,
         })
     }
 }

@@ -153,12 +153,17 @@ async fn session_cache_preserves_native_values_through_index_update_and_user_ref
         )
         .await?;
     let refreshed = crate::utils::json::parse_native_json(&encoded(&cache, &token).await?.into())?;
-    let before = before_refresh.as_object().unwrap();
-    let after = refreshed.as_object().unwrap();
+    let before = before_refresh.as_object().unwrap().snapshot_fields()?;
+    let after = refreshed.as_object().unwrap().snapshot_fields()?;
     assert_eq!(after.get("session"), before.get("session"));
     assert_eq!(
-        after.get("user").unwrap().as_object().unwrap().get("name"),
-        Some(&"After".into()),
+        after
+            .get("user")
+            .unwrap()
+            .as_object()
+            .unwrap()
+            .get("name")?,
+        Some("After".into()),
     );
     assert_payload(
         &store

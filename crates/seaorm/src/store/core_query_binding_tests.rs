@@ -387,7 +387,12 @@ async fn organization_relations_rebind_stored_keys_through_the_write_policy() ->
                 store.list_user_organizations(owner_id).await?,
                 [organization.clone()]
             );
-            assert_eq!(store.list_user_teams(owner_id).await?, [team.clone()]);
+            let mut public_team = team.clone();
+            assert_eq!(
+                public_team.additional_fields.shift_remove("memberCount"),
+                Some(1.into())
+            );
+            assert_eq!(store.list_user_teams(owner_id).await?, [public_team]);
             let details = required(
                 store
                     .get_organization_details(OrganizationDetailsQuery {

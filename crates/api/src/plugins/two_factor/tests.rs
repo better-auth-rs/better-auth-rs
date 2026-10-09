@@ -257,7 +257,13 @@ async fn test_verify_existing_session_factor_enables_two_factor_and_reissues_ses
     let queued = request.take_response_headers().unwrap();
     let set_cookie_headers: Vec<_> = queued.get_all("set-cookie").collect();
     assert_eq!(
-        response.user.as_object().unwrap()["twoFactorEnabled"],
+        response
+            .user
+            .as_object()
+            .unwrap()
+            .get("twoFactorEnabled")
+            .unwrap()
+            .unwrap(),
         FieldValue::Bool(false)
     );
     assert_eq!(

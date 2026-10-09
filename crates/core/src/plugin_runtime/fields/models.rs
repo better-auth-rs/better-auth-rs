@@ -32,6 +32,16 @@ const NATIVE_MODELS: &[(EntityRole, &str)] = &[
 ];
 
 impl ModelFields {
+    /// Resolve the physical model name used by raw relation properties.
+    /// Legacy field-only declarations retain the adapter's default model name.
+    #[doc(hidden)]
+    pub fn storage_model_name<'a>(&'a self, role: EntityRole, default: &'a str) -> &'a str {
+        self.declarations
+            .get(&ModelDeclaration::Native(role))
+            .and_then(Option::as_deref)
+            .unwrap_or(default)
+    }
+
     pub(crate) fn set_model_name(
         &mut self,
         role: EntityRole,
@@ -184,9 +194,7 @@ mod tests {
             );
 
             let mut legacy = schema.clone();
-            legacy
-                .register(EntityRole::Team, UserConfig::default())
-                .unwrap();
+            legacy.register(EntityRole::Team, UserConfig::default());
             let adapter_name =
                 |role, candidate: &str| role == EntityRole::Team && candidate == "team_table";
             assert_eq!(

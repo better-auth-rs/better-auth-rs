@@ -89,6 +89,7 @@ run_stage() {
         ./compat-tests/reference-server/contracts/model-alias-order.test.ts \
         ./compat-tests/reference-server/contracts/team-details-null-selector.test.ts \
         ./compat-tests/reference-server/contracts/native-join-property-collision.test.ts \
+        ./compat-tests/reference-server/contracts/organization-member-singular-existing.test.ts \
         ./compat-tests/reference-server/contracts/organization-serial-references.test.ts \
         ./compat-tests/reference-server/contracts/organization-direct-order.test.ts \
         ./compat-tests/reference-server/contracts/account-id-input.test.ts \
@@ -565,7 +566,8 @@ run_stage() {
         ./compat-tests/reference-server/contracts/account-user-selected-relations.test.ts \
         ./compat-tests/reference-server/contracts/account-user-auth-boundary.test.ts \
         ./compat-tests/reference-server/contracts/account-user-auth-email.test.ts \
-        ./compat-tests/reference-server/contracts/organization-member-join-reference.test.ts
+        ./compat-tests/reference-server/contracts/organization-member-join-reference.test.ts \
+        ./compat-tests/reference-server/contracts/organization-member-singular-existing.test.ts
       ;;
     passkey)
       cargo fmt --all -- --check

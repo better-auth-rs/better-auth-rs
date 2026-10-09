@@ -13,17 +13,17 @@ impl TwoFactorPlugin {
         ) {
             return Ok(());
         }
-        let Some(data) = req
-            .new_session()?
-            .filter(|data| data.user_field("twoFactorEnabled").is_truthy())
-        else {
+        let Some(data) = req.new_session()? else {
             return Ok(());
         };
+        if !data.user_field("twoFactorEnabled")?.is_truthy() {
+            return Ok(());
+        }
         let fields = data
             .user
             .as_object()
             .ok_or_else(|| AuthError::internal("A two-factor challenge requires a User object"))?;
-        let user = better_auth_core::UserView::try_from(fields.clone())?;
+        let user = better_auth_core::UserView::try_from(fields.snapshot_fields()?)?;
         let trusted = inspect_trusted_device(req, &user, ctx).await?;
         for cookie in trusted.set_cookie_headers {
             response.headers.append("Set-Cookie", cookie);

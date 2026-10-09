@@ -65,7 +65,7 @@ pub(super) async fn send_verification_email_core(
     endpoint.session = ctx.native_session(req, SessionRead::Cached).await?;
     if let Some(data) = &endpoint.session {
         let email = data.user_property("email")?;
-        if crate::plugins::helpers::user_email_field(email)?.to_lowercase()
+        if crate::plugins::helpers::user_email_field(&email)?.to_lowercase()
             != body.email.to_lowercase()
         {
             return Err(AuthError::bad_request("Email mismatch"));
@@ -73,7 +73,7 @@ pub(super) async fn send_verification_email_core(
         if data.user_property("emailVerified")?.is_truthy() {
             return Err(AuthError::bad_request("Email is already verified"));
         }
-        send_for_user(data.user.clone(), email, body, config, &endpoint).await?;
+        send_for_user(data.user.clone(), &email, body, config, &endpoint).await?;
     } else {
         let start = std::time::Instant::now();
         let user = ctx.database.get_user_by_email(&body.email).await?;
@@ -203,7 +203,7 @@ pub(super) async fn verify_email_core(
             )?;
             let url = verification_url(ctx.base_url(), &token, query.callback_url.as_deref());
             if super::delivery::available(Some(config), ctx) {
-                let mut fields = user.enumerable_fields();
+                let mut fields = user.enumerable_fields()?;
                 let _ = fields.insert("email".into(), update_to.clone());
                 let task = super::delivery::delivery(
                     Some(config),
@@ -272,7 +272,7 @@ pub(super) async fn verify_email_core(
                 .await;
             }
         }
-        let mut fields = active.user.enumerable_fields();
+        let mut fields = active.user.enumerable_fields()?;
         let _ = fields.insert("email".into(), update_to.clone());
         let _ = fields.insert("emailVerified".into(), verified.into());
         active.user = fields.into();
@@ -321,7 +321,7 @@ pub(super) async fn verify_email_core(
             _ => None,
         };
         let mut data = active_session(current, &user, req, ctx).await?;
-        let mut fields = data.user.enumerable_fields();
+        let mut fields = data.user.enumerable_fields()?;
         let _ = fields.insert("emailVerified".into(), true.into());
         data.user = fields.into();
         ctx.session_manager()

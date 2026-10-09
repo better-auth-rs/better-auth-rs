@@ -9,7 +9,7 @@ pub(super) async fn enable_core<S: better_auth_core::AuthSchema>(
 ) -> AuthResult<(EnableResponse, Vec<String>)> {
     verify_user_password(
         ctx,
-        data.user_property("id")?,
+        &data.user_property("id")?,
         body.password.as_deref(),
         config.allow_passwordless,
         false,
@@ -28,7 +28,7 @@ pub(super) async fn enable_core<S: better_auth_core::AuthSchema>(
                 message: "OTP is not available",
             });
         }
-        let updated = update_two_factor_user(data.user_property("id")?, true, ctx)
+        let updated = update_two_factor_user(&data.user_property("id")?, true, ctx)
             .await?
             .ok_or_else(|| AuthError::internal("Cannot read properties of null (reading 'id')"))?;
         let _ = issue_factor_session(
@@ -58,9 +58,7 @@ pub(super) async fn enable_core<S: better_auth_core::AuthSchema>(
     }
     let existing = ctx
         .database
-        .get_two_factor_by_user_id_value(&SchemaValue::from_field(
-            data.user_property("id")?.clone(),
-        ))
+        .get_two_factor_by_user_id_value(&SchemaValue::from_field(data.user_property("id")?))
         .await?;
     if existing
         .as_ref()
@@ -92,7 +90,7 @@ pub(super) async fn enable_core<S: better_auth_core::AuthSchema>(
 
     let set_cookie_headers = Vec::new();
     if config.skip_verification_on_enable {
-        let updated_user = update_two_factor_user(data.user_property("id")?, true, ctx)
+        let updated_user = update_two_factor_user(&data.user_property("id")?, true, ctx)
             .await?
             .ok_or_else(|| AuthError::internal("Cannot read properties of null (reading 'id')"))?;
         let _ = issue_factor_session(
@@ -117,7 +115,7 @@ pub(super) async fn enable_core<S: better_auth_core::AuthSchema>(
             .update_two_factor_record(&existing.id, fields)
             .await?;
     } else {
-        let _ = fields.insert("userId".into(), data.user_property("id")?.clone());
+        let _ = fields.insert("userId".into(), data.user_property("id")?);
         let _ = ctx.database.create_two_factor_record(fields).await?;
     }
 
@@ -128,7 +126,7 @@ pub(super) async fn enable_core<S: better_auth_core::AuthSchema>(
             .as_deref()
             .filter(|issuer| !issuer.is_empty())
             .or(config.issuer.as_deref().filter(|issuer| !issuer.is_empty())),
-        data.user_property("email")?,
+        &data.user_property("email")?,
         ctx,
     )?
     .get_url()?;
@@ -151,14 +149,14 @@ pub(super) async fn disable_core(
 ) -> AuthResult<(StatusResponse, Vec<String>)> {
     verify_user_password(
         ctx,
-        data.user_property("id")?,
+        &data.user_property("id")?,
         body.password.as_deref(),
         config.allow_passwordless,
         false,
     )
     .await?;
 
-    let updated_user = update_two_factor_user(data.user_property("id")?, false, ctx)
+    let updated_user = update_two_factor_user(&data.user_property("id")?, false, ctx)
         .await?
         .ok_or_else(|| AuthError::internal("Cannot read properties of null (reading 'id')"))?;
     ctx.database
@@ -203,14 +201,14 @@ pub(super) async fn get_totp_uri_core(
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<TotpUriResponse> {
     require_totp(config)?;
-    let two_factor = load_two_factor_record(data.user_property("id")?, ctx).await?;
+    let two_factor = load_two_factor_record(&data.user_property("id")?, ctx).await?;
     let secret = crate::plugins::symmetric::decrypt_field(
         ctx.config.encryption_secret(),
         &two_factor.secret.field_value(),
     )?;
     verify_user_password(
         ctx,
-        data.user_property("id")?,
+        &data.user_property("id")?,
         body.password.as_deref(),
         config
             .totp_allow_passwordless
@@ -219,7 +217,7 @@ pub(super) async fn get_totp_uri_core(
     )
     .await?;
     Ok(TotpUriResponse {
-        totp_uri: build_totp(config, &secret, None, data.user_property("email")?, ctx)?
+        totp_uri: build_totp(config, &secret, None, &data.user_property("email")?, ctx)?
             .with_default_period()
             .get_url()?,
     })
@@ -513,7 +511,7 @@ pub(super) async fn generate_backup_codes_core(
 
     verify_user_password(
         ctx,
-        data.user_property("id")?,
+        &data.user_property("id")?,
         body.password.as_deref(),
         config
             .backup_code_options
@@ -522,7 +520,7 @@ pub(super) async fn generate_backup_codes_core(
         true,
     )
     .await?;
-    let two_factor = load_two_factor_record(data.user_property("id")?, ctx).await?;
+    let two_factor = load_two_factor_record(&data.user_property("id")?, ctx).await?;
 
     let backup_codes = config.backup_code_options.generate();
     let encrypted = config

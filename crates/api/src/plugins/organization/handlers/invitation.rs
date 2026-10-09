@@ -1,3 +1,4 @@
+use better_auth_core::AuthRecordFields;
 use better_auth_core::entity::{AuthInvitation, AuthMember, AuthOrganization, AuthUser};
 use better_auth_core::error::{AuthError, AuthResult};
 use better_auth_core::plugin::AuthContext;
@@ -54,7 +55,7 @@ pub(crate) async fn invite_member_core(
 
     let member = ctx
         .database
-        .get_member_with_user_value(&org_value, session.user_property("id")?)
+        .get_member_with_user_value(&org_value, &session.user_property("id")?)
         .await?
         .map(|joined| joined.member)
         .ok_or_else(|| AuthError::bad_request("Member not found"))?;
@@ -290,9 +291,7 @@ pub(crate) async fn invite_member_core(
             organization_id: better_auth_core::SchemaValue::from_field(org_id),
             email: email.clone(),
             role: normalized_roles(&role_input),
-            inviter_id: better_auth_core::SchemaValue::from_field(
-                session.user_property("id")?.clone(),
-            ),
+            inviter_id: better_auth_core::SchemaValue::from_field(session.user_property("id")?),
             expires_at: body
                 .additional_fields
                 .get("expiresAt")
@@ -314,7 +313,7 @@ pub(crate) async fn invite_member_core(
         }
         let expires_at = config.invitation_expires_at(chrono::Utc::now())?;
         ctx.database
-            .create_invitation(draft.into_create(expires_at, session.user_property("id")?)?)
+            .create_invitation(draft.into_create(expires_at, &session.user_property("id")?)?)
             .await?
     };
     let invitation = crate::plugins::organization::fields::invitation_snapshot(invitation, config);
@@ -373,7 +372,7 @@ pub(crate) async fn get_invitation_core(
 
     let recipient = invitation.email().typed()?;
     if recipient.to_lowercase()
-        != crate::plugins::helpers::user_email_field(session.user_property("email")?)?
+        != crate::plugins::helpers::user_email_field(&session.user_property("email")?)?
             .to_lowercase()
     {
         return Err(AuthError::forbidden(
@@ -429,7 +428,7 @@ pub(crate) async fn list_invitations_core(
 
     let _ = ctx
         .database
-        .get_member_with_user_value(&org_id, session.user_property("id")?)
+        .get_member_with_user_value(&org_id, &session.user_property("id")?)
         .await?
         .ok_or_else(|| AuthError::forbidden("Not a member of this organization"))?;
 
@@ -457,7 +456,7 @@ pub(crate) async fn list_user_invitations_core(
         .transpose()?
         .filter(|email| email.is_truthy())
     {
-        Some(email) => email.clone(),
+        Some(email) => email,
         None => email
             .map(better_auth_core::FieldValue::from)
             .unwrap_or_default(),
@@ -504,7 +503,7 @@ pub(crate) async fn accept_invitation_core(
     }
 
     let recipient = crate::plugins::helpers::user_email_field(&invitation.email().field_value())?;
-    let user_email = crate::plugins::helpers::user_email_field(session.user_property("email")?)?;
+    let user_email = crate::plugins::helpers::user_email_field(&session.user_property("email")?)?;
 
     if recipient.to_lowercase() != user_email.to_lowercase() {
         return Err(AuthError::forbidden(
@@ -563,7 +562,7 @@ pub(crate) async fn accept_invitation_core(
         .database
         .accept_invitation_with_teams_values(
             &body.invitation_id.as_str().into(),
-            session.user_property("id")?,
+            &session.user_property("id")?,
             Some(&session.session.token.field_value()),
             config.teams.enabled,
             better_auth_core::store::TeamMemberLimits::Resolver(&resolver),
@@ -603,7 +602,7 @@ pub(crate) async fn reject_invitation_core(
         .ok_or_else(|| AuthError::bad_request("Invitation not found!"))?;
 
     let recipient = crate::plugins::helpers::user_email_field(&invitation.email().field_value())?;
-    let user_email = crate::plugins::helpers::user_email_field(session.user_property("email")?)?;
+    let user_email = crate::plugins::helpers::user_email_field(&session.user_property("email")?)?;
 
     if recipient.to_lowercase() != user_email.to_lowercase() {
         return Err(AuthError::forbidden(
@@ -668,7 +667,7 @@ pub(crate) async fn cancel_invitation_core(
         .database
         .get_member_with_user_value(
             &invitation.organization_id().field_value(),
-            session.user_property("id")?,
+            &session.user_property("id")?,
         )
         .await?
         .map(|joined| joined.member)
@@ -731,7 +730,10 @@ pub async fn handle_invite_member(
     let session = require_native_session(req, ctx).await?;
     let body: InviteMemberRequest = super::super::request::read(req, &config.schema)?;
     let invitation = invite_member_core(&body, &session, config, ctx, Some(req)).await?;
-    AuthResponse::json(None, &invitation)
+    Ok(AuthResponse::native(
+        None,
+        invitation.field_values()?.into(),
+    ))
 }
 
 pub async fn handle_get_invitation(

@@ -82,7 +82,11 @@ impl AfterEndpointHook<StatelessSchema> for Probe {
         self.record("after", request);
         if response.status == 200 {
             let result = response.body.field_value()?;
-            let mut user = result.model_property("user")?.as_object().unwrap().clone();
+            let mut user = result
+                .model_property("user")?
+                .as_object()
+                .unwrap()
+                .snapshot_fields()?;
             let created_at = user.get("createdAt").unwrap();
             assert!(matches!(created_at, FieldValue::Date(_)));
             *self.created_at.lock().unwrap() = Some(created_at.clone());

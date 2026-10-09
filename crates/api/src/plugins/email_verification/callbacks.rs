@@ -21,7 +21,7 @@ impl VerificationEmail {
         let fields = self.user.as_object().ok_or_else(|| {
             better_auth_core::AuthError::internal("Verification User must be an object")
         })?;
-        UserView::try_from(fields.clone())
+        UserView::try_from(fields.snapshot_fields()?)
     }
 }
 type Sender<S> = dyn Fn(&VerificationEmail, &EndpointContext<'_, S>) -> AuthResult<Option<BackgroundFuture>>

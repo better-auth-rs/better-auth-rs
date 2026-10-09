@@ -268,7 +268,7 @@ mod tests {
         let expected = crate::FieldValue::parse_json(input)?;
         assert!(parse_date_constructor("2100-01-01T00:00Z").is_some());
         assert_eq!(
-            crate::utils::json::safe_parse_field(&input.into()),
+            crate::utils::json::safe_parse_field(&input.into())?,
             expected
         );
         assert_eq!(

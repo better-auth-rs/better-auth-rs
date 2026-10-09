@@ -109,7 +109,7 @@ async fn two_factor_cookie_issuance_preserves_pinned_fractional_lifetimes() {
             .plugin(EmailPasswordPlugin::new())
             .plugin(TwoFactorPlugin::with_config(factor_config).callbacks(
                 TwoFactorCallbacks::<BundledSchema>::default().send(move |user, otp, _| {
-                    let user = user.as_object().unwrap();
+                    let user = user.as_object().unwrap().snapshot_fields()?;
                     output.lock().unwrap().push((
                         user["id"].as_str().unwrap().to_owned(),
                         user["email"].as_str().unwrap().to_owned(),

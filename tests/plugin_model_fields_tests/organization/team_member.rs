@@ -9,6 +9,8 @@ use better_auth_seaorm::sea_orm::{
 };
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
+#[path = "team_default_callback.rs"]
+mod default_callback;
 #[path = "team_member_details.rs"]
 mod details;
 #[path = "team_member_duplicate_ids.rs"]
@@ -23,6 +25,8 @@ mod recovery;
 mod registration;
 #[path = "team_member_removal.rs"]
 mod removal;
+#[path = "team_route_projection.rs"]
+mod route_projection;
 
 fn date(offset: i64) -> FieldDate {
     FieldDate::from_milliseconds(1_893_456_000_000.0 + offset as f64 * 1_000.0)

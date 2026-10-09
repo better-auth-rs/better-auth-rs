@@ -406,7 +406,7 @@ impl PhoneNumberPlugin {
             }
             ctx.database
                 .update_user_by_id_value(
-                    session.user_property("id")?,
+                    &session.user_property("id")?,
                     UpdateUser {
                         phone_number: Some(Some(phone.to_owned())),
                         phone_number_verified: Some(true),

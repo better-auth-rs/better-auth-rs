@@ -25,7 +25,9 @@ pub mod entity;
 pub mod error;
 mod error_codes;
 pub mod field_value;
-pub use field_value::{FieldDate, FieldFunction, FieldMap, FieldValue, StructuredCloneContext};
+pub use field_value::{
+    FieldDate, FieldFunction, FieldMap, FieldObject, FieldValue, StructuredCloneContext,
+};
 pub mod hooks;
 pub mod id;
 pub mod middleware;

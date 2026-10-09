@@ -470,12 +470,15 @@ async fn exercise_endpoint_verifier(
                     context
                         .session
                         .as_ref()
-                        .and_then(|data| data.user_field("id").as_str()),
+                        .map(|data| data.user_field("id"))
+                        .transpose()?
+                        .as_ref()
+                        .and_then(|id| id.as_str()),
                     owner_id.as_deref()
                 );
                 if let Some(data) = &context.session {
                     let session = &data.session;
-                    assert_eq!(session.user_id.field_value(), *data.user_field("id"));
+                    assert_eq!(session.user_id.field_value(), data.user_field("id")?);
                     assert!(
                         context
                             .auth

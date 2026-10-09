@@ -79,7 +79,7 @@ impl OrganizationPlugin {
             .add_member_value(input.into_field_values().into())
             .await?;
         match response {
-            FieldValue::Object(fields) => Member::from_field_values((*fields).clone()),
+            FieldValue::Object(fields) => Member::from_field_values(fields.snapshot_fields()?),
             _ => Err(AuthError::internal(
                 "Native addMember did not return a member object",
             )),

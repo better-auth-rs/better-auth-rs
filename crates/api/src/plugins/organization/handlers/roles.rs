@@ -22,47 +22,27 @@ type Permissions = HashMap<String, Vec<String>>;
 
 // Preserve request order because upstream returns missingPermissions in that order.
 #[derive(Clone)]
-struct RequestedPermissions(FieldMap);
+struct RequestedPermissions(better_auth_core::FieldObject);
 
 impl RequestedPermissions {
-    fn dynamic(value: &FieldValue) -> Self {
-        let units = match value {
-            FieldValue::String(value) => Some(value.encode_utf16().collect::<Vec<_>>()),
-            FieldValue::Utf16String(value) => Some(value.as_utf16().to_vec()),
-            _ => None,
-        };
-        Self(match value {
-            FieldValue::Object(fields) => (**fields).clone(),
-            FieldValue::Array(values) => values
-                .iter()
-                .enumerate()
-                .map(|(index, value)| (index.to_string(), value.clone()))
-                .collect(),
-            _ => units
-                .into_iter()
-                .flatten()
-                .enumerate()
-                .map(|(index, unit)| {
-                    (
-                        index.to_string(),
-                        better_auth_core::Utf16String::from_units(vec![unit]).into(),
-                    )
-                })
-                .collect(),
-        })
+    fn dynamic(value: &FieldValue) -> AuthResult<Self> {
+        Ok(Self(match value {
+            FieldValue::Object(fields) => fields.clone(),
+            _ => value.enumerable_fields()?.into(),
+        }))
     }
 }
 
 impl SchemaField for RequestedPermissions {
     fn from_field(value: FieldValue) -> Result<Self, FieldValue> {
         match value {
-            FieldValue::Object(fields) => Ok(Self((*fields).clone())),
+            FieldValue::Object(fields) => Ok(Self(fields)),
             value => Err(value),
         }
     }
 
     fn into_field(self) -> FieldValue {
-        self.0.into()
+        FieldValue::Object(self.0)
     }
 }
 
@@ -135,7 +115,7 @@ impl FromFieldMap for CreateRole {
         let additional_fields = match fields.remove("additionalFields") {
             None | Some(FieldValue::Undefined) => OptionalField::Missing,
             Some(FieldValue::Null) => OptionalField::Null,
-            Some(FieldValue::Object(fields)) => OptionalField::Value((*fields).clone()),
+            Some(FieldValue::Object(fields)) => OptionalField::Value(fields.snapshot_fields()?),
             Some(_) => {
                 return Err(AuthError::internal(
                     "Validated additionalFields is not an object",
@@ -296,7 +276,7 @@ async fn authorize_member(
         })?;
     let member = ctx
         .database
-        .get_member_value(&organization_id, session.user_property("id")?)
+        .get_member_value(&organization_id, &session.user_property("id")?)
         .await?
         .ok_or_else(|| AuthError::forbidden("You are not a member of this organization"))?;
     let permission = if action == "list" { "read" } else { action };
@@ -362,8 +342,8 @@ async fn validate_permissions(
     ctx: &AuthContext<impl AuthSchema>,
 ) -> AuthResult<Option<AuthResponse>> {
     let ac = require_ac(config)?;
+    let permission = permission.0.snapshot_fields()?;
     if permission
-        .0
         .iter()
         .any(|(resource, _)| !ac.contains_key(resource))
     {
@@ -374,7 +354,7 @@ async fn validate_permissions(
         });
     }
     let mut missing = Vec::new();
-    for (resource, actions) in &permission.0 {
+    for (resource, actions) in &permission {
         let actions = match actions {
             FieldValue::Array(actions) => actions.to_vec(),
             FieldValue::String(actions) => actions
@@ -615,9 +595,12 @@ pub async fn handle_role_request(
                 requested.clone().map(SchemaField::into_field)
             }
             .filter(FieldValue::is_truthy);
-            let requested = requested.unwrap_or_else(|| {
-                RequestedPermissions::dynamic(permission.as_ref().unwrap_or(&FieldValue::Null))
-            });
+            let requested = match requested {
+                Some(requested) => requested,
+                None => {
+                    RequestedPermissions::dynamic(permission.as_ref().unwrap_or(&FieldValue::Null))?
+                }
+            };
             let _ = require_ac(config)?;
             let (organization_id, member_role) = authorize_member(
                 &session,
@@ -808,16 +791,16 @@ mod tests {
         let FieldValue::Object(body) = response.body.field_value().unwrap() else {
             panic!("Expected native role response");
         };
-        let Some(FieldValue::Object(returned)) = body.get("roleData") else {
+        let Some(FieldValue::Object(returned)) = body.get("roleData").unwrap() else {
             panic!("Expected native role data");
         };
-        assert_eq!(returned.get("id"), Some(&FieldValue::Number(7.0)));
+        assert_eq!(returned.get("id").unwrap(), Some(FieldValue::Number(7.0)));
         assert!(matches!(
-            returned.get("createdAt"),
+            returned.get("createdAt").unwrap(),
             Some(FieldValue::Date(_))
         ));
         assert!(matches!(
-            returned.get("permission"),
+            returned.get("permission").unwrap(),
             Some(FieldValue::Object(_))
         ));
         assert!(

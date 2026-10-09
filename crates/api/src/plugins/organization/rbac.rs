@@ -264,6 +264,7 @@ fn decode_statements(
         .as_object()
         .ok_or_else(|| better_auth_core::AuthError::internal("Role permission is not an object"))?;
     fields
+        .snapshot_fields()?
         .iter()
         .map(|(resource, actions)| Ok((resource.clone(), actions.decode()?)))
         .collect()

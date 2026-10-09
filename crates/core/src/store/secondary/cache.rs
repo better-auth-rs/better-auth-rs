@@ -3,10 +3,11 @@ use crate::{AuthError, AuthResult, FieldDate, FieldMap, FieldValue, FromFieldMap
 #[cfg(test)]
 mod tests;
 
-pub(super) fn decode(value: Option<FieldValue>) -> Option<FieldValue> {
+pub(super) fn decode(value: Option<FieldValue>) -> AuthResult<Option<FieldValue>> {
     value
         .map(|value| crate::utils::json::safe_parse_field(&value))
-        .filter(FieldValue::is_truthy)
+        .transpose()
+        .map(|value| value.filter(FieldValue::is_truthy))
 }
 
 pub(super) fn parse(value: Option<FieldValue>) -> AuthResult<Option<FieldValue>> {
@@ -24,8 +25,8 @@ pub(super) fn parse(value: Option<FieldValue>) -> AuthResult<Option<FieldValue>>
 pub(super) fn object(value: &FieldValue) -> AuthResult<FieldMap> {
     value
         .as_object()
-        .cloned()
-        .ok_or_else(|| AuthError::internal("Secondary storage record must be an object"))
+        .ok_or_else(|| AuthError::internal("Secondary storage record must be an object"))?
+        .snapshot_fields()
 }
 
 pub(super) fn stringify(value: &FieldValue) -> AuthResult<String> {

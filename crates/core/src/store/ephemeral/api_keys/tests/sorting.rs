@@ -258,8 +258,8 @@ fn number_sort_rows(value: &Value) -> AuthResult<Vec<FieldMap>> {
         .map(|value| {
             contract::field(value)?
                 .as_object()
-                .cloned()
-                .ok_or_else(|| AuthError::internal("Expected a number sort record"))
+                .ok_or_else(|| AuthError::internal("Expected a number sort record"))?
+                .snapshot_fields()
         })
         .collect()
 }

@@ -83,7 +83,7 @@ pub trait AuthPlugin<S: AuthSchema>: Send + Sync + std::any::Any {
 
 ### Register adapter field policies
 
-Call `AuthInitContext::register_model_fields(EntityRole, UserConfig)` during `on_init` to register fields for User, Session, Account, or Verification. Use `better_auth_core::store::schema::EntityRole`. Later plugins replace earlier declarations for the same field. Application declarations retain precedence at the adapter; plugin declarations retain precedence in existing endpoint parsers. `register_user_fields` remains available for user-only registration.
+Call `AuthInitContext::register_model_fields(EntityRole, UserConfig)` during `on_init` to register fields for any native `EntityRole`. Registration uses the shared declaration map; each adapter still owns model operations and physical storage. Use `better_auth_core::store::schema::EntityRole`. Later plugins replace earlier declarations for the same field. Application declarations retain precedence at the adapter; plugin declarations retain precedence in existing endpoint parsers. `register_user_fields` remains available for user-only registration.
 
 Use `register_model_schema(role, model_name, fields)` when a native declaration also supplies a model name. Omitted or empty names reset the name to the logical model name. Field-only registration resets an earlier name override to the adapter's native table mapping. Native and custom model aliases resolve in one declaration order; logical names always take precedence. Replacing a declaration preserves its first position. Runtime registration does not rename physical tables or create migrations.
 

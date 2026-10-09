@@ -173,6 +173,9 @@ impl<T: SchemaField> SchemaField for &T {
 
 impl SchemaField for serde_json::Value {
     fn from_field(value: FieldValue) -> Result<Self, FieldValue> {
+        if value.contains_live_object() {
+            return Err(value);
+        }
         match value.json() {
             Ok(Some(json)) if FieldValue::from(json.clone()) == value => Ok(json),
             _ => Err(value),
@@ -194,7 +197,8 @@ mod json_tests {
             "{\"values\":[-0.0,1.7976931348623157e308,-1.7976931348623157e308],\"nested\":{\"value\":false}}",
         )?;
         let value = FieldValue::from(source.clone());
-        let values = value.as_object().unwrap()["values"].as_array().unwrap();
+        let fields = value.as_object().unwrap().snapshot_fields()?;
+        let values = fields["values"].as_array().unwrap();
         assert!(values[0].as_f64().unwrap().is_sign_negative());
         assert_eq!(values[1].as_f64(), Some(f64::MAX));
         assert_eq!(values[2].as_f64(), Some(-f64::MAX));

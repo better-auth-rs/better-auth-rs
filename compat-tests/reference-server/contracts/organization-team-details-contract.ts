@@ -77,16 +77,15 @@ for (const backend of ["memory", "sqlite"] as const) {
             output(value) { events.push(["team.organizationId", "output", value]); return "visible-organization"; },
           } },
         });
-        for (const [teamId, organizationId] of [["missing-team", "organization"], ["team-a", "wrong-organization"]]) {
+        for (const [teamId, organizationId] of [["missing-team", "organization"], ["team-a", "wrong-organization"], ["team-a", " organization "]]) {
           expect(await reader.findTeamById({ teamId, organizationId, includeTeamMembers: true })).toBeNull();
-          expect(events.splice(0)).toStrictEqual([["team.organizationId", "input", organizationId]]);
+          expect(events.splice(0)).toStrictEqual([]);
         }
-        for (const organizationId of [" organization ", undefined, ""]) {
+        for (const organizationId of ["organization", undefined, ""]) {
           expect(await reader.findTeamById({ teamId: "team-a", organizationId, includeTeamMembers: false })).toStrictEqual({
             ...publicTeam("team-a", "Team A"), organizationId: "visible-organization",
           });
           expect(events.splice(0)).toStrictEqual([
-            ...(organizationId === " organization " ? [["team.organizationId", "input", organizationId]] : []),
             ["team.name", "output", "Team A"], ["team.organizationId", "output", "organization"],
           ]);
         }

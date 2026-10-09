@@ -715,8 +715,7 @@ async fn resolve_two_factor_state<S: better_auth_core::AuthSchema>(
         Ok(data) => {
             let key = format!(
                 "{}!{}",
-                SchemaValue::<String>::from_field(data.user_property("id")?.clone())
-                    .display_string()?,
+                SchemaValue::<String>::from_field(data.user_property("id")?).display_string()?,
                 data.session.id().display_string()?
             );
             return Ok(ResolvedTwoFactorState::Session {
@@ -770,10 +769,10 @@ async fn verify_existing_session_factor(
     complete_enrollment: impl std::future::Future<Output = AuthResult<()>>,
 ) -> AuthResult<(SessionTokenResponse, Vec<String>)> {
     if enrollment.is_some() && !data.user_property("twoFactorEnabled")?.is_truthy() {
-        let updated_user = update_two_factor_user(data.user_property("id")?, true, ctx).await?;
+        let updated_user = update_two_factor_user(&data.user_property("id")?, true, ctx).await?;
         let issued = issue_factor_session(
             req,
-            SchemaValue::from_field(data.user_property("id")?.clone()),
+            SchemaValue::from_field(data.user_property("id")?),
             updated_user
                 .clone()
                 .map_or(FieldValue::Null, |user| FieldMap::from(user).into()),
@@ -936,7 +935,7 @@ impl ResolvedTwoFactorState {
 
     fn user_id(&self) -> AuthResult<FieldValue> {
         match self {
-            Self::Session { data, .. } => Ok(data.user_property("id")?.clone()),
+            Self::Session { data, .. } => data.user_property("id"),
             Self::Pending(pending) => Ok(pending.user.id.field_value()),
         }
     }

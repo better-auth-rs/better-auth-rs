@@ -68,9 +68,9 @@ pub fn parse_native_json(value: &FieldValue) -> AuthResult<FieldValue> {
 }
 
 /// Decode permissions and legacy metadata with upstream safeJSONParse behavior.
-pub fn safe_parse_field(value: &FieldValue) -> FieldValue {
+pub fn safe_parse_field(value: &FieldValue) -> AuthResult<FieldValue> {
     let parsed = match value {
-        FieldValue::Undefined | FieldValue::Null => return FieldValue::Null,
+        FieldValue::Undefined | FieldValue::Null => return Ok(FieldValue::Null),
         FieldValue::String(_) | FieldValue::Utf16String(_) => parse_native_json(value),
         value => Ok(value.clone()),
     };
@@ -83,27 +83,48 @@ pub fn safe_parse_field(value: &FieldValue) -> FieldValue {
                 "Error parsing JSON",
                 &[crate::observability::LogArgument::Error(&error)],
             );
-            FieldValue::Null
+            Ok(FieldValue::Null)
         }
     }
 }
 
-fn revive(value: FieldValue, parse_date: &impl Fn(&str) -> Option<FieldDate>) -> FieldValue {
-    match value {
+fn revive(
+    value: FieldValue,
+    parse_date: &impl Fn(&str) -> Option<FieldDate>,
+) -> AuthResult<FieldValue> {
+    revive_with_active(value, parse_date, &mut std::collections::HashSet::new())
+}
+
+fn revive_with_active(
+    value: FieldValue,
+    parse_date: &impl Fn(&str) -> Option<FieldDate>,
+    active: &mut std::collections::HashSet<crate::field_value::ObjectIdentity>,
+) -> AuthResult<FieldValue> {
+    Ok(match value {
         FieldValue::String(text) => parse_date(&text).map_or_else(|| text.into(), Into::into),
         FieldValue::Array(values) => values
             .iter()
             .cloned()
-            .map(|value| revive(value, parse_date))
-            .collect::<Vec<_>>()
+            .map(|value| revive_with_active(value, parse_date, active))
+            .collect::<AuthResult<Vec<_>>>()?
             .into(),
-        FieldValue::Object(values) => values
-            .iter()
-            .map(|(key, value)| (key.clone(), revive(value.clone(), parse_date)))
-            .collect::<FieldMap>()
-            .into(),
+        FieldValue::Object(values) => {
+            let identity = values.identity();
+            if !active.insert(identity) {
+                return Err(AuthError::internal(
+                    "JSON date revival of cyclic field objects is not supported",
+                ));
+            }
+            let fields = values
+                .snapshot_fields()?
+                .into_iter()
+                .map(|(key, value)| Ok((key, revive_with_active(value, parse_date, active)?)))
+                .collect::<AuthResult<FieldMap>>()?;
+            let _ = active.remove(&identity);
+            fields.into()
+        }
         value => value,
-    }
+    })
 }
 
 #[expect(
@@ -153,7 +174,7 @@ pub fn parse_client_json(value: FieldValue) -> AuthResult<FieldValue> {
             "[better-json] Potential prototype pollution attempt detected",
         ));
     }
-    Ok(revive(FieldValue::parse_json(text)?, &client_date))
+    revive(FieldValue::parse_json(text)?, &client_date)
 }
 
 fn client_date(text: &str) -> Option<FieldDate> {
@@ -206,12 +227,13 @@ mod tests {
         .into();
         for (parsed, revived) in [
             (parse_native_json(&text)?, false),
-            (safe_parse_field(&text), true),
+            (safe_parse_field(&text)?, true),
             (parse_client_json(text.clone())?, true),
         ] {
             let fields = parsed
                 .as_object()
-                .ok_or_else(|| AuthError::internal("Expected parsed object"))?;
+                .ok_or_else(|| AuthError::internal("Expected parsed object"))?
+                .snapshot_fields()?;
             assert_eq!(fields.get("units"), Some(&expected_units));
             assert!(
                 matches!(fields.get("number"), Some(FieldValue::Number(number)) if number.is_infinite())
@@ -250,7 +272,7 @@ mod tests {
         ] {
             let text = Utf16String::from_units(units).into();
             assert!(parse_native_json(&text).is_err());
-            assert_eq!(safe_parse_field(&text), FieldValue::Null);
+            assert_eq!(safe_parse_field(&text).unwrap(), FieldValue::Null);
             assert!(parse_client_json(text).is_err());
         }
         let text: FieldValue = Utf16String::from_units(
@@ -272,7 +294,7 @@ mod tests {
     #[test]
     fn strict_metadata_and_safe_permissions_keep_distinct_parse_policies() -> AuthResult<()> {
         assert!(parse_client_json("not JSON".into()).is_err());
-        assert_eq!(safe_parse_field(&"not JSON".into()), FieldValue::Null);
+        assert_eq!(safe_parse_field(&"not JSON".into())?, FieldValue::Null);
         assert!(parse_client_json("undefined".into())?.is_undefined());
         assert!(
             matches!(parse_client_json("NaN".into())?, FieldValue::Number(value) if value.is_nan())
@@ -285,10 +307,8 @@ mod tests {
         )]));
         assert!(parse_client_json(object.clone())?.strict_equals(&object));
         assert!(matches!(
-            safe_parse_field(&object)
-                .as_object()
-                .and_then(|map| map.get("a")),
-            Some(FieldValue::Date(_))
+            safe_parse_field(&object)?.model_property("a")?,
+            FieldValue::Date(_)
         ));
         Ok(())
     }
@@ -300,7 +320,8 @@ mod tests {
         let parsed = parse_client_json(text.into())?;
         let fields = parsed
             .as_object()
-            .ok_or_else(|| AuthError::internal("Expected metadata object"))?;
+            .ok_or_else(|| AuthError::internal("Expected metadata object"))?
+            .snapshot_fields()?;
         assert_eq!(
             fields
                 .get("date")
@@ -316,9 +337,7 @@ mod tests {
             matches!(fields.get("number"), Some(FieldValue::Number(value)) if value.is_infinite())
         );
         assert_eq!(
-            raw.as_object()
-                .and_then(|fields| fields.get("date"))
-                .and_then(FieldValue::as_str),
+            raw.model_property("date")?.as_str(),
             Some("0020-02-31T01:00:00.1234+01:00")
         );
         Ok(())

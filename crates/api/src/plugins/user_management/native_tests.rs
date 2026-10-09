@@ -157,7 +157,7 @@ async fn change_email_spreads_raw_users_and_keeps_the_original_callback_session(
             .await?
             .unwrap();
         assert_eq!(response.status, 200);
-        let mut expected = user.enumerable_fields();
+        let mut expected = user.enumerable_fields()?;
         let _ = expected.insert("email".into(), "new@native-user.test".into());
         let expected = FieldValue::from(expected);
         assert_eq!(req.new_session()?.unwrap().user, expected);
@@ -170,7 +170,10 @@ async fn change_email_spreads_raw_users_and_keeps_the_original_callback_session(
             .unwrap();
         if user
             .as_object()
-            .is_some_and(|fields| fields.contains_key("id"))
+            .map(|fields| fields.get("id"))
+            .transpose()?
+            .flatten()
+            .is_some()
         {
             assert_eq!(
                 stored.email.field_value(),
@@ -487,15 +490,16 @@ async fn real_many_user_relationships_reach_change_and_delete_consumers() -> Aut
         );
         assert_eq!(plugin.on_request(&req, &ctx).await?.unwrap().status, 200);
         let published = req.new_session()?.unwrap();
-        assert!(published.user_field("id").is_undefined());
+        assert!(published.user_field("id")?.is_undefined());
         assert_eq!(
-            published.user_field("email"),
-            &FieldValue::from("changed@native-user.test")
+            published.user_field("email")?,
+            FieldValue::from("changed@native-user.test")
         );
         assert_eq!(
-            published.user.as_object().unwrap()["0"]
+            published.user.as_object().unwrap().snapshot_fields()?["0"]
                 .as_object()
-                .unwrap()["id"],
+                .unwrap()
+                .snapshot_fields()?["id"],
             user.id.field_value()
         );
         let req = request("/delete-user", json!({}));
@@ -506,7 +510,10 @@ async fn real_many_user_relationships_reach_change_and_delete_consumers() -> Aut
         assert_eq!(trace[1].0, "after");
         assert_eq!(trace[0].1, trace[1].1);
         assert_eq!(
-            trace[0].1.as_object().unwrap()["0"].as_object().unwrap()["id"],
+            trace[0].1.as_object().unwrap().snapshot_fields()?["0"]
+                .as_object()
+                .unwrap()
+                .snapshot_fields()?["id"],
             user.id.field_value()
         );
         assert_eq!(

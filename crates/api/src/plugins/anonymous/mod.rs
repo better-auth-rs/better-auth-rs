@@ -108,9 +108,8 @@ impl AnonymousPlugin {
             )
             .await?
             .data;
-        if previous
-            .as_ref()
-            .is_some_and(|data| data.user_field("isAnonymous").is_truthy())
+        if let Some(data) = &previous
+            && data.user_field("isAnonymous")?.is_truthy()
         {
             return Err(error(
                 400,
@@ -323,50 +322,49 @@ impl AnonymousPlugin {
             )
             .await?
             .data;
-        let previous =
-            match previous.filter(|session| session.user_field("isAnonymous").is_truthy()) {
-                Some(previous) => Some(previous),
-                None => {
-                    if let Some(user_id) = req
-                        .server_context("anonymousUserId")?
-                        .and_then(|value| value.as_str().map(str::to_owned))
+        let previous = match previous {
+            Some(previous) if previous.user_field("isAnonymous")?.is_truthy() => Some(previous),
+            _ => {
+                if let Some(user_id) = req
+                    .server_context("anonymousUserId")?
+                    .and_then(|value| value.as_str().map(str::to_owned))
+                {
+                    if let Some(user) = ctx
+                        .database
+                        .get_user_by_id(&user_id)
+                        .await?
+                        .filter(|user| user.is_anonymous().field_value().is_truthy())
                     {
-                        if let Some(user) = ctx
+                        let mut session = None;
+                        for candidate in ctx
                             .database
-                            .get_user_by_id(&user_id)
+                            .get_user_sessions_value(&user.id.field_value())
                             .await?
-                            .filter(|user| user.is_anonymous().field_value().is_truthy())
                         {
-                            let mut session = None;
-                            for candidate in ctx
-                                .database
-                                .get_user_sessions_value(&user.id.field_value())
-                                .await?
-                            {
-                                if candidate.expires_at().is_after(chrono::Utc::now())? {
-                                    session = Some(candidate);
-                                    break;
-                                }
+                            if candidate.expires_at().is_after(chrono::Utc::now())? {
+                                session = Some(candidate);
+                                break;
                             }
-                            if let Some(session) = session {
-                                Some(better_auth_core::session::NativeSessionData {
-                                    user: better_auth_core::FieldMap::from(
-                                        ctx.internal_user_view(&user).await?,
-                                    )
-                                    .into(),
-                                    session,
-                                })
-                            } else {
-                                None
-                            }
+                        }
+                        if let Some(session) = session {
+                            Some(better_auth_core::session::NativeSessionData {
+                                user: better_auth_core::FieldMap::from(
+                                    ctx.internal_user_view(&user).await?,
+                                )
+                                .into(),
+                                session,
+                            })
                         } else {
                             None
                         }
                     } else {
                         None
                     }
+                } else {
+                    None
                 }
-            };
+            }
+        };
         let Some(mut previous) = previous else {
             return Ok(());
         };
@@ -416,14 +414,14 @@ impl AnonymousPlugin {
         }
         if !self.disable_delete_anonymous_user
             && !previous
-                .user_field("id")
-                .strict_equals(new_session.user_field("id"))
-            && !new_session.user_field("isAnonymous").is_truthy()
+                .user_field("id")?
+                .strict_equals(&new_session.user_field("id")?)
+            && !new_session.user_field("isAnonymous")?.is_truthy()
         {
             // Upstream keeps a successful sign-in when post-link cleanup fails.
             if let Err(cause) = ctx
                 .database
-                .delete_user_value(previous.user_field("id"))
+                .delete_user_value(&previous.user_field("id")?)
                 .await
             {
                 better_auth_core::observability::logger::current().error(
@@ -475,8 +473,9 @@ better_auth_core::impl_auth_plugin!(AnonymousPlugin, "anonymous";
                     let session = ctx.session_manager()
                         .resolve_native(&session_request, better_auth_core::session::SessionRead::Cached)
                         .await?.data;
-                    if let Some(session) = session.filter(|session| session.user_field("isAnonymous").is_truthy()) {
-                        req.set_server_context("anonymousUserId", session.user_field("id").clone())?;
+                    if let Some(session) = session
+                        && session.user_field("isAnonymous")?.is_truthy() {
+                        req.set_server_context("anonymousUserId", session.user_field("id")?)?;
                     }
                     Ok(None)
                 },

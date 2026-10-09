@@ -65,7 +65,8 @@ impl BeforeEndpointHook<StatelessSchema> for Hooks {
         let body = request.input_field_value()?;
         let fields = body
             .as_object()
-            .ok_or_else(|| AuthError::internal("Expected native member input"))?;
+            .ok_or_else(|| AuthError::internal("Expected native member input"))?
+            .snapshot_fields()?;
         {
             let mut trace = self.trace()?;
             trace.phases.push("before");
@@ -136,8 +137,9 @@ impl AfterEndpointHook<StatelessSchema> for Hooks {
         let body = response.body.field_value()?;
         let fields = body
             .as_object()
-            .ok_or_else(|| AuthError::internal("Expected native member response"))?;
-        let mut member = Member::from_field_values(fields.clone())?;
+            .ok_or_else(|| AuthError::internal("Expected native member response"))?
+            .snapshot_fields()?;
+        let mut member = Member::from_field_values(fields)?;
         {
             let mut trace = self.trace()?;
             trace.phases.push("after");
@@ -267,16 +269,37 @@ impl Fixture {
             &self.input.additional_fields,
         );
         assert_native_fields(
-            trace.before_scope.as_ref().unwrap().as_object().unwrap(),
+            &trace
+                .before_scope
+                .as_ref()
+                .unwrap()
+                .as_object()
+                .unwrap()
+                .snapshot_fields()
+                .unwrap(),
             &self.input.additional_fields,
         );
         if !matches!(self.hooks.mode, Mode::ReplaceBody) {
             assert_native_fields(
-                trace.member_scope.as_ref().unwrap().as_object().unwrap(),
+                &trace
+                    .member_scope
+                    .as_ref()
+                    .unwrap()
+                    .as_object()
+                    .unwrap()
+                    .snapshot_fields()
+                    .unwrap(),
                 &self.input.additional_fields,
             );
             assert_native_fields(
-                trace.after_scope.as_ref().unwrap().as_object().unwrap(),
+                &trace
+                    .after_scope
+                    .as_ref()
+                    .unwrap()
+                    .as_object()
+                    .unwrap()
+                    .snapshot_fields()
+                    .unwrap(),
                 &self.input.additional_fields,
             );
         }
@@ -344,6 +367,8 @@ async fn replace_body_discards_original_native_member_input() {
                 .as_object()
                 .unwrap()
                 .get("marker")
+                .unwrap()
+                .as_ref()
                 .and_then(FieldValue::as_str),
             Some(marker)
         );
