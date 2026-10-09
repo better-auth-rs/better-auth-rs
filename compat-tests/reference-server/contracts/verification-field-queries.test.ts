@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
+import { createHash } from "node:crypto";
 import { betterAuth, type BetterAuthOptions } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { getMigrations } from "better-auth/db/migration";
@@ -29,7 +30,7 @@ async function setup(backend: "memory" | "sqlite", fields: Declaration, generate
   }
   const context = await betterAuth(options).$context;
   return {
-    ...context,
+    ...context, options,
     raw: () => structuredClone(database ? database.query("SELECT * FROM verification ORDER BY id").all() as Fields[] : memory.verification),
     close: () => database?.close(),
   };
@@ -250,3 +251,175 @@ test("memory verification latest and consume place null below a negative number"
     ]);
   } finally { context.close(); }
 });
+
+const reservationId = (identifier: string) => createHash("sha256").update(`reserve:${identifier}`).digest("base64url");
+const reservationDates: Declaration = {
+  createdAt: { type: "date", transform: { input() { return date(0); } } },
+  updatedAt: { type: "date", transform: { input() { return date(0); } } },
+};
+const reservationStorage = (backend: "memory" | "sqlite", value: Fields) => backend === "memory" ? value : {
+  ...value,
+  createdAt: (value.createdAt as Date).toISOString(),
+  updatedAt: (value.updatedAt as Date).toISOString(),
+  expiresAt: (value.expiresAt as Date).toISOString(),
+};
+
+for (const backend of ["memory", "sqlite"] as const) {
+  for (const serial of [false, true]) {
+    test(`${backend} Verification reservation ${serial ? "Serial" : "default"} uses the adapter primary-key behavior`, async () => {
+      const events: unknown[] = [];
+      const context = await setup(backend, {
+        ...reservationDates,
+        value: { type: "string", transform: {
+          input(value) { events.push(["input", value]); return value; },
+          output(value) { events.push(["output", value]); return value; },
+        } },
+      }, serial ? "serial" : undefined, serial);
+      try {
+        const reserve = (value: string) => context.internalAdapter.reserveVerificationValue({ identifier: "subject", value, expiresAt: date(100) });
+        const duplicate = backend === "sqlite" && !serial;
+        expect([await reserve("first"), await reserve("second")]).toStrictEqual([true, !duplicate]);
+        expect(events).toStrictEqual([
+          ["input", "first"], ["output", "first"],
+          ["input", "second"], ["output", duplicate ? "first" : "second"],
+        ]);
+        const first = { ...values(reservationId("subject"), "subject", "first"), ...(serial ? { id: 1 } : {}) };
+        const second = { ...values(reservationId("subject"), "subject", "second"), ...(serial ? { id: 2 } : {}) };
+        expect(context.raw()).toStrictEqual([
+          reservationStorage(backend, first),
+          ...(!duplicate ? [reservationStorage(backend, second)] : []),
+        ]);
+      } finally { context.close(); }
+    });
+  }
+
+  for (const existing of [false, true]) {
+    test(`${backend} Verification reservation input failure ${existing ? "finds the original primary key" : "preserves the original error"}`, async () => {
+      const events: unknown[] = [];
+      const failure = new TypeError("verification-reservation-input-rejected");
+      let enabled = false;
+      const context = await setup(backend, {
+        ...reservationDates,
+        value: { type: "string", transform: {
+          input(value) {
+            if (enabled) { events.push(["input", value]); throw failure; }
+            return value;
+          },
+          output(value) { if (enabled) events.push(["output", value]); return value; },
+        } },
+      });
+      try {
+        const retained = values(reservationId("subject"), "different-identifier", "existing");
+        if (existing) expect(await context.adapter.create({ model: "verification", data: retained, forceAllowId: true })).toStrictEqual(retained);
+        enabled = true;
+        let caught: unknown;
+        let result: unknown;
+        try {
+          result = await context.internalAdapter.reserveVerificationValue({ identifier: "subject", value: "before", expiresAt: date(100) });
+        } catch (error) { caught = error; }
+        expect(result).toBe(existing ? false : undefined);
+        expect(caught).toBe(existing ? undefined : failure);
+        expect(events).toStrictEqual([["input", "before"], ...(existing ? [["output", "existing"]] : [])]);
+        expect(context.raw()).toStrictEqual(existing ? [reservationStorage(backend, retained)] : []);
+      } finally { context.close(); }
+    });
+  }
+
+  test(`${backend} Verification reservation constructs its timestamps and ignores caller additional fields`, async () => {
+    const events: unknown[] = [];
+    const observedDates: Date[] = [];
+    const captureDate = (phase: string, value: unknown) => {
+      expect(value).toBeInstanceOf(Date);
+      observedDates.push(value as Date);
+      events.push([phase, value]);
+      return date(0);
+    };
+    const context = await setup(backend, {
+      value: { type: "string", transform: {
+        input(value) { events.push(["value-input", value]); return "before"; },
+        output(value) { events.push(["value-output", value]); return value; },
+      } },
+      createdAt: { type: "date", transform: { input(value) { return captureDate("created-input", value); } } },
+      updatedAt: { type: "date", transform: { input(value) { return captureDate("updated-input", value); } } },
+      probe: { type: "string", fieldName: "value", defaultValue: "default-probe", transform: {
+        input(value) { events.push(["probe-input", value]); return value; },
+        output(value) { events.push(["probe-output", value]); return value; },
+      } },
+    });
+    try {
+      const input = {
+        identifier: "subject", value: "before", expiresAt: date(100),
+        createdAt: date(-100), updatedAt: date(-100), probe: "caller-probe",
+      };
+      const started = Date.now();
+      expect(await context.internalAdapter.reserveVerificationValue(input)).toBe(true);
+      const finished = Date.now();
+      expect(observedDates).toHaveLength(2);
+      expect(observedDates[0]).not.toBe(observedDates[1]);
+      expect(observedDates[0]).not.toBe(input.createdAt);
+      expect(observedDates[1]).not.toBe(input.updatedAt);
+      for (const value of observedDates) {
+        expect(value.getTime()).toBeGreaterThanOrEqual(started);
+        expect(value.getTime()).toBeLessThanOrEqual(finished);
+      }
+      expect(events).toStrictEqual([
+        ["value-input", "before"], ["created-input", observedDates[0]], ["updated-input", observedDates[1]],
+        ["probe-input", "default-probe"], ["value-output", "default-probe"], ["probe-output", "default-probe"],
+      ]);
+      expect(context.raw()).toStrictEqual([reservationStorage(backend, values(reservationId("subject"), "subject", "default-probe"))]);
+    } finally { context.close(); }
+  });
+
+  for (const idFirst of [false, true]) {
+    test(`${backend} Verification reservation preserves the UUID ID slot ${idFirst ? "before" : "after"} reentrant output`, async () => {
+      const events: unknown[] = [];
+      let context: Awaited<ReturnType<typeof setup>>;
+      const id = { type: "string" as const, fieldName: "ignored", transform: {
+        input() { throw new Error("configured-reservation-id-input-called"); },
+        output() { throw new Error("configured-reservation-id-output-called"); },
+      } };
+      const probe = { type: "string" as const, fieldName: "value", defaultValue: "probe", transform: {
+        async input(value: unknown) {
+          events.push(["probe-input", value]);
+          const nested = await context.adapter.findOne({ model: "verification", where: [{ field: "identifier", value: "retained" }] });
+          events.push(["nested-read", nested]);
+          return undefined;
+        },
+        output(value: unknown) { events.push(["probe-output", value]); return value; },
+      } };
+      context = await setup(backend, {
+        ...reservationDates,
+        ...(idFirst ? { id, probe } : { probe, id }),
+      }, "uuid");
+      try {
+        const writer = await betterAuth({ ...context.options, verification: undefined, advanced: undefined }).$context;
+        const retained = values("retained", "retained", "retained-proof");
+        expect(await writer.adapter.create({ model: "verification", data: retained, forceAllowId: true })).toStrictEqual(retained);
+        let caught: unknown;
+        let result: unknown;
+        try {
+          result = await context.internalAdapter.reserveVerificationValue({ identifier: "subject", value: "before", expiresAt: date(100) });
+        } catch (error) { caught = error; }
+        const succeeds = backend === "memory" || !idFirst;
+        expect(result).toBe(succeeds ? true : undefined);
+        if (succeeds) expect(caught).toBeUndefined();
+        else {
+          expect(caught).toBeInstanceOf(Error);
+          const error = caught as Error & { code?: string; errno?: number };
+          expect({ name: error.name, message: error.message, code: error.code, errno: error.errno }).toStrictEqual({
+            name: "SQLiteError", message: "NOT NULL constraint failed: verification.id", code: "SQLITE_CONSTRAINT_NOTNULL", errno: 1299,
+          });
+        }
+        expect(events).toStrictEqual([
+          ["probe-input", "probe"], ["probe-output", "retained-proof"], ["nested-read", { ...retained, probe: "retained-proof" }],
+          ...(succeeds ? [["probe-output", "before"]] : []),
+        ]);
+        const created = values(reservationId("subject"), "subject", "before");
+        const { id: _, ...withoutId } = created;
+        const rows: Fields[] = [reservationStorage(backend, retained), ...(succeeds ? [reservationStorage(backend, idFirst ? withoutId : created)] : [])];
+        if (backend === "sqlite") rows.sort((left, right) => String(left.id) < String(right.id) ? -1 : 1);
+        expect(context.raw()).toStrictEqual(rows);
+      } finally { context.close(); }
+    });
+  }
+}

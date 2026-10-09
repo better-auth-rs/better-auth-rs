@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
+import { createHash } from "node:crypto";
 import { betterAuth, type BetterAuthOptions } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { getMigrations } from "better-auth/db/migration";
@@ -118,28 +119,57 @@ for (const backend of ["memory", "sqlite"] as const) {
   });
 }
 
-test("Memory Verification reservation rethrows the original output error after reentrant deletion", async () => {
-  const fixture = await setup("memory");
-  try {
-    const events: unknown[] = [];
-    const failure = new TypeError("verification-reservation-output-rejected");
-    const reader = await betterAuth({
-      ...fixture.options,
-      verification: { additionalFields: {
-        identifier: { type: "string", transform: { async output(value) {
-          events.push(["identifier", value]);
-          await fixture.writer.adapter.delete({ model: "verification", where: [{ field: "identifier", value: "subject" }] });
-          events.push(["deleted"]);
-          throw failure;
-        } } },
-      } },
-    }).$context;
-    let caught: unknown;
-    try {
-      await reader.internalAdapter.reserveVerificationValue({ identifier: "subject", value: "before", expiresAt: date(100) });
-    } catch (error) { caught = error; }
-    expect(caught).toBe(failure);
-    expect(events).toStrictEqual([["identifier", "subject"], ["deleted"]]);
-    expect(fixture.storage()).toStrictEqual([]);
-  } finally { fixture.close(); }
-});
+for (const backend of ["memory", "sqlite"] as const) {
+  for (const mode of ["keep", "delete", "replace", "reread-failure"] as const) {
+    test(`${backend} Verification reservation output failure rereads the original primary key after ${mode}`, async () => {
+      const fixture = await setup(backend);
+      try {
+        const events: unknown[] = [];
+        const failure = new TypeError("verification-reservation-output-rejected");
+        const rereadFailure = new TypeError("verification-reservation-reread-rejected");
+        const id = createHash("sha256").update("reserve:subject").digest("base64url");
+        const retained = row(id, "subject", "before");
+        const replacement = row(id, "replacement", "other");
+        let calls = 0;
+        const reader = await betterAuth({
+          ...fixture.options,
+          verification: { additionalFields: {
+            identifier: { type: "string", transform: { async output(value) {
+              events.push(["identifier", value]);
+              if (++calls === 1) {
+                if (mode === "delete" || mode === "replace") {
+                  await fixture.writer.adapter.delete({ model: "verification", where: [{ field: "id", value: id }] });
+                  events.push(["deleted"]);
+                }
+                if (mode === "replace") {
+                  const written = await fixture.writer.adapter.create({ model: "verification", data: replacement, forceAllowId: true });
+                  events.push(["replacement", written]);
+                }
+                throw failure;
+              }
+              if (mode === "reread-failure") throw rereadFailure;
+              return value;
+            } } },
+            value: { type: "string", transform: { output(value) { events.push(["value", value]); return value; } } },
+            createdAt: { type: "date", transform: { input() { return date(0); } } },
+            updatedAt: { type: "date", transform: { input() { return date(0); } } },
+          } },
+        }).$context;
+        let caught: unknown;
+        let result: unknown;
+        try {
+          result = await reader.internalAdapter.reserveVerificationValue({ identifier: "subject", value: "before", expiresAt: date(100) });
+        } catch (error) { caught = error; }
+        expect(result).toBe(mode === "keep" || mode === "replace" ? false : undefined);
+        expect(caught).toBe(mode === "delete" ? failure : mode === "reread-failure" ? rereadFailure : undefined);
+        const trace: unknown[] = [["identifier", "subject"]];
+        if (mode === "delete" || mode === "replace") trace.push(["deleted"]);
+        if (mode === "replace") trace.push(["replacement", replacement]);
+        if (mode !== "delete") trace.push(["identifier", mode === "replace" ? "replacement" : "subject"]);
+        if (mode === "keep" || mode === "replace") trace.push(["value", mode === "replace" ? "other" : "before"]);
+        expect(events).toStrictEqual(trace);
+        expect(fixture.storage()).toStrictEqual(mode === "delete" ? [] : [fixture.expectedStorage(mode === "replace" ? replacement : retained)]);
+      } finally { fixture.close(); }
+    });
+  }
+}

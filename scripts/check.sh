@@ -92,6 +92,7 @@ run_stage() {
         ./compat-tests/reference-server/contracts/account-live-output.test.ts \
         ./compat-tests/reference-server/contracts/memory-account-live-page.test.ts \
         ./compat-tests/reference-server/contracts/session-live-output.test.ts \
+        ./compat-tests/reference-server/contracts/verification-field-queries.test.ts \
         ./compat-tests/reference-server/contracts/verification-live-output.test.ts \
         ./compat-tests/reference-server/contracts/user-runtime-output.test.ts \
         ./compat-tests/reference-server/contracts/memory-user-live-reads.test.ts \
@@ -101,7 +102,8 @@ run_stage() {
         ./compat-tests/reference-server/contracts/team-catalog.test.ts || organization_status=1
       cargo clippy --workspace --locked --features axum,seaorm2,redis-cache -- -D warnings || organization_status=1
       cargo clippy --locked --features axum,seaorm2,redis-cache \
-        --test organization_id_input_tests --test account_id_input_tests -- -D warnings || organization_status=1
+        --test organization_id_input_tests --test account_id_input_tests \
+        --test verification_field_queries_tests -- -D warnings || organization_status=1
       cargo test --locked --no-fail-fast -p better-auth-core -p better-auth-seaorm --lib || organization_status=1
       cargo test --locked -p better-auth-api --lib -- \
         plugins::organization::handlers::native_mutation_tests:: \
@@ -120,7 +122,8 @@ run_stage() {
         --test organization_member_join_reference_tests --test session_field_queries_tests \
         --test account_id_input_tests --test account_owner_batch_tests \
         --test account_live_output_tests --test memory_account_live_page_tests \
-        --test verification_live_output_tests --test user_runtime_output_tests \
+        --test verification_field_queries_tests --test verification_live_output_tests \
+        --test user_runtime_output_tests \
         --test memory_user_live_reads_tests \
         --test account_user_auth_boundary_reference_tests \
         --test legacy_schema_integration_tests || organization_status=1

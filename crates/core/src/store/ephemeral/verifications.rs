@@ -55,13 +55,9 @@ impl EphemeralStore {
 
     pub(super) async fn verification_storage_fields(
         &self,
-        mut input: FieldMap,
+        input: FieldMap,
         create: bool,
-        forced_id: Option<Value>,
     ) -> AuthResult<FieldMap> {
-        if let Some(id) = &forced_id {
-            let _ = input.insert("id".into(), id.clone());
-        }
         let supplied = input.get("id").cloned();
         self.model_fields.begin_id_input(
             EntityRole::Verification,
@@ -77,9 +73,6 @@ impl EphemeralStore {
                 input,
                 create,
                 || {
-                    if let Some(id) = &forced_id {
-                        return Ok(Some(id.clone()));
-                    }
                     let Some(policy) = self
                         .model_fields
                         .id_input_policy(EntityRole::Verification)?
@@ -109,6 +102,19 @@ impl EphemeralStore {
                 |_, field, value| self.memory_plugin_field_input(field, value),
             )
             .await
+    }
+
+    async fn create_verification_record(&self, input: FieldMap) -> AuthResult<VerificationView> {
+        let mut record = self.verification_storage_fields(input, true).await?;
+        let source = self
+            .raw("verification", "create", |state| {
+                if let Some(id) = self.next_serial_id(state.verifications.len()) {
+                    let _ = record.insert("id".into(), id);
+                }
+                Ok(state.verifications.push_ref(record))
+            })
+            .await?;
+        self.output_verification(RecordSource::Live(source)).await
     }
 
     pub(super) fn verification_field<'a>(
@@ -204,31 +210,13 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
     }
 
     async fn reserve_verification(&self, id: &str, input: CreateVerification) -> AuthResult<bool> {
-        let record = self
-            .verification_storage_fields(
-                input.with_timestamps(Utc::now().into()).fields()?,
-                true,
-                Some(id.into()),
-            )
-            .await?;
-        let inserted = self
-            .raw("verification", "create", |state| {
-                if state
-                    .verifications
-                    .snapshot()?
-                    .iter()
-                    .any(|row| row.get("id").and_then(Value::as_str) == Some(id))
-                {
-                    return Ok(None);
-                }
-                Ok(Some(state.verifications.push_ref(record)))
-            })
-            .await?;
-        let Some(inserted) = inserted else {
-            return Ok(false);
-        };
-        // A failed create projection can remove or replace the inserted row before this lookup.
-        if let Err(error) = self.output_verification(RecordSource::Live(inserted)).await {
+        let result = async {
+            self.create_verification_record(input.into_reservation(id).fields()?)
+                .await
+        }
+        .await;
+        // The fallback observes rows left by input, persistence, or output failures.
+        if let Err(error) = result {
             let bound = self.verification_query("id", id)?;
             let found = self
                 .raw("verification", "findOne", |state| {
@@ -272,18 +260,7 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
         {
             return Ok(None);
         }
-        let mut record = self
-            .verification_storage_fields(input.fields()?, true, None)
-            .await?;
-        let source = self
-            .raw("verification", "create", |state| {
-                if let Some(id) = self.next_serial_id(state.verifications.len()) {
-                    let _ = record.insert("id".into(), id);
-                }
-                Ok(state.verifications.push_ref(record))
-            })
-            .await?;
-        let projected = self.output_verification(RecordSource::Live(source)).await?;
+        let projected = self.create_verification_record(input.fields()?).await?;
         if let Some(writer) = writer {
             writer(projected.fields()?).await?;
         }
@@ -412,19 +389,10 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
         Ok(())
     }
     async fn delete_verification(&self, id: &str) -> AuthResult<()> {
-        self.model_fields.begin_id_query(EntityRole::Verification)?;
-        let bound_id = self.memory_primary_id_query(&Value::from(id))?;
-        let (id, rows) = self
+        let id = self.verification_query("id", id)?;
+        let rows = self
             .raw("verification", "findOne", |state| {
-                let records = state.verifications.snapshot()?;
-                // Explicit textual IDs take precedence over the Serial numeric binding.
-                let id = records
-                    .iter()
-                    .filter_map(|row| row.get("id"))
-                    .find(|stored| stored.as_str() == Some(id))
-                    .cloned()
-                    .unwrap_or(bound_id);
-                let rows = state
+                Ok(state
                     .verifications
                     .first_ref(|row| {
                         row.get("id")
@@ -432,8 +400,7 @@ impl VerificationStore<StatelessSchema> for EphemeralStore {
                             .strict_equals(&id)
                     })?
                     .into_iter()
-                    .collect();
-                Ok((id, rows))
+                    .collect())
             })
             .await?;
         let _ = self

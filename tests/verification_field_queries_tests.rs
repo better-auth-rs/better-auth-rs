@@ -24,6 +24,9 @@ use std::sync::{
 };
 use tokio::task::JoinSet;
 
+#[path = "verification_field_queries_tests/reservation.rs"]
+mod reservation;
+
 fn date(offset: i64) -> FieldDate {
     FieldDate::from_milliseconds(1_893_456_000_000.0 + offset as f64 * 1_000.0)
 }
@@ -363,16 +366,20 @@ async fn mapped_lifecycle<S: AuthSchema>(
         retained
     );
 
+    let mut config = mapped();
+    reservation::pin_dates(&mut config);
+    let store = store.with_runtime(Arc::new(config), Vec::new(), Default::default())?;
     let claim = input("ignored", "claim", "claimed-proof", 3, 100);
     assert!(
         store
             .reserve_verification("reservation", claim.clone())
             .await?
     );
-    assert!(
-        !store
+    assert_eq!(
+        store
             .reserve_verification("reservation", claim.clone())
-            .await?
+            .await?,
+        !double_where_mapping
     );
     let (claim_identifier, claim_value) = if double_where_mapping {
         ("claimed-proof", "claim")

@@ -71,7 +71,7 @@ async fn serial_account_primary_ids_bind_padded_queries_and_project_strings() ->
 }
 
 #[tokio::test]
-async fn serial_verification_deletion_keeps_reserved_string_ids() -> AuthResult<()> {
+async fn serial_verification_deletion_uses_numeric_reservation_ids() -> AuthResult<()> {
     let store = serial_store();
     let _ = store.create_verification(verification("ordinary")).await?;
     assert!(
@@ -80,16 +80,17 @@ async fn serial_verification_deletion_keeps_reserved_string_ids() -> AuthResult<
             .await?
     );
     let reserved = required(store.get_verification_by_identifier("reserved").await?)?;
+    assert_eq!(reserved.id, "2");
     store.delete_verification("1").await?;
     assert!(
         store
-            .get_verification_by_identifier("reserved")
+            .get_verification_by_identifier("ordinary")
             .await?
             .is_none()
     );
     assert_eq!(
-        required(store.get_verification_by_identifier("ordinary").await?)?.id,
-        "1"
+        required(store.get_verification_by_identifier("reserved").await?)?.id,
+        reserved.id
     );
     assert!(
         store
@@ -107,13 +108,23 @@ async fn serial_verification_deletion_keeps_reserved_string_ids() -> AuthResult<
         required(store.get_verification_by_identifier("reserved").await?)?.id,
         reserved.id
     );
+    assert_eq!(
+        store
+            .lock()?
+            .verifications
+            .snapshot()?
+            .into_iter()
+            .map(|row| row.get("id").cloned().unwrap_or_default())
+            .collect::<Vec<_>>(),
+        [Value::Number(2.0), Value::Number(2.0)]
+    );
     store.delete_verification(reserved.id.typed()?).await?;
     assert!(store.lock()?.verifications.snapshot()?.is_empty());
     Ok(())
 }
 
 #[tokio::test]
-async fn serial_verification_consumption_preserves_numeric_and_reservation_ids() -> AuthResult<()> {
+async fn serial_verification_consumption_preserves_numeric_reservation_ids() -> AuthResult<()> {
     let store = serial_store();
     let ordinary = store.create_verification(verification("ordinary")).await?;
     assert_eq!(ordinary.id, "1");
@@ -123,7 +134,7 @@ async fn serial_verification_consumption_preserves_numeric_and_reservation_ids()
             .await?
     );
     assert!(
-        !store
+        store
             .reserve_verification_value(verification("reserved"))
             .await?
     );
@@ -136,7 +147,7 @@ async fn serial_verification_consumption_preserves_numeric_and_reservation_ids()
             .into_iter()
             .map(|row| row.get("id").cloned().unwrap_or_default())
             .collect::<Vec<_>>(),
-        [Value::Number(1.0), reserved.id.field_value()]
+        [Value::Number(1.0), Value::Number(2.0), Value::Number(3.0)]
     );
     for (identifier, expected_id) in [("ordinary", ordinary.id), ("reserved", reserved.id)] {
         let (first, second) = tokio::join!(

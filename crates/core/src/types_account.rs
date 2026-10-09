@@ -235,6 +235,30 @@ impl CreateVerification {
         }
         self
     }
+    /// Construct the internal reservation input before adapter field policies.
+    #[doc(hidden)]
+    pub fn into_reservation(self, id: &str) -> Self {
+        Self {
+            field_order: [
+                "id",
+                "identifier",
+                "value",
+                "expiresAt",
+                "createdAt",
+                "updatedAt",
+            ]
+            .into_iter()
+            .map(str::to_owned)
+            .collect(),
+            id: id.into(),
+            identifier: self.identifier,
+            value: self.value,
+            expires_at: self.expires_at,
+            created_at: chrono::Utc::now().into(),
+            updated_at: chrono::Utc::now().into(),
+            ..Default::default()
+        }
+    }
 }
 
 /// Partial update passed to database hooks before adapter field policies.

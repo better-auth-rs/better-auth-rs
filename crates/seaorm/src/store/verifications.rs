@@ -39,15 +39,11 @@ where
         id: &str,
         verification: CreateVerification,
     ) -> AuthResult<bool> {
-        let reservation_id = self.parse_id(id, S::Verification::parse_id)?;
         let result: AuthResult<()> =
             async {
+                let verification = verification.into_reservation(id);
                 let active = self
-                    .new_verification_active(
-                        self.connection(),
-                        verification.with_timestamps(Utc::now().into()),
-                        Some(id),
-                    )
+                    .new_verification_active(self.connection(), verification)
                     .await?;
                 let row = database_operation::<
                     <S::Verification as SeaOrmVerificationModel>::Entity,
@@ -79,25 +75,28 @@ where
         match result {
             Ok(()) => Ok(true),
             Err(cause) => {
-                if match database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(
-                    self.config(),
-                    "findOne",
-                    async {
-                        self.model_fields.begin_id_query(EntityRole::Verification)?;
-                        plugin_rows::one(
-                            self.connection(),
-                            <S::Verification as SeaOrmVerificationModel>::Entity::find()
-                                .filter(super::value_filter::equals_native(S::Verification::id_column(), reservation_id, self.connection().get_database_backend())?),
-                        ).await
-                    },
-                )
-                .await?
-                .as_ref() { Some(row) => self.output_verification(row, self.connection()).await.map(Some), None => Ok(None) }?
-                .is_some()
-                {
-                    Ok(false)
-                } else {
-                    Err(cause)
+                let row = database_operation::<
+                    <S::Verification as SeaOrmVerificationModel>::Entity,
+                    _,
+                >(self.config(), "findOne", async {
+                    let filter = self.verification_selector(
+                        "id",
+                        &id.into(),
+                        self.connection().get_database_backend(),
+                    )?;
+                    plugin_rows::one(
+                        self.connection(),
+                        <S::Verification as SeaOrmVerificationModel>::Entity::find().filter(filter),
+                    )
+                    .await
+                })
+                .await?;
+                match row {
+                    Some(row) => {
+                        let _ = self.output_verification(&row, self.connection()).await?;
+                        Ok(false)
+                    }
+                    None => Err(cause),
                 }
             }
         }
@@ -668,7 +667,7 @@ where
         }
         let actual = verification.fields()?;
         let active = self
-            .new_verification_active(connection, verification, None)
+            .new_verification_active(connection, verification)
             .await?;
         let row = database_operation::<<S::Verification as SeaOrmVerificationModel>::Entity, _>(
             self.config(),

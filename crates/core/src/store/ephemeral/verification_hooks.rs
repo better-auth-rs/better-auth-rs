@@ -29,7 +29,7 @@ impl EphemeralStore {
         crate::store::database_hooks::await_adapter_lookup().await;
         let bound_identifier = self.verification_query("identifier", identifier)?;
         let patch = self
-            .verification_storage_fields(prepared.into_fields(), false, None)
+            .verification_storage_fields(prepared.into_fields(), false)
             .await?;
         let record = self
             .raw("verification", "update", |state| {

@@ -188,23 +188,12 @@ where
         &self,
         db: &impl ConnectionTrait,
         input: CreateVerification,
-        forced_id: Option<&str>,
     ) -> AuthResult<
         super::record_write::RecordWrite<<S::Verification as SeaOrmVerificationModel>::Entity>,
     > {
         let fields = self.config().verification.field_schema();
         let backend = db.get_database_backend();
-        let mut input = input.fields()?;
-        let forced_id = forced_id
-            .map(|id| {
-                crate::field_value::from_column(
-                    self.parse_id(id, S::Verification::parse_id)?.into(),
-                )
-            })
-            .transpose()?;
-        if let Some(id) = &forced_id {
-            let _ = input.insert("id".into(), id.clone());
-        }
+        let input = input.fields()?;
         let supplied = input.get("id").cloned();
         self.model_fields.begin_id_input(
             EntityRole::Verification,
@@ -217,23 +206,17 @@ where
             .storage_fields_with_bound_id(
                 input,
                 true,
-                || {
-                    if let Some(id) = &forced_id {
-                        Ok(Some(id.clone()))
-                    } else {
-                        match self
-                            .model_fields
-                            .id_input_policy(EntityRole::Verification)?
-                        {
-                            Some(policy) => self
-                                .config()
-                                .advanced
-                                .database
-                                .generate_id()
-                                .adapter_create_id_input("verification", supplied.clone(), policy),
-                            None => Ok(supplied.clone()),
-                        }
-                    }
+                || match self
+                    .model_fields
+                    .id_input_policy(EntityRole::Verification)?
+                {
+                    Some(policy) => self
+                        .config()
+                        .advanced
+                        .database
+                        .generate_id()
+                        .adapter_create_id_input("verification", supplied.clone(), policy),
+                    None => Ok(supplied.clone()),
                 },
                 |name, field, value| {
                     crate::reference_id::input_binding(

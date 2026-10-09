@@ -1237,7 +1237,9 @@ pub trait VerificationStore<S: AuthSchema>: Send + Sync {
     ) -> AuthResult<()> {
         Ok(())
     }
-    /// Insert a deterministic primary key. Return false when the reservation already exists.
+    /// Apply adapter ID policies to the deterministic key, then attempt creation without hooks.
+    /// Return false when creation fails and a normal query finds the original key.
+    /// Duplicate exclusion requires the adapter to retain that key and enforce its uniqueness.
     async fn reserve_verification(
         &self,
         id: &str,
