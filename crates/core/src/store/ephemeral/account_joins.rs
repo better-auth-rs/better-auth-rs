@@ -158,9 +158,7 @@ impl EphemeralStore {
         let value = if logical == "id" {
             self.memory_primary_id_query(&value)?
         } else {
-            let value = self.memory_field_query(&fields, &logical, value)?;
-            let field = fields.fields().get(&logical).cloned().unwrap_or_default();
-            crate::user_query::bind_filter(&field, &value)?
+            self.memory_field_query(&fields, &logical, value)?
         };
         self.raw(
             "account",
@@ -296,9 +294,7 @@ impl EphemeralStore {
         let value = if logical == "id" {
             self.memory_primary_id_query(&value)?
         } else {
-            let value = self.memory_field_query(&self.config.user, &logical, value)?;
-            let field = ResolvedJoin::user_field(&self.config, &logical);
-            crate::user_query::bind_filter(&field, &value)?
+            self.memory_field_query(&self.user_schema(), &logical, value)?
         };
         self.raw(
             "user",

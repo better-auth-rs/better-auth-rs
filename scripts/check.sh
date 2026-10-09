@@ -77,6 +77,34 @@ run_stage() {
         --test cookie_expires_tests --test cookie_cleanup_tests \
         --test cookie_lifetime_tests --test cookie_session_precision_tests
       ;;
+    memory-query)
+      cargo fmt --all -- --check
+      local query_status=0
+      bun --no-install test \
+        ./compat-tests/reference-server/contracts/organization-query-limits.test.ts \
+        ./compat-tests/reference-server/contracts/organization-physical-fields.test.ts \
+        ./compat-tests/reference-server/contracts/query-binding-order.test.ts \
+        ./compat-tests/reference-server/contracts/session-field-queries.test.ts \
+        ./compat-tests/reference-server/contracts/verification-field-queries.test.ts \
+        ./compat-tests/reference-server/contracts/account-owner-batch.test.ts \
+        ./compat-tests/reference-server/contracts/account-user-selected-relations.test.ts \
+        ./compat-tests/reference-server/contracts/native-core-joins.test.ts \
+        ./compat-tests/reference-server/contracts/user-runtime-input.test.ts \
+        ./compat-tests/reference-server/contracts/user-runtime-output.test.ts \
+        ./compat-tests/reference-server/contracts/memory-user-live-reads.test.ts || query_status=1
+      cargo clippy --workspace --locked --features axum,seaorm2,redis-cache -- -D warnings || query_status=1
+      cargo test --locked -p better-auth-core --features redis-cache --lib -- \
+        store::ephemeral:: user_query:: store::joins:: || query_status=1
+      cargo test --locked --no-fail-fast --features axum,seaorm2,redis-cache \
+        --test organization_query_limits_tests --test organization_native_fields_tests \
+        --test organization_serial_reference_tests --test query_binding_order_tests \
+        --test account_native_selector_tests --test account_user_selected_relations_reference_tests \
+        --test native_memory_join_tests --test native_core_join_tests \
+        --test session_field_queries_tests --test verification_field_queries_tests \
+        --test plugin_model_fields_tests --test user_runtime_input_tests \
+        --test user_record_values_tests --test memory_user_live_reads_tests || query_status=1
+      return "$query_status"
+      ;;
     memory-sorting)
       cargo fmt --all -- --check
       cargo clippy --locked -p better-auth-core --lib -- -D warnings

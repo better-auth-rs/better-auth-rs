@@ -41,10 +41,7 @@ impl EphemeralStore {
         let value = if logical == "id" {
             self.memory_primary_id_query(value)?
         } else {
-            crate::user_query::bind_filter(
-                field,
-                &self.memory_field_query(&schema, logical, value.clone())?,
-            )?
+            self.memory_field_query(&schema, logical, value.clone())?
         };
         let physical = resolve_field_name(field.field_name.as_deref(), logical);
         Ok((physical.to_owned(), value))
@@ -537,7 +534,7 @@ impl UserStore<StatelessSchema> for EphemeralStore {
             if matches!(name, "id" | "_id") {
                 return self.memory_primary_id_query(&value);
             }
-            self.memory_field_query(&self.config.user, name, value)
+            self.memory_field_query(&self.user_schema(), name, value)
         })?;
         let users: Vec<_> = self
             .raw("user", "findMany", |state| {

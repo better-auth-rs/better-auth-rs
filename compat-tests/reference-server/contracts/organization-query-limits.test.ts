@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
+import "./organization-native-binding";
 
 const require = createRequire(new URL("../package.json", import.meta.url));
 const { betterAuth } = await import(require.resolve("better-auth"));

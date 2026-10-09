@@ -44,6 +44,7 @@ on:
           - plugin-display-json
           - plugin-display-values
           - memory-sorting
+          - memory-query
           - schema-joins
           - field-projection
           - account-user-auth
@@ -84,7 +85,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: ${{ !contains(fromJSON('["lint-default", "lint-features", "format", "rustdoc", "runtime-values", "secondary-user-refresh", "account-user-auth", "telemetry", "plugin-display-values", "memory-sorting", "api-key-cache", "email-verification", "cookie-attributes", "oauth-duration", "oauth-proxy", "totp-period", "credential-timing"]'), inputs.stage) && 'postgres:18.6' || '' }}
+        image: ${{ !contains(fromJSON('["lint-default", "lint-features", "format", "rustdoc", "runtime-values", "secondary-user-refresh", "account-user-auth", "telemetry", "plugin-display-values", "memory-sorting", "memory-query", "api-key-cache", "email-verification", "cookie-attributes", "oauth-duration", "oauth-proxy", "totp-period", "credential-timing"]'), inputs.stage) && 'postgres:18.6' || '' }}
         env:
           POSTGRES_USER: better_auth
           POSTGRES_PASSWORD: better_auth_ci
@@ -97,7 +98,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
       mysql:
-        image: ${{ !contains(fromJSON('["lint-default", "lint-features", "format", "rustdoc", "runtime-values", "secondary-user-refresh", "account-user-auth", "telemetry", "plugin-display-values", "memory-sorting", "api-key-cache", "email-verification", "cookie-attributes", "oauth-duration", "oauth-proxy", "totp-period", "credential-timing"]'), inputs.stage) && 'mysql:8.4.11' || '' }}
+        image: ${{ !contains(fromJSON('["lint-default", "lint-features", "format", "rustdoc", "runtime-values", "secondary-user-refresh", "account-user-auth", "telemetry", "plugin-display-values", "memory-sorting", "memory-query", "api-key-cache", "email-verification", "cookie-attributes", "oauth-duration", "oauth-proxy", "totp-period", "credential-timing"]'), inputs.stage) && 'mysql:8.4.11' || '' }}
         env:
           MYSQL_ROOT_PASSWORD: better_auth_ci
           MYSQL_ROOT_HOST: "%"
@@ -110,7 +111,7 @@ jobs:
           --health-retries 10
     env:
       CHECK_STAGE: ${{ github.event_name == 'workflow_dispatch' && inputs.stage || 'all' }}
-      RUST_CACHE_STAGE: ${{ contains(fromJSON('["oauth-duration", "oauth-proxy"]'), inputs.stage) && 'provider-options' || inputs.stage == 'totp-period' && 'two-factor' || inputs.stage == 'api-key-cache' && 'plugin-fields' || inputs.stage == 'native-create' && 'user-fields' || inputs.stage == 'memory-sorting' && 'plugin-display-values' || inputs.stage == 'credential-timing' && 'account-user-auth' || github.event_name == 'workflow_dispatch' && inputs.stage || 'all' }}
+      RUST_CACHE_STAGE: ${{ contains(fromJSON('["oauth-duration", "oauth-proxy"]'), inputs.stage) && 'provider-options' || inputs.stage == 'totp-period' && 'two-factor' || inputs.stage == 'api-key-cache' && 'plugin-fields' || contains(fromJSON('["native-create", "memory-query"]'), inputs.stage) && 'user-fields' || inputs.stage == 'memory-sorting' && 'plugin-display-values' || inputs.stage == 'credential-timing' && 'account-user-auth' || github.event_name == 'workflow_dispatch' && inputs.stage || 'all' }}
       BETTER_AUTH_TEST_POSTGRES_URL: postgres://better_auth:better_auth_ci@127.0.0.1:5432/better_auth_test
       BETTER_AUTH_TEST_MYSQL_URL: mysql://root:better_auth_ci@127.0.0.1:3306/mysql
     steps:

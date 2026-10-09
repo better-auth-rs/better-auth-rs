@@ -1,5 +1,8 @@
 #![cfg(feature = "seaorm2")]
 
+#[path = "organization_query_limits_tests/native_binding.rs"]
+mod native_binding;
+
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},

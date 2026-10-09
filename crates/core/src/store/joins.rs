@@ -4,7 +4,7 @@ use crate::{
     AuthConfig, AuthError, AuthResult,
     plugin_runtime::ModelFields,
     store::schema::{EntityRole, resolve_field_name},
-    user_fields::{USER_FIELDS, UserConfig, UserFieldConfig, UserFieldReference, UserFieldType},
+    user_fields::{USER_FIELDS, UserConfig, UserFieldConfig, UserFieldReference},
     wire::{AccountView, UserView},
 };
 
@@ -304,30 +304,6 @@ impl MemberUser {
 }
 
 impl ResolvedJoin {
-    /// Resolve User query attributes without changing creation or output policies.
-    pub fn user_field(config: &AuthConfig, logical: &str) -> UserFieldConfig {
-        if logical == "id" {
-            return UserFieldConfig::default();
-        }
-        config
-            .user
-            .fields()
-            .get(logical)
-            .cloned()
-            .unwrap_or_else(|| UserFieldConfig {
-                field_type: match logical {
-                    "emailVerified"
-                    | "isAnonymous"
-                    | "phoneNumberVerified"
-                    | "twoFactorEnabled"
-                    | "banned" => UserFieldType::Boolean,
-                    "createdAt" | "updatedAt" | "banExpires" => UserFieldType::Date,
-                    _ => UserFieldType::String,
-                },
-                ..Default::default()
-            })
-    }
-
     /// Resolve the native source column again against the projected parent field names.
     pub fn fallback_from(
         &self,

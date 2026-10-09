@@ -742,16 +742,17 @@ impl OrganizationRoleStore for EphemeralStore {
         names: &[String],
     ) -> AuthResult<Vec<OrganizationRole>> {
         let schema = self.field_config(EntityRole::OrganizationRole)?;
-        let names = names
-            .iter()
-            .map(|name| {
-                self.organization_query(
-                    EntityRole::OrganizationRole,
-                    "role",
-                    Value::from(name.as_str()),
-                )
-            })
-            .collect::<AuthResult<Vec<_>>>()?;
+        let names = self
+            .organization_query(
+                EntityRole::OrganizationRole,
+                "role",
+                names
+                    .iter()
+                    .map(|name| Value::from(name.as_str()))
+                    .collect::<Vec<_>>()
+                    .into(),
+            )?
+            .field_value();
         let organization_id = self.organization_query(
             EntityRole::OrganizationRole,
             "organizationId",
@@ -762,15 +763,21 @@ impl OrganizationRoleStore for EphemeralStore {
             .organization_roles
             .snapshot()?
             .into_iter()
-            .filter(|row| {
-                organization_value(row, &schema, "organizationId")
+            .try_fold(Vec::new(), |mut selected, row| -> AuthResult<_> {
+                // Memory validates the transformed IN operand only when a stored row is evaluated.
+                let names = names
+                    .as_array()
+                    .ok_or_else(|| AuthError::internal("Value must be an array"))?;
+                if organization_value(&row, &schema, "organizationId")
                     .strict_equals(&organization_id.field_value())
                     && names.iter().any(|name| {
-                        name.field_value()
-                            .same_value_zero(&organization_value(row, &schema, "role"))
+                        name.same_value_zero(&organization_value(&row, &schema, "role"))
                     })
-            })
-            .collect();
+                {
+                    selected.push(row);
+                }
+                Ok(selected)
+            })?;
         let rows = crate::query::paginate_memory(
             rows,
             Some(self.config.advanced.database.find_many_limit()),

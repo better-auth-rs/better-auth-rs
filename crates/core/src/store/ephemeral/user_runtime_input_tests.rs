@@ -27,6 +27,42 @@ mod contract {
 
 use contract::write;
 
+#[tokio::test]
+async fn user_list_binds_native_boolean_queries_from_the_complete_schema() -> AuthResult<()> {
+    let store = EphemeralStore::new(Arc::new(AuthConfig::default()));
+    let mut expected = Vec::new();
+    for (id, verified) in [("verified", true), ("unverified", false)] {
+        expected.push(
+            store
+                .create_user(crate::CreateUser {
+                    id: Some(id.into()),
+                    ..crate::CreateUser::new()
+                        .with_name(id)
+                        .with_email(format!("{id}@native-query.test"))
+                        .with_email_verified(verified)
+                })
+                .await?,
+        );
+    }
+    let before = store.storage_rows(crate::store::schema::EntityRole::User)?;
+    for (value, index) in [("true", 0), ("false", 1), ("TRUE", 1), ("", 1)] {
+        let (returned, count) = store
+            .list_users(crate::ListUsersParams {
+                filter_field: Some("emailVerified".into()),
+                filter_value: Some(value.into()),
+                ..Default::default()
+            })
+            .await?;
+        assert_eq!(returned, [expected[index].clone()], "{value:?}");
+        assert_eq!(count, 1, "{value:?}");
+        assert_eq!(
+            store.storage_rows(crate::store::schema::EntityRole::User)?,
+            before
+        );
+    }
+    Ok(())
+}
+
 type Events = Arc<Mutex<Vec<(&'static str, FieldMap)>>>;
 
 struct Hook {

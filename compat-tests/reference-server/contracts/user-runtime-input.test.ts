@@ -5,6 +5,23 @@ import { parseInputData } from "better-auth/db";
 import { cases, observe, options, owner, revive, user } from "./user-runtime-contract";
 import inputCases from "../../../tests/fixtures/user-runtime-input-cases.json";
 
+test("Memory User list binds native Boolean strings from the complete schema", async () => {
+  const rows = [true, false].map(emailVerified => ({
+    id: emailVerified ? "verified" : "unverified", name: "Owner",
+    email: `${emailVerified}@native-query.test`, emailVerified, image: null,
+    createdAt: new Date("2030-01-01T00:00:00.000Z"), updatedAt: new Date("2030-01-01T00:00:00.000Z"),
+  }));
+  const memory = { user: rows, session: [], account: [], verification: [] };
+  const before = structuredClone(memory);
+  const { adapter } = await betterAuth({ ...options(memory), user: {} }).$context;
+  for (const [value, index] of [["true", 0], ["false", 1], ["TRUE", 1], ["", 1]] as const) {
+    const where = [{ field: "emailVerified", value }];
+    expect(await adapter.findMany({ model: "user", where })).toStrictEqual([rows[index]]);
+    expect(await adapter.count({ model: "user", where })).toBe(1);
+    expect(memory).toStrictEqual(before);
+  }
+});
+
 test("Public input keeps own undefined and skips validators and transforms only for undefined input", () => {
   for (const action of ["create", "update"] as const) {
     const events: string[] = [];

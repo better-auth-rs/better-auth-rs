@@ -41,16 +41,16 @@ impl EphemeralStore {
     ) -> AuthResult<Value> {
         self.model_fields.begin_id_query(EntityRole::Verification)?;
         let schema = self.config.verification.field_schema().adapter_fields(&[]);
-        let value = if name == "id" {
-            self.memory_primary_id_query(&value.into())?
+        if !schema.fields().contains_key(name) {
+            return Err(AuthError::config(format!(
+                "Unknown verification field: {name}"
+            )));
+        }
+        if name == "id" {
+            self.memory_primary_id_query(&value.into())
         } else {
-            self.memory_field_query(&schema, name, value.into())?
-        };
-        let field = schema
-            .fields()
-            .get(name)
-            .ok_or_else(|| AuthError::config(format!("Unknown verification field: {name}")))?;
-        crate::user_query::bind_filter(field, &value)
+            self.memory_field_query(&schema, name, value.into())
+        }
     }
 
     pub(super) async fn verification_storage_fields(

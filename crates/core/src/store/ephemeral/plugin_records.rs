@@ -61,11 +61,12 @@ impl EphemeralStore {
             self.memory_primary_id_query(&value)
         } else {
             let fields = self.model_fields.plugin_fields(role);
-            let field = fields.fields().get(name).ok_or_else(|| {
-                AuthError::config(format!("Unknown plugin field {role:?}.{name}"))
-            })?;
-            let value = self.memory_field_query(&fields, name, value)?;
-            crate::user_query::bind_filter(field, &value)
+            if !fields.fields().contains_key(name) {
+                return Err(AuthError::config(format!(
+                    "Unknown plugin field {role:?}.{name}"
+                )));
+            }
+            self.memory_field_query(&fields, name, value)
         }
     }
 
@@ -259,6 +260,11 @@ impl EphemeralStore {
             EntityRole::Session => state.sessions.snapshot(),
             EntityRole::Account => state.accounts.snapshot(),
             EntityRole::Verification => state.verifications.snapshot(),
+            EntityRole::Organization => state.organizations.snapshot(),
+            EntityRole::Member => state.members.snapshot(),
+            EntityRole::Invitation => state.invitations.snapshot(),
+            EntityRole::Team => state.teams.snapshot(),
+            EntityRole::OrganizationRole => state.organization_roles.snapshot(),
             _ => state.plugin_rows(role)?.snapshot(),
         }
     }

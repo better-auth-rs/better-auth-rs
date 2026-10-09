@@ -52,10 +52,6 @@ impl EphemeralStore {
             return Ok(("id".into(), self.memory_primary_id_query(&value)?));
         }
         let value = self.memory_field_query(fields, name, value)?;
-        let value = match fields.fields().get(name) {
-            Some(field) => crate::user_query::bind_filter(field, &value)?,
-            None => value,
-        };
         Ok((fields.record_storage_key(name).to_owned(), value))
     }
 

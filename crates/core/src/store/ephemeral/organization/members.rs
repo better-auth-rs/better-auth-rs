@@ -244,7 +244,6 @@ impl MemberStore for EphemeralStore {
         &self,
         params: &ListOrganizationMembersParams,
     ) -> AuthResult<(Vec<Member>, usize)> {
-        use crate::user_fields::UserFieldType;
         let schema = self.field_config(EntityRole::Member)?;
         let organization_id = self.organization_query(
             EntityRole::Member,
@@ -275,36 +274,6 @@ impl MemberStore for EphemeralStore {
                 self.memory_primary_id_query(expected)?
             } else {
                 self.memory_field_query(&schema, field, expected.clone())?
-            };
-            let field_type = schema.fields().get(field).map(|field| &field.field_type);
-            let convert = |expected: &Value| -> Value {
-                match (field_type, expected) {
-                    (Some(UserFieldType::Number), Value::String(value)) => {
-                        crate::organization_fields::numeric_filter(value)
-                            .map_or_else(|| expected.clone(), Value::Number)
-                    }
-                    (Some(UserFieldType::Boolean), Value::String(value)) => {
-                        Value::Bool(value == "true")
-                    }
-                    _ => expected.clone(),
-                }
-            };
-            let expected = if let Some(values) = expected.as_array() {
-                // The adapter converts number arrays only when every input is a numeric string.
-                if matches!(field_type, Some(UserFieldType::Number))
-                    && values.iter().all(|value| {
-                        value
-                            .as_str()
-                            .and_then(crate::organization_fields::numeric_filter)
-                            .is_some()
-                    })
-                {
-                    Value::Array(values.iter().map(convert).collect::<Vec<_>>().into())
-                } else {
-                    expected.clone()
-                }
-            } else {
-                convert(&expected)
             };
             let matches_member = |member: &FieldMap| -> AuthResult<bool> {
                 let Some(actual) = value(member, field) else {

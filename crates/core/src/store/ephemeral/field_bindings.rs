@@ -83,6 +83,10 @@ impl EphemeralStore {
         } else {
             value
         };
+        let value = match field {
+            Some(field) => crate::user_query::bind_filter(field, &value)?,
+            None => value,
+        };
         // Query JSON conversion follows reference conversion and uses the original query value.
         match original_json {
             Some(original) => memory_json_query_value(value, &original),
@@ -124,16 +128,14 @@ impl EphemeralStore {
     ) -> AuthResult<(String, Value)> {
         self.model_fields.begin_id_query(EntityRole::Session)?;
         let schema = crate::store::session_create_schema(&self.session_config, &FieldMap::new());
-        let field = schema
-            .fields()
-            .get(name)
-            .ok_or_else(|| AuthError::config(format!("Unknown session field: {name}")))?;
+        if !schema.fields().contains_key(name) {
+            return Err(AuthError::config(format!("Unknown session field: {name}")));
+        }
         let value = if name == "id" {
             self.memory_primary_id_query(&value)?
         } else {
             self.memory_field_query(&schema, name, value)?
         };
-        let value = crate::user_query::bind_filter(field, &value)?;
         Ok((schema.record_storage_key(name).to_owned(), value))
     }
 }

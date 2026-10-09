@@ -497,7 +497,7 @@ impl<'a> PreparedUserQuery<'a> {
         })
     }
 
-    /// Bind Memory search and filter values without changing SQL query values.
+    /// Bind Memory search and filter values with the adapter's complete field policy.
     pub fn bind_memory_filter(
         mut self,
         mut bind: impl FnMut(&str, Value) -> AuthResult<Value>,
@@ -516,11 +516,7 @@ impl<'a> PreparedUserQuery<'a> {
                 .unwrap_or("email");
             let declared = declared_field(name, self.fields);
             let name = declared.map_or(name, |(logical, _)| logical);
-            let value = bind(name, Value::from(value))?;
-            self.memory_search = Some(match declared {
-                Some((_, field)) => bind_filter(field, &value)?,
-                None => value,
-            });
+            self.memory_search = Some(bind(name, Value::from(value))?);
         }
         let name = self
             .params
@@ -534,13 +530,7 @@ impl<'a> PreparedUserQuery<'a> {
             .params
             .filter_value
             .clone()
-            .map(|value| {
-                let value = bind(name, value)?;
-                match declared {
-                    Some((_, field)) => bind_filter(field, &value),
-                    None => Ok(value),
-                }
-            })
+            .map(|value| bind(name, value))
             .transpose()?;
         Ok(self)
     }
