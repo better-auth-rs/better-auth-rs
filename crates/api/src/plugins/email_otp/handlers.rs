@@ -11,7 +11,8 @@ use better_auth_core::utils::password;
 use better_auth_core::wire::UserView;
 use better_auth_core::{
     AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, AuthSchema, AuthSession,
-    AuthUser, CreateAccount, CreateUser, FieldValue, RequestMeta, UpdateAccount, UpdateUser,
+    AuthUser, CreateAccount, CreateUser, FieldMap, FieldValue, RequestMeta, UpdateAccount,
+    UpdateUser,
 };
 use serde_json::json;
 
@@ -109,36 +110,50 @@ impl EmailOtpPlugin {
             .get_user_by_email(&email)
             .await?
             .ok_or_else(user_not_found)?;
-        let user = self.mark_verified(ctx, &user, email).await?;
+        let user = self.mark_verified(req, ctx, &user, email).await?;
         if ctx
             .email_verification_policy
             .auto_sign_in_after_verification
         {
-            return self.session_response(req, ctx, &user, true).await;
+            let user = user.as_ref().ok_or_else(|| {
+                AuthError::type_error("Cannot read properties of null (reading 'id')")
+            })?;
+            return self.session_response(req, ctx, user, true).await;
         }
         let manager = ctx.session_manager();
-        if let Some(current) = ctx
+        if let Some(mut current) = ctx
             .native_session(req, better_auth_core::session::SessionRead::Cached)
             .await?
-            && user.email_verified.is_truthy()?
-            && current
-                .user_field("id")
-                .strict_equals(&user.id.field_value())
         {
-            let (mut user, session) = current.into_views()?;
-            user.set_field("emailVerified", true.into());
-            manager
-                .write_cache(
-                    req,
-                    &better_auth_core::session::SessionData { session, user },
-                    manager.dont_remember(req),
-                )
-                .await?;
+            let updated = user.as_ref().ok_or_else(|| {
+                AuthError::type_error("Cannot read properties of null (reading 'emailVerified')")
+            })?;
+            if updated.email_verified.is_truthy()?
+                && current
+                    .user_property("id")?
+                    .strict_equals(&updated.id.field_value())
+            {
+                let mut fields = current.user.enumerable_fields();
+                let _ = fields.insert("emailVerified".into(), true.into());
+                current.user = fields.into();
+                manager
+                    .write_native_cache(req, &current, manager.dont_remember(req))
+                    .await?;
+            }
         }
-        Ok(AuthResponse::json(
+        let user = match user {
+            Some(user) => FieldMap::from(ctx.user_view(&user).await?).into(),
+            None => FieldValue::Null,
+        };
+        Ok(AuthResponse::native(
             200,
-            &json!({"status": true, "token": null, "user": ctx.user_view(&user).await?}),
-        )?)
+            FieldMap::from([
+                ("status".into(), true.into()),
+                ("token".into(), FieldValue::Null),
+                ("user".into(), user),
+            ])
+            .into(),
+        ))
     }
 
     pub(super) async fn sign_in(
@@ -260,8 +275,8 @@ impl EmailOtpPlugin {
         if let Some(account) = get_credential_account(ctx, user.id().into_owned()).await? {
             let _ = ctx
                 .database
-                .update_account(
-                    account.id.typed()?,
+                .update_account_by_id_value(
+                    &account.id.field_value(),
                     UpdateAccount {
                         password: (Some(hash))
                             .map(|value| better_auth_core::SchemaValue::Typed(Some(value)))
@@ -300,8 +315,8 @@ impl EmailOtpPlugin {
         if !user.email_verified().is_truthy()? {
             let _ = ctx
                 .database
-                .update_user(
-                    user.id().typed()?,
+                .update_user_by_id_value(
+                    &user.id().field_value(),
                     UpdateUser {
                         email_verified: Some(true),
                         ..Default::default()
@@ -311,7 +326,7 @@ impl EmailOtpPlugin {
         }
         if ctx.password_policy.revoke_sessions_on_password_reset {
             ctx.database
-                .delete_user_sessions(user.id().typed()?)
+                .delete_user_sessions_by_user_value(&user.id().field_value())
                 .await?;
         }
         success()
@@ -332,8 +347,7 @@ impl EmailOtpPlugin {
             .require_authoritative_native_session(req)
             .await
             .map_err(session_error)?;
-        let user = session.user_view()?;
-        let (email, new_email) = self.change_addresses(&user, &body)?;
+        let (email, new_email) = self.change_addresses(&session.user, &body)?;
         endpoint.session = Some(session);
         if self.config.verify_current_email {
             let otp = body
@@ -369,13 +383,11 @@ impl EmailOtpPlugin {
         ctx: &AuthContext<impl AuthSchema>,
     ) -> AuthResult<AuthResponse> {
         let body = body!(req);
-        let (user, session) = ctx
+        let mut session = ctx
             .require_authoritative_native_session(req)
             .await
-            .map_err(session_error)?
-            .into_views()?;
-        let (email, new_email) = self.change_addresses(&user, &body)?;
-        let authenticated_user = user.clone();
+            .map_err(session_error)?;
+        let (email, new_email) = self.change_addresses(&session.user, &body)?;
         self.verify_otp(
             ctx,
             &EmailOtpType::ChangeEmail.identifier(&format!("{email}-{new_email}")),
@@ -391,25 +403,25 @@ impl EmailOtpPlugin {
         if ctx.database.get_user_by_email(&new_email).await?.is_some() {
             return Err(AuthError::bad_request("Email already in use"));
         }
-        let _ = self.mark_verified(ctx, &user, new_email.clone()).await?;
-        let mut user = authenticated_user;
-        user.set_field("email", new_email.into());
-        user.set_field("emailVerified", true.into());
+        let _ = self
+            .mark_verified(req, ctx, &user, new_email.clone())
+            .await?;
+        let mut user = session.user.enumerable_fields();
+        let _ = user.insert("email".into(), new_email.into());
+        let _ = user.insert("emailVerified".into(), true.into());
+        session.user = user.into();
         ctx.session_manager()
-            .set_session_cookie(
-                req,
-                better_auth_core::session::SessionData { session, user },
-                None,
-            )
+            .set_native_session_cookie(req, session, None)
             .await?;
         success()
     }
 
-    fn change_addresses(&self, user: &UserView, body: &Body) -> AuthResult<(String, String)> {
+    fn change_addresses(&self, user: &FieldValue, body: &Body) -> AuthResult<(String, String)> {
         if !self.config.change_email {
             return Err(AuthError::bad_request("Change email with OTP is disabled"));
         }
-        let email = crate::plugins::helpers::user_email(user)?.to_lowercase();
+        let email = crate::plugins::helpers::user_email_field(user.model_property("email")?)?
+            .to_lowercase();
         let new_email = body.get("newEmail").to_lowercase();
         validate_email(&new_email)?;
         if email == new_email {
@@ -420,17 +432,22 @@ impl EmailOtpPlugin {
 
     async fn mark_verified<S: AuthSchema>(
         &self,
+        req: &AuthRequest,
         ctx: &AuthContext<S>,
         user: &better_auth_core::wire::UserView,
         email: String,
-    ) -> AuthResult<better_auth_core::wire::UserView> {
-        if let Some(hook) = &ctx.email_verification_policy.before_email_verification {
-            hook(&better_auth_core::FieldMap::from(user.clone()).into()).await?;
-        }
+    ) -> AuthResult<Option<better_auth_core::wire::UserView>> {
+        let endpoint = EndpointContext::new(Some(req), req.input_field_value()?, ctx);
+        crate::plugins::email_verification::delivery::before(
+            &FieldMap::from(user.clone()).into(),
+            None,
+            &endpoint,
+        )
+        .await?;
         let user = ctx
             .database
-            .update_user(
-                user.id().typed()?,
+            .update_user_by_id_value(
+                &user.id().field_value(),
                 UpdateUser {
                     email: Some(email),
                     email_verified: Some(true),
@@ -438,9 +455,11 @@ impl EmailOtpPlugin {
                 },
             )
             .await?;
-        if let Some(hook) = &ctx.email_verification_policy.after_email_verification {
-            hook(&better_auth_core::FieldMap::from(user.clone()).into()).await?;
-        }
+        let after = user
+            .as_ref()
+            .map(|user| FieldMap::from(user.clone()).into())
+            .unwrap_or(FieldValue::Null);
+        crate::plugins::email_verification::delivery::after(&after, None, &endpoint).await?;
         Ok(user)
     }
 

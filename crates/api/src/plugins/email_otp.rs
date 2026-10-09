@@ -12,6 +12,8 @@ mod handlers;
 mod native;
 mod otp;
 pub use native::EmailOtpApi;
+#[cfg(test)]
+mod native_tests;
 mod request;
 
 /// Purpose of an email OTP.

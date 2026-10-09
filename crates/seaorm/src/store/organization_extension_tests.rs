@@ -688,15 +688,22 @@ async fn single_team_invitation_captures_cookie_before_switching_organization() 
 #[tokio::test]
 async fn dynamic_team_limits_run_in_order_and_rollback_callback_failures() {
     use better_auth_core::store::{SessionStore, TeamMemberLimitResolver, TeamMemberLimits};
-    use better_auth_core::{AuthError, AuthResult, CreateSession, InvitationStatus};
+    use better_auth_core::{AuthError, AuthResult, CreateSession, FieldValue, InvitationStatus};
     struct Limits {
-        calls: std::sync::Mutex<Vec<String>>,
+        calls: std::sync::Mutex<Vec<(FieldValue, String)>>,
         fail: std::sync::atomic::AtomicBool,
     }
     #[async_trait::async_trait]
     impl TeamMemberLimitResolver for Limits {
-        async fn maximum(&self, team_id: &str) -> AuthResult<Option<usize>> {
-            self.calls.lock().unwrap().push(team_id.to_owned());
+        async fn maximum(
+            &self,
+            team_id: &str,
+            organization_id: &FieldValue,
+        ) -> AuthResult<Option<usize>> {
+            self.calls
+                .lock()
+                .unwrap()
+                .push((organization_id.clone(), team_id.to_owned()));
             if team_id == "second" && self.fail.load(std::sync::atomic::Ordering::SeqCst) {
                 return Err(AuthError::forbidden("Application rejected team capacity"));
             }
@@ -756,7 +763,13 @@ async fn dynamic_team_limits_run_in_order_and_rollback_callback_failures() {
         .await
         .unwrap_err();
     assert_eq!(error.status_code(), 403);
-    assert_eq!(*limits.calls.lock().unwrap(), ["first", "second"]);
+    assert_eq!(
+        *limits.calls.lock().unwrap(),
+        [
+            (FieldValue::from("org-a"), "first".to_owned()),
+            (FieldValue::from("org-a"), "second".to_owned())
+        ]
+    );
     assert!(store.list_team_members("first").await.unwrap().is_empty());
     assert_eq!(store.list_team_members("second").await.unwrap().len(), 1);
     assert!(store.get_member("org-a", "user-b").await.unwrap().is_none());

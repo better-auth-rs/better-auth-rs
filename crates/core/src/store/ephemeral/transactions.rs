@@ -35,9 +35,23 @@ impl AuthTransaction<StatelessSchema> for EphemeralTransaction {
         user_id: &str,
         maximum: Option<usize>,
     ) -> AuthResult<Option<crate::TeamMember>> {
-        self.store.add_team_member(team_id, user_id, maximum).await
+        self.add_team_member_value(&team_id.field_value(), &user_id.into(), maximum)
+            .await
+    }
+    async fn add_team_member_value(
+        &self,
+        team_id: &Value,
+        user_id: &Value,
+        maximum: Option<usize>,
+    ) -> AuthResult<Option<crate::TeamMember>> {
+        self.store
+            .add_team_member_value(team_id, user_id, maximum)
+            .await
     }
     async fn delete_member(&self, id: &str) -> AuthResult<()> {
+        self.delete_member_value(&id.into()).await
+    }
+    async fn delete_member_value(&self, id: &Value) -> AuthResult<()> {
         self.store.delete_member_subject(id, None).await
     }
     async fn delete_member_for_user(
@@ -45,6 +59,15 @@ impl AuthTransaction<StatelessSchema> for EphemeralTransaction {
         id: &str,
         organization_id: &str,
         user_id: &str,
+    ) -> AuthResult<()> {
+        self.delete_member_for_user_value(&id.into(), &organization_id.into(), &user_id.into())
+            .await
+    }
+    async fn delete_member_for_user_value(
+        &self,
+        id: &Value,
+        organization_id: &Value,
+        user_id: &Value,
     ) -> AuthResult<()> {
         self.store
             .delete_member_subject(id, Some((organization_id, user_id)))

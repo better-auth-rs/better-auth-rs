@@ -1,11 +1,10 @@
-use super::id_filter::IdColumn;
 use super::{
     SeaOrmStore, map_db_err,
     organization_models::{self as models, Entity, values},
 };
 use crate::SeaOrmOrganizationModel;
 use crate::schema::{AuthSchema, SeaOrmSessionModel};
-use better_auth_core::{AuthError, AuthResult, Invitation, Member};
+use better_auth_core::{AuthError, AuthResult, Invitation, Member, store::schema::EntityRole};
 use better_auth_core::{FieldValue, SchemaField};
 use chrono::Utc;
 use sea_orm::{
@@ -19,8 +18,8 @@ where
 {
     pub(super) async fn accept_team_invitation(
         &self,
-        invitation_id: &str,
-        user_id: &str,
+        invitation_id: &FieldValue,
+        user_id: &FieldValue,
         session_token: Option<&FieldValue>,
         teams_enabled: bool,
         maximum: better_auth_core::store::TeamMemberLimits<'_>,
@@ -49,7 +48,7 @@ where
 
     async fn transition_invitation(
         &self,
-        id: &str,
+        id: &FieldValue,
         from: &str,
         status: &str,
     ) -> AuthResult<Option<Invitation>> {
@@ -66,10 +65,12 @@ where
         let tx = self.connection().begin().await.map_err(map_db_err)?;
         let changed = active
             .update(self.connection().get_database_backend())?
-            .filter(
-                O::Invitation::column("id")?
-                    .eq_id(id, self.config().advanced.database.generate_id())?,
-            )
+            .filter(super::value_filter::equals_id(
+                O::Invitation::column("id")?,
+                id,
+                self.config().advanced.database.generate_id(),
+                self.connection().get_database_backend(),
+            )?)
             .filter(O::Invitation::column("status")?.eq(from))
             .exec(&tx)
             .await
@@ -77,8 +78,12 @@ where
         let row = if changed.rows_affected == 0 {
             None
         } else {
-            models::find::<O::Invitation, _>(&tx, id, self.config().advanced.database.generate_id())
-                .await?
+            models::find_value::<O::Invitation, _>(
+                &tx,
+                id,
+                self.config().advanced.database.generate_id(),
+            )
+            .await?
         };
         tx.commit().await.map_err(map_db_err)?;
         // Output transforms run after the claim is committed, before the member transaction starts.
@@ -94,7 +99,7 @@ where
     async fn accept_claimed_invitation(
         &self,
         invitation: &Invitation,
-        user_id: &str,
+        user_id: &FieldValue,
         session_token: Option<&FieldValue>,
         teams_enabled: bool,
         maximum: better_auth_core::store::TeamMemberLimits<'_>,
@@ -102,28 +107,33 @@ where
         let config = self.organization_fields()?;
         let tx = self.connection().begin().await.map_err(map_db_err)?;
         let result = async {
-            let team_ids: Vec<_> = invitation
-                .team_id
-                .typed()?
-                .as_deref()
-                .filter(|_| teams_enabled)
-                .unwrap_or("")
-                .split(',')
-                .filter(|id| !id.is_empty())
-                .collect();
+            let team_id = invitation.team_id.field_value();
+            let team_ids: Vec<_> = if teams_enabled && team_id.is_truthy() {
+                team_id
+                    .as_str()
+                    .ok_or_else(|| AuthError::type_error("acceptedI.teamId.split is not a function"))?
+                    .split(',')
+                    .collect()
+            } else {
+                Vec::new()
+            };
             for team_id in &team_ids {
+                let team_value = FieldValue::from(*team_id);
                 let locked = Entity::<O::Team>::update_many()
                     .col_expr(
                         O::Team::column("member_count")?,
                         Expr::col(O::Team::column("member_count")?),
                     )
-                    .filter(
-                        O::Team::column("id")?
-                            .eq_id(*team_id, self.config().advanced.database.generate_id())?,
-                    )
-                    .filter(O::Team::column("organization_id")?.eq_id(
-                        invitation.organization_id.typed()?.clone(),
+                    .filter(super::value_filter::equals_id(
+                        O::Team::column("id")?,
+                        &team_value,
                         self.config().advanced.database.generate_id(),
+                        self.connection().get_database_backend(),
+                    )?)
+                    .filter(self.organization_field_equals::<O::Team>(
+                        EntityRole::Team,
+                        "organizationId",
+                        &invitation.organization_id.field_value(),
                     )?)
                     .exec(&tx)
                     .await
@@ -131,31 +141,37 @@ where
                 if locked.rows_affected == 0 {
                     return Err(AuthError::bad_request("Team not found"));
                 }
-                let maximum = maximum.maximum(team_id).await?;
+                let maximum = maximum.maximum(team_id, &invitation.organization_id.field_value()).await?;
                 let existing = Entity::<O::TeamMember>::find()
-                    .filter(
-                        O::TeamMember::column("team_id")?
-                            .eq_id(*team_id, self.config().advanced.database.generate_id())?,
-                    )
-                    .filter(
-                        O::TeamMember::column("user_id")?
-                            .eq_id(user_id, self.config().advanced.database.generate_id())?,
-                    )
+                    .filter(super::value_filter::equals_id(
+                        O::TeamMember::column("team_id")?,
+                        &team_value,
+                        self.config().advanced.database.generate_id(),
+                        self.connection().get_database_backend(),
+                    )?)
+                    .filter(super::value_filter::equals_id(
+                        O::TeamMember::column("user_id")?,
+                        user_id,
+                        self.config().advanced.database.generate_id(),
+                        self.connection().get_database_backend(),
+                    )?)
                     .one(&tx)
                     .await
                     .map_err(map_db_err)?;
                 if existing.is_none() {
                     let count = Entity::<O::TeamMember>::find()
-                        .filter(
-                            O::TeamMember::column("team_id")?
-                                .eq_id(*team_id, self.config().advanced.database.generate_id())?,
-                        )
+                        .filter(super::value_filter::equals_id(
+                            O::TeamMember::column("team_id")?,
+                            &team_value,
+                            self.config().advanced.database.generate_id(),
+                            self.connection().get_database_backend(),
+                        )?)
                         .count(&tx)
                         .await
                         .map_err(map_db_err)?;
                     if !super::team_capacity::reserve::<O::Team, _>(
                         &tx,
-                        team_id,
+                        &team_value,
                         count,
                         maximum,
                         &config.team,
@@ -172,12 +188,12 @@ where
                             "teamMember",
                             None,
                             values([
-                                ("team_id", (*team_id).to_owned().into_field()),
-                                ("user_id", (user_id).to_owned().into_field()),
+                                ("team_id", team_value.clone()),
+                                ("user_id", user_id.clone()),
                                 (
                                     "membership_key",
-                                    (better_auth_core::organization_fields::team_membership_key(
-                                        team_id, user_id,
+                                    (better_auth_core::organization_fields::team_membership_key_values(
+                                        &team_value, user_id,
                                     )?)
                                     .into_field(),
                                 ),
@@ -199,7 +215,7 @@ where
                     None,
                     values([
                         ("organization_id", invitation.organization_id.field_value()),
-                        ("user_id", (user_id).to_owned().into_field()),
+                        ("user_id", user_id.clone()),
                         ("role", invitation.role.field_value()),
                         ("created_at", FieldValue::Date((Utc::now()).into())),
                     ]),

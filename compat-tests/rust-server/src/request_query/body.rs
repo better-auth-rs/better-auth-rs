@@ -309,7 +309,7 @@ impl better_auth::plugins::organization::hooks::OrganizationHooks for BodyTrace 
     async fn before_create_organization(
         &self,
         _: &mut better_auth_core::CreateOrganization,
-        _: &better_auth_core::wire::UserView,
+        _: &better_auth_core::FieldValue,
     ) -> AuthResult<()> {
         self.current("organization.create", None);
         Ok(())
@@ -326,7 +326,7 @@ impl better_auth::plugins::organization::hooks::OrganizationHooks for BodyTrace 
         &self,
         _: &mut better_auth::plugins::organization::hooks::OrganizationTeamDraft,
         _: &better_auth::plugins::organization::types::OrganizationResponse,
-        _: Option<&better_auth_core::wire::UserView>,
+        _: Option<&better_auth_core::FieldValue>,
     ) -> AuthResult<()> {
         self.current("team.create", None);
         Ok(())

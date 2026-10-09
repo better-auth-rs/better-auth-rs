@@ -212,7 +212,7 @@ pub struct CreateInvitation {
     pub organization_id: crate::SchemaValue<String>,
     pub email: String,
     pub role: String,
-    pub inviter_id: String,
+    pub inviter_id: SchemaValue<String>,
     pub expires_at: crate::FieldDate,
 }
 
@@ -229,7 +229,7 @@ impl CreateInvitation {
             additional_fields: Default::default(),
             email: email.into(),
             role: role.into(),
-            inviter_id: inviter_id.into(),
+            inviter_id: inviter_id.into().into(),
             team_id: None,
             id: None,
             created_at: None,

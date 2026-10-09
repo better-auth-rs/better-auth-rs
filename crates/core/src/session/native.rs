@@ -73,17 +73,7 @@ impl NativeSessionData {
     /// Read a User property at a required property-access boundary.
     /// Non-null primitives have no User fields; null and undefined reject property access.
     pub fn user_property(&self, name: &str) -> AuthResult<&FieldValue> {
-        let nullish = match &self.user {
-            FieldValue::Null => Some("null"),
-            FieldValue::Undefined => Some("undefined"),
-            _ => None,
-        };
-        if let Some(nullish) = nullish {
-            return Err(AuthError::type_error(format!(
-                "Cannot read properties of {nullish} (reading '{name}')"
-            )));
-        }
-        Ok(self.user_field(name))
+        self.user.model_property(name)
     }
 
     /// Read an object through native User slots without requiring a typed User identity.

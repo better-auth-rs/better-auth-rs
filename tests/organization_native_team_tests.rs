@@ -17,7 +17,6 @@ use better_auth::{AuthConfig, AuthError, AuthResult, AuthSchema, BetterAuth};
 use better_auth_core::observability::{AfterEndpointHook, BeforeEndpointHook, EndpointHooks};
 use better_auth_core::store::EphemeralStore;
 use better_auth_core::user_fields::UserFieldConfig;
-use better_auth_core::wire::UserView;
 use better_auth_core::{
     AuthContext, AuthRequest, AuthResponse, BeforeRequestAction, CreateInvitation, CreateMember,
     CreateOrganization, CreateSession, CreateTeam, CreateUser, FieldDate, FieldMap, FieldValue,
@@ -62,7 +61,7 @@ impl State {
         self.record(json!({"phase":phase,"path":request.path(),"body":body}))
     }
     fn team(&self, phase: &str, event: OrganizationTeamEvent<'_>) -> AuthResult<()> {
-        self.record(json!({"phase":phase,"user":event.user.map(|user| &user.id),"team":team_value(event.team)?}))
+        self.record(json!({"phase":phase,"user":event.user.map(|user| user.model_property("id")).transpose()?,"team":team_value(event.team)?}))
     }
 }
 
@@ -117,7 +116,7 @@ impl OrganizationPolicy for State {
         data: OrganizationTeamLimit<'_>,
         _: OrganizationEndpoint<'_>,
     ) -> AuthResult<Option<usize>> {
-        self.record(json!({"phase":"limit","organizationId":data.organization_id.json()?,"user":data.session.map(|session| &session.user.id)}))?;
+        self.record(json!({"phase":"limit","organizationId":data.organization_id.json()?,"user":data.session.map(|session| session.user.model_property("id")).transpose()?}))?;
         Ok(Some(100))
     }
 }
@@ -127,9 +126,9 @@ impl OrganizationHooks for State {
         &self,
         data: &mut OrganizationTeamDraft,
         _: &OrganizationResponse,
-        user: Option<&UserView>,
+        user: Option<&FieldValue>,
     ) -> AuthResult<()> {
-        self.record(json!({"phase":"create-before","user":user.map(|user| &user.id),"team":{"name":data.name,"organizationId":data.organization_id,"label":data.additional_fields.get("label").map(FieldValue::json).transpose()?}}))?;
+        self.record(json!({"phase":"create-before","user":user.map(|user| user.model_property("id")).transpose()?,"team":{"name":data.name,"organizationId":data.organization_id,"label":data.additional_fields.get("label").map(FieldValue::json).transpose()?}}))?;
         data.name = format!("{}:hook", data.name.typed()?).into();
         let label = data
             .additional_fields

@@ -1,8 +1,7 @@
 use super::EndpointContext;
 use better_auth_core::FieldValue;
 use better_auth_core::{
-    AuthResult, AuthSchema, CreateMember, Member, Organization, SchemaValue, Team, TeamMember,
-    UserView,
+    AuthResult, AuthSchema, CreateMember, Member, Organization, Team, TeamMember, UserView,
 };
 
 pub(super) struct MemberAdapter<'a, 'b, S: AuthSchema>(&'a EndpointContext<'b, S>);
@@ -70,40 +69,40 @@ impl<'a, 'b, S: AuthSchema> MemberAdapter<'a, 'b, S> {
             None => self.0.auth.database.create_member(input).await,
         }
     }
-    pub(super) async fn add_team_member(
+    pub(super) async fn add_team_member_value(
         &self,
-        team: &SchemaValue<String>,
-        user: &str,
+        team: &FieldValue,
+        user: &FieldValue,
         maximum: Option<usize>,
     ) -> AuthResult<Option<TeamMember>> {
         match self.0.transaction {
-            Some(transaction) => transaction.add_team_member(team, user, maximum).await,
+            Some(transaction) => transaction.add_team_member_value(team, user, maximum).await,
             None => {
                 self.0
                     .auth
                     .database
-                    .add_team_member(team, user, maximum)
+                    .add_team_member_value(team, user, maximum)
                     .await
             }
         }
     }
-    pub(super) async fn delete_member_for_user(
+    pub(super) async fn delete_member_for_user_value(
         &self,
-        id: &str,
-        organization_id: &str,
-        user_id: &str,
+        id: &FieldValue,
+        organization_id: &FieldValue,
+        user_id: &FieldValue,
     ) -> AuthResult<()> {
         match self.0.transaction {
             Some(transaction) => {
                 transaction
-                    .delete_member_for_user(id, organization_id, user_id)
+                    .delete_member_for_user_value(id, organization_id, user_id)
                     .await
             }
             None => {
                 self.0
                     .auth
                     .database
-                    .delete_member_for_user(id, organization_id, user_id)
+                    .delete_member_for_user_value(id, organization_id, user_id)
                     .await
             }
         }

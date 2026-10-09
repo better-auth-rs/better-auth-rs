@@ -251,7 +251,7 @@ impl EmailVerificationPlugin {
         if ctx
             .extensions
             .get::<Arc<EmailVerificationCallbacks<S>>>()
-            .is_none()
+            .is_none_or(|callbacks| !callbacks.has_sender())
             && self.config.send_verification_email.is_none()
             && crate::plugins::email_otp::callbacks::overrides_verification(ctx)
         {

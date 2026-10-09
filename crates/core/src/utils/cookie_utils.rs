@@ -13,7 +13,7 @@ pub use chunks::{
 use crate::{AuthError, AuthResult, config::AuthConfig, request_runtime::ResolvedCookie};
 use base64::{
     Engine as _, alphabet,
-    engine::{DecodePaddingMode, GeneralPurpose, GeneralPurposeConfig, general_purpose::STANDARD},
+    engine::{GeneralPurpose, GeneralPurposeConfig, general_purpose::STANDARD},
 };
 use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, percent_decode_str, utf8_percent_encode};
 
@@ -29,7 +29,7 @@ const COOKIE_COMPONENT: &AsciiSet = &NON_ALPHANUMERIC
     .remove(b')');
 const COOKIE_BASE64: GeneralPurpose = GeneralPurpose::new(
     &alphabet::STANDARD,
-    GeneralPurposeConfig::new().with_decode_padding_mode(DecodePaddingMode::Indifferent),
+    GeneralPurposeConfig::new().with_decode_allow_trailing_bits(true),
 );
 use cookie::{Cookie, SameSite as CookieSameSite};
 use hmac::{Hmac, Mac};
@@ -72,13 +72,32 @@ pub fn sign_cookie_value(value: &str, secret: &str) -> String {
 
 /// Verify a signed cookie. Invalid or malformed signatures are unauthenticated.
 pub fn verify_cookie_value(value: &str, secret: &str) -> Option<String> {
-    let decoded = percent_decode_str(value).decode_utf8().ok()?;
+    let decoded = decode_cookie_value(value);
     let (value, signature) = decoded.rsplit_once('.')?;
+    if value.is_empty() || signature.len() != 44 || !signature.ends_with('=') {
+        return None;
+    }
     let signature = COOKIE_BASE64.decode(signature).ok()?;
     let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes()).ok()?;
     mac.update(value.as_bytes());
     mac.verify_slice(&signature).ok()?;
     Some(value.to_string())
+}
+
+fn decode_cookie_value(value: &str) -> std::borrow::Cow<'_, str> {
+    let mut bytes = value.bytes();
+    while let Some(byte) = bytes.next() {
+        if byte == b'%'
+            && (!bytes.next().is_some_and(|byte| byte.is_ascii_hexdigit())
+                || !bytes.next().is_some_and(|byte| byte.is_ascii_hexdigit()))
+        {
+            return std::borrow::Cow::Borrowed(value);
+        }
+    }
+    // Better Call retains the complete raw cookie when decodeURIComponent rejects an escape.
+    percent_decode_str(value)
+        .decode_utf8()
+        .unwrap_or(std::borrow::Cow::Borrowed(value))
 }
 
 /// Read a cookie by its exact name.
@@ -478,6 +497,56 @@ mod native_cookie_tests {
         Ok(encode_cookie_value(&sign_cookie_value_native_raw(
             value, secret,
         )?))
+    }
+
+    #[test]
+    fn signed_cookie_verification_requires_upstream_payload_and_signature_framing() {
+        let secret = "signed-cookie-framing-secret";
+        let signed = sign_cookie_value_raw("token:flag.with.period", secret);
+        for value in [&signed, &encode_cookie_value(&signed)] {
+            assert_eq!(
+                verify_cookie_value(value, secret).as_deref(),
+                Some("token:flag.with.period")
+            );
+        }
+        for value in [
+            signed.trim_end_matches('=').to_owned(),
+            format!("{signed}="),
+            sign_cookie_value_raw("", secret),
+            sign_cookie_value_raw("token:flag.with.period", "different-secret"),
+            signed.replacen("token", "other", 1),
+            "token.invalid=".to_owned(),
+            "token.%FF".to_owned(),
+            "token".to_owned(),
+        ] {
+            assert_eq!(verify_cookie_value(&value, secret), None, "{value}");
+        }
+    }
+
+    #[test]
+    #[expect(
+        clippy::unwrap_used,
+        reason = "The generated HMAC signature has a padded Base64 final quartet"
+    )]
+    fn signed_cookie_verification_retains_invalid_uri_escapes_and_atob_padding_bits() {
+        let secret = "signed-cookie-native-decoding-secret";
+        for payload in ["%FF", "a%20%zz", "%E0%A4%A", "%"] {
+            let raw = sign_cookie_value_raw(payload, secret);
+            for value in [&raw, &encode_cookie_value(&raw)] {
+                assert_eq!(verify_cookie_value(value, secret).as_deref(), Some(payload));
+            }
+        }
+        let signed = sign_cookie_value_raw("token:flag", secret);
+        let mut bytes = signed.into_bytes();
+        let alphabet = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        let last = bytes.iter_mut().rev().nth(1).unwrap();
+        let index = alphabet.iter().position(|byte| *byte == *last).unwrap();
+        *last = *alphabet.get(index | 3).unwrap();
+        let value = String::from_utf8(bytes).unwrap();
+        assert_eq!(
+            verify_cookie_value(&value, secret).as_deref(),
+            Some("token:flag")
+        );
     }
 
     #[test]

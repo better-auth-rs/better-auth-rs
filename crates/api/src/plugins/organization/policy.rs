@@ -1,8 +1,15 @@
 use super::{OrganizationConfig, hooks::*};
-use better_auth_core::{AuthResult, Team, wire::UserView};
+use better_auth_core::{AuthResult, FieldValue, Team};
 
 impl OrganizationConfig {
-    pub(crate) async fn may_create(&self, user: &UserView) -> AuthResult<bool> {
+    pub(crate) fn creator_role(&self) -> &str {
+        if self.creator_role.is_empty() {
+            "owner"
+        } else {
+            &self.creator_role
+        }
+    }
+    pub(crate) async fn may_create(&self, user: &FieldValue) -> AuthResult<bool> {
         if let Some(policy) = &self.policy
             && let Some(value) = policy.allow_user_to_create_organization(user).await?
         {
@@ -12,7 +19,7 @@ impl OrganizationConfig {
     }
     pub(crate) async fn organization_limit_reached(
         &self,
-        user: &UserView,
+        user: &FieldValue,
         count: usize,
     ) -> AuthResult<bool> {
         if let Some(policy) = &self.policy

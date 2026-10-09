@@ -6,7 +6,10 @@ use crate::schema::AuthSchema;
 use crate::types_org::{CreateInvitation, Invitation, InvitationStatus};
 use crate::{SeaOrmOrganizationModel, SeaOrmOrganizationSchema};
 use async_trait::async_trait;
-use better_auth_core::{AuthResult, store::InvitationStore};
+use better_auth_core::{
+    AuthResult,
+    store::{InvitationStore, schema::EntityRole},
+};
 use better_auth_core::{FieldValue, SchemaField};
 use chrono::Utc;
 use sea_orm::{
@@ -67,8 +70,12 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> I
         .await
     }
     async fn get_invitation_by_id(&self, id: &str) -> AuthResult<Option<Invitation>> {
+        self.get_invitation_by_id_value(&id.into()).await
+    }
+
+    async fn get_invitation_by_id_value(&self, id: &FieldValue) -> AuthResult<Option<Invitation>> {
         let config = self.organization_fields()?.invitation;
-        let row = models::find::<O::Invitation, _>(
+        let row = models::find_value::<O::Invitation, _>(
             self.connection(),
             id,
             self.config().advanced.database.generate_id(),
@@ -101,11 +108,10 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> I
             .bind(self.connection().get_database_backend())?;
         let expires_at = O::Invitation::column("expires_at")?;
         let row = Entity::<O::Invitation>::find()
-            .filter(super::value_filter::equals_id(
-                O::Invitation::column("organization_id")?,
+            .filter(self.organization_field_equals::<O::Invitation>(
+                EntityRole::Invitation,
+                "organizationId",
                 organization_id,
-                self.config().advanced.database.generate_id(),
-                self.connection().get_database_backend(),
             )?)
             .filter(O::Invitation::column("email")?.eq(email.to_lowercase()))
             .filter(O::Invitation::column("status")?.eq("pending"))
@@ -126,7 +132,16 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> I
         id: &str,
         status: InvitationStatus,
     ) -> AuthResult<Invitation> {
-        models::update::<O::Invitation, _>(
+        self.update_invitation_status_value(&id.into(), status)
+            .await
+    }
+
+    async fn update_invitation_status_value(
+        &self,
+        id: &FieldValue,
+        status: InvitationStatus,
+    ) -> AuthResult<Invitation> {
+        models::update_value::<O::Invitation, _>(
             self.connection(),
             id,
             values([("status", (status.to_string()).into_field())]),
@@ -141,7 +156,16 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> I
         id: &str,
         expires_at: chrono::DateTime<Utc>,
     ) -> AuthResult<Invitation> {
-        models::update::<O::Invitation, _>(
+        self.update_invitation_expiry_value(&id.into(), expires_at)
+            .await
+    }
+
+    async fn update_invitation_expiry_value(
+        &self,
+        id: &FieldValue,
+        expires_at: chrono::DateTime<Utc>,
+    ) -> AuthResult<Invitation> {
+        models::update_value::<O::Invitation, _>(
             self.connection(),
             id,
             values([("expires_at", FieldValue::Date((expires_at).into()))]),
@@ -164,11 +188,10 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> I
         organization_id: &better_auth_core::FieldValue,
     ) -> AuthResult<Vec<Invitation>> {
         let rows = Entity::<O::Invitation>::find()
-            .filter(super::value_filter::equals_id(
-                O::Invitation::column("organization_id")?,
+            .filter(self.organization_field_equals::<O::Invitation>(
+                EntityRole::Invitation,
+                "organizationId",
                 organization_id,
-                self.config().advanced.database.generate_id(),
-                self.connection().get_database_backend(),
             )?)
             .limit(super::pagination::default_limit(
                 self.config(),
@@ -200,11 +223,10 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> I
             .bind(self.connection().get_database_backend())?;
         let expires_at = O::Invitation::column("expires_at")?;
         Entity::<O::Invitation>::find()
-            .filter(super::value_filter::equals_id(
-                O::Invitation::column("organization_id")?,
+            .filter(self.organization_field_equals::<O::Invitation>(
+                EntityRole::Invitation,
+                "organizationId",
                 organization_id,
-                self.config().advanced.database.generate_id(),
-                self.connection().get_database_backend(),
             )?)
             .filter(O::Invitation::column("status")?.eq("pending"))
             .filter(expires_at.into_expr().gt(expires_at.save_as(now)))
@@ -277,7 +299,10 @@ mod tests {
     use std::sync::Arc;
 
     use better_auth_core::config::AuthConfig;
-    use better_auth_core::store::{InvitationStore, OrganizationStore, UserStore};
+    use better_auth_core::store::{
+        InvitationStore, MemberStore, OrganizationStore, SessionStore, TeamStore, UserStore,
+    };
+    use better_auth_core::{CreateMember, CreateTeam, FieldValue, SchemaValue, UpdateTeam};
     use chrono::{Duration, Utc};
 
     use crate::Database;
@@ -289,16 +314,334 @@ mod tests {
     use super::SeaOrmStore;
 
     async fn test_store() -> SeaOrmStore<BundledSchema> {
+        test_store_with_joins(false).await
+    }
+
+    async fn test_store_with_joins(joins: bool) -> SeaOrmStore<BundledSchema> {
         let database = Database::connect("sqlite::memory:")
             .await
             .expect("sqlite test database should connect");
         run_migrations(&database)
             .await
             .expect("sqlite test migrations should run");
-        SeaOrmStore::new(
-            Arc::new(AuthConfig::new("test-secret-key-at-least-32-chars-long")),
-            database,
-        )
+        let mut config = AuthConfig::new("test-secret-key-at-least-32-chars-long");
+        config.advanced.database.joins = Some(joins);
+        SeaOrmStore::new(Arc::new(config), database)
+    }
+
+    async fn native_fixture(joins: bool) -> SeaOrmStore<BundledSchema> {
+        let store = test_store_with_joins(joins).await;
+        for id in ["1", "2"] {
+            let _ = store
+                .create_user(CreateUser {
+                    id: Some(id.into()),
+                    name: Some(format!("User {id}")).into(),
+                    email: Some(format!("{id}@native-team.test")),
+                    ..Default::default()
+                })
+                .await
+                .expect("fixture user should be created");
+        }
+        let mut organization = CreateOrganization::new("Native", "native");
+        organization.id = Some("1".into());
+        let _ = store
+            .create_organization(organization)
+            .await
+            .expect("fixture organization should be created");
+        for id in ["10", "11"] {
+            let _ = store
+                .create_team(CreateTeam {
+                    id: Some(id.into()),
+                    organization_id: "1".into(),
+                    name: format!("Team {id}").into(),
+                    ..Default::default()
+                })
+                .await
+                .expect("fixture team should be created");
+        }
+        store
+    }
+
+    #[tokio::test]
+    async fn native_team_mutations_preserve_capacity_idempotence_and_joined_lists() {
+        for joins in [false, true] {
+            let store = native_fixture(joins).await;
+            let team_id = FieldValue::Number(10.0);
+            let first_user = FieldValue::Number(1.0);
+            let second_user = FieldValue::Number(2.0);
+            let member = store
+                .add_team_member_value(&team_id, &first_user, Some(1))
+                .await
+                .expect("native membership should be created")
+                .expect("capacity should be available");
+            let repeated = store
+                .add_team_member(&SchemaValue::from_field(team_id.clone()), "1", Some(0))
+                .await
+                .expect("existing membership should bypass the capacity limit")
+                .expect("existing membership should be returned");
+            assert_eq!(member.id, repeated.id);
+            assert_eq!(
+                store
+                    .count_team_members_value(&team_id)
+                    .await
+                    .expect("native count should succeed"),
+                1
+            );
+            assert!(
+                store
+                    .add_team_member_value(&team_id, &second_user, Some(1))
+                    .await
+                    .expect("full team should reject membership without an error")
+                    .is_none()
+            );
+            store
+                .remove_team_member_value(&team_id, &first_user)
+                .await
+                .expect("native removal should release capacity");
+            assert_eq!(
+                store
+                    .count_team_members_value(&team_id)
+                    .await
+                    .expect("native count should succeed"),
+                0
+            );
+            let _ = store
+                .add_team_member_value(&team_id, &second_user, Some(1))
+                .await
+                .expect("released capacity should be reusable")
+                .expect("replacement membership should exist");
+            let listed = store
+                .list_user_teams_value(&second_user)
+                .await
+                .expect("native owner list should succeed");
+            assert_eq!(listed.len(), 1);
+            assert_eq!(
+                listed
+                    .first()
+                    .expect("listed team should exist")
+                    .id
+                    .field_value(),
+                FieldValue::from("10")
+            );
+            let updated = store
+                .update_team_value(
+                    &team_id,
+                    UpdateTeam {
+                        name: Some("Renamed".into()),
+                        ..Default::default()
+                    },
+                )
+                .await
+                .expect("native primary selector should update the team");
+            assert_eq!(
+                updated
+                    .name
+                    .typed()
+                    .expect("ordinary name should remain a string"),
+                "Renamed"
+            );
+            let organization_member = store
+                .create_member(CreateMember::new("1", "2", "member"))
+                .await
+                .expect("organization membership should be created");
+            store
+                .delete_member_value(&organization_member.id.field_value())
+                .await
+                .expect("default primary fields should support membership cleanup");
+            assert!(
+                store
+                    .get_member("1", "2")
+                    .await
+                    .expect("deleted organization member lookup should succeed")
+                    .is_none()
+            );
+            assert_eq!(
+                store
+                    .count_team_members_value(&team_id)
+                    .await
+                    .expect("organization member cleanup should remove team membership"),
+                0
+            );
+            let _ = store
+                .add_team_member_value(&team_id, &first_user, Some(1))
+                .await
+                .expect("organization member cleanup should release team capacity")
+                .expect("released capacity should be reusable");
+            store
+                .delete_team_value(&team_id)
+                .await
+                .expect("native primary selector should delete the team");
+            assert!(
+                store
+                    .get_team_value(&team_id)
+                    .await
+                    .expect("deleted team lookup should succeed")
+                    .is_none()
+            );
+            assert_eq!(
+                store
+                    .count_team_members_value(&team_id)
+                    .await
+                    .expect("deleted team memberships should be countable"),
+                0
+            );
+            assert!(
+                store
+                    .list_user_teams_value(&first_user)
+                    .await
+                    .expect("deleted memberships should not join")
+                    .is_empty()
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn native_invitation_acceptance_rolls_back_partial_team_capacity_and_can_retry() {
+        let store = native_fixture(false).await;
+        let invitation_id = FieldValue::Number(20.0);
+        let user_id = FieldValue::Number(2.0);
+        let mut invitation = CreateInvitation::new(
+            "1",
+            "2@native-team.test",
+            "member",
+            "1",
+            (Utc::now() + Duration::hours(1)).into(),
+        );
+        invitation.id = Some("20".into());
+        invitation.team_id = Some("10,11".into());
+        let _ = store
+            .create_invitation(invitation)
+            .await
+            .expect("fixture invitation should be created");
+        let expires_at = Utc::now() + Duration::hours(2);
+        let renewed = store
+            .update_invitation_expiry_value(&invitation_id, expires_at)
+            .await
+            .expect("native invitation selector should renew expiry");
+        assert_eq!(
+            renewed
+                .expires_at
+                .typed()
+                .expect("expiry should remain a date")
+                .milliseconds(),
+            expires_at.timestamp_millis() as f64
+        );
+        let canceled = store
+            .update_invitation_status_value(&invitation_id, InvitationStatus::Canceled)
+            .await
+            .expect("native invitation selector should cancel");
+        assert_eq!(
+            canceled
+                .status
+                .typed()
+                .expect("status should retain its ordinary type"),
+            &InvitationStatus::Canceled
+        );
+        let _ = store
+            .update_invitation_status_value(&invitation_id, InvitationStatus::Pending)
+            .await
+            .expect("fixture invitation should return to pending");
+        let _ = store
+            .add_team_member_value(&FieldValue::Number(11.0), &FieldValue::Number(1.0), Some(1))
+            .await
+            .expect("second team should be filled")
+            .expect("initial team capacity should be available");
+        assert!(
+            store
+                .accept_invitation_with_teams_values(
+                    &invitation_id,
+                    &user_id,
+                    None,
+                    true,
+                    Some(1).into()
+                )
+                .await
+                .is_err()
+        );
+        assert_eq!(
+            store
+                .count_team_members("10")
+                .await
+                .expect("first team count should succeed"),
+            0
+        );
+        assert_eq!(
+            store
+                .count_team_members("11")
+                .await
+                .expect("second team count should succeed"),
+            1
+        );
+        assert!(
+            store
+                .get_member("1", "2")
+                .await
+                .expect("organization membership lookup should succeed")
+                .is_none()
+        );
+        let pending = store
+            .get_invitation_by_id_value(&invitation_id)
+            .await
+            .expect("claimed invitation should remain readable")
+            .expect("claimed invitation should remain stored");
+        assert_eq!(
+            pending
+                .status
+                .typed()
+                .expect("status should retain its ordinary type"),
+            &InvitationStatus::Pending
+        );
+        store
+            .remove_team_member_value(&FieldValue::Number(11.0), &FieldValue::Number(1.0))
+            .await
+            .expect("second team capacity should be released");
+        let (member, invitation, cookie_session) = store
+            .accept_invitation_with_teams_values(
+                &invitation_id,
+                &user_id,
+                None,
+                true,
+                Some(1).into(),
+            )
+            .await
+            .expect("same native invitation should succeed on retry");
+        assert_eq!(member.user_id.field_value(), FieldValue::from("2"));
+        assert_eq!(
+            invitation
+                .status
+                .typed()
+                .expect("status should retain its ordinary type"),
+            &InvitationStatus::Accepted
+        );
+        assert!(cookie_session.is_none());
+        for team_id in ["10", "11"] {
+            assert_eq!(
+                store
+                    .count_team_members(team_id)
+                    .await
+                    .expect("accepted team count should succeed"),
+                1
+            );
+            assert!(
+                store
+                    .get_team_member(team_id, "2")
+                    .await
+                    .expect("accepted team member lookup should succeed")
+                    .is_some()
+            );
+        }
+        assert!(
+            store
+                .accept_invitation_with_teams_values(
+                    &invitation_id,
+                    &user_id,
+                    None,
+                    true,
+                    Some(1).into()
+                )
+                .await
+                .is_err()
+        );
     }
 
     #[tokio::test]

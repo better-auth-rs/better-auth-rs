@@ -669,7 +669,18 @@ impl<S: AuthSchema> SessionManager<S> {
         data: &SessionData,
         dont_remember: bool,
     ) -> AuthResult<()> {
-        self.write_cache_with_response(req, &data.clone().into(), dont_remember, None, None)
+        self.write_native_cache(req, &data.clone().into(), dont_remember)
+            .await
+    }
+
+    /// Write the configured cache while retaining the selected native User value.
+    pub async fn write_native_cache(
+        &self,
+        req: &AuthRequest,
+        data: &NativeSessionData,
+        dont_remember: bool,
+    ) -> AuthResult<()> {
+        self.write_cache_with_response(req, data, dont_remember, None, None)
             .await
     }
 

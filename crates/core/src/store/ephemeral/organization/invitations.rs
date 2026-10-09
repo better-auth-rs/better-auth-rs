@@ -13,7 +13,7 @@ impl InvitationStore for EphemeralStore {
             email: (input.email).into(),
             role: input.role.into(),
             status: (input.status.unwrap_or_default()).into(),
-            inviter_id: (input.inviter_id).into(),
+            inviter_id: input.inviter_id,
             team_id: (input.team_id).into(),
             expires_at: (input.expires_at).into(),
             created_at: (input.created_at.unwrap_or_else(|| Utc::now().into())).into(),
@@ -48,7 +48,10 @@ impl InvitationStore for EphemeralStore {
         self.output_invitation(invitation).await
     }
     async fn get_invitation_by_id(&self, id: &str) -> AuthResult<Option<Invitation>> {
-        let id = self.organization_query(EntityRole::Invitation, "id", Value::from(id))?;
+        self.get_invitation_by_id_value(&id.into()).await
+    }
+    async fn get_invitation_by_id_value(&self, id: &Value) -> AuthResult<Option<Invitation>> {
+        let id = self.organization_query(EntityRole::Invitation, "id", id.clone())?;
         let value = self.lock()?.invitations.get(&id)?;
         match value {
             Some(value) => self.output_invitation(value).await.map(Some),
@@ -94,7 +97,15 @@ impl InvitationStore for EphemeralStore {
         id: &str,
         status: InvitationStatus,
     ) -> AuthResult<Invitation> {
-        let id = self.organization_query(EntityRole::Invitation, "id", Value::from(id))?;
+        self.update_invitation_status_value(&id.into(), status)
+            .await
+    }
+    async fn update_invitation_status_value(
+        &self,
+        id: &Value,
+        status: InvitationStatus,
+    ) -> AuthResult<Invitation> {
+        let id = self.organization_query(EntityRole::Invitation, "id", id.clone())?;
         let patch = self
             .prepare_record_patch(
                 EntityRole::Invitation,
@@ -120,7 +131,15 @@ impl InvitationStore for EphemeralStore {
         id: &str,
         expires_at: DateTime<Utc>,
     ) -> AuthResult<Invitation> {
-        let id = self.organization_query(EntityRole::Invitation, "id", Value::from(id))?;
+        self.update_invitation_expiry_value(&id.into(), expires_at)
+            .await
+    }
+    async fn update_invitation_expiry_value(
+        &self,
+        id: &Value,
+        expires_at: DateTime<Utc>,
+    ) -> AuthResult<Invitation> {
+        let id = self.organization_query(EntityRole::Invitation, "id", id.clone())?;
         let patch = self
             .prepare_record_patch(
                 EntityRole::Invitation,

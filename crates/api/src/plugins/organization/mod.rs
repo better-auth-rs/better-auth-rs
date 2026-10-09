@@ -32,7 +32,7 @@ pub struct InvitationEmail {
     /// The member sending the invitation.
     pub member: better_auth_core::types::Member,
     /// The user sending the invitation.
-    pub inviter: better_auth_core::wire::UserView,
+    pub inviter: better_auth_core::FieldValue,
     /// HTTP request that initiated delivery, absent for requestless server calls.
     pub request: Option<AuthRequest>,
 }

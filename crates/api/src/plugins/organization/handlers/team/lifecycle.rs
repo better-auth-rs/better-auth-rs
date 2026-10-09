@@ -1,4 +1,3 @@
-use better_auth_core::entity::{AuthSession, AuthUser};
 use better_auth_core::{
     AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult, AuthSchema, FieldValue,
 };
@@ -30,14 +29,14 @@ pub(super) async fn create(
         .or_else(|| {
             session
                 .as_ref()
-                .map(|(_, session)| session.active_organization_id().field_value())
+                .map(|session| session.session.active_organization_id.field_value())
         })
         .filter(FieldValue::is_truthy)
         .ok_or_else(|| AuthError::bad_request("No active organization"))?;
-    if let Some((user, _)) = &session {
+    if let Some(session) = &session {
         let member = ctx
             .database
-            .get_member_with_user_value(&org, &user.id().field_value())
+            .get_member_with_user_value(&org, session.user_property("id")?)
             .await?
             .ok_or_else(|| {
                 AuthError::forbidden("You are not allowed to invite users to this organization")
@@ -52,18 +51,10 @@ pub(super) async fn create(
         )
         .await?;
     }
-    let user_view = match &session {
-        Some((user, _)) => Some(ctx.user_view(user).await?),
-        None => None,
-    };
-    let session_view = match &session {
-        Some((_, session)) => Some(ctx.session_view(session).await?),
-        None => None,
-    };
-    let actor = user_view
-        .as_ref()
-        .zip(session_view.as_ref())
-        .map(|(user, session)| OrganizationSession { user, session });
+    let actor = session.as_ref().map(|session| OrganizationSession {
+        user: &session.user,
+        session: &session.session,
+    });
     let count = ctx.database.count_organization_teams_value(&org).await?;
     if let Some(maximum) = config
         .team_limit(
@@ -101,7 +92,11 @@ pub(super) async fn create(
     };
     if let Some(hooks) = &config.hooks {
         hooks
-            .before_create_team(&mut data, &organization_view, user_view.as_ref())
+            .before_create_team(
+                &mut data,
+                &organization_view,
+                session.as_ref().map(|session| &session.user),
+            )
             .await?;
     }
     let team = ctx
@@ -113,7 +108,7 @@ pub(super) async fn create(
         hooks
             .after_create_team(OrganizationTeamEvent {
                 team: &team,
-                user: user_view.as_ref(),
+                user: session.as_ref().map(|session| &session.user),
                 organization: &organization_view,
             })
             .await?;
@@ -136,21 +131,22 @@ pub(super) async fn remove(
         .or_else(|| {
             session
                 .as_ref()
-                .map(|(_, session)| session.active_organization_id().field_value())
+                .map(|session| session.session.active_organization_id.field_value())
         })
         .filter(FieldValue::is_truthy)
         .ok_or_else(|| AuthError::bad_request("No active organization"))?;
     if session.is_none() && request_present(req, ctx) {
         return Err(AuthResponse::new(401).into());
     }
-    if let Some((user, session)) = &session {
+    if let Some(session) = &session {
         let member = ctx
             .database
-            .get_member_with_user_value(&org, &user.id().field_value())
+            .get_member_with_user_value(&org, session.user_property("id")?)
             .await?
             .ok_or_else(|| AuthError::forbidden("You are not allowed to delete this team"))?;
         if session
-            .active_team_id()
+            .session
+            .active_team_id
             .field_value()
             .strict_equals(&body.team_id.as_str().into())
         {
@@ -168,10 +164,6 @@ pub(super) async fn remove(
         )
         .await?;
     }
-    let user_view = match &session {
-        Some((user, _)) => Some(ctx.user_view(user).await?),
-        None => None,
-    };
     let team = find_team(&body.team_id.as_str().into(), &org, ctx).await?;
     if !config.teams.allow_removing_all_teams
         && ctx.database.count_organization_teams_value(&org).await? <= 1
@@ -186,13 +178,15 @@ pub(super) async fn remove(
     let organization_view = fields::organization(&organization, ctx);
     let event = OrganizationTeamEvent {
         team: &team,
-        user: user_view.as_ref(),
+        user: session.as_ref().map(|session| &session.user),
         organization: &organization_view,
     };
     if let Some(hooks) = &config.hooks {
         hooks.before_delete_team(event).await?;
     }
-    ctx.database.delete_team(team.id.typed()?).await?;
+    ctx.database
+        .delete_team_value(&team.id.field_value())
+        .await?;
     if let Some(hooks) = &config.hooks {
         hooks.after_delete_team(event).await?;
     }

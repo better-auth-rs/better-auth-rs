@@ -27,10 +27,24 @@ impl VerificationEmail {
 type Sender<S> = dyn Fn(&VerificationEmail, &EndpointContext<'_, S>) -> AuthResult<Option<BackgroundFuture>>
     + Send
     + Sync;
+pub(super) type Lifecycle<S> = dyn Fn(&FieldValue, &EndpointContext<'_, S>) -> AuthResult<Option<BackgroundFuture>>
+    + Send
+    + Sync;
 
 /// Verification delivery with the complete endpoint and active transaction.
 pub struct EmailVerificationCallbacks<S: AuthSchema> {
-    pub(super) sender: Arc<Sender<S>>,
+    pub(super) sender: Option<Arc<Sender<S>>>,
+    pub(super) before: Option<Arc<Lifecycle<S>>>,
+    pub(super) after: Option<Arc<Lifecycle<S>>>,
+}
+impl<S: AuthSchema> Default for EmailVerificationCallbacks<S> {
+    fn default() -> Self {
+        Self {
+            sender: None,
+            before: None,
+            after: None,
+        }
+    }
 }
 impl<S: AuthSchema> EmailVerificationCallbacks<S> {
     /// Invoke delivery before background scheduling. Return `None` for synchronous completion.
@@ -45,8 +59,43 @@ impl<S: AuthSchema> EmailVerificationCallbacks<S> {
         + 'static,
     ) -> Self {
         Self {
-            sender: Arc::new(callback),
+            sender: Some(Arc::new(callback)),
+            ..Self::default()
         }
+    }
+
+    /// Run before verification mutates the User. Returned work completes before the mutation.
+    pub fn before(
+        mut self,
+        callback: impl Fn(&FieldValue, &EndpointContext<'_, S>) -> AuthResult<Option<BackgroundFuture>>
+        + Send
+        + Sync
+        + 'static,
+    ) -> Self {
+        self.before = Some(Arc::new(callback));
+        self
+    }
+
+    /// Run after verification mutates the User. Cancellation preserves the upstream null User.
+    pub fn after(
+        mut self,
+        callback: impl Fn(&FieldValue, &EndpointContext<'_, S>) -> AuthResult<Option<BackgroundFuture>>
+        + Send
+        + Sync
+        + 'static,
+    ) -> Self {
+        self.after = Some(Arc::new(callback));
+        self
+    }
+
+    pub(crate) fn has_sender(&self) -> bool {
+        self.sender.is_some()
+    }
+    pub(crate) fn has_before(&self) -> bool {
+        self.before.is_some()
+    }
+    pub(crate) fn has_after(&self) -> bool {
+        self.after.is_some()
     }
 }
 impl EmailVerificationPlugin {

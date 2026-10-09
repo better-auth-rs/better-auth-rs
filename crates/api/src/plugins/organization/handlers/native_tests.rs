@@ -15,7 +15,7 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 
-async fn context(
+pub(super) async fn context(
     config: better_auth_core::AuthConfig,
     organization: &OrganizationConfig,
 ) -> AuthContext<StatelessSchema> {
@@ -29,7 +29,7 @@ async fn context(
     .unwrap()
 }
 
-async fn session(
+pub(super) async fn session(
     ctx: &AuthContext<StatelessSchema>,
     user: &better_auth_core::wire::UserView,
 ) -> NativeSessionData {
@@ -147,7 +147,7 @@ async fn native_read_routes_preserve_property_access_order_and_failed_membership
     }
 }
 
-fn numeric_output(enabled: Arc<AtomicBool>) -> UserFieldConfig {
+pub(super) fn numeric_output(enabled: Arc<AtomicBool>) -> UserFieldConfig {
     UserFieldConfig {
         transform: Some(FieldTransforms {
             input: None,

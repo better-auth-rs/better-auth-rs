@@ -60,7 +60,10 @@ impl TeamStore for EphemeralStore {
         }
     }
     async fn update_team(&self, id: &str, update: UpdateTeam) -> AuthResult<Team> {
-        let id = self.organization_query(EntityRole::Team, "id", Value::from(id))?;
+        self.update_team_value(&id.into(), update).await
+    }
+    async fn update_team_value(&self, id: &Value, update: UpdateTeam) -> AuthResult<Team> {
+        let id = self.organization_query(EntityRole::Team, "id", id.clone())?;
         let mut patch = FieldMap::new();
         if let Some(name) = update.name {
             let _ = patch.insert("name".into(), name.into_field());
@@ -96,9 +99,11 @@ impl TeamStore for EphemeralStore {
         self.output_team(team).await
     }
     async fn delete_team(&self, id: &str) -> AuthResult<()> {
-        let id = self.organization_query(EntityRole::Team, "id", Value::from(id))?;
-        let public_id = Self::project_id(&id)?;
-        let public_id = public_id.typed()?;
+        self.delete_team_value(&id.into()).await
+    }
+    async fn delete_team_value(&self, id: &Value) -> AuthResult<()> {
+        let public_id = id;
+        let id = self.organization_query(EntityRole::Team, "id", id.clone())?;
         let (organization_id, snapshot) = {
             let state = self.lock()?;
             let organization_id = state
@@ -143,7 +148,7 @@ impl TeamStore for EphemeralStore {
             };
             let retained: Vec<_> = ids
                 .split(',')
-                .filter(|team_id| *team_id != public_id)
+                .filter(|team_id| !Value::from(*team_id).strict_equals(public_id))
                 .collect();
             if retained.len() == ids.split(',').count() {
                 continue;
@@ -268,10 +273,13 @@ impl TeamStore for EphemeralStore {
             .count() as u64)
     }
     async fn list_user_teams(&self, user_id: &str) -> AuthResult<Vec<Team>> {
+        self.list_user_teams_value(&user_id.into()).await
+    }
+    async fn list_user_teams_value(&self, user_id: &Value) -> AuthResult<Vec<Team>> {
         if self.config.advanced.database.joins == Some(true) {
             return self.joined_user_teams(user_id).await;
         }
-        let user_id = self.memory_primary_id_query(&Value::from(user_id))?;
+        let user_id = self.memory_primary_id_query(user_id)?;
         let rows = self
             .lock()?
             .team_members
@@ -344,7 +352,10 @@ impl TeamStore for EphemeralStore {
         .collect()
     }
     async fn count_team_members(&self, team_id: &str) -> AuthResult<u64> {
-        let team_id = self.organization_query(EntityRole::Team, "id", Value::from(team_id))?;
+        self.count_team_members_value(&team_id.into()).await
+    }
+    async fn count_team_members_value(&self, team_id: &Value) -> AuthResult<u64> {
+        let team_id = self.organization_query(EntityRole::Team, "id", team_id.clone())?;
         Ok(self
             .lock()?
             .team_members
@@ -359,8 +370,17 @@ impl TeamStore for EphemeralStore {
         user_id: &str,
         maximum: Option<usize>,
     ) -> AuthResult<Option<TeamMember>> {
-        let user_id = self.memory_reference_id_input(Value::from(user_id))?;
-        let team_id = self.organization_primary_id(team_id)?;
+        self.add_team_member_value(&team_id.field_value(), &user_id.into(), maximum)
+            .await
+    }
+    async fn add_team_member_value(
+        &self,
+        team_id: &Value,
+        user_id: &Value,
+        maximum: Option<usize>,
+    ) -> AuthResult<Option<TeamMember>> {
+        let user_id = self.memory_reference_id_input(user_id.clone())?;
+        let team_id = self.organization_query(EntityRole::Team, "id", team_id.clone())?;
         let team_id = &team_id;
         let (team, actual, row_count) = {
             let state = self.lock()?;
@@ -369,10 +389,16 @@ impl TeamStore for EphemeralStore {
                 .get(team_id)?
                 .ok_or_else(|| AuthError::not_found("Team not found"))?;
             let members = state.team_members.snapshot()?;
-            if let Some(member) = members
-                .iter()
-                .find(|member| member.team_id == *team_id && member.user_id == user_id)
-            {
+            if let Some(member) = members.iter().find(|member| {
+                member
+                    .team_id
+                    .field_value()
+                    .strict_equals(&team_id.field_value())
+                    && member
+                        .user_id
+                        .field_value()
+                        .strict_equals(&user_id.field_value())
+            }) {
                 return Self::output_team_member(member.clone()).map(Some);
             }
             (
@@ -399,10 +425,16 @@ impl TeamStore for EphemeralStore {
             .get(team_id)?
             .ok_or_else(|| AuthError::not_found("Team not found"))?;
         let members = state.team_members.snapshot()?;
-        if let Some(member) = members
-            .iter()
-            .find(|member| member.team_id == *team_id && member.user_id == user_id)
-        {
+        if let Some(member) = members.iter().find(|member| {
+            member
+                .team_id
+                .field_value()
+                .strict_equals(&team_id.field_value())
+                && member
+                    .user_id
+                    .field_value()
+                    .strict_equals(&user_id.field_value())
+        }) {
             return Self::output_team_member(member.clone()).map(Some);
         }
         let actual = members
@@ -432,8 +464,12 @@ impl TeamStore for EphemeralStore {
         Self::output_team_member(member).map(Some)
     }
     async fn remove_team_member(&self, team_id: &str, user_id: &str) -> AuthResult<()> {
-        let user_id = self.memory_primary_id_query(&Value::from(user_id))?;
-        let team_id = self.organization_query(EntityRole::Team, "id", Value::from(team_id))?;
+        self.remove_team_member_value(&team_id.into(), &user_id.into())
+            .await
+    }
+    async fn remove_team_member_value(&self, team_id: &Value, user_id: &Value) -> AuthResult<()> {
+        let user_id = self.memory_primary_id_query(user_id)?;
+        let team_id = self.organization_query(EntityRole::Team, "id", team_id.clone())?;
         let team_id = &team_id;
         let (team, members) = {
             let state = self.lock()?;

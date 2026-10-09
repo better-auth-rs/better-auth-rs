@@ -357,7 +357,14 @@ where
     }
 
     async fn update_member_role(&self, member_id: &str, role: &str) -> AuthResult<Member> {
-        models::update::<O::Member, _>(
+        self.update_member_role_value(&member_id.into(), role).await
+    }
+    async fn update_member_role_value(
+        &self,
+        member_id: &better_auth_core::FieldValue,
+        role: &str,
+    ) -> AuthResult<Member> {
+        models::update_value::<O::Member, _>(
             self.connection(),
             member_id,
             values([("role", (role).to_owned().into_field())]),
@@ -369,6 +376,12 @@ where
     }
 
     async fn delete_member(&self, member_id: &str) -> AuthResult<()> {
+        self.delete_member_value(&member_id.into()).await
+    }
+    async fn delete_member_value(
+        &self,
+        member_id: &better_auth_core::FieldValue,
+    ) -> AuthResult<()> {
         use sea_orm::TransactionTrait;
         let tx = self.connection().begin().await.map_err(map_db_err)?;
         let result = self.delete_member_with_connection(&tx, member_id).await?;
@@ -381,6 +394,19 @@ where
         member_id: &str,
         organization_id: &str,
         user_id: &str,
+    ) -> AuthResult<()> {
+        self.delete_member_for_user_value(
+            &member_id.into(),
+            &organization_id.into(),
+            &user_id.into(),
+        )
+        .await
+    }
+    async fn delete_member_for_user_value(
+        &self,
+        member_id: &better_auth_core::FieldValue,
+        organization_id: &better_auth_core::FieldValue,
+        user_id: &better_auth_core::FieldValue,
     ) -> AuthResult<()> {
         use sea_orm::TransactionTrait;
         let tx = self.connection().begin().await.map_err(map_db_err)?;
@@ -702,13 +728,14 @@ impl<
     pub(super) async fn delete_member_with_connection<C: sea_orm::ConnectionTrait>(
         &self,
         db: &C,
-        member_id: &str,
+        member_id: &better_auth_core::FieldValue,
     ) -> AuthResult<()> {
         let Some(member) = Entity::<O::Member>::find()
-            .filter(
-                O::Member::column("id")?
-                    .eq_id(member_id, self.config().advanced.database.generate_id())?,
-            )
+            .filter(self.organization_field_equals::<O::Member>(
+                better_auth_core::store::schema::EntityRole::Member,
+                "id",
+                member_id,
+            )?)
             .one(db)
             .await
             .map_err(map_db_err)?
@@ -724,8 +751,8 @@ impl<
         self.delete_member_for_user_with_connection(
             db,
             member_id,
-            member.organization_id.typed()?,
-            member.user_id.typed()?,
+            &member.organization_id.field_value(),
+            &member.user_id.field_value(),
         )
         .await
     }
@@ -733,22 +760,24 @@ impl<
     pub(super) async fn delete_member_for_user_with_connection<C: sea_orm::ConnectionTrait>(
         &self,
         db: &C,
-        member_id: &str,
-        organization_id: &str,
-        user_id: &str,
+        member_id: &better_auth_core::FieldValue,
+        organization_id: &better_auth_core::FieldValue,
+        user_id: &better_auth_core::FieldValue,
     ) -> AuthResult<()> {
         let _ = Entity::<O::Member>::delete_many()
-            .filter(
-                O::Member::column("id")?
-                    .eq_id(member_id, self.config().advanced.database.generate_id())?,
-            )
+            .filter(self.organization_field_equals::<O::Member>(
+                better_auth_core::store::schema::EntityRole::Member,
+                "id",
+                member_id,
+            )?)
             .exec(db)
             .await
             .map_err(map_db_err)?;
         let teams = Entity::<O::Team>::find()
-            .filter(O::Team::column("organization_id")?.eq_id(
+            .filter(self.organization_field_equals::<O::Team>(
+                better_auth_core::store::schema::EntityRole::Team,
+                "organizationId",
                 organization_id,
-                self.config().advanced.database.generate_id(),
             )?)
             .limit(super::pagination::default_limit(
                 &self.config,
@@ -769,28 +798,33 @@ impl<
                     O::Team::column("member_count")?,
                     Expr::col(O::Team::column("member_count")?),
                 )
-                .filter(O::Team::column("id")?.eq_id(
-                    team.id.typed()?,
-                    self.config().advanced.database.generate_id(),
+                .filter(self.organization_field_equals::<O::Team>(
+                    better_auth_core::store::schema::EntityRole::Team,
+                    "id",
+                    &team.id.field_value(),
                 )?)
                 .exec(db)
                 .await
                 .map_err(map_db_err)?;
             let deleted = Entity::<O::TeamMember>::delete_many()
-                .filter(O::TeamMember::column("team_id")?.eq_id(
-                    team.id.typed()?,
+                .filter(super::value_filter::equals_id(
+                    O::TeamMember::column("team_id")?,
+                    &team.id.field_value(),
                     self.config().advanced.database.generate_id(),
+                    db.get_database_backend(),
                 )?)
-                .filter(
-                    O::TeamMember::column("user_id")?
-                        .eq_id(user_id, self.config().advanced.database.generate_id())?,
-                )
+                .filter(super::value_filter::equals_id(
+                    O::TeamMember::column("user_id")?,
+                    user_id,
+                    self.config().advanced.database.generate_id(),
+                    db.get_database_backend(),
+                )?)
                 .exec(db)
                 .await
                 .map_err(map_db_err)?;
             super::team_capacity::release::<O::Team, _>(
                 db,
-                team.id.typed()?,
+                &team.id.field_value(),
                 deleted.rows_affected,
                 &self.organization_fields()?.team,
                 self.config().advanced.database.generate_id(),

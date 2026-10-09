@@ -53,6 +53,8 @@ let auth = BetterAuth::<AppAuthSchema>::new(config)
 
 The `.roles(map)` and `.admin_roles(roles)` builders accept the map and list directly. Use `None` in an `AdminConfig` literal to retain omission. Custom administrator role names are checked when the plugin initializes.
 
+Impersonation uses the upstream signed `token:dontRemember` cookie and the configured session-token cookie attributes. Stopping impersonation validates the administrator session before deleting the impersonated session and restoring the administrator cookie. Older JWT-format impersonation cookies are not accepted; sign in again to restore an administrator session.
+
 A nonzero `banExpiresIn` request value takes precedence over `default_ban_expires_in`. A zero request value uses the configured default. Both expiry configurations preserve millisecond date precision, so a value of `1.5` represents 1500 milliseconds. NaN has the same default behavior as zero.
 
 The ordinary SQLite contracts cover omission, zero, fractional seconds, request precedence, stored dates, and issuance Cookie attributes. They do not establish equivalent error timing for non-finite or out-of-range dates, or behavior at ban and session expiry boundaries.

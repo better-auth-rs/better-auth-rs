@@ -1,11 +1,11 @@
-use better_auth_core::entity::{AuthSession, AuthUser};
 use better_auth_core::error::{AuthError, AuthResult};
 use better_auth_core::plugin::{AuthContext, AuthRoute};
+use better_auth_core::session::NativeSessionData;
 use better_auth_core::types::{AuthRequest, AuthResponse, HttpMethod, Team};
 use serde::Deserialize;
 use validator::Validate;
 
-use super::{require_session, resolve_organization_id};
+use super::{require_native_session, resolve_organization_id};
 use crate::plugins::organization::hooks::*;
 use crate::plugins::organization::types::{NullableStringField, deserialize_nullable_string_field};
 use crate::plugins::organization::{OrganizationConfig, rbac::check_permission};
@@ -193,12 +193,11 @@ pub(crate) async fn handle_team_request(
         }
         _ => {}
     }
-    let (user, session) = require_session(req, ctx).await?;
-    let user_view = ctx.user_view(&user).await?;
-    let session_view = ctx.session_view(&session).await?;
+    let data = require_native_session(req, ctx).await?;
+    let session = &data.session;
     let actor = OrganizationSession {
-        user: &user_view,
-        session: &session_view,
+        user: &data.user,
+        session,
     };
     macro_rules! body {
         ($ty:ty) => {
@@ -213,10 +212,10 @@ pub(crate) async fn handle_team_request(
             let organization_id =
                 optional_string(body.data.organization_id, "body.data.organizationId")?;
             let org =
-                resolve_organization_id(organization_id.as_deref(), None, &session, ctx).await?;
+                resolve_organization_id(organization_id.as_deref(), None, session, ctx).await?;
             let member = ctx
                 .database
-                .get_member_with_user_value(&org, &user.id().field_value())
+                .get_member_with_user_value(&org, data.user_property("id")?)
                 .await?
                 .ok_or_else(|| AuthError::forbidden("You are not allowed to update this team"))?;
             authorize(
@@ -238,7 +237,7 @@ pub(crate) async fn handle_team_request(
                 crate::plugins::organization::fields::organization(&organization, ctx);
             let event = OrganizationTeamEvent {
                 team: &team,
-                user: Some(&user_view),
+                user: Some(&data.user),
                 organization: &organization_view,
             };
             let mut updates = better_auth_core::UpdateTeam {
@@ -249,7 +248,10 @@ pub(crate) async fn handle_team_request(
             if let Some(hooks) = &config.hooks {
                 hooks.before_update_team(&mut updates, event).await?;
             }
-            let updated = ctx.database.update_team(team.id.typed()?, updates).await?;
+            let updated = ctx
+                .database
+                .update_team_value(&team.id.field_value(), updates)
+                .await?;
             let updated = crate::plugins::organization::fields::team(updated, ctx);
             if let Some(hooks) = &config.hooks {
                 hooks
@@ -263,11 +265,11 @@ pub(crate) async fn handle_team_request(
         }
         (HttpMethod::Get, "/organization/list-teams") => {
             let org =
-                resolve_organization_id(req.query_string("organizationId")?, None, &session, ctx)
+                resolve_organization_id(req.query_string("organizationId")?, None, session, ctx)
                     .await?;
             if ctx
                 .database
-                .get_member_with_user_value(&org, &user.id().field_value())
+                .get_member_with_user_value(&org, data.user_property("id")?)
                 .await?
                 .is_none()
             {
@@ -285,37 +287,40 @@ pub(crate) async fn handle_team_request(
             let body = body!(ActiveBody);
             let team_id = match body.team_id {
                 NullableStringField::Null => {
-                    if !session.active_team_id().field_value().is_truthy() {
+                    if !session.active_team_id.field_value().is_truthy() {
                         return Ok(Some(AuthResponse::json(200, &serde_json::Value::Null)?));
                     }
                     let updated = ctx
                         .database
                         .update_session_active_team_by_token_value(
-                            &session.token().field_value(),
+                            &session.token.field_value(),
                             None,
                         )
                         .await?;
                     let manager = ctx.session_manager();
                     manager
-                        .set_session_cookie(
+                        .set_native_session_cookie(
                             req,
-                            manager.internal_data(&user, &updated).await?,
+                            NativeSessionData {
+                                session: updated,
+                                user: data.user.clone(),
+                            },
                             None,
                         )
                         .await?;
                     return Ok(Some(AuthResponse::json(200, &serde_json::Value::Null)?));
                 }
                 NullableStringField::Value(id) if !id.is_empty() => FieldValue::from(id),
-                _ => session.active_team_id().field_value(),
+                _ => session.active_team_id.field_value(),
             };
             if !team_id.is_truthy() {
                 return Ok(Some(AuthResponse::json(200, &serde_json::Value::Null)?));
             }
-            let org = resolve_organization_id(None, None, &session, ctx).await?;
+            let org = resolve_organization_id(None, None, session, ctx).await?;
             let team = find_team(&team_id, &org, ctx).await?;
             if ctx
                 .database
-                .get_team_member_value(&team_id, &user.id().field_value())
+                .get_team_member_value(&team_id, data.user_property("id")?)
                 .await?
                 .is_none()
             {
@@ -324,13 +329,20 @@ pub(crate) async fn handle_team_request(
             let updated = ctx
                 .database
                 .update_session_active_team_by_token_value(
-                    &session.token().field_value(),
+                    &session.token.field_value(),
                     Some(&team.id.field_value()),
                 )
                 .await?;
             let manager = ctx.session_manager();
             manager
-                .set_session_cookie(req, manager.internal_data(&user, &updated).await?, None)
+                .set_native_session_cookie(
+                    req,
+                    NativeSessionData {
+                        session: updated,
+                        user: data.user.clone(),
+                    },
+                    None,
+                )
                 .await?;
             AuthResponse::json(200, &team)?
         }
@@ -338,25 +350,28 @@ pub(crate) async fn handle_team_request(
             let target = req
                 .query_string("userId")?
                 .filter(|id| !id.is_empty())
-                .unwrap_or(user.id.typed()?);
+                .map(FieldValue::from)
+                .map(Ok)
+                .unwrap_or_else(|| data.user_property("id").cloned())?;
+            let is_self = target.strict_equals(data.user_property("id")?);
             let explicit_org = req
                 .query_string("organizationId")?
                 .filter(|id| !id.is_empty());
             let org = explicit_org
                 .map(FieldValue::from)
-                .unwrap_or_else(|| session.active_organization_id().field_value());
-            if user.id != target || explicit_org.is_some() {
+                .unwrap_or_else(|| session.active_organization_id.field_value());
+            if !is_self || explicit_org.is_some() {
                 if !org.is_truthy() {
                     return Err(AuthError::bad_request("No active organization"));
                 }
                 let member = ctx
                     .database
-                    .get_member_with_user_value(&org, &user.id().field_value())
+                    .get_member_with_user_value(&org, data.user_property("id")?)
                     .await?
                     .ok_or_else(|| {
                         AuthError::forbidden("You are not a member of this organization")
                     })?;
-                if user.id != target {
+                if !is_self {
                     authorize(
                         &member.member,
                         &org,
@@ -368,7 +383,7 @@ pub(crate) async fn handle_team_request(
                     .await?;
                     if ctx
                         .database
-                        .get_member_with_user_value(&org, &target.into())
+                        .get_member_with_user_value(&org, &target)
                         .await?
                         .is_none()
                     {
@@ -379,7 +394,7 @@ pub(crate) async fn handle_team_request(
                 }
                 let teams = ctx
                     .database
-                    .list_user_teams(target)
+                    .list_user_teams_value(&target)
                     .await?
                     .into_iter()
                     .filter(|team| team.organization_id.field_value().strict_equals(&org))
@@ -387,10 +402,10 @@ pub(crate) async fn handle_team_request(
                 AuthResponse::json(200, &teams)?
             } else {
                 let mut teams = Vec::new();
-                for team in ctx.database.list_user_teams(target).await? {
+                for team in ctx.database.list_user_teams_value(&target).await? {
                     if ctx
                         .database
-                        .get_member(team.organization_id.typed()?, target)
+                        .get_member_value(&team.organization_id.field_value(), &target)
                         .await?
                         .is_some()
                     {
@@ -405,7 +420,7 @@ pub(crate) async fn handle_team_request(
                 .query_string("teamId")?
                 .filter(|id| !id.is_empty())
                 .map(FieldValue::from)
-                .unwrap_or_else(|| session.active_team_id().field_value());
+                .unwrap_or_else(|| session.active_team_id.field_value());
             if !team_id.is_truthy() {
                 return Err(AuthError::bad_request("You do not have an active team"));
             }
@@ -418,13 +433,13 @@ pub(crate) async fn handle_team_request(
                 .database
                 .get_member_value(
                     &team.organization_id.field_value(),
-                    &user.id().field_value(),
+                    data.user_property("id")?,
                 )
                 .await?
                 .is_none()
                 || ctx
                     .database
-                    .get_team_member_value(&team_id, &user.id().field_value())
+                    .get_team_member_value(&team_id, data.user_property("id")?)
                     .await?
                     .is_none()
             {
@@ -437,11 +452,11 @@ pub(crate) async fn handle_team_request(
             "/organization/add-team-member" | "/organization/remove-team-member",
         ) => {
             let body = body!(MemberBody);
-            let org = resolve_organization_id(body.organization_id.as_deref(), None, &session, ctx)
+            let org = resolve_organization_id(body.organization_id.as_deref(), None, session, ctx)
                 .await?;
             let member = ctx
                 .database
-                .get_member_with_user_value(&org, &user.id().field_value())
+                .get_member_with_user_value(&org, data.user_property("id")?)
                 .await?
                 .ok_or_else(|| {
                     AuthError::bad_request("User is not a member of the organization")
@@ -483,11 +498,11 @@ pub(crate) async fn handle_team_request(
                 .get_user_by_id(&body.user_id)
                 .await?
                 .ok_or_else(|| AuthError::bad_request("User not found"))?;
-            let target_view = ctx.internal_user_view(&target_user).await?;
+            let target_value = FieldValue::from(FieldMap::from(target_user));
             let target = OrganizationTeamMemberTarget {
                 team: &team,
                 organization: &organization_view,
-                user: &target_view,
+                user: &target_value,
             };
             if adding {
                 if let Some(hooks) = &config.hooks {
@@ -495,7 +510,7 @@ pub(crate) async fn handle_team_request(
                 }
                 let maximum = config
                     .team_member_limit(OrganizationTeamMemberLimit {
-                        team_id: &team.id.field_value(),
+                        team_id: &body.team_id.as_str().into(),
                         organization_id: &org,
                         session: actor,
                     })

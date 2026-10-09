@@ -1,6 +1,6 @@
 use super::{OrganizationPlugin, hooks::*, types::RoleInput};
 use crate::plugins::endpoint_context::EndpointContext;
-use better_auth_core::entity::{AuthSession, AuthUser};
+use better_auth_core::entity::AuthUser;
 use better_auth_core::{
     AuthContext, AuthError, AuthRequest, AuthResult, AuthSchema, FieldMap, FieldValue,
     FromFieldMap, Member,
@@ -99,7 +99,9 @@ impl OrganizationPlugin {
         let user_id = user_id.is_truthy().then_some(user_id);
         // Upstream permits a supplied user ID even when session lookup fails.
         let session = match user_id.is_some() {
-            true => super::handlers::require_session(request, ctx).await.ok(),
+            true => super::handlers::require_native_session(request, ctx)
+                .await
+                .ok(),
             _ => None,
         };
         let org_value = input.organization_id.field_value();
@@ -109,7 +111,7 @@ impl OrganizationPlugin {
             .or_else(|| {
                 session
                     .as_ref()
-                    .map(|(_, session)| session.active_organization_id().field_value())
+                    .map(|session| session.session.active_organization_id.field_value())
                     .filter(FieldValue::is_truthy)
             })
             .ok_or(AuthError::Upstream {
@@ -182,12 +184,12 @@ impl OrganizationPlugin {
                 code: "ORGANIZATION_NOT_FOUND",
                 message: "Organization not found",
             })?;
-        let org_id = organization.id.typed()?.as_str();
+        let org_id = organization.id.field_value();
         let organization_view =
             crate::plugins::organization::fields::organization(&organization, ctx);
-        let user_view = ctx.internal_user_view(&user).await?;
+        let user_value = FieldValue::from(FieldMap::from(&user));
         let event = OrganizationUser {
-            user: &user_view,
+            user: &user_value,
             organization: &organization_view,
         };
         if count >= self.config.member_limit(event).await? as i64 {
@@ -199,13 +201,13 @@ impl OrganizationPlugin {
         }
         let mut data = OrganizationMemberDraft {
             additional_fields,
-            organization_id: org_id.to_owned().into(),
+            organization_id: organization.id.clone(),
             user_id: user.id().into_owned(),
             role: super::input::parse_roles(&input.role)?,
             team_id: team
                 .as_ref()
-                .map(|team| team.id.typed().cloned())
-                .transpose()?,
+                .map(|team| team.id.clone())
+                .unwrap_or_default(),
             created_at: None,
         };
         if let Some(hooks) = &self.config.hooks {
@@ -213,18 +215,16 @@ impl OrganizationPlugin {
         }
         let member = store.create_member(data.into_create()).await?;
         if let Some(team) = team {
-            let team_id = team.id.typed()?.clone();
+            let team_id = team.id.field_value();
             let result = async {
-                let maximum = if let Some((actor, session)) = &session {
-                    let user_view = ctx.user_view(actor).await?;
-                    let session_view = ctx.session_view(session).await?;
+                let maximum = if let Some(session) = &session {
                     self.config
                         .team_member_limit(OrganizationTeamMemberLimit {
-                            team_id: &team_id.as_str().into(),
-                            organization_id: &org_id.into(),
+                            team_id: &team_id,
+                            organization_id: &org_id,
                             session: OrganizationSession {
-                                user: &user_view,
-                                session: &session_view,
+                                user: &session.user,
+                                session: &session.session,
                             },
                         })
                         .await?
@@ -239,7 +239,7 @@ impl OrganizationPlugin {
                     self.config.teams.maximum_members_per_team
                 };
                 let _ = store
-                    .add_team_member(&team_id.into(), user.id().typed()?, maximum)
+                    .add_team_member_value(&team_id, &user.id().field_value(), maximum)
                     .await?
                     .ok_or(AuthError::Upstream {
                         status: 403,
@@ -251,7 +251,11 @@ impl OrganizationPlugin {
             .await;
             if let Err(error) = result {
                 store
-                    .delete_member_for_user(member.id.typed()?, org_id, user.id().typed()?)
+                    .delete_member_for_user_value(
+                        &member.id.field_value(),
+                        &org_id,
+                        &user.id().field_value(),
+                    )
                     .await?;
                 return Err(error);
             }
@@ -260,7 +264,7 @@ impl OrganizationPlugin {
             hooks
                 .after_add_member(OrganizationMemberEvent {
                     member: &member,
-                    user: &user_view,
+                    user: &user_value,
                     organization: &organization_view,
                 })
                 .await?;

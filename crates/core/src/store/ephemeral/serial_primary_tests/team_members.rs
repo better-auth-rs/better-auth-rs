@@ -7,6 +7,170 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::sync::Notify;
 
 #[tokio::test]
+async fn native_team_deletion_compares_invitation_tokens_without_stringifying_the_selector()
+-> AuthResult<()> {
+    for selector in [Value::Number(1.0), Value::from("1")] {
+        let store = serial_store();
+        let team = store
+            .create_team(CreateTeam {
+                name: "Deleted".into(),
+                organization_id: "1".into(),
+                ..Default::default()
+            })
+            .await?;
+        let _ = store.add_team_member(&team.id, "2", Some(1)).await?;
+        let mut input = organization::invitation();
+        input.team_id = Some("1,other".into());
+        let invitation = store.create_invitation(input).await?;
+        store.delete_team_value(&selector).await?;
+        assert!(store.get_team("1").await?.is_none());
+        assert!(store.list_team_members("1").await?.is_empty());
+        let invitation = required(store.get_invitation_by_id(invitation.id.typed()?).await?)?;
+        assert_eq!(
+            invitation.team_id.typed()?.as_deref(),
+            Some(if selector.is_number() {
+                "1,other"
+            } else {
+                "other"
+            })
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn acceptance_consumes_projected_fields_and_keeps_the_original_claim_for_commit_and_compensation()
+-> AuthResult<()> {
+    struct Limits {
+        maximum: usize,
+        calls: Mutex<Vec<(String, Value)>>,
+    }
+    #[async_trait]
+    impl crate::store::TeamMemberLimitResolver for Limits {
+        async fn maximum(
+            &self,
+            team_id: &str,
+            organization_id: &Value,
+        ) -> AuthResult<Option<usize>> {
+            self.calls
+                .lock()
+                .unwrap()
+                .push((team_id.into(), organization_id.clone()));
+            Ok(Some(self.maximum))
+        }
+    }
+    for maximum in [0, 1] {
+        let store = serial_store();
+        let original = store
+            .create_team(CreateTeam {
+                name: "Original".into(),
+                organization_id: "1".into(),
+                ..Default::default()
+            })
+            .await?;
+        let projected = store
+            .create_team(CreateTeam {
+                name: "Projected".into(),
+                organization_id: "2".into(),
+                ..Default::default()
+            })
+            .await?;
+        let mut input = organization::invitation();
+        input.team_id = Some(original.id.typed()?.clone());
+        let invitation = store.create_invitation(input).await?;
+        let session = store
+            .create_session(CreateSession {
+                inherited_fields: Default::default(),
+                additional_fields: Default::default(),
+                user_id: "3".into(),
+                expires_at: (Utc::now() + chrono::Duration::hours(1)).into(),
+                ip_address: None,
+                user_agent: None,
+                impersonated_by: None,
+                active_organization_id: None,
+            })
+            .await?;
+        let original_session = required(
+            store
+                .lock()?
+                .sessions
+                .find(|row| row.token == session.token)?,
+        )?;
+        let mut fields = OrganizationFields::default();
+        for (name, output) in [
+            ("organizationId", Value::Number(2.0)),
+            ("role", Value::Number(7.0)),
+            ("teamId", projected.id.field_value()),
+        ] {
+            let _ = fields.invitation.fields_mut().insert(
+                name.into(),
+                UserFieldConfig {
+                    transform: Some(FieldTransforms {
+                        output: Some(UserFieldTransform::new(move |_| Ok(output.clone()))),
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                },
+            );
+        }
+        store.configure_organization_fields(fields)?;
+        let limits = Limits {
+            maximum,
+            calls: Default::default(),
+        };
+        let result = store
+            .accept_invitation_with_teams_values(
+                &invitation.id.field_value(),
+                &Value::Number(3.0),
+                Some(&session.token.field_value()),
+                true,
+                TeamMemberLimits::Resolver(&limits),
+            )
+            .await;
+        assert_eq!(
+            *limits.calls.lock().unwrap(),
+            [("2".into(), Value::Number(2.0))]
+        );
+        if maximum == 0 {
+            assert!(matches!(result, Err(AuthError::Forbidden(_))));
+        } else {
+            let (member, accepted, cookie) = result?;
+            assert_eq!(accepted.id, "1");
+            assert_eq!(accepted.organization_id.field_value(), Value::Number(2.0));
+            assert_eq!(accepted.role.field_value(), Value::Number(7.0));
+            assert_eq!(accepted.team_id.field_value(), Value::from("2"));
+            assert_eq!(member.organization_id, "2");
+            assert_eq!(member.role.field_value(), Value::Number(7.0));
+            assert_eq!(
+                required(cookie)?.active_team_id.field_value(),
+                Value::from("2")
+            );
+        }
+        let state = store.lock()?;
+        let claimed = required(state.invitations.get(
+            &crate::SchemaValue::<String>::from_field(Value::Number(1.0)),
+        )?)?;
+        assert_eq!(claimed.organization_id.field_value(), Value::Number(1.0));
+        assert_eq!(claimed.role, "member");
+        assert_eq!(claimed.team_id.field_value(), Value::from("1"));
+        assert_eq!(claimed.is_pending(), maximum == 0);
+        assert_eq!(state.members.len(), maximum);
+        assert_eq!(state.team_members.len(), maximum);
+        let persisted = required(state.sessions.find(|row| row.token == session.token)?)?;
+        if maximum == 0 {
+            assert_eq!(persisted, original_session);
+        } else {
+            assert_eq!(
+                persisted.active_organization_id.field_value(),
+                Value::Number(2.0)
+            );
+            assert_eq!(persisted.active_team_id.field_value(), Value::from("2"));
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test]
 async fn serial_team_membership_binds_owner_queries_and_isolates_removal() -> AuthResult<()> {
     for native in [false, true] {
         let mut config = AuthConfig::default();

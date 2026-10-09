@@ -136,11 +136,27 @@ pub trait AuthTransaction<S: AuthSchema>:
             "The store must support transactional organization operations",
         ))
     }
+    /// Reserve team capacity with native selectors through this transaction.
+    async fn add_team_member_value(
+        &self,
+        team_id: &crate::FieldValue,
+        user_id: &crate::FieldValue,
+        maximum: Option<usize>,
+    ) -> AuthResult<Option<crate::TeamMember>> {
+        let team_id = crate::SchemaValue::from_field(team_id.clone());
+        let user_id = crate::SchemaValue::<String>::from_field(user_id.clone());
+        self.add_team_member(&team_id, user_id.typed()?, maximum)
+            .await
+    }
     /// Delete a member and its team memberships through this transaction.
     async fn delete_member(&self, _id: &str) -> AuthResult<()> {
         Err(AuthError::config(
             "The store must support transactional organization operations",
         ))
+    }
+    async fn delete_member_value(&self, id: &crate::FieldValue) -> AuthResult<()> {
+        let id = crate::SchemaValue::<String>::from_field(id.clone());
+        self.delete_member(id.typed()?).await
     }
     /// Delete a member and the original user's team memberships through this transaction.
     async fn delete_member_for_user(
@@ -152,6 +168,18 @@ pub trait AuthTransaction<S: AuthSchema>:
         Err(AuthError::config(
             "The store must support transactional organization operations",
         ))
+    }
+    async fn delete_member_for_user_value(
+        &self,
+        id: &crate::FieldValue,
+        organization_id: &crate::FieldValue,
+        user_id: &crate::FieldValue,
+    ) -> AuthResult<()> {
+        let id = crate::SchemaValue::<String>::from_field(id.clone());
+        let organization_id = crate::SchemaValue::<String>::from_field(organization_id.clone());
+        let user_id = crate::SchemaValue::<String>::from_field(user_id.clone());
+        self.delete_member_for_user(id.typed()?, organization_id.typed()?, user_id.typed()?)
+            .await
     }
 
     /// Retain this transaction adapter after the enclosing operation finishes.
@@ -604,7 +632,11 @@ pub trait UserStore<S: AuthSchema>: Send + Sync {
 /// Resolve a team's capacity inside the invitation acceptance transaction.
 #[async_trait]
 pub trait TeamMemberLimitResolver: Send + Sync {
-    async fn maximum(&self, team_id: &str) -> AuthResult<Option<usize>>;
+    async fn maximum(
+        &self,
+        team_id: &str,
+        organization_id: &crate::FieldValue,
+    ) -> AuthResult<Option<usize>>;
 }
 
 /// Fixed and dynamic limits share the same atomic team reservation path.
@@ -614,10 +646,14 @@ pub enum TeamMemberLimits<'a> {
     Resolver(&'a dyn TeamMemberLimitResolver),
 }
 impl TeamMemberLimits<'_> {
-    pub async fn maximum(&self, team_id: &str) -> AuthResult<Option<usize>> {
+    pub async fn maximum(
+        &self,
+        team_id: &str,
+        organization_id: &crate::FieldValue,
+    ) -> AuthResult<Option<usize>> {
         match self {
             Self::Fixed(maximum) => Ok(*maximum),
-            Self::Resolver(resolver) => resolver.maximum(team_id).await,
+            Self::Resolver(resolver) => resolver.maximum(team_id, organization_id).await,
         }
     }
 }
@@ -765,6 +801,27 @@ pub trait SessionStore<S: AuthSchema>: Send + Sync {
             .transpose()?;
         self.accept_invitation_with_teams(invitation_id, user_id, token, teams_enabled, maximum)
             .await
+    }
+
+    /// Preserve all native selectors through invitation claim, team capacity, and session updates.
+    async fn accept_invitation_with_teams_values(
+        &self,
+        invitation_id: &crate::FieldValue,
+        user_id: &crate::FieldValue,
+        session_token: Option<&crate::FieldValue>,
+        teams_enabled: bool,
+        maximum: TeamMemberLimits<'_>,
+    ) -> AuthResult<(Member, Invitation, Option<crate::wire::SessionView>)> {
+        let invitation_id = crate::SchemaValue::<String>::from_field(invitation_id.clone());
+        let user_id = crate::SchemaValue::<String>::from_field(user_id.clone());
+        self.accept_invitation_with_teams_by_token_value(
+            invitation_id.typed()?,
+            user_id.typed()?,
+            session_token,
+            teams_enabled,
+            maximum,
+        )
+        .await
     }
 
     /// None cancels cleanup. Some(0) means a completed write matched no rows.
@@ -1395,7 +1452,19 @@ pub trait MemberStore: Send + Sync {
     }
     async fn get_member_by_id(&self, id: &str) -> AuthResult<Option<Member>>;
     async fn update_member_role(&self, member_id: &str, role: &str) -> AuthResult<Member>;
+    async fn update_member_role_value(
+        &self,
+        id: &crate::FieldValue,
+        role: &str,
+    ) -> AuthResult<Member> {
+        let id = crate::SchemaValue::<String>::from_field(id.clone());
+        self.update_member_role(id.typed()?, role).await
+    }
     async fn delete_member(&self, member_id: &str) -> AuthResult<()>;
+    async fn delete_member_value(&self, id: &crate::FieldValue) -> AuthResult<()> {
+        let id = crate::SchemaValue::<String>::from_field(id.clone());
+        self.delete_member(id.typed()?).await
+    }
     /// Preserve the original membership subject when a creation hook changes the saved member.
     async fn delete_member_for_user(
         &self,
@@ -1406,6 +1475,18 @@ pub trait MemberStore: Send + Sync {
         Err(AuthError::config(
             "The store must support member deletion with an explicit subject",
         ))
+    }
+    async fn delete_member_for_user_value(
+        &self,
+        id: &crate::FieldValue,
+        organization_id: &crate::FieldValue,
+        user_id: &crate::FieldValue,
+    ) -> AuthResult<()> {
+        let id = crate::SchemaValue::<String>::from_field(id.clone());
+        let organization_id = crate::SchemaValue::<String>::from_field(organization_id.clone());
+        let user_id = crate::SchemaValue::<String>::from_field(user_id.clone());
+        self.delete_member_for_user(id.typed()?, organization_id.typed()?, user_id.typed()?)
+            .await
     }
     async fn list_organization_members(&self, org_id: &str) -> AuthResult<Vec<Member>>;
     async fn list_organization_members_value(
@@ -1437,6 +1518,13 @@ pub trait MemberStore: Send + Sync {
 pub trait InvitationStore: Send + Sync {
     async fn create_invitation(&self, invitation: CreateInvitation) -> AuthResult<Invitation>;
     async fn get_invitation_by_id(&self, id: &str) -> AuthResult<Option<Invitation>>;
+    async fn get_invitation_by_id_value(
+        &self,
+        id: &crate::FieldValue,
+    ) -> AuthResult<Option<Invitation>> {
+        let id = crate::SchemaValue::<String>::from_field(id.clone());
+        self.get_invitation_by_id(id.typed()?).await
+    }
     async fn get_pending_invitation(
         &self,
         org_id: &str,
@@ -1455,12 +1543,28 @@ pub trait InvitationStore: Send + Sync {
         id: &str,
         status: InvitationStatus,
     ) -> AuthResult<Invitation>;
+    async fn update_invitation_status_value(
+        &self,
+        id: &crate::FieldValue,
+        status: InvitationStatus,
+    ) -> AuthResult<Invitation> {
+        let id = crate::SchemaValue::<String>::from_field(id.clone());
+        self.update_invitation_status(id.typed()?, status).await
+    }
     /// Renew an invitation without changing its identity, role, or inviter.
     async fn update_invitation_expiry(
         &self,
         id: &str,
         expires_at: chrono::DateTime<chrono::Utc>,
     ) -> AuthResult<Invitation>;
+    async fn update_invitation_expiry_value(
+        &self,
+        id: &crate::FieldValue,
+        expires_at: chrono::DateTime<chrono::Utc>,
+    ) -> AuthResult<Invitation> {
+        let id = crate::SchemaValue::<String>::from_field(id.clone());
+        self.update_invitation_expiry(id.typed()?, expires_at).await
+    }
     async fn list_organization_invitations(&self, org_id: &str) -> AuthResult<Vec<Invitation>>;
     async fn list_organization_invitations_value(
         &self,
@@ -1906,7 +2010,19 @@ pub trait TeamStore: Send + Sync {
         }
     }
     async fn update_team(&self, id: &str, update: crate::UpdateTeam) -> AuthResult<crate::Team>;
+    async fn update_team_value(
+        &self,
+        id: &crate::FieldValue,
+        update: crate::UpdateTeam,
+    ) -> AuthResult<crate::Team> {
+        let id = crate::SchemaValue::<String>::from_field(id.clone());
+        self.update_team(id.typed()?, update).await
+    }
     async fn delete_team(&self, id: &str) -> AuthResult<()>;
+    async fn delete_team_value(&self, id: &crate::FieldValue) -> AuthResult<()> {
+        let id = crate::SchemaValue::<String>::from_field(id.clone());
+        self.delete_team(id.typed()?).await
+    }
     async fn list_organization_teams(&self, organization_id: &str) -> AuthResult<Vec<crate::Team>>;
     async fn list_organization_teams_value(
         &self,
@@ -1925,6 +2041,13 @@ pub trait TeamStore: Send + Sync {
         self.count_organization_teams(id.typed()?).await
     }
     async fn list_user_teams(&self, user_id: &str) -> AuthResult<Vec<crate::Team>>;
+    async fn list_user_teams_value(
+        &self,
+        user_id: &crate::FieldValue,
+    ) -> AuthResult<Vec<crate::Team>> {
+        let id = crate::SchemaValue::<String>::from_field(user_id.clone());
+        self.list_user_teams(id.typed()?).await
+    }
     async fn get_team_member(
         &self,
         team_id: &str,
@@ -1950,6 +2073,10 @@ pub trait TeamStore: Send + Sync {
     }
     /// Count all stored team memberships independently of the read-page limit.
     async fn count_team_members(&self, team_id: &str) -> AuthResult<u64>;
+    async fn count_team_members_value(&self, team_id: &crate::FieldValue) -> AuthResult<u64> {
+        let id = crate::SchemaValue::<String>::from_field(team_id.clone());
+        self.count_team_members(id.typed()?).await
+    }
     /// Atomically return an existing membership or reserve capacity and create one.
     /// Return None when the maximum member count is reached.
     async fn add_team_member(
@@ -1958,7 +2085,28 @@ pub trait TeamStore: Send + Sync {
         user_id: &str,
         maximum: Option<usize>,
     ) -> AuthResult<Option<crate::TeamMember>>;
+    async fn add_team_member_value(
+        &self,
+        team_id: &crate::FieldValue,
+        user_id: &crate::FieldValue,
+        maximum: Option<usize>,
+    ) -> AuthResult<Option<crate::TeamMember>> {
+        let team_id = crate::SchemaValue::from_field(team_id.clone());
+        let user_id = crate::SchemaValue::<String>::from_field(user_id.clone());
+        self.add_team_member(&team_id, user_id.typed()?, maximum)
+            .await
+    }
     async fn remove_team_member(&self, team_id: &str, user_id: &str) -> AuthResult<()>;
+    async fn remove_team_member_value(
+        &self,
+        team_id: &crate::FieldValue,
+        user_id: &crate::FieldValue,
+    ) -> AuthResult<()> {
+        let team_id = crate::SchemaValue::<String>::from_field(team_id.clone());
+        let user_id = crate::SchemaValue::<String>::from_field(user_id.clone());
+        self.remove_team_member(team_id.typed()?, user_id.typed()?)
+            .await
+    }
 }
 
 /// A scoped point lookup for an organization role.

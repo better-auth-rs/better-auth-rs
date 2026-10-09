@@ -244,9 +244,7 @@ pub(super) async fn verify_email_core(
             .map(|user| FieldMap::from(user).into())
             .unwrap_or(FieldValue::Null);
         if verified {
-            if let Some(hook) = &config.after_email_verification {
-                hook(&updated_value).await?;
-            }
+            super::delivery::after(&updated_value, Some(config), &endpoint).await?;
         } else {
             let token = create_native_email_verification_token(
                 ctx.config.signing_secret(),
@@ -298,9 +296,7 @@ pub(super) async fn verify_email_core(
     if verified {
         return Ok(success(query, Some(FieldValue::Null)));
     }
-    if let Some(hook) = &config.before_email_verification {
-        hook(&user).await?;
-    }
+    super::delivery::before(&user, Some(config), &endpoint).await?;
     let updated = ctx
         .database
         .update_user_by_field_value(
@@ -312,11 +308,11 @@ pub(super) async fn verify_email_core(
             },
         )
         .await?;
-    if let Some(hook) = &config.after_email_verification {
+    {
         let updated = updated
             .map(|user| FieldMap::from(user).into())
             .unwrap_or(FieldValue::Null);
-        hook(&updated).await?;
+        super::delivery::after(&updated, Some(config), &endpoint).await?;
     }
     if config.auto_sign_in_after_verification {
         let current = ctx.native_session(req, SessionRead::Cached).await?;

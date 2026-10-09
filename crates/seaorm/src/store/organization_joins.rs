@@ -378,13 +378,15 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPluginSchema> SeaOrmSt
 
     pub(super) async fn joined_user_teams(
         &self,
-        user_id: &str,
+        user_id: &better_auth_core::FieldValue,
     ) -> AuthResult<Vec<better_auth_core::Team>> {
         let parent = Entity::<O::TeamMember>::find()
-            .filter(
-                O::TeamMember::column("user_id")?
-                    .eq_id(user_id, self.config().advanced.database.generate_id())?,
-            )
+            .filter(super::value_filter::equals_id(
+                O::TeamMember::column("user_id")?,
+                user_id,
+                self.config().advanced.database.generate_id(),
+                self.connection().get_database_backend(),
+            )?)
             .limit(super::pagination::default_limit(
                 self.config(),
                 self.connection().get_database_backend(),

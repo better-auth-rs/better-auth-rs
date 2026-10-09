@@ -167,8 +167,12 @@ impl<S: AuthSchema, P: AuthPlugin<S>, C: Send + Sync + 'static> AuthPlugin<S>
     fn telemetry(&self, options: &mut better_auth_core::observability::telemetry::PluginTelemetry) {
         self.plugin.telemetry(options);
         let callbacks = self.callbacks.as_ref() as &dyn std::any::Any;
-        if callbacks.is::<super::email_verification::EmailVerificationCallbacks<S>>() {
-            options.email_verification.send_verification_email = true;
+        if let Some(callbacks) =
+            callbacks.downcast_ref::<super::email_verification::EmailVerificationCallbacks<S>>()
+        {
+            options.email_verification.send_verification_email |= callbacks.has_sender();
+            options.email_verification.before_email_verification |= callbacks.has_before();
+            options.email_verification.after_email_verification |= callbacks.has_after();
         }
         if callbacks.is::<super::password_management::PasswordManagementCallbacks<S>>() {
             options.email_and_password.send_reset_password = true;

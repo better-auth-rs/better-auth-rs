@@ -1,6 +1,27 @@
 use super::*;
 
 #[test]
+fn model_properties_preserve_native_identity_and_nullish_access_errors() -> AuthResult<()> {
+    let id = FieldValue::from(FieldMap::from([("native".into(), true.into())]));
+    let record = FieldValue::from(FieldMap::from([("id".into(), id.clone())]));
+    assert!(record.model_property("id")?.strict_equals(&id));
+    assert!(record.model_property("missing")?.is_undefined());
+    for receiver in [false.into(), 0.0.into(), "".into(), vec![id].into()] {
+        assert!(receiver.model_property("id")?.is_undefined());
+    }
+    for (receiver, kind) in [
+        (FieldValue::Null, "null"),
+        (FieldValue::Undefined, "undefined"),
+    ] {
+        assert!(
+            matches!(receiver.model_property("id"), Err(AuthError::TypeError(message))
+            if message == format!("Cannot read properties of {kind} (reading 'id')"))
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn ordinary_object_primitive_conversion_checks_only_the_selected_method() -> AuthResult<()> {
     let display = crate::Utf16String::from("[object Object]");
     for value in [

@@ -225,7 +225,22 @@ fn postgres_date(date: &FieldDate) -> AuthResult<String> {
 
 pub(super) fn utf16_string(value: &better_auth_core::Utf16String, backend: DbBackend) -> String {
     match backend {
-        DbBackend::Sqlite => String::from_utf8_lossy(&value.to_wtf8()).into_owned(),
+        DbBackend::Sqlite => {
+            let mut input = value.as_utf16().iter().copied();
+            let mut units = Vec::with_capacity(value.as_utf16().len());
+            while let Some(unit) = input.next() {
+                // Bun binds UTF-16; SQLite combines any surrogate with the next unit, even an ASCII unit.
+                if (0xd800..0xe000).contains(&unit)
+                    && let Some(next) = input.next()
+                {
+                    units.extend([0xd800 | (unit & 0x3ff), 0xdc00 | (next & 0x3ff)]);
+                } else {
+                    units.push(unit);
+                }
+            }
+            String::from_utf8_lossy(&better_auth_core::Utf16String::from_units(units).to_wtf8())
+                .into_owned()
+        }
         _ => String::from_utf16_lossy(value.as_utf16()),
     }
 }
@@ -247,6 +262,29 @@ mod function_tests;
 mod tests {
     use super::*;
     use sea_orm::sea_query::{MysqlQueryBuilder, Query};
+
+    #[test]
+    fn sqlite_utf16_binding_retains_the_driver_surrogate_pairing() {
+        for (units, expected) in [
+            (vec![0xd800, 0x40], "\u{10040}"),
+            (vec![0xdc00, 0x41], "\u{10041}"),
+            (vec![0xd83d, 0xde00], "\u{1f600}"),
+            (vec![0xdfff, 0xffff], "\u{10ffff}"),
+            (vec![0xd800, 0xd800, 0x40], "\u{10000}@"),
+            (vec![0xd800], "\u{fffd}\u{fffd}\u{fffd}"),
+            (vec![0xdc00], "\u{fffd}\u{fffd}\u{fffd}"),
+            (vec![0x61, 0, 0x62], "a\0b"),
+        ] {
+            let value = better_auth_core::Utf16String::from_units(units);
+            assert_eq!(utf16_string(&value, DbBackend::Sqlite), expected);
+            for backend in [DbBackend::MySql, DbBackend::Postgres] {
+                assert_eq!(
+                    utf16_string(&value, backend),
+                    String::from_utf16_lossy(value.as_utf16())
+                );
+            }
+        }
+    }
 
     #[test]
     fn mysql_numbers_keep_literal_types_while_strings_remain_bound() -> AuthResult<()> {

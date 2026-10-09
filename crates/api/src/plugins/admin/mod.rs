@@ -2,7 +2,8 @@ use std::collections::HashMap;
 
 use better_auth_core::session::NativeSessionData;
 use better_auth_core::utils::cookie_utils::{
-    create_clear_cookie, create_session_like_cookie, related_cookie_name,
+    create_clear_cookie, encode_cookie_value, get_cookie, related_cookie_name, render_cookie,
+    sign_cookie_value_native_raw, verify_cookie_value,
 };
 use better_auth_core::{AuthContext, AuthError, AuthRequest, AuthResponse, AuthResult};
 use better_auth_core::{AuthSession, AuthUser};
@@ -20,11 +21,13 @@ pub(super) mod handlers;
 pub(super) mod types;
 
 #[cfg(test)]
+mod impersonation_tests;
+#[cfg(test)]
 mod native_session_tests;
 #[cfg(test)]
 mod tests;
 
-use crate::plugins::helpers::{delete_session_cookies, get_cookie};
+use crate::plugins::helpers::delete_session_cookies;
 use access::{has_permission, is_admin_role, is_admin_user_id};
 use handlers::*;
 use types::*;
@@ -305,30 +308,39 @@ impl AdminPlugin {
             ctx,
         )
         .await?;
-        let dont_remember = ctx.session_manager().dont_remember(req);
-        let admin_cookie = create_admin_session_cookie_value(
-            ctx.config.signing_secret(),
-            &AdminSessionCookiePayload {
-                session_token: session.session.token.display_string()?,
-                dont_remember,
-            },
-            ctx.config.session.expires_in(),
-        )?;
-        let admin_cookie_name = related_cookie_name(&ctx.config, "admin_session");
-
         delete_session_cookies(req, &ctx.config, false, None)?;
-        req.append_response_header(
-            "Set-Cookie",
-            create_session_like_cookie(
-                &admin_cookie_name,
-                &admin_cookie,
-                Some(ctx.config.session.expires_in().as_seconds_f64()),
-                &ctx.config,
-            )?,
-        )?;
+        let dont_remember = get_cookie(req, &related_cookie_name(&ctx.config, "dont_remember"))
+            .and_then(|value| verify_cookie_value(&value, ctx.config.signing_secret()))
+            .unwrap_or_default();
+        let mut payload = session
+            .session
+            .token
+            .field_value()
+            .display_utf16()?
+            .as_utf16()
+            .to_vec();
+        payload.push(u16::from(b':'));
+        payload.extend(dont_remember.encode_utf16());
+        let admin_cookie = encode_cookie_value(&sign_cookie_value_native_raw(
+            &better_auth_core::Utf16String::from_units(payload).into(),
+            ctx.config.signing_secret(),
+        )?);
+        let mut cookie = ctx.config.auth_cookie(
+            "session_token",
+            better_auth_core::CookieAttributes {
+                max_age: Some(ctx.config.session.expires_in().as_seconds_f64()),
+                ..Default::default()
+            },
+        );
+        cookie.name = related_cookie_name(&ctx.config, "admin_session");
+        req.append_response_header("Set-Cookie", render_cookie(&admin_cookie, &cookie)?)?;
         ctx.session_manager()
             .set_session_cookie(req, data, Some(true))
             .await?;
+        let response = SessionUserResponse {
+            session: ctx.session_view(&response.session).await?,
+            user: ctx.user_view(&response.user).await?,
+        };
         let auth_response = AuthResponse::json(200, &response)?;
         Ok(auth_response)
     }
@@ -343,33 +355,30 @@ impl AdminPlugin {
             .await?
             .ok_or_else(|| AuthError::from(AuthResponse::new(401)))?
             .session;
-        if !session.impersonated_by.field_value().is_truthy() {
-            return Err(AuthError::bad_request("You are not impersonating anyone"));
-        }
-
-        let admin_cookie_name = related_cookie_name(&ctx.config, "admin_session");
-        let admin_cookie_value = get_cookie(req, &admin_cookie_name)
-            .ok_or_else(|| AuthError::internal("Failed to find admin session"))?;
-        let admin_cookie =
-            decode_admin_session_cookie_value(ctx.config.signing_secret(), &admin_cookie_value)
-                .map_err(|_| AuthError::internal("Failed to find admin session"))?;
-
-        let (response, data) = stop_impersonating_core(&session, &admin_cookie, ctx).await?;
+        let (data, dont_remember) = stop_impersonating_core(&session, req, ctx).await?;
 
         ctx.session_manager()
-            .set_native_session_cookie(req, data, Some(admin_cookie.dont_remember))
+            .set_native_session_cookie(req, data.clone(), Some(dont_remember))
             .await?;
-        let mut auth_response = AuthResponse::native(200, response);
+        let admin_cookie_name = related_cookie_name(&ctx.config, "admin_session");
         better_auth_core::utils::cookie_utils::remove_set_cookie_entries(
             req,
-            Some(&mut auth_response.headers),
+            None,
             &admin_cookie_name,
         )?;
-        auth_response = auth_response.with_appended_header(
+        req.append_response_header(
             "Set-Cookie",
             create_clear_cookie(&admin_cookie_name, &ctx.config)?,
-        );
-        Ok(auth_response)
+        )?;
+        let response = better_auth_core::FieldMap::from([
+            (
+                "session".into(),
+                better_auth_core::FieldMap::from(ctx.session_view(&data.session).await?).into(),
+            ),
+            ("user".into(), data.public_user(&ctx.config.user)?),
+        ])
+        .into();
+        Ok(AuthResponse::native(200, response))
     }
 
     async fn handle_revoke_user_session(

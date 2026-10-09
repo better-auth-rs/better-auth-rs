@@ -236,6 +236,24 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
         teams_enabled: bool,
         maximum: crate::store::TeamMemberLimits<'_>,
     ) -> AuthResult<(Member, Invitation, Option<SessionView>)> {
+        self.accept_invitation_with_teams_values(
+            &invitation_id.into(),
+            &user_id.into(),
+            session_token,
+            teams_enabled,
+            maximum,
+        )
+        .await
+    }
+
+    async fn accept_invitation_with_teams_values(
+        &self,
+        invitation_id: &crate::FieldValue,
+        user_id: &crate::FieldValue,
+        session_token: Option<&crate::FieldValue>,
+        teams_enabled: bool,
+        maximum: crate::store::TeamMemberLimits<'_>,
+    ) -> AuthResult<(Member, Invitation, Option<SessionView>)> {
         self.accept_invitation(
             invitation_id,
             user_id,
@@ -266,9 +284,9 @@ impl SessionStore<StatelessSchema> for EphemeralStore {
         maximum: crate::store::TeamMemberLimits<'_>,
     ) -> AuthResult<(Member, Invitation, Option<SessionView>)> {
         let token = session_token.map(crate::FieldValue::from);
-        self.accept_invitation(
-            invitation_id,
-            user_id,
+        self.accept_invitation_with_teams_values(
+            &invitation_id.into(),
+            &user_id.into(),
             token.as_ref(),
             teams_enabled,
             maximum,

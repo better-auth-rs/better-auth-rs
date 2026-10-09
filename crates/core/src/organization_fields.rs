@@ -61,10 +61,20 @@ pub fn numeric_filter(value: &str) -> Option<f64> {
 
 /// Match the Organization adapter's stable key for a team and user pair.
 pub fn team_membership_key(team_id: &str, user_id: &str) -> crate::AuthResult<String> {
+    team_membership_key_values(&team_id.into(), &user_id.into())
+}
+
+/// Retain native selectors in the internal team membership uniqueness key.
+pub fn team_membership_key_values(
+    team_id: &crate::FieldValue,
+    user_id: &crate::FieldValue,
+) -> crate::AuthResult<String> {
     use base64::Engine;
     use sha2::{Digest, Sha256};
-    Ok(base64::engine::general_purpose::URL_SAFE_NO_PAD
-        .encode(Sha256::digest(serde_json::to_vec(&[team_id, user_id])?)))
+    let pair = crate::FieldValue::from(vec![team_id.clone(), user_id.clone()])
+        .stringify()?
+        .ok_or_else(|| crate::AuthError::internal("A membership key array must serialize"))?;
+    Ok(base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(Sha256::digest(pair.as_bytes())))
 }
 
 /// Additional fields for the five entities supported by the Organization plugin.

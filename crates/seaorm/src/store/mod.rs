@@ -366,11 +366,23 @@ where
         user_id: &str,
         maximum: Option<usize>,
     ) -> AuthResult<Option<better_auth_core::TeamMember>> {
+        self.add_team_member_value(&team_id.field_value(), &user_id.into(), maximum)
+            .await
+    }
+    async fn add_team_member_value(
+        &self,
+        team_id: &better_auth_core::FieldValue,
+        user_id: &better_auth_core::FieldValue,
+        maximum: Option<usize>,
+    ) -> AuthResult<Option<better_auth_core::TeamMember>> {
         self.store
             .add_team_member_with_connection(&self.tx, team_id, user_id, maximum)
             .await
     }
     async fn delete_member(&self, id: &str) -> AuthResult<()> {
+        self.delete_member_value(&id.into()).await
+    }
+    async fn delete_member_value(&self, id: &better_auth_core::FieldValue) -> AuthResult<()> {
         self.store.delete_member_with_connection(&self.tx, id).await
     }
     async fn delete_member_for_user(
@@ -378,6 +390,15 @@ where
         id: &str,
         organization_id: &str,
         user_id: &str,
+    ) -> AuthResult<()> {
+        self.delete_member_for_user_value(&id.into(), &organization_id.into(), &user_id.into())
+            .await
+    }
+    async fn delete_member_for_user_value(
+        &self,
+        id: &better_auth_core::FieldValue,
+        organization_id: &better_auth_core::FieldValue,
+        user_id: &better_auth_core::FieldValue,
     ) -> AuthResult<()> {
         self.store
             .delete_member_for_user_with_connection(&self.tx, id, organization_id, user_id)

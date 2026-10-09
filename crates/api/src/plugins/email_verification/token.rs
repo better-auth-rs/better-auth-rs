@@ -217,3 +217,7 @@ mod tests;
 #[cfg(test)]
 #[path = "payload_tests.rs"]
 mod payload_tests;
+
+#[cfg(test)]
+#[path = "claims_tests.rs"]
+mod claims_tests;

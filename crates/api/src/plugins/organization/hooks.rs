@@ -1,14 +1,14 @@
-//! Typed application hooks. Mutable inputs represent upstream `data` overrides.
+//! Application hooks preserve native callback subjects and upstream `data` overrides.
 
 use super::types::OrganizationResponse;
 
 use async_trait::async_trait;
 use better_auth_core::{
     AuthConfig, AuthContext, AuthRequest, AuthResult, AuthSchema, CreateInvitation, CreateMember,
-    CreateOrganization, CreateTeam, Invitation, Member, Team, TeamMember, UpdateOrganization,
-    UpdateTeam,
+    CreateOrganization, CreateTeam, FieldValue, Invitation, Member, Team, TeamMember,
+    UpdateOrganization, UpdateTeam,
     store::{InvitationStore, MemberStore, OrganizationStore, TeamStore},
-    wire::{SessionView, UserView},
+    wire::SessionView,
 };
 
 /// Request and persistence capabilities supplied to endpoint-aware callbacks.
@@ -49,7 +49,7 @@ pub struct OrganizationUser<'a> {
     /// Persisted organization associated with the operation.
     pub organization: &'a OrganizationResponse,
     /// Acting user, or the invited/added user where upstream supplies that user.
-    pub user: &'a UserView,
+    pub user: &'a FieldValue,
 }
 
 /// Member and user supplied to organization update hooks.
@@ -58,7 +58,7 @@ pub struct OrganizationActor<'a> {
     /// Acting user's organization membership.
     pub member: &'a Member,
     /// Acting user.
-    pub user: &'a UserView,
+    pub user: &'a FieldValue,
 }
 
 /// A membership operation and its upstream user subject.
@@ -67,7 +67,7 @@ pub struct OrganizationMemberEvent<'a> {
     /// Membership being added, removed, or changed.
     pub member: &'a Member,
     /// User supplied by the upstream hook at this call site.
-    pub user: &'a UserView,
+    pub user: &'a FieldValue,
     /// Organization containing the membership.
     pub organization: &'a OrganizationResponse,
 }
@@ -78,7 +78,7 @@ pub struct OrganizationInvitationEvent<'a> {
     /// Invitation snapshot at this hook's position in the operation.
     pub invitation: &'a Invitation,
     /// Inviter, recipient, or cancelling user, according to the hook.
-    pub user: &'a UserView,
+    pub user: &'a FieldValue,
     /// Organization receiving the invited user.
     pub organization: &'a OrganizationResponse,
 }
@@ -89,7 +89,7 @@ pub struct OrganizationTeamEvent<'a> {
     /// Persisted team snapshot.
     pub team: &'a Team,
     /// Acting user; absent for trusted team creation/deletion without a session.
-    pub user: Option<&'a UserView>,
+    pub user: Option<&'a FieldValue>,
     /// Organization containing the team.
     pub organization: &'a OrganizationResponse,
 }
@@ -100,7 +100,7 @@ pub struct OrganizationTeamMemberTarget<'a> {
     /// Team receiving or losing the member.
     pub team: &'a Team,
     /// User being added or removed, rather than the administrator.
-    pub user: &'a UserView,
+    pub user: &'a FieldValue,
     /// Organization containing the team.
     pub organization: &'a OrganizationResponse,
 }
@@ -114,16 +114,16 @@ pub struct OrganizationMemberDraft {
     pub user_id: better_auth_core::SchemaValue<String>,
     pub role: better_auth_core::SchemaValue<String>,
     /// Server-side addMember input; team assignment is handled separately from this record.
-    pub team_id: Option<String>,
+    pub team_id: better_auth_core::SchemaValue<String>,
     /// The hook starts without a timestamp; the adapter always generates the stored value.
     pub created_at: Option<better_auth_core::FieldDate>,
 }
 impl OrganizationMemberDraft {
     pub(crate) fn into_create(mut self) -> CreateMember {
-        if let Some(team_id) = self.team_id {
+        if !self.team_id.is_undefined() {
             let _ = self
                 .additional_fields
-                .insert("teamId".into(), team_id.into());
+                .insert("teamId".into(), self.team_id.field_value());
         }
         CreateMember {
             organization_id: self.organization_id,
@@ -180,7 +180,7 @@ pub struct OrganizationInvitationDraft {
     pub organization_id: better_auth_core::SchemaValue<String>,
     pub email: String,
     pub role: String,
-    pub inviter_id: String,
+    pub inviter_id: better_auth_core::SchemaValue<String>,
     pub created_at: better_auth_core::SchemaValue<better_auth_core::FieldDate>,
     pub status: better_auth_core::SchemaValue<better_auth_core::InvitationStatus>,
     pub expires_at: better_auth_core::SchemaValue<better_auth_core::FieldDate>,
@@ -193,7 +193,7 @@ impl OrganizationInvitationDraft {
     pub(crate) fn into_create(
         mut self,
         expires_at: chrono::DateTime<chrono::Utc>,
-        inviter_id: &str,
+        inviter_id: &FieldValue,
     ) -> AuthResult<CreateInvitation> {
         for (name, value) in [
             ("createdAt", self.created_at.field_value()),
@@ -204,7 +204,7 @@ impl OrganizationInvitationDraft {
                 let _ = self.additional_fields.insert(name.into(), value);
             }
         }
-        if self.inviter_id != inviter_id {
+        if !self.inviter_id.field_value().strict_equals(inviter_id) {
             let _ = self.additional_fields.remove("inviterId");
         }
         Ok(CreateInvitation {
@@ -232,7 +232,7 @@ pub trait OrganizationHooks: Send + Sync {
     async fn before_create_organization(
         &self,
         _data: &mut CreateOrganization,
-        _user: &UserView,
+        _user: &FieldValue,
     ) -> AuthResult<()> {
         Ok(())
     }
@@ -374,7 +374,7 @@ pub trait OrganizationHooks: Send + Sync {
         &self,
         _data: &mut OrganizationTeamDraft,
         _organization: &OrganizationResponse,
-        _user: Option<&UserView>,
+        _user: Option<&FieldValue>,
     ) -> AuthResult<()> {
         Ok(())
     }
@@ -439,7 +439,7 @@ pub trait OrganizationHooks: Send + Sync {
 #[derive(Clone, Copy)]
 pub struct OrganizationSession<'a> {
     /// Authenticated user, which may differ from the member being added.
-    pub user: &'a UserView,
+    pub user: &'a FieldValue,
     /// Current authenticated session.
     pub session: &'a SessionView,
 }
@@ -470,12 +470,12 @@ pub trait OrganizationPolicy: Send + Sync {
     /// Decide whether this user may create an organization.
     async fn allow_user_to_create_organization(
         &self,
-        _user: &UserView,
+        _user: &FieldValue,
     ) -> AuthResult<Option<bool>> {
         Ok(None)
     }
     /// Return true when the user's organization limit has been reached.
-    async fn organization_limit_reached(&self, _user: &UserView) -> AuthResult<Option<bool>> {
+    async fn organization_limit_reached(&self, _user: &FieldValue) -> AuthResult<Option<bool>> {
         Ok(None)
     }
     /// Resolve pending invitation capacity for the authenticated inviter.

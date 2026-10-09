@@ -1,10 +1,9 @@
-use super::id_filter::IdColumn;
 use super::{
     map_db_err,
     organization_models::{self as models, Entity},
 };
 use crate::SeaOrmOrganizationModel;
-use better_auth_core::{AuthResult, SchemaField, user_fields::UserConfig};
+use better_auth_core::{AuthResult, FieldValue, SchemaField, user_fields::UserConfig};
 use sea_orm::{
     ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter,
     sea_query::{Expr, ExprTrait, SimpleExpr},
@@ -12,7 +11,7 @@ use sea_orm::{
 
 async fn update<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
     conn: &C,
-    id: &str,
+    id: &FieldValue,
     condition: Option<SimpleExpr>,
     value: SimpleExpr,
     fields: &UserConfig,
@@ -20,12 +19,17 @@ async fn update<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
 ) -> AuthResult<bool> {
     let mut update = Entity::<M>::update_many()
         .col_expr(M::column("member_count")?, value)
-        .filter(M::column("id")?.eq_id(id, policy)?);
+        .filter(super::value_filter::equals_id(
+            M::column("id")?,
+            id,
+            policy,
+            conn.get_database_backend(),
+        )?);
     if let Some(condition) = condition {
         update = update.filter(condition);
     }
     let changed = update.exec(conn).await.map_err(map_db_err)?.rows_affected > 0;
-    if changed && let Some(row) = models::find::<M, _>(conn, id, policy).await? {
+    if changed && let Some(row) = models::find_value::<M, _>(conn, id, policy).await? {
         let _ = row.record(fields, conn.get_database_backend()).await?;
     }
     Ok(changed)
@@ -33,7 +37,7 @@ async fn update<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
 
 pub(super) async fn reserve<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
     conn: &C,
-    id: &str,
+    id: &FieldValue,
     actual: u64,
     maximum: Option<usize>,
     fields: &UserConfig,
@@ -50,14 +54,19 @@ pub(super) async fn reserve<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
     .await?;
     let changed = active
         .update(conn.get_database_backend())?
-        .filter(M::column("id")?.eq_id(id, policy)?)
+        .filter(super::value_filter::equals_id(
+            M::column("id")?,
+            id,
+            policy,
+            conn.get_database_backend(),
+        )?)
         .filter(M::column("member_count")?.lt(actual))
         .exec(conn)
         .await
         .map_err(map_db_err)?
         .rows_affected
         > 0;
-    if changed && let Some(row) = models::find::<M, _>(conn, id, policy).await? {
+    if changed && let Some(row) = models::find_value::<M, _>(conn, id, policy).await? {
         let _ = row.record(fields, conn.get_database_backend()).await?;
     }
     update::<M, _>(
@@ -75,7 +84,7 @@ pub(super) async fn reserve<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
 
 pub(super) async fn release<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
     conn: &C,
-    id: &str,
+    id: &FieldValue,
     deleted: u64,
     fields: &UserConfig,
     policy: &better_auth_core::id::IdGeneration,

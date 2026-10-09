@@ -1,9 +1,8 @@
-use chrono::{Duration, Utc};
-use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation, decode, encode};
-use serde::{Deserialize, Serialize};
+use chrono::Utc;
 
 use better_auth_core::entity::{AuthSession, AuthUser};
 use better_auth_core::session::NativeSessionData;
+use better_auth_core::utils::cookie_utils::{get_cookie, related_cookie_name, verify_cookie_value};
 use better_auth_core::wire::{SessionView, UserView};
 use better_auth_core::{
     AuthContext, AuthError, AuthResult, CreateAccount, CreateSession, UpdateUser,
@@ -24,60 +23,6 @@ const MESSAGE_CANNOT_IMPERSONATE_ADMINS: &str = "You cannot impersonate admins";
 const MESSAGE_NOT_IMPERSONATING: &str = "You are not impersonating anyone";
 const MESSAGE_FAILED_TO_FIND_USER: &str = "Failed to find user";
 const MESSAGE_FAILED_TO_FIND_ADMIN_SESSION: &str = "Failed to find admin session";
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct AdminSessionCookieClaims {
-    #[serde(rename = "sessionToken")]
-    session_token: String,
-    #[serde(rename = "dontRemember")]
-    dont_remember: bool,
-    exp: usize,
-    iat: usize,
-}
-
-#[derive(Debug, Clone)]
-pub(crate) struct AdminSessionCookiePayload {
-    pub session_token: String,
-    pub dont_remember: bool,
-}
-
-pub(crate) fn create_admin_session_cookie_value(
-    secret: &str,
-    payload: &AdminSessionCookiePayload,
-    max_age: Duration,
-) -> AuthResult<String> {
-    let now = Utc::now();
-    let claims = AdminSessionCookieClaims {
-        session_token: payload.session_token.clone(),
-        dont_remember: payload.dont_remember,
-        exp: (now + max_age).timestamp() as usize,
-        iat: now.timestamp() as usize,
-    };
-    Ok(encode(
-        &Header::default(),
-        &claims,
-        &EncodingKey::from_secret(secret.as_bytes()),
-    )?)
-}
-
-pub(crate) fn decode_admin_session_cookie_value(
-    secret: &str,
-    token: &str,
-) -> AuthResult<AdminSessionCookiePayload> {
-    let mut validation = Validation::new(Algorithm::HS256);
-    validation.validate_exp = true;
-    let claims = decode::<AdminSessionCookieClaims>(
-        token,
-        &DecodingKey::from_secret(secret.as_bytes()),
-        &validation,
-    )?
-    .claims;
-
-    Ok(AdminSessionCookiePayload {
-        session_token: claims.session_token,
-        dont_remember: claims.dont_remember,
-    })
-}
 
 fn joined_role(role: &RoleInput) -> String {
     role.joined()
@@ -664,8 +609,8 @@ pub(crate) async fn impersonate_user_core(
         .internal_data(&target, &session)
         .await?;
     let response = SessionUserResponse {
-        session: ctx.session_view(&session).await?,
-        user: ctx.user_view(&target).await?,
+        session,
+        user: target,
     };
 
     Ok((response, data))
@@ -673,12 +618,9 @@ pub(crate) async fn impersonate_user_core(
 
 pub(crate) async fn stop_impersonating_core(
     session: &impl AuthSession,
-    admin_cookie: &AdminSessionCookiePayload,
+    req: &better_auth_core::AuthRequest,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
-) -> AuthResult<(
-    better_auth_core::FieldValue,
-    better_auth_core::session::NativeSessionData,
-)> {
+) -> AuthResult<(NativeSessionData, bool)> {
     let admin_id = session.impersonated_by().field_value();
     if !admin_id.is_truthy() {
         return Err(AuthError::bad_request(MESSAGE_NOT_IMPERSONATING));
@@ -690,9 +632,16 @@ pub(crate) async fn stop_impersonating_core(
         .await?
         .ok_or_else(|| AuthError::internal(MESSAGE_FAILED_TO_FIND_USER))?;
 
+    let admin_cookie = get_cookie(req, &related_cookie_name(&ctx.config, "admin_session"))
+        .and_then(|value| verify_cookie_value(&value, ctx.config.signing_secret()))
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| AuthError::internal(MESSAGE_FAILED_TO_FIND_ADMIN_SESSION))?;
+    let mut parts = admin_cookie.split(':');
+    let admin_token = parts.next().unwrap_or_default();
+    let dont_remember = parts.next().is_some_and(|value| !value.is_empty());
     let (admin_session, snapshot) = ctx
         .database
-        .get_session_snapshot(&admin_cookie.session_token)
+        .get_session_snapshot(admin_token)
         .await?
         .ok_or_else(|| AuthError::internal(MESSAGE_FAILED_TO_FIND_ADMIN_SESSION))?;
 
@@ -718,16 +667,7 @@ pub(crate) async fn stop_impersonating_core(
     ctx.database
         .delete_session_by_token_value(&session.token().field_value())
         .await?;
-    let response = better_auth_core::FieldMap::from([
-        (
-            "session".into(),
-            better_auth_core::FieldMap::from(ctx.session_view(&data.session).await?).into(),
-        ),
-        ("user".into(), data.public_user(&ctx.config.user)?),
-    ])
-    .into();
-
-    Ok((response, data))
+    Ok((data, dont_remember))
 }
 
 pub(crate) async fn revoke_user_session_core(

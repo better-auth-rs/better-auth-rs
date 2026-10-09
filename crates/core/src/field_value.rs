@@ -293,6 +293,25 @@ impl FieldValue {
         }
     }
 
+    /// Read a named model field without narrowing its value or a non-null receiver.
+    /// Null and undefined reject property access; other non-record values have no model fields.
+    pub fn model_property(&self, name: &str) -> AuthResult<&Self> {
+        let nullish = match self {
+            Self::Null => Some("null"),
+            Self::Undefined => Some("undefined"),
+            _ => None,
+        };
+        if let Some(nullish) = nullish {
+            return Err(AuthError::type_error(format!(
+                "Cannot read properties of {nullish} (reading '{name}')"
+            )));
+        }
+        Ok(self
+            .as_object()
+            .and_then(|fields| fields.get(name))
+            .unwrap_or(&Self::Undefined))
+    }
+
     /// Copy own enumerable properties while retaining native child identities.
     /// String keys enumerate UTF-16 units, as in object spread and `Object.entries`.
     pub fn enumerable_fields(&self) -> FieldMap {

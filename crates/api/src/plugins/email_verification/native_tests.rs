@@ -433,6 +433,90 @@ async fn native_change_email_strings_survive_storage_delivery_and_follow_up_toke
 }
 
 #[tokio::test]
+async fn typed_lifecycle_awaits_failures_and_replaces_legacy_hooks() -> AuthResult<()> {
+    for fail_before in [true, false] {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let before_calls = calls.clone();
+        let after_calls = calls.clone();
+        let legacy: better_auth_core::email::EmailVerificationHook = Arc::new(|_| {
+            Box::pin(async { Err(AuthError::internal("Legacy verification hook must not run")) })
+        });
+        let plugin = EmailVerificationPlugin::new()
+            .before_email_verification(legacy.clone())
+            .after_email_verification(legacy)
+            .callbacks(
+                EmailVerificationCallbacks::<StatelessSchema>::default()
+                    .before(move |user, endpoint| {
+                        assert_eq!(
+                            user.as_object().unwrap().get("emailVerified"),
+                            Some(&false.into())
+                        );
+                        assert_eq!(endpoint.request.unwrap().path(), "/verify-email");
+                        let calls = before_calls.clone();
+                        Ok(Some(Box::pin(async move {
+                            tokio::task::yield_now().await;
+                            assert_eq!(calls.fetch_add(1, Ordering::SeqCst), 0);
+                            if fail_before {
+                                Err(AuthError::internal("Typed before failed"))
+                            } else {
+                                Ok(())
+                            }
+                        })))
+                    })
+                    .after(move |user, endpoint| {
+                        assert_eq!(
+                            user.as_object().unwrap().get("emailVerified"),
+                            Some(&true.into())
+                        );
+                        assert_eq!(endpoint.request.unwrap().path(), "/verify-email");
+                        let calls = after_calls.clone();
+                        Ok(Some(Box::pin(async move {
+                            tokio::task::yield_now().await;
+                            assert_eq!(calls.fetch_add(1, Ordering::SeqCst), 1);
+                            Err(AuthError::internal("Typed after failed"))
+                        })))
+                    }),
+            );
+        let config = Arc::new(crate::plugins::test_helpers::create_test_config());
+        let ctx = crate::plugins::test_helpers::initialize_test_context(
+            config.clone(),
+            Arc::new(EphemeralStore::new(config)),
+            &[&plugin],
+        )
+        .await?;
+        let _ = ctx
+            .database
+            .create_user(CreateUser::new().with_email("owner@native-email.test"))
+            .await?;
+        let request = verify_request(&ctx, None)?;
+        let error = plugin.on_request(&request, &ctx).await.err().unwrap();
+        assert_eq!(
+            error.to_string(),
+            if fail_before {
+                "Internal server error: Typed before failed"
+            } else {
+                "Internal server error: Typed after failed"
+            }
+        );
+        let user = ctx
+            .database
+            .get_user_by_email("owner@native-email.test")
+            .await?
+            .unwrap();
+        assert_eq!(
+            user.email_verified.field_value(),
+            FieldValue::Bool(!fail_before)
+        );
+        assert_eq!(
+            calls.load(Ordering::SeqCst),
+            if fail_before { 1 } else { 2 }
+        );
+        assert!(request.new_session()?.is_none());
+    }
+    Ok(())
+}
+
+#[tokio::test]
 async fn session_reads_follow_token_branches_and_caught_failures_use_anonymous_flow()
 -> AuthResult<()> {
     let rejecting = Arc::new(AtomicBool::new(false));

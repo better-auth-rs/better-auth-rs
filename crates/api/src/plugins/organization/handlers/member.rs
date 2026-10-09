@@ -1,11 +1,12 @@
-use better_auth_core::entity::{AuthMember, AuthOrganization, AuthSession, AuthUser};
+use better_auth_core::FieldValue;
+use better_auth_core::entity::{AuthMember, AuthOrganization, AuthUser};
 use better_auth_core::error::{AuthError, AuthResult};
 use better_auth_core::plugin::AuthContext;
 use better_auth_core::session::NativeSessionData;
 use better_auth_core::store::ListOrganizationMembersParams;
 use better_auth_core::types::{AuthRequest, AuthResponse};
 
-use super::{require_native_session, require_session, resolve_organization_id};
+use super::{require_native_session, resolve_organization_id};
 use crate::plugins::organization::rbac::check_permission;
 use crate::plugins::organization::types::{
     BasicMemberResponse, GetActiveMemberRoleQuery, GetActiveMemberRoleResponse, ListMembersQuery,
@@ -19,7 +20,6 @@ fn has_role(member: &impl AuthMember, role: &str) -> AuthResult<bool> {
         .role()
         .typed()?
         .split(',')
-        .map(str::trim)
         .any(|candidate| candidate == role))
 }
 
@@ -187,17 +187,17 @@ pub(crate) async fn get_active_member_role_core(
 
 pub(crate) async fn remove_member_core(
     body: &RemoveMemberRequest,
-    user: &impl AuthUser,
-    session: &impl AuthSession,
+    session: &NativeSessionData,
     config: &OrganizationConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<RemovedMemberResponse> {
     let org_id =
-        resolve_organization_id(body.organization_id.as_deref(), None, session, ctx).await?;
+        resolve_organization_id(body.organization_id.as_deref(), None, &session.session, ctx)
+            .await?;
 
     let requester_member = ctx
         .database
-        .get_member_with_user_value(&org_id, &user.id().field_value())
+        .get_member_with_user_value(&org_id, session.user_property("id")?)
         .await?
         .map(|joined| joined.member)
         .ok_or_else(|| AuthError::bad_request("Member not found"))?;
@@ -219,10 +219,15 @@ pub(crate) async fn remove_member_core(
             .map(|joined| joined.member)
             .ok_or_else(|| AuthError::bad_request("Member not found"))?
     };
-    let is_self_removal = target_member.user_id().clone() == user.id().into_owned();
-
-    if has_role(&target_member, &config.creator_role)? {
-        if !has_role(&requester_member, &config.creator_role)? {
+    let creator_role = config.creator_role();
+    if has_role(&target_member, creator_role)? {
+        if !requester_member
+            .role()
+            .typed()?
+            .split(',')
+            .map(str::trim)
+            .any(|role| role == creator_role)
+        {
             return Err(AuthError::bad_request(
                 "You cannot leave the organization as the only owner",
             ));
@@ -235,7 +240,7 @@ pub(crate) async fn remove_member_core(
             all_members
                 .iter()
                 .try_fold(0, |count, candidate| -> AuthResult<usize> {
-                    Ok(count + usize::from(has_role(candidate, &config.creator_role)?))
+                    Ok(count + usize::from(has_role(candidate, creator_role)?))
                 })?;
 
         if owner_count <= 1 {
@@ -276,13 +281,14 @@ pub(crate) async fn remove_member_core(
     let organization_view = crate::plugins::organization::fields::organization(&organization, ctx);
     let target_user = ctx
         .database
-        .get_user_by_id(target_member.user_id.typed()?)
+        .get_user_by_id_value(&target_member.user_id.field_value())
         .await?
         .ok_or_else(|| AuthError::bad_request("User not found"))?;
-    let user_view = ctx.internal_user_view(&target_user).await?;
+    let user_value =
+        better_auth_core::FieldValue::from(better_auth_core::FieldMap::from(&target_user));
     let event = OrganizationMemberEvent {
         member: &target_member,
-        user: &user_view,
+        user: &user_value,
         organization: &organization_view,
     };
     if let Some(hooks) = &config.hooks {
@@ -299,18 +305,28 @@ pub(crate) async fn remove_member_core(
     };
 
     ctx.database
-        .delete_member(target_member.id().typed()?)
+        .delete_member_for_user_value(
+            &target_member.id().field_value(),
+            &org_id,
+            &target_member.user_id().field_value(),
+        )
         .await?;
 
-    if is_self_removal
+    if session
+        .user_property("id")?
+        .strict_equals(&target_member.user_id().field_value())
         && session
-            .active_organization_id()
+            .session
+            .active_organization_id
             .field_value()
             .strict_equals(&target_member.organization_id.field_value())
     {
         let _ = ctx
             .database
-            .update_session_active_organization_by_token_value(&session.token().field_value(), None)
+            .update_session_active_organization_by_token_value(
+                &session.session.token.field_value(),
+                None,
+            )
             .await?;
     }
 
@@ -322,38 +338,26 @@ pub(crate) async fn remove_member_core(
 
 pub(crate) async fn update_member_role_core(
     body: &UpdateMemberRoleRequest,
-    user: &impl AuthUser,
-    session: &impl AuthSession,
+    session: &NativeSessionData,
     config: &OrganizationConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<BasicMemberResponse> {
     let org_id =
-        resolve_organization_id(body.organization_id.as_deref(), None, session, ctx).await?;
+        resolve_organization_id(body.organization_id.as_deref(), None, &session.session, ctx)
+            .await?;
 
     let requester_member = ctx
         .database
-        .get_member_with_user_value(&org_id, &user.id().field_value())
+        .get_member_with_user_value(&org_id, session.user_property("id")?)
         .await?
         .map(|joined| joined.member)
         .ok_or_else(|| AuthError::bad_request("Member not found"))?;
 
-    if !has_role(&requester_member, &config.creator_role)?
-        && !check_permission(
-            requester_member.role().typed()?,
-            &org_id,
-            "member",
-            &["update"],
-            config,
-            ctx,
-        )
-        .await?
+    let target_member = if requester_member
+        .id
+        .field_value()
+        .strict_equals(&body.member_id.as_str().into())
     {
-        return Err(AuthError::forbidden(
-            "You are not allowed to update this member",
-        ));
-    }
-
-    let target_member = if requester_member.id == body.member_id {
         requester_member.clone()
     } else {
         ctx.database
@@ -373,13 +377,14 @@ pub(crate) async fn update_member_role_core(
         ));
     }
 
-    let requester_is_owner = has_role(&requester_member, &config.creator_role)?;
-    let target_is_owner = has_role(&target_member, &config.creator_role)?;
+    let creator_role = config.creator_role();
+    let requester_is_owner = has_role(&requester_member, creator_role)?;
+    let target_is_owner = has_role(&target_member, creator_role)?;
     let new_role = body.role.joined();
     let new_role_contains_owner = new_role
         .split(',')
         .map(str::trim)
-        .any(|role| role == config.creator_role);
+        .any(|role| role == creator_role);
 
     if (new_role_contains_owner || target_is_owner) && !requester_is_owner {
         return Err(AuthError::forbidden(
@@ -387,7 +392,12 @@ pub(crate) async fn update_member_role_core(
         ));
     }
 
-    if target_is_owner && requester_member.id() == target_member.id() && !new_role_contains_owner {
+    if requester_is_owner
+        && requester_member
+            .id()
+            .field_value()
+            .strict_equals(&target_member.id().field_value())
+    {
         let all_members = ctx
             .database
             .list_organization_members_value(&org_id)
@@ -396,32 +406,33 @@ pub(crate) async fn update_member_role_core(
             all_members
                 .iter()
                 .try_fold(0, |count, candidate| -> AuthResult<usize> {
-                    Ok(count + usize::from(has_role(candidate, &config.creator_role)?))
+                    Ok(count + usize::from(has_role(candidate, creator_role)?))
                 })?;
 
-        if owner_count <= 1 {
+        if owner_count <= 1 && !new_role_contains_owner {
             return Err(AuthError::bad_request(
                 "You cannot leave the organization without an owner",
             ));
         }
     }
 
-    let dynamic_roles = if config.dynamic_access_control {
-        ctx.database
-            .query_organization_roles_value(
-                &org_id,
-                &body
-                    .role
-                    .roles()
-                    .into_iter()
-                    .map(str::to_owned)
-                    .collect::<Vec<_>>(),
-            )
-            .await?
-    } else {
-        Vec::new()
-    };
-    let unknown_roles = body
+    if !requester_is_owner
+        && !check_permission(
+            requester_member.role().typed()?,
+            &org_id,
+            "member",
+            &["update"],
+            config,
+            ctx,
+        )
+        .await?
+    {
+        return Err(AuthError::forbidden(
+            "You are not allowed to update this member",
+        ));
+    }
+
+    let unknown_static_roles = body
         .role
         .roles()
         .into_iter()
@@ -431,7 +442,30 @@ pub(crate) async fn update_member_role_core(
                     .roles
                     .as_ref()
                     .is_some_and(|roles| roles.contains_key(*role))
-                && !dynamic_roles.iter().any(|stored| stored.role == *role)
+        })
+        .collect::<Vec<_>>();
+    let dynamic_roles = if config.dynamic_access_control && !unknown_static_roles.is_empty() {
+        ctx.database
+            .query_organization_roles_value(
+                &org_id,
+                &unknown_static_roles
+                    .iter()
+                    .map(|role| (*role).to_owned())
+                    .collect::<Vec<_>>(),
+            )
+            .await?
+    } else {
+        Vec::new()
+    };
+    let unknown_roles = unknown_static_roles
+        .into_iter()
+        .filter(|role| {
+            !dynamic_roles.iter().any(|stored| {
+                stored
+                    .role
+                    .field_value()
+                    .strict_equals(&FieldValue::from(*role))
+            })
         })
         .collect::<Vec<_>>();
     if !unknown_roles.is_empty() {
@@ -449,13 +483,14 @@ pub(crate) async fn update_member_role_core(
     let organization_view = crate::plugins::organization::fields::organization(&organization, ctx);
     let target_user = ctx
         .database
-        .get_user_by_id(target_member.user_id.typed()?)
+        .get_user_by_id_value(&target_member.user_id.field_value())
         .await?
         .ok_or_else(|| AuthError::bad_request("User not found"))?;
-    let user_view = ctx.internal_user_view(&target_user).await?;
+    let user_value =
+        better_auth_core::FieldValue::from(better_auth_core::FieldMap::from(target_user));
     let event = OrganizationMemberEvent {
         member: &target_member,
-        user: &user_view,
+        user: &user_value,
         organization: &organization_view,
     };
     let mut overridden_role = new_role.clone();
@@ -531,9 +566,9 @@ pub async fn handle_remove_member(
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
-    let (user, session) = require_session(req, ctx).await?;
+    let session = require_native_session(req, ctx).await?;
     let body: RemoveMemberRequest = super::super::request::read(req, &config.schema)?;
-    let response = remove_member_core(&body, &user, &session, config, ctx).await?;
+    let response = remove_member_core(&body, &session, config, ctx).await?;
     Ok(AuthResponse::json(200, &response)?)
 }
 
@@ -543,9 +578,9 @@ pub async fn handle_update_member_role(
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
-    let (user, session) = require_session(req, ctx).await?;
+    let session = require_native_session(req, ctx).await?;
     let body: UpdateMemberRoleRequest = super::super::request::read(req, &config.schema)?;
-    let response = match update_member_role_core(&body, &user, &session, config, ctx).await {
+    let response = match update_member_role_core(&body, &session, config, ctx).await {
         Err(AuthError::BadRequest(message)) if message.starts_with("ROLE_NOT_FOUND: ") => {
             return Ok(AuthResponse::json(
                 400,

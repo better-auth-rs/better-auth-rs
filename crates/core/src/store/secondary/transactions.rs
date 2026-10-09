@@ -51,6 +51,16 @@ impl<S: AuthSchema> AuthTransaction<S> for Transaction<S> {
     async fn create_member(&self, input: crate::CreateMember) -> AuthResult<crate::Member> {
         self.inner.create_member(input).await
     }
+    async fn add_team_member_value(
+        &self,
+        team_id: &crate::FieldValue,
+        user_id: &crate::FieldValue,
+        maximum: Option<usize>,
+    ) -> AuthResult<Option<crate::TeamMember>> {
+        self.inner
+            .add_team_member_value(team_id, user_id, maximum)
+            .await
+    }
     async fn add_team_member(
         &self,
         team_id: &crate::SchemaValue<String>,
@@ -59,8 +69,21 @@ impl<S: AuthSchema> AuthTransaction<S> for Transaction<S> {
     ) -> AuthResult<Option<crate::TeamMember>> {
         self.inner.add_team_member(team_id, user_id, maximum).await
     }
+    async fn delete_member_value(&self, member_id: &crate::FieldValue) -> AuthResult<()> {
+        self.inner.delete_member_value(member_id).await
+    }
     async fn delete_member(&self, id: &str) -> AuthResult<()> {
         self.inner.delete_member(id).await
+    }
+    async fn delete_member_for_user_value(
+        &self,
+        member_id: &crate::FieldValue,
+        organization_id: &crate::FieldValue,
+        user_id: &crate::FieldValue,
+    ) -> AuthResult<()> {
+        self.inner
+            .delete_member_for_user_value(member_id, organization_id, user_id)
+            .await
     }
     async fn delete_member_for_user(
         &self,

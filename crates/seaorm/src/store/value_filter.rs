@@ -48,7 +48,8 @@ pub(super) fn equals_id(
     policy: &better_auth_core::id::IdGeneration,
     backend: DbBackend,
 ) -> AuthResult<SimpleExpr> {
-    match value {
+    let value = policy.adapter_id_query(value.clone())?;
+    match &value {
         FieldValue::String(value) => column.eq_id(value, policy),
         value => equals(column, value, backend),
     }

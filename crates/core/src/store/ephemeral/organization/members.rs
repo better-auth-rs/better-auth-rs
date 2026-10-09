@@ -174,7 +174,10 @@ impl MemberStore for EphemeralStore {
         }
     }
     async fn update_member_role(&self, id: &str, role: &str) -> AuthResult<Member> {
-        let id = self.organization_query(EntityRole::Member, "id", Value::from(id))?;
+        self.update_member_role_value(&id.into(), role).await
+    }
+    async fn update_member_role_value(&self, id: &Value, role: &str) -> AuthResult<Member> {
+        let id = self.organization_query(EntityRole::Member, "id", id.clone())?;
         let patch = self
             .prepare_record_patch(
                 EntityRole::Member,
@@ -194,9 +197,12 @@ impl MemberStore for EphemeralStore {
         self.output_member(result).await
     }
     async fn delete_member(&self, id: &str) -> AuthResult<()> {
-        let id = id.to_owned();
+        self.delete_member_value(&id.into()).await
+    }
+    async fn delete_member_value(&self, id: &Value) -> AuthResult<()> {
+        let id = id.clone();
         crate::store::transaction(self, move |tx| {
-            Box::pin(async move { tx.delete_member(&id).await })
+            Box::pin(async move { tx.delete_member_value(&id).await })
         })
         .await
     }
@@ -206,14 +212,19 @@ impl MemberStore for EphemeralStore {
         organization_id: &str,
         user_id: &str,
     ) -> AuthResult<()> {
-        let (id, organization_id, user_id) = (
-            id.to_owned(),
-            organization_id.to_owned(),
-            user_id.to_owned(),
-        );
+        self.delete_member_for_user_value(&id.into(), &organization_id.into(), &user_id.into())
+            .await
+    }
+    async fn delete_member_for_user_value(
+        &self,
+        id: &Value,
+        organization_id: &Value,
+        user_id: &Value,
+    ) -> AuthResult<()> {
+        let (id, organization_id, user_id) = (id.clone(), organization_id.clone(), user_id.clone());
         crate::store::transaction(self, move |tx| {
             Box::pin(async move {
-                tx.delete_member_for_user(&id, &organization_id, &user_id)
+                tx.delete_member_for_user_value(&id, &organization_id, &user_id)
                     .await
             })
         })

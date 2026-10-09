@@ -921,10 +921,28 @@ impl<S: AuthSchema> SessionStore<S> for SecondaryStore<S> {
         teams_enabled: bool,
         maximum: TeamMemberLimits<'_>,
     ) -> AuthResult<(Member, Invitation, Option<SessionView>)> {
+        self.accept_invitation_with_teams_values(
+            &invitation_id.into(),
+            &user_id.into(),
+            session_token,
+            teams_enabled,
+            maximum,
+        )
+        .await
+    }
+
+    async fn accept_invitation_with_teams_values(
+        &self,
+        invitation_id: &crate::FieldValue,
+        user_id: &crate::FieldValue,
+        session_token: Option<&FieldValue>,
+        teams_enabled: bool,
+        maximum: TeamMemberLimits<'_>,
+    ) -> AuthResult<(Member, Invitation, Option<SessionView>)> {
         let database_token = session_token.filter(|_| self.database_sessions());
         let (member, invitation, snapshot) = self
             .inner
-            .accept_invitation_with_teams_by_token_value(
+            .accept_invitation_with_teams_values(
                 invitation_id,
                 user_id,
                 database_token,

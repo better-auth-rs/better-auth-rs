@@ -12,7 +12,7 @@ use better_auth::plugins::organization::{
 };
 use better_auth_core::{
     AuthError, AuthResult, CreateOrganization, CreateTeam, FieldValue, Member, Team, TeamMember,
-    UpdateOrganization, UpdateTeam, wire::UserView,
+    UpdateOrganization, UpdateTeam,
 };
 use serde_json::{Map, Value, json};
 use std::sync::Arc;
@@ -197,14 +197,17 @@ impl OrganizationCallbacks {
 
 #[async_trait::async_trait]
 impl OrganizationPolicy for OrganizationCallbacks {
-    async fn allow_user_to_create_organization(&self, user: &UserView) -> AuthResult<Option<bool>> {
+    async fn allow_user_to_create_organization(
+        &self,
+        user: &FieldValue,
+    ) -> AuthResult<Option<bool>> {
         self.record("allowCreate", json!({"user":user}), None)
             .await?;
         Ok(Some(
             self.state.lock().await.limits.get("allowCreate") != Some(&Value::Bool(false)),
         ))
     }
-    async fn organization_limit_reached(&self, user: &UserView) -> AuthResult<Option<bool>> {
+    async fn organization_limit_reached(&self, user: &FieldValue) -> AuthResult<Option<bool>> {
         self.record("organizationLimit", json!({"user":user}), None)
             .await?;
         Ok(Some(
@@ -269,7 +272,7 @@ impl OrganizationHooks for OrganizationCallbacks {
     async fn before_create_organization(
         &self,
         data: &mut CreateOrganization,
-        user: &UserView,
+        user: &FieldValue,
     ) -> AuthResult<()> {
         let mut organization = json!({"id":data.id,"name":data.name,"slug":data.slug});
         put_field(&mut organization, "metadata", data.metadata.field_value())?;
@@ -498,7 +501,7 @@ impl OrganizationHooks for OrganizationCallbacks {
         &self,
         data: &mut OrganizationTeamDraft,
         organization: &Organization,
-        user: Option<&UserView>,
+        user: Option<&FieldValue>,
     ) -> AuthResult<()> {
         let mut team = json!({"id":data.id,"organizationId":data.organization_id,"name":data.name});
         put_field(
@@ -561,7 +564,8 @@ impl OrganizationHooks for OrganizationCallbacks {
         target: OrganizationTeamMemberTarget<'_>,
     ) -> AuthResult<()> {
         let mut data = team_target(target, None);
-        data["teamMember"] = json!({"teamId":target.team.id,"userId":target.user.id});
+        data["teamMember"] =
+            json!({"teamId":target.team.id,"userId":target.user.model_property("id")?});
         self.record("beforeAddTeamMember", data, None).await
     }
     async fn after_add_team_member(

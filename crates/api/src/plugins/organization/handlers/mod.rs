@@ -18,24 +18,6 @@ use super::OrganizationConfig;
 use super::rbac::check_permissions;
 use super::types::{HasPermissionRequest, HasPermissionResponse};
 
-/// Helper function to require authenticated session
-pub(crate) async fn require_session<S: better_auth_core::AuthSchema>(
-    req: &AuthRequest,
-    ctx: &AuthContext<S>,
-) -> AuthResult<(
-    better_auth_core::wire::UserView,
-    better_auth_core::wire::SessionView,
-)> {
-    ctx.require_session(req).await.map_err(|error| match error {
-        AuthError::Unauthenticated => AuthError::Upstream {
-            status: 401,
-            code: "UNAUTHORIZED",
-            message: "Unauthorized",
-        },
-        error => error,
-    })
-}
-
 pub(crate) async fn require_native_session<S: better_auth_core::AuthSchema>(
     req: &AuthRequest,
     ctx: &AuthContext<S>,
@@ -55,13 +37,8 @@ pub(crate) async fn require_native_session<S: better_auth_core::AuthSchema>(
 async fn optional_session<S: better_auth_core::AuthSchema>(
     req: &AuthRequest,
     ctx: &AuthContext<S>,
-) -> AuthResult<
-    Option<(
-        better_auth_core::wire::UserView,
-        better_auth_core::wire::SessionView,
-    )>,
-> {
-    match ctx.require_session(req).await {
+) -> AuthResult<Option<NativeSessionData>> {
+    match ctx.require_native_session(req).await {
         Ok(session) => Ok(Some(session)),
         Err(AuthError::Unauthenticated) => Ok(None),
         Err(error) => Err(error),
@@ -81,12 +58,7 @@ fn request_present<S: better_auth_core::AuthSchema>(
 async fn request_only_session<S: better_auth_core::AuthSchema>(
     req: &AuthRequest,
     ctx: &AuthContext<S>,
-) -> AuthResult<
-    Option<(
-        better_auth_core::wire::UserView,
-        better_auth_core::wire::SessionView,
-    )>,
-> {
+) -> AuthResult<Option<NativeSessionData>> {
     let session = optional_session(req, ctx).await?;
     if session.is_none() && request_present(req, ctx) {
         return Err(AuthError::Upstream {
@@ -175,5 +147,7 @@ pub async fn handle_has_permission(
     Ok(AuthResponse::json(200, &response)?)
 }
 
+#[cfg(test)]
+mod native_mutation_tests;
 #[cfg(test)]
 mod native_tests;

@@ -1,6 +1,9 @@
 use super::{EmailVerificationCallbacks, EmailVerificationConfig, VerificationEmail};
 use crate::plugins::endpoint_context::EndpointContext;
-use better_auth_core::{AuthContext, AuthResult, AuthSchema, background::BackgroundFuture};
+use better_auth_core::{
+    AuthContext, AuthResult, AuthSchema, FieldValue, background::BackgroundFuture,
+    email::EmailVerificationHook,
+};
 use std::sync::Arc;
 
 pub(crate) fn available<S: AuthSchema>(
@@ -9,7 +12,7 @@ pub(crate) fn available<S: AuthSchema>(
 ) -> bool {
     ctx.extensions
         .get::<Arc<EmailVerificationCallbacks<S>>>()
-        .is_some()
+        .is_some_and(|callbacks| callbacks.has_sender())
         || config.is_some_and(|config| config.send_verification_email.is_some())
         || ctx.email_verification_policy.override_sender.is_some()
         || crate::plugins::email_otp::callbacks::overrides_verification(ctx)
@@ -27,7 +30,7 @@ pub(crate) fn delivery<S: AuthSchema>(
     if ctx
         .extensions
         .get::<Arc<EmailVerificationCallbacks<S>>>()
-        .is_none()
+        .is_none_or(|callbacks| !callbacks.has_sender())
         && config.is_none_or(|config| config.send_verification_email.is_none())
         && crate::plugins::email_otp::callbacks::overrides_verification(ctx)
     {
@@ -41,8 +44,12 @@ pub(crate) fn delivery<S: AuthSchema>(
             .await
         })));
     }
-    if let Some(callbacks) = ctx.extensions.get::<Arc<EmailVerificationCallbacks<S>>>() {
-        return (callbacks.sender)(&message, endpoint);
+    if let Some(sender) = ctx
+        .extensions
+        .get::<Arc<EmailVerificationCallbacks<S>>>()
+        .and_then(|callbacks| callbacks.sender.as_ref())
+    {
+        return sender(&message, endpoint);
     }
     if let Some(sender) = config
         .and_then(|config| config.send_verification_email.as_ref())
@@ -79,4 +86,72 @@ pub(crate) fn delivery<S: AuthSchema>(
         );
     }
     Ok(None)
+}
+
+async fn lifecycle<S: AuthSchema>(
+    user: &FieldValue,
+    endpoint: &EndpointContext<'_, S>,
+    callback: Option<&Arc<super::callbacks::Lifecycle<S>>>,
+    legacy: Option<&EmailVerificationHook>,
+) -> AuthResult<()> {
+    if let Some(callback) = callback {
+        if let Some(task) = callback(user, endpoint)? {
+            task.await?;
+        }
+    } else if let Some(legacy) = legacy {
+        legacy(user).await?;
+    }
+    Ok(())
+}
+
+pub(crate) async fn before<S: AuthSchema>(
+    user: &FieldValue,
+    config: Option<&EmailVerificationConfig>,
+    endpoint: &EndpointContext<'_, S>,
+) -> AuthResult<()> {
+    let callbacks = endpoint
+        .auth
+        .extensions
+        .get::<Arc<EmailVerificationCallbacks<S>>>();
+    let legacy = config.map_or(
+        endpoint
+            .auth
+            .email_verification_policy
+            .before_email_verification
+            .as_ref(),
+        |config| config.before_email_verification.as_ref(),
+    );
+    lifecycle(
+        user,
+        endpoint,
+        callbacks.and_then(|callbacks| callbacks.before.as_ref()),
+        legacy,
+    )
+    .await
+}
+
+pub(crate) async fn after<S: AuthSchema>(
+    user: &FieldValue,
+    config: Option<&EmailVerificationConfig>,
+    endpoint: &EndpointContext<'_, S>,
+) -> AuthResult<()> {
+    let callbacks = endpoint
+        .auth
+        .extensions
+        .get::<Arc<EmailVerificationCallbacks<S>>>();
+    let legacy = config.map_or(
+        endpoint
+            .auth
+            .email_verification_policy
+            .after_email_verification
+            .as_ref(),
+        |config| config.after_email_verification.as_ref(),
+    );
+    lifecycle(
+        user,
+        endpoint,
+        callbacks.and_then(|callbacks| callbacks.after.as_ref()),
+        legacy,
+    )
+    .await
 }

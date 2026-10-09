@@ -1,13 +1,11 @@
-use better_auth_core::entity::{
-    AuthInvitation, AuthMember, AuthOrganization, AuthSession, AuthUser,
-};
+use better_auth_core::entity::{AuthInvitation, AuthMember, AuthOrganization, AuthUser};
 use better_auth_core::error::{AuthError, AuthResult};
 use better_auth_core::plugin::AuthContext;
 use better_auth_core::session::NativeSessionData;
 use better_auth_core::types::{AuthRequest, AuthResponse, InvitationStatus};
 use better_auth_core::wire::InvitationView;
 
-use super::{require_native_session, require_session, resolve_organization_id};
+use super::{require_native_session, resolve_organization_id};
 use crate::plugins::organization::rbac::check_permission;
 use crate::plugins::organization::types::{
     AcceptInvitationRequest, AcceptInvitationResponse, BasicMemberResponse,
@@ -30,8 +28,7 @@ fn requested_roles(input: &crate::plugins::organization::types::RoleInput) -> Ve
 
 pub(crate) async fn invite_member_core(
     body: &InviteMemberRequest,
-    user: &impl AuthUser,
-    session: &impl AuthSession,
+    session: &NativeSessionData,
     config: &OrganizationConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     request: Option<&AuthRequest>,
@@ -41,7 +38,7 @@ pub(crate) async fn invite_member_core(
         .is_truthy()
         .then_some(org_value)
         .or_else(|| {
-            let id = session.active_organization_id().field_value();
+            let id = session.session.active_organization_id.field_value();
             id.is_truthy().then_some(id)
         })
         .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
@@ -57,7 +54,7 @@ pub(crate) async fn invite_member_core(
 
     let member = ctx
         .database
-        .get_member_with_user_value(&org_value, &user.id().field_value())
+        .get_member_with_user_value(&org_value, session.user_property("id")?)
         .await?
         .map(|joined| joined.member)
         .ok_or_else(|| AuthError::bad_request("Member not found"))?;
@@ -171,13 +168,11 @@ pub(crate) async fn invite_member_core(
         .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
     let organization_view = crate::plugins::organization::fields::organization(&organization, ctx);
     let expires_at = config.invitation_expires_at(chrono::Utc::now())?;
-    let user_view = ctx.user_view(user).await?;
-    let session_view = ctx.session_view(session).await?;
     let is_resend = existing.is_some() && resend;
     let invitation = if let Some(existing) = existing.as_ref().filter(|_| resend) {
         let _ = ctx
             .database
-            .update_invitation_expiry(existing.id().typed()?, expires_at)
+            .update_invitation_expiry_value(&existing.id().field_value(), expires_at)
             .await?;
         let mut response = existing.clone();
         response.expires_at = expires_at.into();
@@ -186,7 +181,10 @@ pub(crate) async fn invite_member_core(
         if let Some(existing) = existing {
             let _ = ctx
                 .database
-                .update_invitation_status(existing.id().typed()?, InvitationStatus::Canceled)
+                .update_invitation_status_value(
+                    &existing.id().field_value(),
+                    InvitationStatus::Canceled,
+                )
                 .await?;
         }
         {
@@ -194,7 +192,7 @@ pub(crate) async fn invite_member_core(
                 .pending_invitation_limit(
                     OrganizationMemberEvent {
                         member: &member,
-                        user: &user_view,
+                        user: &session.user,
                         organization: &organization_view,
                     },
                     OrganizationEndpoint::new(ctx, request),
@@ -241,19 +239,19 @@ pub(crate) async fn invite_member_core(
                 teams.push(team);
             }
             for team in &teams {
-                let team_id = team.id.typed()?;
+                let team_id = team.id.field_value();
                 let limit = config
                     .team_member_limit(OrganizationTeamMemberLimit {
                         organization_id: &org_id,
-                        team_id: &team_id.as_str().into(),
+                        team_id: &team_id,
                         session: OrganizationSession {
-                            user: &user_view,
-                            session: &session_view,
+                            user: &session.user,
+                            session: &session.session,
                         },
                     })
                     .await?;
                 if let Some(limit) = limit
-                    && ctx.database.count_team_members(team_id).await? >= limit as u64
+                    && ctx.database.count_team_members_value(&team_id).await? >= limit as u64
                 {
                     return Err(AuthError::forbidden("Team member limit reached"));
                 }
@@ -282,7 +280,9 @@ pub(crate) async fn invite_member_core(
             organization_id: better_auth_core::SchemaValue::from_field(org_id),
             email: email.clone(),
             role: normalized_roles(&role_input),
-            inviter_id: user.id().typed()?.to_string(),
+            inviter_id: better_auth_core::SchemaValue::from_field(
+                session.user_property("id")?.clone(),
+            ),
             expires_at: body
                 .additional_fields
                 .get("expiresAt")
@@ -297,14 +297,14 @@ pub(crate) async fn invite_member_core(
                     &mut draft,
                     OrganizationUser {
                         organization: &organization_view,
-                        user: &user_view,
+                        user: &session.user,
                     },
                 )
                 .await?;
         }
         let expires_at = config.invitation_expires_at(chrono::Utc::now())?;
         ctx.database
-            .create_invitation(draft.into_create(expires_at, user.id().typed()?)?)
+            .create_invitation(draft.into_create(expires_at, session.user_property("id")?)?)
             .await?
     };
     let invitation = crate::plugins::organization::fields::invitation_snapshot(invitation, config);
@@ -314,14 +314,14 @@ pub(crate) async fn invite_member_core(
         better_auth_core::FieldValue::from_json(serde_json::to_value(body)?)?,
         ctx,
     );
-    endpoint.session = Some((user_view.clone(), session_view).into());
+    endpoint.session = Some(session.clone());
     let task = crate::plugins::organization::callbacks::delivery(
         config,
         InvitationEmail {
             invitation: invitation_view.clone(),
             organization: organization_view.clone(),
             member,
-            inviter: user_view.clone(),
+            inviter: session.user.clone(),
             request: endpoint.request.cloned(),
         },
         &endpoint,
@@ -336,7 +336,7 @@ pub(crate) async fn invite_member_core(
         hooks
             .after_create_invitation(OrganizationInvitationEvent {
                 invitation: &invitation,
-                user: &user_view,
+                user: &session.user,
                 organization: &organization_view,
             })
             .await?;
@@ -477,8 +477,7 @@ pub(crate) async fn list_user_invitations_core(
 
 pub(crate) async fn accept_invitation_core(
     body: &AcceptInvitationRequest,
-    user: &impl AuthUser,
-    session: &impl AuthSession,
+    session: &NativeSessionData,
     config: &OrganizationConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<(
@@ -494,15 +493,18 @@ pub(crate) async fn accept_invitation_core(
         return Err(AuthError::bad_request("Invitation not found"));
     }
 
-    let user_email = crate::plugins::helpers::user_email(user)?;
+    let recipient = crate::plugins::helpers::user_email_field(&invitation.email().field_value())?;
+    let user_email = crate::plugins::helpers::user_email_field(session.user_property("email")?)?;
 
-    if invitation.email().typed()?.to_lowercase() != user_email.to_lowercase() {
+    if recipient.to_lowercase() != user_email.to_lowercase() {
         return Err(AuthError::forbidden(
             "You are not the recipient of the invitation",
         ));
     }
 
-    if config.require_email_verification_on_invitation && !user.email_verified().is_truthy()? {
+    if config.require_email_verification_on_invitation
+        && !session.user_property("emailVerified")?.is_truthy()
+    {
         return Err(AuthError::forbidden(
             "Email verification required before accepting or rejecting invitation",
         ));
@@ -510,23 +512,21 @@ pub(crate) async fn accept_invitation_core(
 
     let count = ctx
         .database
-        .list_organization_members(invitation.organization_id.typed()?)
-        .await?
-        .len();
+        .count_organization_members_value(&invitation.organization_id.field_value())
+        .await?;
     let organization = ctx
         .database
-        .get_organization_by_id(invitation.organization_id.typed()?)
+        .get_organization_by_id_value(&invitation.organization_id.field_value())
         .await?
         .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
     let organization_view = crate::plugins::organization::fields::organization(&organization, ctx);
-    let user_view = ctx.user_view(user).await?;
     let limit = config
         .member_limit(OrganizationUser {
             organization: &organization_view,
-            user: &user_view,
+            user: &session.user,
         })
         .await?;
-    if count >= limit {
+    if count >= limit as i64 {
         return Err(AuthError::Upstream {
             status: 403,
             code: "ORGANIZATION_MEMBERSHIP_LIMIT_REACHED",
@@ -535,28 +535,26 @@ pub(crate) async fn accept_invitation_core(
     }
     let event = OrganizationInvitationEvent {
         invitation: &invitation,
-        user: &user_view,
+        user: &session.user,
         organization: &organization_view,
     };
     if let Some(hooks) = &config.hooks {
         hooks.before_accept_invitation(event).await?;
     }
 
-    let session_view = ctx.session_view(session).await?;
     let resolver = InvitationTeamLimits {
         config,
-        organization_id: invitation.organization_id.typed()?,
         session: OrganizationSession {
-            user: &user_view,
-            session: &session_view,
+            user: &session.user,
+            session: &session.session,
         },
     };
     let (member, accepted, snapshot) = ctx
         .database
-        .accept_invitation_with_teams_by_token_value(
-            invitation.id().typed()?,
-            user.id().typed()?,
-            Some(&session.token().field_value()),
+        .accept_invitation_with_teams_values(
+            &body.invitation_id.as_str().into(),
+            session.user_property("id")?,
+            Some(&session.session.token.field_value()),
             config.teams.enabled,
             better_auth_core::store::TeamMemberLimits::Resolver(&resolver),
         )
@@ -572,11 +570,6 @@ pub(crate) async fn accept_invitation_core(
             )
             .await?;
     }
-    let snapshot = if let Some(session) = snapshot.as_ref() {
-        Some(ctx.session_view(session).await?)
-    } else {
-        None
-    };
     Ok((
         AcceptInvitationResponse {
             invitation: InvitationView::from(&accepted),
@@ -588,7 +581,7 @@ pub(crate) async fn accept_invitation_core(
 
 pub(crate) async fn reject_invitation_core(
     body: &RejectInvitationRequest,
-    user: &impl AuthUser,
+    session: &NativeSessionData,
     config: &OrganizationConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<AcceptInvitationResponse<InvitationView, Option<BasicMemberResponse>>> {
@@ -599,15 +592,18 @@ pub(crate) async fn reject_invitation_core(
         .filter(|invitation| invitation.is_pending())
         .ok_or_else(|| AuthError::bad_request("Invitation not found!"))?;
 
-    let user_email = crate::plugins::helpers::user_email(user)?;
+    let recipient = crate::plugins::helpers::user_email_field(&invitation.email().field_value())?;
+    let user_email = crate::plugins::helpers::user_email_field(session.user_property("email")?)?;
 
-    if invitation.email().typed()?.to_lowercase() != user_email.to_lowercase() {
+    if recipient.to_lowercase() != user_email.to_lowercase() {
         return Err(AuthError::forbidden(
             "You are not the recipient of the invitation",
         ));
     }
 
-    if config.require_email_verification_on_invitation && !user.email_verified().is_truthy()? {
+    if config.require_email_verification_on_invitation
+        && !session.user_property("emailVerified")?.is_truthy()
+    {
         return Err(AuthError::forbidden(
             "Email verification required before accepting or rejecting invitation",
         ));
@@ -615,14 +611,13 @@ pub(crate) async fn reject_invitation_core(
 
     let organization = ctx
         .database
-        .get_organization_by_id(invitation.organization_id.typed()?)
+        .get_organization_by_id_value(&invitation.organization_id.field_value())
         .await?
         .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
     let organization_view = crate::plugins::organization::fields::organization(&organization, ctx);
-    let user_view = ctx.user_view(user).await?;
     let event = OrganizationInvitationEvent {
         invitation: &invitation,
-        user: &user_view,
+        user: &session.user,
         organization: &organization_view,
     };
     if let Some(hooks) = &config.hooks {
@@ -630,7 +625,7 @@ pub(crate) async fn reject_invitation_core(
     }
     let updated_invitation = ctx
         .database
-        .update_invitation_status(invitation.id().typed()?, InvitationStatus::Rejected)
+        .update_invitation_status(&body.invitation_id, InvitationStatus::Rejected)
         .await?;
 
     if let Some(hooks) = &config.hooks {
@@ -649,7 +644,7 @@ pub(crate) async fn reject_invitation_core(
 
 pub(crate) async fn cancel_invitation_core(
     body: &CancelInvitationRequest,
-    user: &impl AuthUser,
+    session: &NativeSessionData,
     config: &OrganizationConfig,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
 ) -> AuthResult<InvitationView> {
@@ -661,9 +656,9 @@ pub(crate) async fn cancel_invitation_core(
 
     let member = ctx
         .database
-        .get_member_with_user(
-            invitation.organization_id().typed()?.as_str(),
-            user.id().typed()?,
+        .get_member_with_user_value(
+            &invitation.organization_id().field_value(),
+            session.user_property("id")?,
         )
         .await?
         .map(|joined| joined.member)
@@ -686,14 +681,13 @@ pub(crate) async fn cancel_invitation_core(
 
     let organization = ctx
         .database
-        .get_organization_by_id(invitation.organization_id.typed()?)
+        .get_organization_by_id_value(&invitation.organization_id.field_value())
         .await?
         .ok_or_else(|| AuthError::bad_request("Organization not found"))?;
     let organization_view = crate::plugins::organization::fields::organization(&organization, ctx);
-    let user_view = ctx.user_view(user).await?;
     let event = OrganizationInvitationEvent {
         invitation: &invitation,
-        user: &user_view,
+        user: &session.user,
         organization: &organization_view,
     };
     if let Some(hooks) = &config.hooks {
@@ -701,7 +695,7 @@ pub(crate) async fn cancel_invitation_core(
     }
     let updated_invitation = ctx
         .database
-        .update_invitation_status(invitation.id().typed()?, InvitationStatus::Canceled)
+        .update_invitation_status(&body.invitation_id, InvitationStatus::Canceled)
         .await?;
 
     if let Some(hooks) = &config.hooks {
@@ -724,9 +718,9 @@ pub async fn handle_invite_member(
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
-    let (user, session) = require_session(req, ctx).await?;
+    let session = require_native_session(req, ctx).await?;
     let body: InviteMemberRequest = super::super::request::read(req, &config.schema)?;
-    let invitation = invite_member_core(&body, &user, &session, config, ctx, Some(req)).await?;
+    let invitation = invite_member_core(&body, &session, config, ctx, Some(req)).await?;
     Ok(AuthResponse::json(200, &invitation)?)
 }
 
@@ -789,19 +783,19 @@ pub async fn handle_accept_invitation(
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
-    let (user, session) = require_session(req, ctx).await?;
+    let session = require_native_session(req, ctx).await?;
     let body: AcceptInvitationRequest = super::super::request::read(req, &config.schema)?;
-    let (response, snapshot) = accept_invitation_core(&body, &user, &session, config, ctx).await?;
+    let (response, snapshot) = accept_invitation_core(&body, &session, config, ctx).await?;
     let response = AuthResponse::json(200, &response)?;
     if let Some(snapshot) = snapshot {
         let manager = ctx.session_manager();
         // Upstream writes the team cookie before updating the active organization in the transaction.
         manager
-            .set_session_cookie(
+            .set_native_session_cookie(
                 req,
-                better_auth_core::session::SessionData {
+                NativeSessionData {
                     session: snapshot,
-                    user,
+                    user: session.user,
                 },
                 None,
             )
@@ -815,9 +809,9 @@ pub async fn handle_reject_invitation(
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
-    let (user, _session) = require_session(req, ctx).await?;
+    let session = require_native_session(req, ctx).await?;
     let body: RejectInvitationRequest = super::super::request::read(req, &config.schema)?;
-    let response = reject_invitation_core(&body, &user, config, ctx).await?;
+    let response = reject_invitation_core(&body, &session, config, ctx).await?;
     Ok(AuthResponse::json(200, &response)?)
 }
 
@@ -826,9 +820,9 @@ pub async fn handle_cancel_invitation(
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
-    let (user, _session) = require_session(req, ctx).await?;
+    let session = require_native_session(req, ctx).await?;
     let body: CancelInvitationRequest = super::super::request::read(req, &config.schema)?;
-    let response = cancel_invitation_core(&body, &user, config, ctx).await?;
+    let response = cancel_invitation_core(&body, &session, config, ctx).await?;
     Ok(AuthResponse::json(200, &response)?)
 }
 
@@ -888,9 +882,15 @@ mod tests {
             "organizationId": organization.id, "email": "invitee@example.com", "role": "member",
         }))
         .unwrap();
-        let first = invite_member_core(&body, &user, &session, &config, &ctx, None)
-            .await
-            .unwrap();
+        let first = invite_member_core(
+            &body,
+            &(user.clone(), session.clone()).into(),
+            &config,
+            &ctx,
+            None,
+        )
+        .await
+        .unwrap();
         let shortened = first
             .expires_at
             .typed()
@@ -904,9 +904,15 @@ mod tests {
             .await
             .unwrap();
         body.resend = true.into();
-        let resent = invite_member_core(&body, &user, &session, &config, &ctx, None)
-            .await
-            .unwrap();
+        let resent = invite_member_core(
+            &body,
+            &(user.clone(), session.clone()).into(),
+            &config,
+            &ctx,
+            None,
+        )
+        .await
+        .unwrap();
         assert_eq!(resent.id, first.id);
         assert!(
             resent
@@ -928,9 +934,15 @@ mod tests {
             resent.expires_at
         );
         body.email = "another@example.com".into();
-        let error = invite_member_core(&body, &user, &session, &config, &ctx, None)
-            .await
-            .unwrap_err();
+        let error = invite_member_core(
+            &body,
+            &(user.clone(), session.clone()).into(),
+            &config,
+            &ctx,
+            None,
+        )
+        .await
+        .unwrap_err();
         assert_eq!(error.status_code(), 403);
         assert!(error.to_string().contains("Invitation limit reached"));
     }
@@ -938,15 +950,18 @@ mod tests {
 
 struct InvitationTeamLimits<'a> {
     config: &'a OrganizationConfig,
-    organization_id: &'a str,
     session: OrganizationSession<'a>,
 }
 #[async_trait::async_trait]
 impl better_auth_core::store::TeamMemberLimitResolver for InvitationTeamLimits<'_> {
-    async fn maximum(&self, team_id: &str) -> AuthResult<Option<usize>> {
+    async fn maximum(
+        &self,
+        team_id: &str,
+        organization_id: &better_auth_core::FieldValue,
+    ) -> AuthResult<Option<usize>> {
         self.config
             .team_member_limit(OrganizationTeamMemberLimit {
-                organization_id: &self.organization_id.into(),
+                organization_id,
                 team_id: &team_id.into(),
                 session: self.session,
             })

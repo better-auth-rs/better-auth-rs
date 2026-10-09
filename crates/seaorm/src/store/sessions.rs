@@ -583,6 +583,28 @@ where
         better_auth_core::Invitation,
         Option<better_auth_core::wire::SessionView>,
     )> {
+        self.accept_invitation_with_teams_values(
+            &invitation_id.into(),
+            &user_id.into(),
+            session_token,
+            teams_enabled,
+            maximum,
+        )
+        .await
+    }
+
+    async fn accept_invitation_with_teams_values(
+        &self,
+        invitation_id: &better_auth_core::FieldValue,
+        user_id: &better_auth_core::FieldValue,
+        session_token: Option<&better_auth_core::FieldValue>,
+        teams_enabled: bool,
+        maximum: better_auth_core::store::TeamMemberLimits<'_>,
+    ) -> AuthResult<(
+        better_auth_core::Member,
+        better_auth_core::Invitation,
+        Option<better_auth_core::wire::SessionView>,
+    )> {
         self.accept_team_invitation(
             invitation_id,
             user_id,

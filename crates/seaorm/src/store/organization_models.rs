@@ -1,4 +1,3 @@
-use super::id_filter::IdColumn;
 use crate::SeaOrmOrganizationModel;
 use better_auth_core::store::schema::resolve_field_name;
 use better_auth_core::{AuthError, AuthResult, user_fields::UserConfig};
@@ -19,12 +18,20 @@ impl<S: crate::schema::AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate:
         value: &FieldValue,
     ) -> AuthResult<sea_orm::sea_query::SimpleExpr> {
         self.model_fields.begin_id_query(role)?;
+        if name == "id" {
+            return super::value_filter::equals_id(
+                M::column("id")?,
+                value,
+                self.config().advanced.database.generate_id(),
+                self.connection().get_database_backend(),
+            );
+        }
         let fields = self.organization_fields()?.schema_for(role)?;
         let field = fields.fields().get(name).ok_or_else(|| {
             AuthError::config(format!("Unknown organization field {role:?}.{name}"))
         })?;
         let column = M::column(resolve_field_name(field.field_name.as_deref(), name))?;
-        let bound = if name == "id" || field.references_id() {
+        let bound = if field.references_id() {
             self.config()
                 .advanced
                 .database
@@ -174,8 +181,21 @@ pub(super) async fn find<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
     id: &str,
     policy: &better_auth_core::id::IdGeneration,
 ) -> AuthResult<Option<M>> {
+    find_value::<M, _>(conn, &id.into(), policy).await
+}
+
+pub(super) async fn find_value<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
+    conn: &C,
+    id: &FieldValue,
+    policy: &better_auth_core::id::IdGeneration,
+) -> AuthResult<Option<M>> {
     Entity::<M>::find()
-        .filter(M::column("id")?.eq_id(id, policy)?)
+        .filter(super::value_filter::equals_id(
+            M::column("id")?,
+            id,
+            policy,
+            conn.get_database_backend(),
+        )?)
         .one(conn)
         .await
         .map_err(super::map_db_err)
@@ -184,6 +204,17 @@ pub(super) async fn find<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
 pub(super) async fn update<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
     conn: &C,
     id: &str,
+    core: FieldMap,
+    input: FieldMap,
+    config: &UserConfig,
+    policy: &better_auth_core::id::IdGeneration,
+) -> AuthResult<M::Record> {
+    update_value::<M, _>(conn, &id.into(), core, input, config, policy).await
+}
+
+pub(super) async fn update_value<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
+    conn: &C,
+    id: &FieldValue,
     core: FieldMap,
     input: FieldMap,
     config: &UserConfig,
@@ -200,11 +231,16 @@ pub(super) async fn update<M: SeaOrmOrganizationModel, C: ConnectionTrait>(
     .await?;
     let _ = active
         .update(conn.get_database_backend())?
-        .filter(M::column("id")?.eq_id(id, policy)?)
+        .filter(super::value_filter::equals_id(
+            M::column("id")?,
+            id,
+            policy,
+            conn.get_database_backend(),
+        )?)
         .exec(conn)
         .await
         .map_err(super::map_db_err)?;
-    find::<M, _>(conn, id, policy)
+    find_value::<M, _>(conn, id, policy)
         .await?
         .ok_or_else(|| better_auth_core::AuthError::not_found("Organization record not found"))?
         .record(config, conn.get_database_backend())

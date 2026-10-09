@@ -1,4 +1,3 @@
-use super::id_filter::IdColumn;
 use super::{
     SeaOrmStore, map_db_err,
     organization_models::{self as models, Entity, values},
@@ -6,7 +5,8 @@ use super::{
 use crate::SeaOrmOrganizationModel;
 use async_trait::async_trait;
 use better_auth_core::{
-    AuthError, AuthResult, CreateTeam, Team, TeamMember, UpdateTeam, store::TeamStore,
+    AuthError, AuthResult, CreateTeam, Team, TeamMember, UpdateTeam,
+    store::{TeamStore, schema::EntityRole},
 };
 use better_auth_core::{FieldValue, SchemaField};
 use chrono::Utc;
@@ -60,26 +60,17 @@ impl<
         .await
     }
     async fn get_team(&self, id: &str) -> AuthResult<Option<Team>> {
-        let config = self.organization_fields()?.team;
-        let row = models::find::<O::Team, _>(
-            self.connection(),
-            id,
-            self.config().advanced.database.generate_id(),
-        )
-        .await?;
-        match row {
-            Some(row) => row
-                .record(&config, self.connection().get_database_backend())
-                .await
-                .map(Some),
-            None => Ok(None),
-        }
+        self.get_team_value(&id.into()).await
     }
     async fn get_team_value(&self, id: &FieldValue) -> AuthResult<Option<Team>> {
         self.get_team_value_with_connection(self.connection(), id)
             .await
     }
     async fn update_team(&self, id: &str, update: UpdateTeam) -> AuthResult<Team> {
+        self.update_team_value(&id.into(), update).await
+    }
+
+    async fn update_team_value(&self, id: &FieldValue, update: UpdateTeam) -> AuthResult<Team> {
         let config = self.organization_fields()?.team;
         let mut core = Default::default();
         if let Some(updated_at) = update.updated_at {
@@ -102,7 +93,7 @@ impl<
                 let _ = core.insert(name.into(), value);
             }
         }
-        models::update::<O::Team, _>(
+        models::update_value::<O::Team, _>(
             self.connection(),
             id,
             core,
@@ -113,36 +104,49 @@ impl<
         .await
     }
     async fn delete_team(&self, id: &str) -> AuthResult<()> {
+        self.delete_team_value(&id.into()).await
+    }
+
+    async fn delete_team_value(&self, id: &FieldValue) -> AuthResult<()> {
         let tx = self.connection().begin().await.map_err(map_db_err)?;
-        let team =
-            models::find::<O::Team, _>(&tx, id, self.config().advanced.database.generate_id())
-                .await?
-                .ok_or_else(|| AuthError::not_found("Team not found"))?
-                .record(
-                    &Default::default(),
-                    self.connection().get_database_backend(),
-                )
-                .await?;
+        let team = models::find_value::<O::Team, _>(
+            &tx,
+            id,
+            self.config().advanced.database.generate_id(),
+        )
+        .await?
+        .ok_or_else(|| AuthError::not_found("Team not found"))?
+        .record(
+            &Default::default(),
+            self.connection().get_database_backend(),
+        )
+        .await?;
         let _ = Entity::<O::TeamMember>::delete_many()
-            .filter(
-                O::TeamMember::column("team_id")?
-                    .eq_id(id, self.config().advanced.database.generate_id())?,
-            )
+            .filter(super::value_filter::equals_id(
+                O::TeamMember::column("team_id")?,
+                id,
+                self.config().advanced.database.generate_id(),
+                self.connection().get_database_backend(),
+            )?)
             .exec(&tx)
             .await
             .map_err(map_db_err)?;
         let _ = Entity::<O::Team>::delete_many()
-            .filter(
-                O::Team::column("id")?.eq_id(id, self.config().advanced.database.generate_id())?,
-            )
+            .filter(super::value_filter::equals_id(
+                O::Team::column("id")?,
+                id,
+                self.config().advanced.database.generate_id(),
+                self.connection().get_database_backend(),
+            )?)
             .exec(&tx)
             .await
             .map_err(map_db_err)?;
         let config = self.organization_fields()?.invitation;
         let pending = Entity::<O::Invitation>::find()
-            .filter(O::Invitation::column("organization_id")?.eq_id(
-                team.organization_id.typed()?.clone(),
-                self.config().advanced.database.generate_id(),
+            .filter(self.organization_field_equals::<O::Invitation>(
+                EntityRole::Invitation,
+                "organizationId",
+                &team.organization_id.field_value(),
             )?)
             .filter(O::Invitation::column("status")?.eq("pending"))
             .all(&tx)
@@ -160,11 +164,14 @@ impl<
                 continue;
             }
             if let Some(ids) = row.team_id.typed()? {
-                let retained: Vec<_> = ids.split(',').filter(|team_id| *team_id != id).collect();
+                let retained: Vec<_> = ids
+                    .split(',')
+                    .filter(|team_id| Some(*team_id) != id.as_str())
+                    .collect();
                 if retained.len() != ids.split(',').count() {
-                    let _ = models::update::<O::Invitation, _>(
+                    let _ = models::update_value::<O::Invitation, _>(
                         &tx,
-                        row.id.typed()?,
+                        &row.id.field_value(),
                         values([(
                             "team_id",
                             ((!retained.is_empty()).then(|| retained.join(","))).into_field(),
@@ -189,11 +196,10 @@ impl<
         organization_id: &better_auth_core::FieldValue,
     ) -> AuthResult<Vec<Team>> {
         let rows = Entity::<O::Team>::find()
-            .filter(super::value_filter::equals_id(
-                O::Team::column("organization_id")?,
+            .filter(self.organization_field_equals::<O::Team>(
+                EntityRole::Team,
+                "organizationId",
                 organization_id,
-                self.config().advanced.database.generate_id(),
-                self.connection().get_database_backend(),
             )?)
             .limit(super::pagination::default_limit(
                 self.config(),
@@ -219,25 +225,30 @@ impl<
         organization_id: &better_auth_core::FieldValue,
     ) -> AuthResult<u64> {
         Entity::<O::Team>::find()
-            .filter(super::value_filter::equals_id(
-                O::Team::column("organization_id")?,
+            .filter(self.organization_field_equals::<O::Team>(
+                EntityRole::Team,
+                "organizationId",
                 organization_id,
-                self.config().advanced.database.generate_id(),
-                self.connection().get_database_backend(),
             )?)
             .count(self.connection())
             .await
             .map_err(map_db_err)
     }
     async fn list_user_teams(&self, user_id: &str) -> AuthResult<Vec<Team>> {
+        self.list_user_teams_value(&user_id.into()).await
+    }
+
+    async fn list_user_teams_value(&self, user_id: &FieldValue) -> AuthResult<Vec<Team>> {
         if self.config().advanced.database.joins == Some(true) {
             return self.joined_user_teams(user_id).await;
         }
         let rows = Entity::<O::TeamMember>::find()
-            .filter(
-                O::TeamMember::column("user_id")?
-                    .eq_id(user_id, self.config().advanced.database.generate_id())?,
-            )
+            .filter(super::value_filter::equals_id(
+                O::TeamMember::column("user_id")?,
+                user_id,
+                self.config().advanced.database.generate_id(),
+                self.connection().get_database_backend(),
+            )?)
             .limit(super::pagination::default_limit(
                 self.config(),
                 self.connection().get_database_backend(),
@@ -348,11 +359,17 @@ impl<
         .await
     }
     async fn count_team_members(&self, team_id: &str) -> AuthResult<u64> {
+        self.count_team_members_value(&team_id.into()).await
+    }
+
+    async fn count_team_members_value(&self, team_id: &FieldValue) -> AuthResult<u64> {
         Entity::<O::TeamMember>::find()
-            .filter(
-                O::TeamMember::column("team_id")?
-                    .eq_id(team_id, self.config().advanced.database.generate_id())?,
-            )
+            .filter(super::value_filter::equals_id(
+                O::TeamMember::column("team_id")?,
+                team_id,
+                self.config().advanced.database.generate_id(),
+                self.connection().get_database_backend(),
+            )?)
             .count(self.connection())
             .await
             .map_err(map_db_err)
@@ -363,7 +380,16 @@ impl<
         user_id: &str,
         maximum: Option<usize>,
     ) -> AuthResult<Option<TeamMember>> {
-        use sea_orm::TransactionTrait;
+        self.add_team_member_value(&team_id.field_value(), &user_id.into(), maximum)
+            .await
+    }
+
+    async fn add_team_member_value(
+        &self,
+        team_id: &FieldValue,
+        user_id: &FieldValue,
+        maximum: Option<usize>,
+    ) -> AuthResult<Option<TeamMember>> {
         let tx = self.connection().begin().await.map_err(map_db_err)?;
         let result = self
             .add_team_member_with_connection(&tx, team_id, user_id, maximum)
@@ -372,28 +398,43 @@ impl<
         Ok(result)
     }
     async fn remove_team_member(&self, team_id: &str, user_id: &str) -> AuthResult<()> {
+        self.remove_team_member_value(&team_id.into(), &user_id.into())
+            .await
+    }
+
+    async fn remove_team_member_value(
+        &self,
+        team_id: &FieldValue,
+        user_id: &FieldValue,
+    ) -> AuthResult<()> {
         let tx = self.connection().begin().await.map_err(map_db_err)?;
         let _ = Entity::<O::Team>::update_many()
             .col_expr(
                 O::Team::column("member_count")?,
                 Expr::col(O::Team::column("member_count")?),
             )
-            .filter(
-                O::Team::column("id")?
-                    .eq_id(team_id, self.config().advanced.database.generate_id())?,
-            )
+            .filter(super::value_filter::equals_id(
+                O::Team::column("id")?,
+                team_id,
+                self.config().advanced.database.generate_id(),
+                self.connection().get_database_backend(),
+            )?)
             .exec(&tx)
             .await
             .map_err(map_db_err)?;
         let deleted = Entity::<O::TeamMember>::delete_many()
-            .filter(
-                O::TeamMember::column("team_id")?
-                    .eq_id(team_id, self.config().advanced.database.generate_id())?,
-            )
-            .filter(
-                O::TeamMember::column("user_id")?
-                    .eq_id(user_id, self.config().advanced.database.generate_id())?,
-            )
+            .filter(super::value_filter::equals_id(
+                O::TeamMember::column("team_id")?,
+                team_id,
+                self.config().advanced.database.generate_id(),
+                self.connection().get_database_backend(),
+            )?)
+            .filter(super::value_filter::equals_id(
+                O::TeamMember::column("user_id")?,
+                user_id,
+                self.config().advanced.database.generate_id(),
+                self.connection().get_database_backend(),
+            )?)
             .exec(&tx)
             .await
             .map_err(map_db_err)?;
@@ -421,16 +462,9 @@ impl<
         id: &FieldValue,
     ) -> AuthResult<Option<Team>> {
         let config = self.organization_fields()?.team;
-        let row = Entity::<O::Team>::find()
-            .filter(super::value_filter::equals_id(
-                O::Team::column("id")?,
-                id,
-                self.config().advanced.database.generate_id(),
-                self.connection().get_database_backend(),
-            )?)
-            .one(db)
-            .await
-            .map_err(map_db_err)?;
+        let row =
+            models::find_value::<O::Team, _>(db, id, self.config().advanced.database.generate_id())
+                .await?;
         match row {
             Some(row) => row
                 .record(&config, db.get_database_backend())
@@ -443,21 +477,22 @@ impl<
     pub(super) async fn add_team_member_with_connection<C: sea_orm::ConnectionTrait>(
         &self,
         db: &C,
-        team_id: &better_auth_core::SchemaValue<String>,
-        user_id: &str,
+        team_id: &FieldValue,
+        user_id: &FieldValue,
         maximum: Option<usize>,
     ) -> AuthResult<Option<TeamMember>> {
-        let team_id = team_id.typed()?;
         // Lock the aggregate before reading membership or capacity, including on SQLite.
         let locked = Entity::<O::Team>::update_many()
             .col_expr(
                 O::Team::column("member_count")?,
                 Expr::col(O::Team::column("member_count")?),
             )
-            .filter(
-                O::Team::column("id")?
-                    .eq_id(team_id, self.config().advanced.database.generate_id())?,
-            )
+            .filter(super::value_filter::equals_id(
+                O::Team::column("id")?,
+                team_id,
+                self.config().advanced.database.generate_id(),
+                db.get_database_backend(),
+            )?)
             .exec(db)
             .await
             .map_err(map_db_err)?;
@@ -465,14 +500,18 @@ impl<
             return Err(AuthError::not_found("Team not found"));
         }
         if let Some(member) = Entity::<O::TeamMember>::find()
-            .filter(
-                O::TeamMember::column("team_id")?
-                    .eq_id(team_id, self.config().advanced.database.generate_id())?,
-            )
-            .filter(
-                O::TeamMember::column("user_id")?
-                    .eq_id(user_id, self.config().advanced.database.generate_id())?,
-            )
+            .filter(super::value_filter::equals_id(
+                O::TeamMember::column("team_id")?,
+                team_id,
+                self.config().advanced.database.generate_id(),
+                db.get_database_backend(),
+            )?)
+            .filter(super::value_filter::equals_id(
+                O::TeamMember::column("user_id")?,
+                user_id,
+                self.config().advanced.database.generate_id(),
+                db.get_database_backend(),
+            )?)
             .one(db)
             .await
             .map_err(map_db_err)?
@@ -484,10 +523,12 @@ impl<
             ));
         }
         let count = Entity::<O::TeamMember>::find()
-            .filter(
-                O::TeamMember::column("team_id")?
-                    .eq_id(team_id, self.config().advanced.database.generate_id())?,
-            )
+            .filter(super::value_filter::equals_id(
+                O::TeamMember::column("team_id")?,
+                team_id,
+                self.config().advanced.database.generate_id(),
+                db.get_database_backend(),
+            )?)
             .count(db)
             .await
             .map_err(map_db_err)?;
@@ -510,11 +551,11 @@ impl<
                 "teamMember",
                 None,
                 values([
-                    ("team_id", (team_id).to_owned().into_field()),
-                    ("user_id", (user_id).to_owned().into_field()),
+                    ("team_id", team_id.clone()),
+                    ("user_id", user_id.clone()),
                     (
                         "membership_key",
-                        (better_auth_core::organization_fields::team_membership_key(
+                        (better_auth_core::organization_fields::team_membership_key_values(
                             team_id, user_id,
                         )?)
                         .into_field(),

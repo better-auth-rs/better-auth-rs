@@ -217,11 +217,31 @@ impl<S: AuthSchema> MemberStore for SecondaryStore<S> {
     async fn get_member_by_id(&self, id: &str) -> AuthResult<Option<Member>> {
         self.inner.get_member_by_id(id).await
     }
+    async fn update_member_role_value(
+        &self,
+        member_id: &crate::FieldValue,
+        role: &str,
+    ) -> AuthResult<Member> {
+        self.inner.update_member_role_value(member_id, role).await
+    }
     async fn update_member_role(&self, member_id: &str, role: &str) -> AuthResult<Member> {
         self.inner.update_member_role(member_id, role).await
     }
+    async fn delete_member_value(&self, member_id: &crate::FieldValue) -> AuthResult<()> {
+        self.inner.delete_member_value(member_id).await
+    }
     async fn delete_member(&self, member_id: &str) -> AuthResult<()> {
         self.inner.delete_member(member_id).await
+    }
+    async fn delete_member_for_user_value(
+        &self,
+        member_id: &crate::FieldValue,
+        organization_id: &crate::FieldValue,
+        user_id: &crate::FieldValue,
+    ) -> AuthResult<()> {
+        self.inner
+            .delete_member_for_user_value(member_id, organization_id, user_id)
+            .await
     }
     async fn delete_member_for_user(
         &self,
@@ -267,6 +287,12 @@ impl<S: AuthSchema> InvitationStore for SecondaryStore<S> {
     async fn create_invitation(&self, invitation: CreateInvitation) -> AuthResult<Invitation> {
         self.inner.create_invitation(invitation).await
     }
+    async fn get_invitation_by_id_value(
+        &self,
+        id: &crate::FieldValue,
+    ) -> AuthResult<Option<Invitation>> {
+        self.inner.get_invitation_by_id_value(id).await
+    }
     async fn get_invitation_by_id(&self, id: &str) -> AuthResult<Option<Invitation>> {
         self.inner.get_invitation_by_id(id).await
     }
@@ -277,12 +303,28 @@ impl<S: AuthSchema> InvitationStore for SecondaryStore<S> {
     ) -> AuthResult<Option<Invitation>> {
         self.inner.get_pending_invitation(org_id, email).await
     }
+    async fn update_invitation_status_value(
+        &self,
+        id: &crate::FieldValue,
+        status: InvitationStatus,
+    ) -> AuthResult<Invitation> {
+        self.inner.update_invitation_status_value(id, status).await
+    }
     async fn update_invitation_status(
         &self,
         id: &str,
         status: InvitationStatus,
     ) -> AuthResult<Invitation> {
         self.inner.update_invitation_status(id, status).await
+    }
+    async fn update_invitation_expiry_value(
+        &self,
+        id: &crate::FieldValue,
+        expires_at: chrono::DateTime<chrono::Utc>,
+    ) -> AuthResult<Invitation> {
+        self.inner
+            .update_invitation_expiry_value(id, expires_at)
+            .await
     }
     async fn update_invitation_expiry(
         &self,
@@ -698,8 +740,18 @@ impl<S: AuthSchema> TeamStore for SecondaryStore<S> {
     async fn get_team(&self, id: &str) -> AuthResult<Option<crate::Team>> {
         self.inner.get_team(id).await
     }
+    async fn update_team_value(
+        &self,
+        id: &crate::FieldValue,
+        update: crate::UpdateTeam,
+    ) -> AuthResult<crate::Team> {
+        self.inner.update_team_value(id, update).await
+    }
     async fn update_team(&self, id: &str, update: crate::UpdateTeam) -> AuthResult<crate::Team> {
         self.inner.update_team(id, update).await
+    }
+    async fn delete_team_value(&self, id: &crate::FieldValue) -> AuthResult<()> {
+        self.inner.delete_team_value(id).await
     }
     async fn delete_team(&self, id: &str) -> AuthResult<()> {
         self.inner.delete_team(id).await
@@ -726,6 +778,12 @@ impl<S: AuthSchema> TeamStore for SecondaryStore<S> {
             .list_organization_teams_value(organization_id)
             .await
     }
+    async fn list_user_teams_value(
+        &self,
+        user_id: &crate::FieldValue,
+    ) -> AuthResult<Vec<crate::Team>> {
+        self.inner.list_user_teams_value(user_id).await
+    }
     async fn list_user_teams(&self, user_id: &str) -> AuthResult<Vec<crate::Team>> {
         self.inner.list_user_teams(user_id).await
     }
@@ -743,6 +801,9 @@ impl<S: AuthSchema> TeamStore for SecondaryStore<S> {
     ) -> AuthResult<Option<crate::TeamMember>> {
         self.inner.get_team_member_value(team_id, user_id).await
     }
+    async fn count_team_members_value(&self, team_id: &crate::FieldValue) -> AuthResult<u64> {
+        self.inner.count_team_members_value(team_id).await
+    }
     async fn count_team_members(&self, team_id: &str) -> AuthResult<u64> {
         self.inner.count_team_members(team_id).await
     }
@@ -755,6 +816,16 @@ impl<S: AuthSchema> TeamStore for SecondaryStore<S> {
     ) -> AuthResult<Vec<crate::TeamMember>> {
         self.inner.list_team_members_value(team_id).await
     }
+    async fn add_team_member_value(
+        &self,
+        team_id: &crate::FieldValue,
+        user_id: &crate::FieldValue,
+        maximum: Option<usize>,
+    ) -> AuthResult<Option<crate::TeamMember>> {
+        self.inner
+            .add_team_member_value(team_id, user_id, maximum)
+            .await
+    }
     async fn add_team_member(
         &self,
         team_id: &crate::SchemaValue<String>,
@@ -762,6 +833,13 @@ impl<S: AuthSchema> TeamStore for SecondaryStore<S> {
         maximum: Option<usize>,
     ) -> AuthResult<Option<crate::TeamMember>> {
         self.inner.add_team_member(team_id, user_id, maximum).await
+    }
+    async fn remove_team_member_value(
+        &self,
+        team_id: &crate::FieldValue,
+        user_id: &crate::FieldValue,
+    ) -> AuthResult<()> {
+        self.inner.remove_team_member_value(team_id, user_id).await
     }
     async fn remove_team_member(&self, team_id: &str, user_id: &str) -> AuthResult<()> {
         self.inner.remove_team_member(team_id, user_id).await
