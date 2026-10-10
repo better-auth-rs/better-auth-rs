@@ -87,6 +87,25 @@ async fn test_sign_out_integration() {
     assert_eq!(response2, serde_json::Value::Null);
 }
 
+/// A malformed JSON body is refused before the origin check
+// Upstream source: better-call src/utils.ts :: `getBody` parses the body in the router,
+// before endpoint middleware, and throws 400 `BAD_REQUEST` "Invalid JSON in request body".
+#[tokio::test]
+async fn test_malformed_json_is_refused_before_origin_check() {
+    let auth = create_test_auth_memory().await;
+
+    let mut req = post_json("/sign-in/email", serde_json::json!({}));
+    req.body = Some(b"{\"email\":".to_vec());
+    req.headers.insert(
+        "origin".to_string(),
+        "https://untrusted.example".to_string(),
+    );
+    let (status, body) = send_request(&auth, req).await;
+    assert_eq!(status, 400);
+    assert_eq!(body["code"], "BAD_REQUEST");
+    assert_eq!(body["message"], "Invalid JSON in request body");
+}
+
 /// Integration test for list-sessions endpoint
 // Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]

@@ -27,6 +27,29 @@ fn username_error_response(status: u16, code: &str, message: &str) -> AuthResult
     .map_err(AuthError::from)
 }
 
+/// Whether the body claims JSON (better-call's `application/(...+)?json`) and isn't.
+fn malformed_json(req: &AuthRequest) -> bool {
+    let Some(body) = req.body.as_deref().filter(|body| !body.is_empty()) else {
+        return false;
+    };
+    let content_type = req
+        .headers
+        .iter()
+        .find(|(name, _)| name.eq_ignore_ascii_case("content-type"))
+        .map(|(_, value)| value.to_ascii_lowercase())
+        .unwrap_or_default();
+    let Some(subtype) = content_type.strip_prefix("application/") else {
+        return false;
+    };
+    let json = subtype.starts_with("json")
+        || subtype.split_once("+json").is_some_and(|(suffix, _)| {
+            suffix
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b"+.-".contains(&b))
+        });
+    json && serde_json::from_slice::<serde::de::IgnoredAny>(body).is_err()
+}
+
 pub struct BetterAuth<S: AuthSchema> {
     config: Arc<AuthConfig>,
     plugins: Vec<Box<dyn AuthPlugin<S>>>,
@@ -226,6 +249,16 @@ impl<S: AuthSchema> BetterAuth<S> {
 
     /// Inner request handler that may return errors.
     async fn handle_request_inner(&self, req: &mut AuthRequest) -> AuthResult<AuthResponse> {
+        // better-call parses the body in its router, before any endpoint middleware, so a
+        // malformed JSON body is refused before the origin and CSRF checks.
+        if malformed_json(req) {
+            return Err(AuthError::Upstream {
+                status: 400,
+                code: "BAD_REQUEST",
+                message: "Invalid JSON in request body",
+            });
+        }
+
         // Run before-request middleware chain
         if let Some(response) = middleware::run_before(&self.middlewares, req).await? {
             return Ok(response);
