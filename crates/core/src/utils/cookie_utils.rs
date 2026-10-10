@@ -25,7 +25,6 @@ const COOKIE_BASE64: GeneralPurpose = GeneralPurpose::new(
     &alphabet::STANDARD,
     GeneralPurposeConfig::new().with_decode_padding_mode(DecodePaddingMode::Indifferent),
 );
-use cookie::{Cookie, SameSite as CookieSameSite};
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
 
@@ -102,31 +101,20 @@ pub fn create_session_like_cookie(
     config: &AuthConfig,
 ) -> String {
     let session_config = &config.session;
-    let same_site = map_same_site(&session_config.cookie_same_site);
-
-    let mut cookie = Cookie::build((name, value))
-        .path("/")
-        .secure(session_config.cookie_secure)
-        .http_only(session_config.cookie_http_only)
-        .same_site(same_site);
-
-    if let Some(max_age_seconds) = max_age_seconds {
-        let expires_offset = cookie::time::OffsetDateTime::now_utc()
-            + cookie::time::Duration::seconds(max_age_seconds);
-        cookie = cookie
-            .expires(expires_offset)
-            .max_age(cookie::time::Duration::seconds(max_age_seconds));
-    }
-
     // SameSite=None requires the Secure attribute per the spec
-    if matches!(
-        session_config.cookie_same_site,
-        crate::config::SameSite::None
-    ) {
-        cookie = cookie.secure(true);
-    }
-
-    cookie.build().to_string()
+    let secure = session_config.cookie_secure
+        || matches!(
+            session_config.cookie_same_site,
+            crate::config::SameSite::None
+        );
+    serialize_cookie(
+        name,
+        value,
+        max_age_seconds,
+        session_config.cookie_http_only,
+        secure,
+        &session_config.cookie_same_site,
+    )
 }
 
 /// Build a `Set-Cookie` header value that clears the session cookie.
@@ -140,25 +128,37 @@ pub fn create_clear_session_cookie(config: &AuthConfig) -> String {
 /// Mirrors the TypeScript `expireCookie`, which clears a cookie with `Max-Age=0`
 /// while preserving its attributes, and emits no `Expires`.
 pub fn create_clear_cookie(name: &str, config: &AuthConfig) -> String {
-    let session_config = &config.session;
-    let same_site = map_same_site(&session_config.cookie_same_site);
+    create_session_like_cookie(name, "", Some(0), config)
+}
 
-    let mut cookie = Cookie::build((name, ""))
-        .path("/")
-        .max_age(cookie::time::Duration::seconds(0))
-        .http_only(session_config.cookie_http_only)
-        .same_site(same_site);
-
-    if session_config.cookie_secure
-        || matches!(
-            session_config.cookie_same_site,
-            crate::config::SameSite::None
-        )
-    {
-        cookie = cookie.secure(true);
+/// Serialize a cookie as better-call's `serializeCookie` does: `Max-Age`, `Path`,
+/// `HttpOnly`, `Secure`, then `SameSite`, in that order. Better Auth sets no `Expires`
+/// on these cookies; browsers apply `Max-Age`.
+fn serialize_cookie(
+    name: &str,
+    value: &str,
+    max_age_seconds: Option<i64>,
+    http_only: bool,
+    secure: bool,
+    same_site: &crate::config::SameSite,
+) -> String {
+    let mut cookie = format!("{name}={value}");
+    if let Some(max_age) = max_age_seconds.filter(|max_age| *max_age >= 0) {
+        cookie.push_str(&format!("; Max-Age={max_age}"));
     }
-
-    cookie.build().to_string()
+    cookie.push_str("; Path=/");
+    if http_only {
+        cookie.push_str("; HttpOnly");
+    }
+    if secure || name.starts_with("__Secure-") || name.starts_with("__Host-") {
+        cookie.push_str("; Secure");
+    }
+    cookie.push_str(match same_site {
+        crate::config::SameSite::Strict => "; SameSite=Strict",
+        crate::config::SameSite::Lax => "; SameSite=Lax",
+        crate::config::SameSite::None => "; SameSite=None",
+    });
+    cookie
 }
 
 /// Build a Better Auth related cookie name using the configured session cookie
@@ -173,10 +173,24 @@ pub fn related_cookie_name(config: &AuthConfig, suffix: &str) -> String {
         .unwrap_or_else(|| format!("better-auth.{}", suffix))
 }
 
-fn map_same_site(s: &crate::config::SameSite) -> CookieSameSite {
-    match s {
-        crate::config::SameSite::Strict => CookieSameSite::Strict,
-        crate::config::SameSite::Lax => CookieSameSite::Lax,
-        crate::config::SameSite::None => CookieSameSite::None,
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Upstream source: better-call src/cookies.ts :: `serializeCookie` writes
+    // `Max-Age`, `Domain`, `Path`, `Expires`, `HttpOnly`, `Secure`, then `SameSite`;
+    // Better Auth's session cookies pass no `expires`.
+    #[test]
+    fn cookies_follow_better_calls_attribute_order() {
+        let mut config = AuthConfig::new("test-secret-key-at-least-32-chars-long");
+        assert_eq!(
+            create_cookie("better-auth.state", "abc", 300, &config),
+            "better-auth.state=abc; Max-Age=300; Path=/; HttpOnly; SameSite=Lax"
+        );
+        config.session.cookie_secure = true;
+        assert_eq!(
+            create_clear_cookie("better-auth.state", &config),
+            "better-auth.state=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Lax"
+        );
     }
 }
