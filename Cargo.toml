@@ -22,7 +22,7 @@ repository = "https://github.com/better-auth-rs/better-auth-rs"
 
 [workspace.dependencies]
 # Sub-crates
-better-auth-core = { version = "1.0.0-alpha.3", path = "crates/core" }
+better-auth-core = { version = "1.0.0-alpha.3", path = "crates/core", default-features = false }
 better-auth-api = { version = "1.0.0-alpha.3", path = "crates/api", default-features = false }
 better-auth-macros = { version = "1.0.0-alpha.3", path = "crates/derive", package = "better-auth-macros" }
 better-auth-seaorm = { version = "1.0.0-alpha.3", path = "crates/seaorm" }
@@ -60,7 +60,8 @@ validator = { version = "0.21", features = ["derive"] }
 argon2 = "0.5"
 rand = "0.8"
 base64 = "0.22"
-jsonwebtoken = { version = "11", default-features = false, features = ["rust_crypto"] }
+# Crates select the crypto backend through their jwt-* features.
+jsonwebtoken = { version = "11", default-features = false }
 sha2 = "0.10"
 aes-gcm = "0.10"
 hkdf = "0.12"
@@ -84,8 +85,10 @@ quote = "1"
 syn = { version = "2", features = ["full"] }
 
 [features]
-default = ["native-tls"]
+default = ["native-tls", "jwt-rust-crypto"]
 native-tls = ["better-auth-api/native-tls"]
+jwt-rust-crypto = ["better-auth-api/jwt-rust-crypto"]
+jwt-aws-lc-rs = ["better-auth-api/jwt-aws-lc-rs"]
 rustls = ["better-auth-api/rustls"]
 axum = [
     "dep:axum",
