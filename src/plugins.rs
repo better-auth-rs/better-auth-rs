@@ -3,15 +3,21 @@
 pub use better_auth_api::OAuthPlugin;
 pub use better_auth_api::plugins::email_verification::SendVerificationEmail;
 pub use better_auth_api::plugins::password_management::SendResetPassword;
+#[cfg(feature = "two-factor")]
 pub use better_auth_api::plugins::two_factor::SendTwoFactorOtp;
 pub use better_auth_api::plugins::user_management::SendChangeEmailConfirmation;
 pub use better_auth_api::plugins::{
     AccountManagementPlugin, AdminConfig, AdminPlugin, ApiKeyConfig, ApiKeyPlugin,
-    ChangeEmailConfig, DeleteUserConfig, DeviceAuthorizationPlugin, EmailPasswordConfig,
-    EmailPasswordPlugin, EmailVerificationConfig, EmailVerificationHook, EmailVerificationPlugin,
-    OrganizationConfig, OrganizationPlugin, PasskeyConfig, PasskeyPlugin, PasswordManagementConfig,
-    PasswordManagementPlugin, RolePermissions, SessionManagementPlugin, TwoFactorConfig,
-    TwoFactorPlugin, UserManagementConfig, UserManagementPlugin, account_management, admin,
-    api_key, device_authorization, email_password, email_verification, oauth, organization,
-    passkey, password_management, session_management, two_factor, user_management,
+    ChangeEmailConfig, DeleteUserConfig, EmailPasswordConfig, EmailPasswordPlugin,
+    EmailVerificationConfig, EmailVerificationHook, EmailVerificationPlugin, OrganizationConfig,
+    OrganizationPlugin, PasswordManagementConfig, PasswordManagementPlugin, RolePermissions,
+    SessionManagementPlugin, UserManagementConfig, UserManagementPlugin, account_management, admin,
+    api_key, email_password, email_verification, oauth, organization, password_management,
+    session_management, user_management,
 };
+#[cfg(feature = "device-authorization")]
+pub use better_auth_api::plugins::{DeviceAuthorizationPlugin, device_authorization};
+#[cfg(feature = "passkey")]
+pub use better_auth_api::plugins::{PasskeyConfig, PasskeyPlugin, passkey};
+#[cfg(feature = "two-factor")]
+pub use better_auth_api::plugins::{TwoFactorConfig, TwoFactorPlugin, two_factor};
