@@ -81,6 +81,7 @@ Configure Generic OAuth or OIDC with `OAuthPlugin::add_generic_provider` and `Ge
 | --- | --- |
 | `native-tls` | Default TLS backend |
 | `rustls` | Alternative TLS backend; disable default features |
+| `rustls-no-provider` | Rustls with the crypto provider the application installs; disable default features |
 | `axum` | Routes and session extractors |
 | `seaorm2` | SeaORM store and entity derives |
 | `redis-cache` | Standalone asynchronous Redis cache adapter; not a session storage backend |
