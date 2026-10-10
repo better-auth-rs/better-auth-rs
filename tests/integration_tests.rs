@@ -87,6 +87,32 @@ async fn test_sign_out_integration() {
     assert_eq!(response2, serde_json::Value::Null);
 }
 
+/// Sign-out expires a received `session_data` cookie twice
+// Upstream source: packages/better-auth/src/cookies/index.ts :: `deleteSessionCookie`
+// expires `session_data`, then `createSessionStore(...).clean()` expires every received
+// cache cookie, the unchunked one included, so the response carries two identical expiries.
+#[tokio::test]
+async fn test_sign_out_expires_received_session_data_twice() {
+    let auth = create_test_auth_memory().await;
+    let (_user_id, session_token) = create_test_user_and_session(auth.clone()).await;
+
+    let mut req = post_with_auth("/sign-out", &session_token);
+    req.headers.insert(
+        "cookie".to_string(),
+        "better-auth.session_data=stale".to_string(),
+    );
+    let resp = auth.handle_request(req).await.unwrap();
+    assert_eq!(resp.status, 200);
+
+    let expiries: Vec<_> = resp
+        .headers
+        .get_all("set-cookie")
+        .filter(|cookie| cookie.starts_with("better-auth.session_data="))
+        .collect();
+    assert_eq!(expiries.len(), 2, "{expiries:?}");
+    assert_eq!(expiries[0], expiries[1]);
+}
+
 /// Integration test for list-sessions endpoint
 // Upstream source: packages/better-auth/src/api/routes public endpoint handler matching this request path; adapted to the Rust integration endpoint case.
 #[tokio::test]
