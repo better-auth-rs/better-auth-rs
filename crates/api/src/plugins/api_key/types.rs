@@ -357,10 +357,11 @@ fn query_error(field: &str, message: &str) -> AuthResponse {
 }
 
 fn validation_response(location: &str, message: &str) -> AuthResponse {
-    let body = serde_json::json!({
-        "code": "VALIDATION_ERROR", "message": format!("[{location}] {message}")
-    });
-    AuthResponse::text(400, body.to_string()).with_header("content-type", "application/json")
+    let body = better_auth_core::ErrorCodeMessageResponse {
+        message: format!("[{location}] {message}"),
+        code: Some("VALIDATION_ERROR".to_owned()),
+    };
+    AuthResponse::json(400, &body).unwrap_or_else(|_| AuthResponse::text(400, &body.message))
 }
 
 /// Paginated API key response; absent pagination parameters are omitted.

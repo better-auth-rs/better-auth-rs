@@ -1,5 +1,5 @@
 use better_auth_core::{AuthRequest, AuthResponse};
-use serde_json::{Value, json};
+use serde_json::Value;
 
 /// Parse the HTTP JSON boundary before endpoint schema validation.
 pub(crate) fn parse(req: &AuthRequest) -> Result<Option<Value>, AuthResponse> {
@@ -58,11 +58,14 @@ pub(crate) fn validation_error(message: &str) -> AuthResponse {
 }
 
 fn error_response(status: u16, code: &str, message: &str) -> AuthResponse {
-    AuthResponse::text(
+    AuthResponse::json(
         status,
-        json!({ "code": code, "message": message }).to_string(),
+        &better_auth_core::ErrorCodeMessageResponse {
+            message: message.to_owned(),
+            code: Some(code.to_owned()),
+        },
     )
-    .with_header("content-type", "application/json")
+    .unwrap_or_else(|_| AuthResponse::text(status, message))
 }
 
 #[derive(Default)]

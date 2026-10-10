@@ -537,21 +537,21 @@ pub struct ErrorMessageResponse {
     pub message: String,
 }
 
-/// Error body `{ code: String, message: String }` matching the TS better-auth
-/// error response shape.
+/// Error body `{ message: String, code: String }` matching the TS better-auth
+/// error response shape, in its key order (`APIError` writes `message` first).
 #[derive(Debug, Serialize)]
 pub struct ErrorCodeMessageResponse {
+    pub message: String,
     /// Omitted when upstream has no explicit code for this error.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub code: Option<String>,
-    pub message: String,
 }
 
-/// Middleware error response `{ code: String, message: String }`.
+/// Middleware error response `{ message: String, code: String }`.
 #[derive(Debug, Serialize)]
 pub struct CodeMessageResponse {
-    pub code: &'static str,
     pub message: String,
+    pub code: &'static str,
 }
 
 /// Rate-limit error response with `retryAfter` field.
@@ -589,6 +589,30 @@ pub struct ListUsersParams {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ── Error bodies ────────────────────────────────────────────────────
+
+    // Upstream reference: packages/core/src/error/index.ts :: `APIError.from`
+    // builds `{ message, code }`, so the wire body carries `message` first.
+    #[test]
+    fn error_bodies_write_message_before_code() {
+        let body = ErrorCodeMessageResponse {
+            message: "Invalid token".to_string(),
+            code: Some("INVALID_TOKEN".to_string()),
+        };
+        assert_eq!(
+            serde_json::to_string(&body).unwrap(),
+            r#"{"message":"Invalid token","code":"INVALID_TOKEN"}"#
+        );
+        let body = CodeMessageResponse {
+            message: "Too many requests".to_string(),
+            code: "RATE_LIMITED",
+        };
+        assert_eq!(
+            serde_json::to_string(&body).unwrap(),
+            r#"{"message":"Too many requests","code":"RATE_LIMITED"}"#
+        );
+    }
 
     // ── AuthRequest ─────────────────────────────────────────────────────
 

@@ -111,9 +111,10 @@ pub(super) async fn handle(
 fn field_not_allowed(name: &str) -> AuthResult<AuthResponse> {
     Ok(AuthResponse::json(
         400,
-        &serde_json::json!({
-            "code": "FIELD_NOT_ALLOWED", "message": format!("{name} is not allowed to be set"),
-        }),
+        &better_auth_core::ErrorCodeMessageResponse {
+            message: format!("{name} is not allowed to be set"),
+            code: Some("FIELD_NOT_ALLOWED".to_owned()),
+        },
     )?)
 }
 

@@ -71,7 +71,10 @@ impl OAuthSignInError {
             .to_auth_response(),
             Self::Generic(message) => AuthResponse::json(
                 401,
-                &serde_json::json!({"code": "OAUTH_LINK_ERROR", "message": message}),
+                &better_auth_core::ErrorCodeMessageResponse {
+                    message: message.clone(),
+                    code: Some("OAUTH_LINK_ERROR".to_owned()),
+                },
             )?,
             Self::Banned(message) => AuthError::banned_user(message).to_auth_response(),
         })
