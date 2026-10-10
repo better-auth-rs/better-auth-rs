@@ -26,6 +26,7 @@ Builds require OpenSSL 3.0 or newer, including its development headers. OIDC ML-
 | --- | --- |
 | `native-tls` | Default TLS backend for outbound HTTP |
 | `rustls` | Alternative TLS backend; use `default-features = false` |
+| `rustls-no-provider` | Rustls with the process-default crypto provider, which the application installs; use `default-features = false` |
 | `axum` | Route mounting and session extractors |
 | `seaorm2` | SeaORM store and entity derives |
 | `redis-cache` | Standalone asynchronous Redis cache adapter |

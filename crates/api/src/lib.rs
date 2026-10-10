@@ -11,7 +11,10 @@
     )
 )]
 
-#[cfg(all(feature = "native-tls", feature = "rustls"))]
+#[cfg(all(
+    feature = "native-tls",
+    any(feature = "rustls", feature = "rustls-no-provider")
+))]
 compile_error!(
     "features `native-tls` and `rustls` are mutually exclusive. \
      Enable exactly one of them: \
@@ -19,10 +22,14 @@ compile_error!(
      for `rustls`, set `default-features = false, features = [\"rustls\"]`."
 );
 
-#[cfg(not(any(feature = "native-tls", feature = "rustls")))]
+#[cfg(not(any(
+    feature = "native-tls",
+    feature = "rustls",
+    feature = "rustls-no-provider"
+)))]
 compile_error!(
     "one of the TLS backends must be enabled: \
-     enable either the `native-tls` (default) or `rustls` feature."
+     enable `native-tls` (default), `rustls`, or `rustls-no-provider`."
 );
 
 pub mod plugins;
