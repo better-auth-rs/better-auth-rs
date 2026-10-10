@@ -29,11 +29,14 @@ pub mod plugins;
 
 pub use plugins::account_management::AccountManagementPlugin;
 pub use plugins::api_key::{ApiKeyConfig, ApiKeyPlugin};
+#[cfg(feature = "device-authorization")]
 pub use plugins::device_authorization::DeviceAuthorizationPlugin;
 pub use plugins::email_password::EmailPasswordPlugin;
 pub use plugins::email_verification::EmailVerificationPlugin;
 pub use plugins::oauth::OAuthPlugin;
+#[cfg(feature = "passkey")]
 pub use plugins::passkey::{PasskeyConfig, PasskeyPlugin};
 pub use plugins::password_management::PasswordManagementPlugin;
 pub use plugins::session_management::SessionManagementPlugin;
+#[cfg(feature = "two-factor")]
 pub use plugins::two_factor::TwoFactorPlugin;

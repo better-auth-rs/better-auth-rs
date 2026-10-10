@@ -1,6 +1,7 @@
 pub mod account_management;
 pub mod admin;
 pub mod api_key;
+#[cfg(feature = "device-authorization")]
 pub mod device_authorization;
 pub mod email_password;
 pub mod email_verification;
@@ -8,10 +9,12 @@ pub mod helpers;
 mod json_body;
 pub mod oauth;
 pub mod organization;
+#[cfg(feature = "passkey")]
 pub mod passkey;
 pub mod password_management;
 pub mod session_management;
 mod session_update;
+#[cfg(feature = "two-factor")]
 pub mod two_factor;
 pub mod user_management;
 
@@ -174,17 +177,20 @@ pub use account_management::AccountManagementPlugin;
 pub use admin::{AdminConfig, AdminPlugin, RolePermissions};
 pub use api_key::{ApiKeyConfig, ApiKeyPlugin};
 pub use better_auth_core::PasswordHasher;
+#[cfg(feature = "device-authorization")]
 pub use device_authorization::DeviceAuthorizationPlugin;
 pub use email_password::{EmailPasswordConfig, EmailPasswordPlugin};
 pub use email_verification::{
     EmailVerificationConfig, EmailVerificationHook, EmailVerificationPlugin, SendVerificationEmail,
 };
 pub use organization::{OrganizationConfig, OrganizationPlugin};
+#[cfg(feature = "passkey")]
 pub use passkey::{PasskeyConfig, PasskeyPlugin};
 pub use password_management::{
     PasswordManagementConfig, PasswordManagementPlugin, SendResetPassword,
 };
 pub use session_management::SessionManagementPlugin;
+#[cfg(feature = "two-factor")]
 pub use two_factor::{SendTwoFactorOtp, TwoFactorConfig, TwoFactorPlugin};
 pub use user_management::{
     ChangeEmailConfig, DeleteUserConfig, UserManagementConfig, UserManagementPlugin,

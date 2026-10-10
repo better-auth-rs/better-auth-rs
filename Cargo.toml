@@ -84,7 +84,7 @@ quote = "1"
 syn = { version = "2", features = ["full"] }
 
 [features]
-default = ["native-tls"]
+default = ["native-tls", "two-factor", "passkey", "device-authorization", "scripts"]
 native-tls = ["better-auth-api/native-tls"]
 rustls = ["better-auth-api/rustls"]
 axum = [
@@ -97,6 +97,11 @@ axum = [
 ]
 seaorm2 = ["dep:better-auth-seaorm"]
 redis-cache = ["better-auth-core/redis-cache"]
+two-factor = ["better-auth-api/two-factor"]
+passkey = ["better-auth-api/passkey"]
+device-authorization = ["better-auth-api/device-authorization"]
+# The maintainer scripts in scripts/.
+scripts = ["dep:serde_yaml", "dep:clap"]
 
 [dependencies]
 # Core crates
@@ -111,8 +116,8 @@ async-trait = { workspace = true }
 # Serialization
 serde = { workspace = true }
 serde_json = { workspace = true }
-serde_yaml = "0.9"
-clap = { version = "4.5", features = ["derive"] }
+serde_yaml = { version = "0.9", optional = true }
+clap = { version = "4.5", features = ["derive"], optional = true }
 
 # Error handling
 thiserror = { workspace = true }
@@ -157,15 +162,17 @@ required-features = ["seaorm2"]
 [[bin]]
 name = "sync_better_auth_openapi"
 path = "scripts/sync_better_auth_openapi.rs"
+required-features = ["scripts"]
 
 [[bin]]
 name = "openapi_alignment_report"
 path = "scripts/openapi_alignment_report.rs"
+required-features = ["scripts"]
 
 [[bin]]
 name = "generate_docs_openapi"
 path = "scripts/generate_docs_openapi.rs"
-required-features = ["seaorm2"]
+required-features = ["seaorm2", "scripts"]
 
 [workspace.lints.clippy]
 allow_attributes = "warn"
