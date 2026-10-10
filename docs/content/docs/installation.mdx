@@ -26,14 +26,16 @@ Builds require OpenSSL 3.0 or newer, including its development headers. OIDC ML-
 | --- | --- |
 | `native-tls` | Default TLS backend for outbound HTTP |
 | `rustls` | Alternative TLS backend; use `default-features = false` |
+| `jwt-rust-crypto` | Default JWT signing and verification backend (RustCrypto) |
+| `jwt-aws-lc-rs` | JWT backend on aws-lc-rs, without `rsa` and its RUSTSEC-2023-0071 advisory; use `default-features = false` |
 | `axum` | Route mounting and session extractors |
 | `seaorm2` | SeaORM store and entity derives |
 | `redis-cache` | Standalone asynchronous Redis cache adapter |
 
-Select exactly one TLS backend. For Rustls:
+Select exactly one TLS backend and one JWT backend. `default-features = false` also turns off `jwt-rust-crypto`, so name a JWT backend with the TLS one; without one, the first JWT signature or verification panics. For Rustls:
 
 ```toml
-better-auth = { version = "1.0.0-alpha.3", git = "https://github.com/better-auth-rs/better-auth-rs", branch = "master", default-features = false, features = ["rustls", "axum", "seaorm2"] }
+better-auth = { version = "1.0.0-alpha.3", git = "https://github.com/better-auth-rs/better-auth-rs", branch = "master", default-features = false, features = ["rustls", "jwt-rust-crypto", "axum", "seaorm2"] }
 ```
 
 The cache adapters are standalone utilities. Enabling `redis-cache` does not change session persistence or register a session cache.

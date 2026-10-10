@@ -81,6 +81,8 @@ Configure Generic OAuth or OIDC with `OAuthPlugin::add_generic_provider` and `Ge
 | --- | --- |
 | `native-tls` | Default TLS backend |
 | `rustls` | Alternative TLS backend; disable default features |
+| `jwt-rust-crypto` | Default JWT backend (RustCrypto) |
+| `jwt-aws-lc-rs` | JWT backend on aws-lc-rs, without `rsa`; disable default features |
 | `axum` | Routes and session extractors |
 | `seaorm2` | SeaORM store and entity derives |
 | `redis-cache` | Standalone asynchronous Redis cache adapter; not a session storage backend |
