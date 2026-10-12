@@ -1,0 +1,345 @@
+[
+  {
+    "name": "strings",
+    "sql": "select ?, ?, ?",
+    "values": [
+      "UPPER lower",
+      "\u0000\b\t\n\r\u001a\"'\\",
+      "? `MiXeD` -- /* */"
+    ]
+  },
+  {
+    "name": "numbers",
+    "sql": "select ?, ?, ?, ?, ?, ?",
+    "values": [
+      -0.0,
+      1e+21,
+      1e-07,
+      {
+        "$type": "number",
+        "value": "NaN"
+      },
+      {
+        "$type": "number",
+        "value": "Infinity"
+      },
+      {
+        "$type": "number",
+        "value": "-Infinity"
+      }
+    ]
+  },
+  {
+    "name": "nullish",
+    "sql": "select ?, ?, ?, ?",
+    "values": [
+      null,
+      {
+        "$type": "undefined"
+      },
+      true,
+      false
+    ]
+  },
+  {
+    "name": "dates",
+    "sql": "select ?, ?, ?",
+    "values": [
+      {
+        "$type": "date",
+        "value": 0
+      },
+      {
+        "$type": "date",
+        "value": {
+          "$type": "number",
+          "value": "NaN"
+        }
+      },
+      {
+        "$type": "date",
+        "value": -62198755200000
+      }
+    ]
+  },
+  {
+    "name": "surrogates",
+    "sql": "select ?, ?",
+    "values": [
+      {
+        "$type": "utf16",
+        "value": [
+          65,
+          55296,
+          66
+        ]
+      },
+      {
+        "$type": "utf16",
+        "value": [
+          56320,
+          55296
+        ]
+      }
+    ]
+  },
+  {
+    "name": "arrays",
+    "sql": "insert into T values (?)",
+    "values": [
+      [
+        [
+          1,
+          "a"
+        ],
+        [
+          2,
+          "b"
+        ]
+      ]
+    ]
+  },
+  {
+    "name": "nested-arrays",
+    "sql": "select ?",
+    "values": [
+      [
+        [
+          [],
+          [
+            1,
+            2
+          ]
+        ],
+        [
+          3,
+          [
+            4,
+            5
+          ]
+        ]
+      ]
+    ]
+  },
+  {
+    "name": "empty-array",
+    "sql": "select ?, ?",
+    "values": [
+      [],
+      "next"
+    ]
+  },
+  {
+    "name": "object-value",
+    "sql": "select ?",
+    "values": [
+      {
+        "x": 1,
+        "name": "UPPER"
+      }
+    ]
+  },
+  {
+    "name": "array-object",
+    "sql": "select ?",
+    "values": [
+      [
+        {
+          "x": 1
+        },
+        null,
+        {
+          "$type": "undefined"
+        }
+      ]
+    ]
+  },
+  {
+    "name": "assignment-object",
+    "sql": "update T set ? where id = ?",
+    "values": [
+      {
+        "one": 1,
+        "two": "a"
+      },
+      "ID"
+    ]
+  },
+  {
+    "name": "assignment-after-value",
+    "sql": "update T set a = ?, ? where id = ?",
+    "values": [
+      1,
+      {
+        "two": 2
+      },
+      "ID"
+    ]
+  },
+  {
+    "name": "object-after-equals",
+    "sql": "update T set a = ? where id = ?",
+    "values": [
+      {
+        "one": 1
+      },
+      "ID"
+    ]
+  },
+  {
+    "name": "object-nested-assignment",
+    "sql": "update T set ?",
+    "values": [
+      {
+        "a": {
+          "child": 2
+        },
+        "arr": [
+          1,
+          2
+        ],
+        "none": null
+      }
+    ]
+  },
+  {
+    "name": "quoted-placeholders",
+    "sql": "select '?' as `??`, '\\'?' as `x``?`, ?",
+    "values": [
+      "live"
+    ]
+  },
+  {
+    "name": "comments",
+    "sql": "select /* ? */ ?, -- ?\n ?",
+    "values": [
+      1,
+      2
+    ]
+  },
+  {
+    "name": "executable-comments",
+    "sql": "select /*! ? */ /*+ ? */ ?",
+    "values": [
+      1,
+      2,
+      3
+    ]
+  },
+  {
+    "name": "non-comment-dash",
+    "sql": "select --x ?\n ?",
+    "values": [
+      1,
+      2
+    ]
+  },
+  {
+    "name": "double-quotes",
+    "sql": "select \"?\", ?",
+    "values": [
+      "first",
+      "second"
+    ]
+  },
+  {
+    "name": "long-placeholder",
+    "sql": "select ???, ????, ?, ??",
+    "values": [
+      "value",
+      "a.b"
+    ]
+  },
+  {
+    "name": "identifiers",
+    "sql": "select ??, ??, ??",
+    "values": [
+      "a.b`c",
+      "value->$.name",
+      [
+        "A",
+        "b.c"
+      ]
+    ]
+  },
+  {
+    "name": "fewer-values",
+    "sql": "select ?, ?, ?",
+    "values": [
+      "one"
+    ]
+  },
+  {
+    "name": "more-values",
+    "sql": "select ?",
+    "values": [
+      "one",
+      "two"
+    ]
+  },
+  {
+    "name": "no-placeholders",
+    "sql": "select '?' /* ? */",
+    "values": [
+      {
+        "x": 1
+      }
+    ]
+  },
+  {
+    "name": "set-terminator",
+    "sql": "update T set a = 1 where ?",
+    "values": [
+      {
+        "x": 1
+      }
+    ]
+  },
+  {
+    "name": "nearest-set",
+    "sql": "update T set a = 1; update U set ?",
+    "values": [
+      {
+        "x": 1
+      }
+    ]
+  },
+  {
+    "name": "duplicate-key",
+    "sql": "insert into T values (1) on duplicate key update ?",
+    "values": [
+      {
+        "x": 2
+      }
+    ]
+  },
+  {
+    "name": "quoted-set",
+    "sql": "select 'set', `set`, ?",
+    "values": [
+      {
+        "x": 1
+      }
+    ]
+  },
+  {
+    "name": "raw-object",
+    "sql": "select ?",
+    "values": [
+      {
+        "$type": "raw",
+        "value": "CONCAT('A', 'B')"
+      }
+    ]
+  },
+  {
+    "name": "raw-in-set",
+    "sql": "update T set ?",
+    "values": [
+      {
+        "$type": "raw",
+        "value": "a = 2"
+      }
+    ]
+  }
+]

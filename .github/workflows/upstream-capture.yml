@@ -22,7 +22,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - contract: api-key-usage-success
+          - contract: mysql-text
             regressions: []
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -62,6 +62,7 @@ jobs:
       - name: Capture pinned upstream contract
         shell: devenv shell -- bash -e {0}
         env:
+          TZ: UTC
           CAPTURE_CONTRACT: ${{ matrix.contract }}
           CAPTURE_SCRIPT: ${{ matrix.script || format('compat-tests/reference-server/contracts/{0}-capture.mjs', matrix.contract) }}
           CAPTURE_REGRESSIONS: ${{ join(matrix.regressions, ' ') }}
