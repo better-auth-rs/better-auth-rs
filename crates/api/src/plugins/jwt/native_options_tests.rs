@@ -27,7 +27,11 @@ async fn context(plugin: &JwtPlugin, callbacks: JwtCallbacks<S>) -> AuthResult<A
     let store: Arc<dyn AuthStore<S>> = Arc::new(EphemeralStore::new(config.clone()));
     let mut context =
         crate::plugins::test_helpers::initialize_test_context(config, store, &[plugin]).await?;
-    context.extensions.insert(Arc::new(callbacks));
+    context
+        .extensions
+        .insert(Arc::new(super::callbacks::RegisteredCallbacks::from(
+            callbacks,
+        )));
     Ok(context)
 }
 
@@ -472,3 +476,6 @@ fn expiration_preserves_dynamic_numbers_dates_coercion_and_original_errors() -> 
 
 #[path = "native_options_key_tests.rs"]
 mod key_tests;
+
+#[path = "native_adapter_tests.rs"]
+mod adapter_tests;

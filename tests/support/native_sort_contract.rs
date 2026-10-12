@@ -449,7 +449,12 @@ impl Harness {
     }
 
     #[allow(dead_code, reason = "Only the JWT consumer invokes a keyring adapter.")]
-    pub(crate) fn read_keyring(&self, lane: &str, argument: FieldValue) -> AuthResult<FieldValue> {
+    pub(crate) fn read_keyring(
+        &self,
+        lane: &str,
+        argument: FieldValue,
+        same_receiver: bool,
+    ) -> AuthResult<FieldValue> {
         let mut state = self.0.lock().unwrap();
         let arguments = state.observer.observe(&vec![argument].into())?;
         state.event(
@@ -458,7 +463,10 @@ impl Harness {
             } else {
                 "adapter-read"
             },
-            [("arguments".into(), arguments)],
+            [
+                ("arguments".into(), arguments),
+                ("sameReceiver".into(), same_receiver.into()),
+            ],
         )?;
         Ok(state.rows.clone().into())
     }

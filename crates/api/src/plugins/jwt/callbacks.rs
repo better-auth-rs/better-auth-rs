@@ -4,7 +4,7 @@ use better_auth_core::{
     AuthPlugin, AuthRecordFields, AuthResult, AuthSchema, CreateJwk, FieldFunction, FieldMap,
     FieldValue, Jwk,
 };
-use std::{future::Future, pin::Pin, sync::Arc};
+use std::{future::Future, marker::PhantomData, pin::Pin, sync::Arc};
 
 /// A JWT adapter callback that borrows the active endpoint.
 pub type JwtAdapterFuture<'a, T> = Pin<Box<dyn Future<Output = AuthResult<T>> + Send + 'a>>;
@@ -138,6 +138,26 @@ pub(super) enum AdapterBinding<S: AuthSchema> {
     Create(Arc<Create<S>>),
 }
 
+pub(super) struct RegisteredCallbacks<S: AuthSchema> {
+    pub(super) adapter: FieldValue,
+    schema: PhantomData<fn() -> S>,
+}
+
+impl<S: AuthSchema> From<FieldValue> for RegisteredCallbacks<S> {
+    fn from(adapter: FieldValue) -> Self {
+        Self {
+            adapter,
+            schema: PhantomData,
+        }
+    }
+}
+
+impl<S: AuthSchema> From<JwtCallbacks<S>> for RegisteredCallbacks<S> {
+    fn from(callbacks: JwtCallbacks<S>) -> Self {
+        callbacks.into_native().into()
+    }
+}
+
 fn typed_create(data: FieldValue) -> AuthResult<CreateJwk> {
     let mut fields = data.enumerable_fields()?;
     let mut take = |name: &str| fields.remove(name).unwrap_or_default();
@@ -157,7 +177,16 @@ impl JwtPlugin {
     pub fn callbacks<S: AuthSchema>(self, callbacks: JwtCallbacks<S>) -> impl AuthPlugin<S> {
         WithCallbacks {
             plugin: self,
-            callbacks: Arc::new(callbacks),
+            callbacks: Arc::new(RegisteredCallbacks::from(callbacks)),
+        }
+    }
+
+    /// Retain a native adapter group, including its receiver, accessors, and callback identities.
+    /// Unbound callbacks require an explicitly supplied [`EndpointContext::with_native_root`].
+    pub fn native_callbacks<S: AuthSchema>(self, adapter: FieldValue) -> impl AuthPlugin<S> {
+        WithCallbacks {
+            plugin: self,
+            callbacks: Arc::new(RegisteredCallbacks::<S>::from(adapter)),
         }
     }
 }

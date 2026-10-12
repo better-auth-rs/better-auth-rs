@@ -69,3 +69,47 @@ async fn callback_wrapper_preserves_http_response_mutations_replacement_and_erro
         }
     }
 }
+
+#[tokio::test]
+#[expect(
+    clippy::unwrap_used,
+    clippy::panic_in_result_fn,
+    reason = "The context contract asserts explicit root presence, identity, and live mutations."
+)]
+async fn owned_endpoint_retains_explicit_native_root_and_live_mutations() -> AuthResult<()> {
+    let context = crate::plugins::test_helpers::create_test_context().await;
+    let body: FieldValue = better_auth_core::FieldMap::from([("typed".into(), true.into())]).into();
+    let endpoint = EndpointContext::native(None, None, body.clone(), &context);
+    assert!(endpoint.native_root().is_none());
+    assert!(endpoint.to_owned().as_endpoint().native_root().is_none());
+    let root: FieldValue = better_auth_core::FieldMap::new().into();
+    for value in [
+        FieldValue::Undefined,
+        FieldValue::Null,
+        7.into(),
+        "native".into(),
+        root.clone(),
+    ] {
+        let endpoint = EndpointContext::native(None, None, body.clone(), &context)
+            .with_native_root(value.clone());
+        let owned = endpoint.to_owned();
+        let retained = owned.as_endpoint();
+        assert!(retained.native_root().unwrap().strict_equals(&value));
+        assert!(retained.body.strict_equals(&body));
+        assert!(std::ptr::eq(
+            retained.auth.database.as_ref(),
+            context.database.as_ref()
+        ));
+    }
+    let owned = endpoint.with_native_root(root.clone()).to_owned();
+    root.set_model_property("late", body.clone())?;
+    assert!(
+        owned
+            .as_endpoint()
+            .native_root()
+            .unwrap()
+            .model_property("late")?
+            .strict_equals(&body)
+    );
+    Ok(())
+}

@@ -252,7 +252,7 @@ async fn generated_keys_keep_rotation_truthiness_repeated_reads_and_failure_iden
 }
 
 #[tokio::test]
-async fn unbound_native_adapter_requires_the_shared_endpoint_context_boundary() -> AuthResult<()> {
+async fn unbound_native_adapter_requires_an_explicit_endpoint_root() -> AuthResult<()> {
     let plugin = JwtPlugin::new();
     let mut context = context(&plugin, JwtCallbacks::default()).await?;
     context
@@ -283,7 +283,7 @@ async fn unbound_native_adapter_requires_the_shared_endpoint_context_boundary() 
         .unwrap_err();
     assert_eq!(
         error.message_value()?,
-        "Native JWT adapter callbacks require a bound EndpointContext callback".into()
+        "Native JWT adapter callbacks require an explicit native endpoint root".into()
     );
     assert_eq!(calls.load(Ordering::SeqCst), 0);
     assert!(context.database.list_jwk_records().await?.is_empty());

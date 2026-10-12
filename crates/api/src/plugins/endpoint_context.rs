@@ -13,6 +13,7 @@ use std::sync::Arc;
 /// The parsed endpoint input and the active authentication runtime.
 pub struct EndpointContext<'a, S: AuthSchema> {
     input_request: Option<&'a AuthRequest>,
+    native_root: Option<FieldValue>,
     /// Original Request supplied by HTTP transport or an explicit native caller.
     pub request: Option<&'a AuthRequest>,
     /// Endpoint path, including synthetic dispatch from another endpoint.
@@ -32,6 +33,19 @@ pub struct EndpointContext<'a, S: AuthSchema> {
     pub response: Option<&'a AuthResponse>,
 }
 impl<'a, S: AuthSchema> EndpointContext<'a, S> {
+    /// Retain an explicitly supplied native endpoint value without reading its properties.
+    /// This value does not project or synchronize the typed endpoint fields.
+    pub fn with_native_root(mut self, value: FieldValue) -> Self {
+        self.native_root = Some(value);
+        self
+    }
+
+    /// Borrow the original native endpoint value, if the caller supplied one.
+    /// An explicit undefined or null value remains distinct from an absent root.
+    pub fn native_root(&self) -> Option<&FieldValue> {
+        self.native_root.as_ref()
+    }
+
     /// Access installed test helpers using this endpoint's active transaction.
     pub fn test(&'a self) -> AuthResult<super::test_utils::TestUtilsApi<'a, S>> {
         super::test_utils::TestUtilsApi::from_endpoint(self)
@@ -141,6 +155,7 @@ impl<'a, S: AuthSchema> EndpointContext<'a, S> {
     ) -> Self {
         Self {
             input_request: request,
+            native_root: None,
             request: request.and_then(|request| {
                 request.original_request().or_else(|| {
                     better_auth_core::hooks::current_request_hook_context()

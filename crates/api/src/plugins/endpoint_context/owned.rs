@@ -7,6 +7,7 @@ use std::{collections::HashMap, sync::Arc};
 /// retain their isolated rows, including row identities installed during commit.
 pub struct OwnedEndpointContext<S: AuthSchema> {
     input_request: Option<AuthRequest>,
+    native_root: Option<better_auth_core::FieldValue>,
     request: Option<AuthRequest>,
     path: Option<String>,
     params: HashMap<String, String>,
@@ -21,6 +22,7 @@ impl<S: AuthSchema> OwnedEndpointContext<S> {
     pub fn as_endpoint(&self) -> EndpointContext<'_, S> {
         EndpointContext {
             input_request: self.input_request.as_ref(),
+            native_root: self.native_root.clone(),
             request: self.request.as_ref(),
             path: self.path.as_deref(),
             params: self.params.clone(),
@@ -37,6 +39,7 @@ impl<S: AuthSchema> EndpointContext<'_, S> {
     pub fn to_owned(&self) -> OwnedEndpointContext<S> {
         OwnedEndpointContext {
             input_request: self.input_request.cloned(),
+            native_root: self.native_root.clone(),
             request: self.request.cloned(),
             path: self.path.map(str::to_owned),
             params: self.params.clone(),

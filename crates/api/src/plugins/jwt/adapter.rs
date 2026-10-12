@@ -48,11 +48,17 @@ impl<'a, 'ctx, S: AuthSchema> Keyring<'a, 'ctx, S> {
         if let Some(AdapterBinding::<S>::Get(callback)) = function.binding() {
             return callback(self.endpoint).await;
         }
-        let _ = receiver;
-        // shortcut: add a shared native EndpointContext root before invoking unbound adapter callbacks.
-        Err(AuthError::config(
-            "Native JWT adapter callbacks require a bound EndpointContext callback",
-        ))
+        function
+            .call_awaited_with(&receiver, std::slice::from_ref(self.native_root()?))
+            .await
+    }
+
+    fn native_root(&self) -> AuthResult<&FieldValue> {
+        self.endpoint.native_root().ok_or_else(|| {
+            AuthError::config(
+                "Native JWT adapter callbacks require an explicit native endpoint root",
+            )
+        })
     }
 
     async fn find(&self, id: &str) -> AuthResult<FieldValue> {
@@ -100,11 +106,9 @@ impl<'a, 'ctx, S: AuthSchema> Keyring<'a, 'ctx, S> {
             if let Some(AdapterBinding::<S>::Create(callback)) = function.binding() {
                 return callback(data, self.endpoint).await;
             }
-            let _ = receiver;
-            // shortcut: add a shared native EndpointContext root before invoking unbound adapter callbacks.
-            return Err(AuthError::config(
-                "Native JWT adapter callbacks require a bound EndpointContext callback",
-            ));
+            return function
+                .call_awaited_with(&receiver, &[data, self.native_root()?.clone()])
+                .await;
         }
         let mut fields = data.enumerable_fields()?;
         let _ = fields.insert("createdAt".into(), chrono::Utc::now().into());

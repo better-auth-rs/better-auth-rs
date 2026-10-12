@@ -4,10 +4,11 @@
     reason = "Frozen JWT contracts require exact callback binding and complete source observations."
 )]
 
+use super::native_test_support::{ObservedFields, Trace};
 use super::*;
 use crate::plugins::test_helpers::native_sort_contract::{Harness, assert_case, jwk_cases};
 use better_auth_core::{
-    SchemaValue,
+    FieldFunction, SchemaValue,
     store::{AuthStore, EphemeralStore, JwksStore, StatelessSchema},
 };
 use std::sync::{Arc, Weak};
@@ -20,10 +21,10 @@ struct KeyringStore {
 #[async_trait::async_trait]
 impl JwksStore for KeyringStore {
     async fn list_jwk_values(&self) -> AuthResult<FieldValue> {
-        assert!(std::ptr::eq(self, self.owner.upgrade().unwrap().as_ref()));
         self.harness.read_keyring(
             "default",
             FieldMap::from([("model".into(), "jwks".into())]).into(),
+            std::ptr::eq(self, self.owner.upgrade().unwrap().as_ref()),
         )
     }
 
@@ -70,26 +71,29 @@ async fn jwk_native_sort_replays_real_keyring_reads_and_complete_native_graphs()
             owner: owner.clone(),
         });
         let marker: FieldValue = FieldMap::from([("marker".into(), "sort-context".into())]).into();
-        let endpoint = Box::new(EndpointContext::native(
-            None,
-            None,
-            marker.clone(),
-            &context,
-        ));
-        let expected_endpoint = std::ptr::from_ref(endpoint.as_ref()) as usize;
-        let expected_context = context.clone();
+        let endpoint = EndpointContext::native(None, None, FieldValue::Null, &context)
+            .with_native_root(marker.clone());
+        let receiver = ObservedFields::new(FieldMap::new(), Arc::new(Trace::default()), None);
+        let expected_receiver = Arc::downgrade(&receiver);
         let observed = harness.clone();
-        let callbacks =
-            JwtCallbacks::<StatelessSchema>::default().get_jwks_native(move |endpoint| {
-                assert_eq!(std::ptr::from_ref(endpoint) as usize, expected_endpoint);
-                assert!(std::ptr::eq(endpoint.auth, expected_context.as_ref()));
-                assert!(endpoint.body.strict_equals(&marker));
-                let result = observed.read_keyring("custom", endpoint.body.clone());
-                Box::pin(async move { result })
-            });
+        let _ = receiver.fields.set(
+            "getJwks",
+            FieldFunction::asynchronous_contextual(move |receiver, arguments| {
+                assert_eq!(arguments.len(), 1);
+                let root = arguments.first().unwrap();
+                assert!(root.strict_equals(&marker));
+                let result = observed.read_keyring(
+                    "custom",
+                    root.clone(),
+                    receiver.strict_equals(&expected_receiver.upgrade().unwrap().value()),
+                );
+                async move { result }
+            })
+            .into(),
+        )?;
         let mut fields = FieldMap::new();
         if case["lane"] == "custom" {
-            let _ = fields.insert("adapter".into(), callbacks.to_native());
+            let _ = fields.insert("adapter".into(), receiver.value());
         }
         let options = overrides::NativeOptions(fields.into());
         let keyring = adapter::Keyring::new(store.as_ref(), &options, &endpoint);

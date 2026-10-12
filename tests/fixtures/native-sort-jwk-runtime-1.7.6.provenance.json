@@ -13,7 +13,7 @@
     }
   ],
   "runtimeFixture": "native-sort-jwk-runtime-1.7.6.json",
-  "runtimeSha256": "b48f972ca903729471e9fd6d23b1c596c78802a2ffe673b20c885a5a50ed89cf",
+  "runtimeSha256": "087221465921dc50dcdd504d1d60ccec93533c711deca2d6145af22202f3b21e",
   "cases": 70,
   "extraction": "Static extraction from successful frozen source observations. No scenario was executed or sampled again.",
   "sourceConsumption": {
@@ -26,11 +26,10 @@
     "Retain all JWK cases, adapter event arguments, event order, counts, outcomes, full stored and returned graphs, property order, accessor function identity, native method receiver identity, and row aliases.",
     "The data lane retains the existing full runtime graph and identity observations.",
     "The getter lane uses the established native-sort-getter-runtime graph projection: function identity leaves, ordinary identity renumbering, key order, enumerability, accessor identities, Date values, and all ordinary references.",
-    "Exclude only events[0].sameReceiver from the runtime adapter event. JavaScript adapter callback this is an unpaired source observation. Rust adapter binding and endpoint context identity have separate assertions and do not establish JavaScript this equivalence.",
+    "Retain events[0].sameReceiver from every frozen JWK observation. Measure the default store receiver and the original native custom-adapter receiver at the production invocation boundary.",
     "Compare every runtime key and nested key order with the shared strict observation replay assertion."
   ],
   "unpairedSourceObservations": [
-    "JavaScript adapter callback this: events[0].sameReceiver on default findMany and custom getJwks in both lanes.",
     "JavaScript writable and configurable property flags in getter descriptor graphs.",
     "JavaScript function own reflection properties, source text, and String(function)."
   ],
