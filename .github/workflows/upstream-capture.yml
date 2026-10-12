@@ -22,7 +22,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - contract: native-method-diagnostics
+          - contract: siwe-email-claim
+            regressions: []
+          - contract: api-key-rate-limit-public
             regressions: []
     runs-on: ubuntu-latest
     timeout-minutes: 10
