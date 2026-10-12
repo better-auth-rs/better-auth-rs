@@ -287,6 +287,7 @@ impl From<MySqlQueryResult> for ExecResult {
 pub(crate) enum MySqlQueryArguments {
     Prepared(SqlxValues),
     Text(sqlx::mysql::MySqlTextCommand),
+    DeferredText(sqlx::mysql::MySqlDeferredTextCommand),
 }
 
 impl<'q> sqlx::IntoArguments<'q, MySql> for MySqlQueryArguments {
@@ -299,11 +300,20 @@ impl<'q> sqlx::IntoArguments<'q, MySql> for MySqlQueryArguments {
                 'q,
                 MySql,
             >>::into_arguments(command),
+            Self::DeferredText(command) => {
+                <sqlx::mysql::MySqlDeferredTextCommand as sqlx::IntoArguments<'q, MySql>>::into_arguments(command)
+            }
         }
     }
 }
 
 pub(crate) fn sqlx_query(stmt: &Statement) -> sqlx::query::Query<'_, MySql, MySqlQueryArguments> {
+    if let Some(command) = stmt.mysql_deferred_text_command() {
+        return sqlx::query_with(
+            command.template(),
+            MySqlQueryArguments::DeferredText(command.clone()),
+        );
+    }
     if let Some(command) = stmt.mysql_text_command() {
         return sqlx::query_with(command.sql(), MySqlQueryArguments::Text(command.clone()));
     }
@@ -547,6 +557,3 @@ pub(crate) fn from_sqlx_mysql_row_to_proxy_row(row: &sqlx::mysql::MySqlRow) -> c
             .collect(),
     }
 }
-
-#[cfg(test)]
-mod text_command_tests;

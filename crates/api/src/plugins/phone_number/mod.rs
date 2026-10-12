@@ -418,7 +418,7 @@ impl PhoneNumberPlugin {
         let update_phone = body.get("updatePhoneNumber") == Some(&Value::Bool(true));
         let existing_session = if update_phone {
             Some(ctx.require_native_session(req).await.map_err(|error| {
-                if matches!(error, AuthError::Unauthenticated) {
+                if matches!(error.original(), AuthError::Unauthenticated) {
                     AuthError::from_code("UNAUTHORIZED", "USER_NOT_FOUND", "User not found")
                 } else {
                     error
@@ -608,7 +608,9 @@ impl PhoneNumberPlugin {
         )
         .await
         {
-            Err(AuthError::InvalidCredentials) => return Err(invalid_credentials()),
+            Err(error) if matches!(error.original(), AuthError::InvalidCredentials) => {
+                return Err(invalid_credentials());
+            }
             result => result?,
         }
         self.session_response(

@@ -641,12 +641,13 @@ impl<S: AuthSchema> SessionManager<S> {
                 )
                 .await
             {
-                Ok(None) | Err(AuthError::SessionNotFound) => {
-                    self.clear_cookies(req)?;
-                    return Err(failed_session_update());
-                }
-                Ok(Some(updated)) => updated,
+                Ok(updated) => updated,
+                Err(error) if matches!(error.original(), AuthError::SessionNotFound) => None,
                 Err(error) => return Err(error),
+            };
+            let Some(updated) = updated else {
+                self.clear_cookies(req)?;
+                return Err(failed_session_update());
             };
             snapshot.data = snapshot
                 .data

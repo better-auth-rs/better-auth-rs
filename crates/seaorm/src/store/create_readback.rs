@@ -1,14 +1,15 @@
 //! Identify MySQL inserts without changing their transaction or value semantics.
 
+use crate::store::query_compile::Compile;
+
 use better_auth_core::{
     AuthError, AuthResult, FieldValue, id::IdGeneration, store::schema::resolve_field_name,
     user_fields::UserConfig,
 };
 use sea_orm::{
     ColumnTrait, ConnectionTrait, DatabaseConnection, DbBackend, EntityTrait, Iterable,
-    PrimaryKeyToColumn, QueryFilter, QueryResult, QuerySelect, QueryTrait, Statement,
-    TransactionTrait,
-    sea_query::{ExprTrait, Value},
+    PrimaryKeyToColumn, QueryFilter, QueryResult, QuerySelect, Statement, TransactionTrait,
+    sea_query::{Expr, ExprTrait, Value},
 };
 
 use super::{map_db_err, record_bindings::Binding};
@@ -61,9 +62,8 @@ impl<E: EntityTrait> CreateReadback<'_, E> {
         }
         if matches!(self.policy, IdGeneration::Serial) {
             let id = db
-                .query_one_raw(Statement::from_string(
-                    db.get_database_backend(),
-                    "SELECT LAST_INSERT_ID() as id",
+                .query_one_raw(Statement::from_mysql_text(
+                    "SELECT LAST_INSERT_ID() as id".encode_utf16().collect(),
                 ))
                 .await
                 .map_err(map_db_err)?
@@ -81,7 +81,7 @@ impl<E: EntityTrait> CreateReadback<'_, E> {
         }
         if let Some(query) = full_match::<E>(fields, db.get_database_backend())? {
             let mut rows = db
-                .query_all_raw(query.build(db.get_database_backend()))
+                .query_all_raw(query.compile(db.get_database_backend())?)
                 .await
                 .map_err(map_db_err)?;
             if rows.len() == 1 {
@@ -137,13 +137,9 @@ async fn select_one<E: EntityTrait>(
 ) -> AuthResult<Option<QueryResult>> {
     let backend = db.get_database_backend();
     let query = super::plugin_rows::select_all::<E>()
-        .filter(
-            column
-                .into_expr()
-                .eq(column.save_as(value.clone().bind(backend)?)),
-        )
+        .filter(Expr::col(column).eq(column.save_as(value.clone().bind(backend)?)))
         .limit(1);
-    db.query_one_raw(query.build(backend))
+    db.query_one_raw(query.compile(backend)?)
         .await
         .map_err(map_db_err)
 }
@@ -159,11 +155,9 @@ fn full_match<E: EntityTrait>(
             continue;
         }
         let filter = if value.is_null() {
-            column.is_null()
+            Expr::col(*column).is_null()
         } else {
-            column
-                .into_expr()
-                .eq(column.save_as(value.clone().bind(backend)?))
+            Expr::col(*column).eq(column.save_as(value.clone().bind(backend)?))
         };
         query = query.filter(filter);
         has_conditions = true;
@@ -214,6 +208,7 @@ fn is_truthy(value: &Binding) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::store::mysql_query::materialize_for_test;
     use crate::{SeaOrmUserModel, store::entities::user};
     use better_auth_core::{FieldDate, user_fields::UserFieldConfig};
     use sea_orm::Iden;
@@ -328,8 +323,11 @@ mod tests {
                 .select_only()
                 .column(user::Column::Id);
             assert_eq!(
-                query.build(DbBackend::MySql).to_string(),
-                "SELECT `users`.`id` FROM `users` WHERE `users`.`created_at` = NULL AND `users`.`name` IS NULL AND `users`.`email` = '' LIMIT 2"
+                query
+                    .compile(DbBackend::MySql)
+                    .and_then(materialize_for_test)?
+                    .sql,
+                "select `users`.`id` from `users` where `created_at` = NULL and `name` is null and `email` = '' limit 2"
             );
         }
         assert!(
@@ -351,8 +349,12 @@ mod tests {
             assert!(is_truthy(&value));
             assert!(!value.is_null());
             assert_eq!(
-                value.bind(DbBackend::MySql)?,
-                sea_orm::sea_query::SimpleExpr::Value(Value::String(None))
+                super::super::mysql_query::statement(
+                    sea_orm::sea_query::Query::select().expr(value.bind(DbBackend::MySql)?),
+                )
+                .and_then(materialize_for_test)?
+                .sql,
+                "select NULL"
             );
         }
         for value in [

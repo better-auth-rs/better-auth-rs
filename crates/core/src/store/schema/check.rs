@@ -161,7 +161,7 @@ impl SchemaValidation {
         let check = self.check.clone();
         let _task = tokio::spawn(async move {
             if let Err(error) = check.check().await {
-                match &error {
+                match error.original() {
                     AuthError::SchemaCheck(error)
                         if matches!(error.as_ref(), SchemaCheckError::Mismatch(_)) =>
                     {

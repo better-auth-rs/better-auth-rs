@@ -1,12 +1,23 @@
 //! Format native parameters at mysql2's text-command boundary.
 
 use better_auth_core::{AuthError, AuthResult, FieldObject, FieldValue, Utf16String};
-use chrono::{Datelike, Timelike};
 
+mod array;
+mod date;
 mod scan;
 
 /// Retain UTF-16 values until the connection encodes the complete SQL command.
+#[cfg(test)]
 pub(super) fn format(sql: &str, values: &[FieldValue]) -> AuthResult<Utf16String> {
+    format_parameters(sql, values, |value| Ok(value.clone()))
+}
+
+/// Resolve each parameter only after the scanner finds its consuming placeholder.
+pub(super) fn format_parameters<T>(
+    sql: &str,
+    values: &[T],
+    mut resolve: impl FnMut(&T) -> AuthResult<FieldValue>,
+) -> AuthResult<Utf16String> {
     let mut output = Vec::new();
     let mut chunk = 0;
     let mut cursor = 0;
@@ -15,6 +26,8 @@ pub(super) fn format(sql: &str, values: &[FieldValue]) -> AuthResult<Utf16String
         let Some((start, end)) = scan::placeholder(sql, cursor) else {
             break;
         };
+        let value = resolve(value)?;
+        let value = &value;
         append(&mut output, sql_range(sql, chunk..start)?);
         if end - start == 2 {
             identifier(value, &mut output)?;
@@ -94,51 +107,9 @@ fn escape(value: &FieldValue, output: &mut Vec<u16>) -> AuthResult<()> {
                 &better_auth_core::schema_value::number_string(*value),
             );
         }
-        FieldValue::Date(date) => match date.to_datetime()? {
-            None => append(output, "NULL"),
-            Some(date) => {
-                let date = date.with_timezone(&chrono::Local);
-                let year = date.year();
-                // sql-escaper pads the signed year with comparisons, including years below zero.
-                let prefix = if year < 10 {
-                    "000"
-                } else if year < 100 {
-                    "00"
-                } else if year < 1000 {
-                    "0"
-                } else {
-                    ""
-                };
-                quoted(
-                    &format!(
-                        "{prefix}{year}-{:02}-{:02} {:02}:{:02}:{:02}.{:03}",
-                        date.month(),
-                        date.day(),
-                        date.hour(),
-                        date.minute(),
-                        date.second(),
-                        date.nanosecond() / 1_000_000,
-                    )
-                    .into(),
-                    output,
-                );
-            }
-        },
+        FieldValue::Date(_) => date::format(value, output)?,
         FieldValue::Array(values) => {
-            for (index, value) in values.iter()?.enumerate() {
-                let value = value?;
-                if index != 0 {
-                    append(output, ", ");
-                }
-                let nested = matches!(value, FieldValue::Array(_));
-                if nested {
-                    output.push(u16::from(b'('));
-                }
-                escape(&value, output)?;
-                if nested {
-                    output.push(u16::from(b')'));
-                }
-            }
+            array::write(values, array::Mode::Values, output)?;
         }
         FieldValue::Object(_) if has_sql_string(value)? => {
             let FieldValue::Function(function) = value.model_property("toSqlString")? else {
@@ -154,13 +125,7 @@ fn escape(value: &FieldValue, output: &mut Vec<u16>) -> AuthResult<()> {
 
 fn identifier(value: &FieldValue, output: &mut Vec<u16>) -> AuthResult<()> {
     if let FieldValue::Array(values) = value {
-        for (index, value) in values.iter()?.enumerate() {
-            if index != 0 {
-                append(output, ", ");
-            }
-            identifier(&value?, output)?;
-        }
-        return Ok(());
+        return array::write(values, array::Mode::Identifiers, output);
     }
     let text = value.display_utf16()?;
     let json_path = text.as_utf16().windows(2).any(|units| units == [45, 62]);
@@ -203,4 +168,4 @@ fn object_assignments(object: &FieldObject, output: &mut Vec<u16>) -> AuthResult
 }
 
 #[cfg(test)]
-mod tests;
+pub(super) mod tests;

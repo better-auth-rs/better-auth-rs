@@ -29,7 +29,7 @@ mod organization_joins;
 mod organization_models;
 mod organization_parent_joins;
 pub(crate) use organization_models::record_fields as organization_record_fields;
-#[cfg(test)]
+mod mysql_query;
 mod mysql_text;
 mod organization_roles;
 mod organizations;
@@ -38,6 +38,7 @@ mod passkeys;
 mod plugin_models;
 mod plugin_records;
 mod plugin_rows;
+mod query_compile;
 mod rate_limits;
 pub(crate) mod record_bindings;
 mod record_write;

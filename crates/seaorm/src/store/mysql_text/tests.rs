@@ -133,6 +133,13 @@ impl FieldObjectSource for Native {
 }
 
 fn native(throw_on_read: usize) -> AuthResult<Json> {
+    native_with(throw_on_read, |value| format("select ?", &[value]))
+}
+
+pub(in crate::store) fn native_with(
+    throw_on_read: usize,
+    format: impl FnOnce(FieldValue) -> AuthResult<Utf16String>,
+) -> AuthResult<Json> {
     let events = Arc::new(Mutex::new(Vec::new()));
     let thrown = FieldValue::from(FieldMap::from([("marker".into(), "render-error".into())]));
     let source = Arc::new_cyclic(|source| Native {
@@ -143,7 +150,7 @@ fn native(throw_on_read: usize) -> AuthResult<Json> {
         thrown: thrown.clone(),
     });
     let value = FieldValue::Object(FieldObject::from_source(source));
-    let result = format("select ?", &[value]);
+    let result = format(value);
     let events = events
         .lock()
         .map_err(|_| AuthError::internal("Native contract event lock poisoned"))?

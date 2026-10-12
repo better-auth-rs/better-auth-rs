@@ -1,3 +1,4 @@
+use crate::store::query_compile::{Compile, Execute};
 use sea_orm::{
     ColumnTrait, ConnectionTrait, EntityTrait, Iden, IdenStatic, Iterable, PrimaryKeyToColumn,
     QueryFilter, QueryResult, QuerySelect, QueryTrait,
@@ -20,7 +21,12 @@ where
     E: EntityTrait,
     C: ConnectionTrait,
 {
-    let reselect = updated_reselect_filter(&query, reselect);
+    let mut reselect = updated_reselect_filter(&query, reselect);
+    if db.get_database_backend() == sea_orm::DbBackend::MySql {
+        if let SimpleExpr::Binary(column, _, _) = &mut reselect {
+            super::query_compile::unqualify_column(column);
+        }
+    }
     execute_returning_raw(db, query.query, reselect).await
 }
 
@@ -87,17 +93,20 @@ where
     if db.support_returning() {
         return execute_with_returning(db, query).await;
     }
-    if query.exec(db).await.map_err(map_db_err)?.rows_affected == 0 {
+    if query.exec_native(db).await?.rows_affected == 0 {
         return Ok(None);
     }
     // Ordinary updates use the updated selector; guarded increments retain the locked ID.
-    db.query_one_raw(
-        super::plugin_rows::select_all::<E>()
-            .filter(reselect)
-            .build(db.get_database_backend()),
-    )
-    .await
-    .map_err(map_db_err)
+    let backend = db.get_database_backend();
+    let query = super::plugin_rows::select_all::<E>().filter(reselect);
+    let query = if backend == sea_orm::DbBackend::MySql {
+        query.limit(1)
+    } else {
+        query
+    };
+    db.query_one_raw(query.compile(backend)?)
+        .await
+        .map_err(map_db_err)
 }
 
 async fn execute_with_returning<E: EntityTrait>(
@@ -106,9 +115,12 @@ async fn execute_with_returning<E: EntityTrait>(
 ) -> AuthResult<Option<QueryResult>> {
     let mut query = query.into_query();
     let _ = query.returning(Query::returning().all());
-    db.query_one_raw(db.get_database_backend().build(&query))
-        .await
-        .map_err(map_db_err)
+    db.query_one_raw(crate::store::query_compile::build(
+        db.get_database_backend(),
+        &query,
+    )?)
+    .await
+    .map_err(map_db_err)
 }
 
 pub(super) async fn increment_returning_raw<E>(
@@ -202,7 +214,7 @@ where
     let filter = super::value_filter::all(predicates.iter().cloned(), backend)?;
     let target = increment_target::<E>(primary, filter);
     let Some(target) = db
-        .query_one_raw(target.lock_exclusive().build(backend))
+        .query_one_raw(target.lock_exclusive().compile(backend)?)
         .await
         .map_err(map_db_err)?
     else {
@@ -222,9 +234,10 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::store::mysql_query::materialize_for_test;
     use crate::store::{entities::api_key, record_write::RecordWrite};
     use better_auth_core::FieldValue;
-    use sea_orm::{DbBackend, sea_query::MysqlQueryBuilder};
+    use sea_orm::DbBackend;
 
     #[test]
     fn mysql_reselect_uses_the_assigned_primary_key_after_physical_overrides() -> AuthResult<()> {
@@ -253,10 +266,13 @@ mod tests {
                 .column(api_key::Column::Id)
                 .from(api_key::Entity)
                 .and_where(updated_reselect_filter(&query, filter))
-                .to_string(MysqlQueryBuilder);
+                .to_owned();
+            let statement = crate::store::query_compile::build(DbBackend::MySql, &statement)
+                .and_then(materialize_for_test)?
+                .sql;
             assert_eq!(
                 statement,
-                format!("SELECT `id` FROM `api_keys` WHERE `api_keys`.`id` = '{expected}'")
+                format!("select `id` from `api_keys` where `api_keys`.`id` = '{expected}'")
             );
         }
         Ok(())
@@ -273,7 +289,7 @@ mod tests {
                 "`api_keys`.`name` = 'before'",
             ),
             (false, "after".into(), None, "`api_keys`.`name` = 'after'"),
-            (false, FieldValue::Null, None, "`api_keys`.`name` IS NULL"),
+            (false, FieldValue::Null, None, "`api_keys`.`name` is null"),
             (
                 false,
                 "after".into(),
@@ -315,10 +331,13 @@ mod tests {
                 .column(api_key::Column::Id)
                 .from(api_key::Entity)
                 .and_where(updated_reselect_filter(&query, filter))
-                .to_string(MysqlQueryBuilder);
+                .to_owned();
+            let statement = crate::store::query_compile::build(DbBackend::MySql, &statement)
+                .and_then(materialize_for_test)?
+                .sql;
             assert_eq!(
                 statement,
-                format!("SELECT `id` FROM `api_keys` WHERE {expected}")
+                format!("select `id` from `api_keys` where {expected}")
             );
         }
         Ok(())
@@ -329,7 +348,7 @@ mod tests {
     {
         for native_date in [false, true] {
             for (value, predicate) in [
-                (FieldValue::Null, "IS NULL"),
+                (FieldValue::Null, "is null"),
                 (
                     FieldValue::Date(better_auth_core::FieldDate::invalid()),
                     "= NULL",
@@ -353,10 +372,13 @@ mod tests {
                     .column(api_key::Column::Id)
                     .from(api_key::Entity)
                     .and_where(updated_reselect_filter(&query, filter))
-                    .to_string(MysqlQueryBuilder);
+                    .to_owned();
+                let statement = crate::store::query_compile::build(DbBackend::MySql, &statement)
+                    .and_then(materialize_for_test)?
+                    .sql;
                 assert_eq!(
                     statement,
-                    format!("SELECT `id` FROM `api_keys` WHERE `api_keys`.`name` {predicate}")
+                    format!("select `id` from `api_keys` where `api_keys`.`name` {predicate}")
                 );
             }
         }

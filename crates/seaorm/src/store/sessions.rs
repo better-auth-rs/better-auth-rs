@@ -1,9 +1,8 @@
 use super::instrumentation::database_operation;
+use crate::store::query_compile::{Compile, Execute};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use sea_orm::{
-    ColumnTrait, Condition, ConnectionTrait, EntityTrait, QueryFilter, QuerySelect, QueryTrait,
-};
+use sea_orm::{ColumnTrait, Condition, ConnectionTrait, EntityTrait, QueryFilter, QuerySelect};
 
 use better_auth_core::WhereOperator;
 use better_auth_core::session::SessionData;
@@ -139,7 +138,7 @@ where
                 Condition::all()
                     .add_option(S::Session::active_column().map(|column| column.eq(true))),
             )
-            .build(db.get_database_backend());
+            .compile_find(db.get_database_backend())?;
         let row = database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
             self.config(),
             "findOne",
@@ -179,14 +178,19 @@ where
                 Condition::all()
                     .add_option(S::Session::active_column().map(|column| column.eq(true))),
             )
-            .limit(1);
+            .limit(
+                (self.connection().get_database_backend() != sea_orm::DbBackend::MySql)
+                    .then_some(1),
+            );
         if self.config().advanced.database.joins != Some(true) {
             let rows = database_operation::<<S::Session as SeaOrmSessionModel>::Entity, _>(
                 self.config(),
                 "findOne",
-                super::plugin_rows::all(self.connection(), parent),
+                super::plugin_rows::one(self.connection(), parent),
             )
-            .await?;
+            .await?
+            .into_iter()
+            .collect::<Vec<_>>();
             return Ok(self
                 .fallback_session_snapshots(&rows, &relation)
                 .await?
@@ -198,6 +202,7 @@ where
             <S::Session as SeaOrmSessionModel>::Entity,
             <S::User as SeaOrmUserModel>::Entity,
         >(
+            self.connection().get_database_backend(),
             (parent, S::Session::id_column()),
             (
                 S::Session::field_column(&relation.from)?,
@@ -274,6 +279,7 @@ where
                     <S::Session as SeaOrmSessionModel>::Entity,
                     <S::User as SeaOrmUserModel>::Entity,
                 >(
+                    self.connection().get_database_backend(),
                     (parent, S::Session::id_column()),
                     (
                         S::Session::field_column(&relation.from)?,
@@ -480,9 +486,8 @@ where
             async {
                 <S::Session as SeaOrmSessionModel>::Entity::delete_many()
                     .filter(filter)
-                    .exec(db)
+                    .exec_native(db)
                     .await
-                    .map_err(map_db_err)
             },
         )
         .await?;

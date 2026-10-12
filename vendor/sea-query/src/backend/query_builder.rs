@@ -444,6 +444,9 @@ pub trait QueryBuilder:
                 self.prepare_query_statement(sel.deref(), sql);
                 sql.write_str(")").unwrap();
             }
+            Expr::ExternalParameter(parameter) => {
+                self.prepare_external_parameter(parameter, sql);
+            }
             Expr::Value(val) => {
                 self.prepare_value(val.clone(), sql);
             }
@@ -507,6 +510,15 @@ pub trait QueryBuilder:
                 self.prepare_type_ref(type_name, sql);
             }
         }
+    }
+
+    /// Collect a parameter that owns its native payload.
+    ///
+    /// # Panics
+    ///
+    /// The default builders reject parameters that need a dedicated compiler and writer.
+    fn prepare_external_parameter(&self, _: &ExternalParameter, _: &mut impl SqlWriter) {
+        panic!("ExternalParameter requires a dedicated query builder and parameter collector");
     }
 
     /// Translate [`CaseStatement`] into SQL statement.
@@ -1960,6 +1972,7 @@ pub(crate) fn common_inner_expr_well_known_greater_precedence(
         | Expr::Constant(_)
         | Expr::FunctionCall(_)
         | Expr::Value(_)
+        | Expr::ExternalParameter(_)
         | Expr::Keyword(_)
         | Expr::Case(_)
         | Expr::SubQuery(_, _)

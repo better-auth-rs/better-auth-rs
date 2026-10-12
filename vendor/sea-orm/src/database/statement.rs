@@ -17,6 +17,8 @@ pub struct Statement {
     pub db_backend: DbBackend,
     #[cfg(feature = "sqlx-mysql")]
     mysql_text: Option<sqlx::mysql::MySqlTextCommand>,
+    #[cfg(feature = "sqlx-mysql")]
+    mysql_deferred_text: Option<sqlx::mysql::MySqlDeferredTextCommand>,
 }
 
 /// Any type that can build a [Statement]
@@ -42,7 +44,48 @@ impl Statement {
             values: None,
             db_backend: DbBackend::MySql,
             mysql_text: Some(command),
+            mysql_deferred_text: None,
         }
+    }
+
+    /// Retain a validated template and resolve native values after acquiring the connection.
+    ///
+    /// Each execution invokes the materializer. Inspecting or cloning this statement does not
+    /// invoke the materializer, and no formatted command is cached across executions.
+    #[cfg(feature = "sqlx-mysql")]
+    pub fn from_mysql_text_deferred(
+        sql_template: String,
+        materialize: impl Fn() -> Result<Vec<u16>, Box<dyn std::error::Error + Send + Sync>>
+        + Send
+        + Sync
+        + 'static,
+    ) -> Self {
+        let command = sqlx::mysql::MySqlDeferredTextCommand::new(sql_template, materialize);
+        Self {
+            sql: command.template().to_owned(),
+            values: None,
+            db_backend: DbBackend::MySql,
+            mysql_text: None,
+            mysql_deferred_text: Some(command),
+        }
+    }
+
+    /// Materialize a statement after a custom executor owns its connection or transaction lock.
+    ///
+    /// Pass the original deferred statement, or a clone, for each execution. Retaining this
+    /// returned statement retains that execution's snapshot. Nondeferred statements are unchanged.
+    #[cfg(feature = "sqlx-mysql")]
+    pub fn materialize_mysql_text(
+        mut self,
+    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+        if let Some(deferred) = self.mysql_deferred_text.take() {
+            let command = deferred.materialize()?;
+            self.sql = command.sql().to_owned();
+            self.values = None;
+            self.db_backend = DbBackend::MySql;
+            self.mysql_text = Some(command);
+        }
+        Ok(self)
     }
 
     /// Inspect the logical SQL of an explicit MySQL text command.
@@ -58,6 +101,13 @@ impl Statement {
         self.mysql_text.as_ref()
     }
 
+    #[cfg(feature = "sqlx-mysql")]
+    pub(crate) fn mysql_deferred_text_command(
+        &self,
+    ) -> Option<&sqlx::mysql::MySqlDeferredTextCommand> {
+        self.mysql_deferred_text.as_ref()
+    }
+
     /// Create a [Statement] from a [crate::DatabaseBackend] and a raw SQL statement
     pub fn from_string<T>(db_backend: DbBackend, stmt: T) -> Statement
     where
@@ -69,6 +119,8 @@ impl Statement {
             db_backend,
             #[cfg(feature = "sqlx-mysql")]
             mysql_text: None,
+            #[cfg(feature = "sqlx-mysql")]
+            mysql_deferred_text: None,
         }
     }
 
@@ -92,6 +144,8 @@ impl Statement {
             db_backend,
             #[cfg(feature = "sqlx-mysql")]
             mysql_text: None,
+            #[cfg(feature = "sqlx-mysql")]
+            mysql_deferred_text: None,
         }
     }
 }
@@ -101,6 +155,10 @@ impl fmt::Display for Statement {
         #[cfg(feature = "sqlx-mysql")]
         if let Some(command) = &self.mysql_text {
             return f.write_str(command.sql());
+        }
+        #[cfg(feature = "sqlx-mysql")]
+        if let Some(command) = &self.mysql_deferred_text {
+            return f.write_str(command.template());
         }
         match &self.values {
             Some(values) => {

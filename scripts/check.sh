@@ -70,18 +70,34 @@ run_stage() {
       DATABASE_URL="${BETTER_AUTH_TEST_MYSQL_URL:?}" \
         ./scripts/test-mysql-driver-errors.sh "${RUNNER_TEMP:?}/mysql-driver-protocol" || mysql_status=1
       cargo clippy --locked -p better-auth-seaorm --lib -- -D warnings || mysql_status=1
+      CARGO_TERM_COLOR=never cargo test --locked -p better-auth-seaorm --lib \
+        2>&1 | tee "$RUNNER_TEMP/mysql-driver-protocol/adapter-unit.log" || mysql_status=1
       CARGO_TERM_COLOR=never cargo test --locked -p better-auth-seaorm --lib -- \
-        store::db_error::tests:: store::value_filter::predicate::tests:: \
-        --include-ignored --test-threads=1 \
+        store::db_error::tests:: live_mysql_shared_column_contract \
+        --ignored --test-threads=1 \
         2>&1 | tee "$RUNNER_TEMP/mysql-driver-protocol/adapter.log" || mysql_status=1
-      python3 - "$RUNNER_TEMP/mysql-driver-protocol/adapter.log" <<'PY_CHECK' || mysql_status=1
+      python3 - "$RUNNER_TEMP/mysql-driver-protocol" <<'PY_CHECK' || mysql_status=1
 import re
 import sys
 from pathlib import Path
 
-log = Path(sys.argv[1]).read_text()
-name = "store::db_error::tests::mysql_text::live_mysql_text_error_preserves_utf16_and_source_identity"
-assert re.search(r"^test " + re.escape(name) + r" \.\.\. ok$", log, re.M), name
+root = Path(sys.argv[1])
+log = (root / "adapter.log").read_text()
+for name in (
+    "store::db_error::tests::mysql_text::live_mysql_text_error_preserves_utf16_and_source_identity",
+    "store::plugin_records::shared_column_contract_tests::live_mysql_shared_column_contract",
+):
+    assert re.search(r"^test " + re.escape(name) + r" \.\.\. ok$", log, re.M), name
+unit = (root / "adapter-unit.log").read_text()
+name = "store::value_filter::predicate::tests::insensitive_mode_depends_on_the_operator_and_original_operand_shape"
+assert re.search(r"^test " + re.escape(name) + r" \.\.\. ok$", unit, re.M), name
+assert re.search(r"test result: ok\. [1-9][0-9]* passed; 0 failed", unit), "Adapter unit tests must run"
+for name in (
+    "cloned_materialization_error_retains_native_identity_status_and_headers",
+    "cloned_materialization_error_retains_original_typed_variant_and_source",
+    "ordinary_sqlx_encoding_errors_retain_database_classification",
+):
+    assert re.search(r"^test store::db_error::tests::materialization::" + name + r" \.\.\. ok$", unit, re.M), name
 PY_CHECK
       return "$mysql_status"
       ;;

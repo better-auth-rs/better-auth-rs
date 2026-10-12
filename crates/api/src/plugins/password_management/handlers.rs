@@ -276,11 +276,11 @@ pub(crate) async fn change_password_core(
             &credential_account.password.field_value(),
         )
         .await
-        .map_err(|error| match error {
+        .map_err(|error| match error.original() {
             AuthError::InvalidCredentials => {
                 AuthError::from_code("BAD_REQUEST", "INVALID_PASSWORD", "Invalid password")
             }
-            other => other,
+            _ => error,
         })?;
     }
 
@@ -352,11 +352,11 @@ pub(crate) async fn verify_password_core(
         &stored_hash,
     )
     .await
-    .map_err(|error| match error {
+    .map_err(|error| match error.original() {
         AuthError::InvalidCredentials => {
             AuthError::from_code("BAD_REQUEST", "INVALID_PASSWORD", "Invalid password")
         }
-        other => other,
+        _ => error,
     })?;
 
     Ok(StatusResponse { status: true })

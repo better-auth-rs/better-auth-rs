@@ -16,11 +16,11 @@ pub(super) async fn handle(
     let data = ctx
         .require_native_session(req)
         .await
-        .map_err(|error| match error {
+        .map_err(|error| match error.original() {
             AuthError::Unauthenticated => {
                 AuthError::from_code("UNAUTHORIZED", "UNAUTHORIZED", "Unauthorized")
             }
-            error => error,
+            _ => error,
         })?;
     // Plugin schemas override application fields in the upstream input schema.
     let protected_fields: Vec<_> = [

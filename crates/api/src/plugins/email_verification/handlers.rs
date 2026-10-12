@@ -179,13 +179,15 @@ pub(super) async fn verify_email_core(
 ) -> AuthResult<VerifyEmailResult> {
     let claims = match decode_email_verification_token(ctx.config.signing_secret(), &query.token) {
         Ok(claims) => claims,
-        Err(AuthError::Jwt(error)) => {
-            if matches!(error.kind(), ErrorKind::ExpiredSignature) {
-                return verification_error(query, "TOKEN_EXPIRED", "Token expired");
+        Err(error) => match error.original() {
+            AuthError::Jwt(cause) => {
+                if matches!(cause.kind(), ErrorKind::ExpiredSignature) {
+                    return verification_error(query, "TOKEN_EXPIRED", "Token expired");
+                }
+                return verification_error(query, "INVALID_TOKEN", "Invalid token");
             }
-            return verification_error(query, "INVALID_TOKEN", "Invalid token");
-        }
-        Err(error) => return Err(error),
+            _ => return Err(error),
+        },
     };
     let Some(user) = ctx.database.get_user_by_email(&claims.email).await? else {
         return verification_error(query, "USER_NOT_FOUND", "User not found");

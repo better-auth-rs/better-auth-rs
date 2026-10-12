@@ -24,11 +24,11 @@ pub(crate) async fn require_native_session<S: better_auth_core::AuthSchema>(
 ) -> AuthResult<NativeSessionData> {
     ctx.require_native_session(req)
         .await
-        .map_err(|error| match error {
+        .map_err(|error| match error.original() {
             AuthError::Unauthenticated => {
                 AuthError::from_code("UNAUTHORIZED", "UNAUTHORIZED", "Unauthorized")
             }
-            error => error,
+            _ => error,
         })
 }
 
@@ -38,7 +38,7 @@ async fn optional_session<S: better_auth_core::AuthSchema>(
 ) -> AuthResult<Option<NativeSessionData>> {
     match ctx.require_native_session(req).await {
         Ok(session) => Ok(Some(session)),
-        Err(AuthError::Unauthenticated) => Ok(None),
+        Err(error) if matches!(error.original(), AuthError::Unauthenticated) => Ok(None),
         Err(error) => Err(error),
     }
 }

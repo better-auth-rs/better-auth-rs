@@ -517,9 +517,9 @@ pub(crate) async fn sign_in_username_core(
 
     verify_user_password(&user, &body.password, ctx)
         .await
-        .map_err(|error| match error {
+        .map_err(|error| match error.original() {
             AuthError::InvalidCredentials => SignInUsernameFailure::InvalidUsernameOrPassword,
-            other => SignInUsernameFailure::Auth(other),
+            _ => SignInUsernameFailure::Auth(error),
         })?;
 
     if (config.require_email_verification

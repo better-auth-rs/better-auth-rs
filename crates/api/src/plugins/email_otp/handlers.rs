@@ -521,10 +521,10 @@ impl EmailOtpPlugin {
 }
 
 fn session_error(error: AuthError) -> AuthError {
-    match error {
+    match error.original() {
         AuthError::Unauthenticated => {
             AuthError::from_code("UNAUTHORIZED", "UNAUTHORIZED", "Unauthorized")
         }
-        other => other,
+        _ => error,
     }
 }

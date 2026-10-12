@@ -142,11 +142,11 @@ impl AdminPlugin {
     ) -> AuthResult<NativeSessionData> {
         ctx.require_authoritative_native_session(req)
             .await
-            .map_err(|error| match error {
+            .map_err(|error| match error.original() {
                 AuthError::Unauthenticated => {
                     AuthError::from_status("UNAUTHORIZED", better_auth_core::FieldValue::Undefined)
                 }
-                error => error,
+                _ => error,
             })
     }
 

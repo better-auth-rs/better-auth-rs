@@ -1,7 +1,7 @@
 {
   "contract": "mysql-text",
   "version": "1.7.6",
-  "status": "Two upstream captures are byte-identical. Rust compiler and formatter replay are pending.",
+  "status": "Two upstream captures are byte-identical. Compiler and formatter replay passed in CI 38270984836 at 0fda132f; subsequent native command integration requires separate acceptance.",
   "run": "38269310337",
   "runURL": "https://github.com/better-auth-rs/better-auth-rs/actions/runs/38269310337",
   "commit": "90971630c88009aac00317fbbe5ef29b0c9b8136",
@@ -51,5 +51,14 @@
     "sha256": "ca804d6f72dd59a72d8f296cfe23c47716029d0a7cf951cbb2af7eecc2bbdad5"
   },
   "normalizations": [],
-  "boundary": "Preserve complete UTF-16 formatted SQL, native callback event order and thrown identity, and compiled SQL with ordered parameters. These observations do not establish production query, transport, or arbitrary native value parity."
+  "boundary": "Preserve complete UTF-16 formatted SQL, native callback event order and thrown identity, and compiled SQL with ordered parameters. These observations do not establish production query, transport, or arbitrary native value parity.",
+  "replay": {
+    "run": "38270984836",
+    "runURL": "https://github.com/better-auth-rs/better-auth-rs/actions/runs/38270984836",
+    "commit": "0fda132ffd4c60ed7b487bc11c7b4901bce72f2f",
+    "conclusion": "success",
+    "formats": 30,
+    "nativeCallbacks": 2,
+    "compiledQueries": 11
+  }
 }

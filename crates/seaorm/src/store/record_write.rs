@@ -337,12 +337,12 @@ impl<E: EntityTrait> RecordWrite<E> {
         if db.support_returning() {
             let _ = query.returning(Query::returning().all());
             return db
-                .query_one_raw(backend.build(&query))
+                .query_one_raw(crate::store::query_compile::build(backend, &query)?)
                 .await
                 .map_err(map_db_err);
         }
         let _ = db
-            .execute_raw(backend.build(&query))
+            .execute_raw(crate::store::query_compile::build(backend, &query)?)
             .await
             .map_err(map_db_err)?;
         readback.fetch(db, &self.fields).await

@@ -105,6 +105,31 @@ fn callback_error_values_retain_identity_without_reading_properties() -> AuthRes
 }
 
 #[test]
+fn shared_native_errors_do_not_read_properties_during_transport() -> AuthResult<()> {
+    let raw: FieldValue = source(&["name", "message", "statusCode"], |_| {
+        Err(AuthError::type_error(
+            "Transport must not read error properties",
+        ))
+    })
+    .into();
+    let error = AuthError::from_thrown(raw.clone()).into_shared();
+    let AuthError::Shared(shared) = &error else {
+        return Err(AuthError::internal("Expected a shared error"));
+    };
+    let second = AuthError::Shared(shared.clone());
+    let _ = format!("{second:?} {second}");
+    assert!(
+        second
+            .to_auth_response()?
+            .body
+            .field_value()?
+            .strict_equals(&raw)
+    );
+    assert!(error.into_thrown_value()?.strict_equals(&raw));
+    Ok(())
+}
+
+#[test]
 fn typed_callback_error_values_keep_messages_hidden_and_api_brands() -> AuthResult<()> {
     for (error, name, message) in [
         (

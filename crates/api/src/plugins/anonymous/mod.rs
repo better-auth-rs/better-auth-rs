@@ -215,7 +215,7 @@ impl AnonymousPlugin {
             .require_authoritative_native_session(req)
             .await
             .map_err(|cause| {
-                if matches!(cause, AuthError::Unauthenticated) {
+                if matches!(cause.original(), AuthError::Unauthenticated) {
                     AuthError::from_code("UNAUTHORIZED", "UNAUTHORIZED", "Unauthorized")
                 } else {
                     cause

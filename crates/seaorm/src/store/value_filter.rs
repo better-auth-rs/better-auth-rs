@@ -247,9 +247,14 @@ pub(super) fn is_in(
     QueryPredicate::is_in(column, value.clone()).bind(backend)
 }
 
-pub(super) fn membership(column: SimpleExpr, values: Vec<SimpleExpr>, negated: bool) -> SimpleExpr {
-    if values.is_empty() {
-        // Kysely preserves empty-set SQL; SeaQuery otherwise replaces the predicate with a constant.
+pub(super) fn membership(
+    column: SimpleExpr,
+    values: Vec<SimpleExpr>,
+    negated: bool,
+    backend: DbBackend,
+) -> SimpleExpr {
+    if values.is_empty() && backend != DbBackend::MySql {
+        // The PostgreSQL and SQLite builders otherwise replace empty lists with constants.
         column.binary(
             sea_orm::sea_query::BinOper::Custom(if negated { "NOT IN" } else { "IN" }),
             SimpleExpr::Tuple(values),
@@ -280,7 +285,8 @@ mod core_query_tests;
 mod tests {
     use super::*;
     use crate::store::entities::api_key;
-    use sea_orm::{QueryFilter, QueryTrait};
+    use crate::store::mysql_query::materialize_for_test;
+    use sea_orm::QueryFilter;
 
     #[test]
     fn query_aliases_keep_original_types_and_primary_key_history() -> AuthResult<()> {
@@ -353,6 +359,7 @@ mod tests {
 
     #[test]
     fn undefined_equality_keeps_the_driver_binding_instead_of_testing_for_null() -> AuthResult<()> {
+        use crate::store::query_compile::Compile;
         use sea_orm::EntityTrait;
 
         for backend in [DbBackend::Sqlite, DbBackend::Postgres, DbBackend::MySql] {
@@ -362,7 +369,8 @@ mod tests {
                     &FieldValue::Undefined,
                     backend,
                 )?)
-                .build(backend)
+                .compile(backend)
+                .and_then(materialize_for_test)?
                 .to_string();
             let null = api_key::Entity::find()
                 .filter(equals(
@@ -370,10 +378,16 @@ mod tests {
                     &FieldValue::Null,
                     backend,
                 )?)
-                .build(backend)
+                .compile(backend)
+                .and_then(materialize_for_test)?
                 .to_string();
             assert!(undefined.ends_with(" = NULL"), "{backend:?}: {undefined}");
-            assert!(null.ends_with(" IS NULL"), "{backend:?}: {null}");
+            let null_test = if backend == DbBackend::MySql {
+                " is null"
+            } else {
+                " IS NULL"
+            };
+            assert!(null.ends_with(null_test), "{backend:?}: {null}");
         }
         Ok(())
     }

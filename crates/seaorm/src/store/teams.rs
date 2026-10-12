@@ -3,6 +3,7 @@ use super::{
     organization_models::{self as models, Entity, values},
 };
 use crate::SeaOrmOrganizationModel;
+use crate::store::query_compile::Execute;
 use async_trait::async_trait;
 use better_auth_core::{
     AuthError, AuthResult, CreateTeam, Team, TeamMember, UpdateTeam,
@@ -10,9 +11,7 @@ use better_auth_core::{
 };
 use better_auth_core::{FieldValue, SchemaField};
 use chrono::Utc;
-use sea_orm::{
-    EntityTrait, PaginatorTrait, QueryFilter, QuerySelect, TransactionTrait, sea_query::Expr,
-};
+use sea_orm::{EntityTrait, QueryFilter, QuerySelect, TransactionTrait, sea_query::Expr};
 
 mod deletion;
 
@@ -179,15 +178,12 @@ where
         &self,
         organization_id: &better_auth_core::FieldValue,
     ) -> AuthResult<u64> {
-        Entity::<O::Team>::find()
-            .filter(self.organization_field_equals::<O::Team>(
-                EntityRole::Team,
-                "organizationId",
-                organization_id,
-            )?)
-            .count(self.connection())
-            .await
-            .map_err(map_db_err)
+        let query = Entity::<O::Team>::find().filter(self.organization_field_equals::<O::Team>(
+            EntityRole::Team,
+            "organizationId",
+            organization_id,
+        )?);
+        super::plugin_rows::count(self.connection(), query).await
     }
     async fn list_user_teams(&self, user_id: &str) -> AuthResult<Vec<Team>> {
         self.list_user_teams_value(&user_id.into()).await
@@ -290,9 +286,8 @@ where
                 better_auth_core::store::schema::EntityRole::TeamMember,
                 [("teamId", team_id), ("userId", user_id)],
             )?)
-            .exec(self.connection())
-            .await
-            .map_err(map_db_err)?;
+            .exec_native(self.connection())
+            .await?;
         super::team_capacity::release::<O::Team, _>(
             self.connection(),
             super::create_readback::ReadbackScope::Direct(self.connection()),
@@ -368,9 +363,8 @@ impl<
                 self.config().advanced.database.generate_id(),
                 self.connection().get_database_backend(),
             )?)
-            .exec(db)
-            .await
-            .map_err(map_db_err)?;
+            .exec_native(db)
+            .await?;
         if locked.rows_affected == 0 {
             return Err(AuthError::not_found("Team not found"));
         }

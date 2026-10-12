@@ -6,8 +6,7 @@ use better_auth_core::{
 };
 use sea_orm::sqlx::{Row, TypeInfo, ValueRef};
 use sea_orm::{
-    ConnectionTrait, DbBackend, EntityTrait, IdenStatic, QueryResult, QuerySelect, QueryTrait,
-    Select,
+    ConnectionTrait, DbBackend, EntityTrait, IdenStatic, QueryResult, QuerySelect, Select,
     sea_query::{Alias, Asterisk, Expr, ExprTrait},
 };
 use std::{
@@ -15,6 +14,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use super::query_compile::Compile;
 use crate::SeaOrmPluginModel;
 
 mod drivers;
@@ -149,7 +149,7 @@ pub(super) async fn all<E: EntityTrait>(
     db: &impl ConnectionTrait,
     query: Select<E>,
 ) -> AuthResult<Vec<SqlRow>> {
-    db.query_all(&query.into_query())
+    db.query_all_raw(query.compile_find(db.get_database_backend())?)
         .await
         .map(|rows| rows.into_iter().map(Into::into).collect())
         .map_err(super::map_db_err)
@@ -159,7 +159,13 @@ pub(super) async fn one<E: EntityTrait>(
     db: &impl ConnectionTrait,
     query: Select<E>,
 ) -> AuthResult<Option<SqlRow>> {
-    db.query_one(&query.limit(1).into_query())
+    let backend = db.get_database_backend();
+    let query = if backend == DbBackend::MySql {
+        query
+    } else {
+        query.limit(1)
+    };
+    db.query_one_raw(query.compile_find(backend)?)
         .await
         .map(|row| row.map(Into::into))
         .map_err(super::map_db_err)
@@ -173,8 +179,17 @@ pub(super) async fn count<E: EntityTrait>(
     let query = query
         .select_only()
         .expr_as(Expr::col(Alias::new("id")).count(), "count");
-    let row = one(db, query)
-        .await?
+    let backend = db.get_database_backend();
+    let query = if backend == DbBackend::MySql {
+        query
+    } else {
+        query.limit(1)
+    };
+    let row = db
+        .query_one_raw(query.compile(backend)?)
+        .await
+        .map_err(super::map_db_err)?
+        .map(SqlRow::from)
         .ok_or_else(|| AuthError::internal("Adapter count returned no row"))?;
     Ok(better_auth_core::query::field_number(&row.value("count")?)? as u64)
 }

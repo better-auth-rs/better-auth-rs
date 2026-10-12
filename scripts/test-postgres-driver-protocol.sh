@@ -77,12 +77,12 @@ protocol_status=0
 for protocol_index in "${!protocol_packages[@]}"; do
   protocol_package="${protocol_packages[$protocol_index]}"
   cargo test --manifest-path "$protocol_root/$protocol_package/Cargo.toml" \
-    "${protocol_patches[@]}" --locked --target-dir "$protocol_root/target" \
+    "${protocol_patches[@]}" --locked --target-dir "$PWD/target" \
     --features "${protocol_features[$protocol_index]}" --lib \
     2>&1 | tee "$protocol_output/$protocol_package-unit.log" || protocol_status=1
 done
 cargo test --manifest-path "$protocol_root/sqlx-postgres/Cargo.toml" \
-  "${protocol_patches[@]}" --locked --target-dir "$protocol_root/target" \
+  "${protocol_patches[@]}" --locked --target-dir "$PWD/target" \
   --features "${protocol_features[0]}" --lib \
   -- connection::executor::protocol_tests --ignored \
   2>&1 | tee "$protocol_output/sqlx-postgres-live.log" || protocol_status=1

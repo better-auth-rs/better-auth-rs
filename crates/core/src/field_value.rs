@@ -10,6 +10,7 @@ use std::{
 };
 
 mod array;
+mod date_methods;
 pub(crate) use array::{ArrayIdentity, FieldArraySource};
 pub use array::{FieldArray, FieldArrayIter};
 mod function;

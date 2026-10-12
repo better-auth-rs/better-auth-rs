@@ -43,6 +43,8 @@ async fn logger_failure_escapes_typed_error_conversion_once() -> AuthResult<()> 
     for source in [
         AuthError::internal("original conversion failure"),
         AuthError::PasswordHash("original hash failure".into()),
+        AuthError::internal("original conversion failure").into_shared(),
+        AuthError::PasswordHash("original hash failure".into()).into_shared(),
     ] {
         let sink = Arc::new(ThrowingSink {
             calls: AtomicUsize::new(0),
@@ -53,6 +55,33 @@ async fn logger_failure_escapes_typed_error_conversion_once() -> AuthResult<()> 
             .await
             .err()
             .ok_or_else(|| AuthError::internal("The logger failure must escape conversion"))?;
+        assert!(
+            error
+                .raw_value()
+                .is_some_and(|raw| raw.strict_equals(&sink.cause))
+        );
+        assert_eq!(sink.calls.load(Ordering::SeqCst), 1);
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn shared_header_capture_keeps_the_original_conversion_failure_boundary() -> AuthResult<()> {
+    for source in [
+        AuthError::internal("original conversion failure"),
+        AuthError::PasswordHash("original hash failure".into()),
+        AuthError::internal("original conversion failure").into_shared(),
+        AuthError::PasswordHash("original hash failure".into()).into_shared(),
+    ] {
+        let sink = Arc::new(ThrowingSink {
+            calls: AtomicUsize::new(0),
+            cause: FieldMap::from([("token".into(), FieldMap::new().into())]).into(),
+        });
+        let error = context(sink.clone())?
+            .with_endpoint_context(|_| async move {
+                source.capture_native_headers(FieldMap::new().into())
+            })
+            .await;
         assert!(
             error
                 .raw_value()

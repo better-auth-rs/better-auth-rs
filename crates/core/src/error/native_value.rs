@@ -37,7 +37,7 @@ impl AuthError {
                 ..Default::default()
             });
         }
-        let name = match self {
+        let name = match self.original() {
             Self::TypeError(_) => "TypeError",
             Self::RangeError(_) => "RangeError",
             Self::DataClone => "DataCloneError",

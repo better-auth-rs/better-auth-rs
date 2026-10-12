@@ -1,3 +1,4 @@
+use crate::store::query_compile::{Compile, Execute};
 use async_trait::async_trait;
 use better_auth_core::background::BackgroundFuture;
 use better_auth_core::middleware::{EndpointRateLimit, RateLimitDecision};
@@ -6,7 +7,7 @@ use better_auth_core::store::{RateLimitStore, schema::EntityRole};
 use better_auth_core::{AuthResult, AuthSchema, FieldMap, WhereMode, WhereOperator};
 use chrono::Utc;
 use sea_orm::sea_query::{Expr, ExprTrait};
-use sea_orm::{ConnectionTrait, EntityTrait, QueryFilter, QuerySelect, QueryTrait};
+use sea_orm::{ConnectionTrait, EntityTrait, QueryFilter, QuerySelect};
 
 use super::plugin_models::Entity;
 use super::value_filter::QueryPredicate;
@@ -58,7 +59,7 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPluginSchema> SeaOrmSt
                                 self.config(),
                                 self.connection().get_database_backend(),
                             )?)
-                            .build(self.connection().get_database_backend()),
+                            .compile_find(self.connection().get_database_backend())?,
                     )
                     .await
                     .map_err(map_db_err)
@@ -90,9 +91,8 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPluginSchema> SeaOrmSt
         database_operation::<Entity<P::RateLimit>, _>(self.config(), "deleteMany", async {
             let _ = Entity::<P::RateLimit>::delete_many()
                 .filter(filter)
-                .exec(self.connection())
-                .await
-                .map_err(map_db_err)?;
+                .exec_native(self.connection())
+                .await?;
             Ok(())
         })
         .await

@@ -26,6 +26,8 @@ pub enum Expr {
     Binary(Box<Expr>, BinOper, Box<Expr>),
     SubQuery(Option<SubQueryOper>, Box<SubQueryStatement>),
     Value(Value),
+    /// A parameter that owns its native payload and requires a dedicated writer.
+    ExternalParameter(ExternalParameter),
     Values(Vec<Value>),
     Custom(Cow<'static, str>),
     CustomWithExpr(Cow<'static, str>, Vec<Expr>),

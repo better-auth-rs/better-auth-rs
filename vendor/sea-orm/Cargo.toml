@@ -335,6 +335,11 @@ name = "loader_tests"
 path = "tests/loader_tests.rs"
 
 [[test]]
+name = "mysql_text_command"
+path = "tests/mysql_text_command.rs"
+required-features = ["sqlx-mysql", "runtime-tokio"]
+
+[[test]]
 name = "multi_select_tests"
 path = "tests/multi_select_tests.rs"
 

@@ -222,13 +222,9 @@ impl FieldValue {
 
     /// Invoke `getTime()` and retain the native result until the caller's numeric boundary.
     pub fn get_time_method(&self, expression: &str) -> AuthResult<Self> {
-        match (self, self.method_property("getTime")?) {
-            (_, Some(Self::Function(method))) => method.call_with(self, &[]),
-            (Self::Date(date), None) => Ok(date.milliseconds().into()),
-            _ => Err(AuthError::type_error(format!(
-                "{expression}.getTime is not a function"
-            ))),
-        }
+        self.read_date_getter("getTime", |_| {
+            AuthError::type_error(format!("{expression}.getTime is not a function"))
+        })
     }
 
     /// Invoke `toISOString()` without calling `toJSON` or narrowing a custom method's result.

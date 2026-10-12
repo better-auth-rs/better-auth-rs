@@ -156,6 +156,11 @@ impl ConnectionTrait for LockConnection {
     }
 
     async fn query_one_raw(&self, statement: Statement) -> Result<Option<QueryResult>, DbErr> {
+        let statement = statement.materialize_mysql_text().map_err(|error| {
+            DbErr::Query(sea_orm::RuntimeErr::SqlxError(Arc::new(
+                sea_orm::sqlx::Error::Encode(error),
+            )))
+        })?;
         self.statements
             .lock()
             .map_err(|_| DbErr::Custom("Statement log lock is poisoned".into()))?
@@ -239,7 +244,7 @@ async fn mysql_parses_set_only_after_locking_a_non_null_target_id() -> AuthResul
         assert_eq!(calls.load(Ordering::SeqCst), calls_expected);
         assert_eq!(
             connection.statements()?,
-            ["SELECT `users`.`id` FROM `users` WHERE `users`.`id` = 'selected' LIMIT 1 FOR UPDATE"]
+            ["select `users`.`id` from `users` where `users`.`id` = 'selected' limit 1 for update"]
         );
     }
     Ok(())
@@ -282,7 +287,7 @@ async fn mysql_reparses_where_from_the_same_object_after_target_locking() -> Aut
     assert_eq!(
         connection.statements()?,
         [
-            "SELECT `users`.`id` FROM `users` WHERE `users`.`name` LIKE '%[object Object]%' LIMIT 1 FOR UPDATE"
+            "select `users`.`id` from `users` where `users`.`name` like '%[object Object]%' limit 1 for update"
         ]
     );
     Ok(())

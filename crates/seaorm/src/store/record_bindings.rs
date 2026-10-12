@@ -63,6 +63,10 @@ impl Binding {
 }
 
 impl ParsedBinding {
+    pub(super) fn binding(&self) -> &Binding {
+        &self.0
+    }
+
     pub(super) fn is_expression(&self) -> bool {
         self.0.is_expression()
     }
@@ -70,6 +74,9 @@ impl ParsedBinding {
     pub(super) fn encode(self, backend: DbBackend) -> AuthResult<SimpleExpr> {
         match self.0 {
             Binding::Expression(expression) => Ok(expression),
+            binding if backend == DbBackend::MySql => Ok(SimpleExpr::ExternalParameter(
+                sea_orm::sea_query::ExternalParameter::new(ParsedBinding(binding)),
+            )),
             Binding::Native(value) => native_parameter(value, backend),
             Binding::Json(value) if backend == DbBackend::Postgres => {
                 driver_parameter(value, backend)
@@ -164,43 +171,8 @@ fn driver_parameter(value: FieldValue, backend: DbBackend) -> AuthResult<SimpleE
             return Ok(sqlite_text_parameter(&value));
         }
         FieldValue::Utf16String(value) => Value::String(Some(utf16_string(&value, backend))),
-        FieldValue::Array(values) if backend == DbBackend::MySql => {
-            let parameters = values
-                .iter()?
-                .map(|value| {
-                    let value = value?;
-                    if let FieldValue::Array(nested) = value {
-                        nested
-                            .iter()?
-                            .map(|value| driver_parameter(value?, backend))
-                            .collect::<AuthResult<Vec<_>>>()
-                            .map(SimpleExpr::Tuple)
-                    } else {
-                        driver_parameter(value, backend)
-                    }
-                })
-                .collect::<AuthResult<Vec<_>>>()?;
-            return Ok(SimpleExpr::cust_with_exprs(
-                vec!["?"; parameters.len()].join(", "),
-                parameters,
-            ));
-        }
-        FieldValue::Number(value) if backend == DbBackend::MySql => {
-            // mysql2 emits numeric literals; DOUBLE parameters change MySQL's integer rounding.
-            return Ok(SimpleExpr::Custom(
-                better_auth_core::schema_value::number_string(value).into(),
-            ));
-        }
         FieldValue::Number(value) => {
             crate::reference_id::binding(Value::Double(Some(value)), backend)?
-        }
-        FieldValue::Date(date) if backend == DbBackend::MySql => {
-            // sql-escaper converts an invalid Date to SQL NULL without changing the comparison operator.
-            Value::String(date.to_datetime()?.map(|date| {
-                date.with_timezone(&chrono::Local)
-                    .format("%Y-%m-%d %H:%M:%S%.3f")
-                    .to_string()
-            }))
         }
         FieldValue::Date(_) | FieldValue::Array(_) | FieldValue::Object(_)
             if backend == DbBackend::Sqlite =>
@@ -339,7 +311,8 @@ mod function_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sea_orm::sea_query::{MysqlQueryBuilder, Query};
+    use crate::store::mysql_query::materialize_for_test;
+    use sea_orm::sea_query::Query;
 
     #[test]
     fn sqlite_utf16_binding_retains_the_driver_surrogate_pairing() {
@@ -795,7 +768,7 @@ mod tests {
     }
 
     #[test]
-    fn mysql_numbers_keep_literal_types_while_strings_remain_bound() -> AuthResult<()> {
+    fn mysql_numbers_keep_literal_types_while_strings_are_text_quoted() -> AuthResult<()> {
         for (number, literal) in [
             (1.5, "1.5"),
             (2.5, "2.5"),
@@ -809,18 +782,20 @@ mod tests {
             (f64::INFINITY, "Infinity"),
             (f64::NEG_INFINITY, "-Infinity"),
         ] {
-            let (sql, parameters) = Query::select()
-                .expr(parameter(number.into(), DbBackend::MySql)?)
-                .build(MysqlQueryBuilder);
-            assert_eq!(sql, format!("SELECT {literal}"));
-            assert!(parameters.0.is_empty());
+            let statement = super::super::mysql_query::statement(
+                Query::select().expr(parameter(number.into(), DbBackend::MySql)?),
+            )
+            .and_then(materialize_for_test)?;
+            assert_eq!(statement.sql, format!("select {literal}"));
+            assert_eq!(statement.values, None);
         }
         for text in ["2.5", "NaN", "2.5); DROP TABLE users; --"] {
-            let (sql, parameters) = Query::select()
-                .expr(parameter(text.into(), DbBackend::MySql)?)
-                .build(MysqlQueryBuilder);
-            assert_eq!(sql, "SELECT ?");
-            assert_eq!(parameters.0, vec![Value::String(Some(text.into()))]);
+            let statement = super::super::mysql_query::statement(
+                Query::select().expr(parameter(text.into(), DbBackend::MySql)?),
+            )
+            .and_then(materialize_for_test)?;
+            assert_eq!(statement.sql, format!("select '{text}'"));
+            assert_eq!(statement.values, None);
         }
         Ok(())
     }

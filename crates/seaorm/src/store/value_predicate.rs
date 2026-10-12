@@ -170,7 +170,9 @@ impl<C: ColumnTrait> ParsedPredicate<C> {
         } else {
             value
         };
-        let comparison_column = if self.insensitive {
+        let comparison_column = if self.insensitive && backend == DbBackend::MySql {
+            SimpleExpr::cust_with_expr("LOWER(?)", column.clone())
+        } else if self.insensitive {
             Func::lower(column.clone()).into()
         } else {
             column.clone()
@@ -187,6 +189,7 @@ impl<C: ColumnTrait> ParsedPredicate<C> {
                     comparison_column,
                     values,
                     self.operator == WhereOperator::NotIn,
+                    backend,
                 )
             }
             WhereOperator::Lt => column.lt(value),
@@ -196,6 +199,8 @@ impl<C: ColumnTrait> ParsedPredicate<C> {
             WhereOperator::Contains | WhereOperator::StartsWith | WhereOperator::EndsWith => {
                 if self.insensitive && backend == DbBackend::Postgres {
                     column.binary(PgBinOper::ILike, value)
+                } else if self.insensitive && backend == DbBackend::MySql {
+                    SimpleExpr::cust_with_exprs("LOWER(?) LIKE LOWER(?)", [column, value])
                 } else if self.insensitive {
                     Func::lower(column).binary(BinOper::Like, Func::lower(value))
                 } else {

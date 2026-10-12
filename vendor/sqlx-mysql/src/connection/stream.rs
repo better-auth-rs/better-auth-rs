@@ -381,3 +381,6 @@ mod error_transport_support;
 
 #[cfg(test)]
 mod text_command_tests;
+
+#[cfg(test)]
+mod deferred_text_command_tests;

@@ -544,9 +544,13 @@ where
                 <S::User as SeaOrmUserModel>::Entity,
                 <S::Account as SeaOrmAccountModel>::Entity,
             >(
+                self.connection().get_database_backend(),
                 (
                     self.user_field_query(self.connection(), "email", email)?
-                        .limit(1),
+                        .limit(
+                            (self.connection().get_database_backend() != sea_orm::DbBackend::MySql)
+                                .then_some(1),
+                        ),
                     S::User::id_column(),
                 ),
                 (
@@ -562,14 +566,15 @@ where
                 super::joins::joined_raw_rows(self.connection(), &query),
             )
             .await?;
-            let mut rows = rows.into_iter();
-            let Some((record, first_account)) = rows.next() else {
+            let Some((record, accounts)) =
+                super::joins::grouped_raw_rows(rows, S::User::id_column())?
+                    .into_iter()
+                    .next()
+            else {
                 return Ok(None);
             };
             let accounts = super::joins::selected_raw_children(
-                std::iter::once(first_account)
-                    .chain(rows.map(|(_, account)| account))
-                    .flatten(),
+                accounts.into_iter(),
                 S::Account::id_column(),
                 relation.many,
                 self.config().advanced.database.find_many_limit(),

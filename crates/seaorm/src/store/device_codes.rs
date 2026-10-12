@@ -1,11 +1,11 @@
 use super::instrumentation::database_operation;
 use super::plugin_models::Entity;
 use super::value_filter::{BoundQueryField, QueryPredicate, all};
+use crate::store::query_compile::{Compile, Execute};
 use async_trait::async_trait;
 use better_auth_core::{FieldMap, FieldValue, SchemaValue};
 use sea_orm::{
-    ConnectionTrait, EntityTrait, QueryFilter, QueryResult, QueryTrait, TransactionTrait,
-    sea_query::SimpleExpr,
+    ConnectionTrait, EntityTrait, QueryFilter, QueryResult, TransactionTrait, sea_query::SimpleExpr,
 };
 
 use better_auth_core::store::{DeviceCodeStore, schema::EntityRole, validate_increment_one_update};
@@ -242,7 +242,7 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
                 .query_one_raw(
                     super::plugin_rows::select_all::<Entity<P::DeviceCode>>()
                         .filter(filter)
-                        .build(connection.get_database_backend()),
+                        .compile_find(connection.get_database_backend())?,
                 )
                 .await
                 .map_err(map_db_err)
@@ -373,10 +373,9 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         database_operation::<Entity<P::DeviceCode>, _>(self.config(), "delete", async {
             Entity::<P::DeviceCode>::delete_many()
                 .filter(filter)
-                .exec(connection)
+                .exec_native(connection)
                 .await
                 .map(|_| ())
-                .map_err(map_db_err)
         })
         .await
     }
@@ -403,10 +402,9 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         database_operation::<Entity<P::DeviceCode>, _>(self.config(), "delete", async {
             Entity::<P::DeviceCode>::delete_many()
                 .filter(filter)
-                .exec(connection)
+                .exec_native(connection)
                 .await
                 .map(|result| result.rows_affected == 1)
-                .map_err(map_db_err)
         })
         .await
     }

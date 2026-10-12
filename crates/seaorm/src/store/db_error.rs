@@ -6,6 +6,9 @@ use sea_orm::{DbErr, RuntimeErr, SqlErr, sqlx};
 mod mysql_codes;
 
 pub(crate) fn map_db_err(error: DbErr) -> AuthError {
+    if let Some(original) = materialization_error(&error) {
+        return original;
+    }
     let (category, message): (fn(DatabaseErrorCause) -> DatabaseError, String) =
         match error.sql_err() {
             Some(SqlErr::UniqueConstraintViolation(message)) => {
@@ -24,6 +27,21 @@ pub(crate) fn map_db_err(error: DbErr) -> AuthError {
         };
     let properties = driver_properties(&error);
     category(DatabaseErrorCause::from_source(message, error, properties)).into()
+}
+
+fn materialization_error(error: &DbErr) -> Option<AuthError> {
+    let (DbErr::Exec(RuntimeErr::SqlxError(error)) | DbErr::Query(RuntimeErr::SqlxError(error))) =
+        error
+    else {
+        return None;
+    };
+    let sqlx::Error::Encode(error) = error.as_ref() else {
+        return None;
+    };
+    let AuthError::Shared(original) = error.downcast_ref::<AuthError>()? else {
+        return None;
+    };
+    Some(AuthError::Shared(original.clone()))
 }
 
 fn driver_properties(error: &DbErr) -> Option<FieldMap> {

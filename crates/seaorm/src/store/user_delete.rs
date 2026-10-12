@@ -1,8 +1,9 @@
 use super::instrumentation::database_operation;
+use crate::store::query_compile::Execute;
 use sea_orm::{ConnectionTrait, EntityTrait, QueryFilter, QuerySelect};
 
+use super::HookTransaction;
 use super::transaction_hooks::after_write;
-use super::{HookTransaction, map_db_err};
 use crate::SeaOrmStore;
 use crate::error::AuthResult;
 use crate::schema::{AuthSchema, SeaOrmAccountModel, SeaOrmSessionModel, SeaOrmUserModel};
@@ -70,9 +71,8 @@ where
             async {
                 <S::Account as SeaOrmAccountModel>::Entity::delete_many()
                     .filter(self.account_selector("userId", user_id)?)
-                    .exec(db)
+                    .exec_native(db)
                     .await
-                    .map_err(map_db_err)
             },
         )
         .await?;
@@ -162,9 +162,8 @@ where
                         id,
                         db.get_database_backend(),
                     )?)
-                    .exec(db)
+                    .exec_native(db)
                     .await
-                    .map_err(map_db_err)
             },
         )
         .await?;
@@ -186,9 +185,8 @@ where
             async {
                 <S::User as SeaOrmUserModel>::Entity::delete_many()
                     .filter(filter)
-                    .exec(db)
+                    .exec_native(db)
                     .await
-                    .map_err(map_db_err)
             },
         )
         .await?;

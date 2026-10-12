@@ -1,4 +1,5 @@
 use super::instrumentation::database_operation;
+use crate::store::query_compile::Execute;
 use better_auth_core::{FieldValue, WhereMode, WhereOperator, store::schema::EntityRole};
 use chrono::Utc;
 use sea_orm::{
@@ -10,8 +11,10 @@ use crate::SeaOrmStore;
 use crate::error::AuthResult;
 use crate::schema::{AuthSchema, SeaOrmSessionModel};
 
+use super::HookTransaction;
+#[cfg(test)]
+use super::map_db_err;
 use super::value_filter::{self, BoundQueryField, QueryPredicate};
-use super::{HookTransaction, map_db_err};
 
 use super::transaction_hooks::after_write;
 
@@ -197,9 +200,8 @@ where
                     active
                         .update_where(backend, predicates)?
                         .query
-                        .exec(db)
+                        .exec_native(db)
                         .await
-                        .map_err(map_db_err)
                 },
             )
             .await?
@@ -212,9 +214,8 @@ where
                 async {
                     <S::Session as SeaOrmSessionModel>::Entity::delete_many()
                         .filter(condition)
-                        .exec(db)
+                        .exec_native(db)
                         .await
-                        .map_err(map_db_err)
                 },
             )
             .await?

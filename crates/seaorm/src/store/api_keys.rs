@@ -1,3 +1,4 @@
+use crate::store::query_compile::{Compile, Execute};
 use better_auth_core::{FieldMap, FieldValue, FromFieldMap};
 #[cfg(test)]
 mod cleanup_tests;
@@ -10,7 +11,7 @@ use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{
     ConnectionTrait, EntityTrait, ExprTrait, Order, QueryFilter, QueryOrder, QuerySelect,
-    QueryTrait, sea_query::Expr,
+    sea_query::Expr,
 };
 
 use better_auth_core::store::{
@@ -86,7 +87,7 @@ where
                             "key",
                             hash.into(),
                         )?)
-                        .build(self.connection().get_database_backend()),
+                        .compile_find(self.connection().get_database_backend())?,
                 )
                 .await
                 .map_err(map_db_err)
@@ -128,7 +129,7 @@ where
                             self.config(),
                             self.connection().get_database_backend(),
                         )?)
-                        .build(self.connection().get_database_backend()),
+                        .compile_find(self.connection().get_database_backend())?,
                 )
                 .await
                 .map_err(map_db_err)
@@ -356,10 +357,9 @@ where
             )?;
             Entity::<P::ApiKey>::delete_many()
                 .filter(predicates)
-                .exec(self.connection())
+                .exec_native(self.connection())
                 .await
                 .map(|result| result.rows_affected as usize)
-                .map_err(map_db_err)
         })
         .await
     }

@@ -1,4 +1,5 @@
 use super::MySqlStream;
+use crate::arguments::IntoArguments;
 use crate::connection::stream::Waiting;
 use crate::describe::Describe;
 use crate::error::Error;
@@ -288,7 +289,24 @@ impl<'c> Executor<'c> for &'c mut MySqlConnection {
         let persistent = query.persistent();
 
         Box::pin(try_stream! {
-            let arguments = arguments?;
+            let mut arguments = arguments?;
+            let deferred = arguments
+                .as_mut()
+                .and_then(|arguments| arguments.deferred_text_command.take());
+            let command = if let Some(deferred) = deferred {
+                if deferred.template() != sql {
+                    Err(err_protocol!("MySQL deferred text template differs from its encoded provenance"))?;
+                }
+                Some(deferred.materialize().map_err(Error::Encode)?)
+            } else {
+                None
+            };
+            let sql = if let Some(command) = &command {
+                arguments = Some(command.clone().into_arguments());
+                command.sql()
+            } else {
+                sql
+            };
             let mut s = pin!(self.run(sql, arguments, persistent).await?);
 
             while let Some(v) = s.try_next().await? {

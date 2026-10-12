@@ -12,6 +12,8 @@
 
 </div>
 
+See [the local adapter patch](BETTER_AUTH_PATCH.md) for compatibility changes in this checkout.
+
 ## SeaQuery
 
 SeaQuery is a query builder to help you construct dynamic SQL queries in Rust.

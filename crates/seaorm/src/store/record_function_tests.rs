@@ -1,4 +1,5 @@
 use super::*;
+use crate::store::mysql_query::materialize_for_test;
 use crate::store::{
     SeaOrmStore, bundled_schema::BundledSchema, entities::user, map_db_err,
     migrator::run_migrations, record_write::RecordWrite,
@@ -281,7 +282,15 @@ fn null_results_fail_after_invocation_and_nested_driver_functions_are_not_called
         );
         assert_eq!(calls.load(Ordering::SeqCst), 1);
         calls.store(0, Ordering::SeqCst);
-        assert!(parameter(vec![function("throws", &calls, &returned)].into(), backend).is_err());
+        assert!(
+            parameter(vec![function("throws", &calls, &returned)].into(), backend)
+                .and_then(|value| crate::store::query_compile::build(
+                    backend,
+                    sea_orm::sea_query::Query::select().expr(value)
+                ))
+                .and_then(materialize_for_test)
+                .is_err()
+        );
         assert_eq!(calls.load(Ordering::SeqCst), 0);
         for operator in [WhereOperator::Eq, WhereOperator::In] {
             let result = crate::store::value_filter::predicate(
@@ -293,7 +302,14 @@ fn null_results_fail_after_invocation_and_nested_driver_functions_are_not_called
                 )])]
                 .into(),
                 backend,
-            );
+            )
+            .and_then(|value| {
+                crate::store::query_compile::build(
+                    backend,
+                    sea_orm::sea_query::Query::select().expr(value),
+                )
+            })
+            .and_then(materialize_for_test);
             let error = result.err().ok_or_else(|| {
                 AuthError::internal("Nested driver function unexpectedly encoded")
             })?;

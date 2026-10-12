@@ -12,6 +12,7 @@ pub struct MySqlArguments {
     pub(crate) types: Vec<MySqlTypeInfo>,
     pub(crate) null_bitmap: NullBitMap,
     pub(crate) text_command: Option<crate::MySqlTextCommand>,
+    pub(crate) deferred_text_command: Option<crate::MySqlDeferredTextCommand>,
 }
 
 impl MySqlArguments {
@@ -19,7 +20,7 @@ impl MySqlArguments {
     where
         T: Encode<'q, MySql> + Type<MySql>,
     {
-        if self.text_command.is_some() {
+        if self.text_command.is_some() || self.deferred_text_command.is_some() {
             return Err("MySQL text commands cannot accept binary parameters".into());
         }
         let ty = value.produces().unwrap_or_else(T::type_info);

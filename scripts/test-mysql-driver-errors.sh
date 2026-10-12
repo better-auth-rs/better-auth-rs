@@ -58,15 +58,15 @@ for file, required in (
 PY
 
 cargo test --manifest-path "$mysql_root/sqlx-mysql/Cargo.toml" "${mysql_patches[@]}" --locked \
-  --target-dir "$mysql_root/target" --features sqlx/runtime-tokio --lib \
+  --target-dir "$PWD/target" --features sqlx/runtime-tokio --lib \
   2>&1 | tee "$mysql_output/unit.log"
 cargo test --manifest-path "$mysql_root/sqlx-mysql/Cargo.toml" "${mysql_patches[@]}" --locked \
-  --target-dir "$mysql_root/target" --features sqlx/runtime-tokio --lib \
+  --target-dir "$PWD/target" --features sqlx/runtime-tokio --lib \
   connection::stream::error_transport_live_tests -- --ignored --test-threads=1 \
   2>&1 | tee "$mysql_output/live.log"
 cargo test --manifest-path "$mysql_root/sea-orm/Cargo.toml" "${mysql_patches[@]}" --locked \
-  --target-dir "$mysql_root/target" --features "$mysql_seaorm_features" --lib \
-  driver::sqlx_mysql::text_command_tests:: -- --ignored --test-threads=1 \
+  --target-dir "$PWD/target" --features "$mysql_seaorm_features" --test mysql_text_command \
+  -- --ignored --test-threads=1 \
   2>&1 | tee "$mysql_output/sea-orm-live.log"
 python3 - "$mysql_output" <<'PY'
 import re
@@ -77,11 +77,22 @@ root = Path(sys.argv[1])
 for file, module, count in (
     ("unit.log", "connection::stream::error_transport_tests", 20),
     ("unit.log", "connection::stream::text_command_tests", 6),
+    ("unit.log", "connection::stream::deferred_text_command_tests", 3),
     ("live.log", "connection::stream::error_transport_live_tests", 3),
-    ("sea-orm-live.log", "driver::sqlx_mysql::text_command_tests", 3),
 ):
     source = (root / file).read_text()
     pattern = rf"^test {re.escape(module)}::.* \.\.\. ok$"
     matches = re.findall(pattern, source, re.M)
     assert len(matches) == count, (file, count, matches)
+source = (root / "sea-orm-live.log").read_text()
+for name in (
+    "live_text_pool_queries_preserve_protocol_and_logical_sql",
+    "live_text_transaction_keeps_atomic_updates_and_rollback",
+    "live_cancelled_text_transaction_stream_keeps_old_error_and_connection",
+    "deferred::live_deferred_pool_failure_and_cancellation_do_not_format",
+    "deferred::live_deferred_transaction_waits_for_stream_lock_and_releases_on_error",
+    "deferred::live_deferred_reexecution_and_streams_use_current_native_values",
+):
+    assert re.search(r"^test " + re.escape(name) + r" \.\.\. ok$", source, re.M), name
+assert "6 passed; 0 failed; 0 ignored" in source
 PY

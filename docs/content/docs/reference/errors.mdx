@@ -18,6 +18,8 @@ Use `AuthError::from_code(status, code, message)` for the upstream `APIError.fro
 
 Native errors retain the complete original `FieldValue`. Use `AuthError::from_thrown(value)` to propagate an existing thrown value or `AuthError::try_api_error(ApiErrorInit { .. })?` to run the upstream constructor. `ApiErrorClass` distinguishes Better Call and Better Auth instances. `is_api_error()?` also recognizes structural errors through their current `name` property; `is_api_error_instance(class)` checks the instance without reading that property.
 
+`AuthError::Shared` retains an original error when a transport shares error ownership. `into_shared()` does not read native properties or reconstruct the error. Use `error.original()` to match a typed variant, and return the owned error when propagation is required. Status, body, native callbacks, and HTTP conversion retain the original behavior. Cloned carriers share the original source and native value while keeping captured endpoint header overrides independent. Downstream exhaustive matches must handle `Shared`.
+
 Use `AuthError::better_auth(message)` for an upstream `BetterAuthError`. Use `AuthError::better_auth_native(Utf16String)` when a message contains unpaired UTF-16 surrogates. Both constructors use the same native error representation, with an enumerable `name`, a hidden `message`, and an empty hidden `stack`. These errors have no API error instance brand. Native reads and callbacks retain every message code unit.
 
 Use `error.into_thrown_value()?` when a callback embeds a caught error in another native object. Existing thrown values move without property reads or identity changes. Typed API errors use the shared constructor. Typed runtime errors retain their category and original message without HTTP sanitization; the message is nonenumerable. Typed Rust errors do not contain JavaScript stack metadata. This conversion does not turn captured endpoint headers into error properties.
@@ -38,6 +40,7 @@ Organization CRUD keeps endpoint-specific errors. Missing membership returns a c
 
 | Variant | HTTP Status | Description |
 |---------|-------------|-------------|
+| `Shared` | Original error status | Shared original error and independent captured endpoint headers |
 | `Response` | Native `statusCode` | Original thrown value, with optional captured endpoint headers |
 | `BadRequest` | 400 | Malformed request |
 | `InvalidRequest` | 400 | Invalid request parameters |

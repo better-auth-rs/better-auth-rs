@@ -756,7 +756,11 @@ async fn resolve_two_factor_state<S: better_auth_core::AuthSchema>(
                 key,
             });
         }
-        Err(AuthError::Unauthenticated | AuthError::SessionNotFound) => {}
+        Err(error)
+            if matches!(
+                error.original(),
+                AuthError::Unauthenticated | AuthError::SessionNotFound
+            ) => {}
         Err(error) => return Err(error),
     }
 

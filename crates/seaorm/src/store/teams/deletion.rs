@@ -1,4 +1,5 @@
 use super::*;
+use crate::store::query_compile::Execute;
 use sea_orm::IdenStatic;
 
 impl<
@@ -39,14 +40,12 @@ impl<
                 "teamId",
                 id,
             )?)
-            .exec(&tx)
-            .await
-            .map_err(map_db_err)?;
+            .exec_native(&tx)
+            .await?;
         let _ = Entity::<O::Team>::delete_many()
             .filter(self.organization_field_equals::<O::Team>(EntityRole::Team, "id", id)?)
-            .exec(&tx)
-            .await
-            .map_err(map_db_err)?;
+            .exec_native(&tx)
+            .await?;
         let config = self.organization_fields()?.invitation;
         let pending = self
             .pending_invitation_rows(&tx, &organization_id, None)

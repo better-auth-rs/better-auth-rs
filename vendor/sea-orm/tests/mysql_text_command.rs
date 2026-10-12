@@ -1,8 +1,8 @@
-use crate::{
+use futures_util::TryStreamExt;
+use sea_orm::{
     ConnectOptions, ConnectionTrait, Database, DatabaseConnection, DbBackend, DbErr, RuntimeErr,
     Statement, StreamTrait, TransactionTrait,
 };
-use futures_util::TryStreamExt;
 
 type TestResult<T = ()> = Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
@@ -200,3 +200,6 @@ async fn live_cancelled_text_transaction_stream_keeps_old_error_and_connection()
     database.close().await?;
     result
 }
+
+#[path = "mysql_text_command/deferred.rs"]
+mod deferred;

@@ -99,7 +99,7 @@ where
         };
         let query = super::plugin_rows::select_all::<Entity<O::Organization>>()
             .filter(predicate)
-            .limit(1);
+            .limit((backend != DbBackend::MySql).then_some(1));
         let selected = if self.config().advanced.database.joins == Some(true) {
             self.select_native_organization_details(query, &relations)
                 .await?

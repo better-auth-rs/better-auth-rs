@@ -254,11 +254,11 @@ impl UserManagementPlugin {
         let data = ctx
             .require_authoritative_native_session(req)
             .await
-            .map_err(|error| match error {
+            .map_err(|error| match error.original() {
                 AuthError::Unauthenticated => {
                     AuthError::from_code("UNAUTHORIZED", "UNAUTHORIZED", "Unauthorized")
                 }
-                error => error,
+                _ => error,
             })?;
         let body = request::change_email(req)?;
         let response = change_email_core(&body, &data, req, &self.config, ctx).await?;
@@ -290,13 +290,13 @@ impl UserManagementPlugin {
         let data = ctx
             .require_authoritative_native_session(req)
             .await
-            .map_err(|error| match error {
+            .map_err(|error| match error.original() {
                 AuthError::Unauthenticated => AuthError::from_code(
                     "NOT_FOUND",
                     "FAILED_TO_GET_USER_INFO",
                     "Failed to get user info",
                 ),
-                error => error,
+                _ => error,
             })?;
         let query: TokenQuery = serde_json::from_value(serde_json::json!({
             "token": req.query_string("token")?,

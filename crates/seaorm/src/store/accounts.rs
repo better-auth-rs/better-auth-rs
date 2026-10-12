@@ -1,4 +1,5 @@
 use super::instrumentation::database_operation;
+use crate::store::query_compile::Execute;
 use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{ConnectionTrait, EntityName, EntityTrait, QueryFilter, QuerySelect};
@@ -16,7 +17,7 @@ use crate::schema::{AuthSchema, SeaOrmAccountModel, SeaOrmUserModel};
 use crate::types::{CreateAccount, UpdateAccount};
 
 use super::value_filter::{self, QueryPredicate};
-use super::{SeaOrmStore, cancelled_by_hook, map_db_err, plugin_rows::SqlRow};
+use super::{SeaOrmStore, cancelled_by_hook, plugin_rows::SqlRow};
 
 impl<S, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> SeaOrmStore<S, O, P>
 where
@@ -93,10 +94,9 @@ where
                     .collect::<AuthResult<Vec<_>>>()?;
                 let query = write.update_where(backend, selectors)?.query;
                 query
-                    .exec(db)
+                    .exec_native(db)
                     .await
                     .map(|result| result.rows_affected.min(9_007_199_254_740_991))
-                    .map_err(map_db_err)
             },
         )
         .await?;
@@ -529,6 +529,7 @@ where
                 <S::Account as SeaOrmAccountModel>::Entity,
                 <S::User as SeaOrmUserModel>::Entity,
             >(
+                self.connection().get_database_backend(),
                 (
                     super::plugin_rows::select_all::<<S::Account as SeaOrmAccountModel>::Entity>()
                         .filter(self.account_selectors([
@@ -852,9 +853,8 @@ where
             async {
                 <S::Account as SeaOrmAccountModel>::Entity::delete_many()
                     .filter(self.account_selector("id", id)?)
-                    .exec(self.connection())
+                    .exec_native(self.connection())
                     .await
-                    .map_err(map_db_err)
             },
         )
         .await?;

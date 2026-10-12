@@ -235,15 +235,15 @@ impl<S: AuthSchema> AuthPlugin<S> for JwtPlugin {
             return self.jwks(&endpoint).await.map(Some);
         }
         if req.path() == "/token" {
-            let session = ctx
-                .require_native_session(req)
-                .await
-                .map_err(|error| match error {
-                    AuthError::Unauthenticated => {
-                        AuthError::from_code("UNAUTHORIZED", "UNAUTHORIZED", "Unauthorized")
-                    }
-                    error => error,
-                })?;
+            let session =
+                ctx.require_native_session(req)
+                    .await
+                    .map_err(|error| match error.original() {
+                        AuthError::Unauthenticated => {
+                            AuthError::from_code("UNAUTHORIZED", "UNAUTHORIZED", "Unauthorized")
+                        }
+                        _ => error,
+                    })?;
             endpoint.session = Some(session.clone());
             let token = self.sign_session(Some(session), &endpoint).await?;
             return Ok(Some(AuthResponse::native(

@@ -299,3 +299,5 @@ async fn live_mysql_database_error_metadata() -> TestResult {
 
 #[cfg(test)]
 mod mysql_text;
+
+mod materialization;

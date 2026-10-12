@@ -319,6 +319,12 @@ impl FieldArray {
         self.identity() == other.identity()
     }
 
+    /// Return whether length and index reads invoke a live source.
+    /// Named properties do not affect the array's indexed storage.
+    pub fn has_live_indices(&self) -> bool {
+        matches!(&self.storage, ArrayStorage::Live(_))
+    }
+
     pub(crate) fn identity(&self) -> ArrayIdentity {
         match &self.storage {
             ArrayStorage::Owned(values) => ArrayIdentity::Owned(Arc::as_ptr(values) as usize),

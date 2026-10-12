@@ -8,9 +8,11 @@
 // Intentionally not `pub`. They only export a single item each.
 // It's a mechanical split to manage LoC.
 mod r#enum;
+mod parameter;
 mod r#trait;
 
 pub use r#enum::Expr;
+pub use parameter::ExternalParameter;
 pub use r#trait::ExprTrait;
 
 /// A legacy compatibility alias for [`Expr`].

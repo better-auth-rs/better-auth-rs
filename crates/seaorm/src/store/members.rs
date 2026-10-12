@@ -1,6 +1,7 @@
+use crate::store::query_compile::Execute;
 use async_trait::async_trait;
 use chrono::Utc;
-use sea_orm::{EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Select};
+use sea_orm::{EntityTrait, QueryFilter, QueryOrder, QuerySelect, Select};
 
 use better_auth_core::store::{ListOrganizationMembersParams, MemberStore};
 
@@ -287,18 +288,17 @@ where
             .await
     }
     async fn count_organization_owners(&self, organization_id: &str) -> AuthResult<i64> {
-        Entity::<O::Member>::find()
-            .filter(self.organization_fields_equal::<O::Member>(
+        let query =
+            Entity::<O::Member>::find().filter(self.organization_fields_equal::<O::Member>(
                 better_auth_core::store::schema::EntityRole::Member,
                 [
                     ("organizationId", &organization_id.into()),
                     ("role", &"owner".into()),
                 ],
-            )?)
-            .count(self.connection())
+            )?);
+        super::plugin_rows::count(self.connection(), query)
             .await
             .map(|count| count as i64)
-            .map_err(map_db_err)
     }
 }
 
@@ -454,9 +454,8 @@ impl<
                 "id",
                 member_id,
             )?)
-            .exec(db)
-            .await
-            .map_err(map_db_err)?;
+            .exec_native(db)
+            .await?;
         if !self.model_fields.organization_teams_enabled() {
             return Ok(());
         }
@@ -498,17 +497,15 @@ impl<
                     self.config().advanced.database.generate_id(),
                     self.connection().get_database_backend(),
                 )?)
-                .exec(db)
-                .await
-                .map_err(map_db_err)?;
+                .exec_native(db)
+                .await?;
             let deleted = Entity::<O::TeamMember>::delete_many()
                 .filter(self.organization_fields_equal::<O::TeamMember>(
                     better_auth_core::store::schema::EntityRole::TeamMember,
                     [("teamId", &team.id.field_value()), ("userId", user_id)],
                 )?)
-                .exec(db)
-                .await
-                .map_err(map_db_err)?;
+                .exec_native(db)
+                .await?;
             super::team_capacity::release::<O::Team, _>(
                 db,
                 super::create_readback::ReadbackScope::Transaction,

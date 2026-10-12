@@ -138,6 +138,13 @@ pub struct OrderExpr {
     pub(crate) nulls: Option<NullOrdering>,
 }
 
+impl OrderExpr {
+    /// Get the ordering expression without changing direction or null placement.
+    pub fn expr_mut(&mut self) -> &mut Expr {
+        &mut self.expr
+    }
+}
+
 /// Join on types
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]

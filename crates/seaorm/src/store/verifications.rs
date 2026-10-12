@@ -1,4 +1,5 @@
 use super::instrumentation::database_operation;
+use crate::store::query_compile::{Compile, Execute};
 use async_trait::async_trait;
 use chrono::Utc;
 use sea_orm::{
@@ -421,9 +422,8 @@ where
                 async {
                     <S::Verification as SeaOrmVerificationModel>::Entity::delete_many()
                         .filter(filter)
-                        .exec(connection)
+                        .exec_native(connection)
                         .await
-                        .map_err(map_db_err)
                 },
             )
             .await?;
@@ -592,9 +592,8 @@ where
             async {
                 <S::Verification as SeaOrmVerificationModel>::Entity::delete_many()
                     .filter(self.verification_selector(name, &value, db.get_database_backend())?)
-                    .exec(db)
+                    .exec_native(db)
                     .await
-                    .map_err(map_db_err)
             },
         )
         .await?;
@@ -810,9 +809,8 @@ where
                         &identifier.into(),
                         transaction.get_database_backend(),
                     )?)
-                    .exec(transaction)
+                    .exec_native(transaction)
                     .await
-                    .map_err(map_db_err)
             },
         )
         .await?;
@@ -843,7 +841,7 @@ where
                             .into_query();
                     let _ = query.returning(Query::returning().all());
                     return transaction
-                        .query_one_raw(backend.build(&query))
+                        .query_one_raw(crate::store::query_compile::build(backend, &query)?)
                         .await
                         .map_err(map_db_err);
                 }
@@ -855,7 +853,7 @@ where
                 .limit(1)
                 .lock_exclusive();
                 let Some(row) = transaction
-                    .query_one_raw(query.build(backend))
+                    .query_one_raw(query.compile(backend)?)
                     .await
                     .map_err(map_db_err)?
                 else {
@@ -866,9 +864,8 @@ where
                     .bind(backend)?;
                 let deleted = <S::Verification as SeaOrmVerificationModel>::Entity::delete_many()
                     .filter(primary.into_expr().eq(primary.save_as(stored_id)))
-                    .exec(transaction)
-                    .await
-                    .map_err(map_db_err)?;
+                    .exec_native(transaction)
+                    .await?;
                 Ok((deleted.rows_affected > 0).then_some(row))
             },
         )

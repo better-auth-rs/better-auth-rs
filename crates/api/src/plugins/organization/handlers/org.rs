@@ -777,7 +777,7 @@ pub async fn handle_update_organization(
 ) -> AuthResult<AuthResponse> {
     let session = match ctx.require_native_session(req).await {
         Ok(session) => session,
-        Err(AuthError::Unauthenticated) => {
+        Err(error) if matches!(error.original(), AuthError::Unauthenticated) => {
             return Err(AuthError::from_status(
                 "UNAUTHORIZED",
                 better_auth_core::FieldMap::from([("message".into(), "User not found".into())])
@@ -804,15 +804,15 @@ pub async fn handle_delete_organization(
             "Organization deletion is disabled",
         ));
     }
-    let session = ctx
-        .require_native_session(req)
-        .await
-        .map_err(|error| match error {
-            AuthError::Unauthenticated => {
-                AuthError::from_status("UNAUTHORIZED", better_auth_core::FieldValue::Undefined)
-            }
-            error => error,
-        })?;
+    let session =
+        ctx.require_native_session(req)
+            .await
+            .map_err(|error| match error.original() {
+                AuthError::Unauthenticated => {
+                    AuthError::from_status("UNAUTHORIZED", better_auth_core::FieldValue::Undefined)
+                }
+                _ => error,
+            })?;
     let body: DeleteOrganizationRequest = super::super::request::read(req, &config.schema)?;
     let response = delete_organization_core(&body, &session, Some(req), config, ctx).await?;
     Ok(AuthResponse::native(None, response.field_values()?.into()))

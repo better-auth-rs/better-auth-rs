@@ -1,11 +1,12 @@
 use super::value_filter::{QueryPredicate, all};
 use super::{SeaOrmStore, instrumentation::database_operation, map_db_err, plugin_models::Entity};
+use crate::store::query_compile::Compile;
 use async_trait::async_trait;
 use better_auth_core::{
     AuthResult, AuthSchema, FieldMap, FieldValue, SchemaValue, WalletAddress,
     store::{WalletStore, schema::EntityRole},
 };
-use sea_orm::{ConnectionTrait, QueryFilter, QueryTrait};
+use sea_orm::{ConnectionTrait, QueryFilter};
 
 #[async_trait]
 impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> WalletStore
@@ -153,7 +154,7 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         let row =
             database_operation::<Entity<P::WalletAddress>, _>(self.config(), "findOne", async {
                 connection
-                    .query_one_raw(query.build(connection.get_database_backend()))
+                    .query_one_raw(query.compile_find(connection.get_database_backend())?)
                     .await
                     .map_err(map_db_err)
             })

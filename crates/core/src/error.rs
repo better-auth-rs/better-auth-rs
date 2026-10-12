@@ -5,12 +5,14 @@ mod database;
 mod http;
 mod native;
 mod native_value;
+mod shared;
 pub use database::{DatabaseError, DatabaseErrorCause};
 #[cfg(test)]
 pub(crate) use native::brand_api_error_object;
 pub use native::{
     ApiErrorClass, ApiErrorInit, api_error_instance, is_api_error_value, is_error_value,
 };
+pub use shared::SharedAuthError;
 
 /// A thrown native value whose properties are excluded from Rust diagnostics.
 pub struct ApiErrorResponse {
@@ -36,6 +38,9 @@ impl std::fmt::Display for ApiErrorResponse {
 /// Typed variants remain available for ordinary Rust callers.
 #[derive(Error, Debug)]
 pub enum AuthError {
+    /// An original error retained across a transport that shares ownership.
+    #[error(transparent)]
+    Shared(SharedAuthError),
     /// Runtime schema failures reject the host entry point before endpoint error handling.
     #[error(transparent)]
     SchemaCheck(std::sync::Arc<crate::store::schema::SchemaCheckError>),
@@ -197,7 +202,7 @@ impl AuthError {
 
     /// Borrow a native thrown value without projecting its properties.
     pub fn raw_value(&self) -> Option<&FieldValue> {
-        match self {
+        match self.original() {
             Self::Response(error) => Some(&error.value),
             Self::Database(error) => Some(error.native_value()),
             _ => None,
@@ -250,7 +255,7 @@ impl AuthError {
         if let Some(value) = self.raw_value() {
             return native::optional_property(value, "message");
         }
-        Ok(match self {
+        Ok(match self.original() {
             Self::Internal(message)
             | Self::TypeError(message)
             | Self::RangeError(message)
@@ -265,7 +270,7 @@ impl AuthError {
         if let Some(value) = self.raw_value() {
             return native::optional_property(value, "status");
         }
-        match self {
+        match self.original() {
             Self::FieldInput { .. } => Ok("BAD_REQUEST".into()),
             _ => Ok(self.status_code()?.into_field_value()),
         }
@@ -279,7 +284,7 @@ impl AuthError {
         let (_, code, message) = self.error_payload()?;
         let mut fields = FieldMap::new();
         if matches!(
-            self,
+            self.original(),
             Self::FieldInput { .. } | Self::RequestValidation { .. }
         ) {
             let _ = fields.insert("message".into(), message.clone().into());
@@ -324,6 +329,15 @@ impl AuthError {
     /// Retain captured endpoint headers, including the original initializer identity.
     pub fn capture_native_headers(self, headers: FieldValue) -> Self {
         match self {
+            Self::Shared(mut error)
+                if matches!(
+                    error.source.original(),
+                    Self::Response(_) | Self::Database(_)
+                ) =>
+            {
+                error.captured_headers = Some(headers);
+                Self::Shared(error)
+            }
             Self::Response(mut response) => {
                 response.captured_headers = Some(headers);
                 Self::Response(response)
@@ -345,6 +359,10 @@ impl AuthError {
     /// Read captured endpoint headers without materializing a Headers value.
     pub fn captured_headers_value(&self) -> Option<FieldValue> {
         match self {
+            Self::Shared(error) => error
+                .captured_headers
+                .clone()
+                .or_else(|| error.source.captured_headers_value()),
             Self::Response(response) => response.captured_headers.clone(),
             Self::Database(error) => error.captured_headers_value(),
             _ => None,
@@ -367,6 +385,7 @@ impl AuthError {
     /// Check the constructor family without invoking a structural name getter.
     pub fn is_api_error_instance(&self, class: ApiErrorClass) -> bool {
         match self {
+            Self::Shared(error) => error.source.is_api_error_instance(class),
             Self::Response(error) => api_error_instance(&error.value, class),
             Self::RequestValidation { .. } => class == ApiErrorClass::BetterCall,
             Self::FieldInput { .. }
@@ -429,6 +448,7 @@ impl AuthError {
             )?));
         }
         let status = match self {
+            Self::Shared(error) => return error.source.status_code(),
             Self::FieldInput { .. } | Self::RequestValidation { .. } => 400,
             Self::Upstream { status, .. } => *status,
             // 400
@@ -504,7 +524,7 @@ impl AuthError {
             let message = native::optional_property(&body, "message")?.decode::<String>()?;
             return Ok((status, code, message));
         }
-        let (code, message) = match self {
+        let (code, message) = match self.original() {
             Self::FieldInput { code, message } => (Some((*code).to_owned()), message.clone()),
             Self::RequestValidation { message } => {
                 (Some("VALIDATION_ERROR".into()), message.clone())
@@ -538,12 +558,17 @@ impl AuthError {
     /// Named `to_auth_response` to avoid collision with Axum's
     /// `IntoResponse::into_response` when the `axum` feature is enabled.
     pub fn to_auth_response(self) -> AuthResult<crate::types::AuthResponse> {
+        let mut response = self.original().response_view()?;
+        if let Some(headers) = self.captured_headers_value() {
+            response.capture_native_error_headers(headers);
+        }
+        Ok(response)
+    }
+
+    fn response_view(&self) -> AuthResult<crate::types::AuthResponse> {
         if let Some(value) = self.raw_value() {
             let mut response = crate::AuthResponse::native(None, value.clone());
             response.set_endpoint_headers(None);
-            if let Some(headers) = self.captured_headers_value() {
-                response.capture_native_error_headers(headers);
-            }
             return Ok(response);
         }
         if let Self::PasswordHash(error) = self {
@@ -556,7 +581,7 @@ impl AuthError {
             return Ok(crate::types::AuthResponse::new(500));
         }
         if self.is_api_error_instance(ApiErrorClass::BetterCall) {
-            let mut response = crate::AuthResponse::native(None, self.into_thrown_value()?);
+            let mut response = crate::AuthResponse::native(None, self.callback_value()?);
             response.set_endpoint_headers(None);
             return Ok(response);
         }

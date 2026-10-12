@@ -1,10 +1,11 @@
 use super::instrumentation::database_operation;
 use super::value_filter::{self, QueryPredicate};
 use super::{
-    SeaOrmStore, map_db_err,
+    SeaOrmStore,
     organization_models::{self as models, Entity, values},
 };
 use crate::schema::AuthSchema;
+use crate::store::query_compile::Execute;
 use crate::{SeaOrmOrganizationModel, SeaOrmOrganizationSchema};
 use async_trait::async_trait;
 use better_auth_core::{
@@ -379,10 +380,9 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
             active
                 .update_where(self.connection().get_database_backend(), selectors)?
                 .query
-                .exec(self.connection())
+                .exec_native(self.connection())
                 .await
                 .map(|result| std::cmp::min(result.rows_affected, 9_007_199_254_740_991))
-                .map_err(map_db_err)
         })
         .await
     }
@@ -393,9 +393,8 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSchema> O
     async fn delete_organization_role_by_fields(&self, selectors: &FieldMap) -> AuthResult<()> {
         let _ = Entity::<O::OrganizationRole>::delete_many()
             .filter(self.organization_role_filter(selectors)?)
-            .exec(self.connection())
-            .await
-            .map_err(map_db_err)?;
+            .exec_native(self.connection())
+            .await?;
         Ok(())
     }
 }

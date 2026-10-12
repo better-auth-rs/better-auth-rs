@@ -117,7 +117,7 @@ impl Walker {
                 self.recurse_audit_expr(right)?;
             }
             Expr::SubQuery(_, subquery) => self.recurse_audit_subquery(subquery)?,
-            Expr::Value(_) => (),
+            Expr::Value(_) | Expr::ExternalParameter(_) => (),
             Expr::Values(_) => (),
             Expr::Custom(_) => (),
             Expr::CustomWithExpr(_, exprs) | Expr::Tuple(exprs) => {

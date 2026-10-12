@@ -3,6 +3,7 @@ use super::{
     organization_models::{self as models, Entity, values},
 };
 use crate::schema::AuthSchema;
+use crate::store::query_compile::Execute;
 use crate::types_org::{CreateOrganization, Organization, UpdateOrganization};
 use crate::{SeaOrmOrganizationModel, SeaOrmOrganizationSchema};
 use async_trait::async_trait;
@@ -104,27 +105,24 @@ where
                 "organizationId",
                 &id.into(),
             )?)
-            .exec(self.connection())
-            .await
-            .map_err(map_db_err)?;
+            .exec_native(self.connection())
+            .await?;
         let _ = Entity::<O::Invitation>::delete_many()
             .filter(self.organization_field_equals::<O::Invitation>(
                 better_auth_core::store::schema::EntityRole::Invitation,
                 "organizationId",
                 &id.into(),
             )?)
-            .exec(self.connection())
-            .await
-            .map_err(map_db_err)?;
+            .exec_native(self.connection())
+            .await?;
         let _ = Entity::<O::Organization>::delete_many()
             .filter(self.organization_field_equals::<O::Organization>(
                 better_auth_core::store::schema::EntityRole::Organization,
                 "id",
                 &id.into(),
             )?)
-            .exec(self.connection())
-            .await
-            .map_err(map_db_err)?;
+            .exec_native(self.connection())
+            .await?;
         Ok(())
     }
 
@@ -337,27 +335,24 @@ where
                 "organizationId",
                 &id.into(),
             )?)
-            .exec(&tx)
-            .await
-            .map_err(map_db_err)?;
+            .exec_native(&tx)
+            .await?;
         let _ = Entity::<O::Invitation>::delete_many()
             .filter(self.organization_field_equals::<O::Invitation>(
                 better_auth_core::store::schema::EntityRole::Invitation,
                 "organizationId",
                 &id.into(),
             )?)
-            .exec(&tx)
-            .await
-            .map_err(map_db_err)?;
+            .exec_native(&tx)
+            .await?;
         let _ = Entity::<O::Organization>::delete_many()
             .filter(self.organization_field_equals::<O::Organization>(
                 better_auth_core::store::schema::EntityRole::Organization,
                 "id",
                 &id.into(),
             )?)
-            .exec(&tx)
-            .await
-            .map_err(map_db_err)?;
+            .exec_native(&tx)
+            .await?;
         tx.commit().await.map_err(map_db_err)
     }
 

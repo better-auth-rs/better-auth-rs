@@ -255,11 +255,11 @@ fn message_error(message: &str) -> AuthResult<AuthResponse> {
 }
 
 pub(crate) fn session_required(error: AuthError) -> AuthError {
-    match error {
+    match error.original() {
         AuthError::Unauthenticated => {
             AuthError::from_code("UNAUTHORIZED", "UNAUTHORIZED", "Unauthorized")
         }
-        error => error,
+        _ => error,
     }
 }
 

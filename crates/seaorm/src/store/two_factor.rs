@@ -2,6 +2,7 @@ use super::instrumentation::database_operation;
 use super::plugin_models::Entity;
 use super::value_filter::QueryPredicate;
 use super::{SeaOrmStore, map_db_err};
+use crate::store::query_compile::{Compile, Execute};
 use crate::{SeaOrmPluginModel, schema::AuthSchema};
 use async_trait::async_trait;
 use better_auth_core::{
@@ -10,7 +11,7 @@ use better_auth_core::{
     store::{TwoFactorStore, schema::EntityRole, validate_increment_one_update},
 };
 use sea_orm::{
-    ConnectionTrait, EntityTrait, ExprTrait, IdenStatic, QueryFilter, QueryResult, QueryTrait,
+    ConnectionTrait, EntityTrait, ExprTrait, IdenStatic, QueryFilter, QueryResult,
     sea_query::{Expr, SimpleExpr},
 };
 
@@ -147,7 +148,7 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
                 .query_one_raw(
                     super::plugin_rows::select_all::<Entity<P::TwoFactor>>()
                         .filter(filter)
-                        .build(self.connection().get_database_backend()),
+                        .compile_find(self.connection().get_database_backend())?,
                 )
                 .await
                 .map_err(map_db_err)
@@ -296,10 +297,9 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
         database_operation::<Entity<P::TwoFactor>, _>(self.config(), "delete", async {
             Entity::<P::TwoFactor>::delete_many()
                 .filter(filter)
-                .exec(self.connection())
+                .exec_native(self.connection())
                 .await
                 .map(|_| ())
-                .map_err(map_db_err)
         })
         .await
     }

@@ -48,7 +48,7 @@ impl AuthError {
             let name = if self.http_has_property("name")? {
                 match self.raw_value() {
                     Some(value) => value.model_property("name")?,
-                    None => match self {
+                    None => match self.original() {
                         Self::TypeError(_) => "TypeError",
                         Self::RangeError(_) => "RangeError",
                         Self::DataClone => "DataCloneError",

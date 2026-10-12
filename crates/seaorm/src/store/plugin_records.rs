@@ -1,7 +1,8 @@
 use super::{SeaOrmStore, instrumentation::database_operation, map_db_err, plugin_models::Entity};
+use crate::store::query_compile::{Compile, Execute};
 use crate::{SeaOrmOrganizationSchema, SeaOrmPluginModel, SeaOrmPluginSchema};
 use better_auth_core::{AuthResult, AuthSchema, FieldMap, SchemaValue, store::schema::EntityRole};
-use sea_orm::{ConnectionTrait, EntityTrait, QueryFilter, QuerySelect, QueryTrait};
+use sea_orm::{ConnectionTrait, EntityTrait, QueryFilter, QuerySelect};
 
 #[cfg(test)]
 #[path = "plugin_record_tests.rs"]
@@ -55,7 +56,7 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPluginSchema> SeaOrmSt
                 .query_one_raw(
                     super::plugin_rows::select_all::<Entity<M>>()
                         .filter(filter)
-                        .build(connection.get_database_backend()),
+                        .compile_find(connection.get_database_backend())?,
                 )
                 .await
                 .map_err(map_db_err)
@@ -106,9 +107,8 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPluginSchema> SeaOrmSt
         database_operation::<Entity<M>, _>(self.config(), "delete", async {
             let _ = Entity::<M>::delete_many()
                 .filter(filter)
-                .exec(connection)
-                .await
-                .map_err(map_db_err)?;
+                .exec_native(connection)
+                .await?;
             Ok(())
         })
         .await
@@ -127,7 +127,7 @@ impl<S: AuthSchema, O: SeaOrmOrganizationSchema, P: SeaOrmPluginSchema> SeaOrmSt
                             self.config(),
                             connection.get_database_backend(),
                         )?)
-                        .build(connection.get_database_backend()),
+                        .compile_find(connection.get_database_backend())?,
                 )
                 .await
                 .map_err(map_db_err)

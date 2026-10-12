@@ -215,11 +215,11 @@ pub(crate) async fn delete_user_core<S: better_auth_core::AuthSchema>(
             &stored_hash,
         )
         .await
-        .map_err(|error| match error {
+        .map_err(|error| match error.original() {
             AuthError::InvalidCredentials => {
                 AuthError::from_code("BAD_REQUEST", "INVALID_PASSWORD", "Invalid password")
             }
-            error => error,
+            _ => error,
         })?;
     }
 

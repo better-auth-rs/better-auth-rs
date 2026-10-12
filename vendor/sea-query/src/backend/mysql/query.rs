@@ -245,6 +245,10 @@ impl QueryBuilder for $builder {
 
 impl_mysql_query_builder!(MysqlQueryBuilder, {});
 impl_mysql_query_builder!(KyselyMysqlQueryBuilder, {
+    fn prepare_external_parameter(&self, parameter: &ExternalParameter, sql: &mut impl SqlWriter) {
+        sql.push_external_parameter(parameter);
+    }
+
     fn prepare_expr(&self, expression: &Expr, sql: &mut impl SqlWriter) {
         // Kysely emits empty IN lists without SeaQuery's boolean rewrite.
         match expression {

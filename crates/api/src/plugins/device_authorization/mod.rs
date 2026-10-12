@@ -332,7 +332,10 @@ impl DeviceAuthorizationPlugin {
             ]));
             match ctx.database.create_device_code_record(fields).await {
                 Ok(_) => {}
-                Err(AuthError::Database(error)) if error.is_unique_constraint() => continue,
+                Err(error) if matches!(error.original(), AuthError::Database(cause) if cause.is_unique_constraint()) =>
+                {
+                    continue;
+                }
                 Err(error) => return Err(error),
             }
 
@@ -501,7 +504,7 @@ impl DeviceAuthorizationPlugin {
 
         let session = match ctx.require_native_session(req).await {
             Ok(session) => Some(session),
-            Err(AuthError::Unauthenticated) => None,
+            Err(error) if matches!(error.original(), AuthError::Unauthenticated) => None,
             Err(error) => return Err(error),
         };
         if let Some(user_id) = session
@@ -577,7 +580,12 @@ impl DeviceAuthorizationPlugin {
     ) -> AuthResult<AuthResponse> {
         let session = match ctx.require_native_session(req).await {
             Ok(session) => session,
-            Err(AuthError::Unauthenticated) | Err(AuthError::SessionNotFound) => {
+            Err(error)
+                if matches!(
+                    error.original(),
+                    AuthError::Unauthenticated | AuthError::SessionNotFound
+                ) =>
+            {
                 return Err(device_error(
                     "UNAUTHORIZED",
                     "unauthorized",

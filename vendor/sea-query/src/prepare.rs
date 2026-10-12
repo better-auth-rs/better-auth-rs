@@ -9,6 +9,15 @@ mod protocol_tests;
 pub trait SqlWriter: Write + Sized + ToString {
     fn push_param<T: QueryBuilder>(&mut self, value: Value, query_builder: &T);
 
+    /// Collect a parameter that owns its native payload.
+    ///
+    /// # Panics
+    ///
+    /// Ordinary writers cannot resolve an external parameter or produce a substitute value.
+    fn push_external_parameter(&mut self, _: &ExternalParameter) {
+        panic!("ExternalParameter requires a dedicated parameter collector");
+    }
+
     /// Upcast this into parent trait. Still needed in 1.85
     fn as_writer(&mut self) -> &mut dyn Write;
 }

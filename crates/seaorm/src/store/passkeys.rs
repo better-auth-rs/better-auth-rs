@@ -2,10 +2,11 @@ use super::instrumentation::database_operation;
 use super::plugin_models::Entity;
 use super::value_filter::{BoundQueryField, QueryPredicate};
 use crate::SeaOrmPluginModel;
+use crate::store::query_compile::Compile;
 use async_trait::async_trait;
 use better_auth_core::{FieldMap, FromFieldMap, SchemaField};
 use chrono::Utc;
-use sea_orm::{ConnectionTrait, IdenStatic, QueryFilter, QuerySelect, QueryTrait};
+use sea_orm::{ConnectionTrait, IdenStatic, QueryFilter, QuerySelect};
 
 use better_auth_core::store::{PasskeyStore, schema::EntityRole};
 use better_auth_core::{PasskeyCredentialState, PasskeyStorage, UpdatePasskey};
@@ -101,7 +102,7 @@ where
                             "credentialID",
                             credential_id.clone(),
                         )?)
-                        .build(self.connection().get_database_backend()),
+                        .compile_find(self.connection().get_database_backend())?,
                 )
                 .await
                 .map_err(map_db_err)
@@ -131,7 +132,7 @@ where
                                 self.config(),
                                 self.connection().get_database_backend(),
                             )?)
-                            .build(self.connection().get_database_backend()),
+                            .compile_find(self.connection().get_database_backend())?,
                     )
                     .await
                     .map_err(map_db_err)
@@ -218,7 +219,7 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
                 .query_one_raw(
                     super::plugin_rows::select_all::<Entity<P::Passkey>>()
                         .filter(filter)
-                        .build(self.connection().get_database_backend()),
+                        .compile_find(self.connection().get_database_backend())?,
                 )
                 .await
                 .map_err(map_db_err)

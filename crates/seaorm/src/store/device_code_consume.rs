@@ -4,6 +4,7 @@ use super::record_bindings::Binding;
 use super::value_filter::QueryPredicate;
 use super::{SeaOrmStore, map_db_err};
 use crate::schema::AuthSchema;
+use crate::store::query_compile::{Compile, Execute};
 use better_auth_core::{
     AuthError, AuthResult, DeviceCode, DeviceCodeOwnership, FieldValue, store::schema::EntityRole,
 };
@@ -83,16 +84,20 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
                     .into_query();
                 let _ = query.returning(Query::returning().all());
                 return connection
-                    .query_one_raw(backend.build(&query))
+                    .query_one_raw(crate::store::query_compile::build(backend, &query)?)
                     .await
                     .map_err(map_db_err);
             }
             // Callers keep the MySQL row lock and deletion in the same transaction.
-            let query = super::plugin_rows::select_all::<Entity<P::DeviceCode>>()
-                .filter(filter)
-                .lock_exclusive();
+            let query = super::plugin_rows::select_all::<Entity<P::DeviceCode>>().filter(filter);
+            let query = if backend == sea_orm::DbBackend::MySql {
+                query.limit(1)
+            } else {
+                query
+            };
+            let query = query.lock_exclusive();
             let Some(row) = connection
-                .query_one_raw(query.build(backend))
+                .query_one_raw(query.compile(backend)?)
                 .await
                 .map_err(map_db_err)?
             else {
@@ -107,9 +112,8 @@ impl<S: AuthSchema, O: crate::SeaOrmOrganizationSchema, P: crate::SeaOrmPluginSc
             // Repeating the predicate in DELETE can turn MySQL SELECT coercion warnings into errors.
             let deleted = Entity::<P::DeviceCode>::delete_many()
                 .filter(id)
-                .exec(connection)
-                .await
-                .map_err(map_db_err)?;
+                .exec_native(connection)
+                .await?;
             Ok(if deleted.rows_affected == 1 {
                 Some(row)
             } else {

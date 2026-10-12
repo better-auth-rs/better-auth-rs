@@ -2,5 +2,5 @@
 
 pub use better_auth_core::error::{
     ApiErrorClass, ApiErrorInit, AuthError, AuthResult, DatabaseError, DatabaseErrorCause,
-    is_error_value,
+    SharedAuthError, is_error_value,
 };

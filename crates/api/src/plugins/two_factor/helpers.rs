@@ -157,11 +157,9 @@ pub(super) async fn verify_user_password(
     .await
     {
         Ok(()) => Ok(()),
-        Err(AuthError::InvalidCredentials) => Err(AuthError::from_code(
-            "BAD_REQUEST",
-            "INVALID_PASSWORD",
-            "Invalid password",
-        )),
+        Err(error) if matches!(error.original(), AuthError::InvalidCredentials) => Err(
+            AuthError::from_code("BAD_REQUEST", "INVALID_PASSWORD", "Invalid password"),
+        ),
         Err(error) => Err(error),
     }
 }

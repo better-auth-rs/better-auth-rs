@@ -809,15 +809,16 @@ impl<S: AuthSchema> BetterAuth<S> {
         context: &AuthContext<S>,
     ) -> AuthResult<AuthResponse> {
         let mut body = better_auth_core::endpoint_input::record_input(req)?;
-        let session = context
-            .require_native_session(req)
-            .await
-            .map_err(|error| match error {
-                AuthError::Unauthenticated => {
-                    AuthError::from_code("UNAUTHORIZED", "UNAUTHORIZED", "Unauthorized")
-                }
-                error => error,
-            })?;
+        let session =
+            context
+                .require_native_session(req)
+                .await
+                .map_err(|error| match error.original() {
+                    AuthError::Unauthenticated => {
+                        AuthError::from_code("UNAUTHORIZED", "UNAUTHORIZED", "Unauthorized")
+                    }
+                    _ => error,
+                })?;
 
         if body
             .remove("email")

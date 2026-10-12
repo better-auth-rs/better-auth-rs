@@ -1,4 +1,5 @@
 use super::*;
+use crate::store::mysql_query::materialize_for_test;
 use sea_orm::{
     Database, DbBackend,
     sea_query::{Alias, Expr},
@@ -151,19 +152,20 @@ async fn numeric_id_matches_consume_one_quota_at_a_time() -> AuthResult<()> {
 }
 
 #[test]
-fn target_selection_keeps_all_guards_and_limits_the_locked_row() {
+fn target_selection_keeps_all_guards_and_limits_the_locked_row() -> AuthResult<()> {
     let target = increment_target::<targets::Entity>(targets::Column::Id, guard());
     let mysql = target
         .clone()
         .lock_exclusive()
-        .build(DbBackend::MySql)
+        .compile(DbBackend::MySql)
+        .and_then(materialize_for_test)?
         .to_string();
     assert!(
-        mysql.starts_with("SELECT `increment_targets`.`id` FROM "),
+        mysql.starts_with("select `increment_targets`.`id` from "),
         "{mysql}"
     );
     assert!(
-        mysql.contains("CAST(`increment_targets`.`id` AS integer) = 1"),
+        mysql.contains("cast(`increment_targets`.`id` as integer) = 1"),
         "{mysql}"
     );
     assert!(
@@ -171,8 +173,9 @@ fn target_selection_keeps_all_guards_and_limits_the_locked_row() {
         "{mysql}"
     );
     assert!(
-        mysql.contains("`increment_targets`.`enabled` = TRUE"),
+        mysql.contains("`increment_targets`.`enabled` = true"),
         "{mysql}"
     );
-    assert!(mysql.ends_with("LIMIT 1 FOR UPDATE"), "{mysql}");
+    assert!(mysql.ends_with("limit 1 for update"), "{mysql}");
+    Ok(())
 }

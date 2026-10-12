@@ -245,6 +245,16 @@ impl SelectInto {
 }
 
 impl SelectStatement {
+    /// Get mutable select expressions without changing their aliases or windows.
+    pub fn get_selects_mut(&mut self) -> &mut [SelectExpr] {
+        &mut self.selects
+    }
+
+    /// Get mutable ordering expressions in SQL order.
+    pub fn get_order_by_mut(&mut self) -> &mut [OrderExpr] {
+        &mut self.orders
+    }
+
     /// Construct a new [`SelectStatement`]
     pub fn new() -> Self {
         Self::default()

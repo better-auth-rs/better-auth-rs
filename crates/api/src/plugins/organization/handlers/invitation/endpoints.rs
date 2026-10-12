@@ -20,17 +20,20 @@ pub async fn handle_get_invitation(
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
     config: &OrganizationConfig,
 ) -> AuthResult<AuthResponse> {
-    let session = ctx
-        .require_native_session(req)
-        .await
-        .map_err(|error| match error {
-            AuthError::Unauthenticated => AuthError::from_status(
-                "UNAUTHORIZED",
-                better_auth_core::FieldMap::from([("message".into(), "Not authenticated".into())])
+    let session =
+        ctx.require_native_session(req)
+            .await
+            .map_err(|error| match error.original() {
+                AuthError::Unauthenticated => AuthError::from_status(
+                    "UNAUTHORIZED",
+                    better_auth_core::FieldMap::from([(
+                        "message".into(),
+                        "Not authenticated".into(),
+                    )])
                     .into(),
-            ),
-            error => error,
-        })?;
+                ),
+                _ => error,
+            })?;
     let query = crate::plugins::query_input::parse::<GetInvitationQuery>(req)?;
     match get_invitation_core(&query, &session, config, ctx).await? {
         Some(response) => Ok(AuthResponse::native(None, response.field_values()?.into())),

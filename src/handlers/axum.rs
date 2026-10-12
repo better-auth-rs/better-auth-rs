@@ -382,9 +382,16 @@ where
         let auth = Arc::<BetterAuth<T>>::from_ref(state);
         match resolve_session(parts, &auth).await {
             Ok(session) => Ok(OptionalSession(Some(session))),
-            Err(
-                AuthError::Unauthenticated | AuthError::SessionNotFound | AuthError::UserNotFound,
-            ) => Ok(OptionalSession(None)),
+            Err(error)
+                if matches!(
+                    error.original(),
+                    AuthError::Unauthenticated
+                        | AuthError::SessionNotFound
+                        | AuthError::UserNotFound
+                ) =>
+            {
+                Ok(OptionalSession(None))
+            }
             Err(error) => Err(error.into_response()),
         }
     }

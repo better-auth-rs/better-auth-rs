@@ -47,7 +47,7 @@ pub use options::{MySqlConnectOptions, MySqlSslMode};
 pub use query_result::MySqlQueryResult;
 pub use row::MySqlRow;
 pub use statement::MySqlStatement;
-pub use text_command::MySqlTextCommand;
+pub use text_command::{MySqlDeferredTextCommand, MySqlTextCommand};
 pub use transaction::MySqlTransactionManager;
 pub use type_info::MySqlTypeInfo;
 pub use value::{MySqlValue, MySqlValueFormat, MySqlValueRef};

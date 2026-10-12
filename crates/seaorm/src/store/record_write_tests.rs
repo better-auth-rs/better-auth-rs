@@ -1,4 +1,6 @@
 use super::*;
+use crate::store::mysql_query::materialize_for_test;
+use crate::store::query_compile::Compile;
 use crate::{
     SeaOrmPluginModel,
     store::entities::{passkey, user},
@@ -8,7 +10,7 @@ use better_auth_core::{
     id::IdGeneration,
     user_fields::{FieldTransforms, UserConfig, UserFieldConfig, UserFieldTransform},
 };
-use sea_orm::{DbBackend, QueryTrait, sea_query::Values};
+use sea_orm::{DbBackend, sea_query::Values};
 use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},
@@ -141,13 +143,16 @@ fn set_driver_encoding_precedes_where_driver_encoding() -> AuthResult<()> {
                 vec![rejecting_callback("nested-driver", &calls, &allocation)].into(),
             );
         }
-        let result = write.update_where_returning(
-            backend,
-            [QueryPredicate::equals(
-                user::Column::Id,
-                FieldValue::Object(object.clone()),
-            )],
-        );
+        let result = write
+            .update_where_returning(
+                backend,
+                [QueryPredicate::equals(
+                    user::Column::Id,
+                    FieldValue::Object(object.clone()),
+                )],
+            )
+            .and_then(|(update, _)| update.query.compile(backend))
+            .and_then(materialize_for_test);
         let _ = object.delete("self")?;
         let error = result
             .err()
@@ -181,8 +186,12 @@ fn returning_update_keeps_all_conditions_and_reuses_only_the_first_selector() ->
         )?;
         assert!(update.source_is_null(user::Column::Image));
         assert!(!update.source_is_null(user::Column::Name));
-        let actual = update.query.build(backend);
-        let selected = backend.build(&Query::select().expr(reselect).to_owned());
+        let actual = update
+            .query
+            .compile(backend)
+            .and_then(materialize_for_test)?;
+        let selected = crate::store::query_compile::build(backend, Query::select().expr(reselect))
+            .and_then(materialize_for_test)?;
         let quote = if backend == DbBackend::MySql {
             '`'
         } else {
@@ -215,6 +224,14 @@ fn returning_update_keeps_all_conditions_and_reuses_only_the_first_selector() ->
                     "selected".into()
                 ))]))
             );
+        } else if backend == DbBackend::MySql {
+            assert_eq!(
+                actual.sql,
+                "update `users` set `name` = 'after', `image` = NULL where `users`.`id` = 'selected' and `users`.`name` = 'before' and `users`.`image` is null"
+            );
+            assert_eq!(actual.values, None);
+            assert_eq!(selected.sql, "select `users`.`id` = 'selected'");
+            assert_eq!(selected.values, None);
         } else {
             assert_eq!(
                 actual.sql,
@@ -298,13 +315,29 @@ fn increment_expression_keeps_assignment_position_and_bypasses_column_casts() ->
             let assigned = if expression {
                 format!("{remaining} + 1")
             } else {
-                "CAST(2 AS integer)".into()
+                if backend == DbBackend::MySql {
+                    "cast(2 as integer)"
+                } else {
+                    "CAST(2 AS integer)"
+                }
+                .into()
             };
-            assert_eq!(
-                update.query.build(backend).to_string(),
+            let expected = if backend == DbBackend::MySql {
+                format!(
+                    "update `mapped_assignments` set {remaining} = {assigned}, `label` = 'after' where `mapped_assignments`.`id` = 'selected'"
+                )
+            } else {
                 format!(
                     "UPDATE {quote}mapped_assignments{quote} SET {remaining} = {assigned}, {quote}label{quote} = 'after' WHERE {quote}mapped_assignments{quote}.{quote}id{quote} = 'selected'"
                 )
+            };
+            assert_eq!(
+                update
+                    .query
+                    .compile(backend)
+                    .and_then(materialize_for_test)?
+                    .to_string(),
+                expected
             );
         }
     }

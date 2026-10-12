@@ -4,6 +4,7 @@ use super::{
 };
 use crate::SeaOrmOrganizationModel;
 use crate::schema::{AuthSchema, SeaOrmSessionModel};
+use crate::store::query_compile::Execute;
 use better_auth_core::store::{
     AuthTransaction, SessionWriteEffects, database_hooks::SessionUpdate,
 };
@@ -180,9 +181,8 @@ where
                         Expr::col(O::Team::column("member_count")?),
                     )
                     .filter(condition.clone())
-                    .exec(tx)
-                    .await
-                    .map_err(map_db_err)?;
+                    .exec_native(tx)
+                    .await?;
                 if locked.rows_affected == 0 {
                     return Err(AuthError::from_code(
                         "BAD_REQUEST",

@@ -1,5 +1,5 @@
 use sea_orm::{
-    ConnectionTrait, EntityTrait, IdenStatic, QueryTrait, Select,
+    ConnectionTrait, DbBackend, EntityTrait, IdenStatic, QueryTrait, Select,
     sea_query::{Asterisk, Expr, ExprTrait, JoinType, Query, SelectStatement},
 };
 
@@ -254,33 +254,53 @@ pub(super) fn raw_relation_value<C: IdenStatic>(
     })
 }
 
-// Current core callers have no sort. An ordered caller must order both query levels explicitly.
 pub(super) fn joined_query<P: EntityTrait, C: EntityTrait>(
+    backend: DbBackend,
     parent: (Select<P>, P::Column),
     on: (P::Column, C::Column),
     child_fields: &UserConfig,
     column: impl Fn(&str) -> AuthResult<C::Column>,
 ) -> AuthResult<NativeJoinQuery> {
-    let mut query = Query::select();
-    let _ = query.from_subquery(parent.0.into_query(), PARENT).join_as(
+    let model = C::default();
+    let child_model = if backend == DbBackend::MySql {
+        mysql_join_model_name(model.table_name())
+    } else {
+        model.table_name()
+    };
+    let (mut query, parent_alias, child_alias) = if backend == DbBackend::MySql {
+        (
+            super::query_compile::find_query(parent.0.into_query()),
+            "primary",
+            format!("join_{child_model}"),
+        )
+    } else {
+        let mut query = Query::select();
+        let _ = query
+            .from_subquery(parent.0.into_query(), PARENT)
+            .expr(Expr::col((PARENT, Asterisk)));
+        (query, PARENT, CHILD.to_owned())
+    };
+    let condition = if backend == DbBackend::MySql {
+        Expr::col((child_alias.clone(), on.1)).equals((parent_alias, on.0))
+    } else {
+        Expr::col((parent_alias, on.0)).equals((child_alias.clone(), on.1))
+    };
+    let _ = query.join_as(
         JoinType::LeftJoin,
-        C::default().table_ref(),
-        CHILD,
-        Expr::col((PARENT, on.0)).equals((CHILD, on.1)),
+        model.table_ref(),
+        child_alias.clone(),
+        condition,
     );
-    let _ = query.expr(Expr::col((PARENT, Asterisk)));
-    let child = select_child_fields(
-        &mut query,
-        CHILD,
-        C::default().table_name(),
-        child_fields,
-        column,
-    )?;
+    let child = select_child_fields(&mut query, &child_alias, child_model, child_fields, column)?;
     Ok(NativeJoinQuery {
         query,
         parent_id: parent.1.as_str().to_owned(),
         child,
     })
+}
+
+pub(super) fn mysql_join_model_name(model: &str) -> &str {
+    model.split('.').nth(1).unwrap_or(model)
 }
 
 pub(super) fn native_parent(
@@ -295,7 +315,7 @@ pub(super) fn native_parent(
 
 pub(super) fn select_child_fields<C: IdenStatic>(
     query: &mut SelectStatement,
-    table: &'static str,
+    table: &str,
     model: &str,
     fields: &UserConfig,
     column: impl Fn(&str) -> AuthResult<C>,
@@ -306,7 +326,7 @@ pub(super) fn select_child_fields<C: IdenStatic>(
     for (name, field) in fields.fields() {
         let column = column(resolve_field_name(field.field_name.as_deref(), name))?;
         let alias = format!("{prefix}{}", column.as_str());
-        let _ = query.expr_as(Expr::col((table, column)), alias);
+        let _ = query.expr_as(Expr::col((table.to_owned(), column)), alias);
         columns.push(column.as_str().to_owned());
     }
     Ok(ChildSelection {
@@ -321,7 +341,10 @@ pub(super) async fn joined_raw_rows(
     query: &NativeJoinQuery,
 ) -> AuthResult<Vec<(SqlRow, Option<SqlRow>)>> {
     let rows = db
-        .query_all(&query.query)
+        .query_all_raw(super::query_compile::build(
+            db.get_database_backend(),
+            &query.query,
+        )?)
         .await
         .map_err(super::map_db_err)?;
     let mut selected = Vec::new();
