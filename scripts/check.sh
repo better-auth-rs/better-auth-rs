@@ -700,7 +700,11 @@ PY_CHECK
         ./compat-tests/reference-server/contracts/native-sort-consumers-capture.test.ts \
         ./compat-tests/reference-server/contracts/native-sort-data-capture.test.ts || jwt_status=1
       cargo clippy --locked -p better-auth-core -p better-auth-api --lib -- -D warnings || jwt_status=1
-      cargo test --locked -p better-auth-core --lib -- error:: field_value:: session:: plugin::tests::native_session_hooks:: || jwt_status=1
+      cargo test --locked -p better-auth-core --lib -- \
+        error:: field_value:: session:: plugin::tests::native_session_hooks:: \
+        endpoint_dispatch::phase_ownership_tests:: plugin::tests::raw_api_errors:: \
+        plugin::tests::response_headers:: plugin::tests::response_status:: \
+        types::response:: types::request_headers:: || jwt_status=1
       cargo test --locked -p better-auth-api --lib -- plugins::jwt:: plugins::json_body:: || jwt_status=1
       cargo clippy --locked --features axum,seaorm2,redis-cache \
         --test jwt_transaction_tests --test jwk_additional_fields_tests \

@@ -2,6 +2,10 @@ use super::*;
 use better_auth_core::{CreateUser, NativeRequest, session::NativeSessionData, store::transaction};
 
 #[tokio::test]
+#[expect(
+    clippy::panic,
+    reason = "The regression requires standalone native-root provisioning to fail before invoking the adapter."
+)]
 async fn direct_facade_preserves_native_roots_and_keeps_standalone_calls_explicit() -> AuthResult<()>
 {
     for root in [
@@ -18,7 +22,7 @@ async fn direct_facade_preserves_native_roots_and_keeps_standalone_calls_explici
                 "createJwk".into(),
                 FieldFunction::contextual(move |_, arguments| {
                     assert_eq!(arguments.len(), 2);
-                    assert!(arguments[1].strict_equals(&expected));
+                    assert!(arguments.get(1).unwrap().strict_equals(&expected));
                     observed.fetch_add(1, Ordering::SeqCst);
                     Ok(FieldValue::Null)
                 })
