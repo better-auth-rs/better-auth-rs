@@ -73,7 +73,7 @@ cargo test --locked -p better-auth-seaorm --lib \
   -- store::value_filter::predicate::tests::empty_membership_preserves_the_pinned_mysql_compiler_and_other_backends --exact \
   2>&1 | tee "$text_output/membership.log" || text_status=1
 cargo test --locked -p better-auth-core --lib \
-  -- field_value::collection_method_tests:: field_value::primitive_tests:: \
+  -- field_value::primitive::collection_tests:: field_value::primitive::tests:: \
   error:: \
   2>&1 | tee "$text_output/core-methods.log" || text_status=1
 
@@ -104,7 +104,7 @@ for name in ("pinned_mysql_native_arrays", "dynamic_cycles_stop_at_the_shared_fr
     assert re.search(r"^test store::mysql_text::array::tests::" + name + r" \.\.\. ok$", arrays, re.M), name
 assert "2 passed; 0 failed; 0 ignored" in arrays
 core = (output / "core-methods.log").read_text()
-for module in ("collection_method_tests", "primitive_tests"):
+for module in ("primitive::collection_tests", "primitive::tests"):
     assert re.search(r"^test field_value::" + module + r"::.* \.\.\. ok$", core, re.M), module
 assert len(re.findall(r"^test error::shared::tests::.* \.\.\. ok$", core, re.M)) == 3
 assert "test error::native_tests::shared_native_errors_do_not_read_properties_during_transport ... ok" in core

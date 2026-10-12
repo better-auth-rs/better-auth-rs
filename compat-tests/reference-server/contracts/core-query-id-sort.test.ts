@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { writeSync } from "node:fs";
+import { writeObservation } from "./write-observation.mjs";
 import { captureCoreQueryIdSort, coreQueryIdSortOperations } from "./core-query-id-sort-capture.mjs";
 
 test("Memory User sorting resolves ID aliases after Where binding and before output", async () => {
@@ -17,7 +17,7 @@ test("Memory User sorting resolves ID aliases after Where binding and before out
         captured.operation === "sort-only" && step.attempt === 1 ? ["2", "1"] : ["1", "2"],
       );
     }
-    writeSync(1, `${JSON.stringify({ contract: "core-query-id-sort", version: observation.version, backend: observation.backend, case: captured })}\n`);
+    await writeObservation(`${JSON.stringify({ contract: "core-query-id-sort", version: observation.version, backend: observation.backend, case: captured })}\n`);
   }
   const fixture = await Bun.file(new URL("../../../tests/fixtures/core-query-id-sort-1.7.6.json", import.meta.url)).json();
   expect(observation).toStrictEqual(fixture);

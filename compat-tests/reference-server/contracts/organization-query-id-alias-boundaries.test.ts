@@ -1,9 +1,9 @@
 import { expect, test } from "bun:test";
-import { writeSync } from "node:fs";
+import { writeObservation } from "./write-observation.mjs";
 import { captureInvitationClaimSelectorUpdates, captureOrganizationUniqueIdAliasJoins } from "./organization-query-id-alias-capture.mjs";
 
-const emit = (contract: string) => (captured: unknown) => {
-  writeSync(1, `${JSON.stringify({ contract, version: "1.7.6", backend: "memory", case: captured })}\n`);
+const emit = (contract: string) => async (captured: unknown) => {
+  await writeObservation(`${JSON.stringify({ contract, version: "1.7.6", backend: "memory", case: captured })}\n`);
 };
 
 test("An explicit unique Member reference preserves singular first-ID-alias joins", async () => {

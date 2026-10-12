@@ -1,10 +1,10 @@
 import { expect, test } from "bun:test";
-import { writeSync } from "node:fs";
+import { writeObservation } from "./write-observation.mjs";
 import { captureInvitationClaimStatusPolicies } from "./organization-query-id-alias-capture.mjs";
 
 test("Invitation claims apply declared status query and write policies", async () => {
-  const observation = await captureInvitationClaimStatusPolicies(captured => {
-    writeSync(1, `${JSON.stringify({ contract: "invitation-claim-status", version: "1.7.6", backend: "memory", case: captured })}\n`);
+  const observation = await captureInvitationClaimStatusPolicies(async captured => {
+    await writeObservation(`${JSON.stringify({ contract: "invitation-claim-status", version: "1.7.6", backend: "memory", case: captured })}\n`);
   });
   expect(observation.cases.map(captured => captured.scenario)).toStrictEqual([
     "invitation-claim-status-json", "invitation-claim-status-string",
