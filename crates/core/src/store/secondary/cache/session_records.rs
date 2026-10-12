@@ -1,4 +1,8 @@
 #![expect(
+    clippy::panic_in_result_fn,
+    reason = "Assertions report exact contract mismatches while Result propagates fixture errors."
+)]
+#![expect(
     clippy::unwrap_used,
     clippy::indexing_slicing,
     reason = "These regressions require complete fixture records and fail immediately on an invalid fixture shape."

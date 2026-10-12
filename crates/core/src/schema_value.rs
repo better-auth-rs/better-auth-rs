@@ -260,6 +260,10 @@ pub fn serialize_optional_date<S: Serializer>(
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::expect_used,
+    reason = "Required fixture operations must succeed before comparing the contract."
+)]
 mod tests {
     use super::*;
 

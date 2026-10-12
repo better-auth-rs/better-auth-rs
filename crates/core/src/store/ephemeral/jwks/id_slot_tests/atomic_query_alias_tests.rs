@@ -1,3 +1,9 @@
+#![expect(
+    clippy::expect_used,
+    clippy::indexing_slicing,
+    reason = "Required fixture operations must succeed before comparing the contract. Fixture indexing must fail when an expected record or property is missing."
+)]
+
 use super::*;
 use crate::AuthRecordFields;
 use crate::plugin_runtime::ModelFields;

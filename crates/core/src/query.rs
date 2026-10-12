@@ -163,6 +163,10 @@ pub(crate) fn session_query_value(query: FieldValue) -> AuthResult<FieldValue> {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::unwrap_used,
+    reason = "Required fixture operations must succeed before comparing the contract."
+)]
 mod tests {
     use super::*;
     use crate::{AuthRequest, HttpMethod};
@@ -416,6 +420,10 @@ pub fn paginate_memory<T>(items: Vec<T>, limit: Option<f64>, offset: Option<f64>
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "Assertions report exact contract mismatches while Result propagates fixture errors."
+)]
 mod field_tests {
     use super::*;
     use crate::{FieldDate, Utf16String};
@@ -451,6 +459,10 @@ mod field_tests {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "Assertions report exact contract mismatches while Result propagates fixture errors."
+)]
 mod dynamic_value_tests {
     use super::*;
 

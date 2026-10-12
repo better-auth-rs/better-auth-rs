@@ -18,6 +18,11 @@ fn public_name(name: &str) -> String {
 }
 
 #[tokio::test]
+#[cfg(test)]
+#[expect(
+    clippy::unwrap_used,
+    reason = "Required fixture operations must succeed before comparing the contract."
+)]
 async fn native_organization_defaults_and_replacements_survive_crud() {
     use crate::{
         CreateOrganizationRole, UpdateOrganizationRole, organization_fields::OrganizationFields,
@@ -149,6 +154,12 @@ async fn native_organization_defaults_and_replacements_survive_crud() {
 }
 
 #[tokio::test]
+#[cfg(test)]
+#[expect(
+    clippy::indexing_slicing,
+    clippy::unwrap_used,
+    reason = "Required fixture operations must succeed before comparing the contract. Fixture indexing must fail when an expected record or property is missing."
+)]
 async fn memory_team_preserves_replaced_date_values_and_durable_capacity() {
     use crate::{
         CreateTeam,
@@ -479,6 +490,11 @@ impl EphemeralStore {
 }
 
 #[tokio::test]
+#[cfg(test)]
+#[expect(
+    clippy::unwrap_used,
+    reason = "Required fixture operations must succeed before comparing the contract."
+)]
 async fn organization_id_slot_preserves_declaration_order_for_bound_alias() {
     use crate::organization_fields::OrganizationFields;
     use crate::user_fields::{UserConfig, UserFieldConfig, UserFieldReference};
@@ -527,6 +543,12 @@ async fn organization_id_slot_preserves_declaration_order_for_bound_alias() {
 }
 
 #[tokio::test]
+#[cfg(test)]
+#[expect(
+    clippy::indexing_slicing,
+    clippy::unwrap_used,
+    reason = "Required fixture operations must succeed before comparing the contract. Fixture indexing must fail when an expected record or property is missing."
+)]
 async fn builtin_policies_transform_typed_records_once_and_preserve_adapter_id() {
     use crate::{
         CreateOrganizationRole, CreateTeam, UpdateTeam,
@@ -761,6 +783,12 @@ async fn builtin_policies_transform_typed_records_once_and_preserve_adapter_id()
 }
 
 #[tokio::test]
+#[cfg(test)]
+#[expect(
+    clippy::indexing_slicing,
+    clippy::unwrap_used,
+    reason = "Required fixture operations must succeed before comparing the contract. Fixture indexing must fail when an expected record or property is missing."
+)]
 async fn invalid_builtin_transform_cannot_partially_update_a_memory_record() {
     use crate::{
         organization_fields::OrganizationFields,
@@ -826,6 +854,12 @@ async fn invalid_builtin_transform_cannot_partially_update_a_memory_record() {
 }
 
 #[tokio::test]
+#[cfg(test)]
+#[expect(
+    clippy::indexing_slicing,
+    clippy::unwrap_used,
+    reason = "Required fixture operations must succeed before comparing the contract. Fixture indexing must fail when an expected record or property is missing."
+)]
 async fn memory_core_fields_keep_dynamic_values_and_output_omission() {
     use crate::{
         SchemaValue, organization_fields::OrganizationFields, user_fields::UserFieldConfig,

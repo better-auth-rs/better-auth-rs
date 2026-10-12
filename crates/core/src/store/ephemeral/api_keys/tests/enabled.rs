@@ -1,3 +1,9 @@
+#![expect(
+    clippy::expect_used,
+    clippy::panic_in_result_fn,
+    reason = "Required fixture operations must succeed before comparing the contract. Assertions report exact contract mismatches while Result propagates fixture errors."
+)]
+
 use super::*;
 use crate::store::schema::EntityRole;
 use crate::user_fields::{

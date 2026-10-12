@@ -1,3 +1,11 @@
+#![expect(
+    clippy::expect_used,
+    clippy::indexing_slicing,
+    clippy::panic,
+    clippy::unwrap_used,
+    reason = "Required fixture operations must succeed before comparing the contract. Fixture indexing must fail when an expected record or property is missing. Unexpected fixture variants and deliberate callback panics must fail or exercise the recorded unwind path."
+)]
+
 use super::*;
 use crate::id::AdapterIdInput;
 use crate::plugin_runtime::ModelFields;

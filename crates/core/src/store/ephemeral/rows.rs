@@ -579,6 +579,10 @@ mod object_tests;
 mod descriptor_tests;
 
 #[cfg(test)]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "Assertions report exact contract mismatches while Result propagates fixture errors."
+)]
 mod tests {
     use super::*;
     use crate::store::ephemeral::table::TableRef;

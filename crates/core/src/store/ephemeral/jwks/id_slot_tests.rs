@@ -1,3 +1,8 @@
+#![expect(
+    clippy::panic_in_result_fn,
+    reason = "Assertions report exact contract mismatches while Result propagates fixture errors."
+)]
+
 use super::*;
 mod atomic_query_alias_tests;
 mod query_alias_tests;

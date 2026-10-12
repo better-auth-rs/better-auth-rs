@@ -1,4 +1,8 @@
 #![expect(
+    clippy::unwrap_used,
+    reason = "Required fixture operations must succeed before comparing the contract."
+)]
+#![expect(
     clippy::panic_in_result_fn,
     reason = "Assertions verify operation ownership and callback scheduling; adapter errors propagate."
 )]

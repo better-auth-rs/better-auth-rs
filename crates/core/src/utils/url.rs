@@ -42,6 +42,10 @@ pub fn append_query_params(target: &str, params: &str) -> AuthResult<String> {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::expect_used,
+    reason = "Required fixture operations must succeed before comparing the contract."
+)]
 mod tests {
     use super::append_query_params;
     use crate::AuthError;

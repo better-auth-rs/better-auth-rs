@@ -314,6 +314,12 @@ impl ApiKeyStore for EphemeralStore {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::expect_used,
+    clippy::panic,
+    clippy::unwrap_used,
+    reason = "Required fixture operations must succeed before comparing the contract. Unexpected fixture variants and deliberate callback panics must fail or exercise the recorded unwind path."
+)]
 mod tests {
     mod enabled;
     mod sorting;

@@ -1,4 +1,9 @@
 #![expect(
+    clippy::expect_used,
+    clippy::panic_in_result_fn,
+    reason = "Required fixture operations must succeed before comparing the contract. Assertions report exact contract mismatches while Result propagates fixture errors."
+)]
+#![expect(
     clippy::unwrap_used,
     clippy::indexing_slicing,
     reason = "Pinned fixture keys and setup must fail immediately when the protected function contract changes"

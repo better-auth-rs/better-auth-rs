@@ -1,4 +1,8 @@
 #![expect(
+    clippy::panic_in_result_fn,
+    reason = "Assertions report exact contract mismatches while Result propagates fixture errors."
+)]
+#![expect(
     clippy::unwrap_used,
     clippy::indexing_slicing,
     reason = "Read the captured ordinary serializer contract and report assertion failures"

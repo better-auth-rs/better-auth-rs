@@ -919,7 +919,7 @@ PY_CHECK
         ./compat-tests/reference-server/contracts/oauth-proxy-callback.test.ts \
         ./compat-tests/reference-server/contracts/oauth-proxy-native-result.test.ts || json_status=1
       cargo clippy --locked -p better-auth-core -p better-auth-api --lib -- -D warnings || json_status=1
-      cargo clippy --locked -p better-auth-core -p better-auth-api --features axum \
+      cargo clippy --locked --keep-going -p better-auth-core -p better-auth-api --features axum \
         --tests -- -D warnings || json_status=1
       cargo clippy --locked --features axum,seaorm2,redis-cache \
         --test plugin_model_fields_tests --test native_endpoint_tests --test server_api_tests \

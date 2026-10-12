@@ -490,6 +490,10 @@ mod cache_cleanup_tests;
 mod mutation_tests;
 
 #[cfg(test)]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "Assertions report exact contract mismatches while Result propagates fixture errors."
+)]
 mod native_cookie_tests {
     use super::*;
     use crate::{FieldMap, FieldValue, Utf16String};

@@ -159,6 +159,10 @@ impl<'de> Deserialize<'de> for Utf16String {
 pub type ApiKeyStart = Utf16String;
 
 #[cfg(test)]
+#[expect(
+    clippy::unwrap_used,
+    reason = "Required fixture operations must succeed before comparing the contract."
+)]
 mod tests {
     use super::*;
 

@@ -1,3 +1,8 @@
+#![expect(
+    clippy::panic_in_result_fn,
+    reason = "Assertions report exact contract mismatches while Result propagates fixture errors."
+)]
+
 use super::{CacheAdapter, MemoryCacheAdapter, SecondaryStorage};
 use crate::{AuthResult, FieldMap, FieldValue};
 use std::sync::Arc;

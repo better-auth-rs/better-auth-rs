@@ -177,6 +177,10 @@ impl SchemaValidation {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::unwrap_used,
+    reason = "Required fixture operations must succeed before comparing the contract."
+)]
 mod tests {
     use super::*;
     use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};

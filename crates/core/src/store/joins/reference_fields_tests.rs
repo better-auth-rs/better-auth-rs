@@ -1,3 +1,8 @@
+#![expect(
+    clippy::expect_used,
+    reason = "Required fixture operations must succeed before comparing the contract."
+)]
+
 use super::*;
 use indexmap::IndexMap;
 use serde::Deserialize;

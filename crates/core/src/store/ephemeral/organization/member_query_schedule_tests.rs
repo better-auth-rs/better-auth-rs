@@ -1,4 +1,8 @@
 #![expect(
+    clippy::expect_used,
+    reason = "Required fixture operations must succeed before comparing the contract."
+)]
+#![expect(
     clippy::panic_in_result_fn,
     reason = "The paired contract checks original errors, retained query peers, request context, and complete storage"
 )]

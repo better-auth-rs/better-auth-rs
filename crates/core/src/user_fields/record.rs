@@ -915,6 +915,10 @@ mod object_tests;
 mod projection_tests;
 
 #[cfg(test)]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "Assertions report exact contract mismatches while Result propagates fixture errors."
+)]
 mod tests {
     use super::*;
     use crate::user_fields::{FieldTransforms, UserFieldTransform};

@@ -1,3 +1,8 @@
+#![expect(
+    clippy::panic_in_result_fn,
+    reason = "Assertions report exact contract mismatches while Result propagates fixture errors."
+)]
+
 use super::*;
 use crate::{
     AuthConfig, AuthRequest, FieldObject, HttpMethod,
@@ -126,12 +131,14 @@ fn request_and_issuance_share_the_native_root_without_eager_property_reads() -> 
 #[test]
 fn public_projection_retains_private_liveness_and_original_relationship_cardinality()
 -> AuthResult<()> {
-    let mut session = SessionView::default();
-    session.active = false;
-    session.additional_fields = FieldMap::from([
-        ("active".into(), true.into()),
-        ("hidden".into(), "private".into()),
-    ]);
+    let session = SessionView {
+        active: false,
+        additional_fields: FieldMap::from([
+            ("active".into(), true.into()),
+            ("hidden".into(), "private".into()),
+        ]),
+        ..Default::default()
+    };
     let data = NativeSessionData::new(
         session,
         vec![FieldMap::from([("id".into(), "owner".into())]).into()].into(),

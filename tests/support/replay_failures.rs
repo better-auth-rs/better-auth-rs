@@ -1,3 +1,8 @@
+#![expect(
+    clippy::panic,
+    reason = "Unexpected fixture variants and deliberate callback panics must fail or exercise the recorded unwind path."
+)]
+
 //! Collect completed comparison failures while capture and setup errors retain their own boundaries.
 
 use std::any::Any;

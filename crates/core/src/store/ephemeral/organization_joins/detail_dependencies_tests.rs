@@ -1,3 +1,8 @@
+#![expect(
+    clippy::indexing_slicing,
+    reason = "Fixture indexing must fail when an expected record or property is missing."
+)]
+
 //! Paired with organization-detail-dependencies.test.ts against Better Auth 1.7.6.
 use super::super::test_support::snapshot_tree;
 use super::*;

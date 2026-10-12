@@ -1,3 +1,11 @@
+#![expect(
+    clippy::expect_used,
+    clippy::indexing_slicing,
+    clippy::panic_in_result_fn,
+    clippy::unwrap_used,
+    reason = "Required fixture operations must succeed before comparing the contract. Fixture indexing must fail when an expected record or property is missing. Assertions report exact contract mismatches while Result propagates fixture errors."
+)]
+
 use crate::store::secondary::SecondaryStore;
 use crate::store::{
     EphemeralStore, MemoryCacheAdapter, SecondaryStorage, SessionStore, StatelessSchema, UserStore,

@@ -1,3 +1,9 @@
+#![expect(
+    clippy::panic_in_result_fn,
+    clippy::unwrap_used,
+    reason = "Required fixture operations must succeed before comparing the contract. Assertions report exact contract mismatches while Result propagates fixture errors."
+)]
+
 use super::*;
 use crate::middleware::EndpointRateLimit;
 use crate::store::database_hooks::{DatabaseHookContext, SessionUpdate};

@@ -1,3 +1,9 @@
+#![expect(
+    clippy::indexing_slicing,
+    clippy::panic,
+    reason = "Fixture indexing must fail when an expected record or property is missing. Unexpected fixture variants and deliberate callback panics must fail or exercise the recorded unwind path."
+)]
+
 use super::*;
 use std::sync::Mutex;
 
@@ -65,13 +71,15 @@ async fn instance_snapshot_survives_option_replacement_and_reinitializes_for_new
     for disable_colors in [None, Some(true), Some(false)] {
         let original = Arc::new(Capture::default());
         let replacement = Arc::new(Capture::default());
-        let mut options = crate::AuthConfig::default();
-        options.logger = LoggerConfig {
-            disable_colors,
-            log: Some(original.clone()),
+        let mut options = crate::AuthConfig {
+            logger: LoggerConfig {
+                disable_colors,
+                log: Some(original.clone()),
+                ..Default::default()
+            }
+            .into(),
             ..Default::default()
-        }
-        .into();
+        };
         options.initialize_logger()?;
         let snapshot = Some(!options.logger()?.0.policy.colors_enabled);
         assert!(snapshot.is_some());

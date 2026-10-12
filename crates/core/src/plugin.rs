@@ -812,6 +812,11 @@ impl<S: AuthSchema> AuthInitParts<S> {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    reason = "Required fixture operations must succeed before comparing the contract."
+)]
 mod tests {
     mod async_body_dispatch;
     mod native_session_hooks;

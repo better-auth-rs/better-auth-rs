@@ -236,6 +236,11 @@ impl ModelFields {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    reason = "Required fixture operations must succeed before comparing the contract."
+)]
 mod tests {
     use super::*;
     use crate::user_fields::UserFieldConfig;

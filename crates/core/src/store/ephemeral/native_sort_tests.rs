@@ -1,8 +1,3 @@
-#![expect(
-    clippy::panic_in_result_fn,
-    reason = "The contract asserts complete results and unchanged unrelated storage after actual adapter queries."
-)]
-
 use super::*;
 use crate::{
     native_sort_contract::{Harness, assert_case, cases, getter_cases},

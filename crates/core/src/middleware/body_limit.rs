@@ -82,6 +82,10 @@ impl Middleware for BodyLimitMiddleware {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::unwrap_used,
+    reason = "Required fixture operations must succeed before comparing the contract."
+)]
 mod tests {
     use super::*;
     use crate::types::HttpMethod;

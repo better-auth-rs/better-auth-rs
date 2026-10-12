@@ -1,3 +1,8 @@
+#![expect(
+    clippy::panic_in_result_fn,
+    reason = "Assertions report exact contract mismatches while Result propagates fixture errors."
+)]
+
 use super::*;
 use crate::store::transaction;
 use crate::user_fields::{FieldTransforms, UserConfig, UserFieldConfig, UserFieldTransform};

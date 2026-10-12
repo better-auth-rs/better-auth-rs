@@ -1,3 +1,8 @@
+#![expect(
+    clippy::unreachable,
+    reason = "Unexpected fixture variants and deliberate callback panics must fail or exercise the recorded unwind path."
+)]
+
 //! Replay the frozen descriptor graph without invoking accessors during observation.
 
 use super::super::__private_core::{

@@ -1,3 +1,8 @@
+#![expect(
+    clippy::expect_used,
+    reason = "Required fixture operations must succeed before comparing the contract."
+)]
+
 //! Paired with memory-array-clone.mjs through actual Memory transactions.
 
 use super::*;

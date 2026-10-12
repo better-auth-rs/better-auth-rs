@@ -749,6 +749,11 @@ mod native_owner_tests;
 mod physical_tests;
 
 #[tokio::test]
+#[cfg(test)]
+#[expect(
+    clippy::unwrap_used,
+    reason = "Required fixture operations must succeed before comparing the contract."
+)]
 async fn invitation_fields_update_atomically_with_team_membership() {
     use crate::{
         CreateTeam,

@@ -1,4 +1,8 @@
 #![expect(
+    clippy::expect_used,
+    reason = "Required fixture operations must succeed before comparing the contract."
+)]
+#![expect(
     clippy::unwrap_used,
     clippy::indexing_slicing,
     clippy::panic_in_result_fn,

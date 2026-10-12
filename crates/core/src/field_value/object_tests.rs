@@ -1,4 +1,8 @@
 #![expect(
+    clippy::indexing_slicing,
+    reason = "Fixture indexing must fail when an expected record or property is missing."
+)]
+#![expect(
     clippy::panic_in_result_fn,
     reason = "Assertions compare shared identity and conversion boundaries; setup and source errors propagate."
 )]

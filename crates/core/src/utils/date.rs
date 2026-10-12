@@ -160,6 +160,11 @@ fn parse_standard_date(parts: &regex::Captures<'_>, timezone: &impl TimeZone) ->
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::indexing_slicing,
+    clippy::panic_in_result_fn,
+    reason = "Fixture indexing must fail when an expected record or property is missing. Assertions report exact contract mismatches while Result propagates fixture errors."
+)]
 mod tests {
     use super::*;
 
