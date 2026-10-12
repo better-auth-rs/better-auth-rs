@@ -123,6 +123,15 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U better_auth -d better_auth_test"
           --health-interval 10s --health-timeout 5s --health-retries 10
+      mysql:
+        image: mysql:8.4.11
+        env:
+          MYSQL_ROOT_PASSWORD: better_auth_ci
+          MYSQL_ROOT_HOST: "%"
+        ports: [3306:3306]
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -pbetter_auth_ci --silent"
+          --health-interval 10s --health-timeout 5s --health-retries 10
     env:
       DATABASE_URL: postgres://better_auth:better_auth_ci@127.0.0.1:5432/better_auth_test
     steps:
@@ -139,11 +148,25 @@ jobs:
           devenv_nixpkgs_rev=$(python3 -c 'import json; print(json.load(open("devenv.lock"))["nodes"]["nixpkgs-src"]["locked"]["rev"])')
           nix profile add "github:NixOS/nixpkgs/${devenv_nixpkgs_rev}#devenv"
       - name: Prepare pinned driver dependency locks
+        id: dependencies
         shell: devenv shell -- bash -e {0}
         run: ./scripts/prepare-driver-error-dependencies.sh "$RUNNER_TEMP/driver-error-dependencies"
       - name: Test PostgreSQL driver protocol and original response metadata
+        if: always() && steps.dependencies.outcome == 'success'
         shell: devenv shell -- bash -e {0}
         run: ./scripts/test-postgres-driver-protocol.sh "$RUNNER_TEMP/driver-error-dependencies"
+      - name: Test MySQL driver command ownership and original errors
+        if: always() && steps.dependencies.outcome == 'success'
+        shell: devenv shell -- bash -e {0}
+        env:
+          DATABASE_URL: mysql://root:better_auth_ci@127.0.0.1:3306/mysql
+        run: ./scripts/test-mysql-driver-errors.sh "$RUNNER_TEMP/driver-error-dependencies/mysql-driver"
+      - name: Check the complete pinned mysql2 error table
+        if: always() && steps.dependencies.outcome == 'success'
+        shell: devenv shell -- bash -e {0}
+        run: |
+          bun install --cwd compat-tests/reference-server --frozen-lockfile
+          python3 scripts/check-mysql-error-codes.py
       - name: Preserve dependency manifests and validation
         if: always()
         uses: actions/upload-artifact@v4
@@ -156,6 +179,7 @@ jobs:
             ${{ runner.temp }}/driver-error-dependencies/test-root.txt
             ${{ runner.temp }}/driver-error-dependencies/validation.json
             ${{ runner.temp }}/driver-error-dependencies/graphs/*.json
+            ${{ runner.temp }}/driver-error-dependencies/mysql-driver/
             ${{ runner.temp }}/driver-error-dependencies/manifest.txt
             ${{ runner.temp }}/driver-error-dependencies/Cargo.toml
             ${{ runner.temp }}/driver-error-dependencies/Cargo.lock

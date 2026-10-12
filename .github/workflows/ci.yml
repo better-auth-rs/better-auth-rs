@@ -52,6 +52,7 @@ on:
           - sql-cleanup
           - shared-column
           - postgres-driver
+          - mysql-driver
           - memory-joins
           - oauth-profile
           - organization-fields
@@ -205,6 +206,15 @@ jobs:
         env:
           DATABASE_URL: ${{ env.BETTER_AUTH_TEST_POSTGRES_URL }}
         run: devenv shell -- ./scripts/test-postgres-driver-protocol.sh "$RUNNER_TEMP/postgres-driver-protocol"
+      - name: Check MySQL driver protocol
+        id: mysql-protocol
+        if: ${{ !cancelled() && env.CHECK_STAGE == 'all' && steps.dependencies.outcome == 'success' }}
+        env:
+          DATABASE_URL: ${{ env.BETTER_AUTH_TEST_MYSQL_URL }}
+        run: devenv shell -- ./scripts/test-mysql-driver-errors.sh "$RUNNER_TEMP/mysql-driver-protocol"
+      - name: Check the complete pinned mysql2 error table
+        if: ${{ !cancelled() && env.CHECK_STAGE == 'all' && steps.dependencies.outcome == 'success' }}
+        run: python3 scripts/check-mysql-error-codes.py
       - name: Check Rustls configuration
         if: ${{ !cancelled() && env.CHECK_STAGE == 'all' && steps.dependencies.outcome == 'success' }}
         run: devenv shell -- ./scripts/check.sh rustls
@@ -276,6 +286,14 @@ jobs:
         with:
           name: postgres-driver-protocol-${{ github.sha }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/postgres-driver-protocol/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Preserve MySQL protocol results
+        if: always() && ((env.CHECK_STAGE == 'all' && steps.mysql-protocol.outcome != 'skipped') || (env.CHECK_STAGE == 'mysql-driver' && steps.focused.outcome != 'skipped'))
+        uses: actions/upload-artifact@v4
+        with:
+          name: mysql-driver-protocol-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/mysql-driver-protocol/
           if-no-files-found: error
           retention-days: 14
       - name: Preserve telemetry host observations

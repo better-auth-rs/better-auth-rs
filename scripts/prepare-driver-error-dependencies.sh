@@ -37,6 +37,7 @@ from pathlib import Path
 root = Path.cwd().resolve()
 vendor_packages = {
     "sqlx-postgres": "0.8.6",
+    "sqlx-mysql": "0.8.6",
     "sea-query": "1.0.0-rc.31",
     "sea-query-sqlx": "0.8.0-rc.14",
     "sea-orm": "2.0.0-rc.37",
@@ -121,6 +122,7 @@ dependency_constraints=(
   'sqlx@=0.8.6'
   'sqlx-core@=0.8.6'
   'sqlx-postgres@=0.8.6'
+  'sqlx-mysql@=0.8.6'
 )
 dependency_constraint_names=()
 for dependency_constraint in "${dependency_constraints[@]}"; do
@@ -196,6 +198,7 @@ expected = {
     "sqlx": "0.8.6",
     "sqlx-core": "0.8.6",
     "sqlx-postgres": "0.8.6",
+    "sqlx-mysql": "0.8.6",
 }
 manifests = [
     "Cargo.toml",
@@ -204,7 +207,7 @@ manifests = [
     "examples/fullstack/backend/Cargo.toml",
 ]
 registry = "registry+https://github.com/rust-lang/crates.io-index"
-patched_packages = {"sqlx-postgres", "sea-query", "sea-query-sqlx", "sea-orm"}
+patched_packages = {"sqlx-postgres", "sqlx-mysql", "sea-query", "sea-query-sqlx", "sea-orm"}
 summary = []
 files = ["crates/seaorm/Cargo.toml"]
 for index, relative in enumerate(manifests):

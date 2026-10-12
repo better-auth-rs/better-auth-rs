@@ -1,0 +1,10 @@
+{
+  "package": "mysql2",
+  "version": "3.24.5",
+  "url": "https://registry.npmjs.org/mysql2/-/mysql2-3.24.5.tgz",
+  "integrity": "sha512-X6Ujsr2QSkkLpkQGjxzpKRAPn9nu4axpR63ntBzquFVEvPOArgbUQ1sJjFKI7hnaYtiVZxa17Z7q18KSubW0IQ==",
+  "source": "lib/constants/errors.js",
+  "source_sha256": "4778749caf383bcdef6e45750fcc1fbe99d530806367a74c485409ce79156164",
+  "license_sha256": "f17f1be30bce27fe6324513a35fa61f6e6766d3028e42e45bdf668a0db7c8d4f",
+  "entries": 1963
+}

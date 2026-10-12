@@ -63,6 +63,17 @@ run_stage() {
         --include-ignored --test-threads=1 || driver_status=1
       return "$driver_status"
       ;;
+    mysql-driver)
+      cargo fmt --all -- --check
+      local mysql_status=0
+      python3 scripts/check-mysql-error-codes.py || mysql_status=1
+      DATABASE_URL="${BETTER_AUTH_TEST_MYSQL_URL:?}" \
+        ./scripts/test-mysql-driver-errors.sh "${RUNNER_TEMP:?}/mysql-driver-protocol" || mysql_status=1
+      cargo clippy --locked -p better-auth-seaorm --lib -- -D warnings || mysql_status=1
+      cargo test --locked -p better-auth-seaorm --lib store::db_error::tests:: \
+        -- --include-ignored --test-threads=1 || mysql_status=1
+      return "$mysql_status"
+      ;;
     shared-column)
       cargo fmt --all -- --check
       local column_status=0
