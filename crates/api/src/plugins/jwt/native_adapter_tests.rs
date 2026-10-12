@@ -77,6 +77,22 @@ async fn public_endpoint_helpers_preserve_native_adapter_receiver_root_and_key_h
             .into(),
         )?;
         let (plugin, context) = registered(receiver.value()).await?;
+        let callbacks = context.extensions.get::<Arc<JwtCallbacks<S>>>().unwrap();
+        let first = overrides::NativeOptions::registered(&plugin.config, &context)?
+            .0
+            .model_property("adapter")?;
+        let second = overrides::NativeOptions::registered(&plugin.config, &context)?
+            .0
+            .model_property("adapter")?;
+        assert!(callbacks.to_native().strict_equals(&receiver.value()));
+        assert!(first.strict_equals(&second));
+        for name in ["getJwks", "createJwk"] {
+            assert!(
+                first
+                    .model_property(name)?
+                    .strict_equals(&second.model_property(name)?)
+            );
+        }
         let endpoint = EndpointContext::native(None, None, "different body".into(), &context)
             .with_native_root(root.value());
         let retained = endpoint.to_owned();
@@ -87,8 +103,10 @@ async fn public_endpoint_helpers_preserve_native_adapter_receiver_root_and_key_h
             .await?
             .unwrap();
         assert_eq!(created.id, "native-key");
+        let payload = claims();
+        payload.set_model_property("sub", "native-owner".into())?;
         let token: String = plugin
-            .sign_value_in_endpoint(claims(), None, &retained)
+            .sign_value_in_endpoint(payload, None, &retained)
             .await?
             .decode()?;
         assert!(

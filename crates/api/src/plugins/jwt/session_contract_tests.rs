@@ -179,8 +179,8 @@ async fn capture(
     let recorded = events.clone();
     context
         .extensions
-        .insert(Arc::new(callbacks::RegisteredCallbacks::from(
-            JwtCallbacks::<BundledSchema>::default().get_jwks(move |endpoint| {
+        .insert(Arc::new(JwtCallbacks::<BundledSchema>::default().get_jwks(
+            move |endpoint| {
                 let key = key.clone();
                 let events = recorded.clone();
                 Box::pin(async move {
@@ -191,7 +191,7 @@ async fn capture(
                     record(&events, json!(["keys", snapshot]))?;
                     Ok(Some(vec![key]))
                 })
-            }),
+            },
         )));
     let plugin = JwtPlugin::with_config(config(policy, &events));
     let request = AuthRequest::new(HttpMethod::Get, "/token");

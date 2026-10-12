@@ -168,9 +168,9 @@ impl NativeOptions {
         let mut fields = FieldMap::from([("jwt".into(), jwt), ("jwks".into(), jwks)]);
         if let Some(callbacks) = context
             .extensions
-            .get::<std::sync::Arc<super::callbacks::RegisteredCallbacks<S>>>()
+            .get::<std::sync::Arc<super::callbacks::JwtCallbacks<S>>>()
         {
-            let _ = fields.insert("adapter".into(), callbacks.adapter.clone());
+            let _ = fields.insert("adapter".into(), callbacks.to_native());
         }
         Ok(Self(fields.into()))
     }

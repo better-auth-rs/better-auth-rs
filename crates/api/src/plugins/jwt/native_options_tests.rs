@@ -27,11 +27,7 @@ async fn context(plugin: &JwtPlugin, callbacks: JwtCallbacks<S>) -> AuthResult<A
     let store: Arc<dyn AuthStore<S>> = Arc::new(EphemeralStore::new(config.clone()));
     let mut context =
         crate::plugins::test_helpers::initialize_test_context(config, store, &[plugin]).await?;
-    context
-        .extensions
-        .insert(Arc::new(super::callbacks::RegisteredCallbacks::from(
-            callbacks,
-        )));
+    context.extensions.insert(Arc::new(callbacks));
     Ok(context)
 }
 
@@ -476,6 +472,65 @@ fn expiration_preserves_dynamic_numbers_dates_coercion_and_original_errors() -> 
 
 #[path = "native_options_key_tests.rs"]
 mod key_tests;
+
+#[tokio::test]
+async fn owned_callback_builders_invalidate_the_shared_registered_adapter() -> AuthResult<()> {
+    for replace_read in [false, true] {
+        let callbacks = Arc::new(
+            JwtCallbacks::<S>::default()
+                .get_jwks_native(|_| Box::pin(async { Ok("original-read".into()) }))
+                .create_jwk_value(|_, _| Box::pin(async { Ok("original-write".into()) })),
+        );
+        let original = callbacks.to_native();
+        assert!(original.strict_equals(&callbacks.to_native()));
+        let Ok(callbacks) = Arc::try_unwrap(callbacks) else {
+            panic!("The callback owner must remain recoverable after native projection");
+        };
+        let callbacks = if replace_read {
+            callbacks.get_jwks_native(|_| Box::pin(async { Ok("replacement-read".into()) }))
+        } else {
+            callbacks.create_jwk_value(|_, _| Box::pin(async { Ok("replacement-write".into()) }))
+        };
+        let replacement = callbacks.to_native();
+        assert!(!replacement.strict_equals(&original));
+        let plugin = JwtPlugin::new();
+        let context = context(&plugin, callbacks).await?;
+        let first = overrides::NativeOptions::registered(&plugin.config, &context)?;
+        let second = overrides::NativeOptions::registered(&plugin.config, &context)?;
+        let first_adapter = first.0.model_property("adapter")?;
+        let second_adapter = second.0.model_property("adapter")?;
+        assert!(first_adapter.strict_equals(&replacement));
+        assert!(first_adapter.strict_equals(&second_adapter));
+        for name in ["getJwks", "createJwk"] {
+            assert!(
+                first_adapter
+                    .model_property(name)?
+                    .strict_equals(&second_adapter.model_property(name)?)
+            );
+        }
+        let endpoint = EndpointContext::native(None, None, FieldValue::Null, &context);
+        assert_eq!(
+            plugin.read_keys(&endpoint).await?,
+            FieldValue::from(if replace_read {
+                "replacement-read"
+            } else {
+                "original-read"
+            })
+        );
+        assert_eq!(
+            adapter::Keyring::new(adapter::store(&endpoint), &first, &endpoint)
+                .create(FieldMap::new().into())
+                .await?,
+            FieldValue::from(if replace_read {
+                "original-write"
+            } else {
+                "replacement-write"
+            })
+        );
+        assert!(context.database.list_jwk_records().await?.is_empty());
+    }
+    Ok(())
+}
 
 #[path = "native_adapter_tests.rs"]
 mod adapter_tests;

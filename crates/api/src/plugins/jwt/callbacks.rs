@@ -4,7 +4,11 @@ use better_auth_core::{
     AuthPlugin, AuthRecordFields, AuthResult, AuthSchema, CreateJwk, FieldFunction, FieldMap,
     FieldValue, Jwk,
 };
-use std::{future::Future, marker::PhantomData, pin::Pin, sync::Arc};
+use std::{
+    future::Future,
+    pin::Pin,
+    sync::{Arc, OnceLock},
+};
 
 /// A JWT adapter callback that borrows the active endpoint.
 pub type JwtAdapterFuture<'a, T> = Pin<Box<dyn Future<Output = AuthResult<T>> + Send + 'a>>;
@@ -18,6 +22,7 @@ type Create<S> = dyn for<'a> Fn(FieldValue, &'a EndpointContext<'_, S>) -> JwtAd
 pub struct JwtCallbacks<S: AuthSchema> {
     pub(super) get: Option<Arc<Get<S>>>,
     pub(super) create: Option<Arc<Create<S>>>,
+    adapter: OnceLock<FieldValue>,
 }
 
 impl<S: AuthSchema> Default for JwtCallbacks<S> {
@@ -25,6 +30,7 @@ impl<S: AuthSchema> Default for JwtCallbacks<S> {
         Self {
             get: None,
             create: None,
+            adapter: OnceLock::new(),
         }
     }
 }
@@ -62,6 +68,7 @@ impl<S: AuthSchema> JwtCallbacks<S> {
             + 'static,
     {
         self.get = Some(Arc::new(callback));
+        let _ = self.adapter.take();
         self
     }
 
@@ -108,24 +115,29 @@ impl<S: AuthSchema> JwtCallbacks<S> {
             + 'static,
     {
         self.create = Some(Arc::new(callback));
+        let _ = self.adapter.take();
         self
     }
 
     pub(super) fn to_native(&self) -> FieldValue {
-        let mut fields = FieldMap::new();
-        if let Some(callback) = &self.get {
-            let _ = fields.insert(
-                "getJwks".into(),
-                FieldFunction::bound(AdapterBinding::Get(callback.clone())).into(),
-            );
-        }
-        if let Some(callback) = &self.create {
-            let _ = fields.insert(
-                "createJwk".into(),
-                FieldFunction::bound(AdapterBinding::Create(callback.clone())).into(),
-            );
-        }
-        fields.into()
+        self.adapter
+            .get_or_init(|| {
+                let mut fields = FieldMap::new();
+                if let Some(callback) = &self.get {
+                    let _ = fields.insert(
+                        "getJwks".into(),
+                        FieldFunction::bound(AdapterBinding::Get(callback.clone())).into(),
+                    );
+                }
+                if let Some(callback) = &self.create {
+                    let _ = fields.insert(
+                        "createJwk".into(),
+                        FieldFunction::bound(AdapterBinding::Create(callback.clone())).into(),
+                    );
+                }
+                fields.into()
+            })
+            .clone()
     }
 
     pub(super) fn into_native(self) -> FieldValue {
@@ -136,26 +148,6 @@ impl<S: AuthSchema> JwtCallbacks<S> {
 pub(super) enum AdapterBinding<S: AuthSchema> {
     Get(Arc<Get<S>>),
     Create(Arc<Create<S>>),
-}
-
-pub(super) struct RegisteredCallbacks<S: AuthSchema> {
-    pub(super) adapter: FieldValue,
-    schema: PhantomData<fn() -> S>,
-}
-
-impl<S: AuthSchema> From<FieldValue> for RegisteredCallbacks<S> {
-    fn from(adapter: FieldValue) -> Self {
-        Self {
-            adapter,
-            schema: PhantomData,
-        }
-    }
-}
-
-impl<S: AuthSchema> From<JwtCallbacks<S>> for RegisteredCallbacks<S> {
-    fn from(callbacks: JwtCallbacks<S>) -> Self {
-        callbacks.into_native().into()
-    }
 }
 
 fn typed_create(data: FieldValue) -> AuthResult<CreateJwk> {
@@ -177,7 +169,7 @@ impl JwtPlugin {
     pub fn callbacks<S: AuthSchema>(self, callbacks: JwtCallbacks<S>) -> impl AuthPlugin<S> {
         WithCallbacks {
             plugin: self,
-            callbacks: Arc::new(RegisteredCallbacks::from(callbacks)),
+            callbacks: Arc::new(callbacks),
         }
     }
 
@@ -186,7 +178,10 @@ impl JwtPlugin {
     pub fn native_callbacks<S: AuthSchema>(self, adapter: FieldValue) -> impl AuthPlugin<S> {
         WithCallbacks {
             plugin: self,
-            callbacks: Arc::new(RegisteredCallbacks::<S>::from(adapter)),
+            callbacks: Arc::new(JwtCallbacks::<S> {
+                adapter: OnceLock::from(adapter),
+                ..Default::default()
+            }),
         }
     }
 }
