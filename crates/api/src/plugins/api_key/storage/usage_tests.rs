@@ -29,9 +29,8 @@ const BY_ID: &str = "api-key:by-id:usage-key";
 const OLD_REF: &str = "api-key:by-ref:owner";
 const FRESH_REF: &str = "api-key:by-ref:fresh-owner";
 
-#[path = "../../../../../../tests/support/secondary_native_source.rs"]
-mod source;
 use crate::plugins::test_helpers::native_observation::{NativeObservation, assert_replay};
+use crate::plugins::test_helpers::native_source as source;
 use source::source_value;
 
 #[path = "usage_tests/success.rs"]

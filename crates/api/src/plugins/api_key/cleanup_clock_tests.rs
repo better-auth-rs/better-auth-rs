@@ -23,8 +23,7 @@ use std::sync::{
 };
 
 use crate::plugins::test_helpers::native_observation as observation;
-#[path = "../../../../../tests/support/secondary_native_source.rs"]
-mod source;
+use crate::plugins::test_helpers::native_source as source;
 
 const EPOCH: i64 = 2_000_000_000_000;
 

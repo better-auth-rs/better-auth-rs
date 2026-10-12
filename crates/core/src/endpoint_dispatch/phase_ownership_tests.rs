@@ -15,10 +15,12 @@ enum Outcome {
     AfterError,
 }
 
+type RetainedPhase = (&'static str, AuthRequest, FieldValue);
+
 #[derive(Clone)]
 struct Phases {
     outcome: Outcome,
-    retained: Arc<Mutex<Vec<(&'static str, AuthRequest, FieldValue)>>>,
+    retained: Arc<Mutex<Vec<RetainedPhase>>>,
     shared: FieldValue,
 }
 

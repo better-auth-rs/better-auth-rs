@@ -664,7 +664,7 @@ async fn session_reads_follow_token_branches_and_caught_failures_use_anonymous_f
     )
     .await;
     crate::plugins::test_helpers::assert_coded_api_error(
-        &result.expect_err("expected builtin API error"),
+        &result.map(|_| ()).expect_err("expected builtin API error"),
         "UNAUTHORIZED",
         401,
         "INVALID_TOKEN",
@@ -826,7 +826,7 @@ async fn caught_session_failure_discards_nested_cookie_headers_but_keeps_outer_h
                 .resolve_native_for_endpoint(&req, SessionRead::Cached)
                 .await;
             crate::plugins::test_helpers::assert_coded_api_error(
-                &result.expect_err("expected builtin API error"),
+                &result.map(|_| ()).expect_err("expected builtin API error"),
                 "INTERNAL_SERVER_ERROR",
                 500,
                 "FAILED_TO_GET_SESSION",

@@ -58,7 +58,7 @@ impl JwtPlugin {
             let public = keys::parse_json(&key.model_property("publicKey")?)?;
             let algorithm = options.key_algorithm(&key)?;
             let (algorithm, public) = keys::import(public, &algorithm)?;
-            let base = endpoint
+            let base: FieldValue = endpoint
                 .auth
                 .config
                 .base_url
