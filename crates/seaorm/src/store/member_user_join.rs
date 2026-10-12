@@ -42,6 +42,7 @@ where
                 Entity<O::Member>,
                 <S::User as SeaOrmUserModel>::Entity,
             >(
+                self.connection().get_database_backend(),
                 (query.limit(1), O::Member::column("id")?),
                 (
                     O::Member::column(&relation.from)?,

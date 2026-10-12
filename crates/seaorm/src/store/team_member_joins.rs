@@ -47,6 +47,7 @@ where
         let (memberships, children) = if native {
             self.model_fields.canonicalize_id(EntityRole::Team)?;
             let query = super::joins::joined_query::<Entity<O::TeamMember>, Entity<O::Team>>(
+                backend,
                 (parent, O::TeamMember::column("id")?),
                 (
                     O::TeamMember::column(&relation.from)?,

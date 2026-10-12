@@ -4,7 +4,7 @@ use crate::{
     store::{entities::team, joins, map_db_err},
 };
 use better_auth_core::user_fields::{FieldTransforms, UserFieldConfig, UserFieldTransform};
-use sea_orm::Database;
+use sea_orm::{Database, QueryTrait};
 use std::sync::MutexGuard;
 
 fn locked<T>(value: &Mutex<T>) -> AuthResult<MutexGuard<'_, T>> {

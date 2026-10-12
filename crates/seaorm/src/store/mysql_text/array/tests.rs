@@ -79,7 +79,7 @@ fn pinned_mysql_native_arrays() -> AuthResult<()> {
     .map_err(|cause| AuthError::internal(cause.to_string()))?;
     let mut arrays = Vec::new();
     for depth in [64, 512, 2048] {
-        let mut value = 7.into();
+        let mut value: FieldValue = 7.into();
         let mut retained = Vec::new();
         for _ in 0..depth {
             value = vec![value].into();

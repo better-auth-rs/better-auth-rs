@@ -50,9 +50,12 @@ impl FieldDate {
 
 #[cfg(unix)]
 fn local_component(milliseconds: i64, method: &str) -> AuthResult<FieldValue> {
-    #[allow(
-        clippy::useless_conversion,
-        reason = "Unix time_t width differs across supported targets; narrower hosts must reject overflow."
+    #[cfg_attr(
+        target_pointer_width = "64",
+        expect(
+            clippy::useless_conversion,
+            reason = "Unix time_t width differs across supported targets; narrower hosts must reject overflow."
+        )
     )]
     let seconds = libc::time_t::try_from(milliseconds.div_euclid(1_000)).map_err(|cause| {
         AuthError::internal(format!(
