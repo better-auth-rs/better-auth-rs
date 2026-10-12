@@ -1,6 +1,7 @@
 #![expect(
     clippy::panic_in_result_fn,
     clippy::unwrap_used,
+    clippy::indexing_slicing,
     reason = "Frozen numeric observations require exact values, signed zero, rendering and all IEEE-754 bits."
 )]
 

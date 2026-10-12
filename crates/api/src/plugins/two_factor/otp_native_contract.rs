@@ -1,7 +1,6 @@
 #![expect(
     clippy::unwrap_used,
     clippy::indexing_slicing,
-    clippy::panic_in_result_fn,
     reason = "Pinned OTP contracts must fail on invalid fixtures, callback order, or persistence observations."
 )]
 

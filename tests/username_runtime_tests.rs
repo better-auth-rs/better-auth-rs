@@ -1,3 +1,7 @@
+#![expect(
+    clippy::unwrap_used,
+    reason = "Username runtime contracts require successful fixture setup and complete response and storage observations."
+)]
 #![allow(
     clippy::expect_used,
     reason = "Fixture setup and response assertions require successful fallible construction."
@@ -83,8 +87,8 @@ async fn credential_login_only_sends_verification_when_required_and_logs_async_d
             let _ = auth
                 .store()
                 .create_account(better_auth_core::CreateAccount {
-                    user_id: (user.id().into_owned()).into(),
-                    account_id: (user.id().into_owned()).into(),
+                    user_id: user.id().into_owned(),
+                    account_id: user.id().into_owned(),
                     provider_id: "credential".into(),
                     access_token: Default::default(),
                     refresh_token: Default::default(),
@@ -186,7 +190,7 @@ async fn duplicate_in_transaction<S: AuthSchema>(auth: &BetterAuth<S>) {
     )
     .await
     .expect("username lookup must use the active transaction connection");
-    let error = result.err().expect("duplicate username must fail");
+    let error = result.expect_err("duplicate username must fail");
     assert_eq!(error.status_value().unwrap(), "BAD_REQUEST".into());
     assert!(error.is_api_error_instance(better_auth_core::ApiErrorClass::BetterAuth));
     assert_eq!(

@@ -1,7 +1,6 @@
 #![expect(
     clippy::unwrap_used,
     clippy::indexing_slicing,
-    clippy::panic_in_result_fn,
     reason = "Claim contracts require complete storage snapshots and original failure identity. Fixture locks must remain available."
 )]
 use super::*;
