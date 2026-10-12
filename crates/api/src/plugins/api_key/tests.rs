@@ -120,8 +120,7 @@ fn json_body(response: &AuthResponse) -> serde_json::Value {
     serde_json::from_slice(&value.bytes().unwrap()).unwrap()
 }
 
-/// Test helper: verify a key and return the same JSON shape the old HTTP
-/// handler produced. Calls the public server-only verification method.
+/// Verify a key through the public server-only method and production rejection response.
 async fn verify_key(
     plugin: &ApiKeyPlugin,
     ctx: &AuthContext<impl better_auth_core::AuthSchema>,
@@ -140,11 +139,9 @@ async fn verify_key(
         .await
     {
         Ok(view) => serde_json::json!({ "valid": true, "error": null, "key": view }),
-        Err(ApiKeyVerificationError::Validation(error)) => serde_json::json!({
-            "valid": false,
-            "error": error,
-            "key": null,
-        }),
+        Err(error @ ApiKeyVerificationError::Validation(_)) => {
+            json_body(&error.into_response().expect("validation response projects"))
+        }
         Err(
             ApiKeyVerificationError::Internal(error)
             | ApiKeyVerificationError::Endpoint(error)

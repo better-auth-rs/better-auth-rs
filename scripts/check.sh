@@ -772,7 +772,7 @@ PY_CHECK
       cargo test --locked -p better-auth-seaorm-macros --lib || cache_status=1
       cargo clippy --locked --features axum,seaorm2,redis-cache --test api_key_delete_expired_tests -- -D warnings || cache_status=1
       cargo test --locked -p better-auth-core --features redis-cache --lib -- \
-        query:: request_runtime::concurrent:: background::tests:: plugin::tests::auth_context_clock_survives_clone_and_native_dispatch utils::password:: utils::json::runtime:: utils::json::syntax:: field_value:: schema_value:: store::cache:: store::secondary:: store::ephemeral::api_keys:: store::ephemeral::shared_column_contract_tests:: native_sort_ passkey wire::api_key_view::tests:: \
+        query:: request_runtime::concurrent:: background::tests:: plugin::tests::auth_context_clock_survives_clone_and_native_dispatch utils::password:: utils::json::runtime:: utils::json::syntax:: field_value:: schema_value:: store::cache:: store::secondary:: store::api_key_usage:: store::ephemeral::api_keys:: store::ephemeral::shared_column_contract_tests:: native_sort_ passkey wire::api_key_view::tests:: \
         store::ephemeral::native_storage_tests:: store::ephemeral::rows:: \
         store::ephemeral::table::tests:: store::ephemeral::transactions::tests:: \
         store::ephemeral::graph_clone_contract_tests:: store::ephemeral::operation_contract_tests:: || cache_status=1

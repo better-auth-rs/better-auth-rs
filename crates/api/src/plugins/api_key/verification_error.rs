@@ -191,9 +191,8 @@ impl From<ApiKeyErrorCode> for ApiKeyVerificationError {
 
 impl Serialize for ApiKeyValidationError {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        self.body_value()
-            .map_err(serde::ser::Error::custom)?
-            .serialize(serializer)
+        let value = self.body_value().map_err(serde::ser::Error::custom)?;
+        better_auth_core::field_value::serde::value::serialize(&value, serializer)
     }
 }
 

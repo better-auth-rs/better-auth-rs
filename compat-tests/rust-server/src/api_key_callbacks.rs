@@ -4,8 +4,8 @@ use axum::{
 };
 use better_auth::plugins::api_key::{
     ApiKeyConfig, ApiKeyDefaultPermissions, ApiKeyEndpoint, ApiKeyGenerator, ApiKeyGetter,
-    ApiKeyPermissions, ApiKeyPlugin, ApiKeyStorage, ApiKeyValidator, ApiKeyVerificationError,
-    CreateKeyRequest, RateLimitDefaults, UpdateKeyRequest, VerifyApiKey,
+    ApiKeyPermissions, ApiKeyPlugin, ApiKeyStorage, ApiKeyValidator, CreateKeyRequest,
+    RateLimitDefaults, UpdateKeyRequest, VerifyApiKey,
 };
 use better_auth::{AuthError, BetterAuth};
 use better_auth_core::{
@@ -166,15 +166,7 @@ impl ApiKeyCallbacks {
                                     key,
                                 })
                                 .map_err(Into::into),
-                                Err(ApiKeyVerificationError::Validation(error)) => {
-                                    to_raw_value(&json!({"valid":false,"error":error,"key":null}))
-                                        .map_err(Into::into)
-                                }
-                                Err(ApiKeyVerificationError::Endpoint(error)) => Err(error),
-                                Err(
-                                    error @ (ApiKeyVerificationError::Internal(_)
-                                    | ApiKeyVerificationError::Rejected(_)),
-                                ) => error.into_response().and_then(|response| {
+                                Err(error) => error.into_response().and_then(|response| {
                                     serde_json::from_slice(&response.body.bytes()?)
                                         .map_err(Into::into)
                                 }),
