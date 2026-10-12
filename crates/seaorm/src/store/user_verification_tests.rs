@@ -8,10 +8,15 @@ use crate::store::{bundled_schema::BundledSchema, migrator::run_migrations};
 use better_auth_core::{
     AuthConfig, AuthUser, CreateAccount, CreateSession, CreateUser, UpdateUser,
     store::{AccountStore, SessionStore, UserStore, VerificationStore},
+    user_fields::{FieldTransforms, UserFieldConfig, UserFieldTransform},
 };
 use chrono::Utc;
 use std::sync::Arc;
 use tokio::{sync::Barrier, task::JoinSet};
+
+tokio::task_local! {
+    static FIRST_RESERVATION_OUTPUT: std::cell::Cell<bool>;
+}
 
 struct FailAfterVerification;
 #[better_auth_core::database_hooks()]
@@ -53,7 +58,26 @@ async fn database_cleanup_reservations_preserve_new_owner_sessions_after_committ
         let database = sea_orm::Database::connect(options).await?;
         let result = async {
             run_migrations(&database).await?;
-            let config = AuthConfig::new("a-secret-that-is-at-least-32-characters");
+            let mut config = AuthConfig::new("a-secret-that-is-at-least-32-characters");
+            let reservation_reads = Arc::new(Barrier::new(8));
+            let _ = config.verification.additional_fields.insert("value".into(), UserFieldConfig {
+                required: Some(true),
+                transform: Some(FieldTransforms {
+                    input: None,
+                    output: Some(UserFieldTransform::new_async(move |value| {
+                        let reservation_reads = reservation_reads.clone();
+                        async move {
+                            if FIRST_RESERVATION_OUTPUT.try_with(|first| first.replace(false)).unwrap_or(false) {
+                                // Upstream rethrows the insert error if the owner releases before the duplicate readback.
+                                let _ = tokio::time::timeout(std::time::Duration::from_secs(10), reservation_reads.wait())
+                                    .await.map_err(|error| AuthError::internal(format!("Reservation readback barrier: {error}")))?;
+                            }
+                            Ok(value)
+                        }
+                    })),
+                }),
+                ..Default::default()
+            });
             let store = Arc::new(SeaOrmStore::<BundledSchema>::new(config.clone(), database.clone()));
             let user = store.create_user(CreateUser::new().with_email("proof@example.com").with_name("Fixture")).await?;
             let user_id = user.id().into_owned();
@@ -82,12 +106,12 @@ scope: Default::default(),
             let mut tasks = JoinSet::new();
             for _ in 0..8 {
                 let store = store.clone(); let barrier = barrier.clone(); let user_id = user_id.clone();
-                let _ = tasks.spawn(async move {
+                let _ = tasks.spawn(FIRST_RESERVATION_OUTPUT.scope(std::cell::Cell::new(true), async move {
                     let _ = barrier.wait().await;
                     let user = store.verify_user_and_revoke_unproven_access(user_id.typed()?).await?.ok_or_else(|| AuthError::internal("Verified user is absent"))?;
                     assert!(user.email_verified().typed().copied()?);
                     store.create_session(session(user_id.typed()?)).await
-                });
+                }));
             }
             while let Some(result) = tasks.join_next().await { let _ = result??; }
             assert_eq!(store.get_user_sessions(user_id.typed()?).await?.len(), 8);
