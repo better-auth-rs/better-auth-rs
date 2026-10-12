@@ -111,7 +111,7 @@ async function captureCase(scenario, seed) {
 }
 
 export async function capturePasskeyTransportMethods() {
-  assertSecondaryNativeVersions();
+  assertSecondaryNativeVersions(["better-auth", "@better-auth/core", "@better-auth/passkey"]);
   assert.equal(JSON.parse(readFileSync(new URL("../node_modules/@better-auth/passkey/package.json", import.meta.url), "utf8")).version, "1.7.6");
   const seedFixture = JSON.parse(readFileSync(seedPath, "utf8"));
   assert.equal(seedFixture.contract, "passkey-native-errors");

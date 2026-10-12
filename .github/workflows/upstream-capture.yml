@@ -22,16 +22,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - contract: two-factor-otp-native
-            regressions:
-              - verification-otp-consumer-native-capture
-              - verification-auth-consumer-native-capture
-              - two-factor-backup-code-native-capture
-              - two-factor-backup-code-encoding-capture
-              - two-factor-backup-generation-capture
           - contract: passkey-transport-methods
             regressions: []
-          - contract: api-key-rate-limit-native
+          - contract: two-factor-otp-counter
             regressions: []
     runs-on: ubuntu-latest
     timeout-minutes: 10

@@ -54,7 +54,9 @@ async function captureCase(scenario) {
     const stored = JSON.parse(harness.cache.get(harness.targetKey));
     const otp = scenario.splitShape === "string" ? "1"
       : ["null", "undefined"].includes(scenario.splitShape) || ["null", "undefined"].includes(scenario.value) ? "undefined" : "123456";
-    const attempts = scenario.splitShape === "string" || scenario.attempts === "string-object" ? 3 : 1;
+    const attempts = scenario.counterText === undefined
+      ? scenario.splitShape === "string" || scenario.attempts === "string-object" ? 3 : 1
+      : (Number.parseInt(scenario.counterText, 10) || 0) + 1;
     assert.equal(stored.value, `${otp}:${attempts}`);
     assert.equal(stored.expiresAt, new Date(now + 60_000).toISOString());
   }
@@ -68,7 +70,7 @@ async function captureCase(scenario) {
   return captured.observation;
 }
 
-export async function captureTwoFactorOtpNative() {
+export async function captureTwoFactorOtpNative(scenarios = twoFactorOtpNativeCases) {
   assertSecondaryNativeVersions(["better-auth", "@better-auth/core"]);
   const provenance = ["plugins/two-factor/otp/index.mjs", "plugins/two-factor/verify-two-factor.mjs", "db/internal-adapter.mjs"].map(path => ({
     path: `better-auth/dist/${path}`, sha256: createHash("sha256").update(readFileSync(new URL(`../node_modules/better-auth/dist/${path}`, import.meta.url))).digest("hex"),
@@ -76,7 +78,7 @@ export async function captureTwoFactorOtpNative() {
   return withClock(async setClock => {
     setClock(now);
     const cases = [];
-    for (const scenario of twoFactorOtpNativeCases) cases.push(await captureCase(scenario));
+    for (const scenario of scenarios) cases.push(await captureCase(scenario));
     return { version: secondaryNativeVersion, backend: "memory", provenance,
       boundary: "Real verifyTwoFactorOTP endpoint, Memory adapter and native secondary Verification values. Shared observations retain complete return/error values, split getter and receiver order, string counter conversion, original errors, consumed rows, restored attempts, factor writes and complete storage. Symbol iterator overrides remain outside the native value model. No OTP algorithm is copied into the harness.", cases };
   });

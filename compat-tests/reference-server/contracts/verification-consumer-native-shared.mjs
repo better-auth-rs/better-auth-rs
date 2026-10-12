@@ -57,6 +57,7 @@ export function createConsumerHarness(scenario, identifier) {
     }
   };
   const attempts = () => {
+    if (scenario.counterText !== undefined) return scenario.counterText;
     if (scenario.attempts === "string-object" || scenario.attempts === "string-error") {
       const value = { marker: "attempts" };
       method(value, "toString", () => scenario.attempts === "string-error" ? fail("throw:attempt-conversion") : "  +2tail");
