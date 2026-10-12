@@ -115,11 +115,16 @@ fn increment_sql_keeps_outer_guards_and_orders_set_before_both_where_bindings() 
         } else {
             assert_eq!(
                 statement.sql,
-                "UPDATE \"users\" SET \"name\" = 'after' WHERE \"users\".\"name\" = 'before' AND \"users\".\"id\" IN (SELECT \"users\".\"id\" FROM \"users\" WHERE \"users\".\"name\" = 'before' LIMIT $1)"
+                "UPDATE \"users\" SET \"name\" = $1 WHERE \"users\".\"name\" = $2 AND \"users\".\"id\" IN (SELECT \"users\".\"id\" FROM \"users\" WHERE \"users\".\"name\" = $3 LIMIT $4)"
             );
             assert_eq!(
                 statement.values,
-                Some(Values(vec![Value::BigUnsigned(Some(1))]))
+                Some(Values(vec![
+                    Value::PostgresUnspecifiedText(Some("after".into())),
+                    Value::PostgresUnspecifiedText(Some("before".into())),
+                    Value::PostgresUnspecifiedText(Some("before".into())),
+                    Value::BigUnsigned(Some(1))
+                ]))
             );
         }
     }

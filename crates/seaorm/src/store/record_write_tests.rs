@@ -196,12 +196,25 @@ fn returning_update_keeps_all_conditions_and_reuses_only_the_first_selector() ->
             assert_eq!(
                 actual.sql,
                 format!(
-                    "UPDATE {table} SET {name} = 'after', {image} = NULL WHERE {table}.{id} = 'selected' AND {table}.{name} = 'before' AND {table}.{image} IS NULL"
+                    "UPDATE {table} SET {name} = $1, {image} = $2 WHERE {table}.{id} = $3 AND {table}.{name} = $4 AND {table}.{image} IS NULL"
                 )
             );
-            assert_eq!(actual.values, Some(Values(Vec::new())));
-            assert_eq!(selected.sql, format!("SELECT {table}.{id} = 'selected'"));
-            assert_eq!(selected.values, Some(Values(Vec::new())));
+            assert_eq!(
+                actual.values,
+                Some(Values(vec![
+                    Value::PostgresUnspecifiedText(Some("after".into())),
+                    Value::PostgresUnspecifiedText(None),
+                    Value::PostgresUnspecifiedText(Some("selected".into())),
+                    Value::PostgresUnspecifiedText(Some("before".into())),
+                ]))
+            );
+            assert_eq!(selected.sql, format!("SELECT {table}.{id} = $1"));
+            assert_eq!(
+                selected.values,
+                Some(Values(vec![Value::PostgresUnspecifiedText(Some(
+                    "selected".into()
+                ))]))
+            );
         } else {
             assert_eq!(
                 actual.sql,
