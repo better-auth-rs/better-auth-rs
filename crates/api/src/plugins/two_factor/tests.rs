@@ -40,8 +40,8 @@ pub(super) async fn create_test_context_with_credential_user(
     _ = ctx
         .database
         .create_account(CreateAccount {
-            user_id: (user.id.clone()).into(),
-            account_id: (user.id.clone()).into(),
+            user_id: user.id.clone(),
+            account_id: user.id.clone(),
             provider_id: ("credential".to_string()).into(),
             access_token: Default::default(),
             refresh_token: Default::default(),
@@ -298,7 +298,7 @@ async fn test_verify_existing_session_factor_enables_two_factor_and_reissues_ses
         "cookie".into(),
         format!(
             "better-auth.session_token={}",
-            cookie_value(&set_cookie_headers[0])
+            cookie_value(set_cookie_headers[0])
         ),
     );
     let (enabled_user, new_session) = ctx.require_session(&request).await.unwrap();

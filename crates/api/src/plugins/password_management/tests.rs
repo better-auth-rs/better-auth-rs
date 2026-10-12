@@ -62,8 +62,8 @@ async fn create_test_context_with_user() -> (AuthContext<TestSchema>, UserView, 
     let _ = ctx
         .database
         .create_account(CreateAccount {
-            user_id: (user.id.clone()).into(),
-            account_id: (user.id.clone()).into(),
+            user_id: user.id.clone(),
+            account_id: user.id.clone(),
             provider_id: ("credential".to_string()).into(),
             access_token: Default::default(),
             refresh_token: Default::default(),
@@ -104,7 +104,7 @@ async fn create_test_context_with_oauth_only_user()
     let _ = ctx
         .database
         .create_account(CreateAccount {
-            user_id: (user.id.clone()).into(),
+            user_id: user.id.clone(),
             account_id: ("google-account-id".to_string()).into(),
             provider_id: ("google".to_string()).into(),
             access_token: (Some("oauth-access-token".to_string()))

@@ -124,7 +124,7 @@ async fn email_signin_null_session_keeps_credentials_and_returns_unauthorized() 
     );
     let result = EmailPasswordPlugin::new().on_request(&req, &ctx).await;
     crate::plugins::test_helpers::assert_coded_api_error(
-        &result.err().expect("expected builtin API error"),
+        &result.expect_err("expected builtin API error"),
         "UNAUTHORIZED",
         401,
         "FAILED_TO_CREATE_SESSION",
@@ -163,7 +163,7 @@ async fn password_replacement_null_session_keeps_password_change_and_revocation(
         Some(serde_json::json!({"currentPassword":"Password123!","newPassword":"Replacement123!","revokeOtherSessions":true}).to_string().into_bytes()));
     let result = PasswordManagementPlugin::new().on_request(&req, &ctx).await;
     crate::plugins::test_helpers::assert_coded_api_error(
-        &result.err().expect("expected builtin API error"),
+        &result.expect_err("expected builtin API error"),
         "INTERNAL_SERVER_ERROR",
         500,
         "FAILED_TO_GET_SESSION",

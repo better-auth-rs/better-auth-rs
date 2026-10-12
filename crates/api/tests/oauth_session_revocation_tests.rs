@@ -375,21 +375,11 @@ async fn missing_token_endpoint_preserves_account_route_errors_and_stored_creden
         .await
         .unwrap();
     assert_eq!(
-        accounts[0]
-            .access_token
-            .typed()
-            .unwrap()
-            .as_deref()
-            .as_deref(),
+        accounts[0].access_token.typed().unwrap().as_deref(),
         Some("provider-access")
     );
     assert_eq!(
-        accounts[0]
-            .refresh_token
-            .typed()
-            .unwrap()
-            .as_deref()
-            .as_deref(),
+        accounts[0].refresh_token.typed().unwrap().as_deref(),
         Some("provider-refresh")
     );
 }

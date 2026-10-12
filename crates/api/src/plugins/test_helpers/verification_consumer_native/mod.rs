@@ -212,7 +212,6 @@ impl LogSink for Logger {
 pub(crate) struct Harness {
     pub(crate) scenario: Json,
     pub(crate) root: FieldValue,
-    pub(crate) value: FieldValue,
     pub(crate) original: FieldValue,
     pub(crate) cache: Arc<Storage>,
     pub(crate) target_key: String,
@@ -238,7 +237,7 @@ impl Harness {
             root: OnceLock::new(),
             roots: Mutex::default(),
         });
-        let (root, value) = values::input(&state, identifier)?;
+        let root = values::input(&state, identifier)?;
         state.root.set(root.clone()).unwrap();
         let retained: FieldValue = FieldMap::from([
             ("value".into(), "unchanged".into()),
@@ -259,7 +258,6 @@ impl Harness {
         Ok(Self {
             scenario: scenario.clone(),
             root,
-            value,
             original,
             cache,
             target_key,

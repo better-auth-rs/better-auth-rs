@@ -202,7 +202,7 @@ async fn expired_cleanup_catch_child() -> AuthResult<()> {
         assert_eq!(*lock(&state.events)?, expected);
         assert_eq!(
             store.plugin_storage_rows(EntityRole::ApiKey)?,
-            [row.clone()]
+            std::slice::from_ref(&row)
         );
         let other = ctx
             .clone()

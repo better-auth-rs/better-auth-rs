@@ -291,7 +291,7 @@ async fn test_delete_user_with_verification() {
     ctx.database
         .create_verification(better_auth_core::CreateVerification {
             identifier: (format!("delete-account-{}", token)).into(),
-            value: (user.id.clone()).into(),
+            value: user.id.clone(),
             expires_at: (chrono::Utc::now() + Duration::hours(24)).into(),
             ..Default::default()
         })
@@ -347,7 +347,7 @@ async fn test_delete_user_callback_clears_account_cookie_when_enabled() {
     ctx.database
         .create_verification(better_auth_core::CreateVerification {
             identifier: (format!("delete-account-{token}")).into(),
-            value: (user.id.clone()).into(),
+            value: user.id.clone(),
             expires_at: (chrono::Utc::now() + Duration::hours(24)).into(),
             ..Default::default()
         })

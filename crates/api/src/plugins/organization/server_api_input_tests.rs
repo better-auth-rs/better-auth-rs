@@ -74,8 +74,8 @@ async fn add_member_validates_fields_before_queries_and_limit_callbacks() {
     );
     let plugin = OrganizationPlugin::with_config(config);
     let valid = AddMemberInput {
-        user_id: user.id.into(),
-        organization_id: organization.id.into(),
+        user_id: user.id,
+        organization_id: organization.id,
         role: RoleInput::One("member".into()).into(),
         team_id: Default::default(),
         additional_fields: [("label".into(), "valid".into())].into_iter().collect(),

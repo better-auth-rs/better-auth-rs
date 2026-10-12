@@ -118,7 +118,7 @@ pub(super) fn assert_complete(actual: &Value, expected: &Value, scenario: &str) 
         let mut characters = text.chars();
         let mut result: String = characters.by_ref().take(512).collect();
         if characters.next().is_some() {
-            result.push_str("…");
+            result.push('…');
         }
         result
     }

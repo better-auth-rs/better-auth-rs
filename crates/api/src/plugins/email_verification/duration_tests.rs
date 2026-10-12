@@ -41,7 +41,10 @@ fn email_verification_numeric_dates_match_all_pinned_jwts_and_expiry_boundaries(
         .as_array()
         .expect("Captured duration scenarios");
     assert_eq!(scenarios.len(), 7);
-    for (backend, cases) in ["memory", "sqlite"].into_iter().zip(cases.chunks_exact(7)) {
+    for (backend, cases) in ["memory", "sqlite"]
+        .into_iter()
+        .zip(cases.as_chunks::<7>().0)
+    {
         for (case, scenario) in cases.iter().zip(scenarios) {
             assert_eq!(case["backend"], backend);
             assert_eq!(&case["scenario"], scenario);

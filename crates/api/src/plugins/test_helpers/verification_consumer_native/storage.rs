@@ -28,10 +28,6 @@ impl Storage {
         Ok(self.entries.lock().unwrap().contains_key(key))
     }
 
-    pub(crate) fn keys(&self) -> AuthResult<Vec<String>> {
-        Ok(self.entries.lock().unwrap().keys().cloned().collect())
-    }
-
     pub(super) fn snapshot(&self) -> AuthResult<FieldValue> {
         Ok(self
             .entries

@@ -241,7 +241,7 @@ async fn check_consumers<S: AuthSchema>(database: Arc<dyn AuthStore<S>>) -> Auth
                 .iter()
                 .find(|plugin| plugin.name() == *name)
                 .unwrap();
-            let error = plugin.on_request(&req, &ctx).await.err().expect(path);
+            let error = plugin.on_request(&req, &ctx).await.expect_err(path);
             if throws {
                 assert!(
                     error.raw_value().unwrap().strict_equals(&original),

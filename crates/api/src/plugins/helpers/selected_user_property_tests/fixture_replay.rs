@@ -5,8 +5,7 @@ use better_auth_core::{AuthConfig, AuthContext, AuthRecordFields};
 use serde_json::{Value as Json, json};
 use test_helpers::native_observation::assert_replay;
 
-#[path = "../../../../../../tests/support/secondary_native_source.rs"]
-mod source;
+use crate::plugins::test_helpers::native_source as source;
 
 pub(super) struct Before<'a> {
     context: &'a AuthContext<StatelessSchema>,

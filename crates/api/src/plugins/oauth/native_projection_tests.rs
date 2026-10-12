@@ -358,8 +358,7 @@ async fn cookie_version_mutation_is_visible_only_to_later_oauth_user_projection(
                     let observed = observed.clone();
                     async move {
                         let _ = observed.fetch_add(1, Ordering::SeqCst);
-                        let _ = data
-                            .user_value()?
+                        data.user_value()?
                             .as_object()
                             .ok_or_else(|| missing("Cookie version User must remain native"))?
                             .set("name", value)?;

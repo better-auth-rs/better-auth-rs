@@ -19,8 +19,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 mod native_boundary;
 mod runtime;
-#[path = "../../../../../../tests/support/secondary_native_source.rs"]
-mod source;
+use crate::plugins::test_helpers::native_source as source;
 
 const NOW: f64 = 2_000_000_000_000.0;
 

@@ -142,8 +142,7 @@ fn selection_defers_failed_coercion_until_both_methods_return() -> AuthResult<()
             "EdDSA".into(),
             (Utc::now().timestamp_millis() as f64).into(),
         )
-        .err()
-        .expect("Native time conversion must fail");
+        .expect_err("Native time conversion must fail");
         assert_eq!(error.message_value()?, "JWK time conversion failed".into());
         assert!(error.into_thrown_value()?.strict_equals(&failure));
         assert_subtraction(&events, true);

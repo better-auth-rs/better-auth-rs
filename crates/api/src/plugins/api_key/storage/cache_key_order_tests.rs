@@ -11,7 +11,7 @@
 
 use super::*;
 use crate::plugins::test_helpers::native_observation::{NativeObservation, assert_replay};
-use better_auth_core::{FieldDate, FieldFunction, FieldObject};
+use better_auth_core::{FieldDate, FieldObject};
 use serde_json::json;
 use std::sync::{Mutex, OnceLock, Weak};
 use tokio::sync::{Notify, oneshot};

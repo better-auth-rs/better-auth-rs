@@ -300,8 +300,7 @@ async fn anonymous_delete_reads_the_public_object_from_a_many_user_relationship(
             &plugin
                 .delete(&req, &ctx)
                 .await
-                .err()
-                .expect("expected builtin API error"),
+                .expect_err("expected builtin API error"),
             "FORBIDDEN",
             403,
             "USER_IS_NOT_ANONYMOUS",

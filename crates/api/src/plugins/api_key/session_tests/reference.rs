@@ -216,7 +216,7 @@ async fn virtual_session_preserves_projected_reference_before_serial_user_conver
             );
             assert_eq!(
                 raw.storage_rows(EntityRole::User).unwrap(),
-                [initial_user.clone()]
+                std::slice::from_ref(&initial_user)
             );
             let keys = raw.storage_rows(EntityRole::ApiKey).unwrap();
             let [stored] = keys.as_slice() else {

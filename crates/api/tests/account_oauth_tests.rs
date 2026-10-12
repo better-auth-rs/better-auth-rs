@@ -1395,7 +1395,7 @@ async fn test_account_linking_disabled_rejects_new_provider() {
     // Simulate a callback request
     let mut req = AuthRequest::new(
         HttpMethod::Get,
-        &format!("/callback/test?code=test-code&state={}", state),
+        format!("/callback/test?code=test-code&state={}", state),
     );
     req.query
         .get_or_insert_with(|| serde_json::json!({}))
@@ -1552,7 +1552,7 @@ async fn test_callback_with_encryption_encrypts_tokens_for_new_user() {
 
     let mut req = AuthRequest::new(
         HttpMethod::Get,
-        &format!("/callback/test?code=test-code&state={}", state),
+        format!("/callback/test?code=test-code&state={}", state),
     );
     req.query
         .get_or_insert_with(|| serde_json::json!({}))

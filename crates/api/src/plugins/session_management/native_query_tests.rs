@@ -95,7 +95,7 @@ async fn active_query<S: AuthSchema>(
     let context = AuthContext::new(config, store).expect("fixture context initializes");
     let listed = super::list_sessions_core(&owner.id.field_value(), &context).await?;
     if expect_active {
-        assert_eq!(listed, [active.clone()]);
+        assert_eq!(listed, std::slice::from_ref(&active));
         assert_eq!(*trace.lock().unwrap(), [FieldValue::from("active")]);
     } else {
         assert!(listed.is_empty());

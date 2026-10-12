@@ -211,7 +211,7 @@ async fn otp_enrollment_rotates_session_and_does_not_enroll_an_authenticator() {
         test_helpers::create_auth_request_no_query(HttpMethod::Get, "/get-session", None, None);
     let _ = req.headers.insert(
         "cookie".into(),
-        format!("better-auth.session_token={}", cookie_value(&cookies[0])),
+        format!("better-auth.session_token={}", cookie_value(cookies[0])),
     );
     let (updated, current) = ctx.require_session(&req).await.unwrap();
     assert_eq!(updated.two_factor_enabled, Some(true));

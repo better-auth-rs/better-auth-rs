@@ -169,10 +169,9 @@ impl FieldObjectSource for Source {
             if self
                 .own_property_descriptor(&name)?
                 .is_some_and(|descriptor| descriptor.enumerable)
+                && let Some(value) = self.get_with_receiver(&name, &FieldValue::Undefined)?
             {
-                if let Some(value) = self.get_with_receiver(&name, &FieldValue::Undefined)? {
-                    let _ = fields.insert(name, value);
-                }
+                let _ = fields.insert(name, value);
             }
         }
         Ok(fields)

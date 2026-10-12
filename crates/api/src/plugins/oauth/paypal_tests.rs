@@ -287,7 +287,6 @@ impl OAuthProfileMapper for Mapper {
                 .map(|v| SchemaValue::from_json(Some(v)))
                 .transpose()?,
             additional_fields: better_auth_core::FieldMap::from_json(extra)?,
-            ..Default::default()
         })
     }
 }

@@ -423,8 +423,7 @@ async fn generation_requires_session_before_client_policy_and_skips_both_generat
         &plugin
             .on_request(&anonymous, &ctx)
             .await
-            .err()
-            .expect("expected builtin API error"),
+            .expect_err("expected builtin API error"),
         "UNAUTHORIZED",
         401,
         "UNAUTHORIZED",

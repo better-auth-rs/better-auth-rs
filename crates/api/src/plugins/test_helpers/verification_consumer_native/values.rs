@@ -200,7 +200,7 @@ fn value(state: &Arc<State>) -> FieldValue {
     }
 }
 
-pub(super) fn input(state: &Arc<State>, identifier: &str) -> AuthResult<(FieldValue, FieldValue)> {
+pub(super) fn input(state: &Arc<State>, identifier: &str) -> AuthResult<FieldValue> {
     let value = value(state);
     let root = Root::new(if text(state, "root") == "function" {
         "function"
@@ -248,7 +248,7 @@ pub(super) fn input(state: &Arc<State>, identifier: &str) -> AuthResult<(FieldVa
             expiry(&state)
         });
     }
-    let copied_value = value.clone();
+    let copied_value = value;
     let expected = root.owner();
     let weak = Arc::downgrade(state);
     root.getter("value", true, move |receiver| {
@@ -278,5 +278,5 @@ pub(super) fn input(state: &Arc<State>, identifier: &str) -> AuthResult<(FieldVa
         }
         Ok(copied_value.clone())
     });
-    Ok((keep(state, root), value))
+    Ok(keep(state, root))
 }

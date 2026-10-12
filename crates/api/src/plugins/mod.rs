@@ -55,6 +55,8 @@ pub(crate) mod test_helpers {
     pub(crate) mod native_session;
     #[path = "../../../../../tests/support/native_sort_contract.rs"]
     pub(crate) mod native_sort_contract;
+    #[path = "../../../../../tests/support/secondary_native_source.rs"]
+    pub(crate) mod native_source;
     #[path = "../../../../../tests/support/replay_failures.rs"]
     mod replay_failures;
     pub(crate) use replay_failures::ReplayFailures;
