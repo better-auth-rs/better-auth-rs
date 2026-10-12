@@ -20,7 +20,9 @@ async function captureCase({ kind, mode }) {
     } });
   }
   getter(root, first, () => child);
-  getter(root, later, () => "later-value", mode !== "show-hidden");
+  if (mode !== "fill-hole") {
+    getter(root, later, () => "later-value", mode !== "show-hidden" && mode !== "hidden-static");
+  }
   getter(root, tail, () => "tail-value");
   getter(child, "mutate", () => {
     root.mutation = "retained";
@@ -32,6 +34,14 @@ async function captureCase({ kind, mode }) {
       } });
     } else if (mode === "hide-later" || mode === "show-hidden") {
       Object.defineProperty(root, later, { enumerable: mode === "show-hidden" });
+    } else if (mode === "fill-hole") {
+      getter(root, later, () => "inserted-value");
+    } else if (mode === "grow") {
+      getter(root, "3", () => "grown-value");
+    } else if (mode === "shrink") {
+      root.length = 1;
+    } else if (mode === "hidden-static") {
+      assert.equal(Object.getOwnPropertyDescriptor(root, later).enumerable, false);
     } else {
       assert.equal(mode, "throw-original");
       throw original;
@@ -50,10 +60,10 @@ async function captureCase({ kind, mode }) {
     events: native.events, functions: native.functions };
 }
 
-export async function captureNativePropertyClone() {
+export async function captureNativePropertyClone(scenarios = nativePropertyCloneCases) {
   assertSecondaryNativeVersions(["better-auth", "@better-auth/core"]);
   const cases = [];
-  for (const scenario of nativePropertyCloneCases) cases.push(await captureCase(scenario));
+  for (const scenario of scenarios) cases.push(await captureCase(scenario));
   return { version: secondaryNativeVersion, runtime: { bun: Bun.version },
     boundary: "Bun structuredClone property selection after nested getters mutate later descriptors; complete descriptor graphs retain function reflection.",
     cases };

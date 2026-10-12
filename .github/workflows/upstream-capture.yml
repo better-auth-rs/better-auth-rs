@@ -22,7 +22,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - contract: native-property-clone
+          - contract: native-property-clone-array-boundaries
             regressions: []
     runs-on: ubuntu-latest
     timeout-minutes: 10
