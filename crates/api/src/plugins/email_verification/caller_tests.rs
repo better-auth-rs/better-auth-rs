@@ -1,7 +1,6 @@
 #![expect(
     clippy::unwrap_used,
     clippy::indexing_slicing,
-    clippy::panic_in_result_fn,
     reason = "Native token callers must retain complete delivery payloads and original failures."
 )]
 

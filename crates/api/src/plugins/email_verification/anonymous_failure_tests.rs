@@ -1,8 +1,3 @@
-#![expect(
-    clippy::panic_in_result_fn,
-    reason = "Anonymous rejection regressions compare complete response, callback, and storage results."
-)]
-
 use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},
@@ -160,7 +155,9 @@ async fn anonymous_verification_only_rethrows_truthy_caught_failures() -> AuthRe
             assert!(request.native_session_snapshot()?.is_none());
             if swallowed {
                 let Some(response) = result? else {
-                    panic!("Verification route must return a response for {name}");
+                    return Err(AuthError::internal(format!(
+                        "Verification route must return a response for {name}"
+                    )));
                 };
                 assert_eq!(response.status, 200, "{name}");
                 assert_eq!(
@@ -170,7 +167,9 @@ async fn anonymous_verification_only_rethrows_truthy_caught_failures() -> AuthRe
                 );
             } else {
                 let Err(error) = result else {
-                    panic!("Verification route must propagate {name}");
+                    return Err(AuthError::internal(format!(
+                        "Verification route must propagate {name}"
+                    )));
                 };
                 if let Some(thrown) = thrown {
                     assert!(
