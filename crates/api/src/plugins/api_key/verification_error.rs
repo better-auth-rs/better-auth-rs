@@ -42,7 +42,7 @@ pub struct ApiKeyValidationError {
     pub message: ApiKeyErrorMessage,
     /// Rate-limit timing, when the rejection is a rate limit.
     pub details: Option<ApiKeyErrorDetails>,
-    native: Option<AuthError>,
+    native: Option<Box<AuthError>>,
 }
 
 impl ApiKeyValidationError {
@@ -102,7 +102,7 @@ impl ApiKeyValidationError {
 
     fn body_value(&self) -> AuthResult<FieldValue> {
         self.native
-            .as_ref()
+            .as_deref()
             .map_or_else(|| Ok(self.declared_body()), AuthError::body_value)
     }
 
@@ -110,7 +110,7 @@ impl ApiKeyValidationError {
         let status = self.status().0;
         let body = self.declared_body();
         self.native
-            .get_or_insert_with(|| AuthError::from_status(status, body))
+            .get_or_insert_with(|| Box::new(AuthError::from_status(status, body)))
     }
 
     pub(super) fn response(&self) -> AuthResult<AuthResponse> {
