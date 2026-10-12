@@ -50,7 +50,9 @@ impl TableRefBuilder for KyselyMysqlQueryBuilder {}
 
 impl PrecedenceDecider for KyselyMysqlQueryBuilder {
     fn inner_expr_well_known_greater_precedence(&self, inner: &Expr, outer: &Oper) -> bool {
-        common_inner_expr_well_known_greater_precedence(inner, outer)
+        // Kysely RawNode fragments own their grouping; the compiler does not insert parentheses.
+        matches!(inner, Expr::Custom(_) | Expr::CustomWithExpr(..))
+            || common_inner_expr_well_known_greater_precedence(inner, outer)
     }
 }
 

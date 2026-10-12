@@ -45,6 +45,8 @@ for contract in ("mysql-text", "mysql-native-values"):
 PY
 
 text_status=0
+bun --no-install test ./compat-tests/reference-server/contracts/mysql-raw-expression.test.ts \
+  2>&1 | tee "$text_output/raw-expression-source.log" || text_status=1
 cargo test --manifest-path "$text_root/sea-query/Cargo.toml" "${text_patch[@]}" --locked \
   --target-dir "$PWD/target" --features "$text_features" --tests \
   2>&1 | tee "$text_output/sea-query-original.log" || text_status=1

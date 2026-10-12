@@ -27,6 +27,24 @@ fn select() -> SelectStatement {
 }
 
 #[test]
+fn raw_binary_operands_preserve_only_explicit_grouping() {
+    for fragment in ["LOWER(?)", "(LOWER(?))"] {
+        let raw = Expr::cust_with_expr(fragment, column("Name"));
+        let expected = fragment.replace('?', "`MiX``ed`.`Name`");
+        for (expression, predicate) in [
+            (raw.clone().eq("upper"), format!("{expected} = ?")),
+            (Expr::val("upper").eq(raw), format!("? = {expected}")),
+        ] {
+            let (sql, values) = select()
+                .and_where(expression)
+                .build_any(&KyselyMysqlQueryBuilder);
+            assert_eq!(sql, format!("select * from `MiX``ed` where {predicate}"));
+            assert_eq!(values, Values(vec!["upper".into()]));
+        }
+    }
+}
+
+#[test]
 #[ignore = "requires the pinned Kysely/mysql2 source observation from GitHub Actions"]
 fn pinned_mysql_compiler_templates_and_parameters() {
     let fixture = std::env::var("BETTER_AUTH_MYSQL_TEXT_FIXTURE").expect("source observation path");
