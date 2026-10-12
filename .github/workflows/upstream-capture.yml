@@ -4,21 +4,20 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: Capture upstream fixtures or prepare dependency locks
+        description: Capture upstream fixtures or prepare driver dependency locks
         type: choice
         default: fixture
         required: true
         options:
           - fixture
           - dependencies
-          - radix-dependencies
 
 permissions:
   contents: read
 
 jobs:
   capture:
-    if: ${{ inputs.mode == 'fixture' }}
+    if: ${{ inputs.mode != 'dependencies' }}
     strategy:
       fail-fast: false
       matrix:
@@ -194,34 +193,5 @@ jobs:
             ${{ runner.temp }}/driver-error-dependencies/compat-tests/schema-consumer/Cargo.lock
             ${{ runner.temp }}/driver-error-dependencies/examples/fullstack/backend/Cargo.toml
             ${{ runner.temp }}/driver-error-dependencies/examples/fullstack/backend/Cargo.lock
-          if-no-files-found: error
-          retention-days: 14
-
-  radix-dependencies:
-    if: ${{ inputs.mode == 'radix-dependencies' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-      - uses: cachix/install-nix-action@v31
-        with:
-          github_access_token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: cachix/cachix-action@v17
-        with:
-          name: devenv
-          skipPush: true
-      - name: Install devenv from the locked nixpkgs revision
-        run: |
-          devenv_nixpkgs_rev=$(python3 -c 'import json; print(json.load(open("devenv.lock"))["nodes"]["nixpkgs-src"]["locked"]["rev"])')
-          nix profile add "github:NixOS/nixpkgs/${devenv_nixpkgs_rev}#devenv"
-      - name: Add the shared radix parser and resolve all four lockfiles
-        shell: devenv shell -- bash -e {0}
-        run: bash ./scripts/prepare-radix-parser-dependencies.sh "$RUNNER_TEMP/radix-parser-dependencies"
-      - name: Preserve dependency manifests, locks, graphs and logs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: radix-parser-dependencies-${{ github.sha }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/radix-parser-dependencies/
           if-no-files-found: error
           retention-days: 14
