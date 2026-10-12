@@ -867,6 +867,18 @@ PY_CHECK
       cargo check --locked --manifest-path compat-tests/rust-server/Cargo.toml || logger_status=1
       return "$logger_status"
       ;;
+    native-properties)
+      cargo fmt --all -- --check
+      local property_status=0
+      bun --no-install test \
+        ./compat-tests/reference-server/contracts/native-property-transition-capture.test.ts \
+        ./compat-tests/reference-server/contracts/native-property-clone-capture.test.ts \
+        ./compat-tests/reference-server/contracts/native-property-clone-array-boundaries-capture.test.ts || property_status=1
+      cargo clippy --locked -p better-auth-core --lib --tests -- -D warnings || property_status=1
+      cargo test --locked -p better-auth-core --lib -- \
+        field_value:: store::ephemeral:: || property_status=1
+      return "$property_status"
+      ;;
     native-json)
       cargo fmt --all -- --check
       local json_status=0
