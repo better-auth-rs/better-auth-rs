@@ -168,7 +168,14 @@ async fn direct_facade_retains_the_borrowed_endpoint_and_transaction_across_nest
                 })
             });
         let plugin = JwtPlugin::new().disable_private_key_encryption(true);
-        let context = context(&plugin, callbacks).await?;
+        let mut context = context(&plugin, callbacks).await?;
+        context
+            .extensions
+            .insert(Arc::new(EndpointDispatcher::<S>::new(
+                Arc::new(Vec::new()),
+                EndpointHooks::default(),
+                [],
+            )));
         let in_transaction = context.clone();
         let result: AuthResult<()> = transaction(context.database.as_ref(), move |tx| {
             Box::pin(async move {
@@ -213,7 +220,14 @@ async fn direct_facade_retains_the_borrowed_endpoint_and_transaction_across_nest
             })
         })
         .await;
-        assert_eq!(result.is_err(), rollback);
+        if rollback {
+            assert_eq!(
+                result.unwrap_err().message_value()?,
+                "Roll back direct helper".into()
+            );
+        } else {
+            result?;
+        }
         assert_eq!(*events.lock().unwrap(), ["create", "sign", "verify"]);
         assert_eq!(
             context.database.list_jwk_records().await?.len(),
