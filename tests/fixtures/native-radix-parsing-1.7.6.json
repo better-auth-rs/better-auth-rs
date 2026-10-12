@@ -1,0 +1,5059 @@
+{
+  "contract": "native-radix-parsing",
+  "version": "1.7.6",
+  "runtime": {
+    "bun": "1.4.2"
+  },
+  "provenance": [
+    {
+      "path": "better-auth/dist/plugins/email-otp/routes.mjs",
+      "sha256": "72c4ceb5bbc080722c7807412e16a40854edb7cc3e6cbef81b509e3274290dac",
+      "calls": [
+        {
+          "line": 248,
+          "source": "if (attempts && parseInt(attempts) >= allowedAttempts) {"
+        },
+        {
+          "line": 253,
+          "source": "await ctx.context.internalAdapter.updateVerificationByIdentifier(identifier, { value: `${otpValue}:${parseInt(attempts || \"0\") + 1}` });"
+        },
+        {
+          "line": 771,
+          "source": "const usedAttempts = parseInt(attempts || \"0\");"
+        }
+      ]
+    },
+    {
+      "path": "better-auth/dist/plugins/two-factor/otp/index.mjs",
+      "sha256": "fb9b971f3930152ee1f9abad381dc628d4ab6372c3dff569acf9264eef260dc4",
+      "calls": [
+        {
+          "line": 219,
+          "source": "const attempts = parseInt(counter, 10) || 0;"
+        }
+      ]
+    },
+    {
+      "path": "better-auth/dist/plugins/organization/routes/crud-org.mjs",
+      "sha256": "138f3b51efc17460d5bc955d5a9e5311ea9083552cfbf971bc7bc0136600b4a7",
+      "calls": [
+        {
+          "line": 334,
+          "source": "membersLimit: z.number().or(z.string().transform((val) => parseInt(val))).meta({ description: \"The limit of members to get. By default, it uses the membershipLimit option.\" }).optional()"
+        }
+      ]
+    },
+    {
+      "path": "@better-auth/core/dist/db/adapter/factory.mjs",
+      "sha256": "738e5b15f175d5f34cbbb995efb4ccb7021f601959bbc1cea1d226d2a8501a49",
+      "calls": [
+        {
+          "line": 126,
+          "source": "if (fieldAttributes.references?.field === \"id\" && useNumberId) if (Array.isArray(newValue)) newValue = newValue.map((x) => x !== null ? Number(x) : null);"
+        },
+        {
+          "line": 127,
+          "source": "else newValue = newValue !== null ? Number(newValue) : null;"
+        },
+        {
+          "line": 243,
+          "source": "else newValue = Number(value);"
+        },
+        {
+          "line": 249,
+          "source": "const parsed = Number(newValue);"
+        },
+        {
+          "line": 252,
+          "source": "const parsed = newValue.map((v) => typeof v === \"string\" && v.trim() !== \"\" ? Number(v) : NaN);"
+        }
+      ]
+    }
+  ],
+  "boundary": "Pinned Bun numeric intrinsics used by the recorded Better Auth consumers. BigInt constructs only inputs. Results retain finite values, signed zero, nonfinite values, decimal rendering, JSON rendering and all IEEE-754 bits. This capture does not execute full plugin or adapter lifecycles. NaN payload bits are retained as runtime evidence, not a portable ECMAScript numeric guarantee.",
+  "cases": [
+    {
+      "name": "safe-integer-last:decimal",
+      "boundary": "safe-integer-last",
+      "input": "9007199254740991",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 9007199254740991,
+          "negativeZero": false,
+          "string": "9007199254740991",
+          "json": "9007199254740991",
+          "bits": "433fffffffffffff"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 9007199254740991,
+          "negativeZero": false,
+          "string": "9007199254740991",
+          "json": "9007199254740991",
+          "bits": "433fffffffffffff"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 9007199254740991,
+          "negativeZero": false,
+          "string": "9007199254740991",
+          "json": "9007199254740991",
+          "bits": "433fffffffffffff"
+        }
+      ]
+    },
+    {
+      "name": "safe-integer-last:negative-decimal",
+      "boundary": "safe-integer-last",
+      "input": "-9007199254740991",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": -9007199254740991,
+          "negativeZero": false,
+          "string": "-9007199254740991",
+          "json": "-9007199254740991",
+          "bits": "c33fffffffffffff"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": -9007199254740991,
+          "negativeZero": false,
+          "string": "-9007199254740991",
+          "json": "-9007199254740991",
+          "bits": "c33fffffffffffff"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": -9007199254740991,
+          "negativeZero": false,
+          "string": "-9007199254740991",
+          "json": "-9007199254740991",
+          "bits": "c33fffffffffffff"
+        }
+      ]
+    },
+    {
+      "name": "safe-integer-last:hexadecimal",
+      "boundary": "safe-integer-last",
+      "input": "0x1fffffffffffff",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 9007199254740991,
+          "negativeZero": false,
+          "string": "9007199254740991",
+          "json": "9007199254740991",
+          "bits": "433fffffffffffff"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 9007199254740991,
+          "negativeZero": false,
+          "string": "9007199254740991",
+          "json": "9007199254740991",
+          "bits": "433fffffffffffff"
+        }
+      ]
+    },
+    {
+      "name": "safe-integer-last:negative-hexadecimal",
+      "boundary": "safe-integer-last",
+      "input": "-0x1fffffffffffff",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": -9007199254740991,
+          "negativeZero": false,
+          "string": "-9007199254740991",
+          "json": "-9007199254740991",
+          "bits": "c33fffffffffffff"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": {
+            "type": "number",
+            "value": "-0"
+          },
+          "negativeZero": true,
+          "string": "0",
+          "json": "0",
+          "bits": "8000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        }
+      ]
+    },
+    {
+      "name": "safe-integer-last:binary",
+      "boundary": "safe-integer-last",
+      "input": "0b11111111111111111111111111111111111111111111111111111",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 9007199254740991,
+          "negativeZero": false,
+          "string": "9007199254740991",
+          "json": "9007199254740991",
+          "bits": "433fffffffffffff"
+        }
+      ]
+    },
+    {
+      "name": "safe-integer-last:octal",
+      "boundary": "safe-integer-last",
+      "input": "0o377777777777777777",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 9007199254740991,
+          "negativeZero": false,
+          "string": "9007199254740991",
+          "json": "9007199254740991",
+          "bits": "433fffffffffffff"
+        }
+      ]
+    },
+    {
+      "name": "safe-integer-even-tie:decimal",
+      "boundary": "safe-integer-even-tie",
+      "input": "9007199254740993",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 9007199254740992,
+          "negativeZero": false,
+          "string": "9007199254740992",
+          "json": "9007199254740992",
+          "bits": "4340000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 9007199254740992,
+          "negativeZero": false,
+          "string": "9007199254740992",
+          "json": "9007199254740992",
+          "bits": "4340000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 9007199254740992,
+          "negativeZero": false,
+          "string": "9007199254740992",
+          "json": "9007199254740992",
+          "bits": "4340000000000000"
+        }
+      ]
+    },
+    {
+      "name": "safe-integer-even-tie:negative-decimal",
+      "boundary": "safe-integer-even-tie",
+      "input": "-9007199254740993",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": -9007199254740992,
+          "negativeZero": false,
+          "string": "-9007199254740992",
+          "json": "-9007199254740992",
+          "bits": "c340000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": -9007199254740992,
+          "negativeZero": false,
+          "string": "-9007199254740992",
+          "json": "-9007199254740992",
+          "bits": "c340000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": -9007199254740992,
+          "negativeZero": false,
+          "string": "-9007199254740992",
+          "json": "-9007199254740992",
+          "bits": "c340000000000000"
+        }
+      ]
+    },
+    {
+      "name": "safe-integer-even-tie:hexadecimal",
+      "boundary": "safe-integer-even-tie",
+      "input": "0x20000000000001",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 9007199254740992,
+          "negativeZero": false,
+          "string": "9007199254740992",
+          "json": "9007199254740992",
+          "bits": "4340000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 9007199254740992,
+          "negativeZero": false,
+          "string": "9007199254740992",
+          "json": "9007199254740992",
+          "bits": "4340000000000000"
+        }
+      ]
+    },
+    {
+      "name": "safe-integer-even-tie:negative-hexadecimal",
+      "boundary": "safe-integer-even-tie",
+      "input": "-0x20000000000001",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": -9007199254740992,
+          "negativeZero": false,
+          "string": "-9007199254740992",
+          "json": "-9007199254740992",
+          "bits": "c340000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": {
+            "type": "number",
+            "value": "-0"
+          },
+          "negativeZero": true,
+          "string": "0",
+          "json": "0",
+          "bits": "8000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        }
+      ]
+    },
+    {
+      "name": "safe-integer-even-tie:binary",
+      "boundary": "safe-integer-even-tie",
+      "input": "0b100000000000000000000000000000000000000000000000000001",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 9007199254740992,
+          "negativeZero": false,
+          "string": "9007199254740992",
+          "json": "9007199254740992",
+          "bits": "4340000000000000"
+        }
+      ]
+    },
+    {
+      "name": "safe-integer-even-tie:octal",
+      "boundary": "safe-integer-even-tie",
+      "input": "0o400000000000000001",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 9007199254740992,
+          "negativeZero": false,
+          "string": "9007199254740992",
+          "json": "9007199254740992",
+          "bits": "4340000000000000"
+        }
+      ]
+    },
+    {
+      "name": "safe-integer-odd-tie:decimal",
+      "boundary": "safe-integer-odd-tie",
+      "input": "9007199254740995",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 9007199254740996,
+          "negativeZero": false,
+          "string": "9007199254740996",
+          "json": "9007199254740996",
+          "bits": "4340000000000002"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 9007199254740996,
+          "negativeZero": false,
+          "string": "9007199254740996",
+          "json": "9007199254740996",
+          "bits": "4340000000000002"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 9007199254740996,
+          "negativeZero": false,
+          "string": "9007199254740996",
+          "json": "9007199254740996",
+          "bits": "4340000000000002"
+        }
+      ]
+    },
+    {
+      "name": "safe-integer-odd-tie:negative-decimal",
+      "boundary": "safe-integer-odd-tie",
+      "input": "-9007199254740995",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": -9007199254740996,
+          "negativeZero": false,
+          "string": "-9007199254740996",
+          "json": "-9007199254740996",
+          "bits": "c340000000000002"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": -9007199254740996,
+          "negativeZero": false,
+          "string": "-9007199254740996",
+          "json": "-9007199254740996",
+          "bits": "c340000000000002"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": -9007199254740996,
+          "negativeZero": false,
+          "string": "-9007199254740996",
+          "json": "-9007199254740996",
+          "bits": "c340000000000002"
+        }
+      ]
+    },
+    {
+      "name": "safe-integer-odd-tie:hexadecimal",
+      "boundary": "safe-integer-odd-tie",
+      "input": "0x20000000000003",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 9007199254740996,
+          "negativeZero": false,
+          "string": "9007199254740996",
+          "json": "9007199254740996",
+          "bits": "4340000000000002"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 9007199254740996,
+          "negativeZero": false,
+          "string": "9007199254740996",
+          "json": "9007199254740996",
+          "bits": "4340000000000002"
+        }
+      ]
+    },
+    {
+      "name": "safe-integer-odd-tie:negative-hexadecimal",
+      "boundary": "safe-integer-odd-tie",
+      "input": "-0x20000000000003",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": -9007199254740996,
+          "negativeZero": false,
+          "string": "-9007199254740996",
+          "json": "-9007199254740996",
+          "bits": "c340000000000002"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": {
+            "type": "number",
+            "value": "-0"
+          },
+          "negativeZero": true,
+          "string": "0",
+          "json": "0",
+          "bits": "8000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        }
+      ]
+    },
+    {
+      "name": "safe-integer-odd-tie:binary",
+      "boundary": "safe-integer-odd-tie",
+      "input": "0b100000000000000000000000000000000000000000000000000011",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 9007199254740996,
+          "negativeZero": false,
+          "string": "9007199254740996",
+          "json": "9007199254740996",
+          "bits": "4340000000000002"
+        }
+      ]
+    },
+    {
+      "name": "safe-integer-odd-tie:octal",
+      "boundary": "safe-integer-odd-tie",
+      "input": "0o400000000000000003",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 9007199254740996,
+          "negativeZero": false,
+          "string": "9007199254740996",
+          "json": "9007199254740996",
+          "bits": "4340000000000002"
+        }
+      ]
+    },
+    {
+      "name": "lower-binade-tie:decimal",
+      "boundary": "lower-binade-tie",
+      "input": "1152921504606846912",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 1152921504606847000,
+          "negativeZero": false,
+          "string": "1152921504606847000",
+          "json": "1152921504606847000",
+          "bits": "43b0000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 1152921504606847000,
+          "negativeZero": false,
+          "string": "1152921504606847000",
+          "json": "1152921504606847000",
+          "bits": "43b0000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 1152921504606847000,
+          "negativeZero": false,
+          "string": "1152921504606847000",
+          "json": "1152921504606847000",
+          "bits": "43b0000000000000"
+        }
+      ]
+    },
+    {
+      "name": "lower-binade-tie:negative-decimal",
+      "boundary": "lower-binade-tie",
+      "input": "-1152921504606846912",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": -1152921504606847000,
+          "negativeZero": false,
+          "string": "-1152921504606847000",
+          "json": "-1152921504606847000",
+          "bits": "c3b0000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": -1152921504606847000,
+          "negativeZero": false,
+          "string": "-1152921504606847000",
+          "json": "-1152921504606847000",
+          "bits": "c3b0000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": -1152921504606847000,
+          "negativeZero": false,
+          "string": "-1152921504606847000",
+          "json": "-1152921504606847000",
+          "bits": "c3b0000000000000"
+        }
+      ]
+    },
+    {
+      "name": "lower-binade-tie:hexadecimal",
+      "boundary": "lower-binade-tie",
+      "input": "0xfffffffffffffc0",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 1152921504606847000,
+          "negativeZero": false,
+          "string": "1152921504606847000",
+          "json": "1152921504606847000",
+          "bits": "43b0000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 1152921504606847000,
+          "negativeZero": false,
+          "string": "1152921504606847000",
+          "json": "1152921504606847000",
+          "bits": "43b0000000000000"
+        }
+      ]
+    },
+    {
+      "name": "lower-binade-tie:negative-hexadecimal",
+      "boundary": "lower-binade-tie",
+      "input": "-0xfffffffffffffc0",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": -1152921504606847000,
+          "negativeZero": false,
+          "string": "-1152921504606847000",
+          "json": "-1152921504606847000",
+          "bits": "c3b0000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": {
+            "type": "number",
+            "value": "-0"
+          },
+          "negativeZero": true,
+          "string": "0",
+          "json": "0",
+          "bits": "8000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        }
+      ]
+    },
+    {
+      "name": "lower-binade-tie:binary",
+      "boundary": "lower-binade-tie",
+      "input": "0b111111111111111111111111111111111111111111111111111111000000",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 1152921504606847000,
+          "negativeZero": false,
+          "string": "1152921504606847000",
+          "json": "1152921504606847000",
+          "bits": "43b0000000000000"
+        }
+      ]
+    },
+    {
+      "name": "lower-binade-tie:octal",
+      "boundary": "lower-binade-tie",
+      "input": "0o77777777777777777700",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 1152921504606847000,
+          "negativeZero": false,
+          "string": "1152921504606847000",
+          "json": "1152921504606847000",
+          "bits": "43b0000000000000"
+        }
+      ]
+    },
+    {
+      "name": "wide-below-tie:decimal",
+      "boundary": "wide-below-tie",
+      "input": "1152921504606847103",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 1152921504606847000,
+          "negativeZero": false,
+          "string": "1152921504606847000",
+          "json": "1152921504606847000",
+          "bits": "43b0000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 1152921504606847000,
+          "negativeZero": false,
+          "string": "1152921504606847000",
+          "json": "1152921504606847000",
+          "bits": "43b0000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 1152921504606847000,
+          "negativeZero": false,
+          "string": "1152921504606847000",
+          "json": "1152921504606847000",
+          "bits": "43b0000000000000"
+        }
+      ]
+    },
+    {
+      "name": "wide-below-tie:negative-decimal",
+      "boundary": "wide-below-tie",
+      "input": "-1152921504606847103",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": -1152921504606847000,
+          "negativeZero": false,
+          "string": "-1152921504606847000",
+          "json": "-1152921504606847000",
+          "bits": "c3b0000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": -1152921504606847000,
+          "negativeZero": false,
+          "string": "-1152921504606847000",
+          "json": "-1152921504606847000",
+          "bits": "c3b0000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": -1152921504606847000,
+          "negativeZero": false,
+          "string": "-1152921504606847000",
+          "json": "-1152921504606847000",
+          "bits": "c3b0000000000000"
+        }
+      ]
+    },
+    {
+      "name": "wide-below-tie:hexadecimal",
+      "boundary": "wide-below-tie",
+      "input": "0x100000000000007f",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 1152921504606847000,
+          "negativeZero": false,
+          "string": "1152921504606847000",
+          "json": "1152921504606847000",
+          "bits": "43b0000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 1152921504606847000,
+          "negativeZero": false,
+          "string": "1152921504606847000",
+          "json": "1152921504606847000",
+          "bits": "43b0000000000000"
+        }
+      ]
+    },
+    {
+      "name": "wide-below-tie:negative-hexadecimal",
+      "boundary": "wide-below-tie",
+      "input": "-0x100000000000007f",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": -1152921504606847000,
+          "negativeZero": false,
+          "string": "-1152921504606847000",
+          "json": "-1152921504606847000",
+          "bits": "c3b0000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": {
+            "type": "number",
+            "value": "-0"
+          },
+          "negativeZero": true,
+          "string": "0",
+          "json": "0",
+          "bits": "8000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        }
+      ]
+    },
+    {
+      "name": "wide-below-tie:binary",
+      "boundary": "wide-below-tie",
+      "input": "0b1000000000000000000000000000000000000000000000000000001111111",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 1152921504606847000,
+          "negativeZero": false,
+          "string": "1152921504606847000",
+          "json": "1152921504606847000",
+          "bits": "43b0000000000000"
+        }
+      ]
+    },
+    {
+      "name": "wide-below-tie:octal",
+      "boundary": "wide-below-tie",
+      "input": "0o100000000000000000177",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 1152921504606847000,
+          "negativeZero": false,
+          "string": "1152921504606847000",
+          "json": "1152921504606847000",
+          "bits": "43b0000000000000"
+        }
+      ]
+    },
+    {
+      "name": "wide-even-tie:decimal",
+      "boundary": "wide-even-tie",
+      "input": "1152921504606847104",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 1152921504606847000,
+          "negativeZero": false,
+          "string": "1152921504606847000",
+          "json": "1152921504606847000",
+          "bits": "43b0000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 1152921504606847000,
+          "negativeZero": false,
+          "string": "1152921504606847000",
+          "json": "1152921504606847000",
+          "bits": "43b0000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 1152921504606847000,
+          "negativeZero": false,
+          "string": "1152921504606847000",
+          "json": "1152921504606847000",
+          "bits": "43b0000000000000"
+        }
+      ]
+    },
+    {
+      "name": "wide-even-tie:negative-decimal",
+      "boundary": "wide-even-tie",
+      "input": "-1152921504606847104",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": -1152921504606847000,
+          "negativeZero": false,
+          "string": "-1152921504606847000",
+          "json": "-1152921504606847000",
+          "bits": "c3b0000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": -1152921504606847000,
+          "negativeZero": false,
+          "string": "-1152921504606847000",
+          "json": "-1152921504606847000",
+          "bits": "c3b0000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": -1152921504606847000,
+          "negativeZero": false,
+          "string": "-1152921504606847000",
+          "json": "-1152921504606847000",
+          "bits": "c3b0000000000000"
+        }
+      ]
+    },
+    {
+      "name": "wide-even-tie:hexadecimal",
+      "boundary": "wide-even-tie",
+      "input": "0x1000000000000080",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 1152921504606847000,
+          "negativeZero": false,
+          "string": "1152921504606847000",
+          "json": "1152921504606847000",
+          "bits": "43b0000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 1152921504606847000,
+          "negativeZero": false,
+          "string": "1152921504606847000",
+          "json": "1152921504606847000",
+          "bits": "43b0000000000000"
+        }
+      ]
+    },
+    {
+      "name": "wide-even-tie:negative-hexadecimal",
+      "boundary": "wide-even-tie",
+      "input": "-0x1000000000000080",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": -1152921504606847000,
+          "negativeZero": false,
+          "string": "-1152921504606847000",
+          "json": "-1152921504606847000",
+          "bits": "c3b0000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": {
+            "type": "number",
+            "value": "-0"
+          },
+          "negativeZero": true,
+          "string": "0",
+          "json": "0",
+          "bits": "8000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        }
+      ]
+    },
+    {
+      "name": "wide-even-tie:binary",
+      "boundary": "wide-even-tie",
+      "input": "0b1000000000000000000000000000000000000000000000000000010000000",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 1152921504606847000,
+          "negativeZero": false,
+          "string": "1152921504606847000",
+          "json": "1152921504606847000",
+          "bits": "43b0000000000000"
+        }
+      ]
+    },
+    {
+      "name": "wide-even-tie:octal",
+      "boundary": "wide-even-tie",
+      "input": "0o100000000000000000200",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 1152921504606847000,
+          "negativeZero": false,
+          "string": "1152921504606847000",
+          "json": "1152921504606847000",
+          "bits": "43b0000000000000"
+        }
+      ]
+    },
+    {
+      "name": "wide-above-tie:decimal",
+      "boundary": "wide-above-tie",
+      "input": "1152921504606847105",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 1152921504606847200,
+          "negativeZero": false,
+          "string": "1152921504606847200",
+          "json": "1152921504606847200",
+          "bits": "43b0000000000001"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 1152921504606847200,
+          "negativeZero": false,
+          "string": "1152921504606847200",
+          "json": "1152921504606847200",
+          "bits": "43b0000000000001"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 1152921504606847200,
+          "negativeZero": false,
+          "string": "1152921504606847200",
+          "json": "1152921504606847200",
+          "bits": "43b0000000000001"
+        }
+      ]
+    },
+    {
+      "name": "wide-above-tie:negative-decimal",
+      "boundary": "wide-above-tie",
+      "input": "-1152921504606847105",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": -1152921504606847200,
+          "negativeZero": false,
+          "string": "-1152921504606847200",
+          "json": "-1152921504606847200",
+          "bits": "c3b0000000000001"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": -1152921504606847200,
+          "negativeZero": false,
+          "string": "-1152921504606847200",
+          "json": "-1152921504606847200",
+          "bits": "c3b0000000000001"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": -1152921504606847200,
+          "negativeZero": false,
+          "string": "-1152921504606847200",
+          "json": "-1152921504606847200",
+          "bits": "c3b0000000000001"
+        }
+      ]
+    },
+    {
+      "name": "wide-above-tie:hexadecimal",
+      "boundary": "wide-above-tie",
+      "input": "0x1000000000000081",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 1152921504606847200,
+          "negativeZero": false,
+          "string": "1152921504606847200",
+          "json": "1152921504606847200",
+          "bits": "43b0000000000001"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 1152921504606847200,
+          "negativeZero": false,
+          "string": "1152921504606847200",
+          "json": "1152921504606847200",
+          "bits": "43b0000000000001"
+        }
+      ]
+    },
+    {
+      "name": "wide-above-tie:negative-hexadecimal",
+      "boundary": "wide-above-tie",
+      "input": "-0x1000000000000081",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": -1152921504606847200,
+          "negativeZero": false,
+          "string": "-1152921504606847200",
+          "json": "-1152921504606847200",
+          "bits": "c3b0000000000001"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": {
+            "type": "number",
+            "value": "-0"
+          },
+          "negativeZero": true,
+          "string": "0",
+          "json": "0",
+          "bits": "8000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        }
+      ]
+    },
+    {
+      "name": "wide-above-tie:binary",
+      "boundary": "wide-above-tie",
+      "input": "0b1000000000000000000000000000000000000000000000000000010000001",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 1152921504606847200,
+          "negativeZero": false,
+          "string": "1152921504606847200",
+          "json": "1152921504606847200",
+          "bits": "43b0000000000001"
+        }
+      ]
+    },
+    {
+      "name": "wide-above-tie:octal",
+      "boundary": "wide-above-tie",
+      "input": "0o100000000000000000201",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 1152921504606847200,
+          "negativeZero": false,
+          "string": "1152921504606847200",
+          "json": "1152921504606847200",
+          "bits": "43b0000000000001"
+        }
+      ]
+    },
+    {
+      "name": "wide-odd-tie:decimal",
+      "boundary": "wide-odd-tie",
+      "input": "1152921504606847360",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 1152921504606847500,
+          "negativeZero": false,
+          "string": "1152921504606847500",
+          "json": "1152921504606847500",
+          "bits": "43b0000000000002"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 1152921504606847500,
+          "negativeZero": false,
+          "string": "1152921504606847500",
+          "json": "1152921504606847500",
+          "bits": "43b0000000000002"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 1152921504606847500,
+          "negativeZero": false,
+          "string": "1152921504606847500",
+          "json": "1152921504606847500",
+          "bits": "43b0000000000002"
+        }
+      ]
+    },
+    {
+      "name": "wide-odd-tie:negative-decimal",
+      "boundary": "wide-odd-tie",
+      "input": "-1152921504606847360",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": -1152921504606847500,
+          "negativeZero": false,
+          "string": "-1152921504606847500",
+          "json": "-1152921504606847500",
+          "bits": "c3b0000000000002"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": -1152921504606847500,
+          "negativeZero": false,
+          "string": "-1152921504606847500",
+          "json": "-1152921504606847500",
+          "bits": "c3b0000000000002"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": -1152921504606847500,
+          "negativeZero": false,
+          "string": "-1152921504606847500",
+          "json": "-1152921504606847500",
+          "bits": "c3b0000000000002"
+        }
+      ]
+    },
+    {
+      "name": "wide-odd-tie:hexadecimal",
+      "boundary": "wide-odd-tie",
+      "input": "0x1000000000000180",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 1152921504606847500,
+          "negativeZero": false,
+          "string": "1152921504606847500",
+          "json": "1152921504606847500",
+          "bits": "43b0000000000002"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 1152921504606847500,
+          "negativeZero": false,
+          "string": "1152921504606847500",
+          "json": "1152921504606847500",
+          "bits": "43b0000000000002"
+        }
+      ]
+    },
+    {
+      "name": "wide-odd-tie:negative-hexadecimal",
+      "boundary": "wide-odd-tie",
+      "input": "-0x1000000000000180",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": -1152921504606847500,
+          "negativeZero": false,
+          "string": "-1152921504606847500",
+          "json": "-1152921504606847500",
+          "bits": "c3b0000000000002"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": {
+            "type": "number",
+            "value": "-0"
+          },
+          "negativeZero": true,
+          "string": "0",
+          "json": "0",
+          "bits": "8000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        }
+      ]
+    },
+    {
+      "name": "wide-odd-tie:binary",
+      "boundary": "wide-odd-tie",
+      "input": "0b1000000000000000000000000000000000000000000000000000110000000",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 1152921504606847500,
+          "negativeZero": false,
+          "string": "1152921504606847500",
+          "json": "1152921504606847500",
+          "bits": "43b0000000000002"
+        }
+      ]
+    },
+    {
+      "name": "wide-odd-tie:octal",
+      "boundary": "wide-odd-tie",
+      "input": "0o100000000000000000600",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 1152921504606847500,
+          "negativeZero": false,
+          "string": "1152921504606847500",
+          "json": "1152921504606847500",
+          "bits": "43b0000000000002"
+        }
+      ]
+    },
+    {
+      "name": "extended-below-tie:decimal",
+      "boundary": "extended-below-tie",
+      "input": "340282366920938501242306470388929921023",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 3.402823669209385e+38,
+          "negativeZero": false,
+          "string": "3.402823669209385e+38",
+          "json": "3.402823669209385e+38",
+          "bits": "47f0000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 3.402823669209385e+38,
+          "negativeZero": false,
+          "string": "3.402823669209385e+38",
+          "json": "3.402823669209385e+38",
+          "bits": "47f0000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 3.402823669209385e+38,
+          "negativeZero": false,
+          "string": "3.402823669209385e+38",
+          "json": "3.402823669209385e+38",
+          "bits": "47f0000000000000"
+        }
+      ]
+    },
+    {
+      "name": "extended-below-tie:negative-decimal",
+      "boundary": "extended-below-tie",
+      "input": "-340282366920938501242306470388929921023",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": -3.402823669209385e+38,
+          "negativeZero": false,
+          "string": "-3.402823669209385e+38",
+          "json": "-3.402823669209385e+38",
+          "bits": "c7f0000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": -3.402823669209385e+38,
+          "negativeZero": false,
+          "string": "-3.402823669209385e+38",
+          "json": "-3.402823669209385e+38",
+          "bits": "c7f0000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": -3.402823669209385e+38,
+          "negativeZero": false,
+          "string": "-3.402823669209385e+38",
+          "json": "-3.402823669209385e+38",
+          "bits": "c7f0000000000000"
+        }
+      ]
+    },
+    {
+      "name": "extended-below-tie:hexadecimal",
+      "boundary": "extended-below-tie",
+      "input": "0x100000000000007ffffffffffffffffff",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 3.402823669209385e+38,
+          "negativeZero": false,
+          "string": "3.402823669209385e+38",
+          "json": "3.402823669209385e+38",
+          "bits": "47f0000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 3.402823669209385e+38,
+          "negativeZero": false,
+          "string": "3.402823669209385e+38",
+          "json": "3.402823669209385e+38",
+          "bits": "47f0000000000000"
+        }
+      ]
+    },
+    {
+      "name": "extended-below-tie:negative-hexadecimal",
+      "boundary": "extended-below-tie",
+      "input": "-0x100000000000007ffffffffffffffffff",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": -3.402823669209385e+38,
+          "negativeZero": false,
+          "string": "-3.402823669209385e+38",
+          "json": "-3.402823669209385e+38",
+          "bits": "c7f0000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": {
+            "type": "number",
+            "value": "-0"
+          },
+          "negativeZero": true,
+          "string": "0",
+          "json": "0",
+          "bits": "8000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        }
+      ]
+    },
+    {
+      "name": "extended-below-tie:binary",
+      "boundary": "extended-below-tie",
+      "input": "0b100000000000000000000000000000000000000000000000000000111111111111111111111111111111111111111111111111111111111111111111111111111",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 3.402823669209385e+38,
+          "negativeZero": false,
+          "string": "3.402823669209385e+38",
+          "json": "3.402823669209385e+38",
+          "bits": "47f0000000000000"
+        }
+      ]
+    },
+    {
+      "name": "extended-below-tie:octal",
+      "boundary": "extended-below-tie",
+      "input": "0o4000000000000000007777777777777777777777777",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 3.402823669209385e+38,
+          "negativeZero": false,
+          "string": "3.402823669209385e+38",
+          "json": "3.402823669209385e+38",
+          "bits": "47f0000000000000"
+        }
+      ]
+    },
+    {
+      "name": "extended-even-tie:decimal",
+      "boundary": "extended-even-tie",
+      "input": "340282366920938501242306470388929921024",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 3.402823669209385e+38,
+          "negativeZero": false,
+          "string": "3.402823669209385e+38",
+          "json": "3.402823669209385e+38",
+          "bits": "47f0000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 3.402823669209385e+38,
+          "negativeZero": false,
+          "string": "3.402823669209385e+38",
+          "json": "3.402823669209385e+38",
+          "bits": "47f0000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 3.402823669209385e+38,
+          "negativeZero": false,
+          "string": "3.402823669209385e+38",
+          "json": "3.402823669209385e+38",
+          "bits": "47f0000000000000"
+        }
+      ]
+    },
+    {
+      "name": "extended-even-tie:negative-decimal",
+      "boundary": "extended-even-tie",
+      "input": "-340282366920938501242306470388929921024",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": -3.402823669209385e+38,
+          "negativeZero": false,
+          "string": "-3.402823669209385e+38",
+          "json": "-3.402823669209385e+38",
+          "bits": "c7f0000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": -3.402823669209385e+38,
+          "negativeZero": false,
+          "string": "-3.402823669209385e+38",
+          "json": "-3.402823669209385e+38",
+          "bits": "c7f0000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": -3.402823669209385e+38,
+          "negativeZero": false,
+          "string": "-3.402823669209385e+38",
+          "json": "-3.402823669209385e+38",
+          "bits": "c7f0000000000000"
+        }
+      ]
+    },
+    {
+      "name": "extended-even-tie:hexadecimal",
+      "boundary": "extended-even-tie",
+      "input": "0x100000000000008000000000000000000",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 3.402823669209385e+38,
+          "negativeZero": false,
+          "string": "3.402823669209385e+38",
+          "json": "3.402823669209385e+38",
+          "bits": "47f0000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 3.402823669209385e+38,
+          "negativeZero": false,
+          "string": "3.402823669209385e+38",
+          "json": "3.402823669209385e+38",
+          "bits": "47f0000000000000"
+        }
+      ]
+    },
+    {
+      "name": "extended-even-tie:negative-hexadecimal",
+      "boundary": "extended-even-tie",
+      "input": "-0x100000000000008000000000000000000",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": -3.402823669209385e+38,
+          "negativeZero": false,
+          "string": "-3.402823669209385e+38",
+          "json": "-3.402823669209385e+38",
+          "bits": "c7f0000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": {
+            "type": "number",
+            "value": "-0"
+          },
+          "negativeZero": true,
+          "string": "0",
+          "json": "0",
+          "bits": "8000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        }
+      ]
+    },
+    {
+      "name": "extended-even-tie:binary",
+      "boundary": "extended-even-tie",
+      "input": "0b100000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 3.402823669209385e+38,
+          "negativeZero": false,
+          "string": "3.402823669209385e+38",
+          "json": "3.402823669209385e+38",
+          "bits": "47f0000000000000"
+        }
+      ]
+    },
+    {
+      "name": "extended-even-tie:octal",
+      "boundary": "extended-even-tie",
+      "input": "0o4000000000000000010000000000000000000000000",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 3.402823669209385e+38,
+          "negativeZero": false,
+          "string": "3.402823669209385e+38",
+          "json": "3.402823669209385e+38",
+          "bits": "47f0000000000000"
+        }
+      ]
+    },
+    {
+      "name": "extended-sticky-bit:decimal",
+      "boundary": "extended-sticky-bit",
+      "input": "340282366920938501242306470388929921025",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 3.4028236692093854e+38,
+          "negativeZero": false,
+          "string": "3.4028236692093854e+38",
+          "json": "3.4028236692093854e+38",
+          "bits": "47f0000000000001"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 3.4028236692093854e+38,
+          "negativeZero": false,
+          "string": "3.4028236692093854e+38",
+          "json": "3.4028236692093854e+38",
+          "bits": "47f0000000000001"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 3.4028236692093854e+38,
+          "negativeZero": false,
+          "string": "3.4028236692093854e+38",
+          "json": "3.4028236692093854e+38",
+          "bits": "47f0000000000001"
+        }
+      ]
+    },
+    {
+      "name": "extended-sticky-bit:negative-decimal",
+      "boundary": "extended-sticky-bit",
+      "input": "-340282366920938501242306470388929921025",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": -3.4028236692093854e+38,
+          "negativeZero": false,
+          "string": "-3.4028236692093854e+38",
+          "json": "-3.4028236692093854e+38",
+          "bits": "c7f0000000000001"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": -3.4028236692093854e+38,
+          "negativeZero": false,
+          "string": "-3.4028236692093854e+38",
+          "json": "-3.4028236692093854e+38",
+          "bits": "c7f0000000000001"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": -3.4028236692093854e+38,
+          "negativeZero": false,
+          "string": "-3.4028236692093854e+38",
+          "json": "-3.4028236692093854e+38",
+          "bits": "c7f0000000000001"
+        }
+      ]
+    },
+    {
+      "name": "extended-sticky-bit:hexadecimal",
+      "boundary": "extended-sticky-bit",
+      "input": "0x100000000000008000000000000000001",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 3.402823669209385e+38,
+          "negativeZero": false,
+          "string": "3.402823669209385e+38",
+          "json": "3.402823669209385e+38",
+          "bits": "47f0000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 3.402823669209385e+38,
+          "negativeZero": false,
+          "string": "3.402823669209385e+38",
+          "json": "3.402823669209385e+38",
+          "bits": "47f0000000000000"
+        }
+      ]
+    },
+    {
+      "name": "extended-sticky-bit:negative-hexadecimal",
+      "boundary": "extended-sticky-bit",
+      "input": "-0x100000000000008000000000000000001",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": -3.402823669209385e+38,
+          "negativeZero": false,
+          "string": "-3.402823669209385e+38",
+          "json": "-3.402823669209385e+38",
+          "bits": "c7f0000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": {
+            "type": "number",
+            "value": "-0"
+          },
+          "negativeZero": true,
+          "string": "0",
+          "json": "0",
+          "bits": "8000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        }
+      ]
+    },
+    {
+      "name": "extended-sticky-bit:binary",
+      "boundary": "extended-sticky-bit",
+      "input": "0b100000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000000000000001",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 3.402823669209385e+38,
+          "negativeZero": false,
+          "string": "3.402823669209385e+38",
+          "json": "3.402823669209385e+38",
+          "bits": "47f0000000000000"
+        }
+      ]
+    },
+    {
+      "name": "extended-sticky-bit:octal",
+      "boundary": "extended-sticky-bit",
+      "input": "0o4000000000000000010000000000000000000000001",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 3.402823669209385e+38,
+          "negativeZero": false,
+          "string": "3.402823669209385e+38",
+          "json": "3.402823669209385e+38",
+          "bits": "47f0000000000000"
+        }
+      ]
+    },
+    {
+      "name": "largest-finite:decimal",
+      "boundary": "largest-finite",
+      "input": "179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 1.7976931348623157e+308,
+          "negativeZero": false,
+          "string": "1.7976931348623157e+308",
+          "json": "1.7976931348623157e+308",
+          "bits": "7fefffffffffffff"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 1.7976931348623157e+308,
+          "negativeZero": false,
+          "string": "1.7976931348623157e+308",
+          "json": "1.7976931348623157e+308",
+          "bits": "7fefffffffffffff"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 1.7976931348623157e+308,
+          "negativeZero": false,
+          "string": "1.7976931348623157e+308",
+          "json": "1.7976931348623157e+308",
+          "bits": "7fefffffffffffff"
+        }
+      ]
+    },
+    {
+      "name": "largest-finite:negative-decimal",
+      "boundary": "largest-finite",
+      "input": "-179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": -1.7976931348623157e+308,
+          "negativeZero": false,
+          "string": "-1.7976931348623157e+308",
+          "json": "-1.7976931348623157e+308",
+          "bits": "ffefffffffffffff"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": -1.7976931348623157e+308,
+          "negativeZero": false,
+          "string": "-1.7976931348623157e+308",
+          "json": "-1.7976931348623157e+308",
+          "bits": "ffefffffffffffff"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": -1.7976931348623157e+308,
+          "negativeZero": false,
+          "string": "-1.7976931348623157e+308",
+          "json": "-1.7976931348623157e+308",
+          "bits": "ffefffffffffffff"
+        }
+      ]
+    },
+    {
+      "name": "largest-finite:hexadecimal",
+      "boundary": "largest-finite",
+      "input": "0xfffffffffffff800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 1.7976931348623157e+308,
+          "negativeZero": false,
+          "string": "1.7976931348623157e+308",
+          "json": "1.7976931348623157e+308",
+          "bits": "7fefffffffffffff"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 1.7976931348623157e+308,
+          "negativeZero": false,
+          "string": "1.7976931348623157e+308",
+          "json": "1.7976931348623157e+308",
+          "bits": "7fefffffffffffff"
+        }
+      ]
+    },
+    {
+      "name": "largest-finite:negative-hexadecimal",
+      "boundary": "largest-finite",
+      "input": "-0xfffffffffffff800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": -1.7976931348623157e+308,
+          "negativeZero": false,
+          "string": "-1.7976931348623157e+308",
+          "json": "-1.7976931348623157e+308",
+          "bits": "ffefffffffffffff"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": {
+            "type": "number",
+            "value": "-0"
+          },
+          "negativeZero": true,
+          "string": "0",
+          "json": "0",
+          "bits": "8000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        }
+      ]
+    },
+    {
+      "name": "largest-finite:binary",
+      "boundary": "largest-finite",
+      "input": "0b1111111111111111111111111111111111111111111111111111100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 1.7976931348623157e+308,
+          "negativeZero": false,
+          "string": "1.7976931348623157e+308",
+          "json": "1.7976931348623157e+308",
+          "bits": "7fefffffffffffff"
+        }
+      ]
+    },
+    {
+      "name": "largest-finite:octal",
+      "boundary": "largest-finite",
+      "input": "0o177777777777777777400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 1.7976931348623157e+308,
+          "negativeZero": false,
+          "string": "1.7976931348623157e+308",
+          "json": "1.7976931348623157e+308",
+          "bits": "7fefffffffffffff"
+        }
+      ]
+    },
+    {
+      "name": "overflow-below-tie:decimal",
+      "boundary": "overflow-below-tie",
+      "input": "179769313486231580793728971405303415079934132710037826936173778980444968292764750946649017977587207096330286416692887910946555547851940402630657488671505820681908902000708383676273854845817711531764475730270069855571366959622842914819860834936475292719074168444365510704342711559699508093042880177904174497791",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 1.7976931348623157e+308,
+          "negativeZero": false,
+          "string": "1.7976931348623157e+308",
+          "json": "1.7976931348623157e+308",
+          "bits": "7fefffffffffffff"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 1.7976931348623157e+308,
+          "negativeZero": false,
+          "string": "1.7976931348623157e+308",
+          "json": "1.7976931348623157e+308",
+          "bits": "7fefffffffffffff"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 1.7976931348623157e+308,
+          "negativeZero": false,
+          "string": "1.7976931348623157e+308",
+          "json": "1.7976931348623157e+308",
+          "bits": "7fefffffffffffff"
+        }
+      ]
+    },
+    {
+      "name": "overflow-below-tie:negative-decimal",
+      "boundary": "overflow-below-tie",
+      "input": "-179769313486231580793728971405303415079934132710037826936173778980444968292764750946649017977587207096330286416692887910946555547851940402630657488671505820681908902000708383676273854845817711531764475730270069855571366959622842914819860834936475292719074168444365510704342711559699508093042880177904174497791",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": -1.7976931348623157e+308,
+          "negativeZero": false,
+          "string": "-1.7976931348623157e+308",
+          "json": "-1.7976931348623157e+308",
+          "bits": "ffefffffffffffff"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": -1.7976931348623157e+308,
+          "negativeZero": false,
+          "string": "-1.7976931348623157e+308",
+          "json": "-1.7976931348623157e+308",
+          "bits": "ffefffffffffffff"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": -1.7976931348623157e+308,
+          "negativeZero": false,
+          "string": "-1.7976931348623157e+308",
+          "json": "-1.7976931348623157e+308",
+          "bits": "ffefffffffffffff"
+        }
+      ]
+    },
+    {
+      "name": "overflow-below-tie:hexadecimal",
+      "boundary": "overflow-below-tie",
+      "input": "0xfffffffffffffbffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": {
+            "type": "number",
+            "value": "Infinity"
+          },
+          "negativeZero": false,
+          "string": "Infinity",
+          "json": "null",
+          "bits": "7ff0000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "Infinity"
+          },
+          "negativeZero": false,
+          "string": "Infinity",
+          "json": "null",
+          "bits": "7ff0000000000000"
+        }
+      ]
+    },
+    {
+      "name": "overflow-below-tie:negative-hexadecimal",
+      "boundary": "overflow-below-tie",
+      "input": "-0xfffffffffffffbffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": {
+            "type": "number",
+            "value": "-Infinity"
+          },
+          "negativeZero": false,
+          "string": "-Infinity",
+          "json": "null",
+          "bits": "fff0000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": {
+            "type": "number",
+            "value": "-0"
+          },
+          "negativeZero": true,
+          "string": "0",
+          "json": "0",
+          "bits": "8000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        }
+      ]
+    },
+    {
+      "name": "overflow-below-tie:binary",
+      "boundary": "overflow-below-tie",
+      "input": "0b1111111111111111111111111111111111111111111111111111101111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "Infinity"
+          },
+          "negativeZero": false,
+          "string": "Infinity",
+          "json": "null",
+          "bits": "7ff0000000000000"
+        }
+      ]
+    },
+    {
+      "name": "overflow-below-tie:octal",
+      "boundary": "overflow-below-tie",
+      "input": "0o177777777777777777577777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "Infinity"
+          },
+          "negativeZero": false,
+          "string": "Infinity",
+          "json": "null",
+          "bits": "7ff0000000000000"
+        }
+      ]
+    },
+    {
+      "name": "overflow-tie:decimal",
+      "boundary": "overflow-tie",
+      "input": "179769313486231580793728971405303415079934132710037826936173778980444968292764750946649017977587207096330286416692887910946555547851940402630657488671505820681908902000708383676273854845817711531764475730270069855571366959622842914819860834936475292719074168444365510704342711559699508093042880177904174497792",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": {
+            "type": "number",
+            "value": "Infinity"
+          },
+          "negativeZero": false,
+          "string": "Infinity",
+          "json": "null",
+          "bits": "7ff0000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": {
+            "type": "number",
+            "value": "Infinity"
+          },
+          "negativeZero": false,
+          "string": "Infinity",
+          "json": "null",
+          "bits": "7ff0000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "Infinity"
+          },
+          "negativeZero": false,
+          "string": "Infinity",
+          "json": "null",
+          "bits": "7ff0000000000000"
+        }
+      ]
+    },
+    {
+      "name": "overflow-tie:negative-decimal",
+      "boundary": "overflow-tie",
+      "input": "-179769313486231580793728971405303415079934132710037826936173778980444968292764750946649017977587207096330286416692887910946555547851940402630657488671505820681908902000708383676273854845817711531764475730270069855571366959622842914819860834936475292719074168444365510704342711559699508093042880177904174497792",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": {
+            "type": "number",
+            "value": "-Infinity"
+          },
+          "negativeZero": false,
+          "string": "-Infinity",
+          "json": "null",
+          "bits": "fff0000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": {
+            "type": "number",
+            "value": "-Infinity"
+          },
+          "negativeZero": false,
+          "string": "-Infinity",
+          "json": "null",
+          "bits": "fff0000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "-Infinity"
+          },
+          "negativeZero": false,
+          "string": "-Infinity",
+          "json": "null",
+          "bits": "fff0000000000000"
+        }
+      ]
+    },
+    {
+      "name": "overflow-tie:hexadecimal",
+      "boundary": "overflow-tie",
+      "input": "0xfffffffffffffc00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": {
+            "type": "number",
+            "value": "Infinity"
+          },
+          "negativeZero": false,
+          "string": "Infinity",
+          "json": "null",
+          "bits": "7ff0000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "Infinity"
+          },
+          "negativeZero": false,
+          "string": "Infinity",
+          "json": "null",
+          "bits": "7ff0000000000000"
+        }
+      ]
+    },
+    {
+      "name": "overflow-tie:negative-hexadecimal",
+      "boundary": "overflow-tie",
+      "input": "-0xfffffffffffffc00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": {
+            "type": "number",
+            "value": "-Infinity"
+          },
+          "negativeZero": false,
+          "string": "-Infinity",
+          "json": "null",
+          "bits": "fff0000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": {
+            "type": "number",
+            "value": "-0"
+          },
+          "negativeZero": true,
+          "string": "0",
+          "json": "0",
+          "bits": "8000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        }
+      ]
+    },
+    {
+      "name": "overflow-tie:binary",
+      "boundary": "overflow-tie",
+      "input": "0b1111111111111111111111111111111111111111111111111111110000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "Infinity"
+          },
+          "negativeZero": false,
+          "string": "Infinity",
+          "json": "null",
+          "bits": "7ff0000000000000"
+        }
+      ]
+    },
+    {
+      "name": "overflow-tie:octal",
+      "boundary": "overflow-tie",
+      "input": "0o177777777777777777600000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "Infinity"
+          },
+          "negativeZero": false,
+          "string": "Infinity",
+          "json": "null",
+          "bits": "7ff0000000000000"
+        }
+      ]
+    },
+    {
+      "name": "overflow-above-tie:decimal",
+      "boundary": "overflow-above-tie",
+      "input": "179769313486231580793728971405303415079934132710037826936173778980444968292764750946649017977587207096330286416692887910946555547851940402630657488671505820681908902000708383676273854845817711531764475730270069855571366959622842914819860834936475292719074168444365510704342711559699508093042880177904174497793",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": {
+            "type": "number",
+            "value": "Infinity"
+          },
+          "negativeZero": false,
+          "string": "Infinity",
+          "json": "null",
+          "bits": "7ff0000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": {
+            "type": "number",
+            "value": "Infinity"
+          },
+          "negativeZero": false,
+          "string": "Infinity",
+          "json": "null",
+          "bits": "7ff0000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "Infinity"
+          },
+          "negativeZero": false,
+          "string": "Infinity",
+          "json": "null",
+          "bits": "7ff0000000000000"
+        }
+      ]
+    },
+    {
+      "name": "overflow-above-tie:negative-decimal",
+      "boundary": "overflow-above-tie",
+      "input": "-179769313486231580793728971405303415079934132710037826936173778980444968292764750946649017977587207096330286416692887910946555547851940402630657488671505820681908902000708383676273854845817711531764475730270069855571366959622842914819860834936475292719074168444365510704342711559699508093042880177904174497793",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": {
+            "type": "number",
+            "value": "-Infinity"
+          },
+          "negativeZero": false,
+          "string": "-Infinity",
+          "json": "null",
+          "bits": "fff0000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": {
+            "type": "number",
+            "value": "-Infinity"
+          },
+          "negativeZero": false,
+          "string": "-Infinity",
+          "json": "null",
+          "bits": "fff0000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "-Infinity"
+          },
+          "negativeZero": false,
+          "string": "-Infinity",
+          "json": "null",
+          "bits": "fff0000000000000"
+        }
+      ]
+    },
+    {
+      "name": "overflow-above-tie:hexadecimal",
+      "boundary": "overflow-above-tie",
+      "input": "0xfffffffffffffc00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": {
+            "type": "number",
+            "value": "Infinity"
+          },
+          "negativeZero": false,
+          "string": "Infinity",
+          "json": "null",
+          "bits": "7ff0000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "Infinity"
+          },
+          "negativeZero": false,
+          "string": "Infinity",
+          "json": "null",
+          "bits": "7ff0000000000000"
+        }
+      ]
+    },
+    {
+      "name": "overflow-above-tie:negative-hexadecimal",
+      "boundary": "overflow-above-tie",
+      "input": "-0xfffffffffffffc00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": {
+            "type": "number",
+            "value": "-Infinity"
+          },
+          "negativeZero": false,
+          "string": "-Infinity",
+          "json": "null",
+          "bits": "fff0000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": {
+            "type": "number",
+            "value": "-0"
+          },
+          "negativeZero": true,
+          "string": "0",
+          "json": "0",
+          "bits": "8000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        }
+      ]
+    },
+    {
+      "name": "overflow-above-tie:binary",
+      "boundary": "overflow-above-tie",
+      "input": "0b1111111111111111111111111111111111111111111111111111110000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "Infinity"
+          },
+          "negativeZero": false,
+          "string": "Infinity",
+          "json": "null",
+          "bits": "7ff0000000000000"
+        }
+      ]
+    },
+    {
+      "name": "overflow-above-tie:octal",
+      "boundary": "overflow-above-tie",
+      "input": "0o177777777777777777600000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "Infinity"
+          },
+          "negativeZero": false,
+          "string": "Infinity",
+          "json": "null",
+          "bits": "7ff0000000000000"
+        }
+      ]
+    },
+    {
+      "name": "overflow-power:decimal",
+      "boundary": "overflow-power",
+      "input": "179769313486231590772930519078902473361797697894230657273430081157732675805500963132708477322407536021120113879871393357658789768814416622492847430639474124377767893424865485276302219601246094119453082952085005768838150682342462881473913110540827237163350510684586298239947245938479716304835356329624224137216",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": {
+            "type": "number",
+            "value": "Infinity"
+          },
+          "negativeZero": false,
+          "string": "Infinity",
+          "json": "null",
+          "bits": "7ff0000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": {
+            "type": "number",
+            "value": "Infinity"
+          },
+          "negativeZero": false,
+          "string": "Infinity",
+          "json": "null",
+          "bits": "7ff0000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "Infinity"
+          },
+          "negativeZero": false,
+          "string": "Infinity",
+          "json": "null",
+          "bits": "7ff0000000000000"
+        }
+      ]
+    },
+    {
+      "name": "overflow-power:negative-decimal",
+      "boundary": "overflow-power",
+      "input": "-179769313486231590772930519078902473361797697894230657273430081157732675805500963132708477322407536021120113879871393357658789768814416622492847430639474124377767893424865485276302219601246094119453082952085005768838150682342462881473913110540827237163350510684586298239947245938479716304835356329624224137216",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": {
+            "type": "number",
+            "value": "-Infinity"
+          },
+          "negativeZero": false,
+          "string": "-Infinity",
+          "json": "null",
+          "bits": "fff0000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": {
+            "type": "number",
+            "value": "-Infinity"
+          },
+          "negativeZero": false,
+          "string": "-Infinity",
+          "json": "null",
+          "bits": "fff0000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "-Infinity"
+          },
+          "negativeZero": false,
+          "string": "-Infinity",
+          "json": "null",
+          "bits": "fff0000000000000"
+        }
+      ]
+    },
+    {
+      "name": "overflow-power:hexadecimal",
+      "boundary": "overflow-power",
+      "input": "0x10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": {
+            "type": "number",
+            "value": "Infinity"
+          },
+          "negativeZero": false,
+          "string": "Infinity",
+          "json": "null",
+          "bits": "7ff0000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "Infinity"
+          },
+          "negativeZero": false,
+          "string": "Infinity",
+          "json": "null",
+          "bits": "7ff0000000000000"
+        }
+      ]
+    },
+    {
+      "name": "overflow-power:negative-hexadecimal",
+      "boundary": "overflow-power",
+      "input": "-0x10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": {
+            "type": "number",
+            "value": "-Infinity"
+          },
+          "negativeZero": false,
+          "string": "-Infinity",
+          "json": "null",
+          "bits": "fff0000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": {
+            "type": "number",
+            "value": "-0"
+          },
+          "negativeZero": true,
+          "string": "0",
+          "json": "0",
+          "bits": "8000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        }
+      ]
+    },
+    {
+      "name": "overflow-power:binary",
+      "boundary": "overflow-power",
+      "input": "0b10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "Infinity"
+          },
+          "negativeZero": false,
+          "string": "Infinity",
+          "json": "null",
+          "bits": "7ff0000000000000"
+        }
+      ]
+    },
+    {
+      "name": "overflow-power:octal",
+      "boundary": "overflow-power",
+      "input": "0o200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "Infinity"
+          },
+          "negativeZero": false,
+          "string": "Infinity",
+          "json": "null",
+          "bits": "7ff0000000000000"
+        }
+      ]
+    },
+    {
+      "name": "empty",
+      "boundary": "syntax",
+      "input": "",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        }
+      ]
+    },
+    {
+      "name": "whitespace",
+      "boundary": "syntax",
+      "input": "﻿ \t\n  ",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        }
+      ]
+    },
+    {
+      "name": "excluded-next-line",
+      "boundary": "syntax",
+      "input": "0x1",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        }
+      ]
+    },
+    {
+      "name": "hex-empty",
+      "boundary": "syntax",
+      "input": "0x",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        }
+      ]
+    },
+    {
+      "name": "hex-negative-empty",
+      "boundary": "syntax",
+      "input": "-0x",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": {
+            "type": "number",
+            "value": "-0"
+          },
+          "negativeZero": true,
+          "string": "0",
+          "json": "0",
+          "bits": "8000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        }
+      ]
+    },
+    {
+      "name": "hex-leading-zeroes",
+      "boundary": "syntax",
+      "input": "0x0000001000000000000081",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 1152921504606847200,
+          "negativeZero": false,
+          "string": "1152921504606847200",
+          "json": "1152921504606847200",
+          "bits": "43b0000000000001"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 1152921504606847200,
+          "negativeZero": false,
+          "string": "1152921504606847200",
+          "json": "1152921504606847200",
+          "bits": "43b0000000000001"
+        }
+      ]
+    },
+    {
+      "name": "hex-uppercase-plus",
+      "boundary": "syntax",
+      "input": "+0X1000000000000081",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 1152921504606847200,
+          "negativeZero": false,
+          "string": "1152921504606847200",
+          "json": "1152921504606847200",
+          "bits": "43b0000000000001"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        }
+      ]
+    },
+    {
+      "name": "hex-whitespace-sign",
+      "boundary": "syntax",
+      "input": "﻿ -0X1000000000000081 ",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": -1152921504606847200,
+          "negativeZero": false,
+          "string": "-1152921504606847200",
+          "json": "-1152921504606847200",
+          "bits": "c3b0000000000001"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": {
+            "type": "number",
+            "value": "-0"
+          },
+          "negativeZero": true,
+          "string": "0",
+          "json": "0",
+          "bits": "8000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        }
+      ]
+    },
+    {
+      "name": "hex-invalid-tail",
+      "boundary": "syntax",
+      "input": "0x1000000000000081g",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 1152921504606847200,
+          "negativeZero": false,
+          "string": "1152921504606847200",
+          "json": "1152921504606847200",
+          "bits": "43b0000000000001"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        }
+      ]
+    },
+    {
+      "name": "hex-fraction",
+      "boundary": "syntax",
+      "input": "0x1000000000000081.8",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 1152921504606847200,
+          "negativeZero": false,
+          "string": "1152921504606847200",
+          "json": "1152921504606847200",
+          "bits": "43b0000000000001"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        }
+      ]
+    },
+    {
+      "name": "hex-exponent-digit",
+      "boundary": "syntax",
+      "input": "0x1e3",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 483,
+          "negativeZero": false,
+          "string": "483",
+          "json": "483",
+          "bits": "407e300000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 483,
+          "negativeZero": false,
+          "string": "483",
+          "json": "483",
+          "bits": "407e300000000000"
+        }
+      ]
+    },
+    {
+      "name": "hex-binary-exponent",
+      "boundary": "syntax",
+      "input": "0x1p4",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 1,
+          "negativeZero": false,
+          "string": "1",
+          "json": "1",
+          "bits": "3ff0000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        }
+      ]
+    },
+    {
+      "name": "hex-separator",
+      "boundary": "syntax",
+      "input": "0x1_0",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 1,
+          "negativeZero": false,
+          "string": "1",
+          "json": "1",
+          "bits": "3ff0000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        }
+      ]
+    },
+    {
+      "name": "hex-negative-zero",
+      "boundary": "syntax",
+      "input": "-0x0",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": {
+            "type": "number",
+            "value": "-0"
+          },
+          "negativeZero": true,
+          "string": "0",
+          "json": "0",
+          "bits": "8000000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": {
+            "type": "number",
+            "value": "-0"
+          },
+          "negativeZero": true,
+          "string": "0",
+          "json": "0",
+          "bits": "8000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        }
+      ]
+    },
+    {
+      "name": "hex-default-vs-decimal",
+      "boundary": "syntax",
+      "input": "0x10",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 16,
+          "negativeZero": false,
+          "string": "16",
+          "json": "16",
+          "bits": "4030000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 16,
+          "negativeZero": false,
+          "string": "16",
+          "json": "16",
+          "bits": "4030000000000000"
+        }
+      ]
+    },
+    {
+      "name": "binary-lowercase",
+      "boundary": "syntax",
+      "input": "0b101",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 5,
+          "negativeZero": false,
+          "string": "5",
+          "json": "5",
+          "bits": "4014000000000000"
+        }
+      ]
+    },
+    {
+      "name": "binary-uppercase",
+      "boundary": "syntax",
+      "input": "0B101",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 5,
+          "negativeZero": false,
+          "string": "5",
+          "json": "5",
+          "bits": "4014000000000000"
+        }
+      ]
+    },
+    {
+      "name": "binary-invalid-tail",
+      "boundary": "syntax",
+      "input": "0b1012",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        }
+      ]
+    },
+    {
+      "name": "binary-negative",
+      "boundary": "syntax",
+      "input": "-0b101",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": {
+            "type": "number",
+            "value": "-0"
+          },
+          "negativeZero": true,
+          "string": "0",
+          "json": "0",
+          "bits": "8000000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": {
+            "type": "number",
+            "value": "-0"
+          },
+          "negativeZero": true,
+          "string": "0",
+          "json": "0",
+          "bits": "8000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        }
+      ]
+    },
+    {
+      "name": "binary-empty",
+      "boundary": "syntax",
+      "input": "0b",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        }
+      ]
+    },
+    {
+      "name": "octal-lowercase",
+      "boundary": "syntax",
+      "input": "0o17",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 15,
+          "negativeZero": false,
+          "string": "15",
+          "json": "15",
+          "bits": "402e000000000000"
+        }
+      ]
+    },
+    {
+      "name": "octal-uppercase",
+      "boundary": "syntax",
+      "input": "0O17",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 15,
+          "negativeZero": false,
+          "string": "15",
+          "json": "15",
+          "bits": "402e000000000000"
+        }
+      ]
+    },
+    {
+      "name": "octal-invalid-tail",
+      "boundary": "syntax",
+      "input": "0o178",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        }
+      ]
+    },
+    {
+      "name": "octal-plus",
+      "boundary": "syntax",
+      "input": "+0o17",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        }
+      ]
+    },
+    {
+      "name": "octal-empty",
+      "boundary": "syntax",
+      "input": "0o",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 0,
+          "negativeZero": false,
+          "string": "0",
+          "json": "0",
+          "bits": "0000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        }
+      ]
+    },
+    {
+      "name": "decimal-leading-zero",
+      "boundary": "syntax",
+      "input": "010",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 10,
+          "negativeZero": false,
+          "string": "10",
+          "json": "10",
+          "bits": "4024000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 10,
+          "negativeZero": false,
+          "string": "10",
+          "json": "10",
+          "bits": "4024000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 10,
+          "negativeZero": false,
+          "string": "10",
+          "json": "10",
+          "bits": "4024000000000000"
+        }
+      ]
+    },
+    {
+      "name": "decimal-exponent",
+      "boundary": "syntax",
+      "input": "-12e4",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": -12,
+          "negativeZero": false,
+          "string": "-12",
+          "json": "-12",
+          "bits": "c028000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": -12,
+          "negativeZero": false,
+          "string": "-12",
+          "json": "-12",
+          "bits": "c028000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": -120000,
+          "negativeZero": false,
+          "string": "-120000",
+          "json": "-120000",
+          "bits": "c0fd4c0000000000"
+        }
+      ]
+    },
+    {
+      "name": "decimal-negative-zero",
+      "boundary": "syntax",
+      "input": "-0",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": {
+            "type": "number",
+            "value": "-0"
+          },
+          "negativeZero": true,
+          "string": "0",
+          "json": "0",
+          "bits": "8000000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": {
+            "type": "number",
+            "value": "-0"
+          },
+          "negativeZero": true,
+          "string": "0",
+          "json": "0",
+          "bits": "8000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "-0"
+          },
+          "negativeZero": true,
+          "string": "0",
+          "json": "0",
+          "bits": "8000000000000000"
+        }
+      ]
+    },
+    {
+      "name": "decimal-negative-zero-tail",
+      "boundary": "syntax",
+      "input": "-0tail",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": {
+            "type": "number",
+            "value": "-0"
+          },
+          "negativeZero": true,
+          "string": "0",
+          "json": "0",
+          "bits": "8000000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": {
+            "type": "number",
+            "value": "-0"
+          },
+          "negativeZero": true,
+          "string": "0",
+          "json": "0",
+          "bits": "8000000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        }
+      ]
+    },
+    {
+      "name": "decimal-fraction",
+      "boundary": "syntax",
+      "input": ".5",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": 0.5,
+          "negativeZero": false,
+          "string": "0.5",
+          "json": "0.5",
+          "bits": "3fe0000000000000"
+        }
+      ]
+    },
+    {
+      "name": "decimal-overflow-exponent",
+      "boundary": "syntax",
+      "input": "1e309",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": 1,
+          "negativeZero": false,
+          "string": "1",
+          "json": "1",
+          "bits": "3ff0000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": 1,
+          "negativeZero": false,
+          "string": "1",
+          "json": "1",
+          "bits": "3ff0000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "Infinity"
+          },
+          "negativeZero": false,
+          "string": "Infinity",
+          "json": "null",
+          "bits": "7ff0000000000000"
+        }
+      ]
+    },
+    {
+      "name": "decimal-rounded-prefix",
+      "boundary": "syntax",
+      "input": " -000544157599796692941tail",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": -544157599796692900,
+          "negativeZero": false,
+          "string": "-544157599796692900",
+          "json": "-544157599796692900",
+          "bits": "c39e34f1d0d6d81f"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": -544157599796692900,
+          "negativeZero": false,
+          "string": "-544157599796692900",
+          "json": "-544157599796692900",
+          "bits": "c39e34f1d0d6d81f"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        }
+      ]
+    },
+    {
+      "name": "decimal-overflow-digits",
+      "boundary": "syntax",
+      "input": "9999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": {
+            "type": "number",
+            "value": "Infinity"
+          },
+          "negativeZero": false,
+          "string": "Infinity",
+          "json": "null",
+          "bits": "7ff0000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": {
+            "type": "number",
+            "value": "Infinity"
+          },
+          "negativeZero": false,
+          "string": "Infinity",
+          "json": "null",
+          "bits": "7ff0000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "Infinity"
+          },
+          "negativeZero": false,
+          "string": "Infinity",
+          "json": "null",
+          "bits": "7ff0000000000000"
+        }
+      ]
+    },
+    {
+      "name": "plus-only",
+      "boundary": "syntax",
+      "input": "+",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        }
+      ]
+    },
+    {
+      "name": "minus-only",
+      "boundary": "syntax",
+      "input": "-",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        }
+      ]
+    },
+    {
+      "name": "space-after-sign",
+      "boundary": "syntax",
+      "input": "+ 0x10",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        }
+      ]
+    },
+    {
+      "name": "infinity",
+      "boundary": "syntax",
+      "input": "Infinity",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "Infinity"
+          },
+          "negativeZero": false,
+          "string": "Infinity",
+          "json": "null",
+          "bits": "7ff0000000000000"
+        }
+      ]
+    },
+    {
+      "name": "nan",
+      "boundary": "syntax",
+      "input": "NaN",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        }
+      ]
+    },
+    {
+      "name": "fullwidth-digit",
+      "boundary": "syntax",
+      "input": "０x10",
+      "operations": [
+        {
+          "name": "inferred",
+          "source": "parseInt(input)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        },
+        {
+          "name": "decimal",
+          "source": "parseInt(input, 10)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        },
+        {
+          "name": "number",
+          "source": "Number(input)",
+          "result": {
+            "type": "number",
+            "value": "NaN"
+          },
+          "negativeZero": false,
+          "string": "NaN",
+          "json": "null",
+          "bits": "7ff8000000000000"
+        }
+      ]
+    }
+  ]
+}

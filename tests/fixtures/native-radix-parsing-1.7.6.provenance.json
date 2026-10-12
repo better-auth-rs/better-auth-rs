@@ -1,0 +1,39 @@
+{
+  "contract": "native-radix-parsing",
+  "version": "1.7.6",
+  "status": "Two upstream captures are byte-identical. Rust replay is pending.",
+  "run": "38296796189",
+  "runURL": "https://github.com/better-auth-rs/better-auth-rs/actions/runs/38296796189",
+  "commit": "a52f13b3fbf4e344f584709396158b22467fc9df",
+  "runConclusion": "success",
+  "artifactName": "upstream-native-radix-parsing-a52f13b3fbf4e344f584709396158b22467fc9df-1",
+  "runtime": {
+    "bun": "1.4.2"
+  },
+  "inputs": 135,
+  "observations": 405,
+  "sources": [
+    {
+      "path": "compat-tests/reference-server/contracts/native-radix-parsing-capture.mjs",
+      "bytes": 5960,
+      "sha256": "2880443042f7a0b0e46f5062ae7bccf05d3e9b8b47361dfb3b17f503893aaa5c"
+    },
+    {
+      "path": "compat-tests/reference-server/contracts/protected-function-shared.mjs",
+      "bytes": 20940,
+      "sha256": "4b833be668fe0e40075695641ac9593a9314a63babe98064ca4a4bf2475e7dea"
+    },
+    {
+      "path": "compat-tests/reference-server/contracts/secondary-native-shared.mjs",
+      "bytes": 3625,
+      "sha256": "7f708484df4fec8a65d920d12a44fdce06278154e63b484d891f47e396b3193f"
+    }
+  ],
+  "fixture": {
+    "path": "tests/fixtures/native-radix-parsing-1.7.6.json",
+    "bytes": 148541,
+    "sha256": "5d07fa70a5332c3dde954a8a7889213b7f3de262c79886f39afcdff0d9f65a6e"
+  },
+  "normalizations": [],
+  "boundary": "Pinned Bun numeric intrinsics used by the recorded Better Auth consumers. BigInt constructs only inputs. Results retain finite values, signed zero, nonfinite values, decimal rendering, JSON rendering and all IEEE-754 bits. This capture does not execute full plugin or adapter lifecycles. NaN payload bits are retained as runtime evidence, not a portable ECMAScript numeric guarantee."
+}
