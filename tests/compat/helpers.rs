@@ -27,7 +27,7 @@ use reqwest::Url;
 use serde_json::Value;
 
 type TestSchema = better_auth_seaorm::store::__private_test_support::bundled_schema::BundledSchema;
-type TestAuth = BetterAuth<TestSchema>;
+pub(crate) type TestAuth = BetterAuth<TestSchema>;
 
 static LOCAL_PROXY_BYPASS: Once = Once::new();
 static MOCK_OAUTH_SERVER: Once = Once::new();
