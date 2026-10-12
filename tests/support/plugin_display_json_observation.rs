@@ -16,29 +16,18 @@ pub(crate) fn passkey_value(row: &Passkey) -> AuthResult<Value> {
     Ok(result)
 }
 
-// Compare timestamp invariants separately. Memory Passkey retains its verified legacy envelope.
-fn stable_row(value: &Value, backend: &str, target: Target, stored: bool) -> Value {
+// Compare timestamp invariants separately.
+fn stable_row(value: &Value) -> Value {
     let mut value = value.clone();
     if let Some(fields) = value.as_object_mut() {
         let _ = fields.remove("createdAt");
         let _ = fields.remove("updatedAt");
-        if stored && backend == "memory" && target != Target::ApiKeyName {
-            assert_eq!(
-                fields.remove("credential"),
-                Some(json!("ordinary-private-record"))
-            );
-        }
     }
     value
 }
 
 // Compare field presence as a set. The retained fixture also records unpaired JavaScript key order.
-fn stable_keys(
-    keys: &Value,
-    backend: &str,
-    target: Target,
-    stored: bool,
-) -> TestResult<Vec<String>> {
+fn stable_keys(keys: &Value) -> TestResult<Vec<String>> {
     let mut names = keys
         .as_array()
         .ok_or("Missing observed field keys")?
@@ -49,13 +38,7 @@ fn stable_keys(
                 .ok_or("Invalid observed field key")
         })
         .collect::<Result<Vec<_>, _>>()?;
-    names.retain(|name| {
-        !matches!(name.as_str(), "createdAt" | "updatedAt")
-            && !(stored
-                && backend == "memory"
-                && target != Target::ApiKeyName
-                && name == "credential")
-    });
+    names.retain(|name| !matches!(name.as_str(), "createdAt" | "updatedAt"));
     names.sort();
     Ok(names)
 }
@@ -75,13 +58,13 @@ pub(super) fn compare_storage(
     );
     for (actual, expected) in actual.iter().zip(expected) {
         assert_eq!(
-            stable_row(&actual["row"], backend, target, true),
-            stable_row(&expected["row"], backend, target, false),
+            stable_row(&actual["row"]),
+            stable_row(&expected["row"]),
             "{backend} {target:?} stored fields"
         );
         assert_eq!(
-            stable_keys(&actual["keys"], backend, target, true)?,
-            stable_keys(&expected["keys"], backend, target, false)?,
+            stable_keys(&actual["keys"])?,
+            stable_keys(&expected["keys"])?,
             "{backend} {target:?} stored field set"
         );
         for field in ["displaySqlNull", "displayText"] {
@@ -184,8 +167,8 @@ pub(super) fn compare(
             let actual = result.as_ref().unwrap_or(&Value::Null);
             let wanted = &expected["result"];
             assert_eq!(
-                stable_row(actual, backend, target, false),
-                stable_row(wanted, backend, target, false),
+                stable_row(actual),
+                stable_row(wanted),
                 "{backend} {target:?} {} result",
                 expected["name"]
             );
@@ -194,8 +177,8 @@ pub(super) fn compare(
                 .map(|fields| fields.keys().cloned().collect::<Vec<_>>())
                 .unwrap_or_default();
             assert_eq!(
-                stable_keys(&json!(actual_keys), backend, target, false)?,
-                stable_keys(&expected["keys"], backend, target, false)?
+                stable_keys(&json!(actual_keys))?,
+                stable_keys(&expected["keys"])?
             );
             if result.is_some() {
                 assert_eq!(actual["id"], ID);

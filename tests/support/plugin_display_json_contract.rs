@@ -473,7 +473,7 @@ where
         check.observe(&failure["result"], action).await?;
     }
     eprintln!(
-        "display JSON contract boundaries: generated ID policy replaces forceAllowId; timestamps are checked against the real clock and storage; Memory Passkey retains its verified legacy credential and updatedAt envelope; field sets are compared without key order; JavaScript Error identity and driver diagnostic text/properties remain unpaired; backend={backend}, target={target:?}"
+        "display JSON contract boundaries: generated ID policy replaces forceAllowId; timestamps are checked against the real clock and storage; field sets are compared without key order; JavaScript Error identity and driver diagnostic text/properties remain unpaired; backend={backend}, target={target:?}"
     );
     if backend == "mysql" && target != Target::PasskeyAaguid {
         primary_key_update::check(raw, target).await?;

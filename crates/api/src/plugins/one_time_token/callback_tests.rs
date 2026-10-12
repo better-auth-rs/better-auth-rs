@@ -396,6 +396,12 @@ async fn generation_error_keeps_callback_effects_without_hashing_persisting_or_f
         pending.get("x-ott-callback").map(String::as_str),
         Some("retained")
     );
+    assert!(request.response_headers_value()?.strict_equals(&captured));
+    assert_eq!(request.take_response_headers()?, pending);
+    assert_eq!(
+        better_auth_core::Headers::from_field_value(&captured)?,
+        pending
+    );
     assert!(request.take_response_headers()?.is_empty());
     assert_eq!(
         request

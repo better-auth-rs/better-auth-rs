@@ -7,6 +7,17 @@ pub(super) struct Events(Arc<Mutex<Vec<Value>>>);
 
 impl Events {
     pub(super) async fn capture<T>(&self, operation: impl std::future::Future<Output = T>) -> T {
+        static TRACING: std::sync::Once = std::sync::Once::new();
+        // Keep a process subscriber alive so parallel unscoped spans cannot disable cached callsites.
+        TRACING.call_once(|| {
+            assert!(
+                tracing::subscriber::set_global_default(
+                    tracing::subscriber::NoSubscriber::default()
+                )
+                .is_ok(),
+                "The query recorder must initialize the test process subscriber once"
+            );
+        });
         // Retained projection tasks inherit the subscriber and its recorder.
         operation
             .with_subscriber(tracing_subscriber::registry().with(self.clone()))
